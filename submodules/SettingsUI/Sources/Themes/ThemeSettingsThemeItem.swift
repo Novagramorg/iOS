@@ -629,14 +629,15 @@ class ThemeSettingsThemeItemNode: ListViewItemNode, ItemListItemNode {
 
                         var themeWallpaper: TelegramWallpaper?
                         if case let .cloud(theme) = theme {
-                            themeWallpaper = theme.resolvedWallpaper ?? theme.theme.settings?.wallpaper
+                            themeWallpaper = theme.resolvedWallpaper ?? theme.theme.settings?.first?.wallpaper
                         }
 
                         let customWallpaper = item.themeSpecificChatWallpapers[theme.generalThemeReference.index]
                         
                         let wallpaper = accentColor?.wallpaper ?? customWallpaper ?? themeWallpaper
 
-                        entries.append(ThemeSettingsThemeEntry(index: index, themeReference: theme, title: title, accentColor: accentColor, selected: item.currentTheme.index == theme.index, theme: item.theme, wallpaper: wallpaper))
+                        let selected = item.currentTheme.index == theme.index || item.currentTheme.generalThemeReference == theme
+                        entries.append(ThemeSettingsThemeEntry(index: index, themeReference: theme, title: title, accentColor: accentColor, selected: selected, theme: item.theme, wallpaper: wallpaper))
                         index += 1
                     }
                     
