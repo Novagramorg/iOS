@@ -14312,11 +14312,11 @@ SQLITE_PRIVATE void sqlite3HashClear(Hash*);
 ** Macros to compute minimum and maximum of two numbers.
 */
 #ifndef MIN
-# define MIN(A,B) ((A)<(B)?(A):(B))
-#endif
+#define MIN(a, b) (((a)<(b))?(a):(b))
+#endif /* MIN */
 #ifndef MAX
-# define MAX(A,B) ((A)>(B)?(A):(B))
-#endif
+#define MAX(a, b) (((a)>(b))?(a):(b))
+#endif  /* MAX */
 
 /*
 ** Swap two objects of type TYPE.
@@ -171497,11 +171497,11 @@ SQLITE_PRIVATE Fts3HashElem *sqlite3Fts3HashFindElem(const Fts3Hash *, const voi
 
 
 #ifndef MIN
-# define MIN(x,y) ((x)<(y)?(x):(y))
-#endif
+#define MIN(a, b) (((a)<(b))?(a):(b))
+#endif /* MIN */
 #ifndef MAX
-# define MAX(x,y) ((x)>(y)?(x):(y))
-#endif
+#define MAX(a, b) (((a)>(b))?(a):(b))
+#endif  /* MAX */
 
 /*
 ** Maximum length of a varint encoded integer. The varint format is different
@@ -193354,12 +193354,12 @@ struct RtreeMatchArg {
   RtreeDValue aParam[1];      /* Values for parameters to the SQL function */
 };
 
-#ifndef MAX
-# define MAX(x,y) ((x) < (y) ? (y) : (x))
-#endif
 #ifndef MIN
-# define MIN(x,y) ((x) > (y) ? (y) : (x))
-#endif
+#define MIN(a, b) (((a)<(b))?(a):(b))
+#endif /* MIN */
+#ifndef MAX
+#define MAX(a, b) (((a)>(b))?(a):(b))
+#endif  /* MAX */
 
 /* What version of GCC is being used.  0 means GCC is not being used .
 ** Note that the GCC_VERSION macro will also be set correctly when using
@@ -213443,8 +213443,12 @@ typedef sqlite3_uint64 u64;
 #define ALWAYS(x) 1
 #define NEVER(x) 0
 
-#define MIN(x,y) (((x) < (y)) ? (x) : (y))
-#define MAX(x,y) (((x) > (y)) ? (x) : (y))
+#ifndef MIN
+#define MIN(a, b) (((a)<(b))?(a):(b))
+#endif /* MIN */
+#ifndef MAX
+#define MAX(a, b) (((a)>(b))?(a):(b))
+#endif  /* MAX */
 
 /*
 ** Constants for the largest and smallest possible 64-bit signed integers.
