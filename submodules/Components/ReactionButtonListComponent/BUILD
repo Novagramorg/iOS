@@ -18,6 +18,7 @@ swift_library(
         "//submodules/AccountContext:AccountContext",
         "//submodules/TelegramPresentationData:TelegramPresentationData",
         "//submodules/WebPBinding:WebPBinding",
+        "//submodules/AnimatedAvatarSetNode:AnimatedAvatarSetNode",
     ],
     visibility = [
         "//visibility:public",
