@@ -21,6 +21,7 @@ swift_library(
         "//submodules/AnimatedAvatarSetNode:AnimatedAvatarSetNode",
         "//submodules/ContextUI:ContextUI",
         "//submodules/AvatarNode:AvatarNode",
+        "//submodules/Components/ReactionImageComponent:ReactionImageComponent",
     ],
     visibility = [
         "//visibility:public",
