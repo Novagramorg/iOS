@@ -95,6 +95,10 @@ private final class WebAppAlertContentNode: AlertContentNode {
         })
     }
     
+    deinit {
+        self.iconDisposable?.dispose()
+    }
+    
     override func updateTheme(_ theme: AlertControllerTheme) {
         self.textNode.attributedText = NSAttributedString(string: strings.WebApp_AddToAttachmentText(self.peerName).string, font: Font.bold(17.0), textColor: theme.primaryColor, paragraphAlignment: .center)
         
