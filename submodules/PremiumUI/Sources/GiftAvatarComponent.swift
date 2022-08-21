@@ -13,41 +13,6 @@ import TelegramCore
 
 private let sceneVersion: Int = 3
 
-private func deg2rad(_ number: Float) -> Float {
-    return number * .pi / 180
-}
-
-private func rad2deg(_ number: Float) -> Float {
-    return number * 180.0 / .pi
-}
-
-private func generateParticlesTexture() -> UIImage {
-    return UIImage()
-}
-
-private func generateFlecksTexture() -> UIImage {
-    return UIImage()
-}
-
-private func generateShineTexture() -> UIImage {
-    return UIImage()
-}
-
-private func generateDiffuseTexture() -> UIImage {
-    return generateImage(CGSize(width: 256, height: 256), rotatedContext: { size, context in
-        let colorsArray: [CGColor] = [
-            UIColor(rgb: 0x0079ff).cgColor,
-            UIColor(rgb: 0x6a93ff).cgColor,
-            UIColor(rgb: 0x9172fe).cgColor,
-            UIColor(rgb: 0xe46acd).cgColor,
-        ]
-        var locations: [CGFloat] = [0.0, 0.25, 0.5, 0.75, 1.0]
-        let gradient = CGGradient(colorsSpace: deviceColorSpace, colors: colorsArray as CFArray, locations: &locations)!
-
-        context.drawLinearGradient(gradient, start: CGPoint(x: 0.0, y: 0.0), end: CGPoint(x: size.width, y: size.height), options: CGGradientDrawingOptions())
-    })!
-}
-
 class GiftAvatarComponent: Component {
     let context: AccountContext
     let peer: EnginePeer?
@@ -174,8 +139,8 @@ class GiftAvatarComponent: Component {
         private func setupScaleAnimation() {
             let animation = CABasicAnimation(keyPath: "transform.scale")
             animation.duration = 2.0
-            animation.fromValue = 1.0 //NSValue(scnVector3: SCNVector3(x: 0.1, y: 0.1, z: 0.1))
-            animation.toValue = 1.15 //NSValue(scnVector3: SCNVector3(x: 0.115, y: 0.115, z: 0.115))
+            animation.fromValue = 1.0
+            animation.toValue = 1.15
             animation.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
             animation.autoreverses = true
             animation.repeatCount = .infinity
