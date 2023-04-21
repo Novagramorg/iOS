@@ -13,6 +13,7 @@ swift_library(
         "//submodules/Display",
         "//submodules/ComponentFlow",
         "//submodules/AppBundle",
+        "//submodules/TelegramUI/Components/TextFieldComponent",
     ],
     visibility = [
         "//visibility:public",
