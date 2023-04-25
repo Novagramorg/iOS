@@ -189,6 +189,5 @@ public final class MatrixView: MTKView, MTKViewDelegate, PhoneDemoDecorationView
 
         commandBuffer.present(drawable)
         commandBuffer.commit()
-
     }
 }
