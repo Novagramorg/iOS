@@ -233,20 +233,21 @@ final class StoryMessageContentComponent: Component {
         }
         
         private func updateVideoPlaybackProgress() {
+            guard let videoPlaybackStatus = self.videoPlaybackStatus else {
+                return
+            }
             var isPlaying = false
             var timestampAndDuration: (timestamp: Double?, duration: Double)?
-            if let videoPlaybackStatus = self.videoPlaybackStatus {
-                switch videoPlaybackStatus.status {
-                case .playing:
-                    isPlaying = true
-                default:
-                    break
-                }
-                if case .buffering(true, _, _, _) = videoPlaybackStatus.status {
-                    timestampAndDuration = (nil, videoPlaybackStatus.duration)
-                } else if Double(0.0).isLess(than: videoPlaybackStatus.duration) {
-                    timestampAndDuration = (videoPlaybackStatus.timestamp, videoPlaybackStatus.duration)
-                }
+            switch videoPlaybackStatus.status {
+            case .playing:
+                isPlaying = true
+            default:
+                break
+            }
+            if case .buffering(true, _, _, _) = videoPlaybackStatus.status {
+                timestampAndDuration = (nil, videoPlaybackStatus.duration)
+            } else if Double(0.0).isLess(than: videoPlaybackStatus.duration) {
+                timestampAndDuration = (videoPlaybackStatus.timestamp, videoPlaybackStatus.duration)
             }
             
             var currentProgress: Double = 0.0
