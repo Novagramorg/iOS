@@ -11,6 +11,7 @@ import AvatarNode
 import TelegramPresentationData
 import CheckNode
 import TelegramStringFormatting
+import PeerPresenceStatusManager
 
 private let avatarFont = avatarPlaceholderFont(size: 15.0)
 
@@ -27,6 +28,7 @@ final class PeerListItemComponent: Component {
     let title: String
     let peer: EnginePeer?
     let subtitle: String?
+    let presence: EnginePeer.Presence?
     let selectionState: SelectionState
     let hasNext: Bool
     let action: (EnginePeer) -> Void
@@ -39,6 +41,7 @@ final class PeerListItemComponent: Component {
         title: String,
         peer: EnginePeer?,
         subtitle: String?,
+        presence: EnginePeer.Presence?,
         selectionState: SelectionState,
         hasNext: Bool,
         action: @escaping (EnginePeer) -> Void
@@ -50,6 +53,7 @@ final class PeerListItemComponent: Component {
         self.title = title
         self.peer = peer
         self.subtitle = subtitle
+        self.presence = presence
         self.selectionState = selectionState
         self.hasNext = hasNext
         self.action = action
@@ -77,6 +81,9 @@ final class PeerListItemComponent: Component {
         if lhs.subtitle != rhs.subtitle {
             return false
         }
+        if lhs.presence != rhs.presence {
+            return false
+        }
         if lhs.selectionState != rhs.selectionState {
             return false
         }
@@ -98,6 +105,8 @@ final class PeerListItemComponent: Component {
         
         private var component: PeerListItemComponent?
         private weak var state: EmptyComponentState?
+        
+        private var presenceManager: PeerPresenceStatusManager?
         
         override init(frame: CGRect) {
             self.separatorLayer = SimpleLayer()
@@ -128,6 +137,12 @@ final class PeerListItemComponent: Component {
         }
         
         func update(component: PeerListItemComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: Transition) -> CGSize {
+            let animationHint = transition.userData(ShareWithPeersScreenComponent.AnimationHint.self)
+            var synchronousLoad = false
+            if let animationHint, animationHint.contentReloaded {
+                synchronousLoad = true
+            }
+            
             let themeUpdated = self.component?.theme !== component.theme
             
             var hasSelectionUpdated = false
@@ -143,6 +158,23 @@ final class PeerListItemComponent: Component {
                     } else {
                         hasSelectionUpdated = true
                     }
+                }
+            }
+            
+            if let presence = component.presence {
+                let presenceManager: PeerPresenceStatusManager
+                if let current = self.presenceManager {
+                    presenceManager = current
+                } else {
+                    presenceManager = PeerPresenceStatusManager(update: { [weak self] in
+                        self?.state?.updated(transition: .immediate)
+                    })
+                    self.presenceManager = presenceManager
+                }
+                presenceManager.reset(presence: presence)
+            } else {
+                if self.presenceManager != nil {
+                    self.presenceManager = nil
                 }
             }
             
@@ -210,15 +242,15 @@ final class PeerListItemComponent: Component {
                 } else {
                     clipStyle = .round
                 }
-                if peer.id == component.context.account.peerId {
-                    self.avatarNode.setPeer(context: component.context, theme: component.theme, peer: peer, overrideImage: .savedMessagesIcon, clipStyle: clipStyle, displayDimensions: CGSize(width: avatarSize, height: avatarSize))
-                } else {
-                    self.avatarNode.setPeer(context: component.context, theme: component.theme, peer: peer, clipStyle: clipStyle, displayDimensions: CGSize(width: avatarSize, height: avatarSize))
-                }
+                self.avatarNode.setPeer(context: component.context, theme: component.theme, peer: peer, clipStyle: clipStyle, synchronousLoad: synchronousLoad, displayDimensions: CGSize(width: avatarSize, height: avatarSize))
             }
             
             let labelData: (String, Bool)
-            if let subtitle = component.subtitle {
+            
+            if let presence = component.presence {
+                let timestamp = CFAbsoluteTimeGetCurrent() + NSTimeIntervalSince1970
+                labelData = stringAndActivityForUserPresence(strings: component.strings, dateTimeFormat: PresentationDateTimeFormat(), presence: presence, relativeTo: Int32(timestamp))
+            } else if let subtitle = component.subtitle {
                 labelData = (subtitle, false)
             } else if case .legacyGroup = component.peer {
                 labelData = (component.strings.Group_Status, false)
