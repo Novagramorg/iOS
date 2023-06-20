@@ -14,6 +14,10 @@ swift_library(
         "//submodules/ComponentFlow",
         "//submodules/TextFormat",
         "//submodules/TelegramPresentationData",
+        "//submodules/AccountContext",
+        "//submodules/InvisibleInkDustNode",
+        "//submodules/TelegramUI/Components/EmojiTextAttachmentView",
+        "//submodules/ChatTextLinkEditUI"
     ],
     visibility = [
         "//visibility:public",
