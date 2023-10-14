@@ -17,6 +17,7 @@ swift_library(
         "//submodules/TelegramCore",
         "//submodules/AccountContext",
         "//submodules/TelegramUI/Components/Chat/ChatHistoryEntry",
+        "//submodules/TelegramUI/Components/Chat/ChatMessageItemCommon",
         "//submodules/TelegramUI/Components/ChatControllerInteraction",
         "//submodules/TelegramPresentationData",
     ],
