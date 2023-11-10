@@ -2,14 +2,8 @@ import Foundation
 import Metal
 import UIKit
 import IOSurface
+import Display
 import ShelfPack
-
-private func alignUp(size: Int, align: Int) -> Int {
-    precondition(((align - 1) & align) == 0, "Align must be a power of two")
-
-    let alignmentMask = align - 1
-    return (size + alignmentMask) & ~alignmentMask
-}
 
 public final class Placeholder<Resolved> {
     var contents: Resolved?
@@ -110,16 +104,16 @@ public struct RenderLayerPlacement: Equatable {
 public protocol RenderToLayerState: AnyObject {
     var pipelineState: MTLRenderPipelineState { get }
     
-    init?(device: MTLDevice, library: MTLLibrary)
+    init?(device: MTLDevice)
 }
 
 public protocol ComputeState: AnyObject {
-    init?(device: MTLDevice, library: MTLLibrary)
+    init?(device: MTLDevice)
 }
 
-open class MetalSubjectLayer: SimpleLayer {
+open class MetalEngineSubjectLayer: SimpleLayer {
     fileprivate var internalId: Int = -1
-    fileprivate var surfaceAllocation: MetalContext.SurfaceAllocation?
+    fileprivate var surfaceAllocation: MetalEngine.SurfaceAllocation?
     
     public override init() {
         super.init()
@@ -136,7 +130,7 @@ open class MetalSubjectLayer: SimpleLayer {
     }
     
     override public func setNeedsDisplay() {
-        if let subject = self as? MetalSubject {
+        if let subject = self as? MetalEngineSubject {
             subject.setNeedsUpdate()
         }
     }
@@ -171,7 +165,7 @@ public final class PooledTexture {
         }
     }
     
-    public func get(context: MetalSubjectContext) -> TexturePlaceholder? {
+    public func get(context: MetalEngineSubjectContext) -> TexturePlaceholder? {
         #if DEBUG
         if context.freeResourcesOnCompletion.contains(where: { $0 === self }) {
             assertionFailure("Trying to get PooledTexture more than once per update cycle")
@@ -193,7 +187,7 @@ public final class PooledTexture {
     }
 }
 
-public final class MetalSubjectContext {
+public final class MetalEngineSubjectContext {
     fileprivate final class ComputeOperation {
         let commands: (MTLCommandBuffer) -> Void
         
@@ -205,13 +199,13 @@ public final class MetalSubjectContext {
     fileprivate final class RenderToLayerOperation {
         let spec: RenderLayerSpec
         let state: RenderToLayerState
-        weak var layer: MetalSubjectLayer?
+        weak var layer: MetalEngineSubjectLayer?
         let commands: (MTLRenderCommandEncoder, RenderLayerPlacement) -> Void
         
         init(
             spec: RenderLayerSpec,
             state: RenderToLayerState,
-            layer: MetalSubjectLayer,
+            layer: MetalEngineSubjectLayer,
             commands: @escaping (MTLRenderCommandEncoder, RenderLayerPlacement) -> Void
         ) {
             self.spec = spec
@@ -222,13 +216,13 @@ public final class MetalSubjectContext {
     }
     
     private let device: MTLDevice
-    private let impl: MetalContext.Impl
+    private let impl: MetalEngine.Impl
     
     fileprivate var computeOperations: [ComputeOperation] = []
     fileprivate var renderToLayerOperationsGroupedByState: [ObjectIdentifier: [RenderToLayerOperation]] = [:]
     fileprivate var freeResourcesOnCompletion: [PooledTexture.Texture] = []
     
-    fileprivate init(device: MTLDevice, impl: MetalContext.Impl) {
+    fileprivate init(device: MTLDevice, impl: MetalEngine.Impl) {
         self.device = device
         self.impl = impl
     }
@@ -236,7 +230,7 @@ public final class MetalSubjectContext {
     public func renderToLayer<RenderToLayerStateType: RenderToLayerState, each Resolved>(
         spec: RenderLayerSpec,
         state: RenderToLayerStateType.Type,
-        layer: MetalSubjectLayer,
+        layer: MetalEngineSubjectLayer,
         inputs: repeat Placeholder<each Resolved>,
         commands: @escaping (MTLRenderCommandEncoder, RenderLayerPlacement, repeat each Resolved) -> Void
     ) {
@@ -245,7 +239,7 @@ public final class MetalSubjectContext {
         if let current = self.impl.renderStates[stateTypeId] as? RenderToLayerStateType {
             resolvedState = current
         } else {
-            guard let value = RenderToLayerStateType(device: self.device, library: self.impl.library) else {
+            guard let value = RenderToLayerStateType(device: self.device) else {
                 assertionFailure("Could not initialize render state \(state)")
                 return
             }
@@ -278,7 +272,7 @@ public final class MetalSubjectContext {
     public func renderToLayer<RenderToLayerStateType: RenderToLayerState>(
         spec: RenderLayerSpec,
         state: RenderToLayerStateType.Type,
-        layer: MetalSubjectLayer,
+        layer: MetalEngineSubjectLayer,
         commands: @escaping (MTLRenderCommandEncoder, RenderLayerPlacement) -> Void
     ) {
         self.renderToLayer(spec: spec, state: state, layer: layer, inputs: noInputPlaceholder, commands: { encoder, placement, _ in
@@ -296,7 +290,7 @@ public final class MetalSubjectContext {
         if let current = self.impl.computeStates[stateTypeId] as? ComputeStateType {
             resolvedState = current
         } else {
-            guard let value = ComputeStateType(device: self.device, library: self.impl.library) else {
+            guard let value = ComputeStateType(device: self.device) else {
                 assertionFailure("Could not initialize compute state \(state)")
                 return Placeholder()
             }
@@ -338,24 +332,24 @@ public final class MetalSubjectContext {
     }
 }
 
-public final class MetalSubjectInternalData {
+public final class MetalEngineSubjectInternalData {
     var internalId: Int = -1
-    var renderSurfaceAllocation: MetalContext.SurfaceAllocation?
+    var renderSurfaceAllocation: MetalEngine.SurfaceAllocation?
     
     init() {
     }
 }
 
-public protocol MetalSubject: AnyObject {
-    var internalData: MetalSubjectInternalData? { get set }
+public protocol MetalEngineSubject: AnyObject {
+    var internalData: MetalEngineSubjectInternalData? { get set }
     
     func setNeedsUpdate()
-    func update(context: MetalSubjectContext)
+    func update(context: MetalEngineSubjectContext)
 }
 
-public extension MetalSubject {
+public extension MetalEngineSubject {
     func setNeedsUpdate() {
-        MetalContext.shared.impl.addSubjectNeedsUpdate(subject: self)
+        MetalEngine.shared.impl.addSubjectNeedsUpdate(subject: self)
     }
 }
 
@@ -370,7 +364,7 @@ private final class MetalEventLayer: CAMetalLayer {
     }
 }
 
-public final class MetalContext {
+public final class MetalEngine {
     struct SurfaceAllocation {
         struct Phase {
             let subRect: CGRect
@@ -509,9 +503,9 @@ public final class MetalContext {
     }
     
     private final class SubjectReference {
-        weak var subject: MetalSubject?
+        weak var subject: MetalEngineSubject?
         
-        init(subject: MetalSubject) {
+        init(subject: MetalEngineSubject) {
             self.subject = subject
         }
     }
@@ -548,7 +542,7 @@ public final class MetalContext {
         
         init?(device: MTLDevice) {
             let mainBundle = Bundle(for: Impl.self)
-            guard let path = mainBundle.path(forResource: "MetalSourcesBundle", ofType: "bundle") else {
+            guard let path = mainBundle.path(forResource: "MetalEngineMetalSourcesBundle", ofType: "bundle") else {
                 return nil
             }
             guard let bundle = Bundle(path: path) else {
@@ -624,15 +618,15 @@ public final class MetalContext {
             let surfaceId = self.nextSurfaceId
             self.nextSurfaceId += 1
             
-            let surfaceWidth = max(1024, alignUp(size: Int(minSize.width), align: 64))
-            let surfaceHeight = max(512, alignUp(size: Int(minSize.height), align: 64))
+            let surfaceWidth = max(1024, alignUp(Int(minSize.width), alignment: 64))
+            let surfaceHeight = max(512, alignUp(Int(minSize.height), alignment: 64))
             let surface = Surface(id: surfaceId, device: self.device, width: surfaceWidth, height: surfaceHeight)
             self.surfaces[surfaceId] = surface
             
             return surface
         }
         
-        private func refreshLayerAllocation(layer: MetalSubjectLayer, renderSpec: RenderLayerSpec) {
+        private func refreshLayerAllocation(layer: MetalEngineSubjectLayer, renderSpec: RenderLayerSpec) {
             var previousSurfaceId: Int?
             var updatedSurfaceId: Int?
             
@@ -689,12 +683,12 @@ public final class MetalContext {
             }
         }
         
-        func addSubjectNeedsUpdate(subject: MetalSubject) {
-            let internalData: MetalSubjectInternalData
+        func addSubjectNeedsUpdate(subject: MetalEngineSubject) {
+            let internalData: MetalEngineSubjectInternalData
             if let current = subject.internalData {
                 internalData = current
             } else {
-                internalData = MetalSubjectInternalData()
+                internalData = MetalEngineSubjectInternalData()
                 subject.internalData = internalData
             }
             
@@ -751,7 +745,7 @@ public final class MetalContext {
                 return
             }
             
-            let subjectContext = MetalSubjectContext(device: device, impl: self)
+            let subjectContext = MetalEngineSubjectContext(device: device, impl: self)
             
             for subjectReference in self.updatedSubjects {
                 guard let subject = subjectReference.subject else {
@@ -899,7 +893,7 @@ public final class MetalContext {
         }
     }
     
-    public static let shared = MetalContext()
+    public static let shared = MetalEngine()
     
     fileprivate let impl: Impl
     
