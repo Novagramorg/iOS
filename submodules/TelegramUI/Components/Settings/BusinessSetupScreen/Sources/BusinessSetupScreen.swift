@@ -182,7 +182,7 @@ final class BusinessSetupScreenComponent: Component {
             var contentHeight: CGFloat = 0.0
             
             contentHeight += environment.navigationHeight
-            contentHeight += 81.0
+            contentHeight += 16.0
             
             //TODO:localize
             let titleSize = self.title.update(
@@ -241,14 +241,22 @@ final class BusinessSetupScreenComponent: Component {
                 icon: "Settings/Menu/AddAccount",
                 title: "Location",
                 subtitle: "Display the location of your business on your account.",
-                action: {
+                action: { [weak self] in
+                    guard let self else {
+                        return
+                    }
+                    self.environment?.controller()?.push(component.context.sharedContext.makeBusinessLocationSetupScreen(context: component.context))
                 }
             ))
             items.append(Item(
                 icon: "Settings/Menu/DataVoice",
                 title: "Opening Hours",
                 subtitle: "Show to your customers when you are open for business.",
-                action: {
+                action: { [weak self] in
+                    guard let self else {
+                        return
+                    }
+                    self.environment?.controller()?.push(component.context.sharedContext.makeBusinessHoursSetupScreen(context: component.context))
                 }
             ))
             items.append(Item(
@@ -262,7 +270,11 @@ final class BusinessSetupScreenComponent: Component {
                 icon: "Settings/Menu/Stories",
                 title: "Greeting Messages",
                 subtitle: "Create greetings that will be automatically sent to new customers.",
-                action: {
+                action: { [weak self] in
+                    guard let self, let component = self.component, let environment = self.environment else {
+                        return
+                    }
+                    environment.controller()?.push(component.context.sharedContext.makeGreetingMessageSetupScreen(context: component.context))
                 }
             ))
             items.append(Item(

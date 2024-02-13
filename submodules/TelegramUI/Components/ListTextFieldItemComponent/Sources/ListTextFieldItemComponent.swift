@@ -4,23 +4,35 @@ import Display
 import ComponentFlow
 import TelegramPresentationData
 import MultilineTextComponent
+import ListSectionComponent
+import PlainButtonComponent
+import BundleIconComponent
 
 public final class ListTextFieldItemComponent: Component {
     public let theme: PresentationTheme
     public let initialText: String
     public let placeholder: String
+    public let autocapitalizationType: UITextAutocapitalizationType
+    public let autocorrectionType: UITextAutocorrectionType
     public let updated: ((String) -> Void)?
+    public let tag: AnyObject?
     
     public init(
         theme: PresentationTheme,
         initialText: String,
         placeholder: String,
-        updated: ((String) -> Void)?
+        autocapitalizationType: UITextAutocapitalizationType = .sentences,
+        autocorrectionType: UITextAutocorrectionType = .default,
+        updated: ((String) -> Void)?,
+        tag: AnyObject? = nil
     ) {
         self.theme = theme
         self.initialText = initialText
         self.placeholder = placeholder
+        self.autocapitalizationType = autocapitalizationType
+        self.autocorrectionType = autocorrectionType
         self.updated = updated
+        self.tag = tag
     }
     
     public static func ==(lhs: ListTextFieldItemComponent, rhs: ListTextFieldItemComponent) -> Bool {
@@ -31,6 +43,12 @@ public final class ListTextFieldItemComponent: Component {
             return false
         }
         if lhs.placeholder != rhs.placeholder {
+            return false
+        }
+        if lhs.autocapitalizationType != rhs.autocapitalizationType {
+            return false
+        }
+        if lhs.autocorrectionType != rhs.autocorrectionType {
             return false
         }
         if (lhs.updated == nil) != (rhs.updated == nil) {
@@ -51,9 +69,10 @@ public final class ListTextFieldItemComponent: Component {
         }
     }
     
-    public final class View: UIView, UITextFieldDelegate {
+    public final class View: UIView, UITextFieldDelegate, ListSectionComponent.ChildView, ComponentTaggedView {
         private let textField: TextField
         private let placeholder = ComponentView<Empty>()
+        private let clearButton = ComponentView<Empty>()
         
         private var component: ListTextFieldItemComponent?
         private weak var state: EmptyComponentState?
@@ -62,6 +81,9 @@ public final class ListTextFieldItemComponent: Component {
         public var currentText: String {
             return self.textField.text ?? ""
         }
+        
+        public var customUpdateIsHighlighted: ((Bool) -> Void)?
+        public private(set) var separatorInset: CGFloat = 0.0
         
         public override init(frame: CGRect) {
             self.textField = TextField()
@@ -81,6 +103,27 @@ public final class ListTextFieldItemComponent: Component {
             if !self.isUpdating {
                 self.state?.updated(transition: .immediate)
             }
+            self.component?.updated?(self.currentText)
+        }
+        
+        public func setText(text: String, updateState: Bool) {
+            self.textField.text = text
+            if updateState {
+                self.state?.updated(transition: .immediate, isLocal: true)
+                self.component?.updated?(self.currentText)
+            } else {
+                self.state?.updated(transition: .immediate, isLocal: true)
+            }
+        }
+        
+        public func matches(tag: Any) -> Bool {
+            if let component = self.component, let componentTag = component.tag {
+                let tag = tag as AnyObject
+                if componentTag === tag {
+                    return true
+                }
+            }
+            return false
         }
         
         func update(component: ListTextFieldItemComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: Transition) -> CGSize {
@@ -102,6 +145,13 @@ public final class ListTextFieldItemComponent: Component {
                 self.textField.addTarget(self, action: #selector(self.textDidChange), for: .editingChanged)
             }
             
+            if self.textField.autocapitalizationType != component.autocapitalizationType {
+                self.textField.autocapitalizationType = component.autocapitalizationType
+            }
+            if self.textField.autocorrectionType != component.autocorrectionType {
+                self.textField.autocorrectionType = component.autocorrectionType
+            }
+            
             let themeUpdated = component.theme !== previousComponent?.theme
             
             if themeUpdated {
@@ -120,7 +170,7 @@ public final class ListTextFieldItemComponent: Component {
                     text: .plain(NSAttributedString(string: component.placeholder.isEmpty ? " " : component.placeholder, font: Font.regular(17.0), textColor: component.theme.list.itemPlaceholderTextColor))
                 )),
                 environment: {},
-                containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 100.0)
+                containerSize: CGSize(width: availableSize.width - sideInset * 2.0 - 30.0, height: 100.0)
             )
             let contentHeight: CGFloat = placeholderSize.height + verticalInset * 2.0
             let placeholderFrame = CGRect(origin: CGPoint(x: sideInset, y: floor((contentHeight - placeholderSize.height) * 0.5)), size: placeholderSize)
@@ -137,6 +187,37 @@ public final class ListTextFieldItemComponent: Component {
             }
             
             transition.setFrame(view: self.textField, frame: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: availableSize.width, height: contentHeight)))
+            
+            let clearButtonSize = self.clearButton.update(
+                transition: transition,
+                component: AnyComponent(PlainButtonComponent(
+                    content: AnyComponent(BundleIconComponent(
+                        name: "Components/Search Bar/Clear",
+                        tintColor: component.theme.list.itemPrimaryTextColor.withMultipliedAlpha(0.4)
+                    )),
+                    effectAlignment: .center,
+                    minSize: CGSize(width: 44.0, height: 44.0),
+                    action: { [weak self] in
+                        guard let self else {
+                            return
+                        }
+                        self.setText(text: "", updateState: true)
+                    },
+                    animateAlpha: false,
+                    animateScale: true
+                )),
+                environment: {},
+                containerSize: CGSize(width: 44.0, height: 44.0)
+            )
+            if let clearButtonView = self.clearButton.view {
+                if clearButtonView.superview == nil {
+                    self.addSubview(clearButtonView)
+                }
+                transition.setFrame(view: clearButtonView, frame: CGRect(origin: CGPoint(x: availableSize.width - 0.0 - clearButtonSize.width, y: floor((contentHeight - clearButtonSize.height) * 0.5)), size: clearButtonSize))
+                clearButtonView.isHidden = self.currentText.isEmpty
+            }
+            
+            self.separatorInset = 16.0
             
             return CGSize(width: availableSize.width, height: contentHeight)
         }
