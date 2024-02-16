@@ -13,9 +13,8 @@ swift_library(
         "//submodules/AsyncDisplayKit",
         "//submodules/Display",
         "//submodules/TelegramPresentationData",
-        "//submodules/LegacyUI",
+        "//submodules/LegacyComponents",
         "//submodules/ComponentFlow",
-        "//submodules/Components/MultilineTextComponent",
     ],
     visibility = [
         "//visibility:public",
