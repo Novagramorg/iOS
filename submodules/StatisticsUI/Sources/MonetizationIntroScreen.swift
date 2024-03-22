@@ -21,18 +21,15 @@ private final class SheetContent: CombinedComponent {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
     
     let context: AccountContext
-    let animatedEmojis: [String: TelegramMediaFile]
     let openMore: () -> Void
     let dismiss: () -> Void
     
     init(
         context: AccountContext,
-        animatedEmojis: [String: TelegramMediaFile],
         openMore: @escaping () -> Void,
         dismiss: @escaping () -> Void
     ) {
         self.context = context
-        self.animatedEmojis = animatedEmojis
         self.openMore = openMore
         self.dismiss = dismiss
     }
@@ -126,7 +123,7 @@ private final class SheetContent: CombinedComponent {
             )
             
             let icon = icon.update(
-                component: BundleIconComponent(name: "Chart/Monetization", tintColor: theme.list.itemCheckColors.foregroundColor),
+                component: BundleIconComponent(name: "Ads/MonetizationLogo", tintColor: theme.list.itemCheckColors.foregroundColor),
                 availableSize: CGSize(width: 90, height: 90),
                 transition: .immediate
             )
@@ -163,7 +160,7 @@ private final class SheetContent: CombinedComponent {
                         titleColor: textColor,
                         text: "Telegram can display ads in your channel.",
                         textColor: secondaryTextColor,
-                        iconName: "Chart/Ads",
+                        iconName: "Ads/Ads",
                         iconColor: linkColor
                     ))
                 )
@@ -176,7 +173,7 @@ private final class SheetContent: CombinedComponent {
                         titleColor: textColor,
                         text: "You receive 50% of the ad revenue in TON.",
                         textColor: secondaryTextColor,
-                        iconName: "Chart/Split",
+                        iconName: "Ads/Split",
                         iconColor: linkColor
                     ))
                 )
@@ -189,7 +186,7 @@ private final class SheetContent: CombinedComponent {
                         titleColor: textColor,
                         text: "You can withdraw your TON any time.",
                         textColor: secondaryTextColor,
-                        iconName: "Chart/Withdrawal",
+                        iconName: "Ads/Withdrawal",
                         iconColor: linkColor
                     ))
                 )
@@ -209,7 +206,7 @@ private final class SheetContent: CombinedComponent {
             let infoTitleString = "What's #TON?"//.replacingOccurrences(of: "#", with: "# ")
             let infoTitleAttributedString = NSMutableAttributedString(string: infoTitleString, font: titleFont, textColor: textColor)
             let range = (infoTitleAttributedString.string as NSString).range(of: "#")
-            if range.location != NSNotFound, let emojiFile = component.animatedEmojis["💎"] {
+            if range.location != NSNotFound, let emojiFile = component.context.animatedEmojiStickersValue["💎"]?.first?.file {
                 infoTitleAttributedString.addAttribute(ChatTextInputAttributes.customEmoji, value: ChatTextInputTextCustomEmojiAttribute(interactivelySelectedFromPackId: nil, fileId: emojiFile.fileId.id, file: emojiFile), range: range)
             }
             let infoTitle = infoTitle.update(
@@ -317,16 +314,13 @@ private final class SheetContainerComponent: CombinedComponent {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
     
     let context: AccountContext
-    let animatedEmojis: [String: TelegramMediaFile]
     let openMore: () -> Void
     
     init(
         context: AccountContext,
-        animatedEmojis: [String: TelegramMediaFile],
         openMore: @escaping () -> Void
     ) {
         self.context = context
-        self.animatedEmojis = animatedEmojis
         self.openMore = openMore
     }
     
@@ -352,7 +346,6 @@ private final class SheetContainerComponent: CombinedComponent {
                 component: SheetComponent<EnvironmentType>(
                     content: AnyComponent<EnvironmentType>(SheetContent(
                         context: context.component.context,
-                        animatedEmojis: context.component.animatedEmojis,
                         openMore: context.component.openMore,
                         dismiss: {
                             animateOut.invoke(Action { _ in
@@ -421,23 +414,19 @@ private final class SheetContainerComponent: CombinedComponent {
 
 final class MonetizationIntroScreen: ViewControllerComponentContainer {
     private let context: AccountContext
-    private let animatedEmojis: [String: TelegramMediaFile]
     private var openMore: (() -> Void)?
         
     init(
         context: AccountContext,
-        animatedEmojis: [String: TelegramMediaFile],
         openMore: @escaping () -> Void
     ) {
         self.context = context
-        self.animatedEmojis = animatedEmojis
         self.openMore = openMore
                 
         super.init(
             context: context,
             component: SheetContainerComponent(
                 context: context,
-                animatedEmojis: animatedEmojis,
                 openMore: openMore
             ),
             navigationBarAppearance: .none,
