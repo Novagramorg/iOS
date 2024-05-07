@@ -42,15 +42,16 @@ typedef NS_ENUM(NSUInteger, LottieGradientType) {
 @property (nonatomic, readonly, direct) CGFloat location;
 
 - (instancetype _Nonnull)init NS_UNAVAILABLE;
+- (instancetype _Nonnull)initWithColor:(LottieColor)color location:(CGFloat)location __attribute__((objc_direct));
 
 @end
 
 @interface LottiePath : NSObject
 
-- (CGRect)boundingBox __attribute__((objc_direct));
 - (void)enumerateItems:(void (^ _Nonnull)(LottiePathItem * _Nonnull))iterate __attribute__((objc_direct));
 
 - (instancetype _Nonnull)init NS_UNAVAILABLE;
+- (instancetype _Nonnull)initWithCustomData:(NSData * _Nonnull)customData __attribute__((objc_direct));
 
 @end
 
@@ -64,6 +65,7 @@ typedef NS_ENUM(NSUInteger, LottieGradientType) {
 @property (nonatomic, readonly, direct) CGFloat opacity;
 
 - (instancetype _Nonnull)init NS_UNAVAILABLE;
+- (instancetype _Nonnull)initWithColor:(LottieColor)color opacity:(CGFloat)opacity __attribute__((objc_direct));
 
 @end
 
@@ -76,6 +78,7 @@ typedef NS_ENUM(NSUInteger, LottieGradientType) {
 @property (nonatomic, readonly, direct) CGPoint end;
 
 - (instancetype _Nonnull)init NS_UNAVAILABLE;
+- (instancetype _Nonnull)initWithOpacity:(CGFloat)opacity gradientType:(LottieGradientType)gradientType colorStops:(NSArray<LottieColorStop *> * _Nonnull)colorStops start:(CGPoint)start end:(CGPoint)end __attribute__((objc_direct));
 
 @end
 
@@ -85,6 +88,7 @@ typedef NS_ENUM(NSUInteger, LottieGradientType) {
 @property (nonatomic, readonly, direct) LottieFillRule fillRule;
 
 - (instancetype _Nonnull)init NS_UNAVAILABLE;
+- (instancetype _Nonnull)initWithShading:(LottieRenderContentShading * _Nonnull)shading fillRule:(LottieFillRule)fillRule __attribute__((objc_direct));
 
 @end
 
@@ -99,6 +103,7 @@ typedef NS_ENUM(NSUInteger, LottieGradientType) {
 @property (nonatomic, strong, readonly, direct) NSArray<NSNumber *> * _Nullable dashPattern;
 
 - (instancetype _Nonnull)init NS_UNAVAILABLE;
+- (instancetype _Nonnull)initWithShading:(LottieRenderContentShading * _Nonnull)shading lineWidth:(CGFloat)lineWidth lineJoin:(CGLineJoin)lineJoin lineCap:(CGLineCap)lineCap miterLimit:(CGFloat)miterLimit dashPhase:(CGFloat)dashPhase dashPattern:(NSArray<NSNumber *> * _Nullable)dashPattern __attribute__((objc_direct));
 
 @end
 
@@ -109,6 +114,7 @@ typedef NS_ENUM(NSUInteger, LottieGradientType) {
 @property (nonatomic, strong, readonly, direct) LottieRenderContentFill * _Nullable fill;
 
 - (instancetype _Nonnull)init NS_UNAVAILABLE;
+- (instancetype _Nonnull)initWithPath:(LottiePath * _Nonnull)path stroke:(LottieRenderContentStroke * _Nullable)stroke fill:(LottieRenderContentFill * _Nullable)fill __attribute__((objc_direct));
 
 @end
 
@@ -130,6 +136,7 @@ typedef NS_ENUM(NSUInteger, LottieGradientType) {
 @property (nonatomic, readonly, direct) LottieRenderNode * _Nullable mask;
 
 - (instancetype _Nonnull)init NS_UNAVAILABLE;
+- (instancetype _Nonnull)initWithPosition:(CGPoint)position bounds:(CGRect)bounds transform:(CATransform3D)transform opacity:(CGFloat)opacity masksToBounds:(bool)masksToBounds isHidden:(bool)isHidden globalRect:(CGRect)globalRect globalTransform:(CATransform3D)globalTransform renderContent:(LottieRenderContent * _Nullable)renderContent hasSimpleContents:(bool)hasSimpleContents isInvertedMatte:(bool)isInvertedMatte subnodes:(NSArray<LottieRenderNode *> * _Nonnull)subnodes mask:(LottieRenderNode * _Nullable)mask __attribute__((objc_direct));
 
 @end
 
