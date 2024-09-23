@@ -25,6 +25,7 @@ swift_library(
         "//submodules/Components/ViewControllerComponent",
         "//submodules/Components/BundleIconComponent",
         "//submodules/Components/MultilineTextComponent",
+        "//submodules/Components/MultilineTextWithEntitiesComponent",
         "//submodules/Components/BalancedTextComponent",
         "//submodules/TelegramUI/Components/ListSectionComponent",
         "//submodules/TelegramUI/Components/ListActionItemComponent",
