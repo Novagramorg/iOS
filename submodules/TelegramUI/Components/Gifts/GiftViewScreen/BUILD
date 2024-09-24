@@ -37,6 +37,7 @@ swift_library(
         "//submodules/Components/SolidRoundedButtonComponent",
         "//submodules/TelegramUI/Components/Stars/StarsAvatarComponent",
         "//submodules/TelegramUI/Components/EmojiTextAttachmentView",
+        "//submodules/TelegramUI/Components/Gifts/GiftAnimationComponent",
         "//submodules/UndoUI",
     ],
     visibility = [
