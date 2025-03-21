@@ -5,14 +5,7 @@ import Postbox
 import TelegramCore
 import AsyncDisplayKit
 import Display
-import ContextUI
-import UndoUI
 import AccountContext
-import ChatControllerInteraction
-import AnimatedTextComponent
-import ChatMessagePaymentAlertController
-import TelegramPresentationData
-import TelegramNotices
 
 extension ChatControllerImpl {
     func presentAccountFrozenInfoIfNeeded(delay: Bool = false) -> Bool {
