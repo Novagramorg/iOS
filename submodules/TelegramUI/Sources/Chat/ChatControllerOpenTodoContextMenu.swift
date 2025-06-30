@@ -66,14 +66,13 @@ extension ChatControllerImpl {
                 items.append(.separator)
                 
                 if canMark {
-                    items.append(.action(ContextMenuActionItem(text: self.presentationData.strings.Chat_Todo_ContextMenu_UncheckTask, icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Clear"), color: theme.contextMenu.primaryColor) }, action: { [weak self]  _, f in
-                        f(.default)
-                        
+                    items.append(.action(ContextMenuActionItem(text: self.presentationData.strings.Chat_Todo_ContextMenu_UncheckTask, icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Clear"), color: theme.contextMenu.primaryColor) }, action: { [weak self] c, f in
                         guard let self else {
                             return
                         }
                         
                         if !self.context.isPremium {
+                            f(.default)
                             let controller = UndoOverlayController(
                                 presentationData: self.presentationData,
                                 content: .premiumPaywall(title: nil, text: self.presentationData.strings.Chat_Todo_PremiumRequired, customUndoText: nil, timeout: nil, linkAction: nil),
@@ -89,21 +88,22 @@ extension ChatControllerImpl {
                                 }
                             )
                             self.present(controller, in: .current)
+                        } else {
+                            c?.dismiss(completion: {
+                                let _ = self.context.engine.messages.requestUpdateTodoMessageItems(messageId: message.id, completedIds: [], incompletedIds: [todoItemId]).start()
+                            })
                         }
-                        
-                        let _ = self.context.engine.messages.requestUpdateTodoMessageItems(messageId: message.id, completedIds: [], incompletedIds: [todoItemId]).start()
                     })))
                 }
             } else {
                 if canMark {
-                    items.append(.action(ContextMenuActionItem(text: self.presentationData.strings.Chat_Todo_ContextMenu_CheckTask, icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Select"), color: theme.contextMenu.primaryColor) }, action: { [weak self]  _, f in
-                        f(.default)
-                        
+                    items.append(.action(ContextMenuActionItem(text: self.presentationData.strings.Chat_Todo_ContextMenu_CheckTask, icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Select"), color: theme.contextMenu.primaryColor) }, action: { [weak self]  c, f in
                         guard let self else {
                             return
                         }
                         
                         if !self.context.isPremium {
+                            f(.default)
                             let controller = UndoOverlayController(
                                 presentationData: self.presentationData,
                                 content: .premiumPaywall(title: nil, text: self.presentationData.strings.Chat_Todo_PremiumRequired, customUndoText: nil, timeout: nil, linkAction: nil),
@@ -119,9 +119,11 @@ extension ChatControllerImpl {
                                 }
                             )
                             self.present(controller, in: .current)
+                        } else {
+                            c?.dismiss(completion: {
+                                let _ = self.context.engine.messages.requestUpdateTodoMessageItems(messageId: message.id, completedIds: [todoItemId], incompletedIds: []).start()
+                            })
                         }
-                        
-                        let _ = self.context.engine.messages.requestUpdateTodoMessageItems(messageId: message.id, completedIds: [todoItemId], incompletedIds: []).start()
                     })))
                 }
             }
@@ -220,14 +222,12 @@ extension ChatControllerImpl {
             
             self.canReadHistory.set(false)
             
-            //TODO:localize
             var sources: [ContextController.Source] = []
             sources.append(
                 ContextController.Source(
                     id: AnyHashable(OptionsId.item),
                     title: self.presentationData.strings.Chat_Todo_ContextMenu_SectionTask,
                     footer: self.presentationData.strings.Chat_Todo_ContextMenu_SectionsInfo,
-                    //source: .extracted(ChatMessageLinkContextExtractedContentSource(chatNode: self.chatDisplayNode, contentNode: contentNode)),
                     source: .extracted(ChatTodoItemContextExtractedContentSource(chatNode: self.chatDisplayNode, contentNode: contentNode)),
                     items: .single(ContextController.Items(content: .list(items)))
                 )

@@ -417,20 +417,24 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                             }
                             title = item.presentationData.strings.Notification_StarsGift_Title(Int32(count))
                             text = incoming ? item.presentationData.strings.Notification_StarsGift_Subtitle : item.presentationData.strings.Notification_StarsGift_SubtitleYou(peerName).string
-                        case let .giftTon(currency, amount, cryptoCurrency, cryptoAmount, _):
+                        case let .giftTon(_, amount, _, cryptoAmount, _):
+                            if amount < 10000000000 {
+                                months = 1000
+                            } else if amount < 50000000000 {
+                                months = 2000
+                            } else {
+                                months = 3000
+                            }
+                            
                             var peerName = ""
                             if let peer = item.message.peers[item.message.id.peerId] {
                                 peerName = EnginePeer(peer).compactDisplayTitle
                             }
-                            //TODO:localize
-                            let _ = currency
-                            let _ = amount
-                            let _ = cryptoCurrency
-                            
                             let cryptoAmount = cryptoAmount ?? 0
                             
-                            title = "$ \(formatTonAmountText(cryptoAmount, dateTimeFormat: item.presentationData.dateTimeFormat))"
-                            text = incoming ? "Use TON to submit post suggestions to channels." : "With TON, \(peerName) will be able to submit post suggestions to channels."
+                            title = "$ \(formatTonAmountText(cryptoAmount, dateTimeFormat: item.presentationData.dateTimeFormat, maxDecimalPositions: 3))"
+                            text = incoming ? item.presentationData.strings.Notification_Ton_Subtitle : item.presentationData.strings.Notification_Ton_SubtitleYou(peerName).string
+                            buttonTitle = ""
                         case let .prizeStars(count, _, channelId, _, _):
                             if count <= 1000 {
                                 months = 3
@@ -640,6 +644,12 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                 }
                 
                 switch months {
+                case 1000:
+                    animationName = "GiftDiamond1"
+                case 2000:
+                    animationName = "GiftDiamond2"
+                case 3000:
+                    animationName = "GiftDiamond3"
                 case 12:
                     animationName = "Gift12"
                 case 6:
@@ -782,8 +792,8 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                     }
                 }
                 for i in 0 ..< labelRects.count {
-                    labelRects[i] = labelRects[i].insetBy(dx: -6.0, dy: floor((labelRects[i].height - 20.0) / 2.0))
-                    labelRects[i].size.height = 20.0
+                    labelRects[i] = labelRects[i].insetBy(dx: -7.0, dy: floor((labelRects[i].height - 22.0) / 2.0))
+                    labelRects[i].size.height = 22.0
                     labelRects[i].origin.x = floor((labelLayout.size.width - labelRects[i].width) / 2.0)
                 }
 
@@ -793,7 +803,7 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                     if let (currentOffset, currentImage, currentRects) = cachedMaskBackgroundImage, currentRects == labelRects {
                         backgroundMaskImage = (currentOffset, currentImage)
                     } else {
-                        backgroundMaskImage = LinkHighlightingNode.generateImage(color: .black, inset: 0.0, innerRadius: 10.0, outerRadius: 10.0, rects: labelRects, useModernPathCalculation: false)
+                        backgroundMaskImage = LinkHighlightingNode.generateImage(color: .black, inset: 0.0, innerRadius: 11.0, outerRadius: 11.0, rects: labelRects, useModernPathCalculation: false)
                         backgroundMaskUpdated = true
                     }
                 } else {
@@ -802,7 +812,7 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
             
                 var backgroundSize = giftSize
                 if hasServiceMessage {
-                    backgroundSize.height += labelLayout.size.height + 18.0
+                    backgroundSize.height += labelLayout.size.height + 20.0
                 } else {
                     backgroundSize.height += 4.0
                 }
@@ -823,7 +833,7 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                             
                             let overlayColor = item.presentationData.theme.theme.overallDarkAppearance && uniquePatternFile == nil ? UIColor(rgb: 0xffffff, alpha: 0.12) : UIColor(rgb: 0x000000, alpha: 0.12)
                             
-                            let imageFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((boundingWidth - giftSize.width) / 2.0), y: hasServiceMessage ? labelLayout.size.height + 12.0 : 0.0), size: giftSize)
+                            let imageFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((boundingWidth - giftSize.width) / 2.0), y: hasServiceMessage ? labelLayout.size.height + 13.0 : 0.0), size: giftSize)
                             let mediaBackgroundFrame = imageFrame.insetBy(dx: -2.0, dy: -2.0)
                             
                             var iconSize = CGSize(width: 160.0, height: 160.0)

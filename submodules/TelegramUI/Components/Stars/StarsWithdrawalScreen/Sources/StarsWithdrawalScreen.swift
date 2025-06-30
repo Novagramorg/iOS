@@ -25,6 +25,7 @@ import ListActionItemComponent
 import ChatScheduleTimeController
 import TabSelectorComponent
 import PresentationDataUtils
+import BalanceNeededScreen
 
 private let amountTag = GenericComponentViewTag()
 
@@ -156,6 +157,7 @@ private final class SheetContent: CombinedComponent {
             var amountRightLabel: String?
             
             let minAmount: StarsAmount?
+            var allowZero = false
             let maxAmount: StarsAmount?
             
             let withdrawConfiguration = StarsWithdrawConfiguration.with(appConfiguration: component.context.currentAppConfiguration.with { $0 })
@@ -168,7 +170,7 @@ private final class SheetContent: CombinedComponent {
                 amountPlaceholder = environment.strings.Stars_Withdraw_AmountPlaceholder
                 
                 minAmount = withdrawConfiguration.minWithdrawAmount.flatMap { StarsAmount(value: $0, nanos: 0) }
-                maxAmount = status.balances.availableBalance
+                maxAmount = status.balances.availableBalance.amount
             case .accountWithdraw:
                 titleString = environment.strings.Stars_Withdraw_Title
                 amountTitle = environment.strings.Stars_Withdraw_AmountTitle
@@ -210,24 +212,35 @@ private final class SheetContent: CombinedComponent {
                 minAmount = StarsAmount(value: minAmountValue, nanos: 0)
                 maxAmount = StarsAmount(value: resaleConfiguration.paidMessageMaxAmount, nanos: 0)
             case let .suggestedPost(mode, _, _, _):
-                //TODO:localize
                 switch mode {
                 case .sender:
-                    titleString = "Suggest Terms"
+                    titleString = environment.strings.Chat_PostSuggestion_Suggest_TitleCreate
                 case .admin:
-                    titleString = "Suggest Changes"
+                    titleString = environment.strings.Chat_PostSuggestion_Suggest_TitleEdit
                 }
                 switch state.currency {
                 case .stars:
-                    amountTitle = "ENTER A PRICE IN STARS"
+                    amountTitle = environment.strings.Chat_PostSuggestion_Suggest_PriceSectionStars
                     maxAmount = StarsAmount(value: resaleConfiguration.channelMessageSuggestionMaxStarsAmount, nanos: 0)
+                    minAmount = StarsAmount(value: resaleConfiguration.channelMessageSuggestionMinStarsAmount, nanos: 0)
                 case .ton:
-                    amountTitle = "ENTER A PRICE IN TON"
+                    amountTitle = environment.strings.Chat_PostSuggestion_Suggest_PriceSectionTon
                     maxAmount = StarsAmount(value: resaleConfiguration.channelMessageSuggestionMaxTonAmount, nanos: 0)
+                    minAmount = StarsAmount(value: 0, nanos: 0)
                 }
-                amountPlaceholder = "Price"
+                amountPlaceholder = environment.strings.Chat_PostSuggestion_Suggest_PricePlaceholder
+                allowZero = true
                 
-                minAmount = StarsAmount(value: 0, nanos: 0)
+                if let usdWithdrawRate = withdrawConfiguration.usdWithdrawRate, let tonUsdRate = withdrawConfiguration.tonUsdRate, let amount = state.amount, amount > StarsAmount.zero {
+                    switch state.currency {
+                    case .stars:
+                        let usdRate = Double(usdWithdrawRate) / 1000.0 / 100.0
+                        amountLabel = "≈\(formatTonUsdValue(amount.value, divide: false, rate: usdRate, dateTimeFormat: environment.dateTimeFormat))"
+                    case .ton:
+                        let usdRate = Double(tonUsdRate) / 1000.0 / 1000000.0
+                        amountLabel = "≈\(formatTonUsdValue(amount.value, divide: false, rate: usdRate, dateTimeFormat: environment.dateTimeFormat))"
+                    }
+                }
             }
             
             let title = title.update(
@@ -247,7 +260,7 @@ private final class SheetContent: CombinedComponent {
             } else if case .reaction = component.mode {
                 balance = state.starsBalance
             } else if case let .withdraw(starsState, _) = component.mode {
-                balance = starsState.balances.availableBalance
+                balance = starsState.balances.availableBalance.amount
             } else {
                 balance = nil
             }
@@ -316,17 +329,16 @@ private final class SheetContent: CombinedComponent {
                 }
                 
                 if displayCurrencySelector {
-                    //TODO:localize
                     let selectedId: AnyHashable = state.currency == .stars ? AnyHashable(0 as Int) : AnyHashable(1 as Int)
                     let starsTitle: String
                     let tonTitle: String
                     switch mode {
                     case .sender:
-                        starsTitle = "Offer Stars"
-                        tonTitle = "Offer TON"
+                        starsTitle = environment.strings.Chat_PostSuggestion_Suggest_OfferStars
+                        tonTitle = environment.strings.Chat_PostSuggestion_Suggest_OfferTon
                     case .admin:
-                        starsTitle = "Request Stars"
-                        tonTitle = "Request TON"
+                        starsTitle = environment.strings.Chat_PostSuggestion_Suggest_RequestStars
+                        tonTitle = environment.strings.Chat_PostSuggestion_Suggest_RequestTon
                     }
                     
                     let currencyToggle = currencyToggle.update(
@@ -460,21 +472,20 @@ private final class SheetContent: CombinedComponent {
             case let .suggestedPost(mode, _, _, _):
                 switch mode {
                 case let .sender(channel, isFromAdmin):
-                    //TODO:localize
                     let string: String
                     if isFromAdmin {
                         switch state.currency {
                         case .stars:
-                            string = "Choose how many Stars you charge for the message."
+                            string = environment.strings.Chat_PostSuggestion_Suggest_RequestDescriptionStars
                         case .ton:
-                            string = "Choose how many TON you charge for the message."
+                            string = environment.strings.Chat_PostSuggestion_Suggest_RequestDescriptionTon
                         }
                     } else {
                         switch state.currency {
                         case .stars:
-                            string = "Choose how many Stars you want to offer \(channel.compactDisplayTitle) to publish this message."
+                            string = environment.strings.Chat_PostSuggestion_Suggest_OfferDescriptionStars(channel.compactDisplayTitle).string
                         case .ton:
-                            string = "Choose how many TON you want to offer \(channel.compactDisplayTitle) to publish this message."
+                            string = environment.strings.Chat_PostSuggestion_Suggest_OfferDescriptionTon(channel.compactDisplayTitle).string
                         }
                     }
                     let amountInfoString = NSAttributedString(attributedString: parseMarkdownIntoAttributedString(string, attributes: amountMarkdownAttributes, textAlignment: .natural))
@@ -483,13 +494,12 @@ private final class SheetContent: CombinedComponent {
                         maximumNumberOfLines: 0
                     ))
                 case .admin:
-                    //TODO:localize
                     let string: String
                     switch state.currency {
                     case .stars:
-                        string = "Choose how many Stars you charge for the message."
+                        string = environment.strings.Chat_PostSuggestion_Suggest_RequestDescriptionStars
                     case .ton:
-                        string = "Choose how many TON you charge for the message."
+                        string = environment.strings.Chat_PostSuggestion_Suggest_RequestDescriptionTon
                     }
                     let amountInfoString = NSAttributedString(attributedString: parseMarkdownIntoAttributedString(string, attributes: amountMarkdownAttributes, textAlignment: .natural))
                     amountFooter = AnyComponent(MultilineTextComponent(
@@ -523,6 +533,7 @@ private final class SheetContent: CombinedComponent {
                                     accentColor: theme.list.itemAccentColor,
                                     value: state.amount?.value,
                                     minValue: minAmount?.value,
+                                    allowZero: allowZero,
                                     maxValue: maxAmount?.value,
                                     placeholderText: amountPlaceholder,
                                     labelText: amountLabel,
@@ -561,13 +572,12 @@ private final class SheetContent: CombinedComponent {
             if case let .suggestedPost(mode, _, _, _) = component.mode {
                 contentSize.height += 24.0
                 
-                //TODO:localize
                 let footerString: String
                 switch mode {
                 case .sender:
-                    footerString = "Select the date and time you want your message to be published."
+                    footerString = environment.strings.Chat_PostSuggestion_Suggest_OfferDateDescription
                 case .admin:
-                    footerString = "Select the date and time you want to publish the message."
+                    footerString = environment.strings.Chat_PostSuggestion_Suggest_EditDateDescription
                 }
                 
                 let timestampFooterString = NSAttributedString(attributedString: parseMarkdownIntoAttributedString(footerString, attributes: amountMarkdownAttributes, textAlignment: .natural))
@@ -633,7 +643,7 @@ private final class SheetContent: CombinedComponent {
                                     let theme = environment.theme
                                     
                                     let minimalTime: Int32 = Int32(Date().timeIntervalSince1970) + 5 * 60 + 10
-                                    let controller = ChatScheduleTimeController(context: state.context, updatedPresentationData: (state.context.sharedContext.currentPresentationData.with({ $0 }).withUpdated(theme: theme), state.context.sharedContext.presentationData |> map { $0.withUpdated(theme: theme) }), mode: .suggestPost(needsTime: false), style: .default, currentTime: state.timestamp, minimalTime: minimalTime, dismissByTapOutside: true, completion: { [weak state] time in
+                                    let controller = ChatScheduleTimeController(context: state.context, updatedPresentationData: (state.context.sharedContext.currentPresentationData.with({ $0 }).withUpdated(theme: theme), state.context.sharedContext.presentationData |> map { $0.withUpdated(theme: theme) }), mode: .suggestPost(needsTime: false, isAdmin: false, funds: nil), style: .default, currentTime: state.timestamp, minimalTime: minimalTime, dismissByTapOutside: true, completion: { [weak state] time in
                                         guard let state else {
                                             return
                                         }
@@ -672,7 +682,6 @@ private final class SheetContent: CombinedComponent {
             } else if case .paidMessages = component.mode {
                 buttonString = environment.strings.Stars_SendMessage_AdjustmentAction
             } else if case let .suggestedPost(mode, _, _, _) = component.mode {
-                //TODO:localize
                 switch mode {
                 case .sender:
                     if let amount = state.amount, amount != .zero {
@@ -686,12 +695,12 @@ private final class SheetContent: CombinedComponent {
                             currencySymbol = "$"
                             currencyAmount = formatTonAmountText(amount.value, dateTimeFormat: environment.dateTimeFormat)
                         }
-                        buttonString = "Offer  \(currencySymbol) \(currencyAmount)"
+                        buttonString = environment.strings.Chat_PostSuggestion_Suggest_OfferButtonPrice("\(currencySymbol) \(currencyAmount)").string
                     } else {
-                        buttonString = "Offer for Free"
+                        buttonString = environment.strings.Chat_PostSuggestion_Suggest_OfferButtonFree
                     }
                 case .admin:
-                    buttonString = "Update Terms"
+                    buttonString = environment.strings.Chat_PostSuggestion_Suggest_UpdateButton
                 }
             } else if let amount = state.amount {
                 buttonString = "\(environment.strings.Stars_Withdraw_Withdraw)  # \(presentationStringsFormattedNumber(amount, environment.dateTimeFormat.groupingSeparator))"
@@ -750,8 +759,8 @@ private final class SheetContent: CombinedComponent {
                         if let controller = controller() as? StarsWithdrawScreen, let state {
                             let amount = state.amount ?? StarsAmount.zero
                             
-                            if let minAmount, amount < minAmount {
-                                controller.presentMinAmountTooltip(minAmount.value)
+                            if let minAmount, amount < minAmount, (!allowZero || amount != .zero) {
+                                controller.presentMinAmountTooltip(minAmount.value, currency: state.currency)
                             } else {
                                 switch state.mode {
                                 case let .withdraw(_, completion):
@@ -788,11 +797,21 @@ private final class SheetContent: CombinedComponent {
                                         }
                                     case .ton:
                                         if let balance = state.tonBalance, amount > balance {
-                                            //TODO:localize
-                                            let presentationData = state.context.sharedContext.currentPresentationData.with { $0 }
-                                            controller.present(standardTextAlertController(theme: AlertControllerTheme(presentationData: presentationData), title: nil, text: "Not enough TON", actions: [
-                                                TextAlertAction(type: .defaultAction, title: strings.Common_OK, action: {})
-                                            ]), in: .window(.root))
+                                            let needed = amount - balance
+                                            var fragmentUrl = "https://fragment.com/ads/topup"
+                                            if let data = state.context.currentAppConfiguration.with({ $0 }).data, let value = data["ton_topup_url"] as? String {
+                                                fragmentUrl = value
+                                            }
+                                            controller.push(BalanceNeededScreen(
+                                                context: state.context,
+                                                amount: needed,
+                                                buttonAction: { [weak state] in
+                                                    guard let state else {
+                                                        return
+                                                    }
+                                                    state.context.sharedContext.applicationBindings.openUrl(fragmentUrl)
+                                                }
+                                            ))
                                             return
                                         }
                                     }
@@ -853,7 +872,7 @@ private final class SheetContent: CombinedComponent {
             var currency: CurrencyAmount.Currency = .stars
             switch mode {
             case let .withdraw(stats, _):
-                amount = StarsAmount(value: stats.balances.availableBalance.value, nanos: 0)
+                amount = StarsAmount(value: stats.balances.availableBalance.amount.value, nanos: 0)
             case .accountWithdraw:
                 amount = context.starsContext?.currentState.flatMap { StarsAmount(value: $0.balance.value, nanos: 0) }
             case let .paidMedia(initialValue, _):
@@ -1091,12 +1110,28 @@ public final class StarsWithdrawScreen: ViewControllerComponentContainer {
         }
     }
     
-    func presentMinAmountTooltip(_ minAmount: Int64) {
+    func presentMinAmountTooltip(_ minAmount: Int64, currency: CurrencyAmount.Currency) {
         let presentationData = self.context.sharedContext.currentPresentationData.with { $0 }
         var text = presentationData.strings.Stars_Withdraw_Withdraw_ErrorMinimum(presentationData.strings.Stars_Withdraw_Withdraw_ErrorMinimum_Stars(Int32(minAmount))).string
         if case .starGiftResell = self.mode {
-            //TODO:localize
-            text = "You cannot sell gift for less than \(presentationData.strings.Stars_Withdraw_Withdraw_ErrorMinimum_Stars(Int32(minAmount)))."
+            text = presentationData.strings.Stars_SellGiftMinAmountToast_Text("\(presentationData.strings.Stars_Withdraw_Withdraw_ErrorMinimum_Stars(Int32(minAmount)))").string
+        } else if case let .suggestedPost(mode, _, _, _) = self.mode {
+            let resaleConfiguration = StarsSubscriptionConfiguration.with(appConfiguration: self.context.currentAppConfiguration.with { $0 })
+            switch currency {
+            case .stars:
+                switch mode {
+                case .admin:
+                    text = presentationData.strings.Chat_PostSuggestion_Suggest_AdminMinAmountStars_Text("\(resaleConfiguration.channelMessageSuggestionMinStarsAmount)").string
+                case let .sender(_, isFromAdmin):
+                    if isFromAdmin {
+                        text = presentationData.strings.Chat_PostSuggestion_Suggest_AdminMinAmountStars_Text("\(resaleConfiguration.channelMessageSuggestionMinStarsAmount)").string
+                    } else {
+                        text = presentationData.strings.Chat_PostSuggestion_Suggest_UserMinAmountStars_Text("\(resaleConfiguration.channelMessageSuggestionMinStarsAmount)").string
+                    }
+                }
+            case .ton:
+                break
+            }
         }
         
         let resultController = UndoOverlayController(
@@ -1131,17 +1166,19 @@ private final class AmountFieldStarsFormatter: NSObject, UITextFieldDelegate {
     
     private let textField: UITextField
     private let minValue: Int64
+    private let allowZero: Bool
     private let maxValue: Int64
     private let updated: (Int64) -> Void
     private let isEmptyUpdated: (Bool) -> Void
     private let animateError: () -> Void
     private let focusUpdated: (Bool) -> Void
 
-    init?(textField: UITextField, currency: CurrencyAmount.Currency, dateTimeFormat: PresentationDateTimeFormat, minValue: Int64, maxValue: Int64, updated: @escaping (Int64) -> Void, isEmptyUpdated: @escaping (Bool) -> Void, animateError: @escaping () -> Void, focusUpdated: @escaping (Bool) -> Void) {
+    init?(textField: UITextField, currency: CurrencyAmount.Currency, dateTimeFormat: PresentationDateTimeFormat, minValue: Int64, allowZero: Bool, maxValue: Int64, updated: @escaping (Int64) -> Void, isEmptyUpdated: @escaping (Bool) -> Void, animateError: @escaping () -> Void, focusUpdated: @escaping (Bool) -> Void) {
         self.textField = textField
         self.currency = currency
         self.dateTimeFormat = dateTimeFormat
         self.minValue = minValue
+        self.allowZero = allowZero
         self.maxValue = maxValue
         self.updated = updated
         self.isEmptyUpdated = isEmptyUpdated
@@ -1285,6 +1322,7 @@ private final class AmountFieldComponent: Component {
     let accentColor: UIColor
     let value: Int64?
     let minValue: Int64?
+    let allowZero: Bool
     let maxValue: Int64?
     let placeholderText: String
     let labelText: String?
@@ -1300,6 +1338,7 @@ private final class AmountFieldComponent: Component {
         accentColor: UIColor,
         value: Int64?,
         minValue: Int64?,
+        allowZero: Bool,
         maxValue: Int64?,
         placeholderText: String,
         labelText: String?,
@@ -1314,6 +1353,7 @@ private final class AmountFieldComponent: Component {
         self.accentColor = accentColor
         self.value = value
         self.minValue = minValue
+        self.allowZero = allowZero
         self.maxValue = maxValue
         self.placeholderText = placeholderText
         self.labelText = labelText
@@ -1340,6 +1380,9 @@ private final class AmountFieldComponent: Component {
             return false
         }
         if lhs.minValue != rhs.minValue {
+            return false
+        }
+        if lhs.allowZero != rhs.allowZero {
             return false
         }
         if lhs.maxValue != rhs.maxValue {
@@ -1448,6 +1491,7 @@ private final class AmountFieldComponent: Component {
                             currency: component.currency,
                             dateTimeFormat: component.dateTimeFormat,
                             minValue: component.minValue ?? 0,
+                            allowZero: component.allowZero,
                             maxValue: component.maxValue ?? Int64.max,
                             updated: { [weak self] value in
                                 guard let self, let component = self.component else {
@@ -1483,6 +1527,7 @@ private final class AmountFieldComponent: Component {
                             currency: component.currency,
                             dateTimeFormat: component.dateTimeFormat,
                             minValue: component.minValue ?? 0,
+                            allowZero: component.allowZero,
                             maxValue: component.maxValue ?? 10000000,
                             updated: { [weak self] value in
                                 guard let self, let component = self.component else {
@@ -1642,17 +1687,19 @@ func generateCloseButtonImage(backgroundColor: UIColor, foregroundColor: UIColor
 
 private struct StarsWithdrawConfiguration {
     static var defaultValue: StarsWithdrawConfiguration {
-        return StarsWithdrawConfiguration(minWithdrawAmount: nil, maxPaidMediaAmount: nil, usdWithdrawRate: nil)
+        return StarsWithdrawConfiguration(minWithdrawAmount: nil, maxPaidMediaAmount: nil, usdWithdrawRate: nil, tonUsdRate: nil)
     }
     
     let minWithdrawAmount: Int64?
     let maxPaidMediaAmount: Int64?
     let usdWithdrawRate: Double?
+    let tonUsdRate: Double?
     
-    fileprivate init(minWithdrawAmount: Int64?, maxPaidMediaAmount: Int64?, usdWithdrawRate: Double?) {
+    fileprivate init(minWithdrawAmount: Int64?, maxPaidMediaAmount: Int64?, usdWithdrawRate: Double?, tonUsdRate: Double?) {
         self.minWithdrawAmount = minWithdrawAmount
         self.maxPaidMediaAmount = maxPaidMediaAmount
         self.usdWithdrawRate = usdWithdrawRate
+        self.tonUsdRate = tonUsdRate
     }
     
     static func with(appConfiguration: AppConfiguration) -> StarsWithdrawConfiguration {
@@ -1669,8 +1716,12 @@ private struct StarsWithdrawConfiguration {
             if let value = data["stars_usd_withdraw_rate_x1000"] as? Double {
                 usdWithdrawRate = value
             }
+            var tonUsdRate: Double?
+            if let value = data["ton_usd_rate"] as? Double {
+                tonUsdRate = value
+            }
             
-            return StarsWithdrawConfiguration(minWithdrawAmount: minWithdrawAmount, maxPaidMediaAmount: maxPaidMediaAmount, usdWithdrawRate: usdWithdrawRate)
+            return StarsWithdrawConfiguration(minWithdrawAmount: minWithdrawAmount, maxPaidMediaAmount: maxPaidMediaAmount, usdWithdrawRate: usdWithdrawRate, tonUsdRate: tonUsdRate)
         } else {
             return .defaultValue
         }

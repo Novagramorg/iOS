@@ -137,6 +137,7 @@ import TelegramCallsUI
 import QuickShareScreen
 import PostSuggestionsSettingsScreen
 import PromptUI
+import SuggestedPostApproveAlert
 
 public final class ChatControllerOverlayPresentationData {
     public let expandData: (ASDisplayNode?, () -> Void)
@@ -977,6 +978,10 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                                         } else if let incompletedTaskId = incompleted.first {
                                             todoTaskId = incompletedTaskId
                                         }
+                                    } else if case let .todoAppendTasks(tasks) = action.action {
+                                        if let task = tasks.first {
+                                            todoTaskId = task.id
+                                        }
                                     }
                                     self.navigateToMessage(from: message.id, to: .id(attribute.messageId, NavigateToMessageParams(timestamp: nil, quote: attribute.isQuote ? attribute.quote.flatMap { quote in NavigateToMessageParams.Quote(string: quote.text, offset: quote.offset) } : nil, todoTaskId: todoTaskId)))
                                     break
@@ -1178,7 +1183,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                                 guard let self, let transactionId, let peerId = self.chatLocation.peerId else {
                                     return
                                 }
-                                let transactionData = await self.context.engine.payments.getStarsTransaction(reference: StarsTransactionReference(peerId: self.context.account.peerId, id: transactionId, isRefund: false)).get()
+                                let transactionData = await self.context.engine.payments.getStarsTransaction(reference: StarsTransactionReference(peerId: self.context.account.peerId, ton: true, id: transactionId, isRefund: false)).get()
                                 let peer = await self.context.engine.data.get(
                                     TelegramEngine.EngineData.Item.Peer.Peer(id: peerId)
                                 ).get()
@@ -1186,7 +1191,6 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                                     self.push(self.context.sharedContext.makeStarsTransactionScreen(context: self.context, transaction: transactionData, peer: peer))
                                 }
                             }
-                            let _ = transactionId
                         case let .giftCode(slug, _, _, _, _, _, _, _, _, _, _):
                             self.openResolved(result: .premiumGiftCode(slug: slug), sourceMessageId: message.id, progress: params.progress)
                             return true
@@ -2348,8 +2352,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                 if message.effectivelyIncoming(strongSelf.context.account.peerId) {
                     switch buttonType {
                     case 0:
-                        //TODO:localize
-                        let promptController = promptController(sharedContext: strongSelf.context.sharedContext, updatedPresentationData: strongSelf.updatedPresentationData, text: "Comment", titleFont: .bold, value: "", placeholder: "Optional", characterLimit: 4096, apply: { value in
+                        let promptController = promptController(sharedContext: strongSelf.context.sharedContext, updatedPresentationData: strongSelf.updatedPresentationData, text: strongSelf.presentationData.strings.Chat_PostSuggestion_Reject_Title, titleFont: .bold, value: "", placeholder: strongSelf.presentationData.strings.Chat_PostSuggestion_Reject_Placeholder, characterLimit: 4096, apply: { value in
                             guard let self else {
                                 return
                             }
@@ -2363,8 +2366,19 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                         strongSelf.present(promptController, in: .window(.root))
                     case 1:
                         var timestamp: Int32?
+                        var funds: (amount: CurrencyAmount, commissionPermille: Int)?
+                        if let amount = attribute.amount {
+                            let configuration = StarsSubscriptionConfiguration.with(appConfiguration: strongSelf.context.currentAppConfiguration.with { $0 })
+                            funds = (amount, amount.currency == .stars ? Int(configuration.channelMessageSuggestionStarsCommissionPermille) : Int(configuration.channelMessageSuggestionTonCommissionPermille))
+                        }
+                        
+                        var isAdmin = false
+                        if let channel = strongSelf.presentationInterfaceState.renderedPeer?.peer as? TelegramChannel, channel.isMonoForum, let linkedMonoforumId = channel.linkedMonoforumId, let mainChannel = strongSelf.presentationInterfaceState.renderedPeer?.peers[linkedMonoforumId] as? TelegramChannel, mainChannel.hasPermission(.manageDirect) {
+                            isAdmin = true
+                        }
+                        
                         if attribute.timestamp == nil {
-                            let controller = ChatScheduleTimeController(context: strongSelf.context, updatedPresentationData: strongSelf.updatedPresentationData, mode: .suggestPost(needsTime: true), style: .default, currentTime: nil, minimalTime: nil, dismissByTapOutside: true, completion: { [weak strongSelf] time in
+                            let controller = ChatScheduleTimeController(context: strongSelf.context, updatedPresentationData: strongSelf.updatedPresentationData, mode: .suggestPost(needsTime: true, isAdmin: isAdmin, funds: funds), style: .default, currentTime: nil, minimalTime: nil, dismissByTapOutside: true, completion: { [weak strongSelf] time in
                                 guard let strongSelf else {
                                     return
                                 }
@@ -2378,17 +2392,43 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                             
                             timestamp = Int32(Date().timeIntervalSince1970) + 1 * 60 * 60
                         } else {
-                            //TODO:localize
-                            let textString = "Publish this message now?"
-                            strongSelf.present(standardTextAlertController(theme: AlertControllerTheme(presentationData: strongSelf.presentationData), title: nil, text: textString, actions: [
-                                TextAlertAction(type: .genericAction, title: strongSelf.presentationData.strings.Common_Cancel, action: {}),
-                                TextAlertAction(type: .defaultAction, title: "Publish", action: { [weak strongSelf] in
+                            var textString: String
+                            if isAdmin {
+                                textString = strongSelf.presentationData.strings.Chat_PostSuggestion_Approve_AdminConfirmationText(message.author.flatMap(EnginePeer.init)?.compactDisplayTitle ?? "").string
+                                
+                                if let funds {
+                                    var commissionValue: String
+                                    commissionValue = "\(Double(funds.commissionPermille) * 0.1)"
+                                    if commissionValue.hasSuffix(".0") {
+                                        commissionValue = String(commissionValue[commissionValue.startIndex ..< commissionValue.index(commissionValue.endIndex, offsetBy: -2)])
+                                    } else if commissionValue.hasSuffix(".00") {
+                                        commissionValue = String(commissionValue[commissionValue.startIndex ..< commissionValue.index(commissionValue.endIndex, offsetBy: -3)])
+                                    }
+                                    
+                                    textString += "\n\n"
+                                    
+                                    switch funds.amount.currency {
+                                    case .stars:
+                                        let displayAmount = funds.amount.amount.totalValue * Double(funds.commissionPermille) / 1000.0
+                                        textString += strongSelf.presentationData.strings.Chat_PostSuggestion_Approve_AdminConfirmationPriceStars("\(displayAmount)", "\(commissionValue)").string
+                                    case .ton:
+                                        let displayAmount = Double(funds.amount.amount.value) / 1000000000.0 * Double(funds.commissionPermille) / 1000.0
+                                        textString += strongSelf.presentationData.strings.Chat_PostSuggestion_Approve_AdminConfirmationPriceTon("\(displayAmount)", "\(commissionValue)").string
+                                    }
+                                }
+                            } else {
+                                textString = strongSelf.presentationData.strings.Chat_PostSuggestion_Approve_UserConfirmationText
+                            }
+                            
+                            strongSelf.present(SuggestedPostApproveAlert(presentationData: strongSelf.presentationData, title: strongSelf.presentationData.strings.Chat_PostSuggestion_Approve_Title, text: textString, actions: [
+                                TextAlertAction(type: .defaultAction, title: strongSelf.presentationData.strings.Chat_PostSuggestion_Approve_Action, action: { [weak strongSelf] in
                                     guard let strongSelf else {
                                         return
                                     }
                                     let _ = strongSelf.context.engine.messages.monoforumPerformSuggestedPostAction(id: message.id, action: .approve(timestamp: timestamp)).startStandalone()
-                                })
-                            ]), in: .window(.root))
+                                }),
+                                TextAlertAction(type: .genericAction, title: strongSelf.presentationData.strings.Common_Cancel, action: {})
+                            ], actionLayout: .vertical, parseMarkdown: true, toastText: funds?.amount.currency == .stars ? strongSelf.presentationData.strings.Chat_PostSuggestion_StarsDisclaimer : nil), in: .window(.root))
                         }
                     case 2:
                         strongSelf.interfaceInteraction?.openSuggestPost(message, .default)
@@ -3599,15 +3639,23 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                         
                         let _ = ApplicationSpecificNotice.incrementTranslationSuggestion(accountManager: context.sharedContext.accountManager, timestamp: Int32(Date().timeIntervalSince1970)).startStandalone()
                         
-                        let controller = TranslateScreen(context: context, text: text.string, canCopy: canCopy, fromLanguage: language, ignoredLanguages: translationSettings.ignoredLanguages)
-                        controller.pushController = { [weak self] c in
-                            self?.effectiveNavigationController?._keepModalDismissProgress = true
-                            self?.push(c)
-                        }
-                        controller.presentController = { [weak self] c in
-                            self?.present(c, in: .window(.root))
-                        }
-                        strongSelf.present(controller, in: .window(.root))
+                        presentTranslateScreen(
+                            context: context,
+                            text: text.string,
+                            canCopy: canCopy,
+                            fromLanguage: language,
+                            ignoredLanguages: translationSettings.ignoredLanguages,
+                            pushController: { [weak self] c in
+                                self?.effectiveNavigationController?._keepModalDismissProgress = true
+                                self?.push(c)
+                            },
+                            presentController: { [weak self] c in
+                                self?.present(c, in: .window(.root))
+                            },
+                            display: { [weak self] c in
+                                self?.present(c, in: .window(.root))
+                            }
+                        )
                     })
                 }
                 if let currentContextController = strongSelf.currentContextController {
