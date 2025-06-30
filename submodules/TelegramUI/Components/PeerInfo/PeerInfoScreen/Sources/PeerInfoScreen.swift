@@ -1048,8 +1048,7 @@ private func settingsItems(data: PeerInfoScreenData?, context: AccountContext, p
             } else {
                 balanceText = NSAttributedString()
             }
-            //TODO:localize
-            items[.payment]!.append(PeerInfoScreenDisclosureItem(id: 103, label: .attributedText(balanceText), text: "My TON", icon: PresentationResourcesSettings.ton, action: {
+            items[.payment]!.append(PeerInfoScreenDisclosureItem(id: 103, label: .attributedText(balanceText), text: presentationData.strings.Settings_MyTon, icon: PresentationResourcesSettings.ton, action: {
                 interaction.openSettings(.ton)
             }))
         }
@@ -1597,11 +1596,11 @@ private func infoItems(data: PeerInfoScreenData?, context: AccountContext, prese
                     }))
                 }
                                 
-                let revenueBalance = data.revenueStatsState?.balances.currentBalance ?? 0
-                let overallRevenueBalance = data.revenueStatsState?.balances.overallRevenue ?? 0
+                let revenueBalance = data.revenueStatsState?.balances.currentBalance.amount.value ?? 0
+                let overallRevenueBalance = data.revenueStatsState?.balances.overallRevenue.amount.value ?? 0
                 
-                let starsBalance = data.starsRevenueStatsState?.balances.currentBalance ?? StarsAmount.zero
-                let overallStarsBalance = data.starsRevenueStatsState?.balances.overallRevenue ?? StarsAmount.zero
+                let starsBalance = data.starsRevenueStatsState?.balances.currentBalance.amount ?? StarsAmount.zero
+                let overallStarsBalance = data.starsRevenueStatsState?.balances.overallRevenue.amount ?? StarsAmount.zero
                 
                 if overallRevenueBalance > 0 || overallStarsBalance > StarsAmount.zero {
                     items[.balances]!.append(PeerInfoScreenHeaderItem(id: 20, text: presentationData.strings.PeerInfo_BotBalance_Title))
@@ -1907,11 +1906,11 @@ private func infoItems(data: PeerInfoScreenData?, context: AccountContext, prese
                         section = .peerMembers
                     }
                     if cachedData.flags.contains(.canViewRevenue) || cachedData.flags.contains(.canViewStarsRevenue) {
-                        let revenueBalance = data.revenueStatsState?.balances.currentBalance ?? 0
-                        let starsBalance = data.starsRevenueStatsState?.balances.currentBalance ?? StarsAmount.zero
+                        let revenueBalance = data.revenueStatsState?.balances.currentBalance.amount.value ?? 0
+                        let starsBalance = data.starsRevenueStatsState?.balances.currentBalance.amount ?? StarsAmount.zero
                         
-                        let overallRevenueBalance = data.revenueStatsState?.balances.overallRevenue ?? 0
-                        let overallStarsBalance = data.starsRevenueStatsState?.balances.overallRevenue ?? StarsAmount.zero
+                        let overallRevenueBalance = data.revenueStatsState?.balances.overallRevenue.amount.value ?? 0
+                        let overallStarsBalance = data.starsRevenueStatsState?.balances.overallRevenue.amount ?? StarsAmount.zero
                         
                         if overallRevenueBalance > 0 || overallStarsBalance > StarsAmount.zero {
                             let smallLabelFont = Font.regular(floor(presentationData.listsFontSize.itemListBaseFontSize / 17.0 * 13.0))
@@ -6617,7 +6616,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                         }
                     }
                     
-                    if let cachedData = data.cachedData as? CachedUserData, cachedData.flags.contains(.translationHidden) {
+                    if let cachedData = data.cachedData as? CachedUserData, canTranslateChats(context: strongSelf.context), cachedData.flags.contains(.translationHidden) {
                         items.append(.action(ContextMenuActionItem(text: presentationData.strings.Conversation_ContextMenuTranslate, icon: { theme in
                             generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Translate"), color: theme.contextMenu.primaryColor)
                         }, action: { [weak self] _, f in

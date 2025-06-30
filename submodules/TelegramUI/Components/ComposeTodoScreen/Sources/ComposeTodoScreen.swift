@@ -28,6 +28,7 @@ import TextFormat
 import TextFieldComponent
 import ListComposePollOptionComponent
 import Markdown
+import PresentationDataUtils
 
 final class ComposeTodoScreenComponent: Component {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
@@ -180,11 +181,15 @@ final class ComposeTodoScreenComponent: Component {
         }
         
         private func item(at point: CGPoint) -> (AnyHashable, ComponentView<Empty>)? {
+            if self.scrollView.isDragging || self.scrollView.isDecelerating {
+                return nil
+            }
+            
             let localPoint = self.todoItemsSectionContainer.convert(point, from: self)
             for (id, itemView) in self.todoItemsSectionContainer.itemViews {
                 if let view = itemView.contents.view as? ListComposePollOptionComponent.View, !view.isRevealed && !view.currentText.isEmpty {
                     let viewFrame = view.convert(view.bounds, to: self.todoItemsSectionContainer)
-                    let iconFrame = CGRect(origin: CGPoint(x: viewFrame.maxX - viewFrame.height, y: viewFrame.minY), size: CGSize(width: viewFrame.height, height: viewFrame.height))
+                    let iconFrame = CGRect(origin: CGPoint(x: viewFrame.maxX - 40.0, y: viewFrame.minY), size: CGSize(width: viewFrame.height, height: viewFrame.height))
                     if iconFrame.contains(localPoint) {
                         return (id, itemView.contents)
                     }
@@ -369,6 +374,10 @@ final class ComposeTodoScreenComponent: Component {
             if !self.ignoreScrolling {
                 self.updateScrolling(transition: .immediate)
             }
+        }
+        
+        func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+            self.endEditing(true)
         }
         
         private func updateScrolling(transition: ComponentTransition) {
@@ -853,6 +862,11 @@ final class ComposeTodoScreenComponent: Component {
                     isEnabled = false
                 }
                 
+                var canDelete = isEnabled
+                if i == self.todoItems.count - 1 {
+                    canDelete = false
+                }
+                
                 todoItemsSectionItems.append(AnyComponentWithIdentity(id: todoItem.id, component: AnyComponent(ListComposePollOptionComponent(
                     externalState: todoItem.textInputState,
                     context: component.context,
@@ -914,7 +928,7 @@ final class ComposeTodoScreenComponent: Component {
                         }
                         self.state?.updated(transition: .spring(duration: 0.4))
                     },
-                    deleteAction: isEnabled ? { [weak self] in
+                    deleteAction: canDelete ? { [weak self] in
                         guard let self else {
                             return
                         }
@@ -928,17 +942,24 @@ final class ComposeTodoScreenComponent: Component {
                         if case let .text(text) = data {
                             let lines = text.string.components(separatedBy: "\n")
                             if !lines.isEmpty {
+                                self.endEditing(true)
                                 var i = 0
                                 for line in lines {
+                                    if line.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                        continue
+                                    }
+                                    let line = String(line.prefix(component.initialData.maxTodoItemLength))
                                     if i < self.todoItems.count {
                                         self.todoItems[i].resetText = NSAttributedString(string: line)
                                     } else {
-                                        let todoItem = ComposeTodoScreenComponent.TodoItem(
-                                            id: self.nextTodoItemId
-                                        )
-                                        todoItem.resetText = NSAttributedString(string: line)
-                                        self.todoItems.append(todoItem)
-                                        self.nextTodoItemId += 1
+                                        if self.todoItems.count < component.initialData.maxTodoItemsCount {
+                                            let todoItem = ComposeTodoScreenComponent.TodoItem(
+                                                id: self.nextTodoItemId
+                                            )
+                                            todoItem.resetText = NSAttributedString(string: line)
+                                            self.todoItems.append(todoItem)
+                                            self.nextTodoItemId += 1
+                                        }
                                     }
                                     i += 1
                                 }
@@ -1730,10 +1751,30 @@ public class ComposeTodoScreen: ViewControllerComponentContainer, AttachmentCont
     }
     
     public func requestDismiss(completion: @escaping () -> Void) {
-        completion()
+        guard let componentView = self.node.hostView.componentView as? ComposeTodoScreenComponent.View else {
+            return
+        }
+        let presentationData = self.context.sharedContext.currentPresentationData.with { $0 }
+        if let input = componentView.validatedInput(), !input.text.isEmpty || !input.items.isEmpty {
+            let text = presentationData.strings.Attachment_DiscardTodoAlertText
+            let controller = textAlertController(context: self.context, title: nil, text: text, actions: [TextAlertAction(type: .genericAction, title: presentationData.strings.Attachment_CancelSelectionAlertNo, action: {
+            }), TextAlertAction(type: .defaultAction, title: presentationData.strings.Attachment_CancelSelectionAlertYes, action: {
+                completion()
+            })])
+            self.present(controller, in: .window(.root))
+        } else {
+            completion()
+        }
     }
     
     public func shouldDismissImmediately() -> Bool {
-        return true
+        guard let componentView = self.node.hostView.componentView as? ComposeTodoScreenComponent.View else {
+            return true
+        }
+        if let input = componentView.validatedInput(), !input.text.isEmpty || !input.items.isEmpty {
+            return false
+        } else {
+            return true
+        }
     }
 }

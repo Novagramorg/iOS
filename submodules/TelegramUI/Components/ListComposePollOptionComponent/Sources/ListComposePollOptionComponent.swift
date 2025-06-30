@@ -459,9 +459,6 @@ public final class ListComposePollOptionComponent: Component {
                     return false
                 }
             }
-            if gestureRecognizer == self.recognizer, let externalState = self.component?.externalState, !externalState.hasText {
-                return false
-            }
             return true
         }
         
@@ -564,6 +561,10 @@ public final class ListComposePollOptionComponent: Component {
             
             if component.inputMode != nil {
                 rightInset += 34.0
+            }
+            
+            if component.canReorder {
+                rightInset += 16.0
             }
             
             let textFieldSize = self.textField.update(
@@ -801,8 +802,13 @@ public final class ListComposePollOptionComponent: Component {
             }
             
             if let deleteAction = component.deleteAction {
-                if self.deleteRevealView == nil {
-                    let deleteRevealView = DeleteRevealView(title: component.strings.Common_Delete, color: component.theme.list.itemDisclosureActions.destructive.fillColor)
+                var deleteRevealViewTransition = transition
+                let deleteRevealView: DeleteRevealView
+                if let current = self.deleteRevealView {
+                    deleteRevealView = current
+                } else {
+                    deleteRevealViewTransition = .immediate
+                    deleteRevealView = DeleteRevealView(title: component.strings.Common_Delete, color: component.theme.list.itemDisclosureActions.destructive.fillColor)
                     deleteRevealView.tapped = { [weak self] action in
                         guard let self else {
                             return
@@ -817,14 +823,17 @@ public final class ListComposePollOptionComponent: Component {
                     }
                     self.deleteRevealView = deleteRevealView
                     self.addSubview(deleteRevealView)
+                    
+                    if self.recognizer == nil {
+                        let recognizer = RevealOptionsGestureRecognizer(target: self, action: #selector(self.handlePan(_:)))
+                        recognizer.delegate = self
+                        self.addGestureRecognizer(recognizer)
+                        self.recognizer = recognizer
+                    }
                 }
                 
-                if self.recognizer == nil {
-                    let recognizer = RevealOptionsGestureRecognizer(target: self, action: #selector(self.handlePan(_:)))
-                    recognizer.delegate = self
-                    self.addGestureRecognizer(recognizer)
-                    self.recognizer = recognizer
-                }
+                let _ = deleteRevealView.updateLayout(availableSize: size, revealOffset: self.revealOffset, transition: deleteRevealViewTransition)
+                deleteRevealView.frame = CGRect(origin: .zero, size: size)
             } else {
                 if let deleteRevealView = self.deleteRevealView {
                     self.deleteRevealView = nil
@@ -838,11 +847,6 @@ public final class ListComposePollOptionComponent: Component {
                 
                 self.isRevealed = false
                 self.revealOffset = 0.0
-            }
-            
-            if let deleteRevealView = self.deleteRevealView {
-                let _ = deleteRevealView.updateLayout(availableSize: size, revealOffset: self.revealOffset, transition: transition)
-                deleteRevealView.frame = CGRect(origin: .zero, size: size)
             }
             
             self.separatorInset = leftInset

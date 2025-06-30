@@ -15,16 +15,72 @@ with open(modules_json_path, 'r') as f:
 
 # Clean spm-files
 spm_files_dir = "spm-files"
-if os.path.exists(spm_files_dir):
-    for item in os.listdir(spm_files_dir):
-        if item != ".build":
-            item_path = os.path.join(spm_files_dir, item)
-            if os.path.isfile(item_path):
-                os.unlink(item_path)
-            elif os.path.isdir(item_path):
-                shutil.rmtree(item_path)
+
+previous_spm_files = set()
+
+def scan_spm_files(path: str):
+    global previous_spm_files
+    if not os.path.exists(path):
+        return
+    for item in os.listdir(path):
+        if item == ".build":
+            continue
+        item_path = os.path.join(path, item)
+        if os.path.isfile(item_path) or os.path.islink(item_path):
+            previous_spm_files.add(item_path)
+        elif os.path.isdir(item_path):
+            previous_spm_files.add(item_path)
+            scan_spm_files(item_path)
+
+scan_spm_files(spm_files_dir)
+
+current_spm_files = set()
+
+def create_spm_file(path: str, contents: str):
+    global current_spm_files
+    current_spm_files.add(path)
+    
+    # Track all parent directories
+    parent_dir = os.path.dirname(path)
+    while parent_dir and parent_dir != path:
+        current_spm_files.add(parent_dir)
+        parent_dir = os.path.dirname(parent_dir)
+    
+    with open(path, "w") as f:
+        f.write(contents)
+
+def link_spm_file(source_path: str, target_path: str):
+    global current_spm_files
+    current_spm_files.add(target_path)
+    
+    # Track all parent directories
+    parent_dir = os.path.dirname(target_path)
+    while parent_dir and parent_dir != target_path:
+        current_spm_files.add(parent_dir)
+        parent_dir = os.path.dirname(parent_dir)
+    
+    # Remove existing file/symlink if it exists and is different
+    if os.path.islink(target_path):
+        if os.readlink(target_path) != source_path:
+            os.unlink(target_path)
+        else:
+            return  # Symlink already points to the correct target
+    elif os.path.exists(target_path):
+        os.unlink(target_path)
+    
+    os.symlink(source_path, target_path)
+
+def create_spm_directory(path: str):
+    global current_spm_files
+    current_spm_files.add(path)
+    if not os.path.exists(path):
+        os.makedirs(path)
+
 if not os.path.exists(spm_files_dir):
     os.makedirs(spm_files_dir)
+    
+# Track the root directory
+current_spm_files.add(spm_files_dir)
 
 def escape_swift_string_literal_component(text: str) -> str:
     # Handle -D defines that use shell-style quoting like -DPACKAGE_STRING='""'
@@ -45,6 +101,29 @@ def escape_swift_string_literal_component(text: str) -> str:
     # For non-define flags or defines without shell quoting, just escape for Swift string literal
     return text.replace('\\', '\\\\').replace('"', '\\"')
 
+# Parses -D flag into a tuple of (define_flag, define_value)
+# Example: flag="ABC" -> (ABC, None)
+# Example: flag="ABC=123" -> (ABC, 123)
+# Example: flag="ABC=\"str\"" -> (ABC, "str")
+def parse_define_flag(flag: str) -> tuple[str, str | None]:
+    if flag.startswith("-D"):
+        define_part = flag[2:]
+    else:
+        define_part = flag
+    
+    # Check if there's an assignment
+    if "=" in define_part:
+        key, value = define_part.split("=", 1)  # Split on first = only
+        
+        # Handle quoted values - remove surrounding quotes if present
+        if (value.startswith('"') and value.endswith('"')) or (value.startswith("'") and value.endswith("'")):
+            value = value[1:-1]  # Remove quotes
+        
+        return (key, value)
+    else:
+        # No assignment, just a flag name
+        return (define_part, None)
+
 parsed_modules = {}
 for name, module in sorted(modules.items()):
     is_empty = False
@@ -60,75 +139,189 @@ for name, module in sorted(modules.items()):
         "is_empty": is_empty,
     }
 
+spm_products = []
+spm_targets = []
+module_to_source_files = dict()
+modulemaps = dict()
+
 combined_lines = []
 combined_lines.append("// swift-tools-version: 6.0")
 combined_lines.append("// The swift-tools-version declares the minimum version of Swift required to build this package.")
 combined_lines.append("")
 combined_lines.append("import PackageDescription")
+combined_lines.append("import Foundation")
+combined_lines.append("""
+func parseProduct(product: [String: Any]) -> Product {
+    let name = product[\"name\"] as! String
+    let targets = product[\"targets\"] as! [String]
+    return .library(name: name, targets: targets)
+}""")
+combined_lines.append("""
+func parseTarget(target: [String: Any]) -> Target {
+    let name = target["name"] as! String
+    let type = target["type"] as! String
+    let dependencies = target["dependencies"] as! [String]
+                      
+    if type == "library" {
+        var swiftSettings: [SwiftSetting]?
+        if let swiftSettingList = target["swiftSettings"] as? [[String: Any]] {
+            var swiftSettingsValue: [SwiftSetting] = []
+            swiftSettingsValue.append(.swiftLanguageMode(.v5))
+            for swiftSetting in swiftSettingList {
+                if swiftSetting["type"] as! String == "define" {
+                    swiftSettingsValue.append(.define(swiftSetting["name"] as! String))
+                } else if swiftSetting["type"] as! String == "unsafeFlags" {
+                    swiftSettingsValue.append(.unsafeFlags(swiftSetting["flags"] as! [String]))
+                } else {
+                    print("Unknown swift setting type: \\(swiftSetting["type"] as! String)")
+                    preconditionFailure("Unknown swift setting type: \\(swiftSetting["type"] as! String)")
+                }
+            }
+                        
+            swiftSettings = swiftSettingsValue
+        }
+                        
+        var cSettings: [CSetting]?
+        if let cSettingList = target["cSettings"] as? [[String: Any]] {
+            var cSettingsValue: [CSetting] = []
+            for cSetting in cSettingList {
+                if cSetting["type"] as! String == "define" {
+                    if let value = cSetting["value"] as? String {
+                        cSettingsValue.append(.define(cSetting["name"] as! String, to: value))
+                    } else {
+                        cSettingsValue.append(.define(cSetting["name"] as! String))
+                    }
+                } else if cSetting["type"] as! String == "unsafeFlags" {
+                    cSettingsValue.append(.unsafeFlags(cSetting["flags"] as! [String]))
+                } else {
+                    print("Unknown c setting type: \\(cSetting["type"] as! String)")
+                    preconditionFailure("Unknown c setting type: \\(cSetting["type"] as! String)")
+                }
+            }
+            cSettings = cSettingsValue
+        }
+
+        var cxxSettings: [CXXSetting]?
+        if let cxxSettingList = target["cxxSettings"] as? [[String: Any]] {
+            var cxxSettingsValue: [CXXSetting] = []
+            for cxxSetting in cxxSettingList {
+                if cxxSetting["type"] as! String == "define" {
+                    if let value = cxxSetting["value"] as? String {
+                        cxxSettingsValue.append(.define(cxxSetting["name"] as! String, to: value))
+                    } else {
+                        cxxSettingsValue.append(.define(cxxSetting["name"] as! String))
+                    }
+                } else if cxxSetting["type"] as! String == "unsafeFlags" {
+                    cxxSettingsValue.append(.unsafeFlags(cxxSetting["flags"] as! [String]))
+                } else {
+                    print("Unknown cxx setting type: \\(cxxSetting["type"] as! String)")
+                    preconditionFailure("Unknown cxx setting type: \\(cxxSetting["type"] as! String)")
+                }
+            }
+            cxxSettings = cxxSettingsValue
+        }
+                        
+        var linkerSettings: [LinkerSetting]?
+        if let linkerSettingList = target["linkerSettings"] as? [[String: Any]] {
+            var linkerSettingsValue: [LinkerSetting] = []
+            for linkerSetting in linkerSettingList {
+                if linkerSetting["type"] as! String == "framework" {
+                    linkerSettingsValue.append(.linkedFramework(linkerSetting["name"] as! String))
+                } else if linkerSetting["type"] as! String == "library" {
+                    linkerSettingsValue.append(.linkedLibrary(linkerSetting["name"] as! String))
+                } else {
+                    print("Unknown linker setting type: \\(linkerSetting["type"] as! String)")
+                    preconditionFailure("Unknown linker setting type: \\(linkerSetting["type"] as! String)")
+                }
+            }
+            linkerSettings = linkerSettingsValue
+        }
+
+        return .target(
+            name: name,
+            dependencies: dependencies.map({ .target(name: $0) }),
+            path: (target["path"] as? String)!,
+            exclude: target["exclude"] as? [String] ?? [],
+            sources: sourceFileMap[name]!,
+            resources: nil,
+            publicHeadersPath: target["publicHeadersPath"] as? String,
+            packageAccess: true,
+            cSettings: cSettings,
+            cxxSettings: cxxSettings,
+            swiftSettings: swiftSettings,
+            linkerSettings: linkerSettings,
+            plugins: nil
+        )
+    } else if type == "xcframework" {
+        return .binaryTarget(name: name, path: (target["path"] as? String)! + "/" + (target["name"] as? String)! + ".xcframework")
+    } else {
+        print("Unknown target type: \\(type)")
+        preconditionFailure("Unknown target type: \\(type)")
+    }
+}
+""")
+combined_lines.append("")
+combined_lines.append("let packageData: [String: Any] = try! JSONSerialization.jsonObject(with: Data(contentsOf: URL(fileURLWithPath: \"PackageData.json\")), options: []) as! [String: Any]")
+combined_lines.append("let sourceFileMap: [String: [String]] = packageData[\"sourceFileMap\"] as! [String: [String]]")
+combined_lines.append("let products: [Product] = (packageData[\"products\"] as! [[String: Any]]).map(parseProduct)")
+combined_lines.append("let targets: [Target] = (packageData[\"targets\"] as! [[String: Any]]).map(parseTarget)")
 combined_lines.append("")
 combined_lines.append("let package = Package(")
 combined_lines.append("    name: \"Telegram\",")
 combined_lines.append("    platforms: [")
-combined_lines.append("        .iOS(.v12)")
+combined_lines.append("        .iOS(.v13)")
 combined_lines.append("    ],")
-combined_lines.append("    products: [")
+combined_lines.append("    products: products,")
 
 for name, module in sorted(modules.items()):
     if parsed_modules[name]["is_empty"]:
         continue
     
     if module["type"] == "objc_library" or module["type"] == "swift_library" or module["type"] == "cc_library":
-        combined_lines.append("        .library(name: \"%s\", targets: [\"%s\"])," % (module["name"], module["name"]))
+        spm_products.append({
+            "name": module["name"],
+            "targets": [module["name"]],
+        })
 
-combined_lines.append("    ],")
-combined_lines.append("    targets: [")
+combined_lines.append("    targets: targets,")
 
 for name, module in sorted(modules.items()):
     if parsed_modules[name]["is_empty"]:
         continue
 
     module_type = module["type"]
-    if module_type == "objc_library" or module_type == "cc_library" or module_type == "swift_library":
-        combined_lines.append("        .target(")
-        combined_lines.append("            name: \"%s\"," % name)
+    if module_type == "objc_library" or module_type == "cc_library" or module_type == "swift_library" or module_type == "apple_static_xcframework_import":
+        spm_target = dict()
+
+        spm_target["name"] = name
         
-        relative_module_path = module["path"] + "/Module_" + name
+        relative_module_path = module["path"]
         module_directory = spm_files_dir + "/" + relative_module_path
-        os.makedirs(module_directory, exist_ok=True)
+        create_spm_directory(module_directory)
 
-        module_sources_directory = module_directory + "/Sources"
-        if not os.path.exists(module_sources_directory):
-            os.makedirs(module_sources_directory)
-        
-        module_public_includes_directory = module_directory + "/PublicIncludes"
-        if not os.path.exists(module_public_includes_directory):
-            os.makedirs(module_public_includes_directory)
+        module_public_headers_prefix = ""
+        if module_type == "objc_library" or module_type == "cc_library":
+            if len(module["includes"]) > 1:
+                print("{}: Multiple includes are not yet supported: {}".format(name, module["includes"]))
+                sys.exit(1)
+            elif len(module["includes"]) == 1:
+                for include_directory in module["includes"]:
+                    if include_directory != ".":
+                        #print("{}: Include directory: {}".format(name, include_directory))
+                        module_public_headers_prefix = include_directory
+                        break
 
-        module_public_headers_prefix = None
-        if len(module["includes"]) > 1:
-            print("{}: Multiple includes are not yet supported: {}".format(name, module["includes"]))
-            sys.exit(1)
-        elif len(module["includes"]) == 1:
-            for include_directory in module["includes"]:
-                if include_directory != ".":
-                    #print("{}: Include directory: {}".format(name, include_directory))
-                    module_public_headers_prefix = include_directory
-                    break
-
-        combined_lines.append("            dependencies: [")
-        for dep in module["deps"]:
+        spm_target["dependencies"] = []
+        for dep in module.get("deps", []):
             if not parsed_modules[dep]["is_empty"]:
-                combined_lines.append("                .target(name: \"%s\")," % dep)
-        combined_lines.append("            ],")
-
-        # All modules now use the symlinked directory path
-        combined_lines.append("            path: \"%s\"," % relative_module_path)
-
-        # Since we control the entire directory structure, we don't need exclude logic
-        combined_lines.append("            exclude: [")
-        combined_lines.append("            ],")
+                spm_target["dependencies"].append(dep)
         
-        combined_lines.append("            sources: [")
+        spm_target["path"] = relative_module_path
+
+        include_source_files = []
+        exclude_source_files = []
+        public_include_files = []
+        
         for source in module["sources"] + module.get("hdrs", []) + module.get("textual_hdrs", []):
             # Process all sources (both regular and generated) with symlinks
             if source.startswith("bazel-out/"):
@@ -146,39 +339,56 @@ for name, module in sorted(modules.items()):
                 source_file_name = source[len(module["path"]) + 1:]
 
             # Create symlink for this source file
-            is_public_include = False
-            if module_public_headers_prefix is not None:
-                if source_file_name.startswith(module_public_headers_prefix):
-                    symlink_location = os.path.join(module_public_includes_directory, source_file_name[len(module_public_headers_prefix) + 1:])
-                    #print("{}: Public include: {}".format(source_file_name, symlink_location))
-                    is_public_include = True
-
-            if not is_public_include:
-                symlink_location = os.path.join(module_sources_directory, source_file_name)
+            symlink_location = os.path.join(module_directory, source_file_name)
 
             # Create parent directory for symlink if it doesn't exist
             symlink_parent = os.path.dirname(symlink_location)
-            if not os.path.exists(symlink_parent):
-                os.makedirs(symlink_parent)
+            create_spm_directory(symlink_parent)
             
             # Calculate relative path from symlink back to original file
-            # Count directory depth: spm-files/module_name/... -> workspace root
+            # Count directory depth: spm-files/module_name/... -> spm-files
             num_parent_dirs = symlink_location.count(os.path.sep)
             relative_prefix = "".join(["../"] * num_parent_dirs)
             symlink_target = relative_prefix + source
             
             # Create the symlink
-            if os.path.lexists(symlink_location):
-                os.unlink(symlink_location)
-            os.symlink(symlink_target, symlink_location)
+            link_spm_file(symlink_target, symlink_location)
             
             # Add to sources list (exclude certain file types)
-            if not source.endswith(('.h', '.hpp', '.a', '.inc')):
-                combined_lines.append("                \"%s\"," % ("Sources/" + source_file_name))
-                
-        combined_lines.append("            ],")
+            if source.endswith(('.h', '.hpp', '.a', '.inc')):
+                if len(module_public_headers_prefix) != 0 and source_file_name.startswith(module_public_headers_prefix):
+                    public_include_files.append(source_file_name[len(module_public_headers_prefix) + 1:])
+                exclude_source_files.append(source_file_name)
+            else:
+                include_source_files.append(source_file_name)
+
+        if name in module_to_source_files:
+            print(f"{name}: duplicate module")
+            sys.exit(1)
+        module_to_source_files[name] = include_source_files
+        
+        ignore_sub_folders = []
+        for other_name, other_module in sorted(modules.items()):
+            if other_module["path"] != module["path"] and other_module["path"].startswith(module["path"] + "/"):
+                exclude_path = other_module["path"][len(module["path"]) + 1:]
+                ignore_sub_folders.append(exclude_path)
+        if len(ignore_sub_folders) != 0:
+            spm_target["exclude"] = ignore_sub_folders
+        
         if module_type == "objc_library" or module_type == "cc_library":
-            combined_lines.append("            publicHeadersPath: \"PublicIncludes\",")
+            modulemap_path = os.path.join(os.path.join(os.path.join(module_directory), module_public_headers_prefix), "module.modulemap")
+            if modulemap_path not in modulemaps:
+                modulemaps[modulemap_path] = []
+            modulemaps[modulemap_path].append({
+                "name": name,
+                "public_include_files": public_include_files
+            })
+                
+        if module_type == "objc_library" or module_type == "cc_library":
+            if module_public_headers_prefix is not None and len(module_public_headers_prefix) != 0:
+                spm_target["publicHeadersPath"] = module_public_headers_prefix
+            else:
+                spm_target["publicHeadersPath"] = ""
 
             if len(module["includes"]) > 1:
                 print("{}: Multiple includes are not yet supported: {}".format(name, module["includes"]))
@@ -188,58 +398,56 @@ for name, module in sorted(modules.items()):
             cxxopts = module.get("cxxopts", [])
 
             if defines or copts or (module_public_headers_prefix is not None):
-                combined_lines.append("            cSettings: [")
+                spm_target["cSettings"] = []
+
                 if defines:
                     for define in defines:
                         if "=" in define:
                             print("{}: Defines with = are not yet supported: {}".format(name, define))
                             sys.exit(1)
                         else:
-                            combined_lines.append(f'                .define("{define}"),')
+                            spm_target["cSettings"].append({
+                                "type": "define",
+                                "name": define
+                            })
                 if copts:
-                    combined_lines.append("                .unsafeFlags([")
+                    unsafe_flags = []
                     for flag in copts:
-                        escaped_flag = escape_swift_string_literal_component(flag)
-                        combined_lines.append(f'                    "{escaped_flag}",')
-                        if escaped_flag.startswith("-I"):
-                            include_path = escaped_flag[2:]
-                            print("{}: Include path: {}".format(name, include_path))
-                            for another_module_name, another_module in sorted(modules.items()):
-                                another_module_path = another_module["path"]
-                                if include_path.startswith(another_module_path):
-                                    relative_module_include_path = include_path[len(another_module_path) + 1:]
-                                    #print("    {}: Matches module: {}".format(another_module_name, another_module_path))
-
-                                    combined_lines.append(f'                    "-I{another_module_path}/Sources/{relative_module_include_path}",')
-
-                                another_module_public_headers_prefix = None
-                                if len(another_module["includes"]) == 1:
-                                    for include_directory in another_module["includes"]:
-                                        if include_directory != ".":
-                                            another_module_public_headers_prefix = another_module_path + "/" + include_directory
-                                            print("    {}: Another module public include: {}".format(another_module_name, another_module_public_headers_prefix))
-                                if another_module_public_headers_prefix is not None:
-                                    if include_path.startswith(another_module_public_headers_prefix):
-                                        relative_module_include_path = include_path[len(another_module_public_headers_prefix) + 1:]
-                                        print("    {}: Matches module public include: {}".format(another_module_name, another_module_public_headers_prefix))
-
-                                        combined_lines.append(f'                    -"-I{another_module_path}/PublicIncludes/{relative_module_include_path}",')
-                    combined_lines.append("                ]),")
-                if module_public_headers_prefix is not None:
-                    combined_lines.append(f"                .headerSearchPath(\"{module_public_headers_prefix}\"),")
-                combined_lines.append("            ],")
+                        if flag.startswith("-D"):
+                            define_flag, define_value = parse_define_flag(flag)
+                            if define_value is None:
+                                spm_target["cSettings"].append({
+                                    "type": "define",
+                                    "name": define_flag
+                                })
+                            else:
+                                spm_target["cSettings"].append({
+                                    "type": "define",
+                                    "name": define_flag,
+                                    "value": define_value
+                                })
+                        else:
+                            escaped_flag = escape_swift_string_literal_component(flag)
+                            unsafe_flags.append(escaped_flag)
+                    spm_target["cSettings"].append({
+                        "type": "unsafeFlags",
+                        "flags": unsafe_flags
+                    })
 
             if defines or cxxopts: # Check for defines OR cxxopts
-                combined_lines.append("            cxxSettings: [")
+                spm_target["cxxSettings"] = []
                 if defines: # Add defines again if present, for C++ context
                     for define in defines:
                         if "=" in define:
                             print("{}: Defines with = are not yet supported: {}".format(name, define))
                             sys.exit(1)
                         else:
-                            combined_lines.append(f'                .define("{define}"),')
+                            spm_target["cxxSettings"].append({
+                                "type": "define",
+                                "name": define
+                            })
                 if cxxopts:
-                    combined_lines.append("                .unsafeFlags([")
+                    unsafe_flags = []
                     for flag in cxxopts:
                         if flag.startswith("-std=") and True:
                             if flag != "-std=c++17":
@@ -248,58 +456,122 @@ for name, module in sorted(modules.items()):
                             else:
                                 continue
                         escaped_flag = escape_swift_string_literal_component(flag)
-                        combined_lines.append(f'                    "{escaped_flag}",')
-                    combined_lines.append("                ])")
-                combined_lines.append("            ],")
+                        unsafe_flags.append(escaped_flag)
+                    spm_target["cxxSettings"].append({
+                        "type": "unsafeFlags",
+                        "flags": unsafe_flags
+                    })
 
-            combined_lines.append("            linkerSettings: [")
+            spm_target["linkerSettings"] = []
             if module_type == "objc_library":
                 for framework in module["sdk_frameworks"]:
-                    combined_lines.append("                .linkedFramework(\"%s\")," % framework)
+                    spm_target["linkerSettings"].append({
+                        "type": "framework",
+                        "name": framework
+                    })
                 for dylib in module["sdk_dylibs"]:
-                    combined_lines.append("                .linkedLibrary(\"%s\")," % dylib)
-            combined_lines.append("            ]")
-            
+                    spm_target["linkerSettings"].append({
+                        "type": "library",
+                        "name": dylib
+                    })
+                    spm_target["linkerSettings"].append({
+                        "type": "library",
+                        "name": dylib
+                    })
+        
         elif module_type == "swift_library":
             defines = module.get("defines", [])
             swift_copts = module.get("copts", []) # These are actual swiftc flags
 
             # Handle cSettings for defines if they exist
             if defines:
-                combined_lines.append("            cSettings: [")
+                spm_target["cSettings"] = []
                 for define in defines:
-                    combined_lines.append(f'                .define("{define}"),')
-                combined_lines.append("            ],")
+                    spm_target["cSettings"].append({
+                        "type": "define",
+                        "name": define
+                    })
 
+            spm_target["swiftSettings"] = []
             # Handle swiftSettings
-            combined_lines.append("            swiftSettings: [")
-            combined_lines.append("                .swiftLanguageMode(.v5),")
-            # Add defines to swiftSettings as simple .define("STRING") flags
             if defines:
                 for define in defines:
                     # For Swift settings, the define is passed as a single string, e.g., "KEY=VALUE" or "FLAG"
                     escaped_define = escape_swift_string_literal_component(define) # Escape the whole define string
-                    combined_lines.append(f'                .define("{escaped_define}"),')
+                    spm_target["swiftSettings"].append({
+                        "type": "define",
+                        "name": escaped_define
+                    })
 
             # Add copts (swiftc flags) to unsafeFlags in swiftSettings
             if swift_copts:
-                combined_lines.append("                .unsafeFlags([")
+                unsafe_flags = []
                 for flag in swift_copts:
                     escaped_flag = escape_swift_string_literal_component(flag)
-                    combined_lines.append(f'                    "{escaped_flag}",')
-                combined_lines.append("                ])")
-            combined_lines.append("            ]")
-        combined_lines.append("        ),")
+                    unsafe_flags.append(escaped_flag)
+                spm_target["swiftSettings"].append({
+                    "type": "unsafeFlags",
+                    "flags": unsafe_flags
+                })
+
+        if module_type == "apple_static_xcframework_import":
+            spm_target["type"] = "xcframework"
+        else:
+            spm_target["type"] = "library"
+
+        spm_targets.append(spm_target)
+    elif module["type"] == "apple_static_xcframework_import":
+        pass
     elif module["type"] == "root":
         pass
     else:
         print("Unknown module type: {}".format(module["type"]))
         sys.exit(1)
 
-combined_lines.append("    ],")
 combined_lines.append("    cxxLanguageStandard: .cxx17")
 combined_lines.append(")")
 combined_lines.append("")
 
-with open("spm-files/Package.swift", "w") as f:
-    f.write("\n".join(combined_lines))
+create_spm_file("spm-files/Package.swift", "\n".join(combined_lines))
+
+package_data = {
+    "sourceFileMap": module_to_source_files,
+    "products": spm_products,
+    "targets": spm_targets
+}
+create_spm_file("spm-files/PackageData.json", json.dumps(package_data, indent=4))
+
+for modulemap_path, modulemap in modulemaps.items():
+    module_map_contents = ""
+    for module in modulemap:
+        module_map_contents += "module {} {{\n".format(module["name"])
+        for public_include_file in module["public_include_files"]:
+            module_map_contents += "    header \"{}\"\n".format(public_include_file)
+        module_map_contents += "}\n"
+    create_spm_file(modulemap_path, module_map_contents)
+
+# Clean up files and directories that are no longer needed
+files_to_remove = previous_spm_files - current_spm_files
+
+# Sort by path depth (deeper paths first) to ensure we remove files before their parent directories
+sorted_files_to_remove = sorted(files_to_remove, key=lambda x: x.count(os.path.sep), reverse=True)
+
+for file_path in sorted_files_to_remove:
+    try:
+        if os.path.islink(file_path):
+            os.unlink(file_path)
+            #print(f"Removed symlink: {file_path}")
+        elif os.path.isfile(file_path):
+            os.unlink(file_path)
+            #print(f"Removed file: {file_path}")
+        elif os.path.isdir(file_path):
+            # Try to remove directory if empty, otherwise use rmtree
+            try:
+                os.rmdir(file_path)
+                #print(f"Removed empty directory: {file_path}")
+            except OSError:
+                shutil.rmtree(file_path)
+                #print(f"Removed directory tree: {file_path}")
+    except OSError as e:
+        print(f"Failed to remove {file_path}: {e}")
+

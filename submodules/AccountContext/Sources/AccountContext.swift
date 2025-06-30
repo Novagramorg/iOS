@@ -1501,60 +1501,73 @@ public struct StarsSubscriptionConfiguration {
         return StarsSubscriptionConfiguration(
             maxFee: 2500,
             usdWithdrawRate: 1200,
+            tonUsdRate: 0,
             paidMessageMaxAmount: 10000,
             paidMessageCommissionPermille: 850,
             paidMessagesAvailable: false,
             starGiftResaleMinAmount: 125,
             starGiftResaleMaxAmount: 3500,
             starGiftCommissionPermille: 80,
-            channelMessageSuggestionCommissionPermille: 850,
+            channelMessageSuggestionStarsCommissionPermille: 850,
+            channelMessageSuggestionTonCommissionPermille: 850,
             channelMessageSuggestionMaxStarsAmount: 10000,
-            channelMessageSuggestionMaxTonAmount: 10000000000000
+            channelMessageSuggestionMaxTonAmount: 10000000000000,
+            channelMessageSuggestionMinStarsAmount: 5
         )
     }
         
     public let maxFee: Int64
     public let usdWithdrawRate: Int64
+    public let tonUsdRate: Int64
     public let paidMessageMaxAmount: Int64
     public let paidMessageCommissionPermille: Int32
     public let paidMessagesAvailable: Bool
     public let starGiftResaleMinAmount: Int64
     public let starGiftResaleMaxAmount: Int64
     public let starGiftCommissionPermille: Int32
-    public let channelMessageSuggestionCommissionPermille: Int32
+    public let channelMessageSuggestionStarsCommissionPermille: Int32
+    public let channelMessageSuggestionTonCommissionPermille: Int32
     public let channelMessageSuggestionMaxStarsAmount: Int64
     public let channelMessageSuggestionMaxTonAmount: Int64
+    public let channelMessageSuggestionMinStarsAmount: Int64
     
     fileprivate init(
         maxFee: Int64,
         usdWithdrawRate: Int64,
+        tonUsdRate: Int64,
         paidMessageMaxAmount: Int64,
         paidMessageCommissionPermille: Int32,
         paidMessagesAvailable: Bool,
         starGiftResaleMinAmount: Int64,
         starGiftResaleMaxAmount: Int64,
         starGiftCommissionPermille: Int32,
-        channelMessageSuggestionCommissionPermille: Int32,
+        channelMessageSuggestionStarsCommissionPermille: Int32,
+        channelMessageSuggestionTonCommissionPermille: Int32,
         channelMessageSuggestionMaxStarsAmount: Int64,
-        channelMessageSuggestionMaxTonAmount: Int64
+        channelMessageSuggestionMaxTonAmount: Int64,
+        channelMessageSuggestionMinStarsAmount: Int64
     ) {
         self.maxFee = maxFee
         self.usdWithdrawRate = usdWithdrawRate
+        self.tonUsdRate = tonUsdRate
         self.paidMessageMaxAmount = paidMessageMaxAmount
         self.paidMessageCommissionPermille = paidMessageCommissionPermille
         self.paidMessagesAvailable = paidMessagesAvailable
         self.starGiftResaleMinAmount = starGiftResaleMinAmount
         self.starGiftResaleMaxAmount = starGiftResaleMaxAmount
         self.starGiftCommissionPermille = starGiftCommissionPermille
-        self.channelMessageSuggestionCommissionPermille = channelMessageSuggestionCommissionPermille
+        self.channelMessageSuggestionStarsCommissionPermille = channelMessageSuggestionStarsCommissionPermille
+        self.channelMessageSuggestionTonCommissionPermille = channelMessageSuggestionTonCommissionPermille
         self.channelMessageSuggestionMaxStarsAmount = channelMessageSuggestionMaxStarsAmount
         self.channelMessageSuggestionMaxTonAmount = channelMessageSuggestionMaxTonAmount
+        self.channelMessageSuggestionMinStarsAmount = channelMessageSuggestionMinStarsAmount
     }
     
     public static func with(appConfiguration: AppConfiguration) -> StarsSubscriptionConfiguration {
         if let data = appConfiguration.data {
             let maxFee = (data["stars_subscription_amount_max"] as? Double).flatMap(Int64.init) ?? StarsSubscriptionConfiguration.defaultValue.maxFee
             let usdWithdrawRate = (data["stars_usd_withdraw_rate_x1000"] as? Double).flatMap(Int64.init) ?? StarsSubscriptionConfiguration.defaultValue.usdWithdrawRate
+            let tonUsdRate = (data["ton_usd_rate"] as? Double).flatMap(Int64.init) ?? StarsSubscriptionConfiguration.defaultValue.tonUsdRate
             let paidMessageMaxAmount = (data["stars_paid_message_amount_max"] as? Double).flatMap(Int64.init) ?? StarsSubscriptionConfiguration.defaultValue.paidMessageMaxAmount
             let paidMessageCommissionPermille = (data["stars_paid_message_commission_permille"] as? Double).flatMap(Int32.init) ?? StarsSubscriptionConfiguration.defaultValue.paidMessageCommissionPermille
             let paidMessagesAvailable = (data["stars_paid_messages_available"] as? Bool) ?? StarsSubscriptionConfiguration.defaultValue.paidMessagesAvailable
@@ -1562,23 +1575,80 @@ public struct StarsSubscriptionConfiguration {
             let starGiftResaleMaxAmount = (data["stars_stargift_resale_amount_max"] as? Double).flatMap(Int64.init) ?? StarsSubscriptionConfiguration.defaultValue.starGiftResaleMaxAmount
             let starGiftCommissionPermille = (data["stars_stargift_resale_commission_permille"] as? Double).flatMap(Int32.init) ?? StarsSubscriptionConfiguration.defaultValue.starGiftCommissionPermille
             
-            let channelMessageSuggestionCommissionPermille = (data["stars_suggested_post_commission_permille"] as? Double).flatMap(Int32.init) ?? StarsSubscriptionConfiguration.defaultValue.channelMessageSuggestionCommissionPermille
+            let channelMessageSuggestionStarsCommissionPermille = (data["stars_suggested_post_commission_permille"] as? Double).flatMap(Int32.init) ?? StarsSubscriptionConfiguration.defaultValue.channelMessageSuggestionStarsCommissionPermille
+            let channelMessageSuggestionTonCommissionPermille = (data["ton_suggested_post_commission_permille"] as? Double).flatMap(Int32.init) ?? StarsSubscriptionConfiguration.defaultValue.channelMessageSuggestionTonCommissionPermille
             let channelMessageSuggestionMaxStarsAmount = (data["stars_suggested_post_amount_max"] as? Double).flatMap(Int64.init) ?? StarsSubscriptionConfiguration.defaultValue.channelMessageSuggestionMaxStarsAmount
             let channelMessageSuggestionMaxTonAmount = (data["ton_suggested_post_amount_max"] as? Double).flatMap(Int64.init) ?? StarsSubscriptionConfiguration.defaultValue.channelMessageSuggestionMaxTonAmount
+            
+            let channelMessageSuggestionMinStarsAmount = (data["stars_suggested_post_amount_min"] as? Double).flatMap(Int64.init) ?? StarsSubscriptionConfiguration.defaultValue.channelMessageSuggestionMinStarsAmount
             
             return StarsSubscriptionConfiguration(
                 maxFee: maxFee,
                 usdWithdrawRate: usdWithdrawRate,
+                tonUsdRate: tonUsdRate,
                 paidMessageMaxAmount: paidMessageMaxAmount,
                 paidMessageCommissionPermille: paidMessageCommissionPermille,
                 paidMessagesAvailable: paidMessagesAvailable,
                 starGiftResaleMinAmount: starGiftResaleMinAmount,
                 starGiftResaleMaxAmount: starGiftResaleMaxAmount,
                 starGiftCommissionPermille: starGiftCommissionPermille,
-                channelMessageSuggestionCommissionPermille: channelMessageSuggestionCommissionPermille,
+                channelMessageSuggestionStarsCommissionPermille: channelMessageSuggestionStarsCommissionPermille,
+                channelMessageSuggestionTonCommissionPermille: channelMessageSuggestionTonCommissionPermille,
                 channelMessageSuggestionMaxStarsAmount: channelMessageSuggestionMaxStarsAmount,
-                channelMessageSuggestionMaxTonAmount: channelMessageSuggestionMaxTonAmount
+                channelMessageSuggestionMaxTonAmount: channelMessageSuggestionMaxTonAmount,
+                channelMessageSuggestionMinStarsAmount: channelMessageSuggestionMinStarsAmount
             )
+        } else {
+            return .defaultValue
+        }
+    }
+}
+
+public struct TranslationConfiguration {
+    static var defaultValue: TranslationConfiguration {
+        return TranslationConfiguration(manual: .disabled, auto: .disabled)
+    }
+    
+    public enum TranslationAvailability {
+        case enabled
+        case system
+        case alternative
+        case disabled
+        
+        init(string: String) {
+            switch string {
+            case "enabled":
+                #if DEBUG
+                self = .system
+                #else
+                self = .enabled
+                #endif
+            case "system":
+                self = .system
+            case "alternative":
+                self = .alternative
+            default:
+                self = .disabled
+            }
+        }
+    }
+    
+    public let manual: TranslationAvailability
+    public let auto: TranslationAvailability
+    
+    fileprivate init(manual: TranslationAvailability, auto: TranslationAvailability) {
+        self.manual = manual
+        self.auto = auto
+    }
+    
+    public static func with(appConfiguration: AppConfiguration) -> TranslationConfiguration {
+        if let data = appConfiguration.data {
+            let manualValue = data["translations_manual_enabled"] as? String ?? "disabled"
+            var autoValue = data["translations_auto_enabled"] as? String ?? "disabled"
+            if autoValue == "alternative" {
+                autoValue = "disabled"
+            }
+            return TranslationConfiguration(manual: TranslationAvailability(string: manualValue), auto: TranslationAvailability(string: autoValue))
         } else {
             return .defaultValue
         }

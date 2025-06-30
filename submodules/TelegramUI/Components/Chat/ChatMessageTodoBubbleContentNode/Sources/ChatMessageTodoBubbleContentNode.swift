@@ -375,7 +375,11 @@ private func generatePercentageAnimationImages(presentationData: ChatPresentatio
 private final class ChatMessageTodoItemNode: ASDisplayNode {
     private var backgroundWallpaperNode: ChatMessageBubbleBackdrop?
     private var backgroundNode: ChatMessageBackground?
-    private var snapshotView: UIView?
+    private var extractedRadioView: UIView?
+    private var extractedIconView: UIView?
+    private var extractedAvatarView: UIView?
+    private var extractedTitleNode: TextNodeWithEntities?
+    private var extractedNameView: UIView?
     
     fileprivate let contextSourceNode: ContextExtractedContentContainingNode
     fileprivate let containerNode: ASDisplayNode
@@ -385,6 +389,7 @@ private final class ChatMessageTodoItemNode: ASDisplayNode {
     private var iconNode: ASImageNode?
     fileprivate var titleNode: TextNodeWithEntities?
     fileprivate var nameNode: TextNode?
+    
     private let buttonNode: HighlightTrackingButtonNode
     let separatorNode: ASDisplayNode
     
@@ -545,16 +550,55 @@ private final class ChatMessageTodoItemNode: ASDisplayNode {
 //                    self.backgroundWallpaperNode?.update(rect: mappedRect, within: containerSize)
 //                }
                 
-                if let snapshotView = self.containerNode.view.snapshotContentTree() {
-                    self.snapshotView = snapshotView
-                    self.contextSourceNode.contentNode.view.addSubview(snapshotView)
+                if let extractedIconView = self.iconNode?.view.snapshotContentTree() {
+                    self.extractedIconView = extractedIconView
+                    self.contextSourceNode.contentNode.view.addSubview(extractedIconView)
+                }
+                
+                if let extractedRadioView = self.radioNode?.view.snapshotContentTree() {
+                    self.extractedRadioView = extractedRadioView
+                    self.contextSourceNode.contentNode.view.addSubview(extractedRadioView)
+                }
+                
+                if let extractedAvatarView = self.avatarNode?.view.snapshotContentTree() {
+                    self.extractedAvatarView = extractedAvatarView
+                    self.contextSourceNode.contentNode.view.addSubview(extractedAvatarView)
+                }
+                
+                if let titleNode = self.titleNode, let context = self.context, let presentationData = self.presentationData {
+                    let titleConstrainedWidth = titleNode.textNode.cachedLayout?.size.width ?? 1.0
+                    let makeTitleLayout = TextNodeWithEntities.asyncLayout(self.extractedTitleNode)
+                    let (_, titleApply) = makeTitleLayout(TextNodeLayoutArguments(attributedString: self.titleNode?.textNode.cachedLayout?.attributedString, backgroundColor: nil, maximumNumberOfLines: 0, truncationType: .end, constrainedSize: CGSize(width: titleConstrainedWidth, height: CGFloat.greatestFiniteMagnitude), alignment: .left, cutout: nil, insets: UIEdgeInsets(top: 1.0, left: 0.0, bottom: 1.0, right: 0.0)))
+                    let extractedTitleNode = titleApply(TextNodeWithEntities.Arguments(
+                        context: context,
+                        cache: context.animationCache,
+                        renderer: context.animationRenderer,
+                        placeholderColor: incoming ? presentationData.theme.theme.chat.message.incoming.mediaPlaceholderColor : presentationData.theme.theme.chat.message.outgoing.mediaPlaceholderColor,
+                        attemptSynchronous: true
+                    ))
+                    extractedTitleNode.textNode.frame = titleNode.textNode.frame
+                    self.contextSourceNode.contentNode.addSubnode(extractedTitleNode.textNode)
+                    self.extractedTitleNode = extractedTitleNode
+                }
+                
+                if let extractedNameView = self.nameNode?.view.snapshotContentTree() {
+                    self.extractedNameView = extractedNameView
+                    self.contextSourceNode.contentNode.view.addSubview(extractedNameView)
                 }
             } else {
                 if let backgroundNode = self.backgroundNode {
                     self.backgroundNode = nil
                     transition.updateAlpha(node: backgroundNode, alpha: 0.0, completion: { [weak backgroundNode] _ in
-                        self.snapshotView?.removeFromSuperview()
-                        self.snapshotView = nil
+                        self.extractedRadioView?.removeFromSuperview()
+                        self.extractedRadioView = nil
+                        self.extractedIconView?.removeFromSuperview()
+                        self.extractedIconView = nil
+                        self.extractedAvatarView?.removeFromSuperview()
+                        self.extractedAvatarView = nil
+                        self.extractedTitleNode?.textNode.removeFromSupernode()
+                        self.extractedTitleNode = nil
+                        self.extractedNameView?.removeFromSuperview()
+                        self.extractedNameView = nil
                         
                         backgroundNode?.removeFromSupernode()
                     })
@@ -588,6 +632,60 @@ private final class ChatMessageTodoItemNode: ASDisplayNode {
             self.pressed?()
         }
     }
+        
+    func linkRectsAtPoint(_ point: CGPoint?) -> [CGRect]? {
+        guard let textNode = self.titleNode else {
+            return nil
+        }
+        var rects: [CGRect]?
+        if let point = point {
+            let textNodeFrame = textNode.textNode.frame
+            if let (index, attributes) = textNode.textNode.attributesAtPoint(CGPoint(x: point.x - textNodeFrame.minX, y: point.y - textNodeFrame.minY)) {
+                let possibleNames: [String] = [
+                    TelegramTextAttributes.URL,
+                    TelegramTextAttributes.PeerMention,
+                    TelegramTextAttributes.PeerTextMention,
+                    TelegramTextAttributes.BotCommand,
+                    TelegramTextAttributes.Hashtag,
+                    TelegramTextAttributes.BankCard
+                ]
+                for name in possibleNames {
+                    if let _ = attributes[NSAttributedString.Key(rawValue: name)], let textRects = textNode.textNode.attributeRects(name: name, at: index) {
+                        rects = textRects.map { $0.offsetBy(dx: textNodeFrame.minX, dy: textNodeFrame.minY) }
+                        break
+                    }
+                }
+            }
+        }
+        return rects
+    }
+    
+    func tapActionAtPoint(_ point: CGPoint, gesture: TapLongTapOrDoubleTapGesture, isEstimating: Bool) -> ChatMessageBubbleContentTapAction {
+        guard let textNode = self.titleNode else {
+            return ChatMessageBubbleContentTapAction(content: .none)
+        }
+        let textNodeFrame = textNode.textNode.frame
+        if let (index, attributes) = textNode.textNode.attributesAtPoint(CGPoint(x: point.x - textNodeFrame.minX, y: point.y - textNodeFrame.minY)) {
+            if let url = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.URL)] as? String {
+                var concealed = true
+                if let (attributeText, fullText) = textNode.textNode.attributeSubstring(name: TelegramTextAttributes.URL, index: index) {
+                    concealed = !doesUrlMatchText(url: url, text: attributeText, fullText: fullText)
+                }
+                return ChatMessageBubbleContentTapAction(content: .url(ChatMessageBubbleContentTapAction.Url(url: url, concealed: concealed)))
+            } else if let peerMention = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.PeerMention)] as? TelegramPeerMention {
+                return ChatMessageBubbleContentTapAction(content: .peerMention(peerId: peerMention.peerId, mention: peerMention.mention, openProfile: false))
+            } else if let peerName = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.PeerTextMention)] as? String {
+                return ChatMessageBubbleContentTapAction(content: .textMention(peerName))
+            } else if let botCommand = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.BotCommand)] as? String {
+                return ChatMessageBubbleContentTapAction(content: .botCommand(botCommand))
+            } else if let hashtag = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.Hashtag)] as? TelegramHashtag {
+                return ChatMessageBubbleContentTapAction(content: .hashtag(hashtag.peerName, hashtag.hashtag))
+            } else {
+                return ChatMessageBubbleContentTapAction(content: .none)
+            }
+        }
+        return ChatMessageBubbleContentTapAction(content: .none)
+    }
     
     static func asyncLayout(_ maybeNode: ChatMessageTodoItemNode?) -> (_ context: AccountContext, _ presentationData: ChatPresentationData, _ presentationContext: ChatPresentationContext, _ message: Message, _ todo: TelegramMediaTodo, _ option: TelegramMediaTodo.Item, _ completion: TelegramMediaTodo.Completion?, _ translation: TranslationMessageAttribute.Additional?, _ constrainedWidth: CGFloat) -> (minimumWidth: CGFloat, layout: ((CGFloat) -> (CGSize, (Bool, Bool, Bool) -> ChatMessageTodoItemNode))) {
         let makeTitleLayout = TextNodeWithEntities.asyncLayout(maybeNode?.titleNode)
@@ -596,7 +694,7 @@ private final class ChatMessageTodoItemNode: ASDisplayNode {
         return { context, presentationData, presentationContext, message, todo, option, completion, translation, constrainedWidth in
             var canMark = false
             if (todo.flags.contains(.othersCanComplete) || message.author?.id == context.account.peerId) {
-                if let forwardInfo = message.forwardInfo, let authorId = forwardInfo.author?.id, authorId != context.account.peerId {   
+                if let _ = message.forwardInfo {
                 } else {
                     canMark = true
                 }
@@ -619,12 +717,16 @@ private final class ChatMessageTodoItemNode: ASDisplayNode {
                 optionEntities.append(MessageTextEntity(range: 0 ..< (optionText as NSString).length, type: .Strikethrough))
             }
             
-            let optionTextColor: UIColor = messageTheme.primaryTextColor
+            var underlineLinks = true
+            if !messageTheme.primaryTextColor.isEqual(messageTheme.linkTextColor) {
+                underlineLinks = false
+            }
+            
             let optionAttributedText = stringWithAppliedEntities(
                 optionText,
                 entities: optionEntities,
-                baseColor: optionTextColor,
-                linkColor: optionTextColor,
+                baseColor: messageTheme.primaryTextColor,
+                linkColor: messageTheme.linkTextColor,
                 baseFont: presentationData.messageFont,
                 linkFont: presentationData.messageFont,
                 boldFont: presentationData.messageFont,
@@ -632,6 +734,7 @@ private final class ChatMessageTodoItemNode: ASDisplayNode {
                 boldItalicFont: presentationData.messageFont,
                 fixedFont: presentationData.messageFont,
                 blockQuoteFont: presentationData.messageFont,
+                underlineLinks: underlineLinks,
                 message: message
             )
             
@@ -701,7 +804,7 @@ private final class ChatMessageTodoItemNode: ASDisplayNode {
                     } else {
                         titleNodeFrame = CGRect(origin: CGPoint(x: leftInset, y: 12.0), size: titleLayout.size)
                     }
-                    if let _ = completion, canMark && todo.flags.contains(.othersCanComplete) {
+                    if let _ = completion, todo.flags.contains(.othersCanComplete) {
                         titleNodeFrame = titleNodeFrame.offsetBy(dx: 0.0, dy: -6.0)
                     }
                     
@@ -725,9 +828,9 @@ private final class ChatMessageTodoItemNode: ASDisplayNode {
                     if let (nameLayout, nameApply) = nameLayoutAndApply {
                         var nameNodeFrame: CGRect
                         if titleLayout.hasRTL {
-                            nameNodeFrame = CGRect(origin: CGPoint(x: width - rightInset - nameLayout.size.width, y: 26.0), size: nameLayout.size)
+                            nameNodeFrame = CGRect(origin: CGPoint(x: width - rightInset - nameLayout.size.width, y: titleNodeFrame.maxY - 4.0), size: nameLayout.size)
                         } else {
-                            nameNodeFrame = CGRect(origin: CGPoint(x: leftInset, y: 26.0), size: nameLayout.size)
+                            nameNodeFrame = CGRect(origin: CGPoint(x: leftInset, y: titleNodeFrame.maxY - 4.0), size: nameLayout.size)
                         }
                         let nameNode = nameApply()
                         if node.nameNode !== nameNode {
@@ -876,6 +979,8 @@ public class ChatMessageTodoBubbleContentNode: ChatMessageBubbleContentNode {
     private let statusNode: ChatMessageDateAndStatusNode
     private var optionNodes: [ChatMessageTodoItemNode] = []
     private var shimmeringNodes: [ShimmeringLinkNode] = []
+    
+    private var linkHighlightingNode: LinkHighlightingNode?
     
     private var todo: TelegramMediaTodo?
     
@@ -1111,15 +1216,15 @@ public class ChatMessageTodoBubbleContentNode: ChatMessageBubbleContentNode {
                 
                 let (typeLayout, typeApply) = makeTypeLayout(TextNodeLayoutArguments(attributedString: NSAttributedString(string: typeText, font: labelsFont, textColor: messageTheme.secondaryTextColor), backgroundColor: nil, maximumNumberOfLines: 0, truncationType: .end, constrainedSize: textConstrainedSize, alignment: .natural, cutout: nil, insets: UIEdgeInsets()))
                 
-                
-                //TODO:localize
                 var bottomText: String = ""
                 if let todo {
+                    let format: String
                     if let author = item.message.author, author.id != item.context.account.peerId && !todo.flags.contains(.othersCanComplete) {
-                        bottomText = "\(todo.completions.count) of \(todo.items.count) completed by \(EnginePeer(author).compactDisplayTitle)"
+                        format = item.presentationData.strings.Chat_Todo_Message_CompletedBy(Int32(todo.completions.count)).replacingOccurrences(of: "{name}", with: EnginePeer(author).compactDisplayTitle)
                     } else {
-                        bottomText = "\(todo.completions.count) of \(todo.items.count) completed"
+                        format = item.presentationData.strings.Chat_Todo_Message_Completed(Int32(todo.completions.count))
                     }
+                    bottomText = format.replacingOccurrences(of: "{count}", with: "\(todo.items.count)")
                 }
                 
                 let (buttonViewResultsTextLayout, buttonViewResultsTextApply) = makeViewResultsTextLayout(TextNodeLayoutArguments(attributedString: NSAttributedString(string: bottomText, font: labelsFont, textColor: messageTheme.secondaryTextColor), backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .end, constrainedSize: textConstrainedSize, alignment: .natural, cutout: nil, insets: textInsets))
@@ -1396,9 +1501,18 @@ public class ChatMessageTodoBubbleContentNode: ChatMessageBubbleContentNode {
             }
         } else {
             for optionNode in self.optionNodes {
-                if optionNode.frame.contains(point), case .tap = gesture {
-                    if optionNode.isUserInteractionEnabled {
-                        return ChatMessageBubbleContentTapAction(content: .ignore)
+                if optionNode.frame.contains(point) {
+                    let optionAction = optionNode.tapActionAtPoint(self.view.convert(point, to: optionNode.view), gesture: gesture, isEstimating: isEstimating)
+                    if case .none = optionAction.content {
+                        if optionNode.isUserInteractionEnabled, case .tap = gesture {
+                            return ChatMessageBubbleContentTapAction(content: .ignore)
+                        }
+                    } else {
+                        var rects: [CGRect]?
+                        if let optionRects = optionNode.linkRectsAtPoint(self.view.convert(point, to: optionNode.view)), let rect = optionRects.first {
+                            rects = [rect.offsetBy(dx: optionNode.frame.minX - 11.0, dy: optionNode.frame.minY - 5.0)]
+                        }
+                        return ChatMessageBubbleContentTapAction(content: optionAction.content, rects: rects)
                     }
                 }
             }
@@ -1406,6 +1520,56 @@ public class ChatMessageTodoBubbleContentNode: ChatMessageBubbleContentNode {
                 return ChatMessageBubbleContentTapAction(content: .ignore)
             }
             return ChatMessageBubbleContentTapAction(content: .none)
+        }
+    }
+    
+    public override func updateTouchesAtPoint(_ point: CGPoint?) {
+        guard let item = self.item else {
+            return
+        }
+        var rects: [CGRect]?
+        if let point = point {
+            let textNodeFrame = self.textNode.textNode.frame
+            if let (index, attributes) = self.textNode.textNode.attributesAtPoint(CGPoint(x: point.x - textNodeFrame.minX, y: point.y - textNodeFrame.minY)) {
+                let possibleNames: [String] = [
+                    TelegramTextAttributes.URL,
+                    TelegramTextAttributes.PeerMention,
+                    TelegramTextAttributes.PeerTextMention,
+                    TelegramTextAttributes.BotCommand,
+                    TelegramTextAttributes.Hashtag,
+                    TelegramTextAttributes.BankCard
+                ]
+                for name in possibleNames {
+                    if let _ = attributes[NSAttributedString.Key(rawValue: name)], let textRects = self.textNode.textNode.attributeRects(name: name, at: index) {
+                        rects = textRects.map { $0.offsetBy(dx: textNodeFrame.minX, dy: textNodeFrame.minY) }
+                        break
+                    }
+                }
+            }
+            
+            for optionNode in self.optionNodes {
+                if optionNode.frame.contains(point), let optionRects = optionNode.linkRectsAtPoint(CGPoint(x: point.x - optionNode.frame.minX, y: point.y - optionNode.frame.minY)) {
+                    rects = optionRects.map { $0.offsetBy(dx: optionNode.frame.minX - 11.0, dy: optionNode.frame.minY - 4.0) }
+                }
+            }
+        }
+        
+        if let rects {
+            let linkHighlightingNode: LinkHighlightingNode
+            if let current = self.linkHighlightingNode {
+                linkHighlightingNode = current
+            } else {
+                linkHighlightingNode = LinkHighlightingNode(color: item.message.effectivelyIncoming(item.context.account.peerId) ? item.presentationData.theme.theme.chat.message.incoming.linkHighlightColor : item.presentationData.theme.theme.chat.message.outgoing.linkHighlightColor)
+                self.linkHighlightingNode = linkHighlightingNode
+                self.insertSubnode(linkHighlightingNode, belowSubnode: self.textNode.textNode)
+            }
+            linkHighlightingNode.frame = self.textNode.textNode.frame
+            linkHighlightingNode.updateRects(rects)
+        } else if let linkHighlightingNode = self.linkHighlightingNode {
+            self.linkHighlightingNode = nil
+            linkHighlightingNode.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.18, removeOnCompletion: false, completion: { [weak linkHighlightingNode] _ in
+                linkHighlightingNode?.removeFromSupernode()
+            })
         }
     }
         
