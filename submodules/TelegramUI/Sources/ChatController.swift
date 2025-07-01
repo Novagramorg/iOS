@@ -2994,14 +2994,16 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                         return peerViewMainPeer(view)
                     }
                     |> deliverOnMainQueue).startStandalone(next: { peer in
-                        guard let peer = peer else {
+                        guard let peer else {
                             return
                         }
                         
                         if let cachedUserData = strongSelf.contentData?.state.peerView?.cachedData as? CachedUserData, cachedUserData.callsPrivate {
-                            let presentationData = context.sharedContext.currentPresentationData.with { $0 }
-                            
-                            strongSelf.present(textAlertController(context: strongSelf.context, updatedPresentationData: strongSelf.updatedPresentationData, title: presentationData.strings.Call_ConnectionErrorTitle, text: presentationData.strings.Call_PrivacyErrorMessage(EnginePeer(peer).compactDisplayTitle).string, actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+                            strongSelf.push(strongSelf.context.sharedContext.makeSendInviteLinkScreen(context: strongSelf.context, subject: .groupCall(.create), peers: [TelegramForbiddenInvitePeer(
+                                peer: EnginePeer(peer),
+                                canInviteWithPremium: false,
+                                premiumRequiredToContact: false
+                            )], theme: strongSelf.presentationData.theme))
                             return
                         }
                         

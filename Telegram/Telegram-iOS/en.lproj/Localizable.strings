@@ -14667,3 +14667,5 @@ Sorry for the inconvenience.";
 "Chat.Todo.Message.Completed_any" = "%@ of {count} completed";
 "Chat.Todo.Message.CompletedBy_1" = "%@ of {count} completed by {name}";
 "Chat.Todo.Message.CompletedBy_any" = "%@ of {count} completed by {name}";
+
+"SendInviteLink.TextCallsRestrictedSendOneInviteLink" = "**%@** restricts calling them. You can send them an invite link to call instead.";
