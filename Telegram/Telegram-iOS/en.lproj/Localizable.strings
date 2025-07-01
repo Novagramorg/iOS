@@ -14623,7 +14623,7 @@ Sorry for the inconvenience.";
 "VoiceOver.SuggestPost" = "Suggest Post";
 
 "Chat.ContextMenu.SuggestedPost.EditMessage" = "Edit Message";
-"Chat.ContextMenu.SuggestedPost.EditPrice" = "Edit Prive";
+"Chat.ContextMenu.SuggestedPost.EditPrice" = "Edit Price";
 "Chat.ContextMenu.SuggestedPost.EditTime" = "Edit Time";
 "Chat.ContextMenu.SuggestedPost.Create" = "Suggest Post";
 
