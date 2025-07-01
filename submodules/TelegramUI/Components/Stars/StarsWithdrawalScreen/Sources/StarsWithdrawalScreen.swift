@@ -603,7 +603,7 @@ private final class SheetContent: CombinedComponent {
                         }
                     )).string
                 } else {
-                    timeString = "Anytime"
+                    timeString = strings.SuggestPost_SetTimeFormat_Any
                 }
                 
                 let timestampSection = timestampSection.update(
@@ -618,7 +618,7 @@ private final class SheetContent: CombinedComponent {
                                 title: AnyComponent(VStack([
                                     AnyComponentWithIdentity(id: AnyHashable(0), component: AnyComponent(MultilineTextComponent(
                                         text: .plain(NSAttributedString(
-                                            string: "Time",
+                                            string: environment.strings.SuggestPost_SetTime_Label,
                                             font: Font.regular(presentationData.listsFontSize.baseDisplaySize),
                                             textColor: environment.theme.list.itemPrimaryTextColor
                                         )),
