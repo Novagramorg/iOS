@@ -481,6 +481,7 @@ swift_library(
         "//submodules/TelegramUI/Components/BatchVideoRendering",
         "//submodules/TelegramUI/Components/ComposeTodoScreen",
         "//submodules/TelegramUI/Components/SuggestedPostApproveAlert",
+        "//submodules/TelegramUI/Components/Stars/BalanceNeededScreen",
     ] + select({
         "@build_bazel_rules_apple//apple:ios_arm64": appcenter_targets,
         "//build-system:ios_sim_arm64": [],

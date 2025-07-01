@@ -775,44 +775,54 @@ private final class SheetContent: CombinedComponent {
                                     completion(amount.value)
                                 case let .paidMessages(_, _, _, _, completion):
                                     completion(amount.value)
-                                case let .suggestedPost(_, _, _, completion):
-                                    switch state.currency {
-                                    case .stars:
-                                        if let balance = state.starsBalance, amount > balance {
-                                            guard let starsContext = state.context.starsContext else {
-                                                return
-                                            }
-                                            let _ = (state.context.engine.payments.starsTopUpOptions()
-                                            |> take(1)
-                                            |> deliverOnMainQueue).startStandalone(next: { [weak controller, weak state] options in
-                                                guard let controller, let state else {
+                                case let .suggestedPost(mode, _, _, completion):
+                                    let needsLocalBalance: Bool
+                                    switch mode {
+                                    case .admin:
+                                        needsLocalBalance = false
+                                    case let .sender(_, isFromAdmin):
+                                        needsLocalBalance = !isFromAdmin
+                                    }
+                                    
+                                    if needsLocalBalance {
+                                        switch state.currency {
+                                        case .stars:
+                                            if let balance = state.starsBalance, amount > balance {
+                                                guard let starsContext = state.context.starsContext else {
                                                     return
                                                 }
-                                                let purchaseController = state.context.sharedContext.makeStarsPurchaseScreen(context: state.context, starsContext: starsContext, options: options, purpose: .generic, completion: { _ in
-                                                })
-                                                controller.push(purchaseController)
-                                            })
-                                            
-                                            return
-                                        }
-                                    case .ton:
-                                        if let balance = state.tonBalance, amount > balance {
-                                            let needed = amount - balance
-                                            var fragmentUrl = "https://fragment.com/ads/topup"
-                                            if let data = state.context.currentAppConfiguration.with({ $0 }).data, let value = data["ton_topup_url"] as? String {
-                                                fragmentUrl = value
-                                            }
-                                            controller.push(BalanceNeededScreen(
-                                                context: state.context,
-                                                amount: needed,
-                                                buttonAction: { [weak state] in
-                                                    guard let state else {
+                                                let _ = (state.context.engine.payments.starsTopUpOptions()
+                                                         |> take(1)
+                                                         |> deliverOnMainQueue).startStandalone(next: { [weak controller, weak state] options in
+                                                    guard let controller, let state else {
                                                         return
                                                     }
-                                                    state.context.sharedContext.applicationBindings.openUrl(fragmentUrl)
+                                                    let purchaseController = state.context.sharedContext.makeStarsPurchaseScreen(context: state.context, starsContext: starsContext, options: options, purpose: .generic, completion: { _ in
+                                                    })
+                                                    controller.push(purchaseController)
+                                                })
+                                                
+                                                return
+                                            }
+                                        case .ton:
+                                            if let balance = state.tonBalance, amount > balance {
+                                                let needed = amount - balance
+                                                var fragmentUrl = "https://fragment.com/ads/topup"
+                                                if let data = state.context.currentAppConfiguration.with({ $0 }).data, let value = data["ton_topup_url"] as? String {
+                                                    fragmentUrl = value
                                                 }
-                                            ))
-                                            return
+                                                controller.push(BalanceNeededScreen(
+                                                    context: state.context,
+                                                    amount: needed,
+                                                    buttonAction: { [weak state] in
+                                                        guard let state else {
+                                                            return
+                                                        }
+                                                        state.context.sharedContext.applicationBindings.openUrl(fragmentUrl)
+                                                    }
+                                                ))
+                                                return
+                                            }
                                         }
                                     }
                                     

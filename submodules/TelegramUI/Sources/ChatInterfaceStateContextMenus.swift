@@ -124,7 +124,7 @@ private func canEditMessage(accountPeerId: PeerId, limitsConfiguration: EngineCo
             if let _ = attribute as? InlineBotMessageAttribute {
                 hasUneditableAttributes = true
                 break
-            } else if let _ = attribute as? PublishedSuggestedPostMessageAttribute {
+            } else if let _ = attribute as? PublishedSuggestedPostMessageAttribute, message.timestamp > Int32(Date().timeIntervalSince1970) - 60 * 60 * 24 {
                 hasUneditableAttributes = true
                 break
             }
@@ -1924,7 +1924,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                 }), false))
             } else if !isUnremovableAction {
                 var iconName: String = isSending ? "Chat/Context Menu/Clear" : "Chat/Context Menu/Delete"
-                if message.attributes.contains(where: { $0 is PublishedSuggestedPostMessageAttribute }) {
+                if message.attributes.contains(where: { $0 is PublishedSuggestedPostMessageAttribute }) && message.timestamp > Int32(Date().timeIntervalSince1970) - 60 * 60 * 24 {
                     iconName = "Chat/Context Menu/DeletePaid"
                 }
                 

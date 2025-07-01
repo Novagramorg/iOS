@@ -35,6 +35,7 @@ import CameraScreen
 import ShareController
 import ComposeTodoScreen
 import ComposePollUI
+import Photos
 
 extension ChatControllerImpl {
     enum AttachMenuSubject {
