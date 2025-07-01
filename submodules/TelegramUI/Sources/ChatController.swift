@@ -2379,6 +2379,12 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                                 funds = (amount, amount.currency == .stars ? Int(configuration.channelMessageSuggestionStarsCommissionPermille) : Int(configuration.channelMessageSuggestionTonCommissionPermille))
                             }
                             
+                            #if DEBUG
+                            if "".isEmpty {
+                                funds = nil
+                            }
+                            #endif
+                            
                             var isAdmin = false
                             if let channel = strongSelf.presentationInterfaceState.renderedPeer?.peer as? TelegramChannel, channel.isMonoForum, let linkedMonoforumId = channel.linkedMonoforumId, let mainChannel = strongSelf.presentationInterfaceState.renderedPeer?.peers[linkedMonoforumId] as? TelegramChannel, mainChannel.hasPermission(.manageDirect) {
                                 isAdmin = true
