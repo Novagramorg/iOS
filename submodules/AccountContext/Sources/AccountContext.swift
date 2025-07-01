@@ -1026,8 +1026,13 @@ public enum OldChannelsControllerIntent {
 }
 
 public enum SendInviteLinkScreenSubject {
+    public enum GroupCall {
+        case existing(link: String)
+        case create
+    }
+    
     case chat(peer: EnginePeer, link: String?)
-    case groupCall(link: String)
+    case groupCall(GroupCall)
 }
 
 public enum StarsWithdrawalScreenSubject {

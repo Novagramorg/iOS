@@ -680,8 +680,11 @@ public final class CallListController: TelegramBaseController {
                 }
                 
                 if let cachedUserData = view.cachedData as? CachedUserData, cachedUserData.callsPrivate {
-                    let presentationData = strongSelf.context.sharedContext.currentPresentationData.with { $0 }
-                    strongSelf.present(textAlertController(context: strongSelf.context, title: presentationData.strings.Call_ConnectionErrorTitle, text: presentationData.strings.Call_PrivacyErrorMessage(EnginePeer(peer).compactDisplayTitle).string, actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+                    strongSelf.push(strongSelf.context.sharedContext.makeSendInviteLinkScreen(context: strongSelf.context, subject: .groupCall(.create), peers: [TelegramForbiddenInvitePeer(
+                        peer: EnginePeer(peer),
+                        canInviteWithPremium: false,
+                        premiumRequiredToContact: false
+                    )], theme: strongSelf.presentationData.theme))
                     return
                 }
                 
