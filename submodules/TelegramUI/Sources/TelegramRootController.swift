@@ -775,9 +775,8 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
     }
 }
 
-//Xcode 16
-#if canImport(ContactProvider)
-extension MediaEditorScreenImpl.Result: @retroactive MediaEditorScreenResult {
+#if SWIFT_PACKAGE
+extension MediaEditorScreenImpl.Result: MediaEditorScreenResult {
     public var target: Stories.PendingTarget {
         if let sendAsPeerId = self.options.sendAsPeerId {
             return .peer(sendAsPeerId)
@@ -787,7 +786,7 @@ extension MediaEditorScreenImpl.Result: @retroactive MediaEditorScreenResult {
     }
 }
 #else
-extension MediaEditorScreenImpl.Result: MediaEditorScreenResult {
+extension MediaEditorScreenImpl.Result: @retroactive MediaEditorScreenResult {
     public var target: Stories.PendingTarget {
         if let sendAsPeerId = self.options.sendAsPeerId {
             return .peer(sendAsPeerId)

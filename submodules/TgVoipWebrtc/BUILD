@@ -153,7 +153,8 @@ objc_library(
         "-DRTC_ENABLE_VP9",
         "-DTGVOIP_NAMESPACE=tgvoip_webrtc",
         "-std=c++17",
-        "-Werror",
+        "-w",
+        #"-Werror",
     ] + optimization_flags,
     includes = [
         "PublicHeaders",
