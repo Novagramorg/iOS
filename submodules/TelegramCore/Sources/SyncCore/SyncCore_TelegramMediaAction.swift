@@ -869,22 +869,28 @@ public enum TelegramMediaActionType: PostboxCoding, Equatable {
             return [peerId]
         case let .prizeStars(_, _, boostPeerId, _, _):
             return boostPeerId.flatMap { [$0] } ?? []
-        case let .starGift(_, _, _, _, _, _, _, _, _, _, _, _, peerId, senderId, _):
+        case let .starGift(gift, _, _, _, _, _, _, _, _, _, _, _, peerId, senderId, _):
             var peerIds: [PeerId] = []
             if let peerId {
                 peerIds.append(peerId)
             }
             if let senderId {
                 peerIds.append(senderId)
+            }
+            if let releasedBy = gift.releasedBy {
+                peerIds.append(releasedBy)
             }
             return peerIds
-        case let .starGiftUnique(_, _, _, _, _, _, _, peerId, senderId, _, _, _, _):
+        case let .starGiftUnique(gift, _, _, _, _, _, _, peerId, senderId, _, _, _, _):
             var peerIds: [PeerId] = []
             if let peerId {
                 peerIds.append(peerId)
             }
             if let senderId {
                 peerIds.append(senderId)
+            }
+            if let releasedBy = gift.releasedBy {
+                peerIds.append(releasedBy)
             }
             return peerIds
         case let .conferenceCall(conferenceCall):

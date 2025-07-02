@@ -460,7 +460,8 @@ final class UserAppearanceScreenComponent: Component {
                                 ],
                                 availability: StarGift.UniqueGift.Availability(issued: 0, total: 0),
                                 giftAddress: nil,
-                                resellStars: nil
+                                resellStars: nil,
+                                releasedBy: nil
                             )
                             signal = component.context.engine.accountData.setStarGiftStatus(starGift: gift, expirationDate: emojiStatus.expirationDate)
                         } else {

@@ -114,7 +114,7 @@ public extension TelegramEngine {
         }
         
         public func keepStarGiftsUpdated() -> Signal<Never, NoError> {
-            return _internal_keepCachedStarGiftsUpdated(postbox: self.account.postbox, network: self.account.network)
+            return _internal_keepCachedStarGiftsUpdated(postbox: self.account.postbox, network: self.account.network, accountPeerId: self.account.peerId)
         }
         
         public func convertStarGift(reference: StarGiftReference) -> Signal<Never, NoError> {

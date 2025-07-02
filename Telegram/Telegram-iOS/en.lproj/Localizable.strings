@@ -14448,6 +14448,8 @@ Sorry for the inconvenience.";
 "SuggestPost.SetTimeFormat.Date" = "%@";
 "SuggestPost.SetTimeFormat.TodayAt" = "Today at %@";
 "SuggestPost.SetTimeFormat.TomorrowAt" = "Tomorrow at %@";
+"SuggestPost.SetTimeFormat.Any" = "Anytime";
+"SuggestPost.SetTime.Label" = "Time";
 
 "Chat.TodoItemCompletionTimestamp.Date" = "completed %@";
 "Chat.TodoItemCompletionTimestamp.TodayAt" = "completed today at %@";
@@ -14496,7 +14498,8 @@ Sorry for the inconvenience.";
 "Chat.Todo.ContextMenu.SectionsInfo" = "You're viewing actions for one task.\nYou can switch to actions for the list.";
 
 "Chat.Todo.PremiumRequired" = "Only [Telegram Premium]() subscribers can mark tasks as done.";
-"Chat.Todo.CompletionLimited" = "%@ has restricted others from editing this to do list.";
+"Chat.Todo.CompletionLimited" = "%@ has restricted others from editing this checklist.";
+"Chat.Todo.CompletionLimitedForward" = "You can’t make changes to forwarded checklists.";
 
 "Forward.ErrorTodoDisabledInChannels" = "Sorry, checklists can’t be forwarded to channels.";
 
@@ -14542,8 +14545,8 @@ Sorry for the inconvenience.";
 "Chat.PostApproval.Message.UserAgreementPriceTon" = "💰 You have been charged %1$@.\n\n⌛ **%2$@** will receive the TON once the post has been live for 24 hours.\n\n🔄 If admins the post before it has been live for 24 hours, your TON will be refunded.";
 "Chat.PostApproval.Message.AdminAgreementPriceStars" = "💰 The user have been charged %1$@.\n\n⌛ **%2$@** will receive the Stars once the post has been live for 24 hours.\n\n🔄 If you remove the post before it has been live for 24 hours, the user's Stars will be refunded.";
 "Chat.PostApproval.Message.AdminAgreementPriceTon" = "💰 The user have been charged %1$@.\n\n⌛ **%2$@** will receive the TON once the post has been live for 24 hours.\n\n🔄 If you remove the post before it has been live for 24 hours, the user's TON will be refunded.";
-"Chat.PostApproval.Message.AdminDeclined" = "You declined the post.";
-"Chat.PostApproval.Message.AdminDeclinedComment" = "You declined the post with the following comment:\n\n%@";
+"Chat.PostApproval.Message.AdminDeclined" = "";
+"Chat.PostApproval.Message.AdminDeclinedComment" = "%@";
 
 "Chat.PostApproval.Message.ActionApprove" = "Approve";
 "Chat.PostApproval.Message.ActionReject" = "Decline";
@@ -14623,7 +14626,7 @@ Sorry for the inconvenience.";
 "VoiceOver.SuggestPost" = "Suggest Post";
 
 "Chat.ContextMenu.SuggestedPost.EditMessage" = "Edit Message";
-"Chat.ContextMenu.SuggestedPost.EditPrice" = "Edit Prive";
+"Chat.ContextMenu.SuggestedPost.EditPrice" = "Edit Price";
 "Chat.ContextMenu.SuggestedPost.EditTime" = "Edit Time";
 "Chat.ContextMenu.SuggestedPost.Create" = "Suggest Post";
 
@@ -14667,3 +14670,10 @@ Sorry for the inconvenience.";
 "Chat.Todo.Message.Completed_any" = "%@ of {count} completed";
 "Chat.Todo.Message.CompletedBy_1" = "%@ of {count} completed by {name}";
 "Chat.Todo.Message.CompletedBy_any" = "%@ of {count} completed by {name}";
+
+"Notification.StarGift.ReleasedBy" = "released by %@";
+
+"Gift.View.ReleasedBy" = "released by %@";
+"Gift.Unique.CollectibleBy" = "collectible %1$@ by %2$@";
+
+"SendInviteLink.TextCallsRestrictedSendOneInviteLink" = "**%@** restricts calling them. You can send them an invite link to call instead.";
