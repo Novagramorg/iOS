@@ -14496,7 +14496,8 @@ Sorry for the inconvenience.";
 "Chat.Todo.ContextMenu.SectionsInfo" = "You're viewing actions for one task.\nYou can switch to actions for the list.";
 
 "Chat.Todo.PremiumRequired" = "Only [Telegram Premium]() subscribers can mark tasks as done.";
-"Chat.Todo.CompletionLimited" = "%@ has restricted others from editing this to do list.";
+"Chat.Todo.CompletionLimited" = "%@ has restricted others from editing this checklist.";
+"Chat.Todo.CompletionLimitedForward" = "You can’t make changes to forwarded checklists.";
 
 "Forward.ErrorTodoDisabledInChannels" = "Sorry, checklists can’t be forwarded to channels.";
 
@@ -14662,3 +14663,8 @@ Sorry for the inconvenience.";
 "Chat.Todo.Message.Completed_any" = "%@ of {count} completed";
 "Chat.Todo.Message.CompletedBy_1" = "%@ of {count} completed by {name}";
 "Chat.Todo.Message.CompletedBy_any" = "%@ of {count} completed by {name}";
+
+"Notification.StarGift.ReleasedBy" = "released by %@";
+
+"Gift.View.ReleasedBy" = "released by %@";
+"Gift.Unique.CollectibleBy" = "collectible %1$@ by %2$@";
