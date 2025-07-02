@@ -2007,7 +2007,11 @@ public final class SharedAccountContextImpl: SharedAccountContext {
                 
             if let cachedUserData = view.cachedData as? CachedUserData, cachedUserData.callsPrivate {
                 let presentationData = context.sharedContext.currentPresentationData.with { $0 }
-                parentController.present(textAlertController(context: context, title: presentationData.strings.Call_ConnectionErrorTitle, text: presentationData.strings.Call_PrivacyErrorMessage(EnginePeer(peer).compactDisplayTitle).string, actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+                parentController.push(context.sharedContext.makeSendInviteLinkScreen(context: context, subject: .groupCall(.create), peers: [TelegramForbiddenInvitePeer(
+                    peer: EnginePeer(peer),
+                    canInviteWithPremium: false,
+                    premiumRequiredToContact: false
+                )], theme: presentationData.theme))
                 return
             }
             

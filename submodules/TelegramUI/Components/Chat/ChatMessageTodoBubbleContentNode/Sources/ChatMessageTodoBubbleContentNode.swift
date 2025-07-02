@@ -372,6 +372,19 @@ private func generatePercentageAnimationImages(presentationData: ChatPresentatio
     return images
 }
 
+private class TodoTrackingButtonNode: HighlightableButtonNode {
+    private var internalHighlighted = false
+    
+    public var shouldHighlightAtPoint: (CGPoint) -> Bool = { _ in return true }
+        
+    open override func beginTracking(with touch: UITouch, with event: UIEvent?) -> Bool {
+        if self.shouldHighlightAtPoint(touch.location(in: self.view)) {
+            return super.beginTracking(with: touch, with: event)
+        }
+        return false
+    }
+}
+
 private final class ChatMessageTodoItemNode: ASDisplayNode {
     private var backgroundWallpaperNode: ChatMessageBubbleBackdrop?
     private var backgroundNode: ChatMessageBackground?
@@ -390,7 +403,7 @@ private final class ChatMessageTodoItemNode: ASDisplayNode {
     fileprivate var titleNode: TextNodeWithEntities?
     fileprivate var nameNode: TextNode?
     
-    private let buttonNode: HighlightTrackingButtonNode
+    private let buttonNode: TodoTrackingButtonNode
     let separatorNode: ASDisplayNode
     
     var context: AccountContext?
@@ -433,7 +446,7 @@ private final class ChatMessageTodoItemNode: ASDisplayNode {
         self.highlightedBackgroundNode.alpha = 0.0
         self.highlightedBackgroundNode.isUserInteractionEnabled = false
         
-        self.buttonNode = HighlightTrackingButtonNode()
+        self.buttonNode = TodoTrackingButtonNode()
         self.separatorNode = ASDisplayNode()
         self.separatorNode.isLayerBacked = true
                 
@@ -447,6 +460,15 @@ private final class ChatMessageTodoItemNode: ASDisplayNode {
         self.addSubnode(self.buttonNode)
         
         self.buttonNode.addTarget(self, action: #selector(self.buttonPressed), forControlEvents: .touchUpInside)
+        self.buttonNode.shouldHighlightAtPoint = { [weak self] location in
+            guard let self else {
+                return true
+            }
+            if case .none = self.tapActionAtPoint(location, gesture: .tap, isEstimating: true).content {
+                return true
+            }
+            return false
+        }
         self.buttonNode.highligthedChanged = { [weak self] highlighted in
             if let strongSelf = self {
                 if highlighted {

@@ -289,7 +289,7 @@ public final class PeerSelectionControllerImpl: ViewController, PeerSelectionCon
                         TelegramEngine.EngineData.Item.Peer.Peer(id: linkedMonoforumId)
                     )
                 } else {
-                    mainPeer = .single(nil)
+                    mainPeer = .single(EnginePeer.channel(peer))
                 }
                 
                 let _ = (mainPeer |> deliverOnMainQueue).startStandalone(next: { [weak self] mainPeer in

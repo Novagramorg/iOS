@@ -7603,7 +7603,11 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
             return
         }
         if cachedUserData.callsPrivate {
-            self.controller?.present(textAlertController(context: self.context, updatedPresentationData: self.controller?.updatedPresentationData, title: self.presentationData.strings.Call_ConnectionErrorTitle, text: self.presentationData.strings.Call_PrivacyErrorMessage(EnginePeer(peer).compactDisplayTitle).string, actions: [TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+            self.controller?.push(self.context.sharedContext.makeSendInviteLinkScreen(context: self.context, subject: .groupCall(.create), peers: [TelegramForbiddenInvitePeer(
+                peer: EnginePeer(peer),
+                canInviteWithPremium: false,
+                premiumRequiredToContact: false
+            )], theme: self.presentationData.theme))
             return
         }
         
