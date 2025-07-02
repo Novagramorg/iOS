@@ -4991,6 +4991,18 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             }
             self.dismissAllTooltips()
             
+            if let message = self.chatDisplayNode.historyNode.messageInCurrentHistoryView(messageId), let _ = message.forwardInfo {
+                let controller = UndoOverlayController(
+                    presentationData: self.presentationData,
+                    content: .universalImage(image: generateTintedImage(image: UIImage(bundleImageName: "Chat/Stickers/Lock"), color: .white)!, size: nil, title: nil, text: self.presentationData.strings.Chat_Todo_CompletionLimitedForward, customUndoText: nil, timeout: nil),
+                    action: { _ in
+                        return false
+                    }
+                )
+                self.present(controller, in: .current)
+                return
+            }
+            
             guard self.presentationInterfaceState.subject != .scheduledMessages else {
                 self.present(textAlertController(context: self.context, updatedPresentationData: self.updatedPresentationData, title: nil, text: self.presentationData.strings.ScheduledMessages_TodoUnavailable, actions: [TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
                 return

@@ -298,19 +298,29 @@ public extension Api.payments {
 }
 public extension Api.payments {
     enum StarGifts: TypeConstructorDescription {
-        case starGifts(hash: Int32, gifts: [Api.StarGift])
+        case starGifts(hash: Int32, gifts: [Api.StarGift], chats: [Api.Chat], users: [Api.User])
         case starGiftsNotModified
     
     public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
     switch self {
-                case .starGifts(let hash, let gifts):
+                case .starGifts(let hash, let gifts, let chats, let users):
                     if boxed {
-                        buffer.appendInt32(-1877571094)
+                        buffer.appendInt32(785918357)
                     }
                     serializeInt32(hash, buffer: buffer, boxed: false)
                     buffer.appendInt32(481674261)
                     buffer.appendInt32(Int32(gifts.count))
                     for item in gifts {
+                        item.serialize(buffer, true)
+                    }
+                    buffer.appendInt32(481674261)
+                    buffer.appendInt32(Int32(chats.count))
+                    for item in chats {
+                        item.serialize(buffer, true)
+                    }
+                    buffer.appendInt32(481674261)
+                    buffer.appendInt32(Int32(users.count))
+                    for item in users {
                         item.serialize(buffer, true)
                     }
                     break
@@ -325,8 +335,8 @@ public extension Api.payments {
     
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
-                case .starGifts(let hash, let gifts):
-                return ("starGifts", [("hash", hash as Any), ("gifts", gifts as Any)])
+                case .starGifts(let hash, let gifts, let chats, let users):
+                return ("starGifts", [("hash", hash as Any), ("gifts", gifts as Any), ("chats", chats as Any), ("users", users as Any)])
                 case .starGiftsNotModified:
                 return ("starGiftsNotModified", [])
     }
@@ -339,10 +349,20 @@ public extension Api.payments {
             if let _ = reader.readInt32() {
                 _2 = Api.parseVector(reader, elementSignature: 0, elementType: Api.StarGift.self)
             }
+            var _3: [Api.Chat]?
+            if let _ = reader.readInt32() {
+                _3 = Api.parseVector(reader, elementSignature: 0, elementType: Api.Chat.self)
+            }
+            var _4: [Api.User]?
+            if let _ = reader.readInt32() {
+                _4 = Api.parseVector(reader, elementSignature: 0, elementType: Api.User.self)
+            }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if _c1 && _c2 {
-                return Api.payments.StarGifts.starGifts(hash: _1!, gifts: _2!)
+            let _c3 = _3 != nil
+            let _c4 = _4 != nil
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.payments.StarGifts.starGifts(hash: _1!, gifts: _2!, chats: _3!, users: _4!)
             }
             else {
                 return nil
