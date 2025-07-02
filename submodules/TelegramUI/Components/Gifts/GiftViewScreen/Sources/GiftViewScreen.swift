@@ -160,6 +160,9 @@ private final class GiftViewSheetContent: CombinedComponent {
                 }
                 
                 if case let .unique(gift) = arguments.gift {
+                    if let releasedBy = gift.releasedBy {
+                        peerIds.append(releasedBy)
+                    }
                     if case let .peerId(peerId) = gift.owner {
                         peerIds.append(peerId)
                     }
@@ -192,6 +195,9 @@ private final class GiftViewSheetContent: CombinedComponent {
                         })
                     }
                 } else if case let .generic(gift) = arguments.gift {
+                    if let releasedBy = gift.releasedBy {
+                        peerIds.append(releasedBy)
+                    }
                     if arguments.canUpgrade || arguments.upgradeStars != nil {
                         self.sampleDisposable.add((context.engine.payments.starGiftUpgradePreview(giftId: gift.id)
                         |> deliverOnMainQueue).start(next: { [weak self] attributes in
@@ -1527,6 +1533,9 @@ private final class GiftViewSheetContent: CombinedComponent {
         let buttons = Child(ButtonsComponent.self)
         let animation = Child(GiftCompositionComponent.self)
         let title = Child(MultilineTextComponent.self)
+        let subtitle = Child(MultilineTextComponent.self)
+        
+        let descriptionButton = Child(RoundedRectangle.self)
         let description = Child(MultilineTextComponent.self)
         
         let transferButton = Child(PlainButtonComponent.self)
@@ -1570,6 +1579,7 @@ private final class GiftViewSheetContent: CombinedComponent {
             let sideInset: CGFloat = 16.0 + environment.safeInsets.left
             
             var titleString: String
+            var subtitleString: String?
             var animationFile: TelegramMediaFile?
             let stars: Int64
             let convertStars: Int64?
@@ -1606,6 +1616,10 @@ private final class GiftViewSheetContent: CombinedComponent {
             } else if let arguments = subject.arguments {
                 switch arguments.gift {
                 case let .generic(gift):
+                    if let releasedBy = gift.releasedBy, let peer = state.peerMap[releasedBy], let addressName = peer.addressName {
+                        subtitleString = strings.Gift_View_ReleasedBy("[@\(addressName)]()").string
+                    }
+                    
                     animationFile = gift.file
                     stars = gift.price
                     text = arguments.text
@@ -2145,9 +2159,15 @@ private final class GiftViewSheetContent: CombinedComponent {
                 }
             } else {
                 var descriptionText: String
+                var hasDescriptionButton = false
                 if let uniqueGift {
                     titleString = uniqueGift.title
                     descriptionText = "\(strings.Gift_Unique_Collectible) #\(presentationStringsFormattedNumber(uniqueGift.number, environment.dateTimeFormat.groupingSeparator))"
+                    
+                    if let releasedBy = uniqueGift.releasedBy, let peer = state.peerMap[releasedBy], let addressName = peer.addressName {
+                        descriptionText = strings.Gift_Unique_CollectibleBy("#\(presentationStringsFormattedNumber(uniqueGift.number, environment.dateTimeFormat.groupingSeparator))", "[@\(addressName)]()").string
+                        hasDescriptionButton = true
+                    }
                 } else if soldOut {
                     descriptionText = strings.Gift_View_UnavailableDescription
                 } else if upgraded {
@@ -2197,7 +2217,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                     component: MultilineTextComponent(
                         text: .plain(NSAttributedString(
                             string: titleString,
-                            font: uniqueGift != nil ? Font.bold(20.0) : Font.bold(25.0),
+                            font: Font.bold(20.0),
                             textColor: uniqueGift != nil ? .white : theme.actionSheet.primaryTextColor,
                             paragraphAlignment: .center
                         )),
@@ -2208,13 +2228,41 @@ private final class GiftViewSheetContent: CombinedComponent {
                     transition: .immediate
                 )
                 context.add(title
-                    .position(CGPoint(x: context.availableSize.width / 2.0, y: uniqueGift != nil ? 190.0 : 177.0))
+                    .position(CGPoint(x: context.availableSize.width / 2.0, y: uniqueGift != nil ? 190.0 : 173.0))
                     .appear(.default(alpha: true))
                     .disappear(.default(alpha: true))
                 )
                 
+                var descriptionOffset: CGFloat = 0.0
+                if let subtitleString {
+                    let subtitle = subtitle.update(
+                        component: MultilineTextComponent(
+                            text: .plain(NSAttributedString(
+                                string: subtitleString,
+                                font: Font.regular(13.0),
+                                textColor: theme.actionSheet.secondaryTextColor,
+                                paragraphAlignment: .center
+                            )),
+                            horizontalAlignment: .center,
+                            maximumNumberOfLines: 1
+                        ),
+                        availableSize: CGSize(width: context.availableSize.width - sideInset * 2.0 - 60.0, height: CGFloat.greatestFiniteMagnitude),
+                        transition: .immediate
+                    )
+                    context.add(subtitle
+                        .position(CGPoint(x: context.availableSize.width / 2.0, y: uniqueGift != nil ? 210.0 : 196.0))
+                        .appear(.default(alpha: true))
+                        .disappear(.default(alpha: true))
+                    )
+                    descriptionOffset += subtitle.size.height
+                }
+                
                 if !descriptionText.isEmpty {
-                    let linkColor = theme.actionSheet.controlAccentColor
+                    var linkColor = theme.actionSheet.controlAccentColor
+                    if hasDescriptionButton {
+                        linkColor = UIColor.white
+                    }
+                    
                     if state.cachedSmallStarImage == nil || state.cachedSmallStarImage?.1 !== environment.theme {
                         state.cachedSmallStarImage = (generateTintedImage(image: UIImage(bundleImageName: "Premium/Stars/ButtonStar"), color: .white)!, theme)
                     }
@@ -2226,7 +2274,11 @@ private final class GiftViewSheetContent: CombinedComponent {
                     let textColor: UIColor
                     if let _ = uniqueGift {
                         textFont = Font.regular(13.0)
-                        textColor = vibrantColor
+                        if hasDescriptionButton {
+                            textColor = vibrantColor.mixedWith(UIColor.white, alpha: 0.5)
+                        } else {
+                            textColor = vibrantColor
+                        }
                     } else {
                         textFont = soldOut ? Font.medium(15.0) : Font.regular(15.0)
                         textColor = soldOut ? theme.list.itemDestructiveColor : theme.list.itemPrimaryTextColor
@@ -2245,6 +2297,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                     if let range = attributedString.string.range(of: ">"), let chevronImage = state.cachedChevronImage?.0 {
                         attributedString.addAttribute(.attachment, value: chevronImage, range: NSRange(range, in: attributedString.string))
                     }
+                    
                     let description = description.update(
                         component: MultilineTextComponent(
                             text: .plain(attributedString),
@@ -2269,11 +2322,28 @@ private final class GiftViewSheetContent: CombinedComponent {
                         availableSize: CGSize(width: context.availableSize.width - sideInset * 2.0 - 50.0, height: CGFloat.greatestFiniteMagnitude),
                         transition: .immediate
                     )
+                    
+                    if hasDescriptionButton {
+                        let descriptionButton = descriptionButton.update(
+                            component: RoundedRectangle(color: UIColor.white.withAlphaComponent(0.15), cornerRadius: 9.5),
+                            environment: {},
+                            availableSize: CGSize(width: description.size.width + 18.0, height: 19.0),
+                            transition: .immediate
+                        )
+                        context.add(descriptionButton
+                            .position(CGPoint(x: context.availableSize.width / 2.0, y: 207.0 + descriptionOffset + description.size.height / 2.0 - UIScreenPixel))
+                            .appear(.default(alpha: true))
+                            .disappear(.default(alpha: true))
+                        )
+                    }
+                    
                     context.add(description
-                        .position(CGPoint(x: context.availableSize.width / 2.0, y: 207.0 + description.size.height / 2.0))
+                        .position(CGPoint(x: context.availableSize.width / 2.0, y: 207.0 + descriptionOffset + description.size.height / 2.0))
                         .appear(.default(alpha: true))
                         .disappear(.default(alpha: true))
                     )
+                    
+                    originY += descriptionOffset
                     
                     if uniqueGift != nil {
                         originY += 16.0
