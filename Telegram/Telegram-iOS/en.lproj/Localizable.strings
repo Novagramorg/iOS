@@ -14448,6 +14448,8 @@ Sorry for the inconvenience.";
 "SuggestPost.SetTimeFormat.Date" = "%@";
 "SuggestPost.SetTimeFormat.TodayAt" = "Today at %@";
 "SuggestPost.SetTimeFormat.TomorrowAt" = "Tomorrow at %@";
+"SuggestPost.SetTimeFormat.Any" = "Anytime";
+"SuggestPost.SetTime.Label" = "Time";
 
 "Chat.TodoItemCompletionTimestamp.Date" = "completed %@";
 "Chat.TodoItemCompletionTimestamp.TodayAt" = "completed today at %@";
@@ -14543,8 +14545,8 @@ Sorry for the inconvenience.";
 "Chat.PostApproval.Message.UserAgreementPriceTon" = "💰 You have been charged %1$@.\n\n⌛ **%2$@** will receive the TON once the post has been live for 24 hours.\n\n🔄 If admins the post before it has been live for 24 hours, your TON will be refunded.";
 "Chat.PostApproval.Message.AdminAgreementPriceStars" = "💰 The user have been charged %1$@.\n\n⌛ **%2$@** will receive the Stars once the post has been live for 24 hours.\n\n🔄 If you remove the post before it has been live for 24 hours, the user's Stars will be refunded.";
 "Chat.PostApproval.Message.AdminAgreementPriceTon" = "💰 The user have been charged %1$@.\n\n⌛ **%2$@** will receive the TON once the post has been live for 24 hours.\n\n🔄 If you remove the post before it has been live for 24 hours, the user's TON will be refunded.";
-"Chat.PostApproval.Message.AdminDeclined" = "You declined the post.";
-"Chat.PostApproval.Message.AdminDeclinedComment" = "You declined the post with the following comment:\n\n%@";
+"Chat.PostApproval.Message.AdminDeclined" = "";
+"Chat.PostApproval.Message.AdminDeclinedComment" = "%@";
 
 "Chat.PostApproval.Message.ActionApprove" = "Approve";
 "Chat.PostApproval.Message.ActionReject" = "Decline";
@@ -14586,7 +14588,10 @@ Sorry for the inconvenience.";
 "BalanceNeeded.FragmentSubtitle" = "You can add funds to your balance via the third-party platform Fragment.";
 "BalanceNeeded.FragmentAction" = "Add Funds via Fragment";
 
-"Settings.MyTon" = "My TON";
+"Settings.Ton.Description" = "Use TON to submit post suggestions to channels on Telegram.";
+
+"Settings.TransactionsTon.Title" = "TON";
+"Settings.TransactionsTon.Subtitle" = "Use TON to submit post suggestions to channels on Telegram.";
 
 "Chat.DeletePaidMessageStars.Title" = "Stars Will Be Lost";
 "Chat.DeletePaidMessageStars.Text" = "You won't receive **Stars** for this post if you delete it now. The post must remain visible for at least **24 hours** after publication.";
@@ -14621,7 +14626,7 @@ Sorry for the inconvenience.";
 "VoiceOver.SuggestPost" = "Suggest Post";
 
 "Chat.ContextMenu.SuggestedPost.EditMessage" = "Edit Message";
-"Chat.ContextMenu.SuggestedPost.EditPrice" = "Edit Prive";
+"Chat.ContextMenu.SuggestedPost.EditPrice" = "Edit Price";
 "Chat.ContextMenu.SuggestedPost.EditTime" = "Edit Time";
 "Chat.ContextMenu.SuggestedPost.Create" = "Suggest Post";
 
@@ -14652,6 +14657,8 @@ Sorry for the inconvenience.";
 "Premium.Week.SignUp" = "Sign up for %@";
 "Premium.Week.SignUpInfo" = "Get Telegram Premium for 1 week";
 
+"Settings.MyTon" = "My TON";
+
 "Stars.Gift.Ton.Text" = "Use TON to submit post suggestions to channels on Telegram.";
 "Stars.Ton.Title" = "TON";
 "Stars.Ton.Description" = "Use TON to submit post suggestions to channels on Telegram.";
@@ -14668,3 +14675,5 @@ Sorry for the inconvenience.";
 
 "Gift.View.ReleasedBy" = "released by %@";
 "Gift.Unique.CollectibleBy" = "collectible %1$@ by %2$@";
+
+"SendInviteLink.TextCallsRestrictedSendOneInviteLink" = "**%@** restricts calling them. You can send them an invite link to call instead.";

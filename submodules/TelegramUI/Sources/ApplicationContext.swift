@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 import Intents
 import TelegramPresentationData
 import TelegramUIPreferences

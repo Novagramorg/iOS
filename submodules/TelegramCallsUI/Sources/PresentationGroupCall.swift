@@ -3659,7 +3659,7 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
                     case let .privacy(peer):
                         if let peer {
                             if let currentInviteLinks = self.currentInviteLinks {
-                                let inviteLinkScreen = self.accountContext.sharedContext.makeSendInviteLinkScreen(context: self.accountContext, subject: .groupCall(link: currentInviteLinks.listenerLink), peers: [TelegramForbiddenInvitePeer(peer: peer, canInviteWithPremium: false, premiumRequiredToContact: false)], theme: defaultDarkColorPresentationTheme)
+                                let inviteLinkScreen = self.accountContext.sharedContext.makeSendInviteLinkScreen(context: self.accountContext, subject: .groupCall(.existing(link: currentInviteLinks.listenerLink)), peers: [TelegramForbiddenInvitePeer(peer: peer, canInviteWithPremium: false, premiumRequiredToContact: false)], theme: defaultDarkColorPresentationTheme)
                                 if let navigationController = self.accountContext.sharedContext.mainWindow?.viewController as? NavigationController {
                                     navigationController.pushViewController(inviteLinkScreen)
                                 }
