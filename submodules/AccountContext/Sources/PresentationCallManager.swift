@@ -6,19 +6,24 @@ import SwiftSignalKit
 import TelegramAudio
 import Display
 
+public enum CallAlreadyInProgressType {
+    case peer(EnginePeer.Id?)
+    case external
+}
+
 public enum RequestCallResult {
     case requested
-    case alreadyInProgress(EnginePeer.Id?)
+    case alreadyInProgress(CallAlreadyInProgressType)
 }
 
 public enum JoinGroupCallManagerResult {
     case joined
-    case alreadyInProgress(EnginePeer.Id?)
+    case alreadyInProgress(CallAlreadyInProgressType)
 }
 
 public enum RequestScheduleGroupCallResult {
     case success
-    case alreadyInProgress(EnginePeer.Id?)
+    case alreadyInProgress(CallAlreadyInProgressType)
 }
 
 public struct CallAuxiliaryServer {
