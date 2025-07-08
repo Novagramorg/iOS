@@ -625,6 +625,7 @@ public enum PeerInfoControllerMode {
     case gifts
     case myProfileGifts
     case groupsInCommon
+    case monoforum(EnginePeer.Id)
 }
 
 public enum ContactListActionItemInlineIconPosition {
