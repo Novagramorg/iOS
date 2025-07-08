@@ -92,6 +92,15 @@ private extension ContextControllerTakeViewInfo.ContainingItem {
         }
     }
     
+    var onDismiss: (() -> Void)? {
+        switch self {
+        case let .node(containingNode):
+            return containingNode.onDismiss
+        case let .view(containingView):
+            return containingView.onDismiss
+        }
+    }
+    
     var layoutUpdated: ((CGSize, ListViewItemUpdateAnimation) -> Void)? {
         get {
             switch self {
@@ -1596,6 +1605,7 @@ final class ContextControllerExtractedPresentationNode: ASDisplayNode, ContextCo
                             
                             contentNode.containingItem.isExtractedToContextPreview = false
                             contentNode.containingItem.isExtractedToContextPreviewUpdated?(false)
+                            contentNode.containingItem.onDismiss?()
                             
                             restoreOverlayViews.forEach({ $0() })
                             completion()

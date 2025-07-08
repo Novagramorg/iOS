@@ -14425,6 +14425,12 @@ Sorry for the inconvenience.";
 "Notification.TodoTasks_1" = "%@ task";
 "Notification.TodoTasks_any" = "%@ tasks";
 
+"Notification.TodoTasksDone_1" = "%@ task as done";
+"Notification.TodoTasksDone_any" = "%@ tasks as done";
+
+"Notification.TodoTasksUndone_1" = "%@ task as not done";
+"Notification.TodoTasksUndone_any" = "%@ tasks as not done";
+
 "Notification.TodoCompleted" = "%1$@ marked \"%2$@\" as done.";
 "Notification.TodoIncompleted" = "%1$@ marked \"%2$@\" as undone.";
 "Notification.TodoMultipleCompleted" = "%1$@ marked %2$@ as done.";
@@ -14433,6 +14439,9 @@ Sorry for the inconvenience.";
 "Notification.TodoIncompletedYou" = "You marked \"%1$@\" as not done.";
 "Notification.TodoMultipleCompletedYou" = "You marked %1$@ as done.";
 "Notification.TodoMultipleIncompletedYou" = "You marked %1$@ as not done.";
+
+"Notification.TodoMultiple" = "%1$@ marked %2$@.";
+"Notification.TodoMultipleYou" = "You marked %1$@.";
 
 "Notification.TodoAddedTasks_1" = "%@ task";
 "Notification.TodoAddedTasks_any" = "%@ tasks";
