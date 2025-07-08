@@ -233,14 +233,20 @@ extension ChatControllerImpl {
                 )
             )
             
+            let messageContentSource = ChatMessageContextExtractedContentSource(chatController: self, chatNode: self.chatDisplayNode, engine: self.context.engine, message: message, selectAll: false, snapshot: true)
+            
             sources.append(
                 ContextController.Source(
                     id: AnyHashable(OptionsId.message),
                     title: self.presentationData.strings.Chat_Todo_ContextMenu_SectionList,
-                    source: .extracted(ChatMessageContextExtractedContentSource(chatController: self, chatNode: self.chatDisplayNode, engine: self.context.engine, message: message, selectAll: false, snapshot: true)),
+                    source: .extracted(messageContentSource),
                     items: .single(actions)
                 )
             )
+            
+            contentNode.onDismiss = { [weak messageContentSource] in
+                messageContentSource?.snapshotView?.removeFromSuperview()
+            }
             
             let contextController = ContextController(
                 presentationData: self.presentationData,

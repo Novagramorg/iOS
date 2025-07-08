@@ -1349,11 +1349,11 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                 if message.author?.id == accountPeerId {
                     let resultString: PresentationStrings.FormattedString
                     if completed.count > 1 || (completed.count == 1 && taskTitle == nil) {
-                        resultString = strings.Notification_TodoMultipleCompletedYou(strings.Notification_TodoTasks(Int32(completed.count)))
+                        resultString = strings.Notification_TodoMultipleYou(strings.Notification_TodoTasksDone(Int32(completed.count)))
                     } else if let _ = completed.first {
                         resultString = strings.Notification_TodoCompletedYou(taskTitle ?? "")
                     } else if incompleted.count > 1 || (incompleted.count == 1 && taskTitle == nil) {
-                        resultString = strings.Notification_TodoMultipleIncompletedYou(strings.Notification_TodoTasks(Int32(incompleted.count)))
+                        resultString = strings.Notification_TodoMultipleYou(strings.Notification_TodoTasksUndone(Int32(incompleted.count)))
                     } else if let _ = incompleted.first {
                         resultString = strings.Notification_TodoIncompletedYou(taskTitle ?? "")
                     } else {
@@ -1368,11 +1368,11 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                     
                     let resultString: PresentationStrings.FormattedString
                     if completed.count > 1 || (completed.count == 1 && taskTitle == nil) {
-                        resultString = strings.Notification_TodoMultipleCompleted(peerName, strings.Notification_TodoTasks(Int32(completed.count)))
+                        resultString = strings.Notification_TodoMultiple(peerName, strings.Notification_TodoTasksDone(Int32(completed.count)))
                     } else if let _ = completed.first {
                         resultString = strings.Notification_TodoCompleted(peerName, taskTitle ?? "")
                     } else if incompleted.count > 1 || (incompleted.count == 1 && taskTitle == nil) {
-                        resultString = strings.Notification_TodoMultipleIncompleted(peerName, strings.Notification_TodoTasks(Int32(incompleted.count)))
+                        resultString = strings.Notification_TodoMultiple(peerName, strings.Notification_TodoTasksUndone(Int32(incompleted.count)))
                     } else if let _ = incompleted.first {
                         resultString = strings.Notification_TodoIncompleted(peerName, taskTitle ?? "")
                     } else {

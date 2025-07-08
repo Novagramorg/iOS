@@ -448,7 +448,6 @@ private final class ChatMessageTodoItemNode: ASDisplayNode {
         
         self.buttonNode = TodoTrackingButtonNode()
         self.separatorNode = ASDisplayNode()
-        self.separatorNode.isLayerBacked = true
                 
         super.init()
                 
@@ -472,6 +471,8 @@ private final class ChatMessageTodoItemNode: ASDisplayNode {
         self.buttonNode.highligthedChanged = { [weak self] highlighted in
             if let strongSelf = self {
                 if highlighted {
+                    strongSelf.containerNode.view.tag = 0x2bad
+                    
                     if let theme = strongSelf.presentationData?.theme.theme, theme.overallDarkAppearance, let contentNode = strongSelf.supernode as? ChatMessageTodoBubbleContentNode, let backdropNode = contentNode.bubbleBackgroundNode?.backdropNode {
                         strongSelf.highlightedBackgroundNode.layer.compositingFilter = "overlayBlendMode"
                         strongSelf.highlightedBackgroundNode.frame = strongSelf.view.convert(strongSelf.highlightedBackgroundNode.frame, to: backdropNode.view)
@@ -496,6 +497,8 @@ private final class ChatMessageTodoItemNode: ASDisplayNode {
                         }
                     }
                 } else {
+                    strongSelf.containerNode.view.tag = 0
+                    
                     strongSelf.highlightedBackgroundNode.alpha = 0.0
                     strongSelf.highlightedBackgroundNode.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.3, completion: { finished in
                         if finished && strongSelf.highlightedBackgroundNode.supernode != strongSelf {
@@ -611,17 +614,6 @@ private final class ChatMessageTodoItemNode: ASDisplayNode {
                 if let backgroundNode = self.backgroundNode {
                     self.backgroundNode = nil
                     transition.updateAlpha(node: backgroundNode, alpha: 0.0, completion: { [weak backgroundNode] _ in
-                        self.extractedRadioView?.removeFromSuperview()
-                        self.extractedRadioView = nil
-                        self.extractedIconView?.removeFromSuperview()
-                        self.extractedIconView = nil
-                        self.extractedAvatarView?.removeFromSuperview()
-                        self.extractedAvatarView = nil
-                        self.extractedTitleNode?.textNode.removeFromSupernode()
-                        self.extractedTitleNode = nil
-                        self.extractedNameView?.removeFromSuperview()
-                        self.extractedNameView = nil
-                        
                         backgroundNode?.removeFromSupernode()
                     })
                 }
@@ -633,6 +625,31 @@ private final class ChatMessageTodoItemNode: ASDisplayNode {
                 }
             }
         }
+        
+        self.contextSourceNode.isExtractedToContextPreviewUpdated = { [weak self] isExtracted in
+            guard let self else {
+                return
+            }
+            if !isExtracted {
+                self.extractedRadioView?.removeFromSuperview()
+                self.extractedRadioView = nil
+                self.extractedIconView?.removeFromSuperview()
+                self.extractedIconView = nil
+                self.extractedAvatarView?.removeFromSuperview()
+                self.extractedAvatarView = nil
+                self.extractedTitleNode?.textNode.removeFromSupernode()
+                self.extractedTitleNode = nil
+                self.extractedNameView?.removeFromSuperview()
+                self.extractedNameView = nil
+            }
+        }
+    }
+    
+    override func didLoad() {
+        super.didLoad()
+        
+        self.highlightedBackgroundNode.view.tag = 0x1bad
+        self.separatorNode.view.tag = 0x3bad
     }
     
     @objc private func buttonPressed() {
