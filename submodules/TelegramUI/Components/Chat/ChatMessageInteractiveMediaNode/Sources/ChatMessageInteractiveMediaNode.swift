@@ -34,6 +34,7 @@ import TextNodeWithEntities
 import RangeSet
 import GiftItemComponent
 import MediaResources
+import UIKitRuntimeUtils
 
 private struct FetchControls {
     let fetch: (Bool) -> Void
@@ -3198,7 +3199,7 @@ public final class ChatMessageInteractiveMediaNode: ASDisplayNode, GalleryItemTr
                 dateAndStatusNode.isHidden = true
             }
             
-            let view: UIView?
+            var view: UIView?
             if let strongSelf = self, strongSelf.imageNode.captureProtected {
                 let imageView = UIImageView()
                 imageView.contentMode = .scaleToFill
@@ -3207,9 +3208,13 @@ public final class ChatMessageInteractiveMediaNode: ASDisplayNode, GalleryItemTr
                 if imageView.layer.contents == nil {
                     imageView.layer.contents = imageView.image?.cgImage
                 }
+                setLayerDisableScreenshots(imageView.layer, true)
                 strongSelf.imageNode.view.superview?.insertSubview(imageView, aboveSubview: strongSelf.imageNode.view)
                 
                 view = self?.view.snapshotContentTree(unhide: true)
+                if let view {
+                    setLayerDisableScreenshots(view.layer, true)
+                }
                 imageView.removeFromSuperview()
             } else {
                 view = self?.view.snapshotContentTree(unhide: true)

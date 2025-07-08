@@ -2394,10 +2394,16 @@ func _internal_updatePeerStoriesHidden(account: Account, id: PeerId, isHidden: B
         guard let peer = transaction.getPeer(id) else {
             return nil
         }
+        
         if let user = peer as? TelegramUser {
             updatePeersCustom(transaction: transaction, peers: [user.withUpdatedStoriesHidden(isHidden)], update: { _, updated in
                 return updated
             })
+            if isHidden {
+                if !transaction.isPeerContact(peerId: user.id) {
+                    let _ = _internal_removeRecentPeer(account: account, peerId: id).startStandalone()
+                }
+            }
         } else if let channel = peer as? TelegramChannel {
             updatePeersCustom(transaction: transaction, peers: [channel.withUpdatedStoriesHidden(isHidden)], update: { _, updated in
                 return updated
