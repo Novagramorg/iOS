@@ -576,6 +576,10 @@ public final class PresentationCallImpl: PresentationCall {
             if self.receptionDisposable == nil, case .active = sessionState.state {
                 self.reception = 4
                 
+                if self.isOutgoing {
+                    self.callKitIntegration?.reportOutgoingCallConnected(uuid: sessionState.id, at: Date())
+                }
+                
                 var canUpdate = false
                 self.receptionDisposable = (ongoingContext.reception
                 |> delay(1.0, queue: .mainQueue())
@@ -600,6 +604,7 @@ public final class PresentationCallImpl: PresentationCall {
             self.isVideo = true
         }
         let previous = self.sessionState
+        let previousRemoteVideoState = self.previousRemoteVideoState
         let previousControl = self.audioSessionControl
         self.sessionState = sessionState
         self.callContextState = callContextState
@@ -1137,12 +1142,12 @@ public final class PresentationCallImpl: PresentationCall {
         } else {
             if let presentationState {
                 self.statePromise.set(presentationState)
-                self.updateTone(presentationState, callContextState: callContextState, previous: previous)
+                self.updateTone(presentationState, callContextState: callContextState, previous: previous, previousRemoteVideoState: previousRemoteVideoState)
             }
         }
     }
     
-    private func updateTone(_ state: PresentationCallState, callContextState: OngoingCallContextState?, previous: CallSession?) {
+    private func updateTone(_ state: PresentationCallState, callContextState: OngoingCallContextState?, previous: CallSession?, previousRemoteVideoState: PresentationCallState.RemoteVideoState?) {
         if self.isMovedToConference {
             return
         }
