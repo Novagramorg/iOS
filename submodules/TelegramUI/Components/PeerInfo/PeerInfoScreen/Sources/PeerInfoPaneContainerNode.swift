@@ -526,6 +526,7 @@ private final class PeerInfoPendingPane {
         peerId: PeerId,
         chatLocation: ChatLocation,
         chatLocationContextHolder: Atomic<ChatLocationContextHolder?>,
+        sharedMediaFromForumTopic: (EnginePeer.Id, Int64)?,
         key: PeerInfoPaneKey,
         hasBecomeReady: @escaping (PeerInfoPaneKey) -> Void,
         parentController: ViewController?,
@@ -535,6 +536,29 @@ private final class PeerInfoPendingPane {
         ensureRectVisible: @escaping (UIView, CGRect) -> Void,
         externalDataUpdated: @escaping (ContainedViewLayoutTransition) -> Void
     ) {
+        var chatLocationPeerId = peerId
+        var chatLocation = chatLocation
+        var chatLocationContextHolder = chatLocationContextHolder
+        if let sharedMediaFromForumTopic {
+            chatLocationPeerId = sharedMediaFromForumTopic.0
+            chatLocation = .replyThread(message: ChatReplyThreadMessage(
+                peerId: sharedMediaFromForumTopic.0,
+                threadId: sharedMediaFromForumTopic.1,
+                channelMessageId: nil,
+                isChannelPost: false,
+                isForumPost: true,
+                isMonoforumPost: true,
+                maxMessage: nil,
+                maxReadIncomingMessageId: nil,
+                maxReadOutgoingMessageId: nil,
+                unreadCount: 0,
+                initialFilledHoles: IndexSet(),
+                initialAnchor: .automatic,
+                isNotAvailable: false
+            ))
+            chatLocationContextHolder = Atomic(value: nil)
+        }
+        
         var captureProtected = data.peer?.isCopyProtectionEnabled ?? false
         let paneNode: PeerInfoPaneNode
         switch key {
@@ -599,7 +623,7 @@ private final class PeerInfoPendingPane {
                 openAddStory()
             }
         case .media:
-            let visualPaneNode = PeerInfoVisualMediaPaneNode(context: context, chatControllerInteraction: chatControllerInteraction, peerId: peerId, chatLocation: chatLocation, chatLocationContextHolder: chatLocationContextHolder, contentType: .photoOrVideo, captureProtected: captureProtected)
+            let visualPaneNode = PeerInfoVisualMediaPaneNode(context: context, chatControllerInteraction: chatControllerInteraction, peerId: chatLocationPeerId, chatLocation: chatLocation, chatLocationContextHolder: chatLocationContextHolder, contentType: .photoOrVideo, captureProtected: captureProtected)
             paneNode = visualPaneNode
             visualPaneNode.openCurrentDate = {
                 openMediaCalendar()
@@ -608,18 +632,18 @@ private final class PeerInfoPendingPane {
                 paneDidScroll()
             }
         case .files:
-            let visualPaneNode = PeerInfoVisualMediaPaneNode(context: context, chatControllerInteraction: chatControllerInteraction, peerId: peerId, chatLocation: chatLocation, chatLocationContextHolder: chatLocationContextHolder, contentType: .files, captureProtected: captureProtected)
+            let visualPaneNode = PeerInfoVisualMediaPaneNode(context: context, chatControllerInteraction: chatControllerInteraction, peerId: chatLocationPeerId, chatLocation: chatLocation, chatLocationContextHolder: chatLocationContextHolder, contentType: .files, captureProtected: captureProtected)
             paneNode = visualPaneNode
         case .links:
-            paneNode = PeerInfoListPaneNode(context: context, updatedPresentationData: updatedPresentationData, chatControllerInteraction: chatControllerInteraction, peerId: peerId, chatLocation: chatLocation, chatLocationContextHolder: chatLocationContextHolder, tagMask: .webPage)
+            paneNode = PeerInfoListPaneNode(context: context, updatedPresentationData: updatedPresentationData, chatControllerInteraction: chatControllerInteraction, peerId: chatLocationPeerId, chatLocation: chatLocation, chatLocationContextHolder: chatLocationContextHolder, tagMask: .webPage)
         case .voice:
-            let visualPaneNode = PeerInfoVisualMediaPaneNode(context: context, chatControllerInteraction: chatControllerInteraction, peerId: peerId, chatLocation: chatLocation, chatLocationContextHolder: chatLocationContextHolder, contentType: .voiceAndVideoMessages, captureProtected: captureProtected)
+            let visualPaneNode = PeerInfoVisualMediaPaneNode(context: context, chatControllerInteraction: chatControllerInteraction, peerId: chatLocationPeerId, chatLocation: chatLocation, chatLocationContextHolder: chatLocationContextHolder, contentType: .voiceAndVideoMessages, captureProtected: captureProtected)
             paneNode = visualPaneNode
         case .music:
-            let visualPaneNode = PeerInfoVisualMediaPaneNode(context: context, chatControllerInteraction: chatControllerInteraction, peerId: peerId, chatLocation: chatLocation, chatLocationContextHolder: chatLocationContextHolder, contentType: .music, captureProtected: captureProtected)
+            let visualPaneNode = PeerInfoVisualMediaPaneNode(context: context, chatControllerInteraction: chatControllerInteraction, peerId: chatLocationPeerId, chatLocation: chatLocation, chatLocationContextHolder: chatLocationContextHolder, contentType: .music, captureProtected: captureProtected)
             paneNode = visualPaneNode
         case .gifs:
-            let visualPaneNode = PeerInfoGifPaneNode(context: context, chatControllerInteraction: chatControllerInteraction, peerId: peerId, chatLocation: chatLocation, chatLocationContextHolder: chatLocationContextHolder, contentType: .gifs)
+            let visualPaneNode = PeerInfoGifPaneNode(context: context, chatControllerInteraction: chatControllerInteraction, peerId: chatLocationPeerId, chatLocation: chatLocation, chatLocationContextHolder: chatLocationContextHolder, contentType: .gifs)
             paneNode = visualPaneNode
         case .groupsInCommon:
             paneNode = PeerInfoGroupsInCommonPaneNode(context: context, peerId: peerId, chatControllerInteraction: chatControllerInteraction, openPeerContextAction: openPeerContextAction, groupsInCommonContext: data.groupsInCommon!)
@@ -662,6 +686,7 @@ final class PeerInfoPaneContainerNode: ASDisplayNode, ASGestureRecognizerDelegat
     private let chatLocation: ChatLocation
     private let chatLocationContextHolder: Atomic<ChatLocationContextHolder?>
     private let isMediaOnly: Bool
+    private let sharedMediaFromForumTopic: (EnginePeer.Id, Int64)?
     
     weak var parentController: ViewController?
     
@@ -724,12 +749,13 @@ final class PeerInfoPaneContainerNode: ASDisplayNode, ASGestureRecognizerDelegat
     
     private let initialPaneKey: PeerInfoPaneKey?
     
-    init(context: AccountContext, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)?, peerId: PeerId, chatLocation: ChatLocation, chatLocationContextHolder: Atomic<ChatLocationContextHolder?>, isMediaOnly: Bool, initialPaneKey: PeerInfoPaneKey?) {
+    init(context: AccountContext, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)?, peerId: PeerId, chatLocation: ChatLocation, sharedMediaFromForumTopic: (EnginePeer.Id, Int64)?, chatLocationContextHolder: Atomic<ChatLocationContextHolder?>, isMediaOnly: Bool, initialPaneKey: PeerInfoPaneKey?) {
         self.context = context
         self.updatedPresentationData = updatedPresentationData
         self.peerId = peerId
         self.chatLocation = chatLocation
         self.chatLocationContextHolder = chatLocationContextHolder
+        self.sharedMediaFromForumTopic = sharedMediaFromForumTopic
         self.isMediaOnly = isMediaOnly
         self.initialPaneKey = initialPaneKey
         
@@ -1086,6 +1112,7 @@ final class PeerInfoPaneContainerNode: ASDisplayNode, ASGestureRecognizerDelegat
                     peerId: self.peerId,
                     chatLocation: self.chatLocation,
                     chatLocationContextHolder: self.chatLocationContextHolder,
+                    sharedMediaFromForumTopic: self.sharedMediaFromForumTopic,
                     key: key,
                     hasBecomeReady: { [weak self] key in
                         let apply: () -> Void = {

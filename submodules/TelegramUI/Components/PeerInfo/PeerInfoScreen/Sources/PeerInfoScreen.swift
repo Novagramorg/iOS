@@ -2906,6 +2906,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
     private let callMessages: [Message]
     private let chatLocation: ChatLocation
     private let chatLocationContextHolder: Atomic<ChatLocationContextHolder?>
+    private let sharedMediaFromForumTopic: (EnginePeer.Id, Int64)?
     
     let isSettings: Bool
     let isMyProfile: Bool
@@ -3029,7 +3030,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
     }
     private var didSetReady = false
     
-    init(controller: PeerInfoScreenImpl, context: AccountContext, peerId: PeerId, avatarInitiallyExpanded: Bool, isOpenedFromChat: Bool, nearbyPeerDistance: Int32?, reactionSourceMessageId: MessageId?, callMessages: [Message], isSettings: Bool, isMyProfile: Bool, hintGroupInCommon: PeerId?, requestsContext: PeerInvitationImportersContext?, profileGiftsContext: ProfileGiftsContext?, starsContext: StarsContext?, tonContext: StarsContext?, chatLocation: ChatLocation, chatLocationContextHolder: Atomic<ChatLocationContextHolder?>, initialPaneKey: PeerInfoPaneKey?) {
+    init(controller: PeerInfoScreenImpl, context: AccountContext, peerId: PeerId, avatarInitiallyExpanded: Bool, isOpenedFromChat: Bool, nearbyPeerDistance: Int32?, reactionSourceMessageId: MessageId?, callMessages: [Message], isSettings: Bool, isMyProfile: Bool, hintGroupInCommon: PeerId?, requestsContext: PeerInvitationImportersContext?, profileGiftsContext: ProfileGiftsContext?, starsContext: StarsContext?, tonContext: StarsContext?, chatLocation: ChatLocation, chatLocationContextHolder: Atomic<ChatLocationContextHolder?>, initialPaneKey: PeerInfoPaneKey?, sharedMediaFromForumTopic: (EnginePeer.Id, Int64)?) {
         self.controller = controller
         self.context = context
         self.peerId = peerId
@@ -3045,6 +3046,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
         self.chatLocationContextHolder = chatLocationContextHolder
         self.isMediaOnly = context.account.peerId == peerId && !isSettings && !isMyProfile
         self.initialExpandPanes = initialPaneKey != nil
+        self.sharedMediaFromForumTopic = sharedMediaFromForumTopic
         
         self.scrollNode = ASScrollNode()
         self.scrollNode.view.delaysContentTouches = false
@@ -3055,7 +3057,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
             forumTopicThreadId = message.threadId
         }
         self.headerNode = PeerInfoHeaderNode(context: context, controller: controller, avatarInitiallyExpanded: avatarInitiallyExpanded, isOpenedFromChat: isOpenedFromChat, isMediaOnly: self.isMediaOnly, isSettings: isSettings, isMyProfile: isMyProfile, forumTopicThreadId: forumTopicThreadId, chatLocation: self.chatLocation)
-        self.paneContainerNode = PeerInfoPaneContainerNode(context: context, updatedPresentationData: controller.updatedPresentationData, peerId: peerId, chatLocation: chatLocation, chatLocationContextHolder: chatLocationContextHolder, isMediaOnly: self.isMediaOnly, initialPaneKey: initialPaneKey)
+        self.paneContainerNode = PeerInfoPaneContainerNode(context: context, updatedPresentationData: controller.updatedPresentationData, peerId: peerId, chatLocation: chatLocation, sharedMediaFromForumTopic: sharedMediaFromForumTopic, chatLocationContextHolder: chatLocationContextHolder, isMediaOnly: self.isMediaOnly, initialPaneKey: initialPaneKey)
         
         super.init()
         
@@ -4799,7 +4801,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                 self.privacySettings.set(.single(nil))
             }
             
-            screenData = peerInfoScreenData(context: context, peerId: peerId, strings: self.presentationData.strings, dateTimeFormat: self.presentationData.dateTimeFormat, isSettings: self.isSettings, isMyProfile: self.isMyProfile, hintGroupInCommon: hintGroupInCommon, existingRequestsContext: requestsContext, existingProfileGiftsContext: profileGiftsContext, chatLocation: self.chatLocation, chatLocationContextHolder: self.chatLocationContextHolder, privacySettings: self.privacySettings.get(), forceHasGifts: initialPaneKey == .gifts)
+            screenData = peerInfoScreenData(context: context, peerId: peerId, strings: self.presentationData.strings, dateTimeFormat: self.presentationData.dateTimeFormat, isSettings: self.isSettings, isMyProfile: self.isMyProfile, hintGroupInCommon: hintGroupInCommon, existingRequestsContext: requestsContext, existingProfileGiftsContext: profileGiftsContext, chatLocation: self.chatLocation, chatLocationContextHolder: self.chatLocationContextHolder, sharedMediaFromForumTopic: self.sharedMediaFromForumTopic, privacySettings: self.privacySettings.get(), forceHasGifts: initialPaneKey == .gifts)
                        
             var previousTimestamp: Double?
             self.headerNode.displayPremiumIntro = { [weak self] sourceView, peerStatus, emojiStatusFileAndPack, white in
@@ -12890,6 +12892,7 @@ public final class PeerInfoScreenImpl: ViewController, PeerInfoScreen, KeyShortc
     private let switchToRecommendedChannels: Bool
     private let switchToGifts: Bool
     private let switchToGroupsInCommon: Bool
+    private let sharedMediaFromForumTopic: (EnginePeer.Id, Int64)?
     let chatLocation: ChatLocation
     private let chatLocationContextHolder = Atomic<ChatLocationContextHolder?>(value: nil)
     
@@ -12961,6 +12964,7 @@ public final class PeerInfoScreenImpl: ViewController, PeerInfoScreen, KeyShortc
         requestsContext: PeerInvitationImportersContext? = nil,
         profileGiftsContext: ProfileGiftsContext? = nil,
         forumTopicThread: ChatReplyThreadMessage? = nil,
+        sharedMediaFromForumTopic: (EnginePeer.Id, Int64)? = nil,
         switchToRecommendedChannels: Bool = false,
         switchToGifts: Bool = false,
         switchToGroupsInCommon: Bool = false
@@ -12981,6 +12985,7 @@ public final class PeerInfoScreenImpl: ViewController, PeerInfoScreen, KeyShortc
         self.switchToRecommendedChannels = switchToRecommendedChannels
         self.switchToGifts = switchToGifts
         self.switchToGroupsInCommon = switchToGroupsInCommon
+        self.sharedMediaFromForumTopic = sharedMediaFromForumTopic
         
         if let forumTopicThread = forumTopicThread {
             self.chatLocation = .replyThread(message: forumTopicThread)
@@ -13346,7 +13351,7 @@ public final class PeerInfoScreenImpl: ViewController, PeerInfoScreen, KeyShortc
         } else if self.switchToGroupsInCommon {
             initialPaneKey = .groupsInCommon
         }
-        self.displayNode = PeerInfoScreenNode(controller: self, context: self.context, peerId: self.peerId, avatarInitiallyExpanded: self.avatarInitiallyExpanded, isOpenedFromChat: self.isOpenedFromChat, nearbyPeerDistance: self.nearbyPeerDistance, reactionSourceMessageId: self.reactionSourceMessageId, callMessages: self.callMessages, isSettings: self.isSettings, isMyProfile: self.isMyProfile, hintGroupInCommon: self.hintGroupInCommon, requestsContext: self.requestsContext, profileGiftsContext: self.profileGiftsContext, starsContext: self.starsContext, tonContext: self.tonContext, chatLocation: self.chatLocation, chatLocationContextHolder: self.chatLocationContextHolder, initialPaneKey: initialPaneKey)
+        self.displayNode = PeerInfoScreenNode(controller: self, context: self.context, peerId: self.peerId, avatarInitiallyExpanded: self.avatarInitiallyExpanded, isOpenedFromChat: self.isOpenedFromChat, nearbyPeerDistance: self.nearbyPeerDistance, reactionSourceMessageId: self.reactionSourceMessageId, callMessages: self.callMessages, isSettings: self.isSettings, isMyProfile: self.isMyProfile, hintGroupInCommon: self.hintGroupInCommon, requestsContext: self.requestsContext, profileGiftsContext: self.profileGiftsContext, starsContext: self.starsContext, tonContext: self.tonContext, chatLocation: self.chatLocation, chatLocationContextHolder: self.chatLocationContextHolder, initialPaneKey: initialPaneKey, sharedMediaFromForumTopic: self.sharedMediaFromForumTopic)
         self.controllerNode.accountsAndPeers.set(self.accountsAndPeers.get() |> map { $0.1 })
         self.controllerNode.activeSessionsContextAndCount.set(self.activeSessionsContextAndCount.get())
         self.cachedDataPromise.set(self.controllerNode.cachedDataPromise.get())
