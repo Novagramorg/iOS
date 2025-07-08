@@ -3954,6 +3954,7 @@ private func peerInfoControllerImpl(context: AccountContext, updatedPresentation
         var callMessages: [Message] = []
         var hintGroupInCommon: PeerId?
         var forumTopicThread: ChatReplyThreadMessage?
+        var sharedMediaFromForumTopic: (EnginePeer.Id, Int64)?
         var isMyProfile = false
         var switchToGifts = false
         var switchToGroupsInCommon = false
@@ -3980,10 +3981,12 @@ private func peerInfoControllerImpl(context: AccountContext, updatedPresentation
             switchToGifts = true
         case .groupsInCommon:
             switchToGroupsInCommon = true
+        case let .monoforum(peerId):
+            sharedMediaFromForumTopic = (peerId, peer.id.toInt64())
         default:
             break
         }
-        return PeerInfoScreenImpl(context: context, updatedPresentationData: updatedPresentationData, peerId: peer.id, avatarInitiallyExpanded: avatarInitiallyExpanded, isOpenedFromChat: isOpenedFromChat, nearbyPeerDistance: nearbyPeerDistance, reactionSourceMessageId: reactionSourceMessageId, callMessages: callMessages, isMyProfile: isMyProfile, hintGroupInCommon: hintGroupInCommon, forumTopicThread: forumTopicThread, switchToGifts: switchToGifts, switchToGroupsInCommon: switchToGroupsInCommon)
+        return PeerInfoScreenImpl(context: context, updatedPresentationData: updatedPresentationData, peerId: peer.id, avatarInitiallyExpanded: avatarInitiallyExpanded, isOpenedFromChat: isOpenedFromChat, nearbyPeerDistance: nearbyPeerDistance, reactionSourceMessageId: reactionSourceMessageId, callMessages: callMessages, isMyProfile: isMyProfile, hintGroupInCommon: hintGroupInCommon, forumTopicThread: forumTopicThread, sharedMediaFromForumTopic: sharedMediaFromForumTopic, switchToGifts: switchToGifts, switchToGroupsInCommon: switchToGroupsInCommon)
     } else if peer is TelegramSecretChat {
         return PeerInfoScreenImpl(context: context, updatedPresentationData: updatedPresentationData, peerId: peer.id, avatarInitiallyExpanded: avatarInitiallyExpanded, isOpenedFromChat: isOpenedFromChat, nearbyPeerDistance: nil, reactionSourceMessageId: nil, callMessages: [])
     }
