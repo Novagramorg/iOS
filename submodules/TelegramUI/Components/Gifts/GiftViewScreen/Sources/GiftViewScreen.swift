@@ -1535,7 +1535,7 @@ private final class GiftViewSheetContent: CombinedComponent {
         let title = Child(MultilineTextComponent.self)
         let subtitle = Child(MultilineTextComponent.self)
         
-        let descriptionButton = Child(RoundedRectangle.self)
+        let descriptionButton = Child(PlainButtonComponent.self)
         let description = Child(MultilineTextComponent.self)
         
         let transferButton = Child(PlainButtonComponent.self)
@@ -1602,6 +1602,7 @@ private final class GiftViewSheetContent: CombinedComponent {
             var isSelfGift = false
             var isChannelGift = false
             var isMyUniqueGift = false
+            var releasedByPeer: EnginePeer?
             
             if case let .soldOutGift(gift) = subject {
                 animationFile = gift.file
@@ -1618,6 +1619,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                 case let .generic(gift):
                     if let releasedBy = gift.releasedBy, let peer = state.peerMap[releasedBy], let addressName = peer.addressName {
                         subtitleString = strings.Gift_View_ReleasedBy("[@\(addressName)]()").string
+                        releasedByPeer = peer
                     }
                     
                     animationFile = gift.file
@@ -2167,6 +2169,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                     if let releasedBy = uniqueGift.releasedBy, let peer = state.peerMap[releasedBy], let addressName = peer.addressName {
                         descriptionText = strings.Gift_Unique_CollectibleBy("#\(presentationStringsFormattedNumber(uniqueGift.number, environment.dateTimeFormat.groupingSeparator))", "[@\(addressName)]()").string
                         hasDescriptionButton = true
+                        releasedByPeer = peer
                     }
                 } else if soldOut {
                     descriptionText = strings.Gift_View_UnavailableDescription
@@ -2235,16 +2238,34 @@ private final class GiftViewSheetContent: CombinedComponent {
                 
                 var descriptionOffset: CGFloat = 0.0
                 if let subtitleString {
+                    let textColor = theme.actionSheet.secondaryTextColor
+                    let textFont = Font.regular(13.0)
+                    let subtitleAttributedString = parseMarkdownIntoAttributedString(
+                        subtitleString,
+                        attributes: MarkdownAttributes(body: MarkdownAttributeSet(font: textFont, textColor: textColor), bold: MarkdownAttributeSet(font: textFont, textColor: textColor), link: MarkdownAttributeSet(font: textFont, textColor: theme.actionSheet.controlAccentColor), linkAttribute: { contents in
+                            return (TelegramTextAttributes.URL, contents)
+                        }),
+                        textAlignment: .center
+                    )
+                    
                     let subtitle = subtitle.update(
                         component: MultilineTextComponent(
-                            text: .plain(NSAttributedString(
-                                string: subtitleString,
-                                font: Font.regular(13.0),
-                                textColor: theme.actionSheet.secondaryTextColor,
-                                paragraphAlignment: .center
-                            )),
+                            text: .plain(subtitleAttributedString),
                             horizontalAlignment: .center,
-                            maximumNumberOfLines: 1
+                            maximumNumberOfLines: 1,
+                            highlightColor: theme.actionSheet.controlAccentColor.withAlphaComponent(0.1),
+                            highlightAction: { attributes in
+                                if let _ = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.URL)] {
+                                    return NSAttributedString.Key(rawValue: TelegramTextAttributes.URL)
+                                } else {
+                                    return nil
+                                }
+                            },
+                            tapAction: { [weak state] attributes, _ in
+                                if let _ = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.URL)] as? String, let peer = releasedByPeer {
+                                    state?.openPeer(peer)
+                                }
+                            }
                         ),
                         availableSize: CGSize(width: context.availableSize.width - sideInset * 2.0 - 60.0, height: CGFloat.greatestFiniteMagnitude),
                         transition: .immediate
@@ -2275,7 +2296,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                     if let _ = uniqueGift {
                         textFont = Font.regular(13.0)
                         if hasDescriptionButton {
-                            textColor = vibrantColor.mixedWith(UIColor.white, alpha: 0.5)
+                            textColor = vibrantColor.mixedWith(UIColor.white, alpha: 0.4)
                         } else {
                             textColor = vibrantColor
                         }
@@ -2307,14 +2328,14 @@ private final class GiftViewSheetContent: CombinedComponent {
                             highlightColor: linkColor.withAlphaComponent(0.1),
                             highlightInset: UIEdgeInsets(top: 0.0, left: 0.0, bottom: 0.0, right: -8.0),
                             highlightAction: { attributes in
-                                if let _ = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.URL)] {
+                                if !hasDescriptionButton, let _ = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.URL)] {
                                     return NSAttributedString.Key(rawValue: TelegramTextAttributes.URL)
                                 } else {
                                     return nil
                                 }
                             },
                             tapAction: { [weak state] attributes, _ in
-                                if let _ = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.URL)] as? String {
+                                if !hasDescriptionButton, let _ = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.URL)] as? String {
                                     state?.openStarsIntro()
                                 }
                             }
@@ -2322,10 +2343,26 @@ private final class GiftViewSheetContent: CombinedComponent {
                         availableSize: CGSize(width: context.availableSize.width - sideInset * 2.0 - 50.0, height: CGFloat.greatestFiniteMagnitude),
                         transition: .immediate
                     )
+                    context.add(description
+                        .position(CGPoint(x: context.availableSize.width / 2.0, y: 207.0 + descriptionOffset + description.size.height / 2.0))
+                        .appear(.default(alpha: true))
+                        .disappear(.default(alpha: true))
+                    )
                     
                     if hasDescriptionButton {
                         let descriptionButton = descriptionButton.update(
-                            component: RoundedRectangle(color: UIColor.white.withAlphaComponent(0.15), cornerRadius: 9.5),
+                            component: PlainButtonComponent(
+                                content: AnyComponent(
+                                    RoundedRectangle(color: UIColor.white.withAlphaComponent(0.15), cornerRadius: 9.5)
+                                ),
+                                effectAlignment: .center,
+                                action: { [weak state] in
+                                    if let releasedByPeer {
+                                        state?.openPeer(releasedByPeer)
+                                    }
+                                },
+                                animateScale: false
+                            ),
                             environment: {},
                             availableSize: CGSize(width: description.size.width + 18.0, height: 19.0),
                             transition: .immediate
@@ -2336,12 +2373,6 @@ private final class GiftViewSheetContent: CombinedComponent {
                             .disappear(.default(alpha: true))
                         )
                     }
-                    
-                    context.add(description
-                        .position(CGPoint(x: context.availableSize.width / 2.0, y: 207.0 + descriptionOffset + description.size.height / 2.0))
-                        .appear(.default(alpha: true))
-                        .disappear(.default(alpha: true))
-                    )
                     
                     originY += descriptionOffset
                     
