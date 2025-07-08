@@ -502,7 +502,7 @@ private enum PeerInfoScreenInputData: Equatable {
 
 public func hasAvailablePeerInfoMediaPanes(context: AccountContext, peerId: PeerId) -> Signal<Bool, NoError> {
     let chatLocationContextHolder = Atomic<ChatLocationContextHolder?>(value: nil)
-    let mediaPanes = peerInfoAvailableMediaPanes(context: context, peerId: peerId, chatLocation: .peer(id: peerId), isMyProfile: false, chatLocationContextHolder: chatLocationContextHolder)
+    let mediaPanes = peerInfoAvailableMediaPanes(context: context, peerId: peerId, chatLocation: .peer(id: peerId), isMyProfile: false, chatLocationContextHolder: chatLocationContextHolder, sharedMediaFromForumTopic: nil)
     |> map { panes -> Bool in
         if let panes {
             return !panes.isEmpty
@@ -525,7 +525,31 @@ public func hasAvailablePeerInfoMediaPanes(context: AccountContext, peerId: Peer
     }
 }
 
-private func peerInfoAvailableMediaPanes(context: AccountContext, peerId: PeerId, chatLocation: ChatLocation, isMyProfile: Bool, chatLocationContextHolder: Atomic<ChatLocationContextHolder?>) -> Signal<[PeerInfoPaneKey]?, NoError> {
+private func peerInfoAvailableMediaPanes(context: AccountContext, peerId: PeerId, chatLocation: ChatLocation, isMyProfile: Bool, chatLocationContextHolder: Atomic<ChatLocationContextHolder?>, sharedMediaFromForumTopic: (EnginePeer.Id, Int64)?) -> Signal<[PeerInfoPaneKey]?, NoError> {
+    var peerId = peerId
+    var chatLocation = chatLocation
+    var chatLocationContextHolder = chatLocationContextHolder
+    if let sharedMediaFromForumTopic {
+        peerId = sharedMediaFromForumTopic.0
+        chatLocation = .replyThread(message: ChatReplyThreadMessage(
+            peerId: sharedMediaFromForumTopic.0,
+            threadId: sharedMediaFromForumTopic.1,
+            channelMessageId: nil,
+            isChannelPost: false,
+            isForumPost: true,
+            isMonoforumPost: true,
+            maxMessage: nil,
+            maxReadIncomingMessageId: nil,
+            maxReadOutgoingMessageId: nil,
+            unreadCount: 0,
+            initialFilledHoles: IndexSet(),
+            initialAnchor: .automatic,
+            isNotAvailable: false
+        ))
+        chatLocationContextHolder = Atomic(value: nil)
+    }
+    let _ = peerId
+    
     var tags: [(MessageTags, PeerInfoPaneKey)] = []
     
     if !isMyProfile {
@@ -648,7 +672,7 @@ public func keepPeerInfoScreenDataHot(context: AccountContext, peerId: PeerId, c
         case .user, .channel, .group:
             var signals: [Signal<Never, NoError>] = []
             
-            signals.append(context.peerChannelMemberCategoriesContextsManager.profileData(postbox: context.account.postbox, network: context.account.network, peerId: peerId, customData: peerInfoAvailableMediaPanes(context: context, peerId: peerId, chatLocation: chatLocation, isMyProfile: false, chatLocationContextHolder: chatLocationContextHolder) |> ignoreValues) |> ignoreValues)
+            signals.append(context.peerChannelMemberCategoriesContextsManager.profileData(postbox: context.account.postbox, network: context.account.network, peerId: peerId, customData: peerInfoAvailableMediaPanes(context: context, peerId: peerId, chatLocation: chatLocation, isMyProfile: false, chatLocationContextHolder: chatLocationContextHolder, sharedMediaFromForumTopic: nil) |> ignoreValues) |> ignoreValues)
             signals.append(context.peerChannelMemberCategoriesContextsManager.profilePhotos(postbox: context.account.postbox, network: context.account.network, peerId: peerId, fetch: peerInfoProfilePhotos(context: context, peerId: peerId)) |> ignoreValues)
             
             if case .user = inputData {
@@ -982,7 +1006,7 @@ func peerInfoScreenSettingsData(context: AccountContext, peerId: EnginePeer.Id, 
     }
 }
 
-func peerInfoScreenData(context: AccountContext, peerId: PeerId, strings: PresentationStrings, dateTimeFormat: PresentationDateTimeFormat, isSettings: Bool, isMyProfile: Bool, hintGroupInCommon: PeerId?, existingRequestsContext: PeerInvitationImportersContext?, existingProfileGiftsContext: ProfileGiftsContext?, chatLocation: ChatLocation, chatLocationContextHolder: Atomic<ChatLocationContextHolder?>, privacySettings: Signal<AccountPrivacySettings?, NoError>, forceHasGifts: Bool) -> Signal<PeerInfoScreenData, NoError> {
+func peerInfoScreenData(context: AccountContext, peerId: PeerId, strings: PresentationStrings, dateTimeFormat: PresentationDateTimeFormat, isSettings: Bool, isMyProfile: Bool, hintGroupInCommon: PeerId?, existingRequestsContext: PeerInvitationImportersContext?, existingProfileGiftsContext: ProfileGiftsContext?, chatLocation: ChatLocation, chatLocationContextHolder: Atomic<ChatLocationContextHolder?>, sharedMediaFromForumTopic: (EnginePeer.Id, Int64)?, privacySettings: Signal<AccountPrivacySettings?, NoError>, forceHasGifts: Bool) -> Signal<PeerInfoScreenData, NoError> {
     return peerInfoScreenInputData(context: context, peerId: peerId, isSettings: isSettings)
     |> mapToSignal { inputData -> Signal<PeerInfoScreenData, NoError> in
         let wasUpgradedGroup = Atomic<Bool?>(value: nil)
@@ -1342,7 +1366,7 @@ func peerInfoScreenData(context: AccountContext, peerId: PeerId, strings: Presen
                      
             return combineLatest(
                 context.account.viewTracker.peerView(peerId, updateData: true),
-                peerInfoAvailableMediaPanes(context: context, peerId: peerId, chatLocation: chatLocation, isMyProfile: isMyProfile, chatLocationContextHolder: chatLocationContextHolder),
+                peerInfoAvailableMediaPanes(context: context, peerId: peerId, chatLocation: chatLocation, isMyProfile: isMyProfile, chatLocationContextHolder: chatLocationContextHolder, sharedMediaFromForumTopic: sharedMediaFromForumTopic),
                 context.engine.data.subscribe(TelegramEngine.EngineData.Item.NotificationSettings.Global()),
                 secretChatKeyFingerprint,
                 status,
@@ -1600,7 +1624,7 @@ func peerInfoScreenData(context: AccountContext, peerId: PeerId, strings: Presen
             
             return combineLatest(
                 context.account.viewTracker.peerView(peerId, updateData: true),
-                peerInfoAvailableMediaPanes(context: context, peerId: peerId, chatLocation: chatLocation, isMyProfile: false, chatLocationContextHolder: chatLocationContextHolder),
+                peerInfoAvailableMediaPanes(context: context, peerId: peerId, chatLocation: chatLocation, isMyProfile: false, chatLocationContextHolder: chatLocationContextHolder, sharedMediaFromForumTopic: sharedMediaFromForumTopic),
                 context.engine.data.subscribe(TelegramEngine.EngineData.Item.NotificationSettings.Global()),
                 status,
                 invitationsContextPromise.get(),
@@ -1922,7 +1946,7 @@ func peerInfoScreenData(context: AccountContext, peerId: PeerId, strings: Presen
             
             return combineLatest(queue: .mainQueue(),
                 context.account.viewTracker.peerView(groupId, updateData: true),
-                peerInfoAvailableMediaPanes(context: context, peerId: groupId, chatLocation: chatLocation, isMyProfile: false, chatLocationContextHolder: chatLocationContextHolder),
+                peerInfoAvailableMediaPanes(context: context, peerId: groupId, chatLocation: chatLocation, isMyProfile: false, chatLocationContextHolder: chatLocationContextHolder, sharedMediaFromForumTopic: sharedMediaFromForumTopic),
                 context.engine.data.subscribe(TelegramEngine.EngineData.Item.NotificationSettings.Global()),
                 status,
                 membersData,
