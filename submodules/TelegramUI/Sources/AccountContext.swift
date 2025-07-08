@@ -359,6 +359,10 @@ public final class AccountContextImpl: AccountContext {
         self.appConfigurationDisposable = (self._appConfiguration.get()
         |> deliverOnMainQueue).start(next: { value in
             let _ = currentAppConfiguration.swap(value)
+            
+            if let data = appConfiguration.data, data["ios_killswitch_contact_diffing"] != nil {
+                sharedDisableDeviceContactDataDiffing = true
+            }
         })
         
         let langCode = sharedContext.currentPresentationData.with { $0 }.strings.baseLanguageCode
