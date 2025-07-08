@@ -620,12 +620,12 @@ public final class AccountContextImpl: AccountContext {
     
     public func joinGroupCall(peerId: PeerId, invite: String?, requestJoinAsPeerId: ((@escaping (PeerId?) -> Void) -> Void)?, activeCall: EngineGroupCallDescription) {
         let callResult = self.sharedContext.callManager?.joinGroupCall(context: self, peerId: peerId, invite: invite, requestJoinAsPeerId: requestJoinAsPeerId, initialCall: activeCall, endCurrentIfAny: false)
-        if let callResult = callResult, case let .alreadyInProgress(currentPeerId) = callResult {
-            if currentPeerId == peerId {
+        if let callResult = callResult, case let .alreadyInProgress(currentCallType) = callResult {
+            if case let .peer(currentPeerId) = currentCallType, currentPeerId == peerId {
                 self.sharedContext.navigateToCurrentCall()
             } else {
                 let dataInput: Signal<(EnginePeer?, EnginePeer?), NoError>
-                if let currentPeerId = currentPeerId {
+                if case let .peer(currentPeerId) = currentCallType, let currentPeerId {
                     dataInput = self.engine.data.get(
                         TelegramEngine.EngineData.Item.Peer.Peer(id: peerId),
                         TelegramEngine.EngineData.Item.Peer.Peer(id: currentPeerId)
@@ -710,9 +710,9 @@ public final class AccountContextImpl: AccountContext {
             endCurrentIfAny: false,
             unmuteByDefault: unmuteByDefault
         )
-        if case let .alreadyInProgress(currentPeerId) = result {
+        if case let .alreadyInProgress(currentCallType) = result {
             let dataInput: Signal<EnginePeer?, NoError>
-            if let currentPeerId {
+            if case let .peer(currentPeerId) = currentCallType, let currentPeerId {
                 dataInput = self.engine.data.get(
                     TelegramEngine.EngineData.Item.Peer.Peer(id: currentPeerId)
                 )
@@ -785,6 +785,31 @@ public final class AccountContextImpl: AccountContext {
                             )
                         })]), on: .root)
                     }
+                } else if case .peer = currentCallType {
+                    let text: String
+                    //TODO:localize
+                    text = "End current call and start a conference?";
+                    strongSelf.sharedContext.mainWindow?.present(textAlertController(context: strongSelf, title: presentationData.strings.Call_CallInProgressTitle, text: text, actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_Cancel, action: {}), TextAlertAction(type: .genericAction, title: presentationData.strings.Common_OK, action: {
+                        guard let self else {
+                            return
+                        }
+                        let _ = callManager.joinConferenceCall(
+                            accountContext: self,
+                            initialCall: EngineGroupCallDescription(
+                                id: call.id,
+                                accessHash: call.accessHash,
+                                title: nil,
+                                scheduleTimestamp: nil,
+                                subscribedToScheduled: false,
+                                isStream: false
+                            ),
+                            reference: call.reference,
+                            beginWithVideo: isVideo,
+                            invitePeerIds: [],
+                            endCurrentIfAny: true,
+                            unmuteByDefault: unmuteByDefault
+                        )
+                    })]), on: .root)
                 } else {
                     strongSelf.sharedContext.mainWindow?.present(textAlertController(context: strongSelf, title: presentationData.strings.Call_CallInProgressTitle, text: presentationData.strings.Call_ExternalCallInProgressMessage, actions: [TextAlertAction(type: .genericAction, title: presentationData.strings.Common_OK, action: {
                     })]), on: .root)
@@ -798,13 +823,13 @@ public final class AccountContextImpl: AccountContext {
             return
         }
         
-        if case let .alreadyInProgress(currentPeerId) = callResult {
-            if currentPeerId == peerId {
+        if case let .alreadyInProgress(currentCallType) = callResult {
+            if case let .peer(currentPeerId) = currentCallType, currentPeerId == peerId {
                 completion()
                 self.sharedContext.navigateToCurrentCall()
             } else {
                 let dataInput: Signal<(EnginePeer?, EnginePeer?), NoError>
-                if let currentPeerId = currentPeerId {
+                if case let .peer(currentPeerId) = currentCallType, let currentPeerId {
                     dataInput = self.engine.data.get(
                         TelegramEngine.EngineData.Item.Peer.Peer(id: peerId),
                         TelegramEngine.EngineData.Item.Peer.Peer(id: currentPeerId)

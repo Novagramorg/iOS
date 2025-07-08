@@ -519,10 +519,13 @@ public final class CallListController: TelegramBaseController {
             return
         }
 
+        var dismissSelectionController: (() -> Void)?
+        
         let options = [ContactListAdditionalOption(title: self.presentationData.strings.CallList_NewCallLink, icon: .generic(PresentationResourcesItemList.linkIcon(presentationData.theme)!), action: { [weak self] in
             guard let self else {
                 return
             }
+            dismissSelectionController?()
             self.createGroupCall(peerIds: [], isVideo: false)
         }, clearHighlightAutomatically: true)]
 
@@ -545,6 +548,10 @@ public final class CallListController: TelegramBaseController {
         controller.navigationPresentation = .modal
         if let navigationController = self.context.sharedContext.mainWindow?.viewController as? NavigationController {
             navigationController.pushViewController(controller)
+        }
+        
+        dismissSelectionController = { [weak controller] in
+            controller?.dismiss()
         }
 
         let _ = (controller.result

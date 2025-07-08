@@ -422,28 +422,25 @@ public final class PresentationCallManagerImpl: PresentationCallManager {
     }
     
     public func requestCall(context: AccountContext, peerId: PeerId, isVideo: Bool, endCurrentIfAny: Bool) -> RequestCallResult {
-        var alreadyInCall: Bool = false
-        var alreadyInCallWithPeerId: PeerId?
+        var alreadyInCallType: CallAlreadyInProgressType?
         
         if let call = self.currentCall {
-            alreadyInCall = true
-            alreadyInCallWithPeerId = call.peerId
+            alreadyInCallType = .peer(call.peerId)
         } else if let currentGroupCall = self.currentGroupCallValue {
-            alreadyInCall = true
             switch currentGroupCall {
             case let .conferenceSource(conferenceSource):
-                alreadyInCallWithPeerId = conferenceSource.peerId
+                alreadyInCallType = .peer(conferenceSource.peerId)
             case let .group(groupCall):
-                alreadyInCallWithPeerId = groupCall.peerId
+                alreadyInCallType = .peer(groupCall.peerId)
             }
         } else {
             if CXCallObserver().calls.contains(where: { $0.hasEnded == false }) {
-                alreadyInCall = true
+                alreadyInCallType = .external
             }
         }
         
-        if alreadyInCall, !endCurrentIfAny {
-            return .alreadyInProgress(alreadyInCallWithPeerId)
+        if let alreadyInCallType, !endCurrentIfAny {
+            return .alreadyInProgress(alreadyInCallType)
         }
         if let _ = callKitIntegrationIfEnabled(self.callKitIntegration, settings: self.callSettings) {
             let begin: () -> Void = { [weak self] in
@@ -942,9 +939,9 @@ public final class PresentationCallManagerImpl: PresentationCallManager {
             } else {
                 switch currentGroupCall {
                 case let .conferenceSource(conferenceSource):
-                    return .alreadyInProgress(conferenceSource.peerId)
+                    return .alreadyInProgress(.peer(conferenceSource.peerId))
                 case let .group(groupCall):
-                    return .alreadyInProgress(groupCall.peerId)
+                    return .alreadyInProgress(.peer(groupCall.peerId))
                 }
             }
         } else if let currentCall = self.currentCall {
@@ -955,7 +952,7 @@ public final class PresentationCallManagerImpl: PresentationCallManager {
                     begin()
                 }))
             } else {
-                return .alreadyInProgress(currentCall.peerId)
+                return .alreadyInProgress(.peer(currentCall.peerId))
             }
         } else {
             begin()
@@ -1001,9 +998,9 @@ public final class PresentationCallManagerImpl: PresentationCallManager {
             } else {
                 switch currentGroupCall {
                 case let .conferenceSource(conferenceSource):
-                    return .alreadyInProgress(conferenceSource.peerId)
+                    return .alreadyInProgress(.peer(conferenceSource.peerId))
                 case let .group(groupCall):
-                    return .alreadyInProgress(groupCall.peerId)
+                    return .alreadyInProgress(.peer(groupCall.peerId))
                 }
             }
         } else if let currentCall = self.currentCall {
@@ -1014,7 +1011,7 @@ public final class PresentationCallManagerImpl: PresentationCallManager {
                     begin()
                 }))
             } else {
-                return .alreadyInProgress(currentCall.peerId)
+                return .alreadyInProgress(.peer(currentCall.peerId))
             }
         } else {
             begin()
@@ -1194,9 +1191,9 @@ public final class PresentationCallManagerImpl: PresentationCallManager {
             } else {
                 switch currentGroupCall {
                 case let .conferenceSource(conferenceSource):
-                    return .alreadyInProgress(conferenceSource.peerId)
+                    return .alreadyInProgress(.peer(conferenceSource.peerId))
                 case let .group(groupCall):
-                    return .alreadyInProgress(groupCall.peerId)
+                    return .alreadyInProgress(.peer(groupCall.peerId))
                 }
             }
         } else if let currentCall = self.currentCall {
@@ -1207,7 +1204,7 @@ public final class PresentationCallManagerImpl: PresentationCallManager {
                     begin()
                 }))
             } else {
-                return .alreadyInProgress(currentCall.peerId)
+                return .alreadyInProgress(.peer(currentCall.peerId))
             }
         } else {
             begin()
