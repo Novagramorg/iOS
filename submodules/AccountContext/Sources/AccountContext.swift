@@ -1623,11 +1623,7 @@ public struct TranslationConfiguration {
         init(string: String) {
             switch string {
             case "enabled":
-                #if DEBUG
-                self = .system
-                #else
                 self = .enabled
-                #endif
             case "system":
                 self = .system
             case "alternative":
