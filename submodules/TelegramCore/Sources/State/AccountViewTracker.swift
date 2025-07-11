@@ -1972,13 +1972,19 @@ public final class AccountViewTracker {
                         addHole = true
                         pollingCompleted = .single(true)
                     }
+                    
+                    /*#if DEBUG
                     if "".isEmpty {
                         addHole = false
                         pollingCompleted = .single(true)
                     }
+                    #endif*/
+                    
                     let resetPeerHoleManagement = self.resetPeerHoleManagement
                     let isAutomaticallyTracked = self.account!.postbox.transaction { transaction -> Bool in
                         if transaction.getPeerChatListIndex(peerId) == nil {
+                            transaction.resetIncomingReadStates([peerId: [Namespaces.Message.Cloud : PeerReadState.idBased(
+                                maxIncomingReadId: 1, maxOutgoingReadId: 1, maxKnownId: 1, count: 0, markedUnread: false)]])
                             if addHole {
                                 resetPeerHoleManagement?(peerId)
                                 transaction.addHole(peerId: peerId, threadId: nil, namespace: Namespaces.Message.Cloud, space: .everywhere, range: 1 ... (Int32.max - 1))
@@ -2255,7 +2261,7 @@ public final class AccountViewTracker {
                 return -1
             }
         }, next: { [weak self] next, viewId in
-            if let strongSelf = self, let account = strongSelf.account {
+            if let strongSelf = self, let account = strongSelf.account, updateData {
                 strongSelf.updateCachedPeerData(peerId: peerId, accountPeerId: account.peerId, viewId: viewId, hasCachedData: next.cachedData != nil)
             }
         }, disposed: { [weak self] viewId in
