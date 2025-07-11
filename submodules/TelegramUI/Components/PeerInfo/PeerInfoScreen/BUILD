@@ -159,6 +159,7 @@ swift_library(
         "//submodules/TelegramUI/Components/BatchVideoRendering",
         "//submodules/TelegramUI/Components/GifVideoLayer",
         "//submodules/Components/HierarchyTrackingLayer",
+        "//submodules/TelegramUI/Components/PeerInfo/PeerInfoRatingComponent",
     ],
     visibility = [
         "//visibility:public",
