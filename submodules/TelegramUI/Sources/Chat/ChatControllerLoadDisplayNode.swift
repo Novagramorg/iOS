@@ -568,6 +568,26 @@ extension ChatControllerImpl {
                 self.dismiss()
             }
         }
+        
+        self.updatePreloadNextChatPeerId()
+    }
+    
+    func updatePreloadNextChatPeerId() {
+        if !self.checkedPeerChatServiceActions {
+            return
+        }
+        
+        if self.preloadNextChatPeerId != self.contentData?.state.preloadNextChatPeerId {
+            self.preloadNextChatPeerId = self.contentData?.state.preloadNextChatPeerId
+            if let nextPeerId = self.contentData?.state.preloadNextChatPeerId {
+                let combinedDisposable = DisposableSet()
+                self.preloadNextChatPeerIdDisposable.set(combinedDisposable)
+                combinedDisposable.add(self.context.account.viewTracker.polledChannel(peerId: nextPeerId).startStrict())
+                combinedDisposable.add(self.context.account.addAdditionalPreloadHistoryPeerId(peerId: nextPeerId))
+            } else {
+                self.preloadNextChatPeerIdDisposable.set(nil)
+            }
+        }
     }
     
     func reloadCachedData() {
