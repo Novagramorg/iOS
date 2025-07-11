@@ -38,6 +38,7 @@ import MultiScaleTextNode
 import PeerInfoCoverComponent
 import PeerInfoPaneNode
 import MultilineTextComponent
+import PeerInfoRatingComponent
 
 final class PeerInfoHeaderNavigationTransition {
     let sourceNavigationBar: NavigationBar
@@ -129,6 +130,9 @@ final class PeerInfoHeaderNode: ASDisplayNode {
     var statusIconSize: CGSize?
     let titleExpandedStatusIconView: ComponentHostView<Empty>
     var titleExpandedStatusIconSize: CGSize?
+    
+    var subtitleRatingIsExpanded: Bool = false
+    var subtitleRating: ComponentView<Empty>?
     
     let subtitleNodeContainer: ASDisplayNode
     let subtitleNodeRawContainer: ASDisplayNode
@@ -1910,6 +1914,57 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         let apparentHeight = (1.0 - transitionFraction) * backgroundHeight + transitionFraction * transitionSourceHeight
         let apparentBackgroundHeight = (1.0 - transitionFraction) * backgroundHeight + transitionFraction * transitionSourceHeight
         
+        var subtitleRatingSize: CGSize?
+        if let cachedData = cachedData as? CachedUserData, let starRating = cachedData.starRating {
+            let subtitleRating: ComponentView<Empty>
+            var subtitleRatingTransition = ComponentTransition(transition)
+            if let current = self.subtitleRating {
+                subtitleRating = current
+            } else {
+                subtitleRatingTransition = .immediate
+                subtitleRating = ComponentView()
+                self.subtitleRating = subtitleRating
+            }
+            let fraction: CGFloat
+            if let nextLevelStars = starRating.nextLevelStars {
+                fraction = CGFloat(starRating.currentLevelStars) / CGFloat(nextLevelStars)
+            } else {
+                fraction = 1.0
+            }
+            //TODO:localize
+            subtitleRatingSize = subtitleRating.update(
+                transition: subtitleRatingTransition,
+                component: AnyComponent(PeerInfoRatingComponent(
+                    backgroundColor: UIColor(white: 1.0, alpha: 0.1),
+                    foregroundColor: UIColor(white: 1.0, alpha: 1.0),
+                    isExpanded: self.subtitleRatingIsExpanded,
+                    compactLabel: "\(starRating.level)",
+                    fraction: fraction,
+                    label: "Level \(starRating.level)",
+                    nextLabel: starRating.nextLevelStars != nil ? "\(starRating.level + 1)" : "",
+                    action: { [weak self] in
+                        guard let self else {
+                            return
+                        }
+                        self.subtitleRatingIsExpanded = !self.subtitleRatingIsExpanded
+                        self.requestUpdateLayout?(true)
+                    }
+                )),
+                environment: {},
+                containerSize: CGSize(width: width - 12.0 * 2.0, height: 100.0)
+            )
+            if let subtitleRatingView = subtitleRating.view {
+                if subtitleRatingView.superview == nil {
+                    self.subtitleNodeContainer.view.addSubview(subtitleRatingView)
+                }
+            }
+        } else {
+            if let subtitleRating = self.subtitleRating {
+                self.subtitleRating = nil
+                subtitleRating.view?.removeFromSuperview()
+            }
+        }
+        
         if !titleSize.width.isZero && !titleSize.height.isZero {
             if self.navigationTransition != nil {
                 var neutralTitleScale: CGFloat = 1.0
@@ -1956,15 +2011,18 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                 let subtitleScale: CGFloat
                 var subtitleOffset: CGFloat = 0.0
                 let subtitleBadgeFraction: CGFloat
+                let subtitleRatingFraction: CGFloat
                 if self.isAvatarExpanded {
                     titleScale = expandedTitleScale
                     subtitleScale = 1.0
                     subtitleBadgeFraction = 1.0
+                    subtitleRatingFraction = 0.0
                 } else {
                     titleScale = (1.0 - titleCollapseFraction) * 1.0 + titleCollapseFraction * titleMinScale
                     subtitleScale = (1.0 - titleCollapseFraction) * 1.0 + titleCollapseFraction * subtitleMinScale
                     subtitleOffset = titleCollapseFraction * -1.0
                     subtitleBadgeFraction = (1.0 - titleCollapseFraction)
+                    subtitleRatingFraction = (1.0 - titleCollapseFraction)
                 }
                 
                 let rawTitleFrame = titleFrame.offsetBy(dx: self.isAvatarExpanded ? titleExpandedHorizontalOffset : titleHorizontalOffset * titleScale, dy: 0.0)
@@ -2002,6 +2060,19 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                     transition.updateFrameAdditive(view: subtitleBadgeView, frame: subtitleBadgeFrame)
                     transition.updateAlpha(layer: subtitleBadgeView.layer, alpha: (1.0 - transitionFraction) * subtitleBadgeFraction)
                 }
+                
+                if let subtitleRatingView = self.subtitleRating?.view, let subtitleRatingSize {
+                    let subtitleBadgeFrame: CGRect
+                    if self.subtitleRatingIsExpanded {
+                        subtitleBadgeFrame = CGRect(origin: CGPoint(x: -subtitleRatingSize.width * 0.5, y: floor((-subtitleRatingSize.height) * 0.5)), size: subtitleRatingSize)
+                    } else {
+                        subtitleBadgeFrame = CGRect(origin: CGPoint(x: (-subtitleSize.width) * 0.5 - 4.0 - subtitleRatingSize.width, y: floor((-subtitleRatingSize.height) * 0.5)), size: subtitleRatingSize)
+                    }
+                    transition.updateFrameAdditive(view: subtitleRatingView, frame: subtitleBadgeFrame)
+                    transition.updateAlpha(layer: subtitleRatingView.layer, alpha: (1.0 - transitionFraction) * subtitleRatingFraction)
+                }
+                
+                transition.updateAlpha(node: self.subtitleNode, alpha: self.subtitleRatingIsExpanded ? 0.0 : 1.0)
             }
         }
         
@@ -2492,6 +2563,10 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         }
         
         if let subtitleBadgeView = self.subtitleBadgeView, let result = subtitleBadgeView.hitTest(self.view.convert(point, to: subtitleBadgeView), with: event) {
+            return result
+        }
+        
+        if let subtitleRatingView = self.subtitleRating?.view, let result = subtitleRatingView.hitTest(self.view.convert(point, to: subtitleRatingView), with: event) {
             return result
         }
         

@@ -1595,7 +1595,7 @@ private func finalStateWithUpdatesAndServerTime(accountPeerId: PeerId, postbox: 
                         }
                         if let replyToMsgHeader {
                             switch replyToMsgHeader {
-                            case let .inputReplyToMessage(_, replyToMsgId, topMsgId, replyToPeerId, quoteText, quoteEntities, quoteOffset, monoforumPeerId):
+                            case let .inputReplyToMessage(_, replyToMsgId, topMsgId, replyToPeerId, quoteText, quoteEntities, quoteOffset, monoforumPeerId, _):
                                 let _ = topMsgId
                                 let _ = monoforumPeerId
                                 

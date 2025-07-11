@@ -284,7 +284,7 @@ func apiMessageAssociatedMessageIds(_ message: Api.Message) -> (replyIds: Refere
                 let peerId: PeerId = chatPeerId.peerId
                 
                 switch replyTo {
-                case let .messageReplyHeader(_, replyToMsgId, replyToPeerId, replyHeader, replyMedia, replyToTopId, quoteText, quoteEntities, quoteOffset):
+                case let .messageReplyHeader(_, replyToMsgId, replyToPeerId, replyHeader, replyMedia, replyToTopId, quoteText, quoteEntities, quoteOffset, _):
                     let _ = replyHeader
                     let _ = replyMedia
                     let _ = replyToTopId
@@ -307,7 +307,7 @@ func apiMessageAssociatedMessageIds(_ message: Api.Message) -> (replyIds: Refere
         case let .messageService(_, id, _, chatPeerId, _, replyHeader, _, _, _, _):
             if let replyHeader = replyHeader {
                 switch replyHeader {
-                case let .messageReplyHeader(_, replyToMsgId, replyToPeerId, replyHeader, replyMedia, replyToTopId, quoteText, quoteEntities, quoteOffset):
+                case let .messageReplyHeader(_, replyToMsgId, replyToPeerId, replyHeader, replyMedia, replyToTopId, quoteText, quoteEntities, quoteOffset, _):
                     let _ = replyHeader
                     let _ = replyMedia
                     let _ = replyToTopId
@@ -723,7 +723,7 @@ extension StoreMessage {
                 if let replyTo = replyTo {
                     var threadMessageId: MessageId?
                     switch replyTo {
-                    case let .messageReplyHeader(innerFlags, replyToMsgId, replyToPeerId, replyHeader, replyMedia, replyToTopId, quoteText, quoteEntities, quoteOffset):
+                    case let .messageReplyHeader(innerFlags, replyToMsgId, replyToPeerId, replyHeader, replyMedia, replyToTopId, quoteText, quoteEntities, quoteOffset, _):
                         let isForumTopic = (innerFlags & (1 << 3)) != 0
                         
                         var quote: EngineMessageReplyQuote?
@@ -1084,7 +1084,7 @@ extension StoreMessage {
                     
                     if chatPeerId.peerId.namespace == Namespaces.Peer.CloudChannel, let replyTo {
                         switch replyTo {
-                        case let .messageReplyHeader(innerFlags, replyToMsgId, replyToPeerId, replyHeader, replyMedia, _, quoteText, quoteEntities, quoteOffset):
+                        case let .messageReplyHeader(innerFlags, replyToMsgId, replyToPeerId, replyHeader, replyMedia, _, quoteText, quoteEntities, quoteOffset, _):
                             var quote: EngineMessageReplyQuote?
                             let isQuote = (innerFlags & (1 << 9)) != 0
                             if quoteText != nil || replyMedia != nil {
@@ -1104,7 +1104,7 @@ extension StoreMessage {
                 } else if let replyTo = replyTo {
                     var threadMessageId: MessageId?
                     switch replyTo {
-                    case let .messageReplyHeader(innerFlags, replyToMsgId, replyToPeerId, replyHeader, replyMedia, replyToTopId, quoteText, quoteEntities, quoteOffset):
+                    case let .messageReplyHeader(innerFlags, replyToMsgId, replyToPeerId, replyHeader, replyMedia, replyToTopId, quoteText, quoteEntities, quoteOffset, _):
                         var quote: EngineMessageReplyQuote?
                         let isQuote = (innerFlags & (1 << 9)) != 0
                         if quoteText != nil || replyMedia != nil {

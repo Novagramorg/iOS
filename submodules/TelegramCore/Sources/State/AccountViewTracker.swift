@@ -1537,7 +1537,7 @@ public final class AccountViewTracker {
                                             let peerId = slice[i].0
                                             let value = result[i]
                                             transaction.updatePeerCachedData(peerIds: Set([peerId]), update: { _, cachedData in
-                                                var cachedData = cachedData as? CachedUserData ?? CachedUserData(about: nil, botInfo: nil, editableBotInfo: nil, peerStatusSettings: nil, pinnedMessageId: nil, isBlocked: false, commonGroupCount: 0, voiceCallsAvailable: true, videoCallsAvailable: true, callsPrivate: true, canPinMessages: true, hasScheduledMessages: true, autoremoveTimeout: .unknown, themeEmoticon: nil, photo: .unknown, personalPhoto: .unknown, fallbackPhoto: .unknown, voiceMessagesAvailable: true, wallpaper: nil, flags: [], businessHours: nil, businessLocation: nil, greetingMessage: nil, awayMessage: nil, connectedBot: nil, businessIntro: .unknown, birthday: nil, personalChannel: .unknown, botPreview: nil, starGiftsCount: nil, starRefProgram: nil, verification: nil, sendPaidMessageStars: nil, disallowedGifts: [], botGroupAdminRights: nil, botChannelAdminRights: nil)
+                                                var cachedData = cachedData as? CachedUserData ?? CachedUserData(about: nil, botInfo: nil, editableBotInfo: nil, peerStatusSettings: nil, pinnedMessageId: nil, isBlocked: false, commonGroupCount: 0, voiceCallsAvailable: true, videoCallsAvailable: true, callsPrivate: true, canPinMessages: true, hasScheduledMessages: true, autoremoveTimeout: .unknown, themeEmoticon: nil, photo: .unknown, personalPhoto: .unknown, fallbackPhoto: .unknown, voiceMessagesAvailable: true, wallpaper: nil, flags: [], businessHours: nil, businessLocation: nil, greetingMessage: nil, awayMessage: nil, connectedBot: nil, businessIntro: .unknown, birthday: nil, personalChannel: .unknown, botPreview: nil, starGiftsCount: nil, starRefProgram: nil, verification: nil, sendPaidMessageStars: nil, disallowedGifts: [], botGroupAdminRights: nil, botChannelAdminRights: nil, starRating: nil)
                                                 var flags = cachedData.flags
                                                 var sendPaidMessageStars = cachedData.sendPaidMessageStars
                                                 switch value {
@@ -1962,7 +1962,7 @@ public final class AccountViewTracker {
                     let polled = self.polledChannel(peerId: peerId).start()
 
                     var addHole = false
-                    let pollingCompleted: Signal<Bool, NoError>
+                    var pollingCompleted: Signal<Bool, NoError>
                     if let context = self.channelPollingContexts[peerId] {
                         if !context.isUpdatedValue {
                             addHole = true
@@ -1970,6 +1970,10 @@ public final class AccountViewTracker {
                         pollingCompleted = context.isUpdated.get()
                     } else {
                         addHole = true
+                        pollingCompleted = .single(true)
+                    }
+                    if "".isEmpty {
+                        addHole = false
                         pollingCompleted = .single(true)
                     }
                     let resetPeerHoleManagement = self.resetPeerHoleManagement
@@ -2121,7 +2125,7 @@ public final class AccountViewTracker {
         return signal
     }
     
-    public func aroundMessageOfInterestHistoryViewForLocation(_ chatLocation: ChatLocationInput, ignoreMessagesInTimestampRange: ClosedRange<Int32>? = nil, ignoreMessageIds: Set<MessageId> = Set(), count: Int, tag: HistoryViewInputTag? = nil, appendMessagesFromTheSameGroup: Bool = false, orderStatistics: MessageHistoryViewOrderStatistics = [], additionalData: [AdditionalMessageHistoryViewData] = [], useRootInterfaceStateForThread: Bool = false) -> Signal<(MessageHistoryView, ViewUpdateType, InitialMessageHistoryData?), NoError> {
+    public func aroundMessageOfInterestHistoryViewForLocation(_ chatLocation: ChatLocationInput, ignoreMessagesInTimestampRange: ClosedRange<Int32>? = nil, ignoreMessageIds: Set<MessageId> = Set(), count: Int, trackHoles: Bool = true, tag: HistoryViewInputTag? = nil, appendMessagesFromTheSameGroup: Bool = false, orderStatistics: MessageHistoryViewOrderStatistics = [], additionalData: [AdditionalMessageHistoryViewData] = [], useRootInterfaceStateForThread: Bool = false) -> Signal<(MessageHistoryView, ViewUpdateType, InitialMessageHistoryData?), NoError> {
         if let account = self.account {
             let signal: Signal<(MessageHistoryView, ViewUpdateType, InitialMessageHistoryData?), NoError>
             if let peerId = chatLocation.peerId, let threadId = chatLocation.threadId, tag == nil {
@@ -2154,6 +2158,7 @@ public final class AccountViewTracker {
                             ignoreMessagesInTimestampRange: ignoreMessagesInTimestampRange,
                             ignoreMessageIds: ignoreMessageIds,
                             count: count,
+                            trackHoles: trackHoles,
                             fixedCombinedReadStates: .peer([peerId: CombinedPeerReadState(states: [
                                 (Namespaces.Message.Cloud, PeerReadState.idBased(maxIncomingReadId: Int32.max - 1, maxOutgoingReadId: Int32.max - 1, maxKnownId: Int32.max - 1, count: 0, markedUnread: false))
                             ])]),
@@ -2183,6 +2188,7 @@ public final class AccountViewTracker {
                                 ignoreMessagesInTimestampRange: ignoreMessagesInTimestampRange,
                                 ignoreMessageIds: ignoreMessageIds,
                                 count: count,
+                                trackHoles: trackHoles,
                                 fixedCombinedReadStates: nil,
                                 topTaggedMessageIdNamespaces: [],
                                 tag: tag,
@@ -2195,10 +2201,10 @@ public final class AccountViewTracker {
                         }
                     }
                     
-                    return account.postbox.aroundMessageOfInterestHistoryViewForChatLocation(chatLocation, ignoreMessagesInTimestampRange: ignoreMessagesInTimestampRange, ignoreMessageIds: ignoreMessageIds, count: count, topTaggedMessageIdNamespaces: [Namespaces.Message.Cloud], tag: tag, appendMessagesFromTheSameGroup: appendMessagesFromTheSameGroup, namespaces: .not(Namespaces.Message.allNonRegular), orderStatistics: orderStatistics, customUnreadMessageId: nil, additionalData: wrappedHistoryViewAdditionalData(chatLocation: chatLocation, additionalData: additionalData), useRootInterfaceStateForThread: useRootInterfaceStateForThread)
+                    return account.postbox.aroundMessageOfInterestHistoryViewForChatLocation(chatLocation, ignoreMessagesInTimestampRange: ignoreMessagesInTimestampRange, ignoreMessageIds: ignoreMessageIds, count: count, trackHoles: trackHoles, topTaggedMessageIdNamespaces: [Namespaces.Message.Cloud], tag: tag, appendMessagesFromTheSameGroup: appendMessagesFromTheSameGroup, namespaces: .not(Namespaces.Message.allNonRegular), orderStatistics: orderStatistics, customUnreadMessageId: nil, additionalData: wrappedHistoryViewAdditionalData(chatLocation: chatLocation, additionalData: additionalData), useRootInterfaceStateForThread: useRootInterfaceStateForThread)
                 }
             } else {
-                signal = account.postbox.aroundMessageOfInterestHistoryViewForChatLocation(chatLocation, ignoreMessagesInTimestampRange: ignoreMessagesInTimestampRange, ignoreMessageIds: ignoreMessageIds, count: count, topTaggedMessageIdNamespaces: [Namespaces.Message.Cloud], tag: tag, appendMessagesFromTheSameGroup: appendMessagesFromTheSameGroup, namespaces: .not(Namespaces.Message.allNonRegular), orderStatistics: orderStatistics, customUnreadMessageId: nil, additionalData: wrappedHistoryViewAdditionalData(chatLocation: chatLocation, additionalData: additionalData), useRootInterfaceStateForThread: useRootInterfaceStateForThread)
+                signal = account.postbox.aroundMessageOfInterestHistoryViewForChatLocation(chatLocation, ignoreMessagesInTimestampRange: ignoreMessagesInTimestampRange, ignoreMessageIds: ignoreMessageIds, count: count, trackHoles: trackHoles, topTaggedMessageIdNamespaces: [Namespaces.Message.Cloud], tag: tag, appendMessagesFromTheSameGroup: appendMessagesFromTheSameGroup, namespaces: .not(Namespaces.Message.allNonRegular), orderStatistics: orderStatistics, customUnreadMessageId: nil, additionalData: wrappedHistoryViewAdditionalData(chatLocation: chatLocation, additionalData: additionalData), useRootInterfaceStateForThread: useRootInterfaceStateForThread)
             }
             return wrappedMessageHistorySignal(chatLocation: chatLocation, signal: signal, fixedCombinedReadStates: nil, addHoleIfNeeded: true)
         } else {
@@ -2206,16 +2212,16 @@ public final class AccountViewTracker {
         }
     }
     
-    public func aroundIdMessageHistoryViewForLocation(_ chatLocation: ChatLocationInput, ignoreMessagesInTimestampRange: ClosedRange<Int32>? = nil, ignoreMessageIds: Set<MessageId> = Set(), count: Int, ignoreRelatedChats: Bool, messageId: MessageId, tag: HistoryViewInputTag? = nil, appendMessagesFromTheSameGroup: Bool = false, orderStatistics: MessageHistoryViewOrderStatistics = [], additionalData: [AdditionalMessageHistoryViewData] = [], useRootInterfaceStateForThread: Bool = false) -> Signal<(MessageHistoryView, ViewUpdateType, InitialMessageHistoryData?), NoError> {
+    public func aroundIdMessageHistoryViewForLocation(_ chatLocation: ChatLocationInput, ignoreMessagesInTimestampRange: ClosedRange<Int32>? = nil, ignoreMessageIds: Set<MessageId> = Set(), count: Int, trackHoles: Bool = true, ignoreRelatedChats: Bool, messageId: MessageId, tag: HistoryViewInputTag? = nil, appendMessagesFromTheSameGroup: Bool = false, orderStatistics: MessageHistoryViewOrderStatistics = [], additionalData: [AdditionalMessageHistoryViewData] = [], useRootInterfaceStateForThread: Bool = false) -> Signal<(MessageHistoryView, ViewUpdateType, InitialMessageHistoryData?), NoError> {
         if let account = self.account {
-            let signal = account.postbox.aroundIdMessageHistoryViewForLocation(chatLocation, ignoreMessagesInTimestampRange: ignoreMessagesInTimestampRange, ignoreMessageIds: ignoreMessageIds, count: count, ignoreRelatedChats: ignoreRelatedChats, messageId: messageId, topTaggedMessageIdNamespaces: [Namespaces.Message.Cloud], tag: tag, appendMessagesFromTheSameGroup: appendMessagesFromTheSameGroup, namespaces: .not(Namespaces.Message.allNonRegular), orderStatistics: orderStatistics, additionalData: wrappedHistoryViewAdditionalData(chatLocation: chatLocation, additionalData: additionalData), useRootInterfaceStateForThread: useRootInterfaceStateForThread)
+            let signal = account.postbox.aroundIdMessageHistoryViewForLocation(chatLocation, ignoreMessagesInTimestampRange: ignoreMessagesInTimestampRange, ignoreMessageIds: ignoreMessageIds, count: count, trackHoles: trackHoles, ignoreRelatedChats: ignoreRelatedChats, messageId: messageId, topTaggedMessageIdNamespaces: [Namespaces.Message.Cloud], tag: tag, appendMessagesFromTheSameGroup: appendMessagesFromTheSameGroup, namespaces: .not(Namespaces.Message.allNonRegular), orderStatistics: orderStatistics, additionalData: wrappedHistoryViewAdditionalData(chatLocation: chatLocation, additionalData: additionalData), useRootInterfaceStateForThread: useRootInterfaceStateForThread)
             return wrappedMessageHistorySignal(chatLocation: chatLocation, signal: signal, fixedCombinedReadStates: nil, addHoleIfNeeded: false)
         } else {
             return .never()
         }
     }
     
-    public func aroundMessageHistoryViewForLocation(_ chatLocation: ChatLocationInput, ignoreMessagesInTimestampRange: ClosedRange<Int32>? = nil, ignoreMessageIds: Set<MessageId> = Set(), index: MessageHistoryAnchorIndex, anchorIndex: MessageHistoryAnchorIndex, count: Int, clipHoles: Bool = true, ignoreRelatedChats: Bool = false, fixedCombinedReadStates: MessageHistoryViewReadState?, tag: HistoryViewInputTag? = nil, appendMessagesFromTheSameGroup: Bool = false, orderStatistics: MessageHistoryViewOrderStatistics = [], additionalData: [AdditionalMessageHistoryViewData] = [], useRootInterfaceStateForThread: Bool = false) -> Signal<(MessageHistoryView, ViewUpdateType, InitialMessageHistoryData?), NoError> {
+    public func aroundMessageHistoryViewForLocation(_ chatLocation: ChatLocationInput, ignoreMessagesInTimestampRange: ClosedRange<Int32>? = nil, ignoreMessageIds: Set<MessageId> = Set(), index: MessageHistoryAnchorIndex, anchorIndex: MessageHistoryAnchorIndex, count: Int, trackHoles: Bool = true, clipHoles: Bool = true, ignoreRelatedChats: Bool = false, fixedCombinedReadStates: MessageHistoryViewReadState?, tag: HistoryViewInputTag? = nil, appendMessagesFromTheSameGroup: Bool = false, orderStatistics: MessageHistoryViewOrderStatistics = [], additionalData: [AdditionalMessageHistoryViewData] = [], useRootInterfaceStateForThread: Bool = false) -> Signal<(MessageHistoryView, ViewUpdateType, InitialMessageHistoryData?), NoError> {
         if let account = self.account {
             let inputAnchor: HistoryViewInputAnchor
             switch index {
