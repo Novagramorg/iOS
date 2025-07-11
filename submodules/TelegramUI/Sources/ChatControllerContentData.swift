@@ -142,6 +142,8 @@ extension ChatControllerImpl {
             var isGeneralThreadClosed: Bool?
             var premiumGiftOptions: [CachedPremiumGiftOption] = []
             var removePaidMessageFeeData: ChatPresentationInterfaceState.RemovePaidMessageFeeData?
+            
+            var preloadNextChatPeerId: EnginePeer.Id?
         }
         
         private let presentationData: PresentationData
@@ -152,9 +154,6 @@ extension ChatControllerImpl {
         
         private var preloadHistoryPeerId: PeerId?
         private let preloadHistoryPeerIdDisposable = MetaDisposable()
-
-        private var preloadNextChatPeerId: PeerId?
-        private let preloadNextChatPeerIdDisposable = MetaDisposable()
         
         private var nextChannelToReadDisposable: Disposable?
         private let chatAdditionalDataDisposable = MetaDisposable()
@@ -946,11 +945,7 @@ extension ChatControllerImpl {
                         explicitelyCanPinMessages = true
                     }
                     
-                    #if DEBUG
-                    peerMonoforumId = nil
-                    #endif
-                    
-                    let preloadHistoryPeerId = peerMonoforumId ?? peerDiscussionId
+                    let preloadHistoryPeerId = peerMonoforumId// ?? peerDiscussionId
                     if strongSelf.preloadHistoryPeerId != preloadHistoryPeerId {
                         strongSelf.preloadHistoryPeerId = preloadHistoryPeerId
                         if let preloadHistoryPeerId, let channel = peerView.peers[peerView.peerId] as? TelegramChannel, case .broadcast = channel.info {
@@ -1056,18 +1051,8 @@ extension ChatControllerImpl {
                                     }
 
                                     let nextPeerId = nextPeer?.id
-
-                                    if strongSelf.preloadNextChatPeerId != nextPeerId {
-                                        strongSelf.preloadNextChatPeerId = nextPeerId
-                                        if let nextPeerId = nextPeerId {
-                                            let combinedDisposable = DisposableSet()
-                                            strongSelf.preloadNextChatPeerIdDisposable.set(combinedDisposable)
-                                            combinedDisposable.add(context.account.viewTracker.polledChannel(peerId: nextPeerId).startStrict())
-                                            combinedDisposable.add(context.account.addAdditionalPreloadHistoryPeerId(peerId: nextPeerId))
-                                        } else {
-                                            strongSelf.preloadNextChatPeerIdDisposable.set(nil)
-                                        }
-                                    }
+                                    
+                                    strongSelf.state.preloadNextChatPeerId = nextPeerId
                                     
                                     if isUpdated {
                                         strongSelf.onUpdated?(previousState)
@@ -1110,18 +1095,8 @@ extension ChatControllerImpl {
                                 }
 
                                 let nextPeerId = nextPeer?.peer.id
-
-                                if strongSelf.preloadNextChatPeerId != nextPeerId {
-                                    strongSelf.preloadNextChatPeerId = nextPeerId
-                                    if let nextPeerId = nextPeerId {
-                                        let combinedDisposable = DisposableSet()
-                                        strongSelf.preloadNextChatPeerIdDisposable.set(combinedDisposable)
-                                        combinedDisposable.add(context.account.viewTracker.polledChannel(peerId: nextPeerId).startStrict())
-                                        combinedDisposable.add(context.account.addAdditionalPreloadHistoryPeerId(peerId: nextPeerId))
-                                    } else {
-                                        strongSelf.preloadNextChatPeerIdDisposable.set(nil)
-                                    }
-                                }
+                                
+                                strongSelf.state.preloadNextChatPeerId = nextPeerId
                                 
                                 if isUpdated {
                                     strongSelf.onUpdated?(previousState)
@@ -1653,11 +1628,7 @@ extension ChatControllerImpl {
                             explicitelyCanPinMessages = true
                         }
                         
-                        #if DEBUG
-                        peerMonoforumId = nil
-                        #endif
-                        
-                        let preloadHistoryPeerId = peerMonoforumId ?? peerDiscussionId
+                        let preloadHistoryPeerId = peerMonoforumId// ?? peerDiscussionId
                         if strongSelf.preloadHistoryPeerId != preloadHistoryPeerId {
                             strongSelf.preloadHistoryPeerId = preloadHistoryPeerId
                             if let preloadHistoryPeerId {
@@ -2377,7 +2348,6 @@ extension ChatControllerImpl {
             self.titleDisposable?.dispose()
             self.preloadSavedMessagesChatsDisposable?.dispose()
             self.preloadHistoryPeerIdDisposable.dispose()
-            self.preloadNextChatPeerIdDisposable.dispose()
             self.nextChannelToReadDisposable?.dispose()
             self.chatAdditionalDataDisposable.dispose()
             self.premiumOrStarsRequiredDisposable?.dispose()
