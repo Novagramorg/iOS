@@ -481,16 +481,19 @@ public final class ChatInterfaceState: Codable, Equatable {
     public struct ReplyMessageSubject: Codable, Equatable {
         public var messageId: EngineMessage.Id
         public var quote: EngineMessageReplyQuote?
+        public var todoItemId: Int32?
         
-        public init(messageId: EngineMessage.Id, quote: EngineMessageReplyQuote?) {
+        public init(messageId: EngineMessage.Id, quote: EngineMessageReplyQuote?, todoItemId: Int32?) {
             self.messageId = messageId
             self.quote = quote
+            self.todoItemId = todoItemId
         }
         
         public var subjectModel: EngineMessageReplySubject {
             return EngineMessageReplySubject(
                 messageId: self.messageId,
-                quote: self.quote
+                quote: self.quote,
+                todoItemId: self.todoItemId
             )
         }
     }
@@ -545,7 +548,8 @@ public final class ChatInterfaceState: Codable, Equatable {
         var result = self.withUpdatedComposeInputState(ChatTextInputState(inputText: chatInputStateStringWithAppliedEntities(state?.text ?? "", entities: state?.entities ?? []))).withUpdatedReplyMessageSubject((state?.replySubject).flatMap {
             return ReplyMessageSubject(
                 messageId: $0.messageId,
-                quote: $0.quote
+                quote: $0.quote,
+                todoItemId: $0.todoItemId
             )
         })
         if let timestamp = state?.timestamp {
@@ -629,7 +633,7 @@ public final class ChatInterfaceState: Codable, Equatable {
             let replyMessageIdNamespace: Int32? = try? container.decodeIfPresent(Int32.self, forKey: "r.n")
             let replyMessageIdId: Int32? = try? container.decodeIfPresent(Int32.self, forKey: "r.i")
             if let replyMessageIdPeerId = replyMessageIdPeerId, let replyMessageIdNamespace = replyMessageIdNamespace, let replyMessageIdId = replyMessageIdId {
-                self.replyMessageSubject = ReplyMessageSubject(messageId: EngineMessage.Id(peerId: EnginePeer.Id(replyMessageIdPeerId), namespace: replyMessageIdNamespace, id: replyMessageIdId), quote: nil)
+                self.replyMessageSubject = ReplyMessageSubject(messageId: EngineMessage.Id(peerId: EnginePeer.Id(replyMessageIdPeerId), namespace: replyMessageIdNamespace, id: replyMessageIdId), quote: nil, todoItemId: nil)
             } else {
                 self.replyMessageSubject = nil
             }
