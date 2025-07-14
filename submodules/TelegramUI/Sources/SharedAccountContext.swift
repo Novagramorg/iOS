@@ -2728,6 +2728,8 @@ public final class SharedAccountContextImpl: SharedAccountContext {
             mappedSource = .todo
         case let .auth(price):
             mappedSource = .auth(price)
+        case let .premiumGift(file):
+            mappedSource = .premiumGift(file)
         }
         return mappedSource
     }
