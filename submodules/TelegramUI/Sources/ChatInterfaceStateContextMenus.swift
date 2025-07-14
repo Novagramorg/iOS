@@ -1162,7 +1162,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
             actions.append(.action(ContextMenuActionItem(text: chatPresentationInterfaceState.strings.Conversation_ContextMenuReply, icon: { theme in
                 return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Reply"), color: theme.actionSheet.primaryTextColor)
             }, action: { c, _ in
-                interfaceInteraction.setupReplyMessage(messages[0].id, { transition, completed in
+                interfaceInteraction.setupReplyMessage(messages[0].id, nil, { transition, completed in
                     c?.dismiss(result: .custom(transition), completion: {
                         completed()
                     })

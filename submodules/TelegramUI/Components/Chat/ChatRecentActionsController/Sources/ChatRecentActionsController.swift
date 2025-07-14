@@ -55,7 +55,7 @@ public final class ChatRecentActionsController: TelegramBaseController {
         
         self.statusBar.statusBarStyle = self.presentationData.theme.rootController.statusBarStyle.style
         
-        self.panelInteraction = ChatPanelInterfaceInteraction(setupReplyMessage: { _, _ in
+        self.panelInteraction = ChatPanelInterfaceInteraction(setupReplyMessage: { _, _, _ in
         }, setupEditMessage: { _, _ in
         }, beginMessageSelection: { _, _ in
         }, cancelMessageSelection: { _ in
