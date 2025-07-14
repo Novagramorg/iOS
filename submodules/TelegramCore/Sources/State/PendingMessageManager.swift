@@ -1497,6 +1497,7 @@ public final class PendingMessageManager {
                                     replyFlags |= 1 << 4
                                 }
                             }
+                            
                             if let _ = replyTodoItemId {
                                 replyFlags |= 1 << 6
                             }
@@ -1594,6 +1595,7 @@ public final class PendingMessageManager {
                                     quoteEntities = apiEntitiesFromMessageTextEntities(replyQuote.entities, associatedPeers: associatedPeers)
                                 }
                             }
+
                             if let _ = replyTodoItemId {
                                 replyFlags |= 1 << 6
                             }
@@ -1741,6 +1743,7 @@ public final class PendingMessageManager {
                                     quoteEntities = apiEntitiesFromMessageTextEntities(replyQuote.entities, associatedPeers: associatedPeers)
                                 }
                             }
+
                             if let _ = replyTodoItemId {
                                 replyFlags |= 1 << 6
                             }
