@@ -1162,9 +1162,16 @@ private final class CachedProfileGifts: Codable {
     }
 }
 
-private func entryId(peerId: EnginePeer.Id) -> ItemCacheEntryId {
-    let cacheKey = ValueBoxKey(length: 8)
-    cacheKey.setInt64(0, value: peerId.toInt64())
+private func entryId(peerId: EnginePeer.Id, collectionId: Int32?) -> ItemCacheEntryId {
+    let cacheKey: ValueBoxKey
+    if let collectionId {
+        cacheKey = ValueBoxKey(length: 8 + 4)
+        cacheKey.setInt64(0, value: peerId.toInt64())
+        cacheKey.setInt32(8, value: collectionId)
+    } else {
+        cacheKey = ValueBoxKey(length: 8)
+        cacheKey.setInt64(0, value: peerId.toInt64())
+    }
     return ItemCacheEntryId(collectionId: Namespaces.CachedItemCollection.cachedProfileGifts, key: cacheKey)
 }
 
@@ -1172,6 +1179,7 @@ private final class ProfileGiftsContextImpl {
     private let queue: Queue
     private let account: Account
     private let peerId: PeerId
+    private let collectionId: Int32?
     
     private let disposable = MetaDisposable()
     private let cacheDisposable = MetaDisposable()
@@ -1200,12 +1208,14 @@ private final class ProfileGiftsContextImpl {
         queue: Queue,
         account: Account,
         peerId: EnginePeer.Id,
+        collectionId: Int32?,
         sorting: ProfileGiftsContext.Sorting,
         filter: ProfileGiftsContext.Filters
     ) {
         self.queue = queue
         self.account = account
         self.peerId = peerId
+        self.collectionId = collectionId
         self.sorting = sorting
         self.filter = filter
         
@@ -1226,6 +1236,7 @@ private final class ProfileGiftsContextImpl {
     
     func loadMore(reload: Bool = false) {
         let peerId = self.peerId
+        let collectionId = self.collectionId
         let accountPeerId = self.account.peerId
         let network = self.account.network
         let postbox = self.account.postbox
@@ -1244,7 +1255,7 @@ private final class ProfileGiftsContextImpl {
         if case let .ready(true, initialNextOffset) = dataState {
             if !isFiltered || isUniqueOnlyFilter, self.gifts.isEmpty, initialNextOffset == nil, !reload {
                 self.cacheDisposable.set((self.account.postbox.transaction { transaction -> CachedProfileGifts? in
-                    let cachedGifts = transaction.retrieveItemCacheEntry(id: entryId(peerId: peerId))?.get(CachedProfileGifts.self)
+                    let cachedGifts = transaction.retrieveItemCacheEntry(id: entryId(peerId: peerId, collectionId: collectionId))?.get(CachedProfileGifts.self)
                     cachedGifts?.render(transaction: transaction)
                     return cachedGifts
                 } |> deliverOn(self.queue)).start(next: { [weak self] cachedGifts in
@@ -1292,6 +1303,9 @@ private final class ProfileGiftsContextImpl {
                     return .single(([], 0, nil, nil))
                 }
                 var flags: Int32 = 0
+                if let _ = collectionId {
+                    flags |= (1 << 6)
+                }
                 if case .value = sorting {
                     flags |= (1 << 5)
                 }
@@ -1310,7 +1324,7 @@ private final class ProfileGiftsContextImpl {
                 if !filter.contains(.unique) {
                     flags |= (1 << 4)
                 }
-                return network.request(Api.functions.payments.getSavedStarGifts(flags: flags, peer: inputPeer, collectionId: nil, offset: initialNextOffset ?? "", limit: 36))
+                return network.request(Api.functions.payments.getSavedStarGifts(flags: flags, peer: inputPeer, collectionId: collectionId, offset: initialNextOffset ?? "", limit: 36))
                 |> map(Optional.init)
                 |> `catch` { _ -> Signal<Api.payments.SavedStarGifts?, NoError> in
                     return .single(nil)
@@ -1363,7 +1377,7 @@ private final class ProfileGiftsContextImpl {
                         self.gifts = gifts
                         self.cacheDisposable.set(self.account.postbox.transaction { transaction in
                             if let entry = CodableEntry(CachedProfileGifts(gifts: gifts, count: count, notificationsEnabled: notificationsEnabled)) {
-                                transaction.putItemCacheEntry(id: entryId(peerId: peerId), entry: entry)
+                                transaction.putItemCacheEntry(id: entryId(peerId: peerId, collectionId: collectionId), entry: entry)
                             }
                         }.start())
                     } else {
@@ -2063,12 +2077,13 @@ public final class ProfileGiftsContext {
     public init(
         account: Account,
         peerId: EnginePeer.Id,
+        collectionId: Int32? = nil,
         sorting: ProfileGiftsContext.Sorting = .date,
         filter: ProfileGiftsContext.Filters = .All
     ) {
         let queue = self.queue
         self.impl = QueueLocalObject(queue: queue, generate: {
-            return ProfileGiftsContextImpl(queue: queue, account: account, peerId: peerId, sorting: sorting, filter: filter)
+            return ProfileGiftsContextImpl(queue: queue, account: account, peerId: peerId, collectionId: collectionId, sorting: sorting, filter: filter)
         })
     }
     
