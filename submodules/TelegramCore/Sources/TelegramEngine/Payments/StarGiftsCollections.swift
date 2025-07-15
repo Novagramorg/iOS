@@ -183,7 +183,20 @@ private func _internal_reorderStarGiftCollections(account: Account, peerId: Engi
     }
 }
 
-private func _internal_updateStarGiftCollection(account: Account, peerId: EnginePeer.Id, collectionId: Int32, actions: [StarGiftCollectionsContext.UpdateAction]) -> Signal<StarGiftCollection?, NoError> {
+private func _internal_updateStarGiftCollection(account: Account, peerId: EnginePeer.Id, collectionId: Int32, giftsContext: ProfileGiftsContext?, actions: [ProfileGiftsCollectionsContext.UpdateAction]) -> Signal<StarGiftCollection?, NoError> {
+    for action in actions {
+        switch action {
+        case let .addGifts(gifts):
+            giftsContext?.insertStarGifts(gifts: gifts)
+        case let .removeGifts(gifts):
+            giftsContext?.removeStarGifts(references: gifts)
+        case let .reorderGifts(gifts):
+            let _ = gifts
+        default:
+            break
+        }
+    }
+    
     return account.postbox.transaction { transaction -> (Api.InputPeer, (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.StarGiftCollection>))? in
         guard let inputPeer = transaction.getPeer(peerId).flatMap(apiInputPeer) else {
             return nil
@@ -202,7 +215,7 @@ private func _internal_updateStarGiftCollection(account: Account, peerId: Engine
                 title = newTitle
             case let .addGifts(gifts):
                 flags |= (1 << 2)
-                addStarGift.append(contentsOf: gifts.compactMap { $0.apiStarGiftReference(transaction: transaction) })
+                addStarGift.append(contentsOf: gifts.compactMap { $0.reference }.compactMap { $0.apiStarGiftReference(transaction: transaction) })
             case let .removeGifts(gifts):
                 flags |= (1 << 1)
                 deleteStarGift.append(contentsOf: gifts.compactMap { $0.apiStarGiftReference(transaction: transaction) })
@@ -258,7 +271,7 @@ private func _internal_deleteStarGiftCollection(account: Account, peerId: Engine
     }
 }
 
-public final class StarGiftCollectionsContext {
+public final class ProfileGiftsCollectionsContext {
     public struct State: Equatable {
         public var collections: [StarGiftCollection]
         public var isLoading: Bool
@@ -266,7 +279,7 @@ public final class StarGiftCollectionsContext {
     
     public enum UpdateAction {
         case updateTitle(String)
-        case addGifts([StarGiftReference])
+        case addGifts([ProfileGiftsContext.State.StarGift])
         case removeGifts([StarGiftReference])
         case reorderGifts([StarGiftReference])
     }
@@ -278,6 +291,7 @@ public final class StarGiftCollectionsContext {
     private let disposable = MetaDisposable()
     
     private var collections: [StarGiftCollection] = []
+    private var giftsContexts: [Int32: ProfileGiftsContext] = [:]
     private var isLoading: Bool = false
     
     private let stateValue = Promise<State>()
@@ -294,6 +308,16 @@ public final class StarGiftCollectionsContext {
     
     deinit {
         self.disposable.dispose()
+    }
+    
+    public func giftsContextForCollection(id: Int32) -> ProfileGiftsContext {
+        if let current = self.giftsContexts[id] {
+            return current
+        } else {
+            let giftsContext = ProfileGiftsContext(account: self.account, peerId: self.peerId, collectionId: id)
+            self.giftsContexts[id] = giftsContext
+            return giftsContext
+        }
     }
     
     public func reload() {
@@ -329,7 +353,8 @@ public final class StarGiftCollectionsContext {
     }
     
     private func updateCollection(id: Int32, actions: [UpdateAction]) -> Signal<StarGiftCollection?, NoError> {
-        return _internal_updateStarGiftCollection(account: self.account, peerId: self.peerId, collectionId: id, actions: actions)
+        let giftsContext = self.giftsContextForCollection(id: id)
+        return _internal_updateStarGiftCollection(account: self.account, peerId: self.peerId, collectionId: id, giftsContext: giftsContext, actions: actions)
         |> deliverOn(self.queue)
         |> afterNext { [weak self] collection in
             guard let self else {
@@ -345,12 +370,12 @@ public final class StarGiftCollectionsContext {
         }
     }
     
-    public func addGifts(id: Int32, gifts: [StarGiftReference]) -> Signal<StarGiftCollection?, NoError> {
+    public func addGifts(id: Int32, gifts: [ProfileGiftsContext.State.StarGift]) -> Signal<StarGiftCollection?, NoError> {
         return self.updateCollection(id: id, actions: [.addGifts(gifts)])
     }
         
     public func removeGifts(id: Int32, gifts: [StarGiftReference]) -> Signal<StarGiftCollection?, NoError> {
-        return self.updateCollection(id: id, actions: [.addGifts(gifts)])
+        return self.updateCollection(id: id, actions: [.removeGifts(gifts)])
     }
 
     public func reorderGifts(id: Int32, gifts: [StarGiftReference]) -> Signal<StarGiftCollection?, NoError> {
@@ -391,6 +416,7 @@ public final class StarGiftCollectionsContext {
             guard let self else {
                 return
             }
+            self.giftsContexts.removeValue(forKey: id)
             self.collections.removeAll(where: { $0.id == id })
             self.pushState()
             self.reload()
