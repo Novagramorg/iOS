@@ -1648,6 +1648,22 @@ private final class ProfileGiftsContextImpl {
         self.pushState()
     }
     
+    func insertStarGifts(gifts: [ProfileGiftsContext.State.StarGift]) {
+        self.gifts.insert(contentsOf: gifts, at: 0)
+        self.pushState()
+    }
+    
+    func removeStarGifts(references: [StarGiftReference]) {
+        self.gifts.removeAll(where: {
+            if let reference = $0.reference {
+                return references.contains(reference)
+            } else {
+                return false
+            }
+        })
+        self.pushState()
+    }
+    
     func upgradeStarGift(formId: Int64?, reference: StarGiftReference, keepOriginalInfo: Bool) -> Signal<ProfileGiftsContext.State.StarGift, UpgradeStarGiftError> {
         return Signal { [weak self] subscriber in
             guard let self else {
@@ -2074,6 +2090,9 @@ public final class ProfileGiftsContext {
         }
     }
     
+    public let peerId: EnginePeer.Id
+    public let collectionId: Int32?
+    
     public init(
         account: Account,
         peerId: EnginePeer.Id,
@@ -2081,6 +2100,9 @@ public final class ProfileGiftsContext {
         sorting: ProfileGiftsContext.Sorting = .date,
         filter: ProfileGiftsContext.Filters = .All
     ) {
+        self.peerId = peerId
+        self.collectionId = collectionId
+        
         let queue = self.queue
         self.impl = QueueLocalObject(queue: queue, generate: {
             return ProfileGiftsContextImpl(queue: queue, account: account, peerId: peerId, collectionId: collectionId, sorting: sorting, filter: filter)
@@ -2143,6 +2165,18 @@ public final class ProfileGiftsContext {
         }
     }
     
+    public func insertStarGifts(gifts: [ProfileGiftsContext.State.StarGift]) {
+        self.impl.with { impl in
+            impl.insertStarGifts(gifts: gifts)
+        }
+    }
+    
+    public func removeStarGifts(references: [StarGiftReference]) {
+        self.impl.with { impl in
+            impl.removeStarGifts(references: references)
+        }
+    }
+
     public func transferStarGift(prepaid: Bool, reference: StarGiftReference, peerId: EnginePeer.Id) -> Signal<Never, TransferStarGiftError> {
         return Signal { subscriber in
             let disposable = MetaDisposable()
