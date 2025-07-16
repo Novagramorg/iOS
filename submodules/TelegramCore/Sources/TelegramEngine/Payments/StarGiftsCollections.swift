@@ -328,7 +328,7 @@ public final class StarGiftCollectionsContext {
         }
     }
     
-    private func updateCollection(id: Int32, actions: [UpdateAction]) -> Signal<StarGiftCollection?, NoError> {
+    public func updateCollection(id: Int32, actions: [UpdateAction]) -> Signal<StarGiftCollection?, NoError> {
         return _internal_updateStarGiftCollection(account: self.account, peerId: self.peerId, collectionId: id, actions: actions)
         |> deliverOn(self.queue)
         |> afterNext { [weak self] collection in
