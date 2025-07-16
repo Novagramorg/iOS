@@ -133,12 +133,12 @@ private func _internal_getStarGiftCollections(postbox: Postbox, network: Network
     }
 }
 
-private func _internal_createStarGiftCollection(account: Account, peerId: EnginePeer.Id, title: String, starGifts: [StarGiftReference]) -> Signal<StarGiftCollection?, NoError> {
+private func _internal_createStarGiftCollection(account: Account, peerId: EnginePeer.Id, title: String, starGifts: [ProfileGiftsContext.State.StarGift]) -> Signal<StarGiftCollection?, NoError> {
     return account.postbox.transaction { transaction -> (Api.InputPeer, [Api.InputSavedStarGift])? in
         guard let inputPeer = transaction.getPeer(peerId).flatMap(apiInputPeer) else {
             return nil
         }
-        let inputStarGifts = starGifts.compactMap { $0.apiStarGiftReference(transaction: transaction) }
+        let inputStarGifts = starGifts.compactMap { $0.reference }.compactMap { $0.apiStarGiftReference(transaction: transaction) }
         return (inputPeer, inputStarGifts)
     }
     |> mapToSignal { inputPeerAndGifts -> Signal<StarGiftCollection?, NoError> in
@@ -156,6 +156,13 @@ private func _internal_createStarGiftCollection(account: Account, peerId: Engine
                 return nil
             }
             return StarGiftCollection(apiStarGiftCollection: result)
+        }
+        |> beforeNext { collection in
+            let _ = account.postbox.transaction { transaction in
+                if let collection, let entry = CodableEntry(CachedProfileGifts(gifts: starGifts.map { $0.withPinnedToTop(false) }, count: Int32(starGifts.count), notificationsEnabled: nil)) {
+                    transaction.putItemCacheEntry(id: giftsEntryId(peerId: peerId, collectionId: collection.id), entry: entry)
+                }
+            }.start()
         }
     }
 }
@@ -191,7 +198,7 @@ private func _internal_updateStarGiftCollection(account: Account, peerId: Engine
         case let .removeGifts(gifts):
             giftsContext?.removeStarGifts(references: gifts)
         case let .reorderGifts(gifts):
-            let _ = gifts
+            giftsContext?.reorderStarGifts(references: gifts)
         default:
             break
         }
@@ -337,10 +344,10 @@ public final class ProfileGiftsCollectionsContext {
         }))
     }
     
-    public func createCollection(title: String, starGifts: [StarGiftReference]) -> Signal<StarGiftCollection?, NoError> {
+    public func createCollection(title: String, starGifts: [ProfileGiftsContext.State.StarGift]) -> Signal<StarGiftCollection?, NoError> {
         return _internal_createStarGiftCollection(account: self.account, peerId: self.peerId, title: title, starGifts: starGifts)
         |> deliverOn(self.queue)
-        |> afterNext { [weak self] collection in
+        |> beforeNext { [weak self] collection in
             guard let self else {
                 return
             }
@@ -348,7 +355,6 @@ public final class ProfileGiftsCollectionsContext {
                 self.collections.append(collection)
                 self.pushState()
             }
-            self.reload()
         }
     }
     
@@ -366,7 +372,6 @@ public final class ProfileGiftsCollectionsContext {
                     self.pushState()
                 }
             }
-            self.reload()
         }
     }
     
@@ -405,7 +410,6 @@ public final class ProfileGiftsCollectionsContext {
             }
             self.collections = collections
             self.pushState()
-            self.reload()
         }
     }
     
@@ -419,7 +423,6 @@ public final class ProfileGiftsCollectionsContext {
             self.giftsContexts.removeValue(forKey: id)
             self.collections.removeAll(where: { $0.id == id })
             self.pushState()
-            self.reload()
         }
     }
     
