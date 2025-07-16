@@ -1119,7 +1119,7 @@ func _internal_starGiftUpgradePreview(account: Account, giftId: Int64) -> Signal
     }
 }
 
-private final class CachedProfileGifts: Codable {
+final class CachedProfileGifts: Codable {
     enum CodingKeys: String, CodingKey {
         case gifts
         case count
@@ -1162,7 +1162,7 @@ private final class CachedProfileGifts: Codable {
     }
 }
 
-private func entryId(peerId: EnginePeer.Id, collectionId: Int32?) -> ItemCacheEntryId {
+func giftsEntryId(peerId: EnginePeer.Id, collectionId: Int32?) -> ItemCacheEntryId {
     let cacheKey: ValueBoxKey
     if let collectionId {
         cacheKey = ValueBoxKey(length: 8 + 4)
@@ -1255,7 +1255,7 @@ private final class ProfileGiftsContextImpl {
         if case let .ready(true, initialNextOffset) = dataState {
             if !isFiltered || isUniqueOnlyFilter, self.gifts.isEmpty, initialNextOffset == nil, !reload {
                 self.cacheDisposable.set((self.account.postbox.transaction { transaction -> CachedProfileGifts? in
-                    let cachedGifts = transaction.retrieveItemCacheEntry(id: entryId(peerId: peerId, collectionId: collectionId))?.get(CachedProfileGifts.self)
+                    let cachedGifts = transaction.retrieveItemCacheEntry(id: giftsEntryId(peerId: peerId, collectionId: collectionId))?.get(CachedProfileGifts.self)
                     cachedGifts?.render(transaction: transaction)
                     return cachedGifts
                 } |> deliverOn(self.queue)).start(next: { [weak self] cachedGifts in
@@ -1377,7 +1377,7 @@ private final class ProfileGiftsContextImpl {
                         self.gifts = gifts
                         self.cacheDisposable.set(self.account.postbox.transaction { transaction in
                             if let entry = CodableEntry(CachedProfileGifts(gifts: gifts, count: count, notificationsEnabled: notificationsEnabled)) {
-                                transaction.putItemCacheEntry(id: entryId(peerId: peerId, collectionId: collectionId), entry: entry)
+                                transaction.putItemCacheEntry(id: giftsEntryId(peerId: peerId, collectionId: collectionId), entry: entry)
                             }
                         }.start())
                     } else {
@@ -1651,6 +1651,24 @@ private final class ProfileGiftsContextImpl {
     func insertStarGifts(gifts: [ProfileGiftsContext.State.StarGift]) {
         self.gifts.insert(contentsOf: gifts, at: 0)
         self.pushState()
+        
+        let peerId = self.peerId
+        let collectionId = self.collectionId
+        self.cacheDisposable.set(self.account.postbox.transaction { transaction in
+            var updatedGifts: [ProfileGiftsContext.State.StarGift] = []
+            var updatedCount: Int32 = 0
+            if let cachedGifts = transaction.retrieveItemCacheEntry(id: giftsEntryId(peerId: peerId, collectionId: collectionId))?.get(CachedProfileGifts.self) {
+                updatedGifts = cachedGifts.gifts
+                updatedCount = cachedGifts.count
+            } else {
+                updatedGifts = []
+            }
+            updatedGifts.insert(contentsOf: gifts, at: 0)
+            updatedCount += Int32(gifts.count)
+            if let entry = CodableEntry(CachedProfileGifts(gifts: updatedGifts, count: updatedCount, notificationsEnabled: nil)) {
+                transaction.putItemCacheEntry(id: giftsEntryId(peerId: peerId, collectionId: collectionId), entry: entry)
+            }
+        }.start())
     }
     
     func removeStarGifts(references: [StarGiftReference]) {
@@ -1661,6 +1679,54 @@ private final class ProfileGiftsContextImpl {
                 return false
             }
         })
+        self.pushState()
+        
+        let peerId = self.peerId
+        let collectionId = self.collectionId
+        self.cacheDisposable.set(self.account.postbox.transaction { transaction in
+            var updatedGifts: [ProfileGiftsContext.State.StarGift] = []
+            var updatedCount: Int32 = 0
+            if let cachedGifts = transaction.retrieveItemCacheEntry(id: giftsEntryId(peerId: peerId, collectionId: collectionId))?.get(CachedProfileGifts.self) {
+                updatedGifts = cachedGifts.gifts
+                updatedCount = cachedGifts.count
+            } else {
+                updatedGifts = []
+            }
+            updatedGifts = updatedGifts.filter { gift in
+                if let reference = gift.reference {
+                    return !references.contains(reference)
+                } else {
+                    return true
+                }
+            }
+            updatedCount -= Int32(references.count)
+            if let entry = CodableEntry(CachedProfileGifts(gifts: updatedGifts, count: updatedCount, notificationsEnabled: nil)) {
+                transaction.putItemCacheEntry(id: giftsEntryId(peerId: peerId, collectionId: collectionId), entry: entry)
+            }
+        }.start())
+    }
+    
+    func reorderStarGifts(references: [StarGiftReference]) {
+        let giftsSet = Set(references)
+        var giftsMap: [StarGiftReference: ProfileGiftsContext.State.StarGift] = [:]
+        for gift in self.gifts {
+            if let reference = gift.reference {
+                giftsMap[reference] = gift
+            }
+        }
+        var updatedGifts: [ProfileGiftsContext.State.StarGift] = []
+        for reference in references {
+            if let gift = giftsMap[reference] {
+                updatedGifts.append(gift)
+            }
+        }
+        for gift in self.gifts {
+            if let reference = gift.reference, giftsSet.contains(reference) {
+                continue
+            }
+            updatedGifts.append(gift)
+        }
+        self.gifts = updatedGifts
         self.pushState()
     }
     
@@ -2174,6 +2240,12 @@ public final class ProfileGiftsContext {
     public func removeStarGifts(references: [StarGiftReference]) {
         self.impl.with { impl in
             impl.removeStarGifts(references: references)
+        }
+    }
+    
+    public func reorderStarGifts(references: [StarGiftReference]) {
+        self.impl.with { impl in
+            impl.reorderStarGifts(references: references)
         }
     }
 
