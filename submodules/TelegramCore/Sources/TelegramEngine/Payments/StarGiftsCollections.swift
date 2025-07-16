@@ -358,7 +358,7 @@ public final class ProfileGiftsCollectionsContext {
         }
     }
     
-    private func updateCollection(id: Int32, actions: [UpdateAction]) -> Signal<StarGiftCollection?, NoError> {
+    public func updateCollection(id: Int32, actions: [UpdateAction]) -> Signal<StarGiftCollection?, NoError> {
         let giftsContext = self.giftsContextForCollection(id: id)
         return _internal_updateStarGiftCollection(account: self.account, peerId: self.peerId, collectionId: id, giftsContext: giftsContext, actions: actions)
         |> deliverOn(self.queue)
