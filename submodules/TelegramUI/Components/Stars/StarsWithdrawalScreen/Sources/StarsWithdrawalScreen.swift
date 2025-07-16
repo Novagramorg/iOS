@@ -1432,6 +1432,8 @@ private final class AmountFieldComponent: Component {
         private weak var state: EmptyComponentState?
         private var isUpdating: Bool = false
         
+        private var didSetValueOnce = false
+        
         override init(frame: CGRect) {
             self.placeholderView = ComponentView<Empty>()
             self.textField = TextFieldNodeView(frame: .zero)
@@ -1470,7 +1472,7 @@ private final class AmountFieldComponent: Component {
             }
             
             self.textField.textColor = component.textColor
-            if self.component?.currency != component.currency {
+            if self.component?.currency != component.currency || ((self.textField.text ?? "").isEmpty && !self.didSetValueOnce) {
                 if let value = component.value, value != .zero {
                     var text = ""
                     switch component.currency {
@@ -1480,6 +1482,7 @@ private final class AmountFieldComponent: Component {
                         text = "\(formatTonAmountText(value, dateTimeFormat: PresentationDateTimeFormat(timeFormat: component.dateTimeFormat.timeFormat, dateFormat: component.dateTimeFormat.dateFormat, dateSeparator: "", dateSuffix: "", requiresFullYear: false, decimalSeparator: ".", groupingSeparator: "")))"
                     }
                     self.textField.text = text
+                    self.didSetValueOnce = true
                 } else {
                     self.textField.text = ""
                 }
