@@ -1,4 +1,62 @@
 public extension Api {
+    enum StarGiftCollection: TypeConstructorDescription {
+        case starGiftCollection(flags: Int32, collectionId: Int32, title: String, icon: Api.Document?, giftsCount: Int32, hash: Int64)
+    
+    public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+    switch self {
+                case .starGiftCollection(let flags, let collectionId, let title, let icon, let giftsCount, let hash):
+                    if boxed {
+                        buffer.appendInt32(-1653926992)
+                    }
+                    serializeInt32(flags, buffer: buffer, boxed: false)
+                    serializeInt32(collectionId, buffer: buffer, boxed: false)
+                    serializeString(title, buffer: buffer, boxed: false)
+                    if Int(flags) & Int(1 << 0) != 0 {icon!.serialize(buffer, true)}
+                    serializeInt32(giftsCount, buffer: buffer, boxed: false)
+                    serializeInt64(hash, buffer: buffer, boxed: false)
+                    break
+    }
+    }
+    
+    public func descriptionFields() -> (String, [(String, Any)]) {
+        switch self {
+                case .starGiftCollection(let flags, let collectionId, let title, let icon, let giftsCount, let hash):
+                return ("starGiftCollection", [("flags", flags as Any), ("collectionId", collectionId as Any), ("title", title as Any), ("icon", icon as Any), ("giftsCount", giftsCount as Any), ("hash", hash as Any)])
+    }
+    }
+    
+        public static func parse_starGiftCollection(_ reader: BufferReader) -> StarGiftCollection? {
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: Int32?
+            _2 = reader.readInt32()
+            var _3: String?
+            _3 = parseString(reader)
+            var _4: Api.Document?
+            if Int(_1!) & Int(1 << 0) != 0 {if let signature = reader.readInt32() {
+                _4 = Api.parse(reader, signature: signature) as? Api.Document
+            } }
+            var _5: Int32?
+            _5 = reader.readInt32()
+            var _6: Int64?
+            _6 = reader.readInt64()
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            let _c3 = _3 != nil
+            let _c4 = (Int(_1!) & Int(1 << 0) == 0) || _4 != nil
+            let _c5 = _5 != nil
+            let _c6 = _6 != nil
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 {
+                return Api.StarGiftCollection.starGiftCollection(flags: _1!, collectionId: _2!, title: _3!, icon: _4, giftsCount: _5!, hash: _6!)
+            }
+            else {
+                return nil
+            }
+        }
+    
+    }
+}
+public extension Api {
     enum StarRefProgram: TypeConstructorDescription {
         case starRefProgram(flags: Int32, botId: Int64, commissionPermille: Int32, durationMonths: Int32?, endDate: Int32?, dailyRevenuePerUser: Api.StarsAmount?)
     
@@ -1234,52 +1292,6 @@ public extension Api {
             let _c2 = _2 != nil
             if _c1 && _c2 {
                 return Api.StickerKeyword.stickerKeyword(documentId: _1!, keyword: _2!)
-            }
-            else {
-                return nil
-            }
-        }
-    
-    }
-}
-public extension Api {
-    enum StickerPack: TypeConstructorDescription {
-        case stickerPack(emoticon: String, documents: [Int64])
-    
-    public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-    switch self {
-                case .stickerPack(let emoticon, let documents):
-                    if boxed {
-                        buffer.appendInt32(313694676)
-                    }
-                    serializeString(emoticon, buffer: buffer, boxed: false)
-                    buffer.appendInt32(481674261)
-                    buffer.appendInt32(Int32(documents.count))
-                    for item in documents {
-                        serializeInt64(item, buffer: buffer, boxed: false)
-                    }
-                    break
-    }
-    }
-    
-    public func descriptionFields() -> (String, [(String, Any)]) {
-        switch self {
-                case .stickerPack(let emoticon, let documents):
-                return ("stickerPack", [("emoticon", emoticon as Any), ("documents", documents as Any)])
-    }
-    }
-    
-        public static func parse_stickerPack(_ reader: BufferReader) -> StickerPack? {
-            var _1: String?
-            _1 = parseString(reader)
-            var _2: [Int64]?
-            if let _ = reader.readInt32() {
-                _2 = Api.parseVector(reader, elementSignature: 570911930, elementType: Int64.self)
-            }
-            let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            if _c1 && _c2 {
-                return Api.StickerPack.stickerPack(emoticon: _1!, documents: _2!)
             }
             else {
                 return nil

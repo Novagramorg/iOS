@@ -14686,3 +14686,7 @@ Sorry for the inconvenience.";
 "Gift.Unique.CollectibleBy" = "collectible %1$@ by %2$@";
 
 "SendInviteLink.TextCallsRestrictedSendOneInviteLink" = "**%@** restricts calling them. You can send them an invite link to call instead.";
+
+"Chat.ReplyPanel.ReplyToTodoItem" = "Reply to Checklist Item";
+
+"Chat.Todo.ReplyToItem" = "Reply to Item";

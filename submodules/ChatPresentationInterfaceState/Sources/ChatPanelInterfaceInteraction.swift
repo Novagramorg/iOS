@@ -69,7 +69,7 @@ public final class ChatPanelInterfaceInteraction {
         case editPrice
     }
     
-    public let setupReplyMessage: (MessageId?, @escaping (ContainedViewLayoutTransition, @escaping () -> Void) -> Void) -> Void
+    public let setupReplyMessage: (MessageId?, Int32?, @escaping (ContainedViewLayoutTransition, @escaping () -> Void) -> Void) -> Void
     public let setupEditMessage: (MessageId?, @escaping (ContainedViewLayoutTransition) -> Void) -> Void
     public let beginMessageSelection: ([MessageId], @escaping (ContainedViewLayoutTransition) -> Void) -> Void
     public let cancelMessageSelection: (ContainedViewLayoutTransition) -> Void
@@ -192,7 +192,7 @@ public final class ChatPanelInterfaceInteraction {
     public let statuses: ChatPanelInterfaceInteractionStatuses?
     
     public init(
-        setupReplyMessage: @escaping (MessageId?, @escaping (ContainedViewLayoutTransition, @escaping () -> Void) -> Void) -> Void,
+        setupReplyMessage: @escaping (MessageId?, Int32?, @escaping (ContainedViewLayoutTransition, @escaping () -> Void) -> Void) -> Void,
         setupEditMessage: @escaping (MessageId?, @escaping (ContainedViewLayoutTransition) -> Void) -> Void,
         beginMessageSelection: @escaping ([MessageId], @escaping (ContainedViewLayoutTransition) -> Void) -> Void,
         cancelMessageSelection: @escaping (ContainedViewLayoutTransition) -> Void,
@@ -443,7 +443,7 @@ public final class ChatPanelInterfaceInteraction {
         updateInputModeAndDismissedButtonKeyboardMessageId: @escaping ((ChatPresentationInterfaceState) -> (ChatInputMode, MessageId?)) -> Void,
         openLinkEditing: @escaping () -> Void
     ) {
-        self.init(setupReplyMessage: { _, _ in
+        self.init(setupReplyMessage: { _, _, _ in
         }, setupEditMessage: { _, _ in
         }, beginMessageSelection: { _, _ in
         }, cancelMessageSelection: { _ in

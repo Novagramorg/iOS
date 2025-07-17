@@ -315,6 +315,12 @@ public enum PremiumSource: Equatable {
             } else {
                 return false
             }
+        case let .premiumGift(lhsFile):
+            if case let .premiumGift(rhsFile) = rhs, lhsFile.id == rhsFile.id {
+                return true
+            } else {
+                return false
+            }
         }
     }
     
@@ -364,6 +370,7 @@ public enum PremiumSource: Equatable {
     case messageEffects
     case todo
     case auth(String)
+    case premiumGift(TelegramMediaFile)
     
     var identifier: String? {
         switch self {
@@ -461,6 +468,8 @@ public enum PremiumSource: Equatable {
             return "todo"
         case .auth:
             return "auth"
+        case .premiumGift:
+            return "premium_gift"
         }
     }
 }
@@ -1817,7 +1826,10 @@ private final class PremiumIntroScreenContentComponent: CombinedComponent {
             
             var link = ""
             let textString: String
-            if case .emojiStatus = context.component.source {
+            if case .premiumGift = context.component.source {
+                //TODO:localize
+                textString = "Subscribe to **Telegram Premium** to send up to **5** of these gifts and unlock access to multiple additional features."
+            } else if case .emojiStatus = context.component.source {
                 textString = strings.Premium_EmojiStatusText.replacingOccurrences(of: "#", with: "# ")
             } else if case .giftTerms = context.component.source {
                 textString = strings.Premium_PersonalDescription
@@ -3354,6 +3366,22 @@ private final class PremiumIntroScreenComponent: CombinedComponent {
                     availableSize: CGSize(width: min(414.0, context.availableSize.width), height: 220.0),
                     transition: context.transition
                 )
+            } else if case let .premiumGift(file) = context.component.source, case let .accountContext(accountContext) = context.component.screenContext {
+                header = emoji.update(
+                    component: EmojiHeaderComponent(
+                        context: accountContext,
+                        animationCache: accountContext.animationCache,
+                        animationRenderer: accountContext.animationRenderer,
+                        placeholderColor: environment.theme.list.mediaPlaceholderColor,
+                        accentColor: environment.theme.list.itemAccentColor,
+                        fileId: file.fileId.id,
+                        file: file,
+                        isVisible: starIsVisible,
+                        hasIdleAnimations: state.hasIdleAnimations
+                    ),
+                    availableSize: CGSize(width: min(414.0, context.availableSize.width), height: 220.0),
+                    transition: context.transition
+                )
             } else {
                 header = star.update(
                     component: PremiumStarComponent(
@@ -3389,7 +3417,10 @@ private final class PremiumIntroScreenComponent: CombinedComponent {
             )
             
             let titleString: String
-            if case .business = context.component.mode {
+            if case .premiumGift = context.component.source {
+                //TODO:localize
+                titleString = "Premium Gift"
+            } else if case .business = context.component.mode {
                 titleString = environment.strings.Business_Title
             } else if case .emojiStatus = context.component.source {
                 titleString = environment.strings.Premium_Title

@@ -413,7 +413,7 @@ public class ChatMessageTextBubbleContentNode: ChatMessageBubbleContentNode {
                 }
                 
                 
-                if item.associatedData.isSuspiciousPeer, let entities = messageEntities {
+                if incoming && item.associatedData.isSuspiciousPeer, let entities = messageEntities {
                     messageEntities = entities.filter { entity in
                         switch entity.type {
                         case .Url, .TextUrl, .Mention, .TextMention, .Hashtag, .Email, .BankCard:
