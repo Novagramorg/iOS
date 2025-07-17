@@ -165,8 +165,10 @@ private final class PromptAlertContentNode: AlertContentNode {
     private let strings: PresentationStrings
     private let text: String
     private let titleFont: PromptControllerTitleFont
+    private let subtitle: String?
 
     private let textNode: ASTextNode
+    private let subtitleNode: ASTextNode?
     let inputFieldNode: PromptInputFieldNode
     
     private let actionNodesSeparator: ASDisplayNode
@@ -189,13 +191,22 @@ private final class PromptAlertContentNode: AlertContentNode {
         return self.isUserInteractionEnabled
     }
     
-    init(theme: AlertControllerTheme, ptheme: PresentationTheme, strings: PresentationStrings, actions: [TextAlertAction], text: String, titleFont: PromptControllerTitleFont, value: String?, placeholder: String?, characterLimit: Int) {
+    init(theme: AlertControllerTheme, ptheme: PresentationTheme, strings: PresentationStrings, actions: [TextAlertAction], text: String, titleFont: PromptControllerTitleFont, subtitle: String?, value: String?, placeholder: String?, characterLimit: Int) {
         self.strings = strings
         self.text = text
         self.titleFont = titleFont
+        self.subtitle = subtitle
         
         self.textNode = ASTextNode()
         self.textNode.maximumNumberOfLines = 2
+        
+        if subtitle != nil {
+            let subtitleNode = ASTextNode()
+            subtitleNode.maximumNumberOfLines = 0
+            self.subtitleNode = subtitleNode
+        } else {
+            self.subtitleNode = nil
+        }
         
         self.inputFieldNode = PromptInputFieldNode(theme: ptheme, placeholder: placeholder ?? "", characterLimit: characterLimit)
         self.inputFieldNode.text = value ?? ""
@@ -220,6 +231,9 @@ private final class PromptAlertContentNode: AlertContentNode {
         super.init()
         
         self.addSubnode(self.textNode)
+        if let subtitleNode = self.subtitleNode {
+            self.addSubnode(subtitleNode)
+        }
         
         self.addSubnode(self.inputFieldNode)
 
@@ -268,6 +282,10 @@ private final class PromptAlertContentNode: AlertContentNode {
             titleFontValue = Font.semibold(17.0)
         }
         self.textNode.attributedText = NSAttributedString(string: self.text, font: titleFontValue, textColor: theme.primaryColor, paragraphAlignment: .center)
+        
+        if let subtitle = self.subtitle, let subtitleNode = self.subtitleNode {
+            subtitleNode.attributedText = NSAttributedString(string: subtitle, font: Font.regular(13.0), textColor: theme.primaryColor, paragraphAlignment: .center)
+        }
 
         self.actionNodesSeparator.backgroundColor = theme.separatorColor
         for actionNode in self.actionNodes {
@@ -302,6 +320,14 @@ private final class PromptAlertContentNode: AlertContentNode {
         transition.updateFrame(node: self.textNode, frame: CGRect(origin: CGPoint(x: floorToScreenPixels((size.width - textSize.width) / 2.0), y: origin.y), size: textSize))
         origin.y += textSize.height + 6.0 + spacing
         
+        var subtitleSize: CGSize?
+        if let subtitleNode {
+            let subtitleSizeValue = subtitleNode.measure(measureSize)
+            subtitleSize = subtitleSizeValue
+            transition.updateFrame(node: subtitleNode, frame: CGRect(origin: CGPoint(x: floorToScreenPixels((size.width - subtitleSizeValue.width) / 2.0), y: origin.y), size: subtitleSizeValue))
+            origin.y += subtitleSizeValue.height + 6.0 + spacing
+        }
+        
         let actionButtonHeight: CGFloat = 44.0
         var minActionsWidth: CGFloat = 0.0
         let maxActionWidth: CGFloat = floor(size.width / CGFloat(self.actionNodes.count))
@@ -324,6 +350,9 @@ private final class PromptAlertContentNode: AlertContentNode {
         let insets = UIEdgeInsets(top: 18.0, left: 18.0, bottom: 9.0, right: 18.0)
         
         var contentWidth = max(titleSize.width, minActionsWidth)
+        if let subtitleSize {
+            contentWidth = max(contentWidth, subtitleSize.width)
+        }
         contentWidth = max(contentWidth, 234.0)
         
         var actionsHeight: CGFloat = 0.0
@@ -342,7 +371,10 @@ private final class PromptAlertContentNode: AlertContentNode {
         transition.updateFrame(node: self.inputFieldNode, frame: CGRect(x: 0.0, y: origin.y, width: resultWidth, height: inputFieldHeight))
         transition.updateAlpha(node: self.inputFieldNode, alpha: inputHeight > 0.0 ? 1.0 : 0.0)
         
-        let resultSize = CGSize(width: resultWidth, height: titleSize.height + textSize.height + spacing + inputHeight + actionsHeight  + insets.top + insets.bottom)
+        var resultSize = CGSize(width: resultWidth, height: titleSize.height + textSize.height + spacing + inputHeight + actionsHeight  + insets.top + insets.bottom)
+        if let subtitleSize {
+            resultSize.height += subtitleSize.height + spacing
+        }
         
         transition.updateFrame(node: self.actionNodesSeparator, frame: CGRect(origin: CGPoint(x: 0.0, y: resultSize.height - actionsHeight - UIScreenPixel), size: CGSize(width: resultSize.width, height: UIScreenPixel)))
         
@@ -407,7 +439,7 @@ public enum PromptControllerTitleFont {
     case bold
 }
 
-public func promptController(sharedContext: SharedAccountContext, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)? = nil, text: String, titleFont: PromptControllerTitleFont = .regular, value: String?, placeholder: String? = nil, characterLimit: Int = 1000, apply: @escaping (String?) -> Void) -> AlertController {
+public func promptController(sharedContext: SharedAccountContext, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)? = nil, text: String, titleFont: PromptControllerTitleFont = .regular, subtitle: String? = nil, value: String?, placeholder: String? = nil, characterLimit: Int = 1000, apply: @escaping (String?) -> Void) -> AlertController {
     let presentationData = updatedPresentationData?.initial ?? sharedContext.currentPresentationData.with { $0 }
     
     var dismissImpl: ((Bool) -> Void)?
@@ -421,7 +453,7 @@ public func promptController(sharedContext: SharedAccountContext, updatedPresent
         applyImpl?()
     })]
     
-    let contentNode = PromptAlertContentNode(theme: AlertControllerTheme(presentationData: presentationData), ptheme: presentationData.theme, strings: presentationData.strings, actions: actions, text: text, titleFont: titleFont, value: value, placeholder: placeholder, characterLimit: characterLimit)
+    let contentNode = PromptAlertContentNode(theme: AlertControllerTheme(presentationData: presentationData), ptheme: presentationData.theme, strings: presentationData.strings, actions: actions, text: text, titleFont: titleFont, subtitle: subtitle, value: value, placeholder: placeholder, characterLimit: characterLimit)
     contentNode.complete = {
         dismissImpl?(true)
         applyImpl?()

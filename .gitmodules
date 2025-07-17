@@ -32,3 +32,6 @@ url=../tgcalls.git
 [submodule "third-party/td/td"]
 	path = third-party/td/td
 	url = https://github.com/tdlib/td
+[submodule "third-party/XcodeGen"]
+	path = third-party/XcodeGen
+	url = https://github.com/yonaskolb/XcodeGen.git

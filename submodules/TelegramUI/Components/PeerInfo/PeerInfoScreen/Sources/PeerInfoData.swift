@@ -677,7 +677,7 @@ public func keepPeerInfoScreenDataHot(context: AccountContext, peerId: PeerId, c
             
             if case .user = inputData {
                 signals.append(Signal { _ in
-                    let listContext = PeerStoryListContext(account: context.account, peerId: peerId, isArchived: false)
+                    let listContext = PeerStoryListContext(account: context.account, peerId: peerId, isArchived: false, folderId: nil)
                     let expiringListContext = PeerExpiringStoryListContext(account: context.account, peerId: peerId)
                     
                     return ActionDisposable {
@@ -829,7 +829,7 @@ func peerInfoScreenSettingsData(context: AccountContext, peerId: EnginePeer.Id, 
     )
     |> distinctUntilChanged
     
-    let storyListContext = PeerStoryListContext(account: context.account, peerId: peerId, isArchived: false)
+    let storyListContext = PeerStoryListContext(account: context.account, peerId: peerId, isArchived: false, folderId: nil)
     let hasStories: Signal<Bool?, NoError> = storyListContext.state
     |> map { state -> Bool? in
         if !state.hasCache {
@@ -1188,7 +1188,7 @@ func peerInfoScreenData(context: AccountContext, peerId: PeerId, strings: Presen
                 secretChatKeyFingerprint = context.engine.data.subscribe(TelegramEngine.EngineData.Item.Peer.SecretChatKeyFingerprint(id: secretChatId))
             }
             
-            let storyListContext = PeerStoryListContext(account: context.account, peerId: peerId, isArchived: false)
+            let storyListContext = PeerStoryListContext(account: context.account, peerId: peerId, isArchived: false, folderId: nil)
             let hasStories: Signal<Bool?, NoError> = storyListContext.state
             |> map { state -> Bool? in
                 if !state.hasCache {
@@ -1201,7 +1201,7 @@ func peerInfoScreenData(context: AccountContext, peerId: PeerId, strings: Presen
             let hasStoryArchive: Signal<Bool?, NoError>
             var storyArchiveListContext: StoryListContext?
             if isMyProfile {
-                let storyArchiveListContextValue = PeerStoryListContext(account: context.account, peerId: peerId, isArchived: true)
+                let storyArchiveListContextValue = PeerStoryListContext(account: context.account, peerId: peerId, isArchived: true, folderId: nil)
                 storyArchiveListContext = storyArchiveListContextValue
                 hasStoryArchive = storyArchiveListContextValue.state
                 |> map { state -> Bool? in
@@ -1535,7 +1535,7 @@ func peerInfoScreenData(context: AccountContext, peerId: PeerId, strings: Presen
             let requestsContextPromise = Promise<PeerInvitationImportersContext?>(nil)
             let requestsStatePromise = Promise<PeerInvitationImportersState?>(nil)
             
-            let storyListContext = PeerStoryListContext(account: context.account, peerId: peerId, isArchived: false)
+            let storyListContext = PeerStoryListContext(account: context.account, peerId: peerId, isArchived: false, folderId: nil)
             let hasStories: Signal<Bool?, NoError> = storyListContext.state
             |> map { state -> Bool? in
                 if !state.hasCache {
@@ -1857,7 +1857,7 @@ func peerInfoScreenData(context: AccountContext, peerId: PeerId, strings: Presen
             let storyListContext: StoryListContext?
             let hasStories: Signal<Bool?, NoError>
             if peerId.namespace == Namespaces.Peer.CloudChannel {
-                storyListContext = PeerStoryListContext(account: context.account, peerId: peerId, isArchived: false)
+                storyListContext = PeerStoryListContext(account: context.account, peerId: peerId, isArchived: false, folderId: nil)
                 hasStories = storyListContext!.state
                 |> map { state -> Bool? in
                     if !state.hasCache {

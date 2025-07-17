@@ -1688,6 +1688,39 @@ private final class StoryContainerScreenComponent: Component {
                                         performReorderAction?()
                                     })
                                 },
+                                createToFolder: { [weak self] title, items in
+                                    guard let self, let component = self.component else {
+                                        return
+                                    }
+                                    
+                                    if let content = component.content as? PeerStoryListContentContextImpl {
+                                        if let listSource = content.listContext as? PeerStoryListContext {
+                                            listSource.addFolder(title: title, completion: { [weak listSource] id in
+                                                Queue.mainQueue().async {
+                                                    guard let listSource else {
+                                                        return
+                                                    }
+                                                    if !items.isEmpty {
+                                                        listSource.addToFolder(id: id, items: items)
+                                                    }
+                                                }
+                                            })
+                                        }
+                                    }
+                                },
+                                addToFolder: { [weak self] folderId in
+                                    guard let self, let component = self.component else {
+                                        return
+                                    }
+                                    guard let stateValue = self.stateValue, let slice = stateValue.slice else {
+                                        return
+                                    }
+                                    if let content = component.content as? PeerStoryListContentContextImpl {
+                                        if let listSource = content.listContext as? PeerStoryListContext {
+                                            listSource.addToFolder(id: folderId, items: [slice.item.storyItem])
+                                        }
+                                    }
+                                },
                                 controller: { [weak self] in
                                     return self?.environment?.controller()
                                 },

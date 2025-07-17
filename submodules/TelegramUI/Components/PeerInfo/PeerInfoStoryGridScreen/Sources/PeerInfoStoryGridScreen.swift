@@ -24,15 +24,18 @@ final class PeerInfoStoryGridScreenComponent: Component {
     let context: AccountContext
     let peerId: EnginePeer.Id
     let scope: PeerInfoStoryGridScreen.Scope
+    let selectionModeCompletion: (([EngineStoryItem]) -> Void)?
 
     init(
         context: AccountContext,
         peerId: EnginePeer.Id,
-        scope: PeerInfoStoryGridScreen.Scope
+        scope: PeerInfoStoryGridScreen.Scope,
+        selectionModeCompletion: (([EngineStoryItem]) -> Void)?
     ) {
         self.context = context
         self.peerId = peerId
         self.scope = scope
+        self.selectionModeCompletion = selectionModeCompletion
     }
 
     static func ==(lhs: PeerInfoStoryGridScreenComponent, rhs: PeerInfoStoryGridScreenComponent) -> Bool {
@@ -342,11 +345,24 @@ final class PeerInfoStoryGridScreenComponent: Component {
                 }
                 
                 let buttonText: String
-                switch component.scope {
-                case .saved:
-                    buttonText = self.selectedCount > 0 ? environment.strings.ChatList_Context_Archive : environment.strings.StoryList_SavedAddAction
-                case .archive:
-                    buttonText = environment.strings.StoryList_SaveToProfile
+                var buttonIsEnabled = true
+                if component.selectionModeCompletion != nil {
+                    //TODO:localize
+                    if self.selectedCount == 0 {
+                        buttonText = "Add Stories"
+                        buttonIsEnabled = false
+                    } else if self.selectedCount == 1 {
+                        buttonText = "Add 1 Story"
+                    } else {
+                        buttonText = "Add \(self.selectedCount) Stories"
+                    }
+                } else {
+                    switch component.scope {
+                    case .saved:
+                        buttonText = self.selectedCount > 0 ? environment.strings.ChatList_Context_Archive : environment.strings.StoryList_SavedAddAction
+                    case .archive:
+                        buttonText = environment.strings.StoryList_SaveToProfile
+                    }
                 }
                 
                 let selectionPanelSize = selectionPanel.update(
@@ -355,13 +371,19 @@ final class PeerInfoStoryGridScreenComponent: Component {
                         theme: environment.theme,
                         title: buttonText,
                         label: nil,
-                        isEnabled: true,
+                        isEnabled: buttonIsEnabled,
                         insets: UIEdgeInsets(top: 0.0, left: sideInset, bottom: environment.safeInsets.bottom, right: sideInset),
                         action: { [weak self] in
                             guard let self, let component = self.component, let environment = self.environment else {
                                 return
                             }
                             guard let paneNode = self.paneNode else {
+                                return
+                            }
+                            
+                            if let selectionModeCompletion = component.selectionModeCompletion {
+                                selectionModeCompletion(Array(paneNode.selectedItems.values))
+                                environment.controller()?.dismiss()
                                 return
                             }
                             
@@ -522,6 +544,12 @@ final class PeerInfoStoryGridScreenComponent: Component {
                     }
                     (self.environment?.controller() as? PeerInfoStoryGridScreen)?.updateTitle()
                 })
+                
+                if component.selectionModeCompletion != nil {
+                    paneNode.shouldOpenItemsWhileInSelectionMode = false
+                    paneNode.setIsSelectionModeActive(true)
+                }
+                
                 applyState = true
             }
             
@@ -562,6 +590,7 @@ public class PeerInfoStoryGridScreen: ViewControllerComponentContainer {
     
     private let context: AccountContext
     private let scope: Scope
+    private let selectionModeCompletion: (([EngineStoryItem]) -> Void)?
     private var isDismissed: Bool = false
     
     private var titleView: ChatTitleView?
@@ -573,15 +602,18 @@ public class PeerInfoStoryGridScreen: ViewControllerComponentContainer {
     public init(
         context: AccountContext,
         peerId: EnginePeer.Id,
-        scope: Scope
+        scope: Scope,
+        selectionModeCompletion: (([EngineStoryItem]) -> Void)? = nil
     ) {
         self.context = context
         self.scope = scope
+        self.selectionModeCompletion = selectionModeCompletion
         
         super.init(context: context, component: PeerInfoStoryGridScreenComponent(
             context: context,
             peerId: peerId,
-            scope: scope
+            scope: scope,
+            selectionModeCompletion: selectionModeCompletion
         ), navigationBarAppearance: .default, theme: .default)
         
         let presentationData = context.sharedContext.currentPresentationData.with({ $0 })
@@ -636,49 +668,54 @@ public class PeerInfoStoryGridScreen: ViewControllerComponentContainer {
     func updateTitle() {
         let presentationData = self.context.sharedContext.currentPresentationData.with { $0 }
         
-        switch self.scope {
-        case .saved:
-            guard let componentView = self.node.hostView.componentView as? PeerInfoStoryGridScreenComponent.View, let paneNode = componentView.paneNode else {
-                return
-            }
-            let title: String?
-            if componentView.selectedCount != 0 {
-                title = presentationData.strings.StoryList_SubtitleSelected(Int32(componentView.selectedCount))
-            } else if let paneStatusText = componentView.paneStatusText, !paneStatusText.isEmpty {
-                title = paneStatusText
-            } else {
-                title = nil
-            }
-            self.titleView?.titleContent = .custom(presentationData.strings.StoryList_TitleSaved, title, false)
-            
-            if paneNode.isSelectionModeActive {
-                self.navigationItem.setRightBarButton(self.doneBarButtonItem, animated: false)
-            } else {
-                self.navigationItem.setRightBarButton(self.moreBarButtonItem, animated: false)
-            }
-        case .archive:
-            guard let componentView = self.node.hostView.componentView as? PeerInfoStoryGridScreenComponent.View else {
-                return
-            }
-            let title: String
-            if componentView.selectedCount != 0 {
-                title = presentationData.strings.StoryList_SubtitleSelected(Int32(componentView.selectedCount))
-            } else {
-                title = presentationData.strings.StoryList_TitleArchive
-            }
-            self.titleView?.titleContent = .custom(title, nil, false)
-            
-            var hasMenu = false
-            if componentView.selectedCount != 0 {
-                hasMenu = true
-            } else if let paneNode = componentView.paneNode, !paneNode.isEmpty {
-                hasMenu = true
-            }
-            
-            if hasMenu {
-                self.navigationItem.setRightBarButton(self.moreBarButtonItem, animated: false)
-            } else {
-                self.navigationItem.setRightBarButton(nil, animated: false)
+        if self.selectionModeCompletion != nil {
+            //TODO:localize
+            self.titleView?.titleContent = .custom("Add Stories", nil, false)
+        } else {
+            switch self.scope {
+            case .saved:
+                guard let componentView = self.node.hostView.componentView as? PeerInfoStoryGridScreenComponent.View, let paneNode = componentView.paneNode else {
+                    return
+                }
+                let title: String?
+                if componentView.selectedCount != 0 {
+                    title = presentationData.strings.StoryList_SubtitleSelected(Int32(componentView.selectedCount))
+                } else if let paneStatusText = componentView.paneStatusText, !paneStatusText.isEmpty {
+                    title = paneStatusText
+                } else {
+                    title = nil
+                }
+                self.titleView?.titleContent = .custom(presentationData.strings.StoryList_TitleSaved, title, false)
+                
+                if paneNode.isSelectionModeActive {
+                    self.navigationItem.setRightBarButton(self.doneBarButtonItem, animated: false)
+                } else {
+                    self.navigationItem.setRightBarButton(self.moreBarButtonItem, animated: false)
+                }
+            case .archive:
+                guard let componentView = self.node.hostView.componentView as? PeerInfoStoryGridScreenComponent.View else {
+                    return
+                }
+                let title: String
+                if componentView.selectedCount != 0 {
+                    title = presentationData.strings.StoryList_SubtitleSelected(Int32(componentView.selectedCount))
+                } else {
+                    title = presentationData.strings.StoryList_TitleArchive
+                }
+                self.titleView?.titleContent = .custom(title, nil, false)
+                
+                var hasMenu = false
+                if componentView.selectedCount != 0 {
+                    hasMenu = true
+                } else if let paneNode = componentView.paneNode, !paneNode.isEmpty {
+                    hasMenu = true
+                }
+                
+                if hasMenu {
+                    self.navigationItem.setRightBarButton(self.moreBarButtonItem, animated: false)
+                } else {
+                    self.navigationItem.setRightBarButton(nil, animated: false)
+                }
             }
         }
     }

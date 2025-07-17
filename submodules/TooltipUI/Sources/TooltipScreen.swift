@@ -20,6 +20,7 @@ import BalancedTextComponent
 import MultilineTextComponent
 import MultilineTextWithEntitiesComponent
 import ShimmerEffect
+import UIKitRuntimeUtils
 
 public enum TooltipActiveTextItem {
     case url(String, Bool)
@@ -1327,6 +1328,10 @@ public final class TooltipScreen: ViewController {
     
     override public func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        
+        if self.ignoreAppearanceMethodInvocations() {
+            return
+        }
         
         self.controllerNode.animateIn()
         self.resetDismissTimeout(duration: self.displayDuration)

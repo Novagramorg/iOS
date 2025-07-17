@@ -15,6 +15,9 @@ swift_library(
         "//submodules/Components/MultilineTextComponent",
         "//submodules/TelegramUI/Components/TextLoadingEffect",
         "//submodules/Components/ComponentDisplayAdapters",
+        "//submodules/TooltipUI",
+        "//submodules/AccountContext",
+        "//submodules/UIKitRuntimeUtils",
     ],
     visibility = [
         "//visibility:public",

@@ -54,6 +54,8 @@ swift_library(
         "//submodules/Components/BalancedTextComponent",
         "//submodules/TelegramUI/Components/CheckComponent",
         "//submodules/TelegramUI/Components/LottieComponent",
+        "//submodules/TelegramUI/Components/BottomButtonPanelComponent",
+        "//submodules/PromptUI",
     ],
     visibility = [
         "//visibility:public",
