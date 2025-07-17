@@ -369,6 +369,7 @@ final class GiftOptionsScreenComponent: Component {
                         }
                         
                         var ribbon: GiftItemComponent.Ribbon?
+                        var outline: GiftItemComponent.Outline?
                         var isSoldOut = false
                         switch gift {
                         case let .generic(gift):
@@ -390,6 +391,14 @@ final class GiftOptionsScreenComponent: Component {
                                     text: environment.strings.Gift_Options_Gift_Limited,
                                     color: .blue
                                 )
+                            }
+                            
+                            if gift.flags.contains(.requiresPremium) {
+                                ribbon = GiftItemComponent.Ribbon(
+                                    text: "premium",
+                                    color: .orange
+                                )
+                                outline = .orange
                             }
                         case let .unique(gift):
                             var ribbonColor: GiftItemComponent.Ribbon.Color = .blue
@@ -435,6 +444,7 @@ final class GiftOptionsScreenComponent: Component {
                                             peer: nil,
                                             subject: subject,
                                             ribbon: ribbon,
+                                            outline: outline,
                                             isSoldOut: isSoldOut
                                         )
                                     ),
@@ -449,6 +459,19 @@ final class GiftOptionsScreenComponent: Component {
                                                     mainController = controller
                                                 }
                                                 if case let .generic(gift) = gift {
+                                                    if let perUserLimit = gift.perUserLimit, perUserLimit.remains == 0 {
+                                                        //TODO:localize
+                                                        let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+                                                        let controller = UndoOverlayController(presentationData: presentationData, content: .sticker(context: component.context, file: gift.file, loop: true, title: nil, text: "You've already sent \(perUserLimit.total) of these gifts, and it's the limit.", undoText: nil, customAction: nil), action: { _ in return false })
+                                                        mainController.present(controller, in: .current)
+                                                        return
+                                                    }
+                                                    if gift.flags.contains(.requiresPremium) && !component.context.isPremium {
+                                                        let controller = component.context.sharedContext.makePremiumIntroController(context: component.context, source: .premiumGift(gift.file), forceDark: false, dismissed: nil)
+                                                        mainController.push(controller)
+                                                        return
+                                                    }
+                                                    
                                                     if let availability = gift.availability, availability.remains == 0 {
                                                         if availability.resale > 0 {
                                                             let storeController = component.context.sharedContext.makeGiftStoreController(
@@ -532,8 +555,6 @@ final class GiftOptionsScreenComponent: Component {
                     self.starsItems.removeValue(forKey: id)
                 }
             }
-            
-            
             
             var topPanelHeight = environment.navigationHeight
             let tabSelectorThreshold = self.tabSelectorOrigin - 8.0
