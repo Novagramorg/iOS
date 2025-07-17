@@ -44,6 +44,8 @@ import StoryFooterPanelComponent
 import TelegramNotices
 import SliderContextItem
 import SaveProgressScreen
+import DirectMediaImageCache
+import PromptUI
 
 public final class StoryAvailableReactions: Equatable {
     let reactionItems: [ReactionItem]
@@ -120,6 +122,8 @@ public final class StoryItemSetContainerComponent: Component {
     public let delete: () -> Void
     public let markAsSeen: (StoryId) -> Void
     public let reorder: () -> Void
+    public let createToFolder: (String, [EngineStoryItem]) -> Void
+    public let addToFolder: (Int64) -> Void
     public let controller: () -> ViewController?
     public let toggleAmbientMode: () -> Void
     public let keyboardInputData: Signal<ChatEntityKeyboardInputNode.InputData, NoError>
@@ -157,6 +161,8 @@ public final class StoryItemSetContainerComponent: Component {
         delete: @escaping () -> Void,
         markAsSeen: @escaping (StoryId) -> Void,
         reorder: @escaping () -> Void,
+        createToFolder: @escaping (String, [EngineStoryItem]) -> Void,
+        addToFolder: @escaping (Int64) -> Void,
         controller: @escaping () -> ViewController?,
         toggleAmbientMode: @escaping () -> Void,
         keyboardInputData: Signal<ChatEntityKeyboardInputNode.InputData, NoError>,
@@ -193,6 +199,8 @@ public final class StoryItemSetContainerComponent: Component {
         self.delete = delete
         self.markAsSeen = markAsSeen
         self.reorder = reorder
+        self.createToFolder = createToFolder
+        self.addToFolder = addToFolder
         self.controller = controller
         self.toggleAmbientMode = toggleAmbientMode
         self.keyboardInputData = keyboardInputData
@@ -6101,6 +6109,102 @@ public final class StoryItemSetContainerComponent: Component {
                 
                 var items: [ContextMenuItem] = []
                 
+                //TODO:localize
+                items.append(.action(ContextMenuActionItem(text: "Add to Album", icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Folder"), color: theme.contextMenu.primaryColor) }, action: { [weak self] c, f in
+                    guard let self, let c else {
+                        f(.default)
+                        return
+                    }
+                    
+                    Task { @MainActor [weak self, weak c] in
+                        guard let self, let component = self.component, let peerId = component.slice.item.peerId, let c else {
+                            return
+                        }
+                        
+                        let (peerReference, folderPreviews) = await PeerStoryListContext.folderPreviews(peerId: peerId, account: component.context.account).get()
+                        
+                        var items: [ContextMenuItem] = []
+                        items.append(.action(ContextMenuActionItem(text: presentationData.strings.Common_Back, icon: { theme in
+                            return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Back"), color: theme.contextMenu.primaryColor)
+                        }, iconPosition: .left, action: { c ,f in
+                            c?.popItems()
+                        })))
+                        items.append(.separator)
+                        
+                        items.append(.action(ContextMenuActionItem(text: "New Album", icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Folder"), color: theme.contextMenu.primaryColor) }, iconPosition: .left, action: { [weak self] c, f in
+                            guard let self else {
+                                f(.default)
+                                return
+                            }
+                            
+                            c?.dismiss(completion: { [weak self] in
+                                guard let self, let component = self.component else {
+                                    return
+                                }
+                                self.presentAddStoryFolder(addItems: [component.slice.item.storyItem])
+                            })
+                        })))
+                        
+                        for folderPreview in folderPreviews {
+                            var iconSource: ContextMenuActionItemIconSource?
+                            if let story = folderPreview.item {
+                                var imageSignal: Signal<UIImage?, NoError>?
+                                
+                                var selectedMedia: Media?
+                                if let image = story.media._asMedia() as? TelegramMediaImage {
+                                    selectedMedia = image
+                                } else if let file = story.media._asMedia() as? TelegramMediaFile {
+                                    selectedMedia = file
+                                }
+                                
+                                if let selectedMedia {
+                                    let directMediaImageCache = DirectMediaImageCache(account: component.context.account)
+                                    if let result = directMediaImageCache.getImage(peer: peerReference, story: story, media: selectedMedia, width: 24, aspectRatio: 1.0, possibleWidths: [24], includeBlurred: false, synchronous: true) {
+                                        if let loadSignal = result.loadSignal {
+                                            imageSignal = .single(result.image) |> then(loadSignal)
+                                        } else {
+                                            imageSignal = .single(result.image)
+                                        }
+                                    }
+                                }
+                                
+                                if let imageSignal {
+                                    iconSource = ContextMenuActionItemIconSource(
+                                        size: CGSize(width: 24.0, height: 24.0),
+                                        cornerRadius: 5.0,
+                                        signal: imageSignal
+                                    )
+                                }
+                            }
+                            
+                            var icon: (PresentationTheme) -> UIImage? = { _ in nil }
+                            if iconSource == nil {
+                                icon = { theme in
+                                    return generateImage(CGSize(width: 24.0, height: 24.0), opaque: false, scale: nil, rotatedContext: { size, context in
+                                        context.clear(CGRect(origin: CGPoint(), size: size))
+                                        context.setFillColor(theme.contextMenu.primaryColor.withMultipliedAlpha(0.1).cgColor)
+                                        context.addPath(UIBezierPath(roundedRect: CGRect(origin: CGPoint(), size: size), cornerRadius: 5.0).cgPath)
+                                        context.fillPath()
+                                    })
+                                }
+                            }
+                            
+                            items.append(.action(ContextMenuActionItem(text: folderPreview.folder.title, icon: icon, iconSource: iconSource, iconPosition: .left, action: { [weak self] c, f in
+                                guard let self, let component = self.component else {
+                                    f(.default)
+                                    return
+                                }
+                                
+                                c?.dismiss(completion: {})
+                                
+                                component.addToFolder(folderPreview.folder.id)
+                            })))
+                        }
+                        
+                        c.pushItems(items: .single(ContextController.Items(content: .list(items))))
+                    }
+                })))
+                
                 if case .file = component.slice.item.storyItem.media {
                     var speedValue: String = presentationData.strings.PlaybackSpeed_Normal
                     var speedIconText: String = "1x"
@@ -7026,6 +7130,34 @@ public final class StoryItemSetContainerComponent: Component {
                 self.updateIsProgressPaused()
                 controller.present(contextController, in: .window(.root))
             })
+        }
+        
+        private func presentAddStoryFolder(addItems: [EngineStoryItem] = []) {
+            guard let component = self.component else {
+                return
+            }
+            
+            let presentationData = component.context.sharedContext.currentPresentationData.with({ $0 }).withUpdated(theme: component.theme)
+            
+            let promptController = promptController(
+                sharedContext: component.context.sharedContext,
+                updatedPresentationData: (initial: presentationData, signal: .single(presentationData)),
+                text: "Create a New Album",
+                titleFont: .bold,
+                subtitle: "Choose a name for your album and start adding your stories there.",
+                value: "",
+                placeholder: "Title",
+                characterLimit: 20,
+                apply: { [weak self] value in
+                    guard let self, let component = self.component else {
+                        return
+                    }
+                    if let value {
+                        component.createToFolder(value, addItems)
+                    }
+                }
+            )
+            component.presentController(promptController, nil)
         }
         
         func displayMutedVideoTooltip() {

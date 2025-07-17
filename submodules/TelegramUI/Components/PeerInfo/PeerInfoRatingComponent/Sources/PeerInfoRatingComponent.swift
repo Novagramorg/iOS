@@ -5,42 +5,60 @@ import ComponentFlow
 import MultilineTextComponent
 import TextLoadingEffect
 import ComponentDisplayAdapters
+import TooltipUI
+import AccountContext
+import UIKitRuntimeUtils
 
 public final class PeerInfoRatingComponent: Component {
+    let context: AccountContext
     let backgroundColor: UIColor
     let foregroundColor: UIColor
+    let tooltipBackgroundColor: UIColor
     let isExpanded: Bool
     let compactLabel: String
     let fraction: CGFloat
     let label: String
     let nextLabel: String
+    let tooltipLabel: String
     let action: () -> Void
     
     public init(
+        context: AccountContext,
         backgroundColor: UIColor,
         foregroundColor: UIColor,
+        tooltipBackgroundColor: UIColor,
         isExpanded: Bool,
         compactLabel: String,
         fraction: CGFloat,
         label: String,
         nextLabel: String,
+        tooltipLabel: String,
         action: @escaping () -> Void
     ) {
+        self.context = context
         self.backgroundColor = backgroundColor
         self.foregroundColor = foregroundColor
+        self.tooltipBackgroundColor = tooltipBackgroundColor
         self.isExpanded = isExpanded
         self.compactLabel = compactLabel
         self.fraction = fraction
         self.label = label
         self.nextLabel = nextLabel
+        self.tooltipLabel = tooltipLabel
         self.action = action
     }
     
     public static func ==(lhs: PeerInfoRatingComponent, rhs: PeerInfoRatingComponent) -> Bool {
+        if lhs.context !== rhs.context {
+            return false
+        }
         if lhs.backgroundColor != rhs.backgroundColor {
             return false
         }
         if lhs.foregroundColor != rhs.foregroundColor {
+            return false
+        }
+        if lhs.tooltipBackgroundColor != rhs.tooltipBackgroundColor {
             return false
         }
         if lhs.isExpanded != rhs.isExpanded {
@@ -56,6 +74,9 @@ public final class PeerInfoRatingComponent: Component {
             return false
         }
         if lhs.nextLabel != rhs.nextLabel {
+            return false
+        }
+        if lhs.tooltipLabel != rhs.tooltipLabel {
             return false
         }
         return true
@@ -76,6 +97,8 @@ public final class PeerInfoRatingComponent: Component {
         private var shimmerEffectView: TextLoadingEffectView?
         
         private var component: PeerInfoRatingComponent?
+        
+        private var tooltipController: TooltipScreen?
         
         override public init(frame: CGRect) {
             self.backgroundView = UIImageView()
@@ -260,6 +283,50 @@ public final class PeerInfoRatingComponent: Component {
                     shimmerEffectView?.removeFromSuperview()
                 })
             }
+            
+            let tooltipController: TooltipScreen
+            if let current = self.tooltipController {
+                tooltipController = current
+            } else {
+                tooltipController = TooltipScreen(
+                    context: component.context,
+                    account: component.context.account,
+                    sharedContext: component.context.sharedContext,
+                    text: .attributedString(text: NSAttributedString(string: component.tooltipLabel, font: Font.semibold(11.0), textColor: .white)),
+                    style: .customBlur(component.tooltipBackgroundColor, -4.0),
+                    arrowStyle: .small,
+                    location: .point(CGRect(origin: CGPoint(x: 100.0, y: 100.0), size: CGSize()), .bottom),
+                    displayDuration: .infinite,
+                    isShimmering: true,
+                    cornerRadius: 10.0,
+                    shouldDismissOnTouch: { _, _ in
+                        return .ignore
+                    }
+                )
+                self.tooltipController = tooltipController
+                
+                tooltipController.containerLayoutUpdated(ContainerViewLayout(
+                    size: CGSize(width: 200.0, height: 200.0),
+                    metrics: LayoutMetrics(),
+                    deviceMetrics: DeviceMetrics.iPhoneXSMax,
+                    intrinsicInsets: UIEdgeInsets(),
+                    safeInsets: UIEdgeInsets(),
+                    additionalInsets: UIEdgeInsets(),
+                    statusBarHeight: nil,
+                    inputHeight: nil,
+                    inputHeightIsInteractivellyChanging: false,
+                    inVoiceOver: false
+                ), transition: .immediate)
+                
+                self.layer.addSublayer(tooltipController.view.layer)
+                tooltipController.viewWillAppear(false)
+                tooltipController.viewDidAppear(false)
+                tooltipController.setIgnoreAppearanceMethodInvocations(true)
+                tooltipController.view.isUserInteractionEnabled = false
+            }
+            
+            transition.setFrame(view: tooltipController.view, frame: CGRect(origin: CGPoint(), size: CGSize(width: 200.0, height: 200.0)).offsetBy(dx: -200.0 * 0.5 + foregroundFrame.width - 7.0, dy: -200.0 * 0.5))
+            alphaTransition.setAlpha(view: tooltipController.view, alpha: component.isExpanded ? 1.0 : 0.0)
             
             return size
         }

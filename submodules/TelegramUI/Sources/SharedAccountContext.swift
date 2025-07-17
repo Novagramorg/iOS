@@ -2546,6 +2546,10 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         return PeerInfoStoryGridScreen(context: context, peerId: context.account.peerId, scope: isArchive ? .archive : .saved)
     }
     
+    public func makeStorySelectionController(context: AccountContext, peerId: EnginePeer.Id, completion: @escaping ([EngineStoryItem]) -> Void) -> ViewController {
+        return PeerInfoStoryGridScreen(context: context, peerId: peerId, scope: .saved, selectionModeCompletion: completion)
+    }
+    
     public func makeArchiveSettingsController(context: AccountContext) -> ViewController {
         return archiveSettingsController(context: context)
     }

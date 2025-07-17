@@ -44,6 +44,8 @@ import MultilineTextComponent
 import LocationUI
 import TabSelectorComponent
 import LanguageSelectionScreen
+import PromptUI
+import BottomButtonPanelComponent
 
 private let mediaBadgeBackgroundColor = UIColor(white: 0.0, alpha: 0.6)
 private let mediaBadgeTextColor = UIColor.white
@@ -1543,7 +1545,7 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
     }
     
     private let context: AccountContext
-    private let scope: Scope
+    public let scope: Scope
     private let isProfileEmbedded: Bool
     private let canManageStories: Bool
     
@@ -1568,7 +1570,7 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
     private var mapInfoNode: LocationInfoListItemNode?
     private var searchHeader: ComponentView<Empty>?
     
-    private var botPreviewLanguageTab: ComponentView<Empty>?
+    private var folderTab: ComponentView<Empty>?
     private var botPreviewFooter: ComponentView<Empty>?
     
     private var barBackgroundLayer: SimpleLayer?
@@ -1583,6 +1585,7 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
     private var didUpdateItemsOnce: Bool = false
     
     private var selectionPanel: ComponentView<Empty>?
+    private var actionPanel: ComponentView<Empty>?
 
     private var isDeceleratingAfterTracking = false
     
@@ -1627,6 +1630,7 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
     
     public var isEmptyUpdated: (Bool) -> Void = { _ in }
     
+    public var shouldOpenItemsWhileInSelectionMode: Bool = true
     public private(set) var isSelectionModeActive: Bool
     
     private var currentParams: (size: CGSize, topInset: CGFloat, sideInset: CGFloat, bottomInset: CGFloat, deviceMetrics: DeviceMetrics, visibleHeight: CGFloat, isScrollingLockedAtTop: Bool, expandProgress: CGFloat, navigationHeight: CGFloat, presentationData: PresentationData)?
@@ -1647,6 +1651,8 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
     public var tabBarOffset: CGFloat {
         if case .botPreview = self.scope {
             return 0.0
+        } else if case let .peer(peerId, _, isArchived) = self.scope, peerId == self.context.account.peerId, !isArchived, self.isProfileEmbedded {
+            return 0.0
         } else {
             return self.itemGrid.coveringInsetOffset
         }
@@ -1659,6 +1665,9 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
     
     private var currentBotPreviewLanguages: [StoryListContext.State.Language] = []
     private var removedBotPreviewLanguages = Set<String>()
+    
+    private var currentStoryFolders: [StoryListContext.State.Folder] = []
+    private var removedStoryFolders = Set<Int64>()
     
     private var numberOfItemsToRequest: Int = 50
     private var isRequestingView: Bool = false
@@ -1674,7 +1683,7 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
     private let maxBotPreviewCount: Int
     
     private let defaultListSource: StoryListContext
-    private var cachedListSources: [String: StoryListContext] = [:]
+    private var cachedListSources: [AnyHashable: StoryListContext] = [:]
     
     public var currentBotPreviewLanguage: (id: String, name: String)? {
         guard let listSource = self.listSource as? BotPreviewStoryListContext else {
@@ -1687,6 +1696,19 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
             return nil
         }
         return (language.id, language.name)
+    }
+    
+    public var currentStoryFolder: (id: Int64, title: String)? {
+        guard let listSource = self.listSource as? PeerStoryListContext else {
+            return nil
+        }
+        guard let id = listSource.folderId else {
+            return nil
+        }
+        guard let folder = self.currentStoryFolders.first(where: { $0.id == id }) else {
+            return nil
+        }
+        return (folder.id, folder.title)
     }
 
     public var openCurrentDate: (() -> Void)?
@@ -1749,7 +1771,7 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
         } else {
             switch self.scope {
             case let .peer(id, _, isArchived):
-                self.listSource = PeerStoryListContext(account: context.account, peerId: id, isArchived: isArchived)
+                self.listSource = PeerStoryListContext(account: context.account, peerId: id, isArchived: isArchived, folderId: nil)
             case let .search(peerId, query):
                 self.listSource = SearchStoryListContext(account: context.account, source: .hashtag(peerId, query))
             case let .location(coordinates, venue):
@@ -1798,7 +1820,7 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
                 return
             }
             
-            if self.isProfileEmbedded {
+            if self.isProfileEmbedded || !self.shouldOpenItemsWhileInSelectionMode {
                 if let selectedIds = self.itemInteraction.selectedIds {
                     self.itemInteraction.toggleSelection(item.story.id, !selectedIds.contains(item.story.id))
                     return
@@ -2275,7 +2297,7 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
         self.requestHistoryAroundVisiblePosition(synchronous: false, reloadAtTop: false)
         
         if case let .peer(id, _, isArchived) = self.scope, id == context.account.peerId, !isArchived {
-            self.preloadArchiveListContext = PeerStoryListContext(account: context.account, peerId: context.account.peerId, isArchived: true)
+            self.preloadArchiveListContext = PeerStoryListContext(account: context.account, peerId: context.account.peerId, isArchived: true, folderId: nil)
         }
         
         if case let .location(_, venue) = scope, let mapNode = self.mapNode {
@@ -2447,6 +2469,122 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
         var items: [ContextMenuItem] = []
         
         if canManage, case let .peer(peerId, _, isArchived) = self.scope {
+            if peerId == self.context.account.peerId && self.isProfileEmbedded {
+                if let folder = self.currentStoryFolder {
+                    //TODO:localize
+                    items.append(.action(ContextMenuActionItem(text: "Remove from Album", textColor: .destructive, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Delete"), color: theme.contextMenu.destructiveColor) }, action: { [weak self] _, f in
+                        guard let self else {
+                            f(.default)
+                            return
+                        }
+                                
+                        if let listSource = self.listSource as? PeerStoryListContext {
+                            listSource.removeFromFolder(id: folder.id, itemIds: [item.id])
+                        }
+                        
+                        f(.dismissWithoutContent)
+                    })))
+                } else {
+                    //TODO:localize
+                    items.append(.action(ContextMenuActionItem(text: "Add to Album", icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Folder"), color: theme.contextMenu.primaryColor) }, action: { [weak self] c, f in
+                        guard let self, let c else {
+                            f(.default)
+                            return
+                        }
+                        
+                        Task { @MainActor [weak self, weak c] in
+                            guard let self, let c else {
+                                return
+                            }
+                            
+                            let (peerReference, folderPreviews) = await PeerStoryListContext.folderPreviews(peerId: peerId, account: self.context.account).get()
+                            
+                            var items: [ContextMenuItem] = []
+                            items.append(.action(ContextMenuActionItem(text: self.presentationData.strings.Common_Back, icon: { theme in
+                                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Back"), color: theme.contextMenu.primaryColor)
+                            }, iconPosition: .left, action: { c ,f in
+                                c?.popItems()
+                            })))
+                            items.append(.separator)
+                            
+                            items.append(.action(ContextMenuActionItem(text: "New Album", icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Folder"), color: theme.contextMenu.primaryColor) }, iconPosition: .left, action: { [weak self] c, f in
+                                guard let self else {
+                                    f(.default)
+                                    return
+                                }
+                                
+                                c?.dismiss(completion: { [weak self] in
+                                    guard let self else {
+                                        return
+                                    }
+                                    self.presentAddStoryFolder(addItems: [item])
+                                })
+                            })))
+                            
+                            for folderPreview in folderPreviews {
+                                var iconSource: ContextMenuActionItemIconSource?
+                                if let story = folderPreview.item {
+                                    var imageSignal: Signal<UIImage?, NoError>?
+                                    
+                                    var selectedMedia: Media?
+                                    if let image = story.media._asMedia() as? TelegramMediaImage {
+                                        selectedMedia = image
+                                    } else if let file = story.media._asMedia() as? TelegramMediaFile {
+                                        selectedMedia = file
+                                    }
+                                    
+                                    if let selectedMedia {
+                                        if let result = self.directMediaImageCache.getImage(peer: peerReference, story: story, media: selectedMedia, width: 24, aspectRatio: 1.0, possibleWidths: [24], includeBlurred: false, synchronous: true) {
+                                            if let loadSignal = result.loadSignal {
+                                                imageSignal = .single(result.image) |> then(loadSignal)
+                                            } else {
+                                                imageSignal = .single(result.image)
+                                            }
+                                        }
+                                    }
+                                    
+                                    if let imageSignal {
+                                        iconSource = ContextMenuActionItemIconSource(
+                                            size: CGSize(width: 24.0, height: 24.0),
+                                            cornerRadius: 5.0,
+                                            signal: imageSignal
+                                        )
+                                    }
+                                }
+                                
+                                var icon: (PresentationTheme) -> UIImage? = { _ in nil }
+                                if iconSource == nil {
+                                    icon = { theme in
+                                        return generateImage(CGSize(width: 24.0, height: 24.0), opaque: false, scale: nil, rotatedContext: { size, context in
+                                            context.clear(CGRect(origin: CGPoint(), size: size))
+                                            context.setFillColor(theme.contextMenu.primaryColor.withMultipliedAlpha(0.1).cgColor)
+                                            context.addPath(UIBezierPath(roundedRect: CGRect(origin: CGPoint(), size: size), cornerRadius: 5.0).cgPath)
+                                            context.fillPath()
+                                        })
+                                    }
+                                }
+                                
+                                items.append(.action(ContextMenuActionItem(text: folderPreview.folder.title, icon: icon, iconSource: iconSource, iconPosition: .left, action: { [weak self] c, f in
+                                    guard let self else {
+                                        f(.default)
+                                        return
+                                    }
+                                    
+                                    c?.dismiss(completion: {})
+                                    
+                                    if let listSource = self.listSource as? PeerStoryListContext {
+                                        listSource.addToFolder(id: folderPreview.folder.id, items: [item])
+                                    }
+                                })))
+                            }
+                            
+                            c.pushItems(items: .single(ContextController.Items(content: .list(items))))
+                        }
+                    })))
+                }
+                items.append(.separator)
+            }
+            
             items.append(.action(ContextMenuActionItem(text: !isArchived ? self.presentationData.strings.StoryList_ItemAction_Archive : self.presentationData.strings.StoryList_ItemAction_Unarchive, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: isArchived ? "Chat/Context Menu/Archive" : "Chat/Context Menu/Unarchive"), color: theme.contextMenu.primaryColor) }, action: { [weak self] _, f in
                 guard let self else {
                     f(.default)
@@ -2784,6 +2922,13 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
                 }
                 botPreviewLanguages.sort(by: { $0.name < $1.name })
                 
+                var storyFolders = self.currentStoryFolders
+                for folder in state.availableFolders {
+                    if !storyFolders.contains(where: { $0.id == folder.id }) && !self.removedStoryFolders.contains(folder.id) {
+                        storyFolders.append(folder)
+                    }
+                }
+                
                 var hadLocalItems = false
                 if let currentListState = self.currentListState {
                     for item in currentListState.items {
@@ -2811,8 +2956,9 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
                 
                 self.updateItemsFromState(state: state, firstTime: firstTime, reloadAtTop: reloadAtTop, synchronous: synchronous, animated: false)
                 
-                if self.currentBotPreviewLanguages != botPreviewLanguages || reloadAtTop {
+                if self.currentBotPreviewLanguages != botPreviewLanguages || self.currentStoryFolders != storyFolders || reloadAtTop {
                     self.currentBotPreviewLanguages = botPreviewLanguages
+                    self.currentStoryFolders = storyFolders
                     if let (size, topInset, sideInset, bottomInset, deviceMetrics, visibleHeight, isScrollingLockedAtTop, expandProgress, navigationHeight, presentationData) = self.currentParams {
                         self.update(size: size, topInset: topInset, sideInset: sideInset, bottomInset: bottomInset, deviceMetrics: deviceMetrics, visibleHeight: visibleHeight, isScrollingLockedAtTop: isScrollingLockedAtTop, expandProgress: expandProgress, navigationHeight: navigationHeight, presentationData: presentationData, synchronous: synchronous, transition: .immediate)
                     }
@@ -2870,7 +3016,11 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
                 isReorderable = !item.storyItem.isPending
             case let .peer(id, _, _):
                 if id == self.context.account.peerId {
-                    isReorderable = state.pinnedIds.contains(item.storyItem.id)
+                    if self.currentStoryFolder != nil {
+                        isReorderable = true
+                    } else {
+                        isReorderable = state.pinnedIds.contains(item.storyItem.id)
+                    }
                 }
             case let .search(peerId, _):
                 if peerId != nil {
@@ -2963,11 +3113,14 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
             if case .botPreview = self.scope {
             } else if case let .peer(id, _, _) = self.scope {
                 if id == self.context.account.peerId {
-                    let maxPinnedIndex = items.items.lastIndex(where: { ($0 as? VisualMediaItem)?.isPinned == true })
-                    if let maxPinnedIndex {
-                        toIndex = min(toIndex, maxPinnedIndex)
+                    if self.currentStoryFolder != nil {
                     } else {
-                        return
+                        let maxPinnedIndex = items.items.lastIndex(where: { ($0 as? VisualMediaItem)?.isPinned == true })
+                        if let maxPinnedIndex {
+                            toIndex = min(toIndex, maxPinnedIndex)
+                        } else {
+                            return
+                        }
                     }
                 }
             } else {
@@ -3379,8 +3532,10 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
             if let _ = self.mapNode {
                 self.updateMapLayout(size: currentParams.size, topInset: currentParams.topInset, bottomInset: currentParams.bottomInset, deviceMetrics: currentParams.deviceMetrics, transition: transition)
             }
-            if case .botPreview = self.scope, self.canManageStories {
-                self.updateBotPreviewLanguageTab(size: currentParams.size, topInset: currentParams.topInset, transition: transition)
+            if case let .peer(peerId, _, isArchived) = self.scope, peerId == self.context.account.peerId, !isArchived, self.isProfileEmbedded {
+                self.updateFolderTab(size: currentParams.size, topInset: currentParams.topInset, transition: transition)
+            } else if case .botPreview = self.scope, self.canManageStories {
+                self.updateFolderTab(size: currentParams.size, topInset: currentParams.topInset, transition: transition)
                 self.updateBotPreviewFooter(size: currentParams.size, bottomInset: 0.0, transition: transition)
             }
         }
@@ -3536,40 +3691,69 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
         }
     }
     
-    private func updateBotPreviewLanguageTab(size: CGSize, topInset: CGFloat, transition: ContainedViewLayoutTransition) {
-        guard case .botPreview = self.scope, self.canManageStories else {
+    private func updateFolderTab(size: CGSize, topInset: CGFloat, transition: ContainedViewLayoutTransition) {
+        var displayFolderTab = false
+        if case .botPreview = self.scope, self.canManageStories {
+            displayFolderTab = true
+        } else if case let .peer(peerId, _, isArchived) = self.scope, peerId == self.context.account.peerId, !isArchived, self.isProfileEmbedded {
+            displayFolderTab = true
+        }
+        
+        if !displayFolderTab {
             return
         }
         
-        let botPreviewLanguageTab: ComponentView<Empty>
-        if let current = self.botPreviewLanguageTab {
-            botPreviewLanguageTab = current
+        let folderTab: ComponentView<Empty>
+        if let current = self.folderTab {
+            folderTab = current
         } else {
-            botPreviewLanguageTab = ComponentView()
-            self.botPreviewLanguageTab = botPreviewLanguageTab
+            folderTab = ComponentView()
+            self.folderTab = folderTab
         }
         
-        var languageItems: [TabSelectorComponent.Item] = []
-        languageItems.append(TabSelectorComponent.Item(
+        var folderItems: [TabSelectorComponent.Item] = []
+        let mainTitle: String
+        let addTitle: String
+        if case .botPreview = self.scope {
+            mainTitle = self.presentationData.strings.BotPreviews_LanguageTab_Main
+            addTitle = self.presentationData.strings.BotPreviews_LanguageTab_Add
+        } else {
+            //TODO:localize
+            mainTitle = "All Stories"
+            addTitle = "+ Add Album"
+        }
+        folderItems.append(TabSelectorComponent.Item(
             id: AnyHashable("_main"),
-            title: self.presentationData.strings.BotPreviews_LanguageTab_Main
+            title: mainTitle
         ))
-        for language in self.currentBotPreviewLanguages {
-            languageItems.append(TabSelectorComponent.Item(
-                id: AnyHashable(language.id),
-                title: language.name
-            ))
+        
+        if case .botPreview = self.scope {
+            for language in self.currentBotPreviewLanguages {
+                folderItems.append(TabSelectorComponent.Item(
+                    id: AnyHashable(language.id),
+                    title: language.name
+                ))
+            }
+        } else {
+            for folder in self.currentStoryFolders {
+                folderItems.append(TabSelectorComponent.Item(
+                    id: AnyHashable(folder.id),
+                    title: folder.title
+                ))
+            }
         }
-        languageItems.append(TabSelectorComponent.Item(
+        folderItems.append(TabSelectorComponent.Item(
             id: AnyHashable("_add"),
-            title: self.presentationData.strings.BotPreviews_LanguageTab_Add
+            title: addTitle
         ))
-        var selectedLanguageId = "_main"
+        var selectedId = AnyHashable("_main")
         if let listSource = self.listSource as? BotPreviewStoryListContext, let language = listSource.language {
-            selectedLanguageId = language
+            selectedId = AnyHashable(language)
+        } else if let listSource = self.listSource as? PeerStoryListContext, let folderId = listSource.folderId {
+            selectedId = AnyHashable(folderId)
         }
         
-        let botPreviewLanguageTabSize = botPreviewLanguageTab.update(
+        let folderTabSize = folderTab.update(
             transition: ComponentTransition(transition),
             component: AnyComponent(TabSelectorComponent(
                 colors: TabSelectorComponent.Colors(
@@ -3581,39 +3765,53 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
                     spacing: 9.0,
                     verticalInset: 11.0
                 ),
-                items: languageItems,
-                selectedId: AnyHashable(selectedLanguageId),
+                items: folderItems,
+                selectedId: selectedId,
                 setSelectedId: { [weak self] id in
-                    guard let self, let id = id.base as? String else {
+                    guard let self else {
                         return
                     }
-                    if id == "_add" {
-                        self.presentAddBotPreviewLanguage()
-                    } else if id == "_main" {
-                        self.setBotPreviewLanguage(id: nil, assumeEmpty: false)
-                    } else if let language = self.currentBotPreviewLanguages.first(where: { $0.id == id }) {
-                        self.setBotPreviewLanguage(id: language.id, assumeEmpty: false)
+                    if let id = id.base as? String {
+                        if id == "_add" {
+                            if case .botPreview = self.scope {
+                                self.presentAddBotPreviewLanguage()
+                            } else {
+                                self.presentAddStoryFolder()
+                            }
+                        } else if id == "_main" {
+                            if case .botPreview = self.scope {
+                                self.setBotPreviewLanguage(id: nil, assumeEmpty: false)
+                            } else {
+                                self.setStoryFolder(id: nil, assumeEmpty: false)
+                            }
+                        } else if let language = self.currentBotPreviewLanguages.first(where: { $0.id == id }) {
+                            self.setBotPreviewLanguage(id: language.id, assumeEmpty: false)
+                        }
+                    } else if let id = id.base as? Int64 {
+                        if let folder = self.currentStoryFolders.first(where: { $0.id == id }) {
+                            self.setStoryFolder(id: folder.id, assumeEmpty: false)
+                        }
                     }
                 }
             )),
             environment: {},
             containerSize: CGSize(width: size.width, height: 44.0)
         )
-        var botPreviewLanguageTabFrame = CGRect(origin: CGPoint(x: floor((size.width - botPreviewLanguageTabSize.width) * 0.5), y: topInset - 11.0), size: botPreviewLanguageTabSize)
+        var folderTabFrame = CGRect(origin: CGPoint(x: floor((size.width - folderTabSize.width) * 0.5), y: topInset - 11.0), size: folderTabSize)
         
         let effectiveScrollingOffset: CGFloat
         effectiveScrollingOffset = self.itemGrid.scrollingOffset
-        botPreviewLanguageTabFrame.origin.y -= effectiveScrollingOffset
+        folderTabFrame.origin.y -= effectiveScrollingOffset
         
         let isSelectingOrReordering = self.isReordering || self.itemInteraction.selectedIds != nil
         
-        if let botPreviewLanguageTabView = botPreviewLanguageTab.view {
-            if botPreviewLanguageTabView.superview == nil {
-                self.view.addSubview(botPreviewLanguageTabView)
+        if let folderTabView = folderTab.view {
+            if folderTabView.superview == nil {
+                self.view.addSubview(folderTabView)
             }
-            transition.updateFrame(view: botPreviewLanguageTabView, frame: botPreviewLanguageTabFrame)
-            transition.updateAlpha(layer: botPreviewLanguageTabView.layer, alpha: isSelectingOrReordering ? 0.5 : 1.0)
-            botPreviewLanguageTabView.isUserInteractionEnabled = !isSelectingOrReordering
+            transition.updateFrame(view: folderTabView, frame: folderTabFrame)
+            transition.updateAlpha(layer: folderTabView.layer, alpha: isSelectingOrReordering ? 0.5 : 1.0)
+            folderTabView.isUserInteractionEnabled = !isSelectingOrReordering
         }
     }
     
@@ -3742,14 +3940,23 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
         var listBottomInset = bottomInset
         var bottomInset = bottomInset
         
+        var displayFolderTab = false
         if case .botPreview = self.scope, self.canManageStories {
-            updateBotPreviewLanguageTab(size: size, topInset: topInset, transition: transition)
+            displayFolderTab = true
+        } else if case let .peer(peerId, _, isArchived) = self.scope, peerId == self.context.account.peerId, !isArchived, self.isProfileEmbedded {
+            displayFolderTab = true
+        }
+        
+        if displayFolderTab {
+            updateFolderTab(size: size, topInset: topInset, transition: transition)
             gridTopInset += 50.0
             
-            updateBotPreviewFooter(size: size, bottomInset: 0.0, transition: transition)
-            if let botPreviewFooterView = self.botPreviewFooter?.view {
+            if case .botPreview = self.scope {
+                updateBotPreviewFooter(size: size, bottomInset: 0.0, transition: transition)
+                if let botPreviewFooterView = self.botPreviewFooter?.view {
                 listBottomInset += 18.0 + botPreviewFooterView.bounds.height
             }
+        }
         }
         
         if self.isProfileEmbedded, let selectedIds = self.itemInteraction.selectedIds, self.canManageStories, case let .peer(peerId, _, isArchived) = self.scope {
@@ -3930,13 +4137,200 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
         } else if let selectionPanel = self.selectionPanel {
             self.selectionPanel = nil
             if let selectionPanelView = selectionPanel.view {
-                transition.updateFrame(view: selectionPanelView, frame: CGRect(origin: CGPoint(x: 0.0, y: size.height), size: selectionPanelView.bounds.size))
+                transition.updateFrame(view: selectionPanelView, frame: CGRect(origin: CGPoint(x: 0.0, y: size.height), size: selectionPanelView.bounds.size), completion: { [weak selectionPanelView] _ in
+                    selectionPanelView?.removeFromSuperview()
+                })
+            }
+        }
+        
+        if self.selectionPanel == nil, self.isProfileEmbedded, self.canManageStories, case let .peer(peerId, _, isArchived) = self.scope, peerId == self.context.account.peerId, !isArchived, self.isProfileEmbedded, self.currentStoryFolder != nil, let items = self.items, !items.items.isEmpty {
+            let actionPanel: ComponentView<Empty>
+            var actionPanelTransition = ComponentTransition(transition)
+            if let current = self.actionPanel {
+                actionPanel = current
+            } else {
+                actionPanelTransition = actionPanelTransition.withAnimation(.none)
+                actionPanel = ComponentView()
+                self.actionPanel = actionPanel
+            }
+            
+            //TODO:localize
+            let actionPanelSize = actionPanel.update(
+                transition: actionPanelTransition,
+                component: AnyComponent(BottomButtonPanelComponent(
+                    theme: presentationData.theme,
+                    title: "Add Stories",
+                    label: nil,
+                    isEnabled: true,
+                    insets: UIEdgeInsets(top: 0.0, left: sideInset + 12.0, bottom: bottomInset, right: sideInset + 12.0),
+                    action: { [weak self] in
+                        guard let self else {
+                            return
+                        }
+                        self.presentAddStoriesToFolder()
+                    }
+                )),
+                environment: {},
+                containerSize: size
+            )
+            let actionPanelFrame = CGRect(origin: CGPoint(x: 0.0, y: size.height - actionPanelSize.height), size: actionPanelSize)
+            if let actionPanelView = actionPanel.view {
+                if actionPanelView.superview == nil {
+                    self.view.addSubview(actionPanelView)
+                    transition.animatePositionAdditive(layer: actionPanelView.layer, offset: CGPoint(x: 0.0, y: actionPanelFrame.height))
+                }
+                actionPanelTransition.setFrame(view: actionPanelView, frame: actionPanelFrame)
+            }
+            bottomInset = actionPanelSize.height
+            listBottomInset += actionPanelSize.height
+        } else if let actionPanel = self.actionPanel {
+            self.actionPanel = nil
+            if let actionPanelView = actionPanel.view {
+                transition.updateFrame(view: actionPanelView, frame: CGRect(origin: CGPoint(x: 0.0, y: size.height), size: actionPanelView.bounds.size), completion: { [weak actionPanelView] _ in
+                    actionPanelView?.removeFromSuperview()
+                })
             }
         }
 
         transition.updateFrame(node: self.contextGestureContainerNode, frame: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: size.width, height: size.height)))
         
-        if case let .peer(_, _, isArchived) = self.scope, let items = self.items, items.items.isEmpty, items.count == 0 {
+        if case let .peer(peerId, _, isArchived) = self.scope, let items = self.items, items.items.isEmpty, items.count == 0 {
+            if peerId == self.context.account.peerId, self.isProfileEmbedded, self.currentStoryFolder != nil {
+                let emptyStateView: ComponentView<Empty>
+                var emptyStateTransition = ComponentTransition(transition)
+                if let current = self.emptyStateView {
+                    emptyStateView = current
+                } else {
+                    emptyStateTransition = .immediate
+                    emptyStateView = ComponentView()
+                    self.emptyStateView = emptyStateView
+                }
+                
+                //TODO:localize
+                let emptyStateSize = emptyStateView.update(
+                    transition: emptyStateTransition,
+                    component: AnyComponent(EmptyStateIndicatorComponent(
+                        context: self.context,
+                        theme: presentationData.theme,
+                        fitToHeight: self.isProfileEmbedded,
+                        animationName: nil,
+                        title: "Organize Your Stories",
+                        text: "Add some stories to this album.",
+                        actionTitle: "Add to Album",
+                        action: { [weak self] in
+                            guard let self else {
+                                return
+                            }
+                            self.presentAddStoriesToFolder()
+                        },
+                        additionalActionTitle: nil,
+                        additionalAction: {},
+                        additionalActionSeparator: nil
+                    )),
+                    environment: {},
+                    containerSize: CGSize(width: size.width, height: size.height - gridTopInset - bottomInset)
+                )
+                
+                let emptyStateFrame: CGRect
+                if self.isProfileEmbedded {
+                    emptyStateFrame = CGRect(origin: CGPoint(x: floor((size.width - emptyStateSize.width) * 0.5), y: max(gridTopInset + 22.0, floor((visibleHeight - gridTopInset - bottomInset - emptyStateSize.height) * 0.5))), size: emptyStateSize)
+                } else {
+                    emptyStateFrame = CGRect(origin: CGPoint(x: floor((size.width - emptyStateSize.width) * 0.5), y: gridTopInset), size: emptyStateSize)
+                }
+                
+                if let emptyStateComponentView = emptyStateView.view {
+                    if emptyStateComponentView.superview == nil {
+                        self.view.addSubview(emptyStateComponentView)
+                        if self.didUpdateItemsOnce {
+                            emptyStateComponentView.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
+                        }
+                    }
+                    emptyStateTransition.setFrame(view: emptyStateComponentView, frame: emptyStateFrame)
+                }
+                
+                let backgroundColor: UIColor
+                if self.isProfileEmbedded, case .botPreview = self.scope {
+                    backgroundColor = presentationData.theme.list.blocksBackgroundColor
+                } else if self.isProfileEmbedded {
+                    backgroundColor = presentationData.theme.list.blocksBackgroundColor
+                } else {
+                    backgroundColor = presentationData.theme.list.blocksBackgroundColor
+                }
+                
+                if self.didUpdateItemsOnce {
+                    ComponentTransition(animation: .curve(duration: 0.2, curve: .easeInOut)).setBackgroundColor(view: self.view, color: backgroundColor)
+                } else {
+                    self.view.backgroundColor = backgroundColor
+                }
+            } else {
+                let emptyStateView: ComponentView<Empty>
+                var emptyStateTransition = ComponentTransition(transition)
+                if let current = self.emptyStateView {
+                    emptyStateView = current
+                } else {
+                    emptyStateTransition = .immediate
+                    emptyStateView = ComponentView()
+                    self.emptyStateView = emptyStateView
+                }
+                let emptyStateSize = emptyStateView.update(
+                    transition: emptyStateTransition,
+                    component: AnyComponent(EmptyStateIndicatorComponent(
+                        context: self.context,
+                        theme: presentationData.theme,
+                        fitToHeight: self.isProfileEmbedded,
+                        animationName: "StoryListEmpty",
+                        title: isArchived ? presentationData.strings.StoryList_ArchivedEmptyState_Title : presentationData.strings.StoryList_SavedEmptyPosts_Title,
+                        text: isArchived ? presentationData.strings.StoryList_ArchivedEmptyState_Text : presentationData.strings.StoryList_SavedEmptyPosts_Text,
+                        actionTitle: isArchived ? nil : presentationData.strings.StoryList_SavedAddAction,
+                        action: { [weak self] in
+                            guard let self else {
+                                return
+                            }
+                            self.emptyAction?()
+                        },
+                        additionalActionTitle: (isArchived || self.isProfileEmbedded) ? nil : presentationData.strings.StoryList_SavedEmptyAction,
+                        additionalAction: { [weak self] in
+                            guard let self else {
+                                return
+                            }
+                            self.additionalEmptyAction?()
+                        }
+                    )),
+                    environment: {},
+                    containerSize: CGSize(width: size.width, height: size.height - gridTopInset - bottomInset)
+                )
+                
+                let emptyStateFrame: CGRect
+                if self.isProfileEmbedded {
+                    emptyStateFrame = CGRect(origin: CGPoint(x: floor((size.width - emptyStateSize.width) * 0.5), y: max(gridTopInset, floor((visibleHeight - gridTopInset - bottomInset - emptyStateSize.height) * 0.5))), size: emptyStateSize)
+                } else {
+                    emptyStateFrame = CGRect(origin: CGPoint(x: floor((size.width - emptyStateSize.width) * 0.5), y: gridTopInset), size: emptyStateSize)
+                }
+                
+                if let emptyStateComponentView = emptyStateView.view {
+                    if emptyStateComponentView.superview == nil {
+                        self.view.addSubview(emptyStateComponentView)
+                        if self.didUpdateItemsOnce {
+                            emptyStateComponentView.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
+                        }
+                    }
+                    emptyStateTransition.setFrame(view: emptyStateComponentView, frame: emptyStateFrame)
+                }
+                
+                let backgroundColor: UIColor
+                if self.isProfileEmbedded {
+                    backgroundColor = presentationData.theme.list.plainBackgroundColor
+                } else {
+                    backgroundColor = presentationData.theme.list.blocksBackgroundColor
+                }
+                
+                if self.didUpdateItemsOnce {
+                    ComponentTransition(animation: .curve(duration: 0.2, curve: .easeInOut)).setBackgroundColor(view: self.view, color: backgroundColor)
+                } else {
+                    self.view.backgroundColor = backgroundColor
+                }
+            }
+        } else if case .botPreview = self.scope, let items = self.items, items.items.isEmpty, items.count == 0 {
             let emptyStateView: ComponentView<Empty>
             var emptyStateTransition = ComponentTransition(transition)
             if let current = self.emptyStateView {
@@ -3946,29 +4340,44 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
                 emptyStateView = ComponentView()
                 self.emptyStateView = emptyStateView
             }
+            
+            var isMainLanguage = true
+            if let listSource = self.listSource as? BotPreviewStoryListContext, let _ = listSource.language {
+                isMainLanguage = false
+            }
+            
             let emptyStateSize = emptyStateView.update(
                 transition: emptyStateTransition,
                 component: AnyComponent(EmptyStateIndicatorComponent(
                     context: self.context,
                     theme: presentationData.theme,
                     fitToHeight: self.isProfileEmbedded,
-                    animationName: "StoryListEmpty",
-                    title: isArchived ? presentationData.strings.StoryList_ArchivedEmptyState_Title : presentationData.strings.StoryList_SavedEmptyPosts_Title,
-                    text: isArchived ? presentationData.strings.StoryList_ArchivedEmptyState_Text : presentationData.strings.StoryList_SavedEmptyPosts_Text,
-                    actionTitle: isArchived ? nil : presentationData.strings.StoryList_SavedAddAction,
+                    animationName: nil,
+                    title: presentationData.strings.BotPreviews_Empty_Title,
+                    text: presentationData.strings.BotPreviews_Empty_Text(Int32(self.maxBotPreviewCount)),
+                    actionTitle: self.canManageStories ? presentationData.strings.BotPreviews_Empty_Add : nil,
                     action: { [weak self] in
                         guard let self else {
                             return
                         }
-                        self.emptyAction?()
+                        if self.canAddMoreBotPreviews() {
+                            self.emptyAction?()
+                        } else {
+                            self.presentUnableToAddMorePreviewsAlert()
+                        }
                     },
-                    additionalActionTitle: (isArchived || self.isProfileEmbedded) ? nil : presentationData.strings.StoryList_SavedEmptyAction,
+                    additionalActionTitle: self.canManageStories ? (isMainLanguage ? presentationData.strings.BotPreviews_Empty_AddTranslation : presentationData.strings.BotPreviews_Empty_DeleteTranslation) : nil,
                     additionalAction: { [weak self] in
                         guard let self else {
                             return
                         }
-                        self.additionalEmptyAction?()
-                    }
+                        if isMainLanguage {
+                            self.presentAddBotPreviewLanguage()
+                        } else {
+                            self.presentDeleteBotPreviewLanguage()
+                        }
+                    },
+                    additionalActionSeparator: self.canManageStories ? presentationData.strings.BotPreviews_Empty_Separator : nil
                 )),
                 environment: {},
                 containerSize: CGSize(width: size.width, height: size.height - gridTopInset - bottomInset)
@@ -3976,7 +4385,7 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
             
             let emptyStateFrame: CGRect
             if self.isProfileEmbedded {
-                emptyStateFrame = CGRect(origin: CGPoint(x: floor((size.width - emptyStateSize.width) * 0.5), y: max(gridTopInset, floor((visibleHeight - gridTopInset - bottomInset - emptyStateSize.height) * 0.5))), size: emptyStateSize)
+                emptyStateFrame = CGRect(origin: CGPoint(x: floor((size.width - emptyStateSize.width) * 0.5), y: max(gridTopInset + 22.0, floor((visibleHeight - gridTopInset - bottomInset - emptyStateSize.height) * 0.5))), size: emptyStateSize)
             } else {
                 emptyStateFrame = CGRect(origin: CGPoint(x: floor((size.width - emptyStateSize.width) * 0.5), y: gridTopInset), size: emptyStateSize)
             }
@@ -3992,8 +4401,10 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
             }
             
             let backgroundColor: UIColor
-            if self.isProfileEmbedded {
-                backgroundColor = presentationData.theme.list.plainBackgroundColor
+            if self.isProfileEmbedded, case .botPreview = self.scope {
+                backgroundColor = presentationData.theme.list.blocksBackgroundColor
+            } else if self.isProfileEmbedded {
+                backgroundColor = presentationData.theme.list.blocksBackgroundColor
             } else {
                 backgroundColor = presentationData.theme.list.blocksBackgroundColor
             }
@@ -4003,7 +4414,7 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
             } else {
                 self.view.backgroundColor = backgroundColor
             }
-        } else if case .botPreview = self.scope, let items = self.items, items.items.isEmpty, items.count == 0 {
+        } else if case let .peer(peerId, _, isArchived) = self.scope, peerId == self.context.account.peerId, !isArchived, self.isProfileEmbedded, let items = self.items, items.items.isEmpty, items.count == 0 {
             let emptyStateView: ComponentView<Empty>
             var emptyStateTransition = ComponentTransition(transition)
             if let current = self.emptyStateView {
@@ -4073,6 +4484,8 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
             let backgroundColor: UIColor
             if self.isProfileEmbedded, case .botPreview = self.scope {
                 backgroundColor = presentationData.theme.list.blocksBackgroundColor
+            } else if self.isProfileEmbedded, case let .peer(peerId, _, isArchived) = self.scope, peerId == self.context.account.peerId, self.isProfileEmbedded, !isArchived {
+                backgroundColor = presentationData.theme.list.blocksBackgroundColor
             } else if self.isProfileEmbedded {
                 backgroundColor = presentationData.theme.list.blocksBackgroundColor
             } else {
@@ -4101,6 +4514,8 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
                 
                 if self.isProfileEmbedded, case .botPreview = self.scope {
                     subTransition.setBackgroundColor(view: self.view, color: presentationData.theme.list.blocksBackgroundColor)
+                } else if self.isProfileEmbedded, case let .peer(peerId, _, isArchived) = self.scope, peerId == self.context.account.peerId, !isArchived, self.isProfileEmbedded {
+                    subTransition.setBackgroundColor(view: self.view, color: presentationData.theme.list.blocksBackgroundColor)
                 } else if self.isProfileEmbedded {
                     subTransition.setBackgroundColor(view: self.view, color: presentationData.theme.list.plainBackgroundColor)
                 } else {
@@ -4108,6 +4523,8 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
                 }
             } else {
                 if self.isProfileEmbedded, case .botPreview = self.scope {
+                    self.view.backgroundColor = presentationData.theme.list.blocksBackgroundColor
+                } else if self.isProfileEmbedded, case let .peer(peerId, _, isArchived) = self.scope, peerId == self.context.account.peerId, self.isProfileEmbedded, !isArchived {
                     self.view.backgroundColor = presentationData.theme.list.blocksBackgroundColor
                 } else {
                     if case let .search(peerId, _) = self.scope, peerId != nil {
@@ -4131,6 +4548,8 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
             
             var adjustForSmallCount = true
             if case .botPreview = self.scope {
+                adjustForSmallCount = false
+            } else if self.currentStoryFolder != nil {
                 adjustForSmallCount = false
             }
          
@@ -4234,10 +4653,21 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
     }
     
     public func canReorder() -> Bool {
-        guard let items = self.items else {
-            return false
+        if case .botPreview = self.scope {
+            guard let items = self.items else {
+                return false
+            }
+            return items.count > 1
+        } else {
+            if self.currentStoryFolder == nil {
+                return false
+            }
+            
+            guard let items = self.items else {
+                return false
+            }
+            return items.count > 1
         }
-        return items.count > 1
     }
     
     private func presentAddBotPreviewLanguage() {
@@ -4248,6 +4678,78 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
             }
             self.addBotPreviewLanguage(language: StoryListContext.State.Language(id: info.languageCode, name: info.title))
         }))
+    }
+    
+    private func presentAddStoryFolder(addItems: [EngineStoryItem] = []) {
+        //TODO:localize
+        let promptController = promptController(
+            sharedContext: self.context.sharedContext,
+            updatedPresentationData: nil,
+            text: "Create a New Album",
+            titleFont: .bold,
+            subtitle: "Choose a name for your album and start adding your stories there.",
+            value: "",
+            placeholder: "Title",
+            characterLimit: 20,
+            apply: { [weak self] value in
+                guard let self else {
+                    return
+                }
+                if let value {
+                    if let listSource = self.listSource as? PeerStoryListContext {
+                        listSource.addFolder(title: value, completion: { [weak self] id in
+                            Queue.mainQueue().async {
+                                guard let self, let listSource = self.listSource as? PeerStoryListContext else {
+                                    return
+                                }
+                                if !addItems.isEmpty {
+                                    listSource.addToFolder(id: id, items: addItems)
+                                }
+                                self.setStoryFolder(id: id, assumeEmpty: addItems.isEmpty)
+                            }
+                        })
+                    }
+                }
+            }
+        )
+        self.parentController?.present(promptController, in: .window(.root))
+    }
+    
+    private func presentAddStoriesToFolder() {
+        guard case let .peer(peerId, _, _) = self.scope else {
+            return
+        }
+        guard let folder = self.currentStoryFolder else {
+            return
+        }
+        
+        let controller = self.context.sharedContext.makeStorySelectionController(context: self.context, peerId: peerId, completion: { [weak self] items in
+            guard let self else {
+                return
+            }
+            if let listSource = self.listSource as? PeerStoryListContext {
+                listSource.addToFolder(id: folder.id, items: items)
+            }
+        })
+        controller.navigationPresentation = .modal
+        
+        self.parentController?.push(controller)
+    }
+    
+    public func presentDeleteCurrentStoryFolder() {
+        if let folder = self.currentStoryFolder {
+            self.setStoryFolder(id: nil, assumeEmpty: false)
+            self.currentStoryFolders.removeAll(where: { $0.id == folder.id })
+            self.removedStoryFolders.insert(folder.id)
+            
+            if let listContext = self.listSource as? PeerStoryListContext {
+                listContext.removeFolder(id: folder.id)
+            }
+            
+            if let (size, topInset, sideInset, bottomInset, deviceMetrics, visibleHeight, isScrollingLockedAtTop, expandProgress, navigationHeight, presentationData) = self.currentParams {
+                self.update(size: size, topInset: topInset, sideInset: sideInset, bottomInset: bottomInset, deviceMetrics: deviceMetrics, visibleHeight: visibleHeight, isScrollingLockedAtTop: isScrollingLockedAtTop, expandProgress: expandProgress, navigationHeight: navigationHeight, presentationData: presentationData, synchronous: false, transition: .immediate)
+            }
+        }
     }
     
     public func presentUnableToAddMorePreviewsAlert() {
@@ -4335,12 +4837,32 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
         }
         
         if let id {
-            if let cachedListSource = self.cachedListSources[id] {
+            if let cachedListSource = self.cachedListSources[AnyHashable(id)] {
                 self.listSource = cachedListSource
             } else {
                 let listSource = BotPreviewStoryListContext(account: self.context.account, engine: self.context.engine, peerId: peerId, language: id, assumeEmpty: assumeEmpty)
                 self.listSource = listSource
-                self.cachedListSources[id] = listSource
+                self.cachedListSources[AnyHashable(id)] = listSource
+            }
+        } else {
+            self.listSource = self.defaultListSource
+        }
+        
+        self.requestHistoryAroundVisiblePosition(synchronous: false, reloadAtTop: true)
+    }
+    
+    private func setStoryFolder(id: Int64?, assumeEmpty: Bool) {
+        if let listSource = self.listSource as? PeerStoryListContext, listSource.folderId == id {
+            return
+        }
+        
+        if let id {
+            if let cachedListSource = self.cachedListSources[AnyHashable(id)] {
+                self.listSource = cachedListSource
+            } else {
+                let listSource = PeerStoryListContext(account: self.context.account, peerId: self.context.account.peerId, isArchived: false, folderId: id)
+                self.listSource = listSource
+                //self.cachedListSources[AnyHashable(id)] = listSource
             }
         } else {
             self.listSource = self.defaultListSource
@@ -4388,20 +4910,26 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
                         listSource.reorderItems(media: reorderedMedia)
                     }
                 } else if case let .peer(id, _, _) = self.scope, id == self.context.account.peerId, let items = self.items {
-                    var updatedPinnedIds: [Int32] = []
-                    for id in reorderedIds {
-                        inner: for item in items.items {
-                            if let item = item as? VisualMediaItem {
-                                if item.storyId == id {
-                                    if item.isPinned {
-                                        updatedPinnedIds.append(id.id)
-                                        break inner
+                    if let _ = self.currentStoryFolder {
+                        if let listSource = self.listSource as? PeerStoryListContext {
+                            listSource.reorderItemsInFolder(itemIds: reorderedIds.map { $0.id })
+                        }
+                    } else {
+                        var updatedPinnedIds: [Int32] = []
+                        for id in reorderedIds {
+                            inner: for item in items.items {
+                                if let item = item as? VisualMediaItem {
+                                    if item.storyId == id {
+                                        if item.isPinned {
+                                            updatedPinnedIds.append(id.id)
+                                            break inner
+                                        }
                                     }
                                 }
                             }
                         }
+                        let _ = self.context.engine.messages.updatePinnedToTopStories(peerId: id, ids: updatedPinnedIds).startStandalone()
                     }
-                    let _ = self.context.engine.messages.updatePinnedToTopStories(peerId: id, ids: updatedPinnedIds).startStandalone()
                 }
             }
             

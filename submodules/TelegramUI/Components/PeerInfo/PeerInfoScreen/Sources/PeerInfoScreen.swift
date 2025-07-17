@@ -11496,26 +11496,150 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
     private func displayMediaGalleryContextMenu(source: ContextReferenceContentNode, gesture: ContextGesture?) {
         let peerId = self.peerId
         
-        if let currentPaneKey = self.paneContainerNode.currentPaneKey, case .botPreview = currentPaneKey {
+        var isBotPreviewOrStories = false
+        if let currentPaneKey = self.paneContainerNode.currentPaneKey {
+            if case .botPreview = currentPaneKey {
+                isBotPreviewOrStories = true
+            } else if case .stories = currentPaneKey {
+                isBotPreviewOrStories = true
+            }
+        }
+        
+        if isBotPreviewOrStories {
             guard let controller = self.controller else {
                 return
             }
             guard let pane = self.paneContainerNode.currentPane?.node as? PeerInfoStoryPaneNode else {
                 return
             }
-            guard let data = self.data, let user = data.peer as? TelegramUser, let botInfo = user.botInfo, botInfo.flags.contains(.canEdit) else {
-                return
-            }
             
-            var items: [ContextMenuItem] = []
-            
-            let strings = self.presentationData.strings
-            
-            var ignoreNextActions = false
-            
-            if pane.canAddMoreBotPreviews() {
-                items.append(.action(ContextMenuActionItem(text: strings.BotPreviews_MenuAddPreview, icon: { theme in
-                    return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Add"), color: theme.contextMenu.primaryColor)
+            if case .botPreview = pane.scope {
+                guard let data = self.data, let user = data.peer as? TelegramUser, let botInfo = user.botInfo, botInfo.flags.contains(.canEdit) else {
+                    return
+                }
+                
+                var items: [ContextMenuItem] = []
+                
+                let strings = self.presentationData.strings
+                
+                var ignoreNextActions = false
+                
+                if pane.canAddMoreBotPreviews() {
+                    items.append(.action(ContextMenuActionItem(text: strings.BotPreviews_MenuAddPreview, icon: { theme in
+                        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Add"), color: theme.contextMenu.primaryColor)
+                    }, action: { [weak self] _, a in
+                        if ignoreNextActions {
+                            return
+                        }
+                        ignoreNextActions = true
+                        a(.default)
+                        
+                        if let self {
+                            self.headerNode.navigationButtonContainer.performAction?(.postStory, nil, nil)
+                        }
+                    })))
+                }
+                
+                if pane.canReorder() {
+                    items.append(.action(ContextMenuActionItem(text: self.presentationData.strings.BotPreviews_MenuReorder, icon: { theme in
+                        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/ReorderItems"), color: theme.contextMenu.primaryColor)
+                    }, action: { [weak pane] _, a in
+                        if ignoreNextActions {
+                            return
+                        }
+                        ignoreNextActions = true
+                        a(.default)
+                        
+                        if let pane {
+                            pane.beginReordering()
+                        }
+                    })))
+                }
+                
+                items.append(.action(ContextMenuActionItem(text: self.presentationData.strings.Conversation_ContextMenuSelect, icon: { theme in
+                    return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Select"), color: theme.contextMenu.primaryColor)
+                }, action: { [weak self] _, a in
+                    if ignoreNextActions {
+                        return
+                    }
+                    ignoreNextActions = true
+                    a(.default)
+                    
+                    if let self {
+                        self.toggleStorySelection(ids: [], isSelected: true)
+                    }
+                })))
+                
+                if let language = pane.currentBotPreviewLanguage {
+                    items.append(.action(ContextMenuActionItem(text: self.presentationData.strings.BotPreviews_MenuDeleteLanguage(language.name).string, textColor: .destructive, icon: { theme in
+                        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Delete"), color: theme.contextMenu.destructiveColor)
+                    }, action: { [weak pane] _, a in
+                        if ignoreNextActions {
+                            return
+                        }
+                        ignoreNextActions = true
+                        a(.default)
+                        
+                        if let pane {
+                            pane.presentDeleteBotPreviewLanguage()
+                        }
+                    })))
+                }
+                
+                let contextController = ContextController(presentationData: self.presentationData, source: .reference(PeerInfoContextReferenceContentSource(controller: controller, sourceNode: source)), items: .single(ContextController.Items(content: .list(items))), gesture: gesture)
+                contextController.passthroughTouchEvent = { [weak self] sourceView, point in
+                    guard let strongSelf = self else {
+                        return .ignore
+                    }
+                    
+                    let localPoint = strongSelf.view.convert(sourceView.convert(point, to: nil), from: nil)
+                    guard let localResult = strongSelf.hitTest(localPoint, with: nil) else {
+                        return .dismiss(consume: true, result: nil)
+                    }
+                    
+                    var testView: UIView? = localResult
+                    while true {
+                        if let testViewValue = testView {
+                            if let node = testViewValue.asyncdisplaykit_node as? PeerInfoHeaderNavigationButton {
+                                node.isUserInteractionEnabled = false
+                                DispatchQueue.main.async {
+                                    node.isUserInteractionEnabled = true
+                                }
+                                return .dismiss(consume: false, result: nil)
+                            } else if let node = testViewValue.asyncdisplaykit_node as? PeerInfoVisualMediaPaneNode {
+                                node.brieflyDisableTouchActions()
+                                return .dismiss(consume: false, result: nil)
+                            } else if let node = testViewValue.asyncdisplaykit_node as? PeerInfoStoryPaneNode {
+                                node.brieflyDisableTouchActions()
+                                return .dismiss(consume: false, result: nil)
+                            } else {
+                                testView = testViewValue.superview
+                            }
+                        } else {
+                            break
+                        }
+                    }
+                    
+                    return .dismiss(consume: true, result: nil)
+                }
+                self.mediaGalleryContextMenu = contextController
+                controller.presentInGlobalOverlay(contextController)
+            } else if case .peer = pane.scope {
+                guard let data = self.data, let user = data.peer as? TelegramUser else {
+                    return
+                }
+                let _ = user
+                
+                var items: [ContextMenuItem] = []
+                
+                let strings = self.presentationData.strings
+                let _ = strings
+                
+                var ignoreNextActions = false
+                
+                //TODO:localize
+                items.append(.action(ContextMenuActionItem(text: "Add Stories", icon: { theme in
+                    return generateTintedImage(image: UIImage(bundleImageName: "Chat List/AddStoryIcon"), color: theme.contextMenu.primaryColor)
                 }, action: { [weak self] _, a in
                     if ignoreNextActions {
                         return
@@ -11527,92 +11651,96 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                         self.headerNode.navigationButtonContainer.performAction?(.postStory, nil, nil)
                     }
                 })))
-            }
-            
-            if pane.canReorder() {
-                items.append(.action(ContextMenuActionItem(text: self.presentationData.strings.BotPreviews_MenuReorder, icon: { theme in
-                    return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/ReorderItems"), color: theme.contextMenu.primaryColor)
-                }, action: { [weak pane] _, a in
-                    if ignoreNextActions {
-                        return
-                    }
-                    ignoreNextActions = true
-                    a(.default)
-                    
-                    if let pane {
-                        pane.beginReordering()
-                    }
-                })))
-            }
-            
-            items.append(.action(ContextMenuActionItem(text: self.presentationData.strings.Conversation_ContextMenuSelect, icon: { theme in
-                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Select"), color: theme.contextMenu.primaryColor)
-            }, action: { [weak self] _, a in
-                if ignoreNextActions {
-                    return
-                }
-                ignoreNextActions = true
-                a(.default)
                 
-                if let self {
-                    self.toggleStorySelection(ids: [], isSelected: true)
-                }
-            })))
-            
-            if let language = pane.currentBotPreviewLanguage {
-                items.append(.action(ContextMenuActionItem(text: self.presentationData.strings.BotPreviews_MenuDeleteLanguage(language.name).string, textColor: .destructive, icon: { theme in
-                    return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Delete"), color: theme.contextMenu.destructiveColor)
-                }, action: { [weak pane] _, a in
-                    if ignoreNextActions {
-                        return
-                    }
-                    ignoreNextActions = true
-                    a(.default)
-                    
-                    if let pane {
-                        pane.presentDeleteBotPreviewLanguage()
-                    }
-                })))
-            }
-            
-            let contextController = ContextController(presentationData: self.presentationData, source: .reference(PeerInfoContextReferenceContentSource(controller: controller, sourceNode: source)), items: .single(ContextController.Items(content: .list(items))), gesture: gesture)
-            contextController.passthroughTouchEvent = { [weak self] sourceView, point in
-                guard let strongSelf = self else {
-                    return .ignore
+                if pane.canReorder() {
+                    items.append(.action(ContextMenuActionItem(text: self.presentationData.strings.BotPreviews_MenuReorder, icon: { theme in
+                        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/ReorderItems"), color: theme.contextMenu.primaryColor)
+                    }, action: { [weak pane] _, a in
+                        if ignoreNextActions {
+                            return
+                        }
+                        ignoreNextActions = true
+                        a(.default)
+                        
+                        if let pane {
+                            pane.beginReordering()
+                        }
+                    })))
                 }
                 
-                let localPoint = strongSelf.view.convert(sourceView.convert(point, to: nil), from: nil)
-                guard let localResult = strongSelf.hitTest(localPoint, with: nil) else {
+                if let folder = pane.currentStoryFolder {
+                    let _ = folder
+                    
+                    items.append(.action(ContextMenuActionItem(text: "Delete Album", textColor: .destructive, icon: { theme in
+                        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Delete"), color: theme.contextMenu.destructiveColor)
+                    }, action: { [weak pane] _, a in
+                        if ignoreNextActions {
+                            return
+                        }
+                        ignoreNextActions = true
+                        a(.default)
+                        
+                        if let pane {
+                            pane.presentDeleteCurrentStoryFolder()
+                        }
+                    })))
+                }
+                
+                if let language = pane.currentBotPreviewLanguage {
+                    items.append(.action(ContextMenuActionItem(text: self.presentationData.strings.BotPreviews_MenuDeleteLanguage(language.name).string, textColor: .destructive, icon: { theme in
+                        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Delete"), color: theme.contextMenu.destructiveColor)
+                    }, action: { [weak pane] _, a in
+                        if ignoreNextActions {
+                            return
+                        }
+                        ignoreNextActions = true
+                        a(.default)
+                        
+                        if let pane {
+                            pane.presentDeleteBotPreviewLanguage()
+                        }
+                    })))
+                }
+                
+                let contextController = ContextController(presentationData: self.presentationData, source: .reference(PeerInfoContextReferenceContentSource(controller: controller, sourceNode: source)), items: .single(ContextController.Items(content: .list(items))), gesture: gesture)
+                contextController.passthroughTouchEvent = { [weak self] sourceView, point in
+                    guard let strongSelf = self else {
+                        return .ignore
+                    }
+                    
+                    let localPoint = strongSelf.view.convert(sourceView.convert(point, to: nil), from: nil)
+                    guard let localResult = strongSelf.hitTest(localPoint, with: nil) else {
+                        return .dismiss(consume: true, result: nil)
+                    }
+                    
+                    var testView: UIView? = localResult
+                    while true {
+                        if let testViewValue = testView {
+                            if let node = testViewValue.asyncdisplaykit_node as? PeerInfoHeaderNavigationButton {
+                                node.isUserInteractionEnabled = false
+                                DispatchQueue.main.async {
+                                    node.isUserInteractionEnabled = true
+                                }
+                                return .dismiss(consume: false, result: nil)
+                            } else if let node = testViewValue.asyncdisplaykit_node as? PeerInfoVisualMediaPaneNode {
+                                node.brieflyDisableTouchActions()
+                                return .dismiss(consume: false, result: nil)
+                            } else if let node = testViewValue.asyncdisplaykit_node as? PeerInfoStoryPaneNode {
+                                node.brieflyDisableTouchActions()
+                                return .dismiss(consume: false, result: nil)
+                            } else {
+                                testView = testViewValue.superview
+                            }
+                        } else {
+                            break
+                        }
+                    }
+                    
                     return .dismiss(consume: true, result: nil)
                 }
-                
-                var testView: UIView? = localResult
-                while true {
-                    if let testViewValue = testView {
-                        if let node = testViewValue.asyncdisplaykit_node as? PeerInfoHeaderNavigationButton {
-                            node.isUserInteractionEnabled = false
-                            DispatchQueue.main.async {
-                                node.isUserInteractionEnabled = true
-                            }
-                            return .dismiss(consume: false, result: nil)
-                        } else if let node = testViewValue.asyncdisplaykit_node as? PeerInfoVisualMediaPaneNode {
-                            node.brieflyDisableTouchActions()
-                            return .dismiss(consume: false, result: nil)
-                        } else if let node = testViewValue.asyncdisplaykit_node as? PeerInfoStoryPaneNode {
-                            node.brieflyDisableTouchActions()
-                            return .dismiss(consume: false, result: nil)
-                        } else {
-                            testView = testViewValue.superview
-                        }
-                    } else {
-                        break
-                    }
-                }
-                
-                return .dismiss(consume: true, result: nil)
+                self.mediaGalleryContextMenu = contextController
+                controller.presentInGlobalOverlay(contextController)
             }
-            self.mediaGalleryContextMenu = contextController
-            controller.presentInGlobalOverlay(contextController)
         } else {
             let _ = (self.context.engine.data.get(EngineDataMap([
                 TelegramEngine.EngineData.Item.Messages.MessageCount(peerId: peerId, threadId: self.chatLocation.threadId, tag: .photo),
@@ -12480,6 +12608,10 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                             rightNavigationButtons.append(PeerInfoHeaderNavigationButtonSpec(key: .more, isForExpandedView: true))
                         case .botPreview:
                             if let data = self.data, data.hasBotPreviewItems, let user = data.peer as? TelegramUser, let botInfo = user.botInfo, botInfo.flags.contains(.canEdit) {
+                                rightNavigationButtons.append(PeerInfoHeaderNavigationButtonSpec(key: .more, isForExpandedView: true))
+                            }
+                        case .stories:
+                            if let data = self.data, data.peer?.id == self.context.account.peerId {
                                 rightNavigationButtons.append(PeerInfoHeaderNavigationButtonSpec(key: .more, isForExpandedView: true))
                             }
                         case .gifts:

@@ -1456,6 +1456,7 @@ public final class PeerStoryListContentContextImpl: StoryContentContext {
     }
     
     private let context: AccountContext
+    let listContext: StoryListContext
     
     public private(set) var stateValue: StoryContentContextState?
     public var state: Signal<StoryContentContextState, NoError> {
@@ -1486,6 +1487,7 @@ public final class PeerStoryListContentContextImpl: StoryContentContext {
     
     public init(context: AccountContext, listContext: StoryListContext, initialId: StoryId?, splitIndexIntoDays: Bool) {
         self.context = context
+        self.listContext = listContext
         
         let preferHighQualityStories: Signal<Bool, NoError> = combineLatest(
             context.sharedContext.automaticMediaDownloadSettings
