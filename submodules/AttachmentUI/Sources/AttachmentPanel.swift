@@ -941,7 +941,7 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate {
         self.mainButtonNode.addTarget(self, action: #selector(self.mainButtonPressed), forControlEvents: .touchUpInside)
         self.secondaryButtonNode.addTarget(self, action: #selector(self.secondaryButtonPressed), forControlEvents: .touchUpInside)
         
-        self.interfaceInteraction = ChatPanelInterfaceInteraction(setupReplyMessage: { _, _  in
+        self.interfaceInteraction = ChatPanelInterfaceInteraction(setupReplyMessage: { _, _, _  in
         }, setupEditMessage: { _, _ in
         }, beginMessageSelection: { _, _ in
         }, cancelMessageSelection: { _ in

@@ -2368,7 +2368,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                             transition: .immediate
                         )
                         context.add(descriptionButton
-                            .position(CGPoint(x: context.availableSize.width / 2.0, y: 207.0 + descriptionOffset + description.size.height / 2.0 - UIScreenPixel))
+                            .position(CGPoint(x: context.availableSize.width / 2.0, y: 207.0 + descriptionOffset + description.size.height / 2.0 - 1.0))
                             .appear(.default(alpha: true))
                             .disappear(.default(alpha: true))
                         )

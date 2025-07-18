@@ -1539,7 +1539,7 @@ extension ChatControllerImpl {
             strongSelf.window?.presentInGlobalOverlay(controller)
         }
         
-        let interfaceInteraction = ChatPanelInterfaceInteraction(setupReplyMessage: { [weak self] messageId, completion in
+        let interfaceInteraction = ChatPanelInterfaceInteraction(setupReplyMessage: { [weak self] messageId, todoItemId, completion in
             guard let strongSelf = self, strongSelf.isNodeLoaded else {
                 return
             }
@@ -1565,7 +1565,8 @@ extension ChatControllerImpl {
                             strongSelf.updateChatPresentationInterfaceState(animated: true, interactive: true, { $0.updatedInterfaceState({
                                 $0.withUpdatedReplyMessageSubject(ChatInterfaceState.ReplyMessageSubject(
                                     messageId: message.id,
-                                    quote: nil
+                                    quote: nil,
+                                    todoItemId: todoItemId
                                 ))
                             }).updatedReplyMessage(message).updatedSearch(nil).updatedShowCommands(false) }, completion: { t in
                                 completion(t, {})
@@ -1588,7 +1589,8 @@ extension ChatControllerImpl {
                 } else {
                     let replySubject = ChatInterfaceState.ReplyMessageSubject(
                         messageId: messageId,
-                        quote: nil
+                        quote: nil,
+                        todoItemId: todoItemId
                     )
                     
                     completion(.immediate, {
@@ -4885,7 +4887,7 @@ extension ChatControllerImpl {
                     if let message = strongSelf.chatDisplayNode.historyNode.messageInCurrentHistoryView(mappedId) {
                         if toSubject.setupReply {
                             Queue.mainQueue().after(0.1) {
-                                strongSelf.interfaceInteraction?.setupReplyMessage(mappedId, { _, f in f() })
+                                strongSelf.interfaceInteraction?.setupReplyMessage(mappedId, nil, { _, f in f() })
                             }
                         }
                         

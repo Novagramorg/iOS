@@ -197,6 +197,8 @@ private func synchronizeChatInputState(transaction: Transaction, postbox: Postbo
                 }
             }
             
+            let replyTodoItemId = replySubject.todoItemId
+            
             if replyToPeer != nil {
                 innerFlags |= 1 << 1
             }
@@ -209,9 +211,11 @@ private func synchronizeChatInputState(transaction: Transaction, postbox: Postbo
             if quoteOffset != nil {
                 innerFlags |= 1 << 4
             }
-            
+            if let _ = replyTodoItemId {
+                innerFlags |= 1 << 6
+            }
             if !discard {
-                replyTo = .inputReplyToMessage(flags: innerFlags, replyToMsgId: replySubject.messageId.id, topMsgId: topMsgId, replyToPeerId: replyToPeer, quoteText: quoteText, quoteEntities: quoteEntities, quoteOffset: quoteOffset, monoforumPeerId: monoforumPeerId, todoItemId: nil)
+                replyTo = .inputReplyToMessage(flags: innerFlags, replyToMsgId: replySubject.messageId.id, topMsgId: topMsgId, replyToPeerId: replyToPeer, quoteText: quoteText, quoteEntities: quoteEntities, quoteOffset: quoteOffset, monoforumPeerId: monoforumPeerId, todoItemId: replyTodoItemId)
             }
         } else if let topMsgId {
             flags |= 1 << 0

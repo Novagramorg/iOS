@@ -42,6 +42,7 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
             }
             
             public static let isBirthdayGift = Flags(rawValue: 1 << 0)
+            public static let requiresPremium = Flags(rawValue: 1 << 1)
         }
         
         enum CodingKeys: String, CodingKey {
@@ -55,6 +56,7 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
             case flags
             case upgradeStars
             case releasedBy
+            case perUserLimit
         }
         
         public struct Availability: Equatable, Codable, PostboxCoding {
@@ -137,6 +139,31 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
             }
         }
         
+        public struct PerUserLimit: Equatable, Codable, PostboxCoding {
+            enum CodingKeys: String, CodingKey {
+                case total
+                case remains
+            }
+
+            public let total: Int32
+            public let remains: Int32
+            
+            public init(total: Int32, remains: Int32) {
+                self.total = total
+                self.remains = remains
+            }
+            
+            public init(decoder: PostboxDecoder) {
+                self.total = decoder.decodeInt32ForKey(CodingKeys.total.rawValue, orElse: 0)
+                self.remains = decoder.decodeInt32ForKey(CodingKeys.remains.rawValue, orElse: 0)
+            }
+            
+            public func encode(_ encoder: PostboxEncoder) {
+                encoder.encodeInt32(self.total, forKey: CodingKeys.total.rawValue)
+                encoder.encodeInt32(self.remains, forKey: CodingKeys.remains.rawValue)
+            }
+        }
+        
         public enum DecodingError: Error {
             case generic
         }
@@ -151,8 +178,9 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
         public let flags: Flags
         public let upgradeStars: Int64?
         public let releasedBy: EnginePeer.Id?
+        public let perUserLimit: PerUserLimit?
         
-        public init(id: Int64, title: String?, file: TelegramMediaFile, price: Int64, convertStars: Int64, availability: Availability?, soldOut: SoldOut?, flags: Flags, upgradeStars: Int64?, releasedBy: EnginePeer.Id?) {
+        public init(id: Int64, title: String?, file: TelegramMediaFile, price: Int64, convertStars: Int64, availability: Availability?, soldOut: SoldOut?, flags: Flags, upgradeStars: Int64?, releasedBy: EnginePeer.Id?, perUserLimit: PerUserLimit?) {
             self.id = id
             self.title = title
             self.file = file
@@ -163,6 +191,7 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
             self.flags = flags
             self.upgradeStars = upgradeStars
             self.releasedBy = releasedBy
+            self.perUserLimit = perUserLimit
         }
         
         public init(from decoder: Decoder) throws {
@@ -183,6 +212,7 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
             self.flags = Flags(rawValue: try container .decodeIfPresent(Int32.self, forKey: .flags) ?? 0)
             self.upgradeStars = try container.decodeIfPresent(Int64.self, forKey: .upgradeStars)
             self.releasedBy = try container.decodeIfPresent(EnginePeer.Id.self, forKey: .releasedBy)
+            self.perUserLimit = try container.decodeIfPresent(PerUserLimit.self, forKey: .perUserLimit)
         }
         
         public init(decoder: PostboxDecoder) {
@@ -196,6 +226,7 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
             self.flags = Flags(rawValue: decoder.decodeInt32ForKey(CodingKeys.flags.rawValue, orElse: 0))
             self.upgradeStars = decoder.decodeOptionalInt64ForKey(CodingKeys.upgradeStars.rawValue)
             self.releasedBy = decoder.decodeOptionalInt64ForKey(CodingKeys.releasedBy.rawValue).flatMap { EnginePeer.Id($0) }
+            self.perUserLimit = decoder.decodeObjectForKey(CodingKeys.perUserLimit.rawValue, decoder: { StarGift.Gift.PerUserLimit(decoder: $0) }) as? StarGift.Gift.PerUserLimit
         }
         
         public func encode(to encoder: Encoder) throws {
@@ -215,6 +246,7 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
             try container.encode(self.flags.rawValue, forKey: .flags)
             try container.encodeIfPresent(self.upgradeStars, forKey: .upgradeStars)
             try container.encodeIfPresent(self.releasedBy, forKey: .releasedBy)
+            try container.encodeIfPresent(self.perUserLimit, forKey: .perUserLimit)
         }
         
         public func encode(_ encoder: PostboxEncoder) {
@@ -247,6 +279,11 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
                 encoder.encodeInt64(releasedBy.toInt64(), forKey: CodingKeys.releasedBy.rawValue)
             } else {
                 encoder.encodeNil(forKey: CodingKeys.releasedBy.rawValue)
+            }
+            if let perUserLimit = self.perUserLimit {
+                encoder.encodeObject(perUserLimit, forKey: CodingKeys.perUserLimit.rawValue)
+            } else {
+                encoder.encodeNil(forKey: CodingKeys.perUserLimit.rawValue)
             }
         }
     }
@@ -720,10 +757,13 @@ public extension StarGift {
 extension StarGift {
     init?(apiStarGift: Api.StarGift) {
         switch apiStarGift {
-        case let .starGift(apiFlags, id, sticker, stars, availabilityRemains, availabilityTotal, availabilityResale, convertStars, firstSale, lastSale, upgradeStars, minResaleStars, title, releasedBy, _, _):
+        case let .starGift(apiFlags, id, sticker, stars, availabilityRemains, availabilityTotal, availabilityResale, convertStars, firstSale, lastSale, upgradeStars, minResaleStars, title, releasedBy, perUserTotal, perUserRemains):
             var flags = StarGift.Gift.Flags()
             if (apiFlags & (1 << 2)) != 0 {
                 flags.insert(.isBirthdayGift)
+            }
+            if (apiFlags & (1 << 7)) != 0 {
+                flags.insert(.requiresPremium)
             }
             
             var availability: StarGift.Gift.Availability?
@@ -739,10 +779,14 @@ extension StarGift {
             if let firstSale, let lastSale {
                 soldOut = StarGift.Gift.SoldOut(firstSale: firstSale, lastSale: lastSale)
             }
+            var perUserLimit: StarGift.Gift.PerUserLimit?
+            if let perUserTotal, let perUserRemains {
+                perUserLimit = StarGift.Gift.PerUserLimit(total: perUserTotal, remains: perUserRemains)
+            }
             guard let file = telegramMediaFileFromApiDocument(sticker, altDocuments: nil) else {
                 return nil
             }
-            self = .generic(StarGift.Gift(id: id, title: title, file: file, price: stars, convertStars: convertStars, availability: availability, soldOut: soldOut, flags: flags, upgradeStars: upgradeStars, releasedBy: releasedBy?.peerId))
+            self = .generic(StarGift.Gift(id: id, title: title, file: file, price: stars, convertStars: convertStars, availability: availability, soldOut: soldOut, flags: flags, upgradeStars: upgradeStars, releasedBy: releasedBy?.peerId, perUserLimit: perUserLimit))
         case let .starGiftUnique(_, id, title, slug, num, ownerPeerId, ownerName, ownerAddress, attributes, availabilityIssued, availabilityTotal, giftAddress, resellStars, releasedBy):
             let owner: StarGift.UniqueGift.Owner
             if let ownerAddress {
@@ -1075,7 +1119,7 @@ func _internal_starGiftUpgradePreview(account: Account, giftId: Int64) -> Signal
     }
 }
 
-private final class CachedProfileGifts: Codable {
+final class CachedProfileGifts: Codable {
     enum CodingKeys: String, CodingKey {
         case gifts
         case count
@@ -1118,9 +1162,16 @@ private final class CachedProfileGifts: Codable {
     }
 }
 
-private func entryId(peerId: EnginePeer.Id) -> ItemCacheEntryId {
-    let cacheKey = ValueBoxKey(length: 8)
-    cacheKey.setInt64(0, value: peerId.toInt64())
+func giftsEntryId(peerId: EnginePeer.Id, collectionId: Int32?) -> ItemCacheEntryId {
+    let cacheKey: ValueBoxKey
+    if let collectionId {
+        cacheKey = ValueBoxKey(length: 8 + 4)
+        cacheKey.setInt64(0, value: peerId.toInt64())
+        cacheKey.setInt32(8, value: collectionId)
+    } else {
+        cacheKey = ValueBoxKey(length: 8)
+        cacheKey.setInt64(0, value: peerId.toInt64())
+    }
     return ItemCacheEntryId(collectionId: Namespaces.CachedItemCollection.cachedProfileGifts, key: cacheKey)
 }
 
@@ -1128,6 +1179,7 @@ private final class ProfileGiftsContextImpl {
     private let queue: Queue
     private let account: Account
     private let peerId: PeerId
+    private let collectionId: Int32?
     
     private let disposable = MetaDisposable()
     private let cacheDisposable = MetaDisposable()
@@ -1156,12 +1208,14 @@ private final class ProfileGiftsContextImpl {
         queue: Queue,
         account: Account,
         peerId: EnginePeer.Id,
+        collectionId: Int32?,
         sorting: ProfileGiftsContext.Sorting,
         filter: ProfileGiftsContext.Filters
     ) {
         self.queue = queue
         self.account = account
         self.peerId = peerId
+        self.collectionId = collectionId
         self.sorting = sorting
         self.filter = filter
         
@@ -1182,6 +1236,7 @@ private final class ProfileGiftsContextImpl {
     
     func loadMore(reload: Bool = false) {
         let peerId = self.peerId
+        let collectionId = self.collectionId
         let accountPeerId = self.account.peerId
         let network = self.account.network
         let postbox = self.account.postbox
@@ -1200,7 +1255,7 @@ private final class ProfileGiftsContextImpl {
         if case let .ready(true, initialNextOffset) = dataState {
             if !isFiltered || isUniqueOnlyFilter, self.gifts.isEmpty, initialNextOffset == nil, !reload {
                 self.cacheDisposable.set((self.account.postbox.transaction { transaction -> CachedProfileGifts? in
-                    let cachedGifts = transaction.retrieveItemCacheEntry(id: entryId(peerId: peerId))?.get(CachedProfileGifts.self)
+                    let cachedGifts = transaction.retrieveItemCacheEntry(id: giftsEntryId(peerId: peerId, collectionId: collectionId))?.get(CachedProfileGifts.self)
                     cachedGifts?.render(transaction: transaction)
                     return cachedGifts
                 } |> deliverOn(self.queue)).start(next: { [weak self] cachedGifts in
@@ -1248,6 +1303,9 @@ private final class ProfileGiftsContextImpl {
                     return .single(([], 0, nil, nil))
                 }
                 var flags: Int32 = 0
+                if let _ = collectionId {
+                    flags |= (1 << 6)
+                }
                 if case .value = sorting {
                     flags |= (1 << 5)
                 }
@@ -1266,7 +1324,7 @@ private final class ProfileGiftsContextImpl {
                 if !filter.contains(.unique) {
                     flags |= (1 << 4)
                 }
-                return network.request(Api.functions.payments.getSavedStarGifts(flags: flags, peer: inputPeer, offset: initialNextOffset ?? "", limit: 36))
+                return network.request(Api.functions.payments.getSavedStarGifts(flags: flags, peer: inputPeer, collectionId: collectionId, offset: initialNextOffset ?? "", limit: 36))
                 |> map(Optional.init)
                 |> `catch` { _ -> Signal<Api.payments.SavedStarGifts?, NoError> in
                     return .single(nil)
@@ -1319,7 +1377,7 @@ private final class ProfileGiftsContextImpl {
                         self.gifts = gifts
                         self.cacheDisposable.set(self.account.postbox.transaction { transaction in
                             if let entry = CodableEntry(CachedProfileGifts(gifts: gifts, count: count, notificationsEnabled: notificationsEnabled)) {
-                                transaction.putItemCacheEntry(id: entryId(peerId: peerId), entry: entry)
+                                transaction.putItemCacheEntry(id: giftsEntryId(peerId: peerId, collectionId: collectionId), entry: entry)
                             }
                         }.start())
                     } else {
@@ -1587,6 +1645,88 @@ private final class ProfileGiftsContextImpl {
     func removeStarGift(gift: TelegramCore.StarGift) {
         self.gifts.removeAll(where: { $0.gift == gift })
         self.filteredGifts.removeAll(where: { $0.gift == gift })
+        self.pushState()
+    }
+    
+    func insertStarGifts(gifts: [ProfileGiftsContext.State.StarGift]) {
+        self.gifts.insert(contentsOf: gifts, at: 0)
+        self.pushState()
+        
+        let peerId = self.peerId
+        let collectionId = self.collectionId
+        self.cacheDisposable.set(self.account.postbox.transaction { transaction in
+            var updatedGifts: [ProfileGiftsContext.State.StarGift] = []
+            var updatedCount: Int32 = 0
+            if let cachedGifts = transaction.retrieveItemCacheEntry(id: giftsEntryId(peerId: peerId, collectionId: collectionId))?.get(CachedProfileGifts.self) {
+                updatedGifts = cachedGifts.gifts
+                updatedCount = cachedGifts.count
+            } else {
+                updatedGifts = []
+            }
+            updatedGifts.insert(contentsOf: gifts, at: 0)
+            updatedCount += Int32(gifts.count)
+            if let entry = CodableEntry(CachedProfileGifts(gifts: updatedGifts, count: updatedCount, notificationsEnabled: nil)) {
+                transaction.putItemCacheEntry(id: giftsEntryId(peerId: peerId, collectionId: collectionId), entry: entry)
+            }
+        }.start())
+    }
+    
+    func removeStarGifts(references: [StarGiftReference]) {
+        self.gifts.removeAll(where: {
+            if let reference = $0.reference {
+                return references.contains(reference)
+            } else {
+                return false
+            }
+        })
+        self.pushState()
+        
+        let peerId = self.peerId
+        let collectionId = self.collectionId
+        self.cacheDisposable.set(self.account.postbox.transaction { transaction in
+            var updatedGifts: [ProfileGiftsContext.State.StarGift] = []
+            var updatedCount: Int32 = 0
+            if let cachedGifts = transaction.retrieveItemCacheEntry(id: giftsEntryId(peerId: peerId, collectionId: collectionId))?.get(CachedProfileGifts.self) {
+                updatedGifts = cachedGifts.gifts
+                updatedCount = cachedGifts.count
+            } else {
+                updatedGifts = []
+            }
+            updatedGifts = updatedGifts.filter { gift in
+                if let reference = gift.reference {
+                    return !references.contains(reference)
+                } else {
+                    return true
+                }
+            }
+            updatedCount -= Int32(references.count)
+            if let entry = CodableEntry(CachedProfileGifts(gifts: updatedGifts, count: updatedCount, notificationsEnabled: nil)) {
+                transaction.putItemCacheEntry(id: giftsEntryId(peerId: peerId, collectionId: collectionId), entry: entry)
+            }
+        }.start())
+    }
+    
+    func reorderStarGifts(references: [StarGiftReference]) {
+        let giftsSet = Set(references)
+        var giftsMap: [StarGiftReference: ProfileGiftsContext.State.StarGift] = [:]
+        for gift in self.gifts {
+            if let reference = gift.reference {
+                giftsMap[reference] = gift
+            }
+        }
+        var updatedGifts: [ProfileGiftsContext.State.StarGift] = []
+        for reference in references {
+            if let gift = giftsMap[reference] {
+                updatedGifts.append(gift)
+            }
+        }
+        for gift in self.gifts {
+            if let reference = gift.reference, giftsSet.contains(reference) {
+                continue
+            }
+            updatedGifts.append(gift)
+        }
+        self.gifts = updatedGifts
         self.pushState()
     }
     
@@ -2016,15 +2156,22 @@ public final class ProfileGiftsContext {
         }
     }
     
+    public let peerId: EnginePeer.Id
+    public let collectionId: Int32?
+    
     public init(
         account: Account,
         peerId: EnginePeer.Id,
+        collectionId: Int32? = nil,
         sorting: ProfileGiftsContext.Sorting = .date,
         filter: ProfileGiftsContext.Filters = .All
     ) {
+        self.peerId = peerId
+        self.collectionId = collectionId
+        
         let queue = self.queue
         self.impl = QueueLocalObject(queue: queue, generate: {
-            return ProfileGiftsContextImpl(queue: queue, account: account, peerId: peerId, sorting: sorting, filter: filter)
+            return ProfileGiftsContextImpl(queue: queue, account: account, peerId: peerId, collectionId: collectionId, sorting: sorting, filter: filter)
         })
     }
     
@@ -2084,6 +2231,24 @@ public final class ProfileGiftsContext {
         }
     }
     
+    public func insertStarGifts(gifts: [ProfileGiftsContext.State.StarGift]) {
+        self.impl.with { impl in
+            impl.insertStarGifts(gifts: gifts)
+        }
+    }
+    
+    public func removeStarGifts(references: [StarGiftReference]) {
+        self.impl.with { impl in
+            impl.removeStarGifts(references: references)
+        }
+    }
+    
+    public func reorderStarGifts(references: [StarGiftReference]) {
+        self.impl.with { impl in
+            impl.reorderStarGifts(references: references)
+        }
+    }
+
     public func transferStarGift(prepaid: Bool, reference: StarGiftReference, peerId: EnginePeer.Id) -> Signal<Never, TransferStarGiftError> {
         return Signal { subscriber in
             let disposable = MetaDisposable()

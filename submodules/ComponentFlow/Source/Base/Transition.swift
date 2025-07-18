@@ -1059,6 +1059,34 @@ public struct ComponentTransition {
         }
     }
     
+    public func setShapeLayerStrokeColor(layer: CAShapeLayer, color: UIColor, completion: ((Bool) -> Void)? = nil) {
+        if let current = layer.strokeColor, current == color.cgColor {
+            completion?(true)
+            return
+        }
+        
+        switch self.animation {
+        case .none:
+            layer.strokeColor = color.cgColor
+            completion?(true)
+        case let .curve(duration, curve):
+            let previousColor: CGColor = layer.strokeColor ?? UIColor.clear.cgColor
+            layer.strokeColor = color.cgColor
+            
+            layer.animate(
+                from: previousColor,
+                to: color.cgColor,
+                keyPath: "strokeColor",
+                duration: duration,
+                delay: 0.0,
+                curve: curve,
+                removeOnCompletion: true,
+                additive: false,
+                completion: completion
+            )
+        }
+    }
+    
     public func setShapeLayerStrokeStart(layer: CAShapeLayer, strokeStart: CGFloat, completion: ((Bool) -> Void)? = nil) {
         switch self.animation {
         case .none:
