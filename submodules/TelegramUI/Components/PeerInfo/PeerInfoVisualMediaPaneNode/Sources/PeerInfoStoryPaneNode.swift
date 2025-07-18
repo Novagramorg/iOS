@@ -1583,6 +1583,7 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
     private var reorderedIds: [StoryId]?
     private var itemCount: Int?
     private var didUpdateItemsOnce: Bool = false
+    private var itemTabId: AnyHashable?
     
     private var selectionPanel: ComponentView<Empty>?
     private var actionPanel: ComponentView<Empty>?
@@ -1713,6 +1714,7 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
 
     public var openCurrentDate: (() -> Void)?
     public var paneDidScroll: (() -> Void)?
+    public var expandIfNeeded: (() -> Void)?
     public var emptyAction: (() -> Void)?
     public var additionalEmptyAction: (() -> Void)?
     
@@ -2881,7 +2883,12 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
                         title = self.presentationData.strings.BotPreviews_SubtitleEmpty
                     }
                 } else {
-                    title = ""
+                    if state.isLoading {
+                        title = self.presentationData.strings.BotPreviews_SubtitleLoading
+                    } else {
+                        //TODO:localize
+                        title = "no stories"
+                    }
                 }
             } else if case let .peer(_, isSaved, isArchived) = self.scope {
                 if isSaved {
@@ -3068,13 +3075,40 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
         )
         
         self.itemCount = state.totalCount
+        
+        var itemTabId: AnyHashable?
+        if let folder = self.currentStoryFolder {
+            itemTabId = AnyHashable(folder.id)
+        }
+        let previousItemTabId = self.itemTabId
+        self.itemTabId = itemTabId
+        
+        var animateDirection: Bool?
+        if firstTime {
+            if previousItemTabId == nil && itemTabId == nil {
+            } else if let previousItemTabId, let itemTabId {
+                let previousIndex = self.currentStoryFolders.firstIndex(where: { AnyHashable($0.id) == previousItemTabId })
+                let updatedIndex = self.currentStoryFolders.firstIndex(where: { AnyHashable($0.id) == itemTabId })
+                if let previousIndex, let updatedIndex {
+                    animateDirection = updatedIndex > previousIndex
+                }
+            } else {
+                if previousItemTabId != nil {
+                    if itemTabId == nil {
+                        animateDirection = false
+                    }
+                } else if itemTabId != nil {
+                    animateDirection = true
+                }
+            }
+        }
 
         let currentSynchronous = synchronous && firstTime
         let currentReloadAtTop = reloadAtTop && firstTime
-        self.updateHistory(items: items, pinnedIds: Set(state.pinnedIds), synchronous: currentSynchronous, reloadAtTop: currentReloadAtTop, animated: animated)
+        self.updateHistory(items: items, pinnedIds: Set(state.pinnedIds), synchronous: currentSynchronous, reloadAtTop: currentReloadAtTop, animated: animated, animateDirection: animateDirection)
     }
     
-    private func updateHistory(items: SparseItemGrid.Items, pinnedIds: Set<Int32>, synchronous: Bool, reloadAtTop: Bool, animated: Bool) {
+    private func updateHistory(items: SparseItemGrid.Items, pinnedIds: Set<Int32>, synchronous: Bool, reloadAtTop: Bool, animated: Bool, animateDirection: Bool?) {
         var transition: ContainedViewLayoutTransition = .immediate
         if case .location = self.scope, let previousItems = self.items, previousItems.items.count == 0, previousItems.count != 0, items.items.count == 0, items.count == 0 {
             transition = .animated(duration: 0.3, curve: .spring)
@@ -3085,17 +3119,57 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
 
         if let (size, topInset, sideInset, bottomInset, deviceMetrics, visibleHeight, isScrollingLockedAtTop, expandProgress, navigationHeight, presentationData) = self.currentParams {
             var gridSnapshot: UIView?
-            if case .botPreview = scope {
-            } else if reloadAtTop {
+            var emptyStateSnapshot: UIView?
+            if animateDirection != nil {
                 gridSnapshot = self.itemGrid.view.snapshotView(afterScreenUpdates: false)
+                
+                if let emptyStateView = self.emptyStateView?.view {
+                    emptyStateSnapshot = emptyStateView.snapshotView(afterScreenUpdates: false)
+                    emptyStateSnapshot?.frame = emptyStateView.frame
+                }
+            } else {
+                if case .botPreview = self.scope {
+                } else if !self.currentStoryFolders.isEmpty {
+                } else if case let .peer(id, _, isArchived) = self.scope, id == self.context.account.peerId, !isArchived {
+                } else if reloadAtTop {
+                    gridSnapshot = self.itemGrid.view.snapshotView(afterScreenUpdates: false)
+                }
             }
-            self.update(size: size, topInset: topInset, sideInset: sideInset, bottomInset: bottomInset, deviceMetrics: deviceMetrics, visibleHeight: visibleHeight, isScrollingLockedAtTop: isScrollingLockedAtTop, expandProgress: expandProgress, navigationHeight: navigationHeight, presentationData: presentationData, synchronous: false, transition: transition, animateGridItems: animated)
+            
+            self.update(size: size, topInset: topInset, sideInset: sideInset, bottomInset: bottomInset, deviceMetrics: deviceMetrics, visibleHeight: visibleHeight, isScrollingLockedAtTop: isScrollingLockedAtTop, expandProgress: expandProgress, navigationHeight: navigationHeight, presentationData: presentationData, synchronous: false, transition: transition, animateGridItems: animated, animateBottomPanel: animateDirection != nil)
             self.updateSelectedItems(animated: false)
-            if let gridSnapshot = gridSnapshot {
-                self.view.addSubview(gridSnapshot)
-                gridSnapshot.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2, removeOnCompletion: false, completion: { [weak gridSnapshot] _ in
-                    gridSnapshot?.removeFromSuperview()
+            
+            if let gridSnapshot {
+                self.view.insertSubview(gridSnapshot, aboveSubview: self.itemGrid.view)
+                gridSnapshot.frame = self.itemGrid.frame
+                if let animateDirection {
+                    let directionFactor: CGFloat = animateDirection ? 1.0 : -1.0
+                    
+                    let transition: ContainedViewLayoutTransition = .animated(duration: 0.4, curve: .spring)
+                    transition.animatePositionAdditive(node: self.itemGrid, offset: CGPoint(x: size.width * directionFactor, y: 0.0))
+                    transition.animatePosition(layer: gridSnapshot.layer, from: CGPoint(), to: CGPoint(x: size.width * (-directionFactor), y: 0.0), removeOnCompletion: false, additive: true, completion: { [weak gridSnapshot] _ in
+                        gridSnapshot?.removeFromSuperview()
+                    })
+                } else {
+                    gridSnapshot.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2, removeOnCompletion: false, completion: { [weak gridSnapshot] _ in
+                        gridSnapshot?.removeFromSuperview()
+                    })
+                }
+            }
+            if let emptyStateSnapshot, let animateDirection {
+                self.view.insertSubview(emptyStateSnapshot, belowSubview: self.itemGrid.view)
+                let directionFactor: CGFloat = animateDirection ? 1.0 : -1.0
+                
+                let transition: ContainedViewLayoutTransition = .animated(duration: 0.4, curve: .spring)
+                transition.animatePosition(layer: emptyStateSnapshot.layer, from: CGPoint(), to: CGPoint(x: size.width * (-directionFactor), y: 0.0), removeOnCompletion: false, additive: true, completion: { [weak emptyStateSnapshot] _ in
+                    emptyStateSnapshot?.removeFromSuperview()
                 })
+            }
+            if let emptyStateView = self.emptyStateView?.view, let animateDirection {
+                let directionFactor: CGFloat = animateDirection ? 1.0 : -1.0
+                
+                let transition: ContainedViewLayoutTransition = .animated(duration: 0.4, curve: .spring)
+                transition.animatePositionAdditive(layer: emptyStateView.layer, offset: CGPoint(x: size.width * directionFactor, y: 0.0))
             }
         }
         
@@ -3771,6 +3845,9 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
                     guard let self else {
                         return
                     }
+                    
+                    self.expandIfNeeded?()
+                    
                     if let id = id.base as? String {
                         if id == "_add" {
                             if case .botPreview = self.scope {
@@ -3887,10 +3964,10 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
     }
     
     public func update(size: CGSize, topInset: CGFloat, sideInset: CGFloat, bottomInset: CGFloat, deviceMetrics: DeviceMetrics, visibleHeight: CGFloat, isScrollingLockedAtTop: Bool, expandProgress: CGFloat, navigationHeight: CGFloat, presentationData: PresentationData, synchronous: Bool, transition: ContainedViewLayoutTransition) {
-        self.update(size: size, topInset: topInset, sideInset: sideInset, bottomInset: bottomInset, deviceMetrics: deviceMetrics, visibleHeight: visibleHeight, isScrollingLockedAtTop: isScrollingLockedAtTop, expandProgress: expandProgress, navigationHeight: navigationHeight, presentationData: presentationData, synchronous: synchronous, transition: transition, animateGridItems: false)
+        self.update(size: size, topInset: topInset, sideInset: sideInset, bottomInset: bottomInset, deviceMetrics: deviceMetrics, visibleHeight: visibleHeight, isScrollingLockedAtTop: isScrollingLockedAtTop, expandProgress: expandProgress, navigationHeight: navigationHeight, presentationData: presentationData, synchronous: synchronous, transition: transition, animateGridItems: false, animateBottomPanel: transition.isAnimated)
     }
         
-    private func update(size: CGSize, topInset: CGFloat, sideInset: CGFloat, bottomInset: CGFloat, deviceMetrics: DeviceMetrics, visibleHeight: CGFloat, isScrollingLockedAtTop: Bool, expandProgress: CGFloat, navigationHeight: CGFloat, presentationData: PresentationData, synchronous: Bool, transition: ContainedViewLayoutTransition, animateGridItems: Bool) {
+    private func update(size: CGSize, topInset: CGFloat, sideInset: CGFloat, bottomInset: CGFloat, deviceMetrics: DeviceMetrics, visibleHeight: CGFloat, isScrollingLockedAtTop: Bool, expandProgress: CGFloat, navigationHeight: CGFloat, presentationData: PresentationData, synchronous: Bool, transition: ContainedViewLayoutTransition, animateGridItems: Bool, animateBottomPanel: Bool) {
         self.currentParams = (size, topInset, sideInset, bottomInset, deviceMetrics, visibleHeight, isScrollingLockedAtTop, expandProgress, navigationHeight, presentationData)
         
         var gridTopInset = topInset
@@ -3924,7 +4001,15 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
             mapOptionsNode.updateLayout(size: mapOptionsFrame.size, leftInset: sideInset, rightInset: sideInset, transition: transition)
         }
         
-        if self.isProfileEmbedded, case .botPreview = self.scope {
+        var hasBarBackground = false
+        if self.isProfileEmbedded {
+            if case .botPreview = self.scope {
+                hasBarBackground = true
+            } else if case let .peer(id, _, isArchived) = self.scope, id == self.context.account.peerId, !isArchived {
+                hasBarBackground = true
+            }
+        }
+        if hasBarBackground {
             let barBackgroundLayer: SimpleLayer
             if let current = self.barBackgroundLayer {
                 barBackgroundLayer = current
@@ -4143,6 +4228,12 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
             }
         }
         
+        var actionPanelGeneralTransition: ComponentTransition
+        if animateBottomPanel && !transition.isAnimated {
+            actionPanelGeneralTransition = .spring(duration: 0.4)
+        } else {
+            actionPanelGeneralTransition = ComponentTransition(transition)
+        }
         if self.selectionPanel == nil, self.isProfileEmbedded, self.canManageStories, case let .peer(peerId, _, isArchived) = self.scope, peerId == self.context.account.peerId, !isArchived, self.isProfileEmbedded, self.currentStoryFolder != nil, let items = self.items, !items.items.isEmpty {
             let actionPanel: ComponentView<Empty>
             var actionPanelTransition = ComponentTransition(transition)
@@ -4177,7 +4268,7 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
             if let actionPanelView = actionPanel.view {
                 if actionPanelView.superview == nil {
                     self.view.addSubview(actionPanelView)
-                    transition.animatePositionAdditive(layer: actionPanelView.layer, offset: CGPoint(x: 0.0, y: actionPanelFrame.height))
+                    actionPanelGeneralTransition.animatePosition(layer: actionPanelView.layer, from: CGPoint(x: 0.0, y: actionPanelFrame.height), to: CGPoint(), additive: true)
                 }
                 actionPanelTransition.setFrame(view: actionPanelView, frame: actionPanelFrame)
             }
@@ -4186,7 +4277,7 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
         } else if let actionPanel = self.actionPanel {
             self.actionPanel = nil
             if let actionPanelView = actionPanel.view {
-                transition.updateFrame(view: actionPanelView, frame: CGRect(origin: CGPoint(x: 0.0, y: size.height), size: actionPanelView.bounds.size), completion: { [weak actionPanelView] _ in
+                actionPanelGeneralTransition.setFrame(view: actionPanelView, frame: CGRect(origin: CGPoint(x: 0.0, y: size.height), size: actionPanelView.bounds.size), completion: { [weak actionPanelView] _ in
                     actionPanelView?.removeFromSuperview()
                 })
             }
@@ -4233,7 +4324,7 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
                 
                 let emptyStateFrame: CGRect
                 if self.isProfileEmbedded {
-                    emptyStateFrame = CGRect(origin: CGPoint(x: floor((size.width - emptyStateSize.width) * 0.5), y: max(gridTopInset + 22.0, floor((visibleHeight - gridTopInset - bottomInset - emptyStateSize.height) * 0.5))), size: emptyStateSize)
+                    emptyStateFrame = CGRect(origin: CGPoint(x: floor((size.width - emptyStateSize.width) * 0.5), y: max(gridTopInset + 22.0, floor((visibleHeight - bottomInset - emptyStateSize.height) * 0.5))), size: emptyStateSize)
                 } else {
                     emptyStateFrame = CGRect(origin: CGPoint(x: floor((size.width - emptyStateSize.width) * 0.5), y: gridTopInset), size: emptyStateSize)
                 }
@@ -4484,8 +4575,6 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
             let backgroundColor: UIColor
             if self.isProfileEmbedded, case .botPreview = self.scope {
                 backgroundColor = presentationData.theme.list.blocksBackgroundColor
-            } else if self.isProfileEmbedded, case let .peer(peerId, _, isArchived) = self.scope, peerId == self.context.account.peerId, self.isProfileEmbedded, !isArchived {
-                backgroundColor = presentationData.theme.list.blocksBackgroundColor
             } else if self.isProfileEmbedded {
                 backgroundColor = presentationData.theme.list.blocksBackgroundColor
             } else {
@@ -4691,6 +4780,7 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
             value: "",
             placeholder: "Title",
             characterLimit: 20,
+            displayCharacterLimit: true,
             apply: { [weak self] value in
                 guard let self else {
                     return

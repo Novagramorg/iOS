@@ -1509,6 +1509,7 @@ public final class PeerStoryListContext: StoryListContext {
                         peer: nil
                     ), at: 0)
                 }
+                state.totalCount = state.items.count
                 self.stateValue = state
             }
         }
@@ -1546,6 +1547,7 @@ public final class PeerStoryListContext: StoryListContext {
             if self.folderId == id {
                 var state = self.stateValue
                 state.items.removeAll(where: { itemIds.contains($0.id.id) })
+                state.totalCount = state.items.count
                 self.stateValue = state
             }
         }
