@@ -24,6 +24,11 @@ import Markdown
 import TelegramUIPreferences
 import UndoUI
 import TelegramStringFormatting
+import ListActionItemComponent
+import ContextUI
+import BundleIconComponent
+import PromptUI
+import DirectMediaImageCache
 
 final class ShareWithPeersScreenComponent: Component {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
@@ -348,6 +353,8 @@ final class ShareWithPeersScreenComponent: Component {
         
         private var selectedCategories = Set<CategoryId>()
         private var selectedOptions = Set<OptionId>()
+        
+        private var shareToFolders: [StoryListContext.State.Folder] = []
         
         private var component: ShareWithPeersScreenComponent?
         private weak var state: EmptyComponentState?
@@ -875,6 +882,139 @@ final class ShareWithPeersScreenComponent: Component {
                     controller.updateModalStyleOverlayTransitionFactor(transitionFactor, transition: transition.containedViewLayoutTransition)
                 }
             }
+        }
+        
+        private func displayFolderSelectionMenu(sourceView: UIView) {
+            Task { @MainActor [weak self] in
+                guard let self, let component = self.component, let environment = self.environment, let controller = environment.controller() else {
+                    return
+                }
+                
+                let presentationData = component.context.sharedContext.currentPresentationData.with({ $0 }).withUpdated(theme: environment.theme)
+                
+                let (peerReference, folderPreviews) = await PeerStoryListContext.folderPreviews(peerId: component.context.account.peerId, account: component.context.account).get()
+                
+                var items: [ContextMenuItem] = []
+                
+                items.append(.action(ContextMenuActionItem(text: "New Album", icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Folder"), color: theme.contextMenu.primaryColor) }, iconPosition: .left, action: { [weak self] c, f in
+                    guard let self else {
+                        f(.default)
+                        return
+                    }
+                    
+                    c?.dismiss(completion: { [weak self] in
+                        guard let self else {
+                            return
+                        }
+                        self.presentAddStoryFolder()
+                    })
+                })))
+                
+                for folderPreview in folderPreviews {
+                    var iconSource: ContextMenuActionItemIconSource?
+                    if let story = folderPreview.item {
+                        var imageSignal: Signal<UIImage?, NoError>?
+                        
+                        var selectedMedia: Media?
+                        if let image = story.media._asMedia() as? TelegramMediaImage {
+                            selectedMedia = image
+                        } else if let file = story.media._asMedia() as? TelegramMediaFile {
+                            selectedMedia = file
+                        }
+                        
+                        if let selectedMedia {
+                            let directMediaImageCache = DirectMediaImageCache(account: component.context.account)
+                            if let result = directMediaImageCache.getImage(peer: peerReference, story: story, media: selectedMedia, width: 24, aspectRatio: 1.0, possibleWidths: [24], includeBlurred: false, synchronous: true) {
+                                if let loadSignal = result.loadSignal {
+                                    imageSignal = .single(result.image) |> then(loadSignal)
+                                } else {
+                                    imageSignal = .single(result.image)
+                                }
+                            }
+                        }
+                        
+                        if let imageSignal {
+                            iconSource = ContextMenuActionItemIconSource(
+                                size: CGSize(width: 24.0, height: 24.0),
+                                cornerRadius: 5.0,
+                                signal: imageSignal
+                            )
+                        }
+                    }
+                    
+                    var icon: (PresentationTheme) -> UIImage? = { _ in nil }
+                    if iconSource == nil {
+                        icon = { theme in
+                            return generateImage(CGSize(width: 24.0, height: 24.0), opaque: false, scale: nil, rotatedContext: { size, context in
+                                context.clear(CGRect(origin: CGPoint(), size: size))
+                                context.setFillColor(theme.contextMenu.primaryColor.withMultipliedAlpha(0.1).cgColor)
+                                context.addPath(UIBezierPath(roundedRect: CGRect(origin: CGPoint(), size: size), cornerRadius: 5.0).cgPath)
+                                context.fillPath()
+                            })
+                        }
+                    }
+                    
+                    let isSelected = self.shareToFolders.contains(where: { $0.id == folderPreview.folder.id })
+                    items.append(.action(ContextMenuActionItem(text: folderPreview.folder.title, icon: icon, additionalLeftIcon: { theme in
+                        if !isSelected {
+                            return nil
+                        }
+                        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Check"), color: theme.contextMenu.primaryColor)
+                    }, iconSource: iconSource, iconPosition: .left, action: { [weak self] c, f in
+                        guard let self, let _ = self.component else {
+                            f(.default)
+                            return
+                        }
+                        
+                        c?.dismiss(completion: {})
+                        
+                        if let index = self.shareToFolders.firstIndex(where: { $0.id == folderPreview.folder.id }) {
+                            self.shareToFolders.remove(at: index)
+                        } else {
+                            self.shareToFolders.append(folderPreview.folder)
+                        }
+                        
+                        self.state?.updated(transition: .immediate)
+                    })))
+                }
+                
+                let contextController = ContextController(presentationData: presentationData, source: .reference(HeaderContextReferenceContentSource(controller: controller, sourceView: sourceView, actionsOnTop: true)), items: .single(ContextController.Items(id: AnyHashable(0), content: .list(items))), gesture: nil)
+                controller.presentInGlobalOverlay(contextController)
+            }
+        }
+        
+        private func presentAddStoryFolder() {
+            guard let component = self.component, let environment = self.environment, let controller = environment.controller() else {
+                return
+            }
+            
+            let presentationData = component.context.sharedContext.currentPresentationData.with({ $0 }).withUpdated(theme: environment.theme)
+            
+            //TODO:localize
+            let promptController = promptController(
+                sharedContext: component.context.sharedContext,
+                updatedPresentationData: (initial: presentationData, signal: .single(presentationData)),
+                text: "Create a New Album",
+                titleFont: .bold,
+                subtitle: "Choose a name for your album and start adding your stories there.",
+                value: "",
+                placeholder: "Title",
+                characterLimit: 20,
+                apply: { [weak self] value in
+                    guard let self, let component = self.component else {
+                        return
+                    }
+                    if let value, !value.isEmpty {
+                        let id = PeerStoryListContext.addFolderExternal(account: component.context.account, peerId: component.context.account.peerId, title: value)
+                        self.shareToFolders.append(StoryListContext.State.Folder(
+                            id: id,
+                            title: value
+                        ))
+                        self.state?.updated(transition: .immediate)
+                    }
+                }
+            )
+            controller.present(promptController, in: .window(.root))
         }
         
         private func updateScrolling(transition: ComponentTransition) {
@@ -1683,8 +1823,84 @@ final class ShareWithPeersScreenComponent: Component {
                     }
                     sectionOffset += footerSize.height
                 } else if section.id == 4 && section.itemCount > 0 {
+                    var sectionItemOffset: CGFloat = 0.0
+                    if self.selectedOptions.contains(.pin) {
+                        let itemFrame = CGRect(origin: CGPoint(x: itemLayout.sideInset, y: sectionOffset + section.insets.top + sectionItemOffset), size: CGSize(width: itemLayout.containerSize.width, height: section.itemHeight))
+                        if !visibleBounds.intersects(itemFrame) {
+                            continue
+                        }
+                        
+                        let itemId = AnyHashable("album")
+                        validIds.append(itemId)
+                        
+                        var itemTransition = transition
+                        let visibleItem: ComponentView<Empty>
+                        if let current = self.visibleItems[itemId] {
+                            visibleItem = current
+                        } else {
+                            visibleItem = ComponentView()
+                            if !transition.animation.isImmediate {
+                                itemTransition = .immediate
+                            }
+                            self.visibleItems[itemId] = visibleItem
+                        }
+                        
+                        //TODO:localize
+                        var foldersText = "All Stories"
+                        if !self.shareToFolders.isEmpty {
+                            if self.shareToFolders.count == 1 {
+                                foldersText = self.shareToFolders[0].title
+                            } else {
+                                foldersText = "\(self.shareToFolders.count) Albums"
+                            }
+                        }
+                        
+                        //TODO:localize
+                        let _ = visibleItem.update(
+                            transition: itemTransition,
+                            component: AnyComponent(ListActionItemComponent(
+                                theme: environment.theme,
+                                background: nil,
+                                title: AnyComponent(VStack([
+                                    AnyComponentWithIdentity(id: AnyHashable(0), component: AnyComponent(MultilineTextComponent(
+                                        text: .plain(NSAttributedString(
+                                            string: "Album",
+                                            font: Font.regular(17.0),
+                                            textColor: environment.theme.list.itemPrimaryTextColor
+                                        )),
+                                        maximumNumberOfLines: 1
+                                    ))),
+                                ], alignment: .left, spacing: 2.0)),
+                                accessory: .custom(ListActionItemComponent.CustomAccessory(component: AnyComponentWithIdentity(id: 0, component: AnyComponent(AlbumLabelComponent(
+                                    theme: environment.theme,
+                                    title: foldersText,
+                                    action: { [weak self] sourceView in
+                                        guard let self else {
+                                            return
+                                        }
+                                        self.displayFolderSelectionMenu(sourceView: sourceView)
+                                    }
+                                ))), insets: UIEdgeInsets(top: 0.0, left: 0.0, bottom: 0.0, right: 0.0), isInteractive: true)),
+                                action: nil
+                            )),
+                            environment: {},
+                            containerSize: itemFrame.size
+                        )
+                        if let itemView = visibleItem.view {
+                            if itemView.superview == nil {
+                                if let minSectionHeader {
+                                    self.itemContainerView.insertSubview(itemView, belowSubview: minSectionHeader)
+                                } else {
+                                    self.itemContainerView.addSubview(itemView)
+                                }
+                            }
+                            itemTransition.setFrame(view: itemView, frame: itemFrame)
+                        }
+                        
+                        sectionItemOffset += section.itemHeight
+                    }
                     if let item = component.coverItem {
-                        let itemFrame = CGRect(origin: CGPoint(x: itemLayout.sideInset, y: sectionOffset + section.insets.top + CGFloat(0) * section.itemHeight), size: CGSize(width: itemLayout.containerSize.width, height: section.itemHeight))
+                        let itemFrame = CGRect(origin: CGPoint(x: itemLayout.sideInset, y: sectionOffset + section.insets.top + sectionItemOffset), size: CGSize(width: itemLayout.containerSize.width, height: section.itemHeight))
                         if !visibleBounds.intersects(itemFrame) {
                             continue
                         }
@@ -1749,6 +1965,9 @@ final class ShareWithPeersScreenComponent: Component {
                     var footerText = environment.strings.Story_Privacy_ChooseCoverInfo
                     if let sendAsPeerId = self.sendAsPeerId, sendAsPeerId.isGroupOrChannel == true {
                         footerText = isSendAsGroup ? environment.strings.Story_Privacy_ChooseCoverGroupInfo : environment.strings.Story_Privacy_ChooseCoverChannelInfo
+                    }
+                    if component.coverItem == nil {
+                        footerText = "Choose the albums where you want to share your story."
                     }
                     
                     let footerSize = sectionFooter.update(
@@ -2496,7 +2715,14 @@ final class ShareWithPeersScreenComponent: Component {
                         itemCount: component.optionItems.count
                     ))
                     
-                    if hasCover {
+                    if hasCover || self.selectedOptions.contains(.pin) {
+                        var itemCount = 0
+                        if hasCover {
+                            itemCount += 1
+                        }
+                        if self.selectedOptions.contains(.pin) {
+                            itemCount += 1
+                        }
                         sections.append(ItemLayout.Section(
                             id: 4,
                             insets: UIEdgeInsets(top: 28.0, left: 0.0, bottom: 0.0, right: 0.0),
@@ -3301,5 +3527,133 @@ public class ShareWithPeersScreen: ViewControllerComponentContainer {
                 self.dismiss(animated: true)
             }
         }
+    }
+}
+
+final class HeaderContextReferenceContentSource: ContextReferenceContentSource {
+    private let controller: ViewController
+    private let sourceView: UIView
+    private let actionsOnTop: Bool
+
+    init(controller: ViewController, sourceView: UIView, actionsOnTop: Bool) {
+        self.controller = controller
+        self.sourceView = sourceView
+        self.actionsOnTop = actionsOnTop
+    }
+
+    func transitionInfo() -> ContextControllerReferenceViewInfo? {
+        return ContextControllerReferenceViewInfo(referenceView: self.sourceView, contentAreaInScreenSpace: UIScreen.main.bounds, actionsPosition: self.actionsOnTop ? .top : .bottom)
+    }
+}
+
+private final class AlbumLabelComponent: Component {
+    let theme: PresentationTheme
+    let title: String
+    let action: (UIView) -> Void
+    
+    init(
+        theme: PresentationTheme,
+        title: String,
+        action: @escaping (UIView) -> Void
+    ) {
+        self.theme = theme
+        self.title = title
+        self.action = action
+    }
+    
+    static func ==(lhs: AlbumLabelComponent, rhs: AlbumLabelComponent) -> Bool {
+        if lhs.theme !== rhs.theme {
+            return false
+        }
+        if lhs.title != rhs.title {
+            return false
+        }
+        return true
+    }
+    
+    final class View: HighlightableButton {
+        private let title = ComponentView<Empty>()
+        private var selectorIcon: ComponentView<Empty>?
+        
+        private var component: AlbumLabelComponent?
+        
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+            
+            self.addTarget(self, action: #selector(self.pressed), for: .touchUpInside)
+            
+            self.isUserInteractionEnabled = true
+        }
+        
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
+        
+        @objc private func pressed() {
+            guard let component = self.component else {
+                return
+            }
+            component.action(self)
+        }
+        
+        func update(component: AlbumLabelComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
+            self.component = component
+            
+            let height: CGFloat = 44.0
+            
+            let rightTextInset: CGFloat = 24.0
+            
+            let titleSize = self.title.update(
+                transition: .immediate,
+                component: AnyComponent(MultilineTextComponent(
+                    text: .plain(NSAttributedString(string: component.title, font: Font.regular(17.0), textColor: component.theme.list.itemSecondaryTextColor))
+                )),
+                environment: {},
+                containerSize: CGSize(width: availableSize.width - rightTextInset, height: height)
+            )
+            let titleFrame = CGRect(origin: CGPoint(x: 0.0, y: floorToScreenPixels((height - titleSize.height) * 0.5)), size: titleSize)
+            if let titleView = self.title.view {
+                if titleView.superview == nil {
+                    titleView.isUserInteractionEnabled = false
+                    self.addSubview(titleView)
+                }
+                titleView.frame = titleFrame
+            }
+            
+            let size = CGSize(width: titleSize.width + rightTextInset, height: height)
+            
+            let selectorIcon: ComponentView<Empty>
+            if let current = self.selectorIcon {
+                selectorIcon = current
+            } else {
+                selectorIcon = ComponentView()
+                self.selectorIcon = selectorIcon
+            }
+            let selectorIconSize = selectorIcon.update(
+                transition: transition,
+                component: AnyComponent(BundleIconComponent(
+                    name: "Item List/ExpandableSelectorArrows", tintColor: component.theme.list.itemSecondaryTextColor)),
+                environment: {},
+                containerSize: CGSize(width: 100.0, height: 100.0)
+            )
+            let selectorIconFrame = CGRect(origin: CGPoint(x: size.width - 8.0 - selectorIconSize.width, y: floorToScreenPixels((size.height - selectorIconSize.height) * 0.5)), size: selectorIconSize)
+            if let selectorIconView = selectorIcon.view {
+                if selectorIconView.superview == nil {
+                    selectorIconView.isUserInteractionEnabled = false
+                    self.addSubview(selectorIconView)
+                }
+                transition.setFrame(view: selectorIconView, frame: selectorIconFrame)
+            }
+            
+            return size
+        }
+    }
+    
+    func makeView() -> View {
+        return View(frame: CGRect())
+    }
+    
+    func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
+        return view.update(component: self, availableSize: availableSize, state: state, environment: environment, transition: transition)
     }
 }

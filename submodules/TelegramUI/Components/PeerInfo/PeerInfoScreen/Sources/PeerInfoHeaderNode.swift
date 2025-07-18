@@ -39,6 +39,7 @@ import PeerInfoCoverComponent
 import PeerInfoPaneNode
 import MultilineTextComponent
 import PeerInfoRatingComponent
+import UndoUI
 
 final class PeerInfoHeaderNavigationTransition {
     let sourceNavigationBar: NavigationBar
@@ -132,6 +133,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
     var titleExpandedStatusIconSize: CGSize?
     
     var subtitleRatingIsExpanded: Bool = false
+    var didDisplayRatingTooltip: Bool = false
     var subtitleRating: ComponentView<Empty>?
     
     let subtitleNodeContainer: ASDisplayNode
@@ -1973,6 +1975,23 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                         }
                         self.subtitleRatingIsExpanded = !self.subtitleRatingIsExpanded
                         self.requestUpdateLayout?(true)
+                        
+                        if self.subtitleRatingIsExpanded, let controller = self.controller, let presentationData = self.presentationData, !self.didDisplayRatingTooltip {
+                            self.didDisplayRatingTooltip = true
+                            controller.presentInGlobalOverlay(UndoOverlayController(
+                                presentationData: presentationData,
+                                content: .info(
+                                    title: nil,
+                                    text: "Profile level reflects the user's payment reliability",
+                                    timeout: 4.0,
+                                    customUndoText: "Learn More"
+                                ),
+                                position: .top,
+                                action: { _ in
+                                    return true
+                                }
+                            ))
+                        }
                     }
                 )),
                 environment: {},

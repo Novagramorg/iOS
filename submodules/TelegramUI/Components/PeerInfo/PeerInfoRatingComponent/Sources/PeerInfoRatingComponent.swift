@@ -271,7 +271,7 @@ public final class PeerInfoRatingComponent: Component {
                 transition.setFrame(view: shimmerEffectView, frame: backgroundFrame)
                 alphaTransition.setAlpha(view: shimmerEffectView, alpha: 1.0)
                 
-                shimmerEffectView.update(color: .clear, borderColor: component.foregroundColor, rect: CGRect(origin: CGPoint(), size: backgroundFrame.size), path: UIBezierPath(roundedRect: CGRect(origin: CGPoint(), size: backgroundFrame.size), cornerRadius: backgroundFrame.height * 0.5).cgPath, transition: shimmerEffectTransition.containedViewLayoutTransition)
+                shimmerEffectView.update(color: .clear, borderColor: component.foregroundColor, rect: CGRect(origin: CGPoint(), size: backgroundFrame.size), path: UIBezierPath(roundedRect: CGRect(origin: CGPoint(), size: backgroundFrame.size).insetBy(dx: 1.0, dy: 1.0), cornerRadius: backgroundFrame.height * 0.5).cgPath, transition: shimmerEffectTransition.containedViewLayoutTransition)
             } else if let shimmerEffectView = self.shimmerEffectView {
                 self.shimmerEffectView = nil
                 
@@ -325,7 +325,7 @@ public final class PeerInfoRatingComponent: Component {
                 tooltipController.view.isUserInteractionEnabled = false
             }
             
-            transition.setFrame(view: tooltipController.view, frame: CGRect(origin: CGPoint(), size: CGSize(width: 200.0, height: 200.0)).offsetBy(dx: -200.0 * 0.5 + foregroundFrame.width - 7.0, dy: -200.0 * 0.5))
+            transition.setFrame(view: tooltipController.view, frame: CGRect(origin: CGPoint(), size: CGSize(width: 200.0, height: 200.0)).offsetBy(dx: -200.0 * 0.5 + foregroundFrame.width + 2.0, dy: -200.0 * 0.5))
             alphaTransition.setAlpha(view: tooltipController.view, alpha: component.isExpanded ? 1.0 : 0.0)
             
             return size
