@@ -1595,7 +1595,7 @@ private func finalStateWithUpdatesAndServerTime(accountPeerId: PeerId, postbox: 
                         }
                         if let replyToMsgHeader {
                             switch replyToMsgHeader {
-                            case let .inputReplyToMessage(_, replyToMsgId, topMsgId, replyToPeerId, quoteText, quoteEntities, quoteOffset, monoforumPeerId, _):
+                            case let .inputReplyToMessage(_, replyToMsgId, topMsgId, replyToPeerId, quoteText, quoteEntities, quoteOffset, monoforumPeerId, todoItemId):
                                 let _ = topMsgId
                                 let _ = monoforumPeerId
                                 
@@ -1631,7 +1631,8 @@ private func finalStateWithUpdatesAndServerTime(accountPeerId: PeerId, postbox: 
                                 
                                 replySubject = EngineMessageReplySubject(
                                     messageId: MessageId(peerId: parsedReplyToPeerId ?? peer.peerId, namespace: Namespaces.Message.Cloud, id: replyToMsgId),
-                                    quote: quote
+                                    quote: quote,
+                                    todoItemId: todoItemId
                                 )
                             case .inputReplyToStory:
                                 break

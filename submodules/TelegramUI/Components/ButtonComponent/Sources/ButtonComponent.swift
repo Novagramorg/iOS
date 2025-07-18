@@ -383,7 +383,7 @@ public final class ButtonComponent: Component {
         isEnabled: Bool,
         tintWhenDisabled: Bool = true,
         allowActionWhenDisabled: Bool = false,
-        displaysProgress: Bool,
+        displaysProgress: Bool = false,
         action: @escaping () -> Void
     ) {
         self.background = background

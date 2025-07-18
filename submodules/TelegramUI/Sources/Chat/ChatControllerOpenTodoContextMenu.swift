@@ -128,6 +128,22 @@ extension ChatControllerImpl {
                 }
             }
             
+            if "".isEmpty {
+                //TODO:localize
+                items.append(.action(ContextMenuActionItem(text: self.presentationData.strings.Chat_Todo_ReplyToItem, icon: { theme in
+                    return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Reply"), color: theme.actionSheet.primaryTextColor)
+                }, action: { [weak self] c, _ in
+                    guard let self else {
+                        return
+                    }
+                    self.interfaceInteraction?.setupReplyMessage(message.id, todoItem.id, { transition, completed in
+                        c?.dismiss(result: .custom(transition), completion: {
+                            completed()
+                        })
+                    })
+                })))
+            }
+            
             items.append(.action(ContextMenuActionItem(text: self.presentationData.strings.Conversation_ContextMenuCopy, icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Copy"), color: theme.contextMenu.primaryColor) }, action: { [weak self]  _, f in
                 f(.default)
 

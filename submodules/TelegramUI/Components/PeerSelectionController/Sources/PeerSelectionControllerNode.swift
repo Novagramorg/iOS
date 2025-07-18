@@ -381,7 +381,7 @@ final class PeerSelectionControllerNode: ASDisplayNode {
             self.indexChanged(1)
         }
              
-        self.interfaceInteraction = ChatPanelInterfaceInteraction(setupReplyMessage: { _, _ in
+        self.interfaceInteraction = ChatPanelInterfaceInteraction(setupReplyMessage: { _, _, _ in
         }, setupEditMessage: { _, _ in
         }, beginMessageSelection: { _, _ in
         }, cancelMessageSelection: { _ in
