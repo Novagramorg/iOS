@@ -280,7 +280,7 @@ public final class TextLoadingEffectView: UIView {
             maskBorderShapeLayer = SimpleShapeLayer()
             maskBorderShapeLayer.fillColor = nil
             maskBorderShapeLayer.strokeColor = UIColor.white.cgColor
-            maskBorderShapeLayer.lineWidth = 2.0
+            maskBorderShapeLayer.lineWidth = 1.0
             self.maskBorderShapeLayer = maskBorderShapeLayer
         }
         

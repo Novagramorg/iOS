@@ -1382,6 +1382,7 @@ final class GiftOptionsScreenComponent: Component {
                             selection: theme.list.itemSecondaryTextColor.withMultipliedAlpha(0.15),
                             simple: true
                         ),
+                        theme: theme,
                         items: tabSelectorItems,
                         selectedId: AnyHashable(self.starsFilter.rawValue),
                         setSelectedId: { [weak self] id in

@@ -3140,7 +3140,7 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
             self.updateSelectedItems(animated: false)
             
             if let gridSnapshot {
-                self.view.insertSubview(gridSnapshot, aboveSubview: self.itemGrid.view)
+                self.view.insertSubview(gridSnapshot, aboveSubview: self.contextGestureContainerNode.view)
                 gridSnapshot.frame = self.itemGrid.frame
                 if let animateDirection {
                     let directionFactor: CGFloat = animateDirection ? 1.0 : -1.0
@@ -3157,7 +3157,7 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
                 }
             }
             if let emptyStateSnapshot, let animateDirection {
-                self.view.insertSubview(emptyStateSnapshot, belowSubview: self.itemGrid.view)
+                self.view.insertSubview(emptyStateSnapshot, belowSubview: self.contextGestureContainerNode.view)
                 let directionFactor: CGFloat = animateDirection ? 1.0 : -1.0
                 
                 let transition: ContainedViewLayoutTransition = .animated(duration: 0.4, curve: .spring)
@@ -3812,7 +3812,75 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
             for folder in self.currentStoryFolders {
                 folderItems.append(TabSelectorComponent.Item(
                     id: AnyHashable(folder.id),
-                    title: folder.title
+                    title: folder.title,
+                    isReorderable: self.canManageStories,
+                    contextAction: self.canManageStories ? { [weak self] sourceNode, gesture in
+                        guard let self else {
+                            return
+                        }
+                        guard let sourceNode = sourceNode as? ContextExtractedContentContainingNode else {
+                            return
+                        }
+                        guard let controller = self.parentController else {
+                            return
+                        }
+                        
+                        var items: [ContextMenuItem] = []
+                        
+                        //TODO:localize
+                        items.append(.action(ContextMenuActionItem(text: "Add Stories", icon: { theme in
+                            return generateTintedImage(image: UIImage(bundleImageName: "Chat List/AddStoryIcon"), color: theme.contextMenu.primaryColor)
+                        }, action: { [weak self] _, a in
+                            guard let self else {
+                                a(.default)
+                                return
+                            }
+                            
+                            a(.default)
+                            
+                            self.presentAddStoriesToFolder()
+                        })))
+                        
+                        //TODO:localize
+                        items.append(.action(ContextMenuActionItem(text: "Reorder", icon: { theme in
+                            return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/ReorderItems"), color: theme.contextMenu.primaryColor)
+                        }, action: { [weak self] _, a in
+                            guard let self else {
+                                a(.default)
+                                return
+                            }
+                            
+                            a(.default)
+                            
+                            self.beginReordering()
+                        })))
+                        
+                        //TODO:localize
+                        items.append(.action(ContextMenuActionItem(text: "Delete Album", textColor: .destructive, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Delete"), color: theme.contextMenu.destructiveColor) }, action: { [weak self] _, f in
+                            guard let self else {
+                                f(.default)
+                                return
+                            }
+                            
+                            f(.dismissWithoutContent)
+                            
+                            self.presentDeleteStoryFolder(id: folder.id)
+                        })))
+                        
+                        let presentationData = self.presentationData
+                        let contextController = ContextController(
+                            presentationData: presentationData,
+                            source: .extracted(ItemExtractedContentSource(
+                                sourceNode: sourceNode,
+                                containerView: controller.view,
+                                keepInPlace: false
+                            )),
+                            items: .single(ContextController.Items(content: .list(items))),
+                            recognizer: nil,
+                            gesture: gesture
+                        )
+                        controller.presentInGlobalOverlay(contextController)
+                    } : nil
                 ))
             }
         }
@@ -3834,6 +3902,7 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
                     foreground: self.presentationData.theme.list.itemPrimaryTextColor.withMultipliedAlpha(0.8),
                     selection: self.presentationData.theme.list.itemPrimaryTextColor.withMultipliedAlpha(0.05)
                 ),
+                theme: self.presentationData.theme,
                 customLayout: TabSelectorComponent.CustomLayout(
                     font: Font.medium(14.0),
                     spacing: 9.0,
@@ -3841,6 +3910,30 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
                 ),
                 items: folderItems,
                 selectedId: selectedId,
+                reorderItem: self.isReordering ? { [weak self] fromId, toId in
+                    guard let self else {
+                        return
+                    }
+                    guard let sourceId = fromId.base as? Int64 else {
+                        return
+                    }
+                    guard let targetId = toId.base as? Int64 else {
+                        return
+                    }
+                    guard let sourceIndex = self.currentStoryFolders.firstIndex(where: { $0.id == sourceId }), let targetIndex = self.currentStoryFolders.firstIndex(where: { $0.id == targetId }) else {
+                        return
+                    }
+                    let folder = self.currentStoryFolders[sourceIndex]
+                    if targetIndex < sourceIndex {
+                        self.currentStoryFolders.remove(at: sourceIndex)
+                        self.currentStoryFolders.insert(folder, at: targetIndex)
+                    } else {
+                        self.currentStoryFolders.insert(folder, at: targetIndex + 1)
+                        self.currentStoryFolders.remove(at: sourceIndex)
+                    }
+                    
+                    self.update(transition: .animated(duration: 0.2, curve: .easeInOut))
+                } : nil,
                 setSelectedId: { [weak self] id in
                     guard let self else {
                         return
@@ -3887,8 +3980,23 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
                 self.view.addSubview(folderTabView)
             }
             transition.updateFrame(view: folderTabView, frame: folderTabFrame)
-            transition.updateAlpha(layer: folderTabView.layer, alpha: isSelectingOrReordering ? 0.5 : 1.0)
-            folderTabView.isUserInteractionEnabled = !isSelectingOrReordering
+            
+            var areTabsDisabled = false
+            
+            if case .botPreview = self.scope {
+                if isSelectingOrReordering {
+                    areTabsDisabled = true
+                }
+            } else {
+                if self.itemInteraction.selectedIds != nil {
+                    areTabsDisabled = true
+                }
+            }
+            
+            transition.updateAlpha(layer: folderTabView.layer, alpha: areTabsDisabled ? 0.5 : 1.0)
+            folderTabView.isUserInteractionEnabled = !areTabsDisabled
+
+            folderTabView.disablesInteractiveTransitionGestureRecognizer = self.isReordering
         }
     }
     
@@ -4033,7 +4141,12 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
         }
         
         if displayFolderTab {
-            updateFolderTab(size: size, topInset: topInset, transition: transition)
+            var folderTabsTransition = transition
+            if animateBottomPanel && !folderTabsTransition.isAnimated {
+                folderTabsTransition = .animated(duration: 0.4, curve: .spring)
+            }
+            
+            updateFolderTab(size: size, topInset: topInset, transition: folderTabsTransition)
             gridTopInset += 50.0
             
             if case .botPreview = self.scope {
@@ -4828,17 +4941,28 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
     
     public func presentDeleteCurrentStoryFolder() {
         if let folder = self.currentStoryFolder {
+            self.presentDeleteStoryFolder(id: folder.id)
+        }
+    }
+    
+    private func presentDeleteStoryFolder(id: Int64) {
+        guard let folder = self.currentStoryFolders.first(where: { $0.id == id }) else {
+            return
+        }
+        let _ = folder
+        
+        if self.currentStoryFolder?.id == id {
             self.setStoryFolder(id: nil, assumeEmpty: false)
-            self.currentStoryFolders.removeAll(where: { $0.id == folder.id })
-            self.removedStoryFolders.insert(folder.id)
-            
-            if let listContext = self.listSource as? PeerStoryListContext {
-                listContext.removeFolder(id: folder.id)
-            }
-            
-            if let (size, topInset, sideInset, bottomInset, deviceMetrics, visibleHeight, isScrollingLockedAtTop, expandProgress, navigationHeight, presentationData) = self.currentParams {
-                self.update(size: size, topInset: topInset, sideInset: sideInset, bottomInset: bottomInset, deviceMetrics: deviceMetrics, visibleHeight: visibleHeight, isScrollingLockedAtTop: isScrollingLockedAtTop, expandProgress: expandProgress, navigationHeight: navigationHeight, presentationData: presentationData, synchronous: false, transition: .immediate)
-            }
+        }
+        self.currentStoryFolders.removeAll(where: { $0.id == id })
+        self.removedStoryFolders.insert(id)
+        
+        if let listContext = self.listSource as? PeerStoryListContext {
+            listContext.removeFolder(id: id)
+        }
+        
+        if let (size, topInset, sideInset, bottomInset, deviceMetrics, visibleHeight, isScrollingLockedAtTop, expandProgress, navigationHeight, presentationData) = self.currentParams {
+            self.update(size: size, topInset: topInset, sideInset: sideInset, bottomInset: bottomInset, deviceMetrics: deviceMetrics, visibleHeight: visibleHeight, isScrollingLockedAtTop: isScrollingLockedAtTop, expandProgress: expandProgress, navigationHeight: navigationHeight, presentationData: presentationData, synchronous: false, transition: .immediate)
         }
     }
     
@@ -4984,6 +5108,12 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
             self.contextGestureContainerNode.isGestureEnabled = self.isProfileEmbedded && self.itemInteraction.selectedIds == nil && !self.isReordering
             
             self.itemGrid.setReordering(isReordering: isReordering)
+            
+            if !isReordering && !self.currentStoryFolders.isEmpty && self.canManageStories {
+                if let listSource = self.listSource as? PeerStoryListContext {
+                    listSource.reorderFolders(ids: self.currentStoryFolders.map(\.id))
+                }
+            }
             
             if !isReordering, let reorderedIds = self.reorderedIds {
                 self.reorderedIds = nil
@@ -5377,3 +5507,34 @@ private final class BottomActionsPanelComponent: Component {
     }
 }
 
+private final class ItemExtractedContentSource: ContextExtractedContentSource {
+    let keepInPlace: Bool
+    let ignoreContentTouches: Bool = true
+    let blurBackground: Bool = true
+    let adjustContentForSideInset: Bool = true
+    
+    private let sourceNode: ContextExtractedContentContainingNode
+    private weak var containerView: UIView?
+    
+    init(sourceNode: ContextExtractedContentContainingNode, containerView: UIView, keepInPlace: Bool) {
+        self.sourceNode = sourceNode
+        self.containerView = containerView
+        self.keepInPlace = keepInPlace
+    }
+    
+    func takeView() -> ContextControllerTakeViewInfo? {
+        var contentArea: CGRect?
+        if let containerView = self.containerView {
+            contentArea = containerView.convert(containerView.bounds, to: nil)
+        }
+        
+        return ContextControllerTakeViewInfo(
+            containingItem: .node(self.sourceNode),
+            contentAreaInScreenSpace: contentArea ?? UIScreen.main.bounds
+        )
+    }
+    
+    func putBack() -> ContextControllerPutBackViewInfo? {
+        return ContextControllerPutBackViewInfo(contentAreaInScreenSpace: UIScreen.main.bounds)
+    }
+}

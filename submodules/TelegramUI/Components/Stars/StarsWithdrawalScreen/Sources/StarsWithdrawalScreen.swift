@@ -348,6 +348,7 @@ private final class SheetContent: CombinedComponent {
                                 selection: theme.list.itemSecondaryTextColor.withMultipliedAlpha(0.15),
                                 simple: true
                             ),
+                            theme: theme,
                             customLayout: TabSelectorComponent.CustomLayout(
                                 font: Font.medium(14.0),
                                 spacing: 10.0

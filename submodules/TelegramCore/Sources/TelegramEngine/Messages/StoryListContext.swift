@@ -1424,6 +1424,37 @@ public final class PeerStoryListContext: StoryListContext {
             }).start()
         }
         
+        func reorderFolders(ids: [Int64]) {
+            var state = self.stateValue
+            var folders: [State.Folder] = []
+            for id in ids {
+                if !folders.contains(where: { $0.id == id }), let folder = state.availableFolders.first(where: { $0.id == id }) {
+                    folders.append(folder)
+                }
+            }
+            for folder in state.availableFolders {
+                if !folders.contains(where: { $0.id == folder.id }) {
+                    folders.append(folder)
+                }
+            }
+            state.availableFolders = folders
+            self.stateValue = state
+            
+            let peerId = self.peerId
+            let isArchived = self.isArchived
+            let items = state.items
+            let pinnedIds = state.pinnedIds
+            let totalCount = state.totalCount
+            let _ = (self.account.postbox.transaction { transaction -> Void in
+                let key = ValueBoxKey(length: 8 + 1)
+                key.setInt64(0, value: peerId.toInt64())
+                key.setInt8(8, value: isArchived ? 1 : 0)
+                if let entry = CodableEntry(CachedPeerStoryListHead(items: items.prefix(100).map { .item($0.storyItem.asStoryItem()) }, pinnedIds: pinnedIds, totalCount: Int32(totalCount), folders: folders)) {
+                    transaction.putItemCacheEntry(id: ItemCacheEntryId(collectionId: Namespaces.CachedItemCollection.cachedPeerStoryListHeads, key: key), entry: entry)
+                }
+            }).start()
+        }
+        
         func addToFolder(id: Int64, items: [EngineStoryItem]) {
             let peerId = self.peerId
             let _ = (self.account.postbox.transaction { transaction -> Void in
@@ -1657,6 +1688,12 @@ public final class PeerStoryListContext: StoryListContext {
         }
     }
     
+    public func reorderFolders(ids: [Int64]) {
+        self.impl.with { impl in
+            impl.reorderFolders(ids: ids)
+        }
+    }
+    
     public func addToFolder(id: Int64, items: [EngineStoryItem]) {
         self.impl.with { impl in
             impl.addToFolder(id: id, items: items)
@@ -1673,6 +1710,27 @@ public final class PeerStoryListContext: StoryListContext {
         self.impl.with { impl in
             impl.reorderItemsInFolder(itemIds: itemIds)
         }
+    }
+    
+    public static func addFolderExternal(account: Account, peerId: PeerId, title: String) -> Int64 {
+        let id = Int64.random(in: Int64.min ... Int64.max)
+        
+        let _ = (account.postbox.transaction { transaction -> Void in
+            let key = ValueBoxKey(length: 8 + 1)
+            key.setInt64(0, value: peerId.toInt64())
+            key.setInt8(8, value: 0)
+            
+            
+            let cached = transaction.retrieveItemCacheEntry(id: ItemCacheEntryId(collectionId: Namespaces.CachedItemCollection.cachedPeerStoryListHeads, key: key))?.get(CachedPeerStoryListHead.self)
+            var folders = cached?.folders ?? []
+            folders.append(StoryListContextState.Folder(id: id, title: title))
+            
+            if let entry = CodableEntry(CachedPeerStoryListHead(items: cached?.items ?? [], pinnedIds: cached?.pinnedIds ?? [], totalCount: cached?.totalCount ?? 0, folders: folders)) {
+                transaction.putItemCacheEntry(id: ItemCacheEntryId(collectionId: Namespaces.CachedItemCollection.cachedPeerStoryListHeads, key: key), entry: entry)
+            }
+        }).start()
+        
+        return id
     }
     
     public static func folderPreviews(peerId: EnginePeer.Id, account: Account) -> Signal<(peer: PeerReference, [(folder: StoryListContext.State.Folder, item: EngineStoryItem?)]), NoError> {
