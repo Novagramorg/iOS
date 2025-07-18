@@ -533,6 +533,7 @@ private final class PeerInfoPendingPane {
         openMediaCalendar: @escaping () -> Void,
         openAddStory: @escaping () -> Void,
         paneDidScroll: @escaping () -> Void,
+        expandIfNeeded: @escaping () -> Void,
         ensureRectVisible: @escaping (UIView, CGRect) -> Void,
         externalDataUpdated: @escaping (ContainedViewLayoutTransition) -> Void
     ) {
@@ -615,6 +616,9 @@ private final class PeerInfoPendingPane {
             }
             visualPaneNode.paneDidScroll = {
                 paneDidScroll()
+            }
+            visualPaneNode.expandIfNeeded = {
+                expandIfNeeded()
             }
             visualPaneNode.ensureRectVisible = { sourceView, rect in
                 ensureRectVisible(sourceView, rect)
@@ -1140,6 +1144,9 @@ final class PeerInfoPaneContainerNode: ASDisplayNode, ASGestureRecognizerDelegat
                     },
                     paneDidScroll: { [weak self] in
                         self?.paneDidScroll?()
+                    },
+                    expandIfNeeded: { [weak self] in
+                        let _ = self?.requestExpandTabs?()
                     },
                     ensureRectVisible: { [weak self] sourceView, rect in
                         guard let self else {
