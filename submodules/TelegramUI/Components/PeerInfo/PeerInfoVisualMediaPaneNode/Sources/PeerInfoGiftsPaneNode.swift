@@ -359,11 +359,11 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
         switch collection {
         case let .collection(id):
             profileGifts = self.profileGiftsCollections.giftsContextForCollection(id: id)
-            if case .ready = profileGifts.currentState?.dataState {
-                profileGifts.reload()
-            }
         default:
             profileGifts = self.profileGifts
+        }
+        if case .ready = profileGifts.currentState?.dataState {
+            profileGifts.reload()
         }
 
         self.giftsListView = GiftsListView(context: self.context, peerId: self.peerId, profileGifts: profileGifts, giftsCollections: self.profileGiftsCollections, canSelect: false)
@@ -862,6 +862,14 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
             canReorder = true
         }
         
+        let profileGifts: ProfileGiftsContext
+        switch self.currentCollection {
+        case let .collection(id):
+            profileGifts = self.profileGiftsCollections.giftsContextForCollection(id: id)
+        default:
+            profileGifts = self.profileGifts
+        }
+        
         var items: [ContextMenuItem] = []
         if canManage {
             items.append(.action(ContextMenuActionItem(text: "Add to Collection", textLayout: .twoLinesMax, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Peer Info/Gifts/AddToCollection"), color: theme.contextMenu.primaryColor) }, action: { [weak self] c, f in
@@ -943,7 +951,7 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
                             return
                         }
                         
-                        self.profileGifts.updateStarGiftPinnedToTop(reference: reference, pinnedToTop: pinnedToTop)
+                        profileGifts.updateStarGiftPinnedToTop(reference: reference, pinnedToTop: pinnedToTop)
                         
                         let toastTitle: String?
                         let toastText: String
@@ -1114,7 +1122,7 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
                     }
                     if let reference = gift.reference {
                         let added = !gift.savedToProfile
-                        self.profileGifts.updateStarGiftAddedToProfile(reference: reference, added: added)
+                        profileGifts.updateStarGiftAddedToProfile(reference: reference, added: added)
                         
                         var animationFile: TelegramMediaFile?
                         switch gift.gift {
@@ -1169,8 +1177,8 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
                                 showSelf = true
                             }
                             let transferStars = gift.transferStars ?? 0
-                            let controller = context.sharedContext.makePremiumGiftController(context: context, source: .starGiftTransfer(birthdays, reference, uniqueGift, transferStars, gift.canExportDate, showSelf), completion: { [weak self] peerIds in
-                                guard let self, let peerId = peerIds.first else {
+                            let controller = context.sharedContext.makePremiumGiftController(context: context, source: .starGiftTransfer(birthdays, reference, uniqueGift, transferStars, gift.canExportDate, showSelf), completion: { peerIds in
+                                guard let peerId = peerIds.first else {
                                     return .complete()
                                 }
                                 Queue.mainQueue().after(1.5, {
@@ -1178,7 +1186,7 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
                                         context.starsContext?.load(force: true)
                                     }
                                 })
-                                return self.profileGifts.transferStarGift(prepaid: transferStars == 0, reference: reference, peerId: peerId)
+                                return profileGifts.transferStarGift(prepaid: transferStars == 0, reference: reference, peerId: peerId)
                             })
                             self.parentController?.push(controller)
                         })
