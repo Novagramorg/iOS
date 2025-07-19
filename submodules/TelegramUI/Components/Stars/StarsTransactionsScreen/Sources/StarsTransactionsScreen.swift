@@ -540,8 +540,7 @@ final class StarsTransactionsScreenComponent: Component {
             let descriptionString: String
             if component.starsContext.ton {
                 titleString = environment.strings.Stars_Ton_Title
-                descriptionString = "Use TON to submit post suggestions in channels or buy gifts."
-                //descriptionString = environment.strings.Stars_Ton_Description
+                descriptionString = environment.strings.Stars_Ton_Description
             } else {
                 titleString = environment.strings.Stars_Intro_Title
                 descriptionString = environment.strings.Stars_Intro_Description
@@ -672,52 +671,52 @@ final class StarsTransactionsScreenComponent: Component {
             
             let withdrawAvailable = (self.revenueState?.balances.overallRevenue.amount.value ?? 0) > 0
              
-            if component.starsContext.ton {
-                //TODO:localize
-                let proceedsSize = self.proceedsView.update(
-                    transition: .immediate,
-                    component: AnyComponent(ListSectionComponent(
-                        theme: environment.theme,
-                        header: AnyComponent(MultilineTextComponent(
-                            text: .plain(NSAttributedString(
-                                string: "Proceeds Overview".uppercased(),
-                                font: Font.regular(presentationData.listsFontSize.itemListBaseHeaderFontSize),
-                                textColor: environment.theme.list.freeTextColor
-                            )),
-                            maximumNumberOfLines: 0
-                        )),
-                        footer: nil,
-                        items: [
-                            AnyComponentWithIdentity(id: 0, component: AnyComponent(StarsOverviewItemComponent(
-                                theme: environment.theme,
-                                dateTimeFormat: environment.dateTimeFormat,
-                                title: "Balance Available to Withdraw",
-                                value: self.revenueState?.balances.availableBalance ?? CurrencyAmount(amount: .zero, currency: .stars),
-                                rate: self.revenueState?.usdRate ?? 0.0
-                            ))),
-                            AnyComponentWithIdentity(id: 1, component: AnyComponent(StarsOverviewItemComponent(
-                                theme: environment.theme,
-                                dateTimeFormat: environment.dateTimeFormat,
-                                title: "Total Lifetime Proceeds",
-                                value: self.revenueState?.balances.overallRevenue ?? CurrencyAmount(amount: .zero, currency: .stars),
-                                rate: self.revenueState?.usdRate ?? 0.0
-                            )))
-                        ],
-                        displaySeparators: false
-                    )),
-                    environment: {},
-                    containerSize: CGSize(width: availableSize.width - sideInsets, height: availableSize.height)
-                )
-                let proceedsFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((availableSize.width - proceedsSize.width) / 2.0), y: contentHeight), size: proceedsSize)
-                if let proceedsView = self.proceedsView.view {
-                    if proceedsView.superview == nil {
-                        self.scrollView.addSubview(proceedsView)
-                    }
-                    transition.setFrame(view: proceedsView, frame: proceedsFrame)
-                }
-                contentHeight += proceedsSize.height
-                contentHeight += 31.0
-            }
+//            if component.starsContext.ton {
+//                //TODO:localize
+//                let proceedsSize = self.proceedsView.update(
+//                    transition: .immediate,
+//                    component: AnyComponent(ListSectionComponent(
+//                        theme: environment.theme,
+//                        header: AnyComponent(MultilineTextComponent(
+//                            text: .plain(NSAttributedString(
+//                                string: "Proceeds Overview".uppercased(),
+//                                font: Font.regular(presentationData.listsFontSize.itemListBaseHeaderFontSize),
+//                                textColor: environment.theme.list.freeTextColor
+//                            )),
+//                            maximumNumberOfLines: 0
+//                        )),
+//                        footer: nil,
+//                        items: [
+//                            AnyComponentWithIdentity(id: 0, component: AnyComponent(StarsOverviewItemComponent(
+//                                theme: environment.theme,
+//                                dateTimeFormat: environment.dateTimeFormat,
+//                                title: "Balance Available to Withdraw",
+//                                value: self.revenueState?.balances.availableBalance ?? CurrencyAmount(amount: .zero, currency: .stars),
+//                                rate: self.revenueState?.usdRate ?? 0.0
+//                            ))),
+//                            AnyComponentWithIdentity(id: 1, component: AnyComponent(StarsOverviewItemComponent(
+//                                theme: environment.theme,
+//                                dateTimeFormat: environment.dateTimeFormat,
+//                                title: "Total Lifetime Proceeds",
+//                                value: self.revenueState?.balances.overallRevenue ?? CurrencyAmount(amount: .zero, currency: .stars),
+//                                rate: self.revenueState?.usdRate ?? 0.0
+//                            )))
+//                        ],
+//                        displaySeparators: false
+//                    )),
+//                    environment: {},
+//                    containerSize: CGSize(width: availableSize.width - sideInsets, height: availableSize.height)
+//                )
+//                let proceedsFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((availableSize.width - proceedsSize.width) / 2.0), y: contentHeight), size: proceedsSize)
+//                if let proceedsView = self.proceedsView.view {
+//                    if proceedsView.superview == nil {
+//                        self.scrollView.addSubview(proceedsView)
+//                    }
+//                    transition.setFrame(view: proceedsView, frame: proceedsFrame)
+//                }
+//                contentHeight += proceedsSize.height
+//                contentHeight += 31.0
+//            }
             
             let termsFont = Font.regular(13.0)
             let termsTextColor = environment.theme.list.freeTextColor
@@ -740,7 +739,7 @@ final class StarsTransactionsScreenComponent: Component {
                 component: AnyComponent(ListSectionComponent(
                     theme: environment.theme,
                     header: nil,
-                    footer: component.starsContext.ton ? AnyComponent(MultilineTextComponent(
+                    footer: component.starsContext.ton && !"".isEmpty ? AnyComponent(MultilineTextComponent(
                         text: .plain(balanceInfoString),
                         maximumNumberOfLines: 0,
                         highlightColor: environment.theme.list.itemAccentColor.withAlphaComponent(0.1),
@@ -767,7 +766,7 @@ final class StarsTransactionsScreenComponent: Component {
                             currency: component.starsContext.ton ? .ton : .stars,
                             rate: nil,
                             actionTitle: component.starsContext.ton ? "Withdraw via Fragment" : (withdrawAvailable ? environment.strings.Stars_Intro_BuyShort : environment.strings.Stars_Intro_Buy),
-                            actionAvailable: (!premiumConfiguration.areStarsDisabled && !premiumConfiguration.isPremiumDisabled),
+                            actionAvailable: (!component.starsContext.ton && !premiumConfiguration.areStarsDisabled && !premiumConfiguration.isPremiumDisabled),
                             actionIsEnabled: true,
                             actionIcon: component.starsContext.ton ? nil : PresentationResourcesItemList.itemListRoundTopupIcon(environment.theme),
                             action: { [weak self] in
