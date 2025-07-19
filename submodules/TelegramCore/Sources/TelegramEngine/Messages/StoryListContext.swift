@@ -1424,6 +1424,27 @@ public final class PeerStoryListContext: StoryListContext {
             }).start()
         }
         
+        func reorderFolders(_ folders: [State.Folder]) {
+            var state = self.stateValue
+            state.availableFolders = folders
+            self.stateValue = state
+            
+            let peerId = self.peerId
+            let isArchived = self.isArchived
+            let items = state.items
+            let pinnedIds = state.pinnedIds
+            let totalCount = state.totalCount
+            let folders = folders
+            let _ = (self.account.postbox.transaction { transaction -> Void in
+                let key = ValueBoxKey(length: 8 + 1)
+                key.setInt64(0, value: peerId.toInt64())
+                key.setInt8(8, value: isArchived ? 1 : 0)
+                if let entry = CodableEntry(CachedPeerStoryListHead(items: items.prefix(100).map { .item($0.storyItem.asStoryItem()) }, pinnedIds: pinnedIds, totalCount: Int32(totalCount), folders: folders)) {
+                    transaction.putItemCacheEntry(id: ItemCacheEntryId(collectionId: Namespaces.CachedItemCollection.cachedPeerStoryListHeads, key: key), entry: entry)
+                }
+            }).start()
+        }
+        
         func addToFolder(id: Int64, items: [EngineStoryItem]) {
             let peerId = self.peerId
             let _ = (self.account.postbox.transaction { transaction -> Void in
@@ -1654,6 +1675,13 @@ public final class PeerStoryListContext: StoryListContext {
             impl.removeFolder(id: id)
         }
     }
+    
+    public func reorderFolders(_ folders: [State.Folder]) {
+        self.impl.with { impl in
+            impl.reorderFolders(folders)
+        }
+    }
+    
     
     public func addToFolder(id: Int64, items: [EngineStoryItem]) {
         self.impl.with { impl in
