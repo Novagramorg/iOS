@@ -98,8 +98,8 @@ private func _internal_getStarGiftCollections(postbox: Postbox, network: Network
         let collections = transaction.retrieveItemCacheEntry(id: entryId(peerId: peerId))?.get(CachedProfileGiftsCollections.self)
         return (inputPeer, collections?.collections)
     }
-    |> mapToSignal { inputPeerAndHash -> Signal<[StarGiftCollection]?, NoError> in
-        guard let (inputPeer, cachedCollections) = inputPeerAndHash else {
+    |> mapToSignal { inputPeerAndCollections -> Signal<[StarGiftCollection]?, NoError> in
+        guard let (inputPeer, cachedCollections) = inputPeerAndCollections else {
             return .single(nil)
         }
         
@@ -108,28 +108,28 @@ private func _internal_getStarGiftCollections(postbox: Postbox, network: Network
             hash = intListSimpleHash(cachedCollections.map { $0.hash })
         }
         
-        return network.request(Api.functions.payments.getStarGiftCollections(peer: inputPeer, hash: hash))
-        |> map(Optional.init)
-        |> `catch` { _ -> Signal<Api.payments.StarGiftCollections?, NoError> in
-            return .single(nil)
-        }
-        |> mapToSignal { result -> Signal<[StarGiftCollection]?, NoError> in
-            guard let result else {
+        return .single(cachedCollections)
+        |> then(
+            network.request(Api.functions.payments.getStarGiftCollections(peer: inputPeer, hash: hash))
+            |> map(Optional.init)
+            |> `catch` { _ -> Signal<Api.payments.StarGiftCollections?, NoError> in
                 return .single(nil)
             }
-            return postbox.transaction { transaction -> [StarGiftCollection]? in
-                switch result {
-                case let .starGiftCollections(collections):
-                    let collections = collections.compactMap { StarGiftCollection(apiStarGiftCollection: $0) }
-                    if let entry = CodableEntry(CachedProfileGiftsCollections(collections: collections)) {
-                        transaction.putItemCacheEntry(id: entryId(peerId: peerId), entry: entry)
+            |> mapToSignal { result -> Signal<[StarGiftCollection]?, NoError> in
+                guard let result else {
+                    return .single(nil)
+                }
+                return postbox.transaction { transaction -> [StarGiftCollection]? in
+                    switch result {
+                    case let .starGiftCollections(collections):
+                        let collections = collections.compactMap { StarGiftCollection(apiStarGiftCollection: $0) }
+                        return collections
+                    case .starGiftCollectionsNotModified:
+                        return cachedCollections ?? []
                     }
-                    return collections
-                case .starGiftCollectionsNotModified:
-                    return cachedCollections ?? []
                 }
             }
-        }
+        )
     }
 }
 
@@ -341,6 +341,7 @@ public final class ProfileGiftsCollectionsContext {
             self.collections = collections ?? []
             self.isLoading = false
             self.pushState()
+            self.updateCache()
         }))
     }
     
@@ -354,6 +355,7 @@ public final class ProfileGiftsCollectionsContext {
             if let collection {
                 self.collections.append(collection)
                 self.pushState()
+                self.updateCache()
             }
         }
     }
@@ -370,6 +372,7 @@ public final class ProfileGiftsCollectionsContext {
                 if let index = self.collections.firstIndex(where: { $0.id == id }) {
                     self.collections[index] = collection
                     self.pushState()
+                    self.updateCache()
                 }
             }
         }
@@ -392,7 +395,8 @@ public final class ProfileGiftsCollectionsContext {
     }
     
     public func reorderCollections(order: [Int32]) -> Signal<Bool, NoError> {
-        return _internal_reorderStarGiftCollections(account: self.account, peerId: self.peerId, order: order)
+        let peerId = self.peerId
+        return _internal_reorderStarGiftCollections(account: self.account, peerId: peerId, order: order)
         |> deliverOn(self.queue)
         |> afterNext { [weak self] collection in
             guard let self else {
@@ -410,6 +414,7 @@ public final class ProfileGiftsCollectionsContext {
             }
             self.collections = collections
             self.pushState()
+            self.updateCache()
         }
     }
     
@@ -423,7 +428,18 @@ public final class ProfileGiftsCollectionsContext {
             self.giftsContexts.removeValue(forKey: id)
             self.collections.removeAll(where: { $0.id == id })
             self.pushState()
+            self.updateCache()
         }
+    }
+    
+    private func updateCache() {
+        let peerId = self.peerId
+        let collections = self.collections
+        let _ = (self.account.postbox.transaction { transaction in
+            if let entry = CodableEntry(CachedProfileGiftsCollections(collections: collections)) {
+                transaction.putItemCacheEntry(id: entryId(peerId: peerId), entry: entry)
+            }
+        }).start()
     }
     
     private func pushState() {

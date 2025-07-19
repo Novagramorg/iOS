@@ -388,6 +388,7 @@ final class PeerInfoScreenData {
     let revenueStatsState: StarsRevenueStats?
     let revenueStatsContext: StarsRevenueStatsContext?
     let profileGiftsContext: ProfileGiftsContext?
+    let profileGiftsCollectionsContext: ProfileGiftsCollectionsContext?
     let premiumGiftOptions: [PremiumGiftCodeOption]
     let webAppPermissions: WebAppPermissionsState?
     
@@ -440,6 +441,7 @@ final class PeerInfoScreenData {
         revenueStatsState: StarsRevenueStats?,
         revenueStatsContext: StarsRevenueStatsContext?,
         profileGiftsContext: ProfileGiftsContext?,
+        profileGiftsCollectionsContext: ProfileGiftsCollectionsContext?,
         premiumGiftOptions: [PremiumGiftCodeOption],
         webAppPermissions: WebAppPermissionsState?
     ) {
@@ -480,6 +482,7 @@ final class PeerInfoScreenData {
         self.revenueStatsState = revenueStatsState
         self.revenueStatsContext = revenueStatsContext
         self.profileGiftsContext = profileGiftsContext
+        self.profileGiftsCollectionsContext = profileGiftsCollectionsContext
         self.premiumGiftOptions = premiumGiftOptions
         self.webAppPermissions = webAppPermissions
     }
@@ -1000,13 +1003,14 @@ func peerInfoScreenSettingsData(context: AccountContext, peerId: EnginePeer.Id, 
             revenueStatsState: nil,
             revenueStatsContext: nil,
             profileGiftsContext: profileGiftsContext,
+            profileGiftsCollectionsContext: nil,
             premiumGiftOptions: [],
             webAppPermissions: nil
         )
     }
 }
 
-func peerInfoScreenData(context: AccountContext, peerId: PeerId, strings: PresentationStrings, dateTimeFormat: PresentationDateTimeFormat, isSettings: Bool, isMyProfile: Bool, hintGroupInCommon: PeerId?, existingRequestsContext: PeerInvitationImportersContext?, existingProfileGiftsContext: ProfileGiftsContext?, chatLocation: ChatLocation, chatLocationContextHolder: Atomic<ChatLocationContextHolder?>, sharedMediaFromForumTopic: (EnginePeer.Id, Int64)?, privacySettings: Signal<AccountPrivacySettings?, NoError>, forceHasGifts: Bool) -> Signal<PeerInfoScreenData, NoError> {
+func peerInfoScreenData(context: AccountContext, peerId: PeerId, strings: PresentationStrings, dateTimeFormat: PresentationDateTimeFormat, isSettings: Bool, isMyProfile: Bool, hintGroupInCommon: PeerId?, existingRequestsContext: PeerInvitationImportersContext?, existingProfileGiftsContext: ProfileGiftsContext?, existingProfileGiftsCollectionsContext: ProfileGiftsCollectionsContext?, chatLocation: ChatLocation, chatLocationContextHolder: Atomic<ChatLocationContextHolder?>, sharedMediaFromForumTopic: (EnginePeer.Id, Int64)?, privacySettings: Signal<AccountPrivacySettings?, NoError>, forceHasGifts: Bool) -> Signal<PeerInfoScreenData, NoError> {
     return peerInfoScreenInputData(context: context, peerId: peerId, isSettings: isSettings)
     |> mapToSignal { inputData -> Signal<PeerInfoScreenData, NoError> in
         let wasUpgradedGroup = Atomic<Bool?>(value: nil)
@@ -1051,6 +1055,7 @@ func peerInfoScreenData(context: AccountContext, peerId: PeerId, strings: Presen
                 revenueStatsState: nil,
                 revenueStatsContext: nil,
                 profileGiftsContext: nil,
+                profileGiftsCollectionsContext: nil,
                 premiumGiftOptions: [],
                 webAppPermissions: nil
             ))
@@ -1073,11 +1078,14 @@ func peerInfoScreenData(context: AccountContext, peerId: PeerId, strings: Presen
             
             let premiumGiftOptions: Signal<[PremiumGiftCodeOption], NoError>
             let profileGiftsContext: ProfileGiftsContext?
+            let profileGiftsCollectionsContext: ProfileGiftsCollectionsContext?
             if case .user = kind {
                 if isMyProfile || userPeerId != context.account.peerId {
                     profileGiftsContext = existingProfileGiftsContext ?? ProfileGiftsContext(account: context.account, peerId: userPeerId)
+                    profileGiftsCollectionsContext = existingProfileGiftsCollectionsContext ?? ProfileGiftsCollectionsContext(account: context.account, peerId: userPeerId)
                 } else {
                     profileGiftsContext = nil
+                    profileGiftsCollectionsContext = nil
                 }
                 premiumGiftOptions = .single([])
                 |> then(
@@ -1085,6 +1093,7 @@ func peerInfoScreenData(context: AccountContext, peerId: PeerId, strings: Presen
                 )
             } else {
                 profileGiftsContext = nil
+                profileGiftsCollectionsContext = nil
                 premiumGiftOptions = .single([])
             }
             
@@ -1511,6 +1520,7 @@ func peerInfoScreenData(context: AccountContext, peerId: PeerId, strings: Presen
                     revenueStatsState: revenueContextAndState.1,
                     revenueStatsContext: revenueContextAndState.0,
                     profileGiftsContext: profileGiftsContext,
+                    profileGiftsCollectionsContext: profileGiftsCollectionsContext,
                     premiumGiftOptions: premiumGiftOptions,
                     webAppPermissions: webAppPermissions
                 )
@@ -1619,6 +1629,7 @@ func peerInfoScreenData(context: AccountContext, peerId: PeerId, strings: Presen
             }
             
             let profileGiftsContext = ProfileGiftsContext(account: context.account, peerId: peerId)
+            let profileGiftsCollectionsContext = ProfileGiftsCollectionsContext(account: context.account, peerId: peerId)
             
             let personalChannel = peerInfoPersonalOrLinkedChannel(context: context, peerId: peerId, isSettings: false)
             
@@ -1743,6 +1754,7 @@ func peerInfoScreenData(context: AccountContext, peerId: PeerId, strings: Presen
                     revenueStatsState: revenueContextAndState.1,
                     revenueStatsContext: revenueContextAndState.0,
                     profileGiftsContext: profileGiftsContext,
+                    profileGiftsCollectionsContext: profileGiftsCollectionsContext,
                     premiumGiftOptions: [],
                     webAppPermissions: nil
                 )
@@ -2076,6 +2088,7 @@ func peerInfoScreenData(context: AccountContext, peerId: PeerId, strings: Presen
                     revenueStatsState: nil,
                     revenueStatsContext: nil,
                     profileGiftsContext: nil,
+                    profileGiftsCollectionsContext: nil,
                     premiumGiftOptions: [],
                     webAppPermissions: nil
                 ))

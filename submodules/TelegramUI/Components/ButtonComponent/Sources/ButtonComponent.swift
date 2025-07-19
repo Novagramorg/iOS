@@ -380,7 +380,7 @@ public final class ButtonComponent: Component {
     public init(
         background: Background,
         content: AnyComponentWithIdentity<Empty>,
-        isEnabled: Bool,
+        isEnabled: Bool = true,
         tintWhenDisabled: Bool = true,
         allowActionWhenDisabled: Bool = false,
         displaysProgress: Bool = false,

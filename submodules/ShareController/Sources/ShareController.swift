@@ -437,10 +437,15 @@ public final class ShareController: ViewController {
             }
         }
     }
-    
-    public var openShareAsImage: (([Message]) -> Void)?
-    
+        
     public var shareStory: (() -> Void)?
+    public var canSendInHighQuality = false {
+        didSet {
+            if self.isNodeLoaded {
+                self.controllerNode.canSendInHighQuality = self.canSendInHighQuality
+            }
+        }
+    }
 
     public var debugAction: (() -> Void)?
     
@@ -692,14 +697,46 @@ public final class ShareController: ViewController {
             mediaParameters = parameters
         }
         
-        self.displayNode = ShareControllerNode(controller: self, environment: self.environment, presentationData: self.presentationData, presetText: self.presetText, defaultAction: self.defaultAction, mediaParameters: mediaParameters, requestLayout: { [weak self] transition in
-            self?.requestLayout(transition: transition)
-        }, presentError: { [weak self] title, text in
-            guard let strongSelf = self else {
-                return
-            }
-            strongSelf.present(standardTextAlertController(theme: AlertControllerTheme(presentationData: strongSelf.presentationData), title: title, text: text, actions: [TextAlertAction(type: .defaultAction, title: strongSelf.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
-        }, externalShare: self.externalShare, immediateExternalShare: self.immediateExternalShare, immediatePeerId: self.immediatePeerId, fromForeignApp: self.fromForeignApp, forceTheme: self.forceTheme, fromPublicChannel: fromPublicChannel, segmentedValues: self.segmentedValues, shareStory: self.shareStory, collectibleItemInfo: self.collectibleItemInfo, messageCount: messageCount)
+        self.displayNode = ShareControllerNode(
+            controller: self,
+            environment: self.environment,
+            presentationData: self.presentationData,
+            presetText: self.presetText,
+            defaultAction: self.defaultAction,
+            mediaParameters: mediaParameters,
+            requestLayout: { [weak self] transition in
+                self?.requestLayout(
+                    transition: transition
+                )
+            },
+            presentError: { [weak self] title, text in
+                guard let strongSelf = self else {
+                    return
+                }
+                strongSelf.present(standardTextAlertController(
+                    theme: AlertControllerTheme(presentationData: strongSelf.presentationData),
+                    title: title,
+                    text: text,
+                    actions: [TextAlertAction(
+                        type: .defaultAction,
+                        title: strongSelf.presentationData.strings.Common_OK,
+                        action: {
+                        })
+                    ]
+                ), in: .window(.root))
+            },
+            externalShare: self.externalShare,
+            immediateExternalShare: self.immediateExternalShare,
+            immediatePeerId: self.immediatePeerId,
+            fromForeignApp: self.fromForeignApp,
+            forceTheme: self.forceTheme,
+            fromPublicChannel: fromPublicChannel,
+            segmentedValues: self.segmentedValues,
+            shareStory: self.shareStory,
+            collectibleItemInfo: self.collectibleItemInfo,
+            messageCount: messageCount
+        )
+        self.controllerNode.canSendInHighQuality = self.canSendInHighQuality
         self.controllerNode.completed = self.completed
         self.controllerNode.enqueued = self.enqueued
         self.controllerNode.present = { [weak self] c in

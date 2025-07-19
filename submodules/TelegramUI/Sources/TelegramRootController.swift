@@ -31,6 +31,8 @@ import PeerInfoScreen
 import PeerInfoStoryGridScreen
 import ShareWithPeersScreen
 import ChatEmptyNode
+import FaceScanScreen
+import UndoUI
 
 private class DetailsChatPlaceholderNode: ASDisplayNode, NavigationDetailsPlaceholderNode {
     private var presentationData: PresentationData
@@ -235,6 +237,22 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         self.accountSettingsController = accountSettingsController
         self.rootTabController = tabBarController
         self.pushViewController(tabBarController, animated: false)
+        
+//        Queue.mainQueue().after(1.0) {
+//            let context = self.context
+//            let infoScreen = AgeVerificationScreen(context: context, completion: { [weak chatListController] proceed in
+//                if proceed {
+//                    let scanScreen = FaceScanScreen(context: context, completion: { success in
+//                        let controller = UndoOverlayController(presentationData: self.presentationData, content: .actionSucceeded(title: "Age check passed!", text: "You can now view this content.", cancel: nil, destructive: false), elevatedLayout: true, action: { _ in return true })
+//                        Queue.mainQueue().after(0.1) {
+//                            chatListController?.present(controller, in: .window(.root))
+//                        }
+//                    })
+//                    chatListController?.push(scanScreen)
+//                }
+//            })
+//            chatListController.push(infoScreen)
+//        }
     }
         
     public func updateRootControllers(showCallsTab: Bool) {
