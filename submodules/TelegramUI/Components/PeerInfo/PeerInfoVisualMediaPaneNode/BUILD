@@ -32,6 +32,7 @@ swift_library(
         "//submodules/TelegramUIPreferences",
         "//submodules/CheckNode",
         "//submodules/AppBundle",
+        "//submodules/Components/BundleIconComponent",
         "//submodules/TelegramUI/Components/ChatControllerInteraction",
         "//submodules/InvisibleInkDustNode",
         "//submodules/MediaPickerUI",
@@ -56,6 +57,7 @@ swift_library(
         "//submodules/TelegramUI/Components/LottieComponent",
         "//submodules/TelegramUI/Components/BottomButtonPanelComponent",
         "//submodules/PromptUI",
+        "//submodules/TelegramUI/Components/EmojiTextAttachmentView",
     ],
     visibility = [
         "//visibility:public",

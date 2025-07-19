@@ -695,6 +695,10 @@ public struct ComponentTransition {
     }
     
     public func setSublayerTransform(layer: CALayer, transform: CATransform3D, completion: ((Bool) -> Void)? = nil) {
+        if CATransform3DEqualToTransform(layer.sublayerTransform, transform) {
+            completion?(true)
+            return
+        }
         switch self.animation {
         case .none:
             layer.sublayerTransform = transform

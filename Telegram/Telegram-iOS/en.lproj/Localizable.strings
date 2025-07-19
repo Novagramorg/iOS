@@ -14690,3 +14690,10 @@ Sorry for the inconvenience.";
 "Chat.ReplyPanel.ReplyToTodoItem" = "Reply to Checklist Item";
 
 "Chat.Todo.ReplyToItem" = "Reply to Item";
+
+"Premium.SubscribeForBiannual" = "Subscribe for %@ / 2 years";
+"Premium.Biannual" = "2 Years";
+
+"Premium.PricePer2Years" = "%@/2 years";
+
+"Chat.SensitiveContentShort" = "18+";
