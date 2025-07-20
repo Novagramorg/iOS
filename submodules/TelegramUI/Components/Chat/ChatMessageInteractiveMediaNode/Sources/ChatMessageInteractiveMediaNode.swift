@@ -2992,7 +2992,7 @@ public final class ChatMessageInteractiveMediaNode: ASDisplayNode, GalleryItemTr
             
             var viewText: String = ""
             if case .eye = icon {
-                viewText = strings.Chat_SensitiveContent
+                viewText = wideLayout ? strings.Chat_SensitiveContent : strings.Chat_SensitiveContentShort
                 extendedMediaOverlayNode.dustNode.revealOnTap = false
             } else {
                 outer: for attribute in message.attributes {
