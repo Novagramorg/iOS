@@ -14745,3 +14745,6 @@ Sorry for the inconvenience.";
 
 "AgeVerification.Fail.Title" = "Age check failed";
 "AgeVerification.Fail.Text" = "Sorry, you can't view this content.";
+
+"FaceScan.Instruction.Position" = "Position your face\nwithin the frame";
+"FaceScan.Instruction.Rotate" = "Move your head slowly to\ncomplete the circle";
