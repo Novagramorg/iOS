@@ -1451,7 +1451,8 @@ private func infoItems(data: PeerInfoScreenData?, context: AccountContext, prese
                             simple: true,
                             source: .generic,
                             skipTermsOfService: true,
-                            payload: nil
+                            payload: nil,
+                            verifyAgeCompletion: nil
                         )
                     })
                 }
