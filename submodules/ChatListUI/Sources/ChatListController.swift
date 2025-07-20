@@ -1250,7 +1250,8 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                 simple: true,
                 source: .generic,
                 skipTermsOfService: true,
-                payload: nil
+                payload: nil,
+                verifyAgeCompletion: nil
             )
         }
         

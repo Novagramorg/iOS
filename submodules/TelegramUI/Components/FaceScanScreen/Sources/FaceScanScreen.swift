@@ -25,16 +25,13 @@ final class FaceScanScreenComponent: Component {
     
     let context: AccountContext
     let availability: Signal<AgeVerificationAvailability, NoError>
-    let requiredAge: Int
     
     init(
         context: AccountContext,
-        availability: Signal<AgeVerificationAvailability, NoError>,
-        requiredAge: Int
+        availability: Signal<AgeVerificationAvailability, NoError>
     ) {
         self.context = context
         self.availability = availability
-        self.requiredAge = requiredAge
     }
 
     static func ==(lhs: FaceScanScreenComponent, rhs: FaceScanScreenComponent) -> Bool {
@@ -307,7 +304,7 @@ final class FaceScanScreenComponent: Component {
         }
         
         private func fillSegment(_ segmentIndex: Int) {
-            guard let component = self.component, !self.completedAngles.contains(segmentIndex) else {
+            guard !self.completedAngles.contains(segmentIndex) else {
                 return
             }
             self.completedAngles.insert(segmentIndex)
@@ -321,7 +318,7 @@ final class FaceScanScreenComponent: Component {
                         if !self.ages.isEmpty {
                             let averageAge = self.ages.reduce(0, +) / Double(self.ages.count)
                             if let environment = self.environment, let controller = environment.controller() as? FaceScanScreen {
-                                controller.completion(averageAge >= Double(component.requiredAge))
+                                controller.completion(Int(averageAge))
                                 controller.dismiss(animated: true)
                             }
                         } else {
@@ -437,7 +434,7 @@ final class FaceScanScreenComponent: Component {
             
             let center = CGPoint(x: availableSize.width / 2, y: environment.statusBarHeight + 10.0 + widthRadius * 1.3)
             
-            var previewScale = 1.0
+            var previewScale = 0.85
             if self.processState == .tracking || self.processState == .readyToStart || self.processState == .completed || self.transitioningToViewFinder {
                 let circlePath = CGPath(roundedRect: CGRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2), cornerWidth: radius, cornerHeight: radius, transform: nil)
                 path.addPath(circlePath)
@@ -545,21 +542,19 @@ final class FaceScanScreenComponent: Component {
 
 public final class FaceScanScreen: ViewControllerComponentContainer {
     private let context: AccountContext
-    fileprivate let completion: (Bool) -> Void
+    fileprivate let completion: (Int) -> Void
     
     public init(
         context: AccountContext,
         availability: Signal<AgeVerificationAvailability, NoError>,
-        requiredAge: Int,
-        completion: @escaping (Bool) -> Void
+        completion: @escaping (Int) -> Void
     ) {
         self.context = context
         self.completion = completion
         
         super.init(context: context, component: FaceScanScreenComponent(
             context: context,
-            availability: availability,
-            requiredAge: requiredAge
+            availability: availability
         ), navigationBarAppearance: .none, theme: .default, updatedPresentationData: nil)
         
         self.title = ""
