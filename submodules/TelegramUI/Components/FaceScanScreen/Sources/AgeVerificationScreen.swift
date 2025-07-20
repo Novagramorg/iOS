@@ -162,8 +162,13 @@ private final class SheetContent: CombinedComponent {
                 return (TelegramTextAttributes.URL, contents)
             })
             
-            //TODO:localize
-            let textString = "To access this content, you must confirm you are at least **18** years old as required by UK law.\n\nThis is a one-time process using your phone's camera. Your selfie will not be stored by Telegram."
+            var textString = environment.strings.AgeVerification_Text
+            if let code = component.context.currentAppConfiguration.with({ $0 }).data?["verify_age_country"] as? String {
+                let key = "AgeVerification.Text.\(code)"
+                if let string = environment.strings.primaryComponent.dict[key] {
+                    textString = string
+                }
+            }
             
             let text = text.update(
                 component: BalancedTextComponent(

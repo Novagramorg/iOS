@@ -458,7 +458,7 @@ final class FaceScanScreenComponent: Component {
             self.frameView.update(size: frameViewFrame.size)
             
             //TODO:localize
-            var instructionString = "Position your face\nwithin the frame"
+            var instructionString = environment.strings.FaceScan_Instruction_Position
             switch self.processState {
             case .waitingForFace, .positioning:
                 self.frameView.update(state: .viewFinder, intermediateCompletion: { [weak self] in
@@ -467,13 +467,13 @@ final class FaceScanScreenComponent: Component {
                         self.state?.updated(transition: .spring(duration: 0.3))
                     }
                 }, transition: .spring(duration: 0.3))
-                instructionString = "Position your face\nwithin the frame"
+                instructionString = environment.strings.FaceScan_Instruction_Position
             case .readyToStart:
                 self.frameView.update(state: .segments(Set()), transition: .spring(duration: 0.3))
-                instructionString = "Move your head slowly to\ncomplete the circle"
+                instructionString = environment.strings.FaceScan_Instruction_Rotate
             case .tracking:
                 self.frameView.update(state: .segments(self.completedAngles), transition: .spring(duration: 0.3))
-                instructionString = "Move your head slowly to\ncomplete the circle"
+                instructionString = environment.strings.FaceScan_Instruction_Rotate
             case .completed:
                 self.frameView.update(state: .success, transition: .spring(duration: 0.3))
                 instructionString = ""
