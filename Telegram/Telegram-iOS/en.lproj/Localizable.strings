@@ -14700,6 +14700,9 @@ Sorry for the inconvenience.";
 
 "AccessDenied.AgeVerificationCamera" = "Telegram needs access to your camera for age verification.\n\nOpen your device's Settings > Privacy > Camera and set Telegram to ON.";
 
+"PeerInfo.Gifts.Collections.All" = "All Gifts";
+"PeerInfo.Gifts.Collections.Add" = "Add Collection";
+
 "PeerInfo.Gifts.AddGiftsButton" = "Add Gifts";
 
 "PeerInfo.Gifts.AddCollection" = "Add Collection";

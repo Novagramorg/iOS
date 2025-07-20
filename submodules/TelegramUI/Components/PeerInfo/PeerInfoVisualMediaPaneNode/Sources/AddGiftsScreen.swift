@@ -114,6 +114,7 @@ final class AddGiftsScreenComponent: Component {
             var contentSize = CGSize(width: self.scrollView.bounds.width, height: contentHeight)
             contentSize.height += environment.safeInsets.bottom
             contentSize.height = max(contentSize.height, self.scrollView.bounds.size.height)
+            contentSize.height += 50.0 + 24.0
             transition.setFrame(view: giftsListView, frame: CGRect(origin: CGPoint(), size: contentSize))
             
             if self.scrollView.contentSize != contentSize {
