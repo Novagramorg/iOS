@@ -11710,7 +11710,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                     }
                 })))
                 
-                if pane.canReorder() {
+                /*if pane.canReorder() {
                     items.append(.action(ContextMenuActionItem(text: self.presentationData.strings.BotPreviews_MenuReorder, icon: { theme in
                         return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/ReorderItems"), color: theme.contextMenu.primaryColor)
                     }, action: { [weak pane] _, a in
@@ -11742,7 +11742,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                             pane.presentDeleteCurrentStoryFolder()
                         }
                     })))
-                }
+                }*/
                 
                 if let language = pane.currentBotPreviewLanguage {
                     items.append(.action(ContextMenuActionItem(text: self.presentationData.strings.BotPreviews_MenuDeleteLanguage(language.name).string, textColor: .destructive, icon: { theme in
