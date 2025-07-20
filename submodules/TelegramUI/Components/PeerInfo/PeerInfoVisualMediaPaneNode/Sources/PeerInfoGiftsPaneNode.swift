@@ -242,7 +242,15 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
     }
     
     public func addGiftsToCollection(id: Int32) {
-        let screen = AddGiftsScreen(context: self.context, peerId: self.peerId, collectionId: id, completion: { [weak self] gifts in
+        var collectionGiftsMaxCount: Int32 = 1000
+        if let value = self.context.currentAppConfiguration.with({ $0 }).data?["stargifts_collection_gifts_limit"] as? Double {
+            collectionGiftsMaxCount = Int32(value)
+        }
+        var remainingCount = collectionGiftsMaxCount
+        if let currentCount = self.giftsListView.profileGifts.currentState?.count {
+            remainingCount = max(0, collectionGiftsMaxCount - currentCount)
+        }
+        let screen = AddGiftsScreen(context: self.context, peerId: self.peerId, collectionId: id, remainingCount: remainingCount, completion: { [weak self] gifts in
             guard let self else {
                 return
             }

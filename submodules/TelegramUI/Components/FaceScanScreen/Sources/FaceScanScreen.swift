@@ -20,20 +20,21 @@ import ZipArchive
 import PlainButtonComponent
 import MultilineTextComponent
 
-private let requiredAge = 18
-
 final class FaceScanScreenComponent: Component {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
     
     let context: AccountContext
     let availability: Signal<AgeVerificationAvailability, NoError>
+    let requiredAge: Int
     
     init(
         context: AccountContext,
-        availability: Signal<AgeVerificationAvailability, NoError>
+        availability: Signal<AgeVerificationAvailability, NoError>,
+        requiredAge: Int
     ) {
         self.context = context
         self.availability = availability
+        self.requiredAge = requiredAge
     }
 
     static func ==(lhs: FaceScanScreenComponent, rhs: FaceScanScreenComponent) -> Bool {
@@ -109,7 +110,7 @@ final class FaceScanScreenComponent: Component {
             
             self.backgroundColor = .black
             
-            self.previewLayer.backgroundColor = UIColor.red.cgColor
+            //self.previewLayer.backgroundColor = UIColor.red.cgColor
             self.previewLayer.videoGravity = .resizeAspectFill
             self.layer.addSublayer(previewLayer)
             
@@ -240,7 +241,7 @@ final class FaceScanScreenComponent: Component {
             let targetCenter = CGPoint(x: 0.5, y: 0.5)
             let distance = sqrt(pow(faceCenter.x - targetCenter.x, 2) + pow(faceCenter.y - targetCenter.y, 2))
             
-            if distance < 0.35 {
+            if distance < 0.24 {
                 switch processState {
                 case .waitingForFace:
                     self.processState = .positioning
@@ -306,7 +307,7 @@ final class FaceScanScreenComponent: Component {
         }
         
         private func fillSegment(_ segmentIndex: Int) {
-            guard !self.completedAngles.contains(segmentIndex) else {
+            guard let component = self.component, !self.completedAngles.contains(segmentIndex) else {
                 return
             }
             self.completedAngles.insert(segmentIndex)
@@ -320,7 +321,7 @@ final class FaceScanScreenComponent: Component {
                         if !self.ages.isEmpty {
                             let averageAge = self.ages.reduce(0, +) / Double(self.ages.count)
                             if let environment = self.environment, let controller = environment.controller() as? FaceScanScreen {
-                                controller.completion(averageAge >= Double(requiredAge))
+                                controller.completion(averageAge >= Double(component.requiredAge))
                                 controller.dismiss(animated: true)
                             }
                         } else {
@@ -457,7 +458,6 @@ final class FaceScanScreenComponent: Component {
             self.frameView.frame = frameViewFrame
             self.frameView.update(size: frameViewFrame.size)
             
-            //TODO:localize
             var instructionString = environment.strings.FaceScan_Instruction_Position
             switch self.processState {
             case .waitingForFace, .positioning:
@@ -550,6 +550,7 @@ public final class FaceScanScreen: ViewControllerComponentContainer {
     public init(
         context: AccountContext,
         availability: Signal<AgeVerificationAvailability, NoError>,
+        requiredAge: Int,
         completion: @escaping (Bool) -> Void
     ) {
         self.context = context
@@ -557,7 +558,8 @@ public final class FaceScanScreen: ViewControllerComponentContainer {
         
         super.init(context: context, component: FaceScanScreenComponent(
             context: context,
-            availability: availability
+            availability: availability,
+            requiredAge: requiredAge
         ), navigationBarAppearance: .none, theme: .default, updatedPresentationData: nil)
         
         self.title = ""
