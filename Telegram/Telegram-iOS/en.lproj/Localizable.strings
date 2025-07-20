@@ -14697,3 +14697,5 @@ Sorry for the inconvenience.";
 "Premium.PricePer2Years" = "%@/2 years";
 
 "Chat.SensitiveContentShort" = "18+";
+
+"AccessDenied.AgeVerificationCamera" = "Telegram needs access to your camera for age verification.\n\nOpen your device's Settings > Privacy > Camera and set Telegram to ON.";
