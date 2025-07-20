@@ -1917,7 +1917,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         let apparentBackgroundHeight = (1.0 - transitionFraction) * backgroundHeight + transitionFraction * transitionSourceHeight
         
         var subtitleRatingSize: CGSize?
-        if let cachedData = cachedData as? CachedUserData, let starRating = cachedData.starRating {
+        if !"".isEmpty, let cachedData = cachedData as? CachedUserData, let starRating = cachedData.starRating {
             let subtitleRating: ComponentView<Empty>
             var subtitleRatingTransition = ComponentTransition(transition)
             if let current = self.subtitleRating {
