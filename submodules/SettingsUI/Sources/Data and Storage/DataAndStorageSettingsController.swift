@@ -14,6 +14,7 @@ import OpenInExternalAppUI
 import ItemListPeerActionItem
 import StorageUsageScreen
 import PresentationDataUtils
+import FaceScanScreen
 
 public enum AutomaticSaveIncomingPeerType {
     case privateChats
@@ -911,6 +912,12 @@ public func dataAndStorageController(context: AccountContext, focusOnItemTag: Da
                 }
             })
             updateSensitiveContentDisposable.set(updateRemoteContentSettingsConfiguration(postbox: context.account.postbox, network: context.account.network, sensitiveContentEnabled: value).start())
+            
+            if !value {
+                let _ = updateAgeVerificationState(engine: context.engine, { _ in
+                    return AgeVerificationState(verificationPassed: false)
+                }).start()
+            }
         }
         if value {
             let presentationData = context.sharedContext.currentPresentationData.with { $0 }

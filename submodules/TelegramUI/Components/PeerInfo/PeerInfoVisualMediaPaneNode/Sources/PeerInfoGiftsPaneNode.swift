@@ -219,8 +219,27 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
     }
     
     public func deleteCollection(id: Int32) {
-        self.setCurrentCollection(collection: .all)
-        let _ = self.profileGiftsCollections.deleteCollection(id: id).start()
+        guard let params = self.currentParams else {
+            return
+        }
+        let actionSheet = ActionSheetController(presentationData: params.presentationData)
+        actionSheet.setItemGroups([
+            ActionSheetItemGroup(items: [
+                ActionSheetTextItem(title: params.presentationData.strings.PeerInfo_Gifts_RemoveCollectionConfirmation),
+                ActionSheetButtonItem(title: params.presentationData.strings.PeerInfo_Gifts_RemoveCollectionAction, color: .destructive, action: { [weak self, weak actionSheet] in
+                    actionSheet?.dismissAnimated()
+                    
+                    self?.setCurrentCollection(collection: .all)
+                    let _ = self?.profileGiftsCollections.deleteCollection(id: id).start()
+                })
+            ]),
+            ActionSheetItemGroup(items: [
+                ActionSheetButtonItem(title: params.presentationData.strings.Common_Cancel, color: .accent, font: .bold, action: { [weak actionSheet] in
+                    actionSheet?.dismissAnimated()
+                })
+            ])
+        ])
+        self.parentController?.present(actionSheet, in: .window(.root))
     }
     
     public func addGiftsToCollection(id: Int32) {

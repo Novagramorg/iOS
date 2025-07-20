@@ -426,7 +426,7 @@ public func presentAgeVerification(context: AccountContext, parentController: Vi
     })
 }
 
-func updateAgeVerificationState(engine: TelegramEngine, _ f: @escaping (AgeVerificationState) -> AgeVerificationState) -> Signal<Never, NoError> {
+public func updateAgeVerificationState(engine: TelegramEngine, _ f: @escaping (AgeVerificationState) -> AgeVerificationState) -> Signal<Never, NoError> {
     return engine.preferences.update(id: ApplicationSpecificPreferencesKeys.ageVerificationState, { entry in
         let currentSettings: AgeVerificationState
         if let entry = entry?.get(AgeVerificationState.self) {
