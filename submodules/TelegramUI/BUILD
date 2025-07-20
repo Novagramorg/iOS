@@ -482,6 +482,7 @@ swift_library(
         "//submodules/TelegramUI/Components/ComposeTodoScreen",
         "//submodules/TelegramUI/Components/SuggestedPostApproveAlert",
         "//submodules/TelegramUI/Components/Stars/BalanceNeededScreen",
+        "//submodules/TelegramUI/Components/FaceScanScreen",
         "//submodules/ContactsHelper",
     ] + select({
         "@build_bazel_rules_apple//apple:ios_arm64": appcenter_targets,

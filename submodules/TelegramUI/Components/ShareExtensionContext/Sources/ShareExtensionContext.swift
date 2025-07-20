@@ -598,9 +598,11 @@ public class ShareRootControllerImpl {
                         }
                         
                         var canShareToStory = true
+                        var canSendInHighQuality = false
                         if let inputItems = self?.getExtensionContext()?.inputItems, inputItems.count == 1, let item = inputItems[0] as? NSExtensionItem, let attachments = item.attachments {
                             for attachment in attachments {
                                 if attachment.hasItemConformingToTypeIdentifier(kUTTypeImage as String) {
+                                    canSendInHighQuality = true
                                 } else if attachment.hasItemConformingToTypeIdentifier(kUTTypeMovie as String) {
                                 } else {
                                     canShareToStory = false
@@ -609,6 +611,7 @@ public class ShareRootControllerImpl {
                         }
                         
                         if canShareToStory {
+                            shareController.canSendInHighQuality = canSendInHighQuality
                             shareController.shareStory = { [weak self] in
                                 guard let self else {
                                     return
