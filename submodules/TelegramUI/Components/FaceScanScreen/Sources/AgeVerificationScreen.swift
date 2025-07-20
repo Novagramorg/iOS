@@ -407,7 +407,12 @@ public func presentAgeVerification(context: AccountContext, parentController: Vi
         } else {
             let infoScreen = AgeVerificationScreen(context: context, completion: { [weak parentController] check, availability in
                 if check {
-                    let scanScreen = FaceScanScreen(context: context, availability: availability, completion: { [weak parentController] passed in
+                    var requiredAge = 18
+                    if let value = context.currentAppConfiguration.with({ $0 }).data?["verify_age_min"] as? Double {
+                        requiredAge = Int(value)
+                    }
+                    
+                    let scanScreen = FaceScanScreen(context: context, availability: availability, requiredAge: requiredAge, completion: { [weak parentController] passed in
                         if passed {
                             let _ = updateAgeVerificationState(engine: context.engine, { _ in
                                 return AgeVerificationState(verificationPassed: passed)

@@ -363,6 +363,8 @@ final class GiftSetupScreenComponent: Component {
             let entities = generateChatInputTextEntities(self.textInputState.text)
             
             var finalPrice: Int64
+            var perUserLimit: Int32?
+            var giftFile: TelegramMediaFile?
             let source: BotPaymentInvoiceSource
             switch component.subject {
             case let .premium(product):
@@ -377,6 +379,8 @@ final class GiftSetupScreenComponent: Component {
                 if self.includeUpgrade, let upgradeStars = starGift.upgradeStars  {
                     finalPrice += upgradeStars
                 }
+                perUserLimit = starGift.perUserLimit?.total
+                giftFile = starGift.file
                 source = .starGift(hideName: self.hideName, includeUpgrade: self.includeUpgrade, peerId: peerId, giftId: starGift.id, text: self.textInputState.text.string, entities: entities)
             }
             
@@ -395,6 +399,8 @@ final class GiftSetupScreenComponent: Component {
                     switch error {
                     case .disallowedStarGifts:
                         return .fail(.disallowedStarGift)
+                    case .starGiftsUserLimit:
+                        return .fail(.starGiftUserLimit)
                     default:
                         return .fail(.generic)
                     }
@@ -468,6 +474,14 @@ final class GiftSetupScreenComponent: Component {
                     
                     var errorText: String?
                     switch error {
+                    case .starGiftUserLimit:
+                        if let perUserLimit, let giftFile {
+                            let text = presentationData.strings.Gift_Options_Gift_BuyLimitReached(perUserLimit)
+                            let undoController = UndoOverlayController(presentationData: presentationData, content: .sticker(context: component.context, file: giftFile, loop: true, title: nil, text: text, undoText: nil, customAction: nil), action: { _ in return false })
+                            controller.present(undoController, in: .current)
+                            return
+                        }
+                        return
                     case .starGiftOutOfStock:
                         errorText = presentationData.strings.Gift_Send_ErrorOutOfStock
                     case .disallowedStarGift:

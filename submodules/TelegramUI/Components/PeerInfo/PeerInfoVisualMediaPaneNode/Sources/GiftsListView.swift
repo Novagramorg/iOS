@@ -36,6 +36,7 @@ final class GiftsListView: UIView {
     
     private let canSelect: Bool
     private let ignoreCollection: Int32?
+    private let remainingSelectionCount: Int32
     
     private var dataDisposable: Disposable?
         
@@ -124,13 +125,14 @@ final class GiftsListView: UIView {
     var contextAction: ((ProfileGiftsContext.State.StarGift, UIView, ContextGesture) -> Void)?
     var addToCollection: (() -> Void)?
     
-    init(context: AccountContext, peerId: PeerId, profileGifts: ProfileGiftsContext, giftsCollections: ProfileGiftsCollectionsContext?, canSelect: Bool, ignoreCollection: Int32? = nil) {
+    init(context: AccountContext, peerId: PeerId, profileGifts: ProfileGiftsContext, giftsCollections: ProfileGiftsCollectionsContext?, canSelect: Bool, ignoreCollection: Int32? = nil, remainingSelectionCount: Int32 = 0) {
         self.context = context
         self.peerId = peerId
         self.profileGifts = profileGifts
         self.giftsCollections = giftsCollections
         self.canSelect = canSelect
         self.ignoreCollection = ignoreCollection
+        self.remainingSelectionCount = remainingSelectionCount
                 
         if let value = context.currentAppConfiguration.with({ $0 }).data?["stargifts_pinned_to_top_limit"] as? Double {
             self.maxPinnedCount = Int(value)
@@ -548,8 +550,10 @@ final class GiftsListView: UIView {
                                     if self.selectedItemIds.contains(itemReferenceId) {
                                         self.selectedItemIds.remove(itemReferenceId)
                                     } else {
-                                        self.selectedItemIds.insert(itemReferenceId)
-                                        self.selectedItemsMap[itemReferenceId] = product
+                                        if self.selectedItemIds.count < self.remainingSelectionCount {
+                                            self.selectedItemIds.insert(itemReferenceId)
+                                            self.selectedItemsMap[itemReferenceId] = product
+                                        }
                                     }
                                     self.selectionUpdated()
                                     self.updateScrolling(transition: .easeInOut(duration: 0.25))
