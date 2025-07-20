@@ -67,6 +67,7 @@ final class FaceScanScreenComponent: Component {
             case completed
         }
         private var processState: State = .waitingForFace
+        private var transitioningToViewFinder = false
         
         private var lastFaceYaw: NSNumber?
         private var lastFacePitch: NSNumber?
@@ -108,7 +109,7 @@ final class FaceScanScreenComponent: Component {
             
             self.backgroundColor = .black
             
-            //self.previewLayer.backgroundColor = UIColor.red.cgColor
+            self.previewLayer.backgroundColor = UIColor.red.cgColor
             self.previewLayer.videoGravity = .resizeAspectFill
             self.layer.addSublayer(previewLayer)
             
@@ -239,7 +240,7 @@ final class FaceScanScreenComponent: Component {
             let targetCenter = CGPoint(x: 0.5, y: 0.5)
             let distance = sqrt(pow(faceCenter.x - targetCenter.x, 2) + pow(faceCenter.y - targetCenter.y, 2))
             
-            if distance < 0.2 {
+            if distance < 0.35 {
                 switch processState {
                 case .waitingForFace:
                     self.processState = .positioning
@@ -337,6 +338,9 @@ final class FaceScanScreenComponent: Component {
             self.faceDetectionTimer?.invalidate()
             self.segmentTimer?.invalidate()
             
+            if self.processState != .waitingForFace && self.processState != .positioning {
+                self.transitioningToViewFinder = true
+            }
             self.processState = .waitingForFace
             self.completedAngles.removeAll()
             self.currentSegment = nil
@@ -433,7 +437,7 @@ final class FaceScanScreenComponent: Component {
             let center = CGPoint(x: availableSize.width / 2, y: environment.statusBarHeight + 10.0 + widthRadius * 1.3)
             
             var previewScale = 1.0
-            if self.processState == .tracking || self.processState == .readyToStart || self.processState == .completed {
+            if self.processState == .tracking || self.processState == .readyToStart || self.processState == .completed || self.transitioningToViewFinder {
                 let circlePath = CGPath(roundedRect: CGRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2), cornerWidth: radius, cornerHeight: radius, transform: nil)
                 path.addPath(circlePath)
                 
@@ -457,7 +461,12 @@ final class FaceScanScreenComponent: Component {
             var instructionString = "Position your face\nwithin the frame"
             switch self.processState {
             case .waitingForFace, .positioning:
-                self.frameView.update(state: .viewFinder, transition: .spring(duration: 0.3))
+                self.frameView.update(state: .viewFinder, intermediateCompletion: { [weak self] in
+                    if let self {
+                        self.transitioningToViewFinder = false
+                        self.state?.updated(transition: .spring(duration: 0.3))
+                    }
+                }, transition: .spring(duration: 0.3))
                 instructionString = "Position your face\nwithin the frame"
             case .readyToStart:
                 self.frameView.update(state: .segments(Set()), transition: .spring(duration: 0.3))

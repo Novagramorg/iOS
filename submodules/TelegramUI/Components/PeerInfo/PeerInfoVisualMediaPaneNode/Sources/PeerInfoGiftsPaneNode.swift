@@ -196,13 +196,12 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
             return
         }
         if let collections = self.collections, collections.count >= self.collectionsMaxCount {
-            let alertController = textAlertController(context: self.context, title: "Limit Reached", text: "Please remove one of the existing collections to add a new one.", actions: [TextAlertAction(type: .defaultAction, title: params.presentationData.strings.Common_OK, action: {})])
+            let alertController = textAlertController(context: self.context, title: params.presentationData.strings.PeerInfo_Gifts_CollectionLimitReached_Title, text: params.presentationData.strings.PeerInfo_Gifts_CollectionLimitReached_Text, actions: [TextAlertAction(type: .defaultAction, title: params.presentationData.strings.Common_OK, action: {})])
             self.parentController?.present(alertController, in: .window(.root))
             return
         }
         
-        //TODO:localize
-        let promptController = promptController(sharedContext: self.context.sharedContext, updatedPresentationData: nil, text: "Create a New Collection", titleFont: .bold, subtitle: "Choose a name for your collection and start adding your gifts there.", value: "", placeholder: "Title", characterLimit: 20, displayCharacterLimit: true, apply: { [weak self] value in
+        let promptController = promptController(sharedContext: self.context.sharedContext, updatedPresentationData: nil, text: params.presentationData.strings.PeerInfo_Gifts_CreateCollection_Title, titleFont: .bold, subtitle: params.presentationData.strings.PeerInfo_Gifts_CreateCollection_Text, value: "", placeholder: params.presentationData.strings.PeerInfo_Gifts_CreateCollection_Placeholder, characterLimit: 20, displayCharacterLimit: true, apply: { [weak self] value in
             guard let self, let value else {
                 return
             }
@@ -253,11 +252,11 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
     }
     
     public func renameCollection(id: Int32) {
-        guard let collection = self.collections?.first(where: { $0.id == id }) else {
+        guard let params = self.currentParams, let collection = self.collections?.first(where: { $0.id == id }) else {
             return
         }
         
-        let promptController = promptController(sharedContext: self.context.sharedContext, updatedPresentationData: nil, text: "Rename Collection", titleFont: .bold, value: collection.title, placeholder: "Title", characterLimit: 20, displayCharacterLimit: true, apply: { [weak self] value in
+        let promptController = promptController(sharedContext: self.context.sharedContext, updatedPresentationData: nil, text: params.presentationData.strings.PeerInfo_Gifts_RenameCollection_Title, titleFont: .bold, value: collection.title, placeholder: params.presentationData.strings.PeerInfo_Gifts_CreateCollection_Placeholder, characterLimit: 20, displayCharacterLimit: true, apply: { [weak self] value in
             guard let self, let value else {
                 return
             }
@@ -440,8 +439,8 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
         }
         
         var items: [ContextMenuItem] = []
-        //TODO:localize
-        items.append(.action(ContextMenuActionItem(text: "Add Gifts", icon: { theme in
+        
+        items.append(.action(ContextMenuActionItem(text: params.presentationData.strings.PeerInfo_Gifts_AddGifts, icon: { theme in
             return generateTintedImage(image: UIImage(bundleImageName: "Peer Info/Gifts/AddGift"), color: theme.actionSheet.primaryTextColor)
         }, action: { [weak self] _, f in
             guard let self else {
@@ -453,7 +452,7 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
             self.addGiftsToCollection(id: id)
         })))
         
-        items.append(.action(ContextMenuActionItem(text: "Rename", icon: { theme in
+        items.append(.action(ContextMenuActionItem(text: params.presentationData.strings.PeerInfo_Gifts_RenameCollection, icon: { theme in
             return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Edit"), color: theme.actionSheet.primaryTextColor)
         }, action: { [weak self] _, f in
             guard let self else {
@@ -464,7 +463,7 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
             self.renameCollection(id: id)
         })))
 
-        items.append(.action(ContextMenuActionItem(text: "Share", icon: { theme in
+        items.append(.action(ContextMenuActionItem(text: params.presentationData.strings.PeerInfo_Gifts_ShareCollection, icon: { theme in
             return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Forward"), color: theme.actionSheet.primaryTextColor)
         }, action: { [weak self] _, f in
             guard let self else {
@@ -472,10 +471,11 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
             }
             f(.default)
             
+            //TODO:release
             let _ = self
         })))
         
-        items.append(.action(ContextMenuActionItem(text: "Reorder", icon: { theme in
+        items.append(.action(ContextMenuActionItem(text: params.presentationData.strings.PeerInfo_Gifts_Reorder, icon: { theme in
             return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/ReorderItems"), color: theme.actionSheet.primaryTextColor)
         }, action: { [weak self] c, f in
             c?.dismiss(completion: { [weak self] in
@@ -486,7 +486,7 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
             })
         })))
         
-        items.append(.action(ContextMenuActionItem(text: "Delete Collection", textColor: .destructive, icon: { theme in
+        items.append(.action(ContextMenuActionItem(text: params.presentationData.strings.PeerInfo_Gifts_DeleteCollection, textColor: .destructive, icon: { theme in
             return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Delete"), color: theme.contextMenu.destructiveColor)
         }, action: { [weak self] _, f in
             guard let self else {
@@ -684,13 +684,12 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
             
             let buttonSideInset = sideInset + 16.0
             
-            //TODO:localize
             let buttonTitle: String
             if self.peerId == self.context.account.peerId {
                 if case .all = self.currentCollection {
                     buttonTitle = params.presentationData.strings.PeerInfo_Gifts_Send
                 } else {
-                    buttonTitle = "Add Gifts"
+                    buttonTitle = params.presentationData.strings.PeerInfo_Gifts_AddGiftsButton
                 }
             } else {
                 buttonTitle = params.presentationData.strings.PeerInfo_Gifts_SendGift
@@ -891,7 +890,7 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
         
         var items: [ContextMenuItem] = []
         if canManage {
-            items.append(.action(ContextMenuActionItem(text: "Add to Collection", textLayout: .twoLinesMax, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Peer Info/Gifts/AddToCollection"), color: theme.contextMenu.primaryColor) }, action: { [weak self] c, f in
+            items.append(.action(ContextMenuActionItem(text: strings.PeerInfo_Gifts_Context_AddToCollection, textLayout: .twoLinesMax, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Peer Info/Gifts/AddToCollection"), color: theme.contextMenu.primaryColor) }, action: { [weak self] c, f in
                 var subItems: [ContextMenuItem] = []
                 
                 subItems.append(.action(ContextMenuActionItem(text: strings.Common_Back, textColor: .primary, icon: { theme in
@@ -902,7 +901,7 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
                 
                 subItems.append(.separator)
                 
-                subItems.append(.action(ContextMenuActionItem(text: "New Collection", icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Peer Info/Gifts/AddCollection"), color: theme.contextMenu.primaryColor) }, iconPosition: .left, action: { [weak self] c, f in
+                subItems.append(.action(ContextMenuActionItem(text: strings.PeerInfo_Gifts_Context_NewCollection, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Peer Info/Gifts/AddCollection"), color: theme.contextMenu.primaryColor) }, iconPosition: .left, action: { [weak self] c, f in
                     f(.default)
                     
                     self?.createCollection(gifts: [gift])
@@ -1215,7 +1214,7 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
         }
         
         if case let .collection(id) = self.currentCollection {
-            items.append(.action(ContextMenuActionItem(text: "Remove From Collection", textColor: .destructive, textLayout: .twoLinesMax, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Peer Info/Gifts/RemoveFromCollection"), color: theme.contextMenu.destructiveColor) }, action: { [weak self] c, f in
+            items.append(.action(ContextMenuActionItem(text: strings.PeerInfo_Gifts_Context_RemoveFromCollection, textColor: .destructive, textLayout: .twoLinesMax, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Peer Info/Gifts/RemoveFromCollection"), color: theme.contextMenu.destructiveColor) }, action: { [weak self] c, f in
                 f(.default)
                 
                 if let reference = gift.reference {

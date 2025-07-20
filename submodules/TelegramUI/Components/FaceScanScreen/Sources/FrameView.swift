@@ -3,14 +3,12 @@ import Display
 import ComponentFlow
 
 final class FrameView: UIView {
-    enum State {
+    enum State: Equatable {
         case viewFinder
         case segments(Set<Int>)
         case success
         case failure
     }
-    
-    private let maskLayer = CALayer()
     
     private let viewFinderLayer = ViewFinderLayer()
     private let transitionLayer = TransitionLayer()
@@ -18,16 +16,15 @@ final class FrameView: UIView {
     
     private var currentState: State = .viewFinder
     private var scheduledState: State?
-    
     private var isTransitioning = false
+    
+    private var currentLayout: CGSize?
     
     override init(frame: CGRect) {
         super.init(frame: frame)
         
         self.backgroundColor = .clear
-        
-        //self.layer.mask = self.maskLayer
-        
+                
         self.transitionLayer.isHidden = true
         self.segmentsLayer.isHidden = true
                 
@@ -40,7 +37,7 @@ final class FrameView: UIView {
         preconditionFailure()
     }
     
-    func update(state: State, transition: ComponentTransition) {
+    func update(state: State, intermediateCompletion: (() -> Void)? = nil, transition: ComponentTransition) {
         guard !self.isTransitioning else {
             self.scheduledState = state
             return
@@ -62,6 +59,7 @@ final class FrameView: UIView {
                     self.transitionLayer.animateOut(transition: transition) {
                         self.transitionLayer.isHidden = true
                         self.viewFinderLayer.isHidden = false
+                        intermediateCompletion?()
                         self.viewFinderLayer.animateIn(transition: transition) {
                             self.isTransitioning = false
                             self.maybeApplyScheduledState()
@@ -118,18 +116,21 @@ final class FrameView: UIView {
             self.update(state: state, transition: .spring(duration: 0.3))
         }
     }
-    
+
     func update(size: CGSize) {
-        let bounds = CGRect(origin: .zero, size: size)
+        guard self.currentLayout != size else {
+            return
+        }
+        self.currentLayout = size
         
-        self.maskLayer.frame = bounds
+        let bounds = CGRect(origin: .zero, size: size)
         
         //let center = CGPoint(x: size.width / 2.0, y: size.height / 2.0)
         //let viewFinderWidth = bounds.width - 34.0
         //let viewFinderSize = CGSize(width: viewFinderWidth, height: floor(viewFinderWidth * 1.17778))
         
         let viewFinderFrame = bounds.insetBy(dx: 29.0, dy: 29.0) //viewFinderSize.centered(around: center)
-        self.viewFinderLayer.update(size: viewFinderFrame.size, closed: false, transition: .immediate)
+        self.viewFinderLayer.update(size: viewFinderFrame.size, closed: self.currentState != .viewFinder, transition: .immediate)
         self.viewFinderLayer.frame = viewFinderFrame
         
         let transitionFrame = bounds.insetBy(dx: 29.0, dy: 29.0) //viewFinderSize.centered(around: center)
@@ -373,7 +374,7 @@ final class SegmentsLayer: SimpleLayer {
             
             let stripeLayer = SimpleShapeLayer()
             stripeLayer.path = path.cgPath
-            stripeLayer.strokeColor = UIColor.white.cgColor
+            stripeLayer.strokeColor = UIColor(rgb: 0xaaaaaa).cgColor
             stripeLayer.lineWidth = lineWidth
             stripeLayer.fillColor = UIColor.clear.cgColor
             stripeLayer.lineCap = .round
