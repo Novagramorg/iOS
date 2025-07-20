@@ -783,12 +783,11 @@ final class GiftsListView: UIView {
             panelTransition.setFrame(view: self.emptyResultsClippingView, frame: CGRect(origin: CGPoint(x: 0.0, y: 48.0), size: params.size))
             panelTransition.setBounds(view: self.emptyResultsClippingView, bounds: CGRect(origin: CGPoint(x: 0.0, y: 48.0), size: params.size))
             
-            //TODO:localize
             let emptyResultsTitleSize = self.emptyResultsTitle.update(
                 transition: .immediate,
                 component: AnyComponent(
                     MultilineTextComponent(
-                        text: .plain(NSAttributedString(string: "Organize Your Gifts", font: Font.semibold(17.0), textColor: presentationData.theme.list.itemPrimaryTextColor)),
+                        text: .plain(NSAttributedString(string: presentationData.strings.PeerInfo_Gifts_EmptyCollection_Title, font: Font.semibold(17.0), textColor: presentationData.theme.list.itemPrimaryTextColor)),
                         horizontalAlignment: .center
                     )
                 ),
@@ -799,14 +798,14 @@ final class GiftsListView: UIView {
                 transition: .immediate,
                 component: AnyComponent(
                     MultilineTextComponent(
-                        text: .plain(NSAttributedString(string: "Add some gifts to this collection.", font: Font.regular(15.0), textColor: presentationData.theme.list.itemSecondaryTextColor)),
+                        text: .plain(NSAttributedString(string: presentationData.strings.PeerInfo_Gifts_EmptyCollection_Text, font: Font.regular(15.0), textColor: presentationData.theme.list.itemSecondaryTextColor)),
                         horizontalAlignment: .center
                     )
                 ),
                 environment: {},
                 containerSize: CGSize(width: params.size.width - sideInset * 2.0, height: params.size.height)
             )
-            let buttonAttributedString = NSAttributedString(string: "Add to Collection", font: Font.semibold(17.0), textColor: .white, paragraphAlignment: .center)
+            let buttonAttributedString = NSAttributedString(string: presentationData.strings.PeerInfo_Gifts_EmptyCollection_Action, font: Font.semibold(17.0), textColor: .white, paragraphAlignment: .center)
             let emptyResultsActionSize = self.emptyResultsAction.update(
                 transition: .immediate,
                 component: AnyComponent(

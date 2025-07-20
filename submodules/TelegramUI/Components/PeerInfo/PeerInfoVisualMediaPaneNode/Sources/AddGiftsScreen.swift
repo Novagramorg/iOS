@@ -153,15 +153,7 @@ final class AddGiftsScreenComponent: Component {
                       
             let bottomPanelOffset: CGFloat = giftsListView.selectedItems.count > 0 ? 0.0 : bottomPanelHeight
             
-            //TODO:localize
-            var buttonString = ""
-            
-            if giftsListView.selectedItems.count > 1 {
-                buttonString = "Add \(giftsListView.selectedItems.count) Gifts"
-            } else {
-                buttonString = "Add 1 Gift"
-            }
-            
+            let buttonString = environment.strings.AddGifts_AddGifts(Int32(giftsListView.selectedItems.count))
             let bottomPanelSize = self.buttonBackground.update(
                 transition: transition,
                 component: AnyComponent(BlurredBackgroundComponent(
@@ -276,8 +268,7 @@ public final class AddGiftsScreen: ViewControllerComponentContainer {
         ), navigationBarAppearance: .default, theme: .default, updatedPresentationData: nil)
         
         
-        //TODO:localize
-        self.title = "Add Gifts"
+        self.title = presentationData.strings.AddGifts_Title
         self.navigationPresentation = .modal
         
         self.scrollToTop = { [weak self] in

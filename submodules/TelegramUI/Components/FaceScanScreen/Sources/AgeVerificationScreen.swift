@@ -84,7 +84,7 @@ private final class SheetContent: CombinedComponent {
             
             let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
             let theme = presentationData.theme
-            //let strings = presentationData.strings
+            let strings = presentationData.strings
                         
             var contentSize = CGSize(width: context.availableSize.width, height: 18.0)
                         
@@ -144,7 +144,7 @@ private final class SheetContent: CombinedComponent {
             contentSize.height += 124.0
             
             let title = title.update(
-                component: Text(text: "Age Verification", font: Font.bold(24.0), color: theme.list.itemPrimaryTextColor),
+                component: Text(text: strings.AgeVerification_Title, font: Font.bold(24.0), color: theme.list.itemPrimaryTextColor),
                 availableSize: CGSize(width: constrainedTitleWidth, height: context.availableSize.height),
                 transition: .immediate
             )
@@ -162,6 +162,7 @@ private final class SheetContent: CombinedComponent {
                 return (TelegramTextAttributes.URL, contents)
             })
             
+            //TODO:localize
             let textString = "To access this content, you must confirm you are at least **18** years old as required by UK law.\n\nThis is a one-time process using your phone's camera. Your selfie will not be stored by Telegram."
             
             let text = text.update(
@@ -195,7 +196,7 @@ private final class SheetContent: CombinedComponent {
                     ),
                     content: AnyComponentWithIdentity(
                         id: AnyHashable(0),
-                        component: AnyComponent(MultilineTextComponent(text: .plain(NSMutableAttributedString(string: "Verify My Age", font: Font.semibold(17.0), textColor: theme.list.itemCheckColors.foregroundColor, paragraphAlignment: .center))))
+                        component: AnyComponent(MultilineTextComponent(text: .plain(NSMutableAttributedString(string: strings.AgeVerification_Verify, font: Font.semibold(17.0), textColor: theme.list.itemCheckColors.foregroundColor, paragraphAlignment: .center))))
                     ),
                     isEnabled: true,
                     displaysProgress: false,
@@ -410,11 +411,11 @@ public func presentAgeVerification(context: AccountContext, parentController: Vi
                 
                             let navigationController = parentController?.navigationController
                             Queue.mainQueue().after(2.0) {
-                                let controller = UndoOverlayController(presentationData: presentationData, content: .actionSucceeded(title: "Age check passed!", text: "You can now view this content.", cancel: nil, destructive: false), action: { _ in return true })
+                                let controller = UndoOverlayController(presentationData: presentationData, content: .actionSucceeded(title: presentationData.strings.AgeVerification_Success_Title, text: presentationData.strings.AgeVerification_Success_Text, cancel: nil, destructive: false), action: { _ in return true })
                                 (navigationController?.viewControllers.last as? ViewController)?.present(controller, in: .window(.root))
                             }
                         } else {
-                            let controller = UndoOverlayController(presentationData: presentationData, content: .universal(animation: "anim_banned", scale: 0.066, colors: [:], title: "Age check failed!", text: "Sorry, you can't view this content.", customUndoText: nil, timeout: nil), action: { _ in return true })
+                            let controller = UndoOverlayController(presentationData: presentationData, content: .universal(animation: "anim_banned", scale: 0.066, colors: [:], title: presentationData.strings.AgeVerification_Fail_Title, text: presentationData.strings.AgeVerification_Fail_Text, customUndoText: nil, timeout: nil), action: { _ in return true })
                             parentController?.present(controller, in: .window(.root))
                         }
                     })
