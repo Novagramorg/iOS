@@ -523,13 +523,19 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
                 
             var topInset: CGFloat = 60.0
             
-            if let collections = self.collections, !collections.isEmpty {
+            var canEditCollections = false
+            if self.peerId == self.context.account.peerId || self.canManage {
+                canEditCollections = true
+            }
+            
+            let hasNonEmptyCollections = self.collections?.contains(where: { $0.count > 0 }) ?? false
+            if let collections = self.collections, !collections.isEmpty && (hasNonEmptyCollections || canEditCollections) {
                 var tabSelectorItems: [TabSelectorComponent.Item] = []
                 tabSelectorItems.append(TabSelectorComponent.Item(
                     id: AnyHashable(GiftCollection.all.rawValue),
-                    title: "All Gifts"
+                    title: params.presentationData.strings.PeerInfo_Gifts_Collections_All
                 ))
-                
+                                
                 var effectiveCollections: [StarGiftCollection] = collections
                 if let reorderedCollectionIds = self.reorderedCollectionIds {
                     var collectionMap: [Int32: StarGiftCollection] = [:]
@@ -546,6 +552,9 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
                 }
                 
                 for collection in effectiveCollections {
+                    if !canEditCollections && collection.count == 0 {
+                        continue
+                    }
                     tabSelectorItems.append(TabSelectorComponent.Item(
                         id: AnyHashable(GiftCollection.collection(collection.id).rawValue),
                         content: .component(AnyComponent(
@@ -565,19 +574,21 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
                         }
                     ))
                 }
-                             
-                tabSelectorItems.append(TabSelectorComponent.Item(
-                    id: AnyHashable(GiftCollection.create.rawValue),
-                    content: .component(AnyComponent(
-                        CollectionTabItemComponent(
-                            context: self.context,
-                            icon: .add,
-                            title: "Add Collection",
-                            theme: params.presentationData.theme
-                        )
-                    )),
-                    isReorderable: false
-                ))
+                        
+                if canEditCollections {
+                    tabSelectorItems.append(TabSelectorComponent.Item(
+                        id: AnyHashable(GiftCollection.create.rawValue),
+                        content: .component(AnyComponent(
+                            CollectionTabItemComponent(
+                                context: self.context,
+                                icon: .add,
+                                title: params.presentationData.strings.PeerInfo_Gifts_Collections_Add,
+                                theme: params.presentationData.theme
+                            )
+                        )),
+                        isReorderable: false
+                    ))
+                }
                 
                 let tabSelectorSize = self.tabSelector.update(
                     transition: transition,
