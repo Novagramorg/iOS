@@ -10258,7 +10258,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                     viewControllers = viewControllers.filter { !($0 is AttachmentController)}
                     rootController.setViewControllers(viewControllers, animated: false)
                     
-                    rootController.proceedWithStoryUpload(target: target, results: [result], existingMedia: nil, forwardInfo: nil, externalState: externalState, commit: commit)
+                    rootController.proceedWithStoryUpload(target: target, results: [result], existingMedia: nil, forwardInfo: nil, folders: [], externalState: externalState, commit: commit)
                 }
             },
             cancelled: {}

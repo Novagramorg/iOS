@@ -992,7 +992,7 @@ func openResolvedUrlImpl(
                         
                         if let rootController = context.sharedContext.mainWindow?.viewController as? TelegramRootControllerInterface {
                             rootController.popToRoot(animated: false)
-                            rootController.proceedWithStoryUpload(target: target, results: results, existingMedia: nil, forwardInfo: nil, externalState: externalState, commit: commit)
+                            rootController.proceedWithStoryUpload(target: target, results: results, existingMedia: nil, forwardInfo: nil, folders: [], externalState: externalState, commit: commit)
                         }
                     })
                     if let navigationController {

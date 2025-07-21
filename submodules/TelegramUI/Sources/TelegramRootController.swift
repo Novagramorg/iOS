@@ -471,7 +471,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
                         
                         if let customTarget, case .botPreview = customTarget {
                             externalState.storyTarget = customTarget
-                            self.proceedWithStoryUpload(target: customTarget, results: results, existingMedia: nil, forwardInfo: nil, externalState: externalState, commit: commit)
+                            self.proceedWithStoryUpload(target: customTarget, results: results, existingMedia: nil, forwardInfo: nil, folders: [], externalState: externalState, commit: commit)
                             
                             dismissCameraImpl?()
                             return
@@ -504,7 +504,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
                                     externalState.isPeerArchived = channel.storiesHidden ?? false
                                 }
                                  
-                                self.proceedWithStoryUpload(target: target, results: results, existingMedia: nil, forwardInfo: nil, externalState: externalState, commit: commit)
+                                self.proceedWithStoryUpload(target: target, results: results, existingMedia: nil, forwardInfo: nil, folders: [], externalState: externalState, commit: commit)
                                 
                                 dismissCameraImpl?()
                             })
@@ -568,7 +568,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
             })
     }
     
-    public func proceedWithStoryUpload(target: Stories.PendingTarget, results: [MediaEditorScreenResult], existingMedia: EngineMedia?, forwardInfo: Stories.PendingForwardInfo?, externalState: MediaEditorTransitionOutExternalState, commit: @escaping (@escaping () -> Void) -> Void) {
+    public func proceedWithStoryUpload(target: Stories.PendingTarget, results: [MediaEditorScreenResult], existingMedia: EngineMedia?, forwardInfo: Stories.PendingForwardInfo?, folders: [Int64], externalState: MediaEditorTransitionOutExternalState, commit: @escaping (@escaping () -> Void) -> Void) {
         guard let results = results as? [MediaEditorScreenImpl.Result] else {
             return
         }
@@ -753,6 +753,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
                         period: result.options.timeout,
                         randomId: result.randomId,
                         forwardInfo: forwardInfo,
+                        folders: folders,
                         uploadInfo: results.count > 1 ? StoryUploadInfo(groupingId: groupingId, index: index, total: Int32(results.count)) : nil
                     )
                     |> deliverOnMainQueue).startStandalone(next: { stableId in
