@@ -2159,6 +2159,12 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
                 strongSelf.controllerNode.dismissInput()
             }
         }, selectionState: selectionContext, editingState: editingContext ?? TGMediaEditingContext())
+        
+        let highQualityPhoto = UserDefaults.standard.bool(forKey: "TG_photoHighQuality_v0")
+        if highQualityPhoto {
+            self.interaction?.editingState.setHighQualityPhoto(highQualityPhoto)
+        }
+        
         self.interaction?.selectionState?.grouping = true
         
         self.interaction?.editingState.sendPaidMessageStars = sendPaidMessageStars ?? 0
