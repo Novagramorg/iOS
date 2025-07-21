@@ -14731,6 +14731,12 @@ Sorry for the inconvenience.";
 "PeerInfo.Gifts.EmptyCollection.Text" = "Add some gifts to this collection.";
 "PeerInfo.Gifts.EmptyCollection.Action" = "Add to Collection";
 
+"PeerInfo.Gifts.AddedToCollection" = "The gift has been added to **%@**.";
+"PeerInfo.Gifts.RemovedFromCollection" = "The gift has been removed from **%@**.";
+
+"PeerInfo.Gifts.AddedToCollectionUnique" = "**%1$@** has been added to **%2$@**.";
+"PeerInfo.Gifts.RemovedFromCollectionUnique" = "**%1$@** has been removed from **%2$@**.";
+
 "AddGifts.Title" = "Add Gifts";
 "AddGifts.AddGifts_1" = "Add %@ Gift";
 "AddGifts.AddGifts_any" = "Add %@ Gifts";
