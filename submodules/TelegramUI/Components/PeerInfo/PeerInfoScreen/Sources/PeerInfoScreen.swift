@@ -11426,7 +11426,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                 items.append(.separator)
             }
             
-            if case .all = pane.currentCollection {
+            if let pane, case .all = pane.currentCollection {
                 items.append(.action(ContextMenuActionItem(text: sorting == .date ? strings.PeerInfo_Gifts_SortByValue : strings.PeerInfo_Gifts_SortByDate, icon: { theme in
                     return generateTintedImage(image: UIImage(bundleImageName: sorting == .date ? "Peer Info/SortValue" : "Peer Info/SortDate"), color: theme.contextMenu.primaryColor)
                 }, action: { [weak giftsContext] _, f in
