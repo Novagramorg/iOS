@@ -163,7 +163,7 @@ public extension MediaEditorScreenImpl {
                             } else {
                                 existingMedia = storyItem.media
                             }
-                            rootController.proceedWithStoryUpload(target: target, results: [result as! MediaEditorScreenResult], existingMedia: existingMedia, forwardInfo: forwardInfo, externalState: externalState, commit: commit)
+                            rootController.proceedWithStoryUpload(target: target, results: [result as! MediaEditorScreenResult], existingMedia: existingMedia, forwardInfo: forwardInfo, folders: [], externalState: externalState, commit: commit)
                         }
                     })
                 } else {

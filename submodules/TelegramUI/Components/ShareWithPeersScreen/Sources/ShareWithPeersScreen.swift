@@ -1005,12 +1005,17 @@ final class ShareWithPeersScreenComponent: Component {
                         return
                     }
                     if let value, !value.isEmpty {
-                        let id = PeerStoryListContext.addFolderExternal(account: component.context.account, peerId: component.context.account.peerId, title: value)
-                        self.shareToFolders.append(StoryListContext.State.Folder(
-                            id: id,
-                            title: value
-                        ))
-                        self.state?.updated(transition: .immediate)
+                        let _ = PeerStoryListContext.addFolderExternal(account: component.context.account, peerId: component.context.account.peerId, title: value, completion: { [weak self] id in
+                            guard let self, let id else {
+                                return
+                            }
+                            
+                            self.shareToFolders.append(StoryListContext.State.Folder(
+                                id: id,
+                                title: value
+                            ))
+                            self.state?.updated(transition: .immediate)
+                        })
                     }
                 }
             )

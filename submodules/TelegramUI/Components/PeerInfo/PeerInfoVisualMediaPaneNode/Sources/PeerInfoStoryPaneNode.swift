@@ -2481,7 +2481,7 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
                         }
                                 
                         if let listSource = self.listSource as? PeerStoryListContext {
-                            listSource.removeFromFolder(id: folder.id, itemIds: [item.id])
+                            let _ = listSource.removeFromFolder(id: folder.id, itemIds: [item.id])
                         }
                         
                         f(.dismissWithoutContent)
@@ -2575,7 +2575,7 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
                                     c?.dismiss(completion: {})
                                     
                                     if let listSource = self.listSource as? PeerStoryListContext {
-                                        listSource.addToFolder(id: folderPreview.folder.id, items: [item])
+                                        let _ = listSource.addToFolder(id: folderPreview.folder.id, items: [item])
                                     }
                                 })))
                             }
@@ -4900,13 +4900,13 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
                 }
                 if let value {
                     if let listSource = self.listSource as? PeerStoryListContext {
-                        listSource.addFolder(title: value, completion: { [weak self] id in
+                        let _ = listSource.addFolder(title: value, completion: { [weak self] id in
                             Queue.mainQueue().async {
-                                guard let self, let listSource = self.listSource as? PeerStoryListContext else {
+                                guard let self, let id, let listSource = self.listSource as? PeerStoryListContext else {
                                     return
                                 }
                                 if !addItems.isEmpty {
-                                    listSource.addToFolder(id: id, items: addItems)
+                                    let _ = listSource.addToFolder(id: id, items: addItems)
                                 }
                                 self.setStoryFolder(id: id, assumeEmpty: addItems.isEmpty)
                             }
@@ -4931,7 +4931,7 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
                 return
             }
             if let listSource = self.listSource as? PeerStoryListContext {
-                listSource.addToFolder(id: folder.id, items: items)
+                let _ = listSource.addToFolder(id: folder.id, items: items)
             }
         })
         controller.navigationPresentation = .modal
@@ -4958,7 +4958,7 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
         self.removedStoryFolders.insert(id)
         
         if let listContext = self.listSource as? PeerStoryListContext {
-            listContext.removeFolder(id: id)
+            let _ = listContext.removeFolder(id: id)
         }
         
         if let (size, topInset, sideInset, bottomInset, deviceMetrics, visibleHeight, isScrollingLockedAtTop, expandProgress, navigationHeight, presentationData) = self.currentParams {
@@ -5111,7 +5111,7 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
             
             if !isReordering && !self.currentStoryFolders.isEmpty && self.canManageStories {
                 if let listSource = self.listSource as? PeerStoryListContext {
-                    listSource.reorderFolders(ids: self.currentStoryFolders.map(\.id))
+                    let _ = listSource.reorderFolders(ids: self.currentStoryFolders.map(\.id))
                 }
             }
             
@@ -5132,7 +5132,7 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
                 } else if case let .peer(id, _, _) = self.scope, id == self.context.account.peerId, let items = self.items {
                     if let _ = self.currentStoryFolder {
                         if let listSource = self.listSource as? PeerStoryListContext {
-                            listSource.reorderItemsInFolder(itemIds: reorderedIds.map { $0.id })
+                            let _ = listSource.reorderItemsInFolder(itemIds: reorderedIds.map { $0.id })
                         }
                     } else {
                         var updatedPinnedIds: [Int32] = []

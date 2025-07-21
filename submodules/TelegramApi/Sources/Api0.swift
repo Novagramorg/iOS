@@ -992,8 +992,9 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[872932635] = { return Api.StickerSetCovered.parse_stickerSetMultiCovered($0) }
     dict[2008112412] = { return Api.StickerSetCovered.parse_stickerSetNoCovered($0) }
     dict[1898850301] = { return Api.StoriesStealthMode.parse_storiesStealthMode($0) }
+    dict[-1826262950] = { return Api.StoryAlbum.parse_storyAlbum($0) }
     dict[-1205411504] = { return Api.StoryFwdHeader.parse_storyFwdHeader($0) }
-    dict[2041735716] = { return Api.StoryItem.parse_storyItem($0) }
+    dict[-302947087] = { return Api.StoryItem.parse_storyItem($0) }
     dict[1374088783] = { return Api.StoryItem.parse_storyItemDeleted($0) }
     dict[-5388013] = { return Api.StoryItem.parse_storyItemSkipped($0) }
     dict[1620104917] = { return Api.StoryReaction.parse_storyReaction($0) }
@@ -1476,6 +1477,8 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[172975040] = { return Api.storage.FileType.parse_filePng($0) }
     dict[-1432995067] = { return Api.storage.FileType.parse_fileUnknown($0) }
     dict[276907596] = { return Api.storage.FileType.parse_fileWebp($0) }
+    dict[-1013417414] = { return Api.stories.Albums.parse_albums($0) }
+    dict[1448008427] = { return Api.stories.Albums.parse_albumsNotModified($0) }
     dict[1862033025] = { return Api.stories.AllStories.parse_allStories($0) }
     dict[291044926] = { return Api.stories.AllStories.parse_allStoriesNotModified($0) }
     dict[-1014513586] = { return Api.stories.CanSendStoryCount.parse_canSendStoryCount($0) }
@@ -2196,6 +2199,8 @@ public extension Api {
                 _1.serialize(buffer, boxed)
             case let _1 as Api.StoriesStealthMode:
                 _1.serialize(buffer, boxed)
+            case let _1 as Api.StoryAlbum:
+                _1.serialize(buffer, boxed)
             case let _1 as Api.StoryFwdHeader:
                 _1.serialize(buffer, boxed)
             case let _1 as Api.StoryItem:
@@ -2613,6 +2618,8 @@ public extension Api {
             case let _1 as Api.stickers.SuggestedShortName:
                 _1.serialize(buffer, boxed)
             case let _1 as Api.storage.FileType:
+                _1.serialize(buffer, boxed)
+            case let _1 as Api.stories.Albums:
                 _1.serialize(buffer, boxed)
             case let _1 as Api.stories.AllStories:
                 _1.serialize(buffer, boxed)

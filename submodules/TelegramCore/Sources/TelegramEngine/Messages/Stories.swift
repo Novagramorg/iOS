@@ -988,7 +988,7 @@ public struct StoryUploadInfo: Codable, Equatable {
     }
 }
 
-func _internal_uploadStory(account: Account, target: Stories.PendingTarget, media: EngineStoryInputMedia, mediaAreas: [MediaArea], text: String, entities: [MessageTextEntity], pin: Bool, privacy: EngineStoryPrivacy, isForwardingDisabled: Bool, period: Int, randomId: Int64, forwardInfo: Stories.PendingForwardInfo?, uploadInfo: StoryUploadInfo? = nil) -> Signal<Int32, NoError> {
+func _internal_uploadStory(account: Account, target: Stories.PendingTarget, media: EngineStoryInputMedia, mediaAreas: [MediaArea], text: String, entities: [MessageTextEntity], pin: Bool, privacy: EngineStoryPrivacy, isForwardingDisabled: Bool, period: Int, randomId: Int64, forwardInfo: Stories.PendingForwardInfo?, folders: [Int64], uploadInfo: StoryUploadInfo? = nil) -> Signal<Int32, NoError> {
     let inputMedia = prepareUploadStoryContent(account: account, media: media)
     
     return (account.postbox.transaction { transaction in
@@ -1017,6 +1017,7 @@ func _internal_uploadStory(account: Account, target: Stories.PendingTarget, medi
             period: Int32(period),
             randomId: randomId,
             forwardInfo: forwardInfo,
+            folders: folders,
             uploadInfo: uploadInfo
         ))
         transaction.setLocalStoryState(state: CodableEntry(currentState))
@@ -1064,6 +1065,7 @@ func _internal_cancelStoryUpload(account: Account, stableId: Int32) {
                             period: currentState.items[i].period,
                             randomId: currentState.items[i].randomId,
                             forwardInfo: currentState.items[i].forwardInfo,
+                            folders: currentState.items[i].folders,
                             uploadInfo: StoryUploadInfo(
                                 groupingId: groupingId,
                                 index: newIndex,
@@ -1141,6 +1143,7 @@ func _internal_uploadStoryImpl(
     privacy: EngineStoryPrivacy,
     isForwardingDisabled: Bool,
     period: Int,
+    folders: [Int64],
     randomId: Int64,
     forwardInfo: Stories.PendingForwardInfo?
 ) -> Signal<StoryUploadResult, NoError> {
@@ -1224,6 +1227,10 @@ func _internal_uploadStoryImpl(
                             fwdFromStory = forwardInfo.storyId
                         }
                         
+                        if !folders.isEmpty {
+                            flags |= 1 << 8
+                        }
+                        
                         return network.request(Api.functions.stories.sendStory(
                             flags: flags,
                             peer: inputPeer,
@@ -1235,7 +1242,8 @@ func _internal_uploadStoryImpl(
                             randomId: randomId,
                             period: Int32(period),
                             fwdFromId: fwdFromId,
-                            fwdFromStory: fwdFromStory
+                            fwdFromStory: fwdFromStory,
+                            albums: folders.isEmpty ? nil : folders.map(Int32.init(clamping:))
                         ))
                         |> map(Optional.init)
                         |> `catch` { _ -> Signal<Api.Updates?, NoError> in
@@ -1259,7 +1267,7 @@ func _internal_uploadStoryImpl(
                                     for update in updates.allUpdates {
                                         if case let .updateStory(_, story) = update {
                                             switch story {
-                                            case let .storyItem(_, idValue, _, fromId, _, _, _, _, media, _, _, _, _):
+                                            case let .storyItem(_, idValue, _, fromId, _, _, _, _, media, _, _, _, _, _):
                                                 if let parsedStory = Stories.StoredItem(apiStoryItem: story, peerId: toPeerId, transaction: transaction) {
                                                     var items = transaction.getStoryItems(peerId: toPeerId)
                                                     var updatedItems: [Stories.Item] = []
@@ -1648,7 +1656,7 @@ func _internal_editStory(account: Account, peerId: PeerId, id: Int32, media: Eng
                     for update in updates.allUpdates {
                         if case let .updateStory(_, story) = update {
                             switch story {
-                            case let .storyItem(_, _, _, _, _, _, _, _, media, _, _, _, _):
+                            case let .storyItem(_, _, _, _, _, _, _, _, media, _, _, _, _, _):
                                 let parsedMedia = textMediaAndExpirationTimerFromApiMedia(media, account.peerId).media
                                 if let parsedMedia = parsedMedia, let originalMedia = originalMedia {
                                     applyMediaResourceChanges(from: originalMedia, to: parsedMedia, postbox: account.postbox, force: false, skipPreviews: updatingCoverTime)
@@ -2009,7 +2017,7 @@ func _internal_updatePinnedToTopStories(account: Account, peerId: PeerId, ids: [
 extension Api.StoryItem {
     var id: Int32 {
         switch self {
-        case let .storyItem(_, id, _, _, _, _, _, _, _, _, _, _, _):
+        case let .storyItem(_, id, _, _, _, _, _, _, _, _, _, _, _, _):
             return id
         case let .storyItemDeleted(id):
             return id
@@ -2072,7 +2080,9 @@ extension Stories.Item.ForwardInfo {
 extension Stories.StoredItem {
     init?(apiStoryItem: Api.StoryItem, existingItem: Stories.Item? = nil, peerId: PeerId, transaction: Transaction) {
         switch apiStoryItem {
-        case let .storyItem(flags, id, date, fromId, forwardFrom, expireDate, caption, entities, media, mediaAreas, privacy, views, sentReaction):
+        case let .storyItem(flags, id, date, fromId, forwardFrom, expireDate, caption, entities, media, mediaAreas, privacy, views, sentReaction, albums):
+            let _ = albums
+            
             let parsedMedia = textMediaAndExpirationTimerFromApiMedia(media, peerId).media
             if let parsedMedia = parsedMedia {
                 var parsedPrivacy: Stories.Item.Privacy?
