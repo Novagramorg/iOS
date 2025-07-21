@@ -133,6 +133,12 @@ final class AddGiftsScreenComponent: Component {
                 giftsListView = current
             } else {
                 giftsListView = GiftsListView(context: component.context, peerId: component.peerId, profileGifts: component.profileGifts, giftsCollections: nil, canSelect: true, ignoreCollection: component.collectionId, remainingSelectionCount: component.remainingCount)
+                giftsListView.onContentUpdated = { [weak self] in
+                    guard let self else {
+                        return
+                    }
+                    self.state?.updated(transition: .immediate)
+                }
                 giftsListView.selectionUpdated = { [weak self] in
                     guard let self else {
                         return
