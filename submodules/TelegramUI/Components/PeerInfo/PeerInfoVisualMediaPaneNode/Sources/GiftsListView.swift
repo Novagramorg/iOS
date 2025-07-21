@@ -36,6 +36,7 @@ final class GiftsListView: UIView {
     
     private let canSelect: Bool
     private let ignoreCollection: Int32?
+    private let remainingSelectionCount: Int32
     
     private var dataDisposable: Disposable?
         
@@ -124,13 +125,14 @@ final class GiftsListView: UIView {
     var contextAction: ((ProfileGiftsContext.State.StarGift, UIView, ContextGesture) -> Void)?
     var addToCollection: (() -> Void)?
     
-    init(context: AccountContext, peerId: PeerId, profileGifts: ProfileGiftsContext, giftsCollections: ProfileGiftsCollectionsContext?, canSelect: Bool, ignoreCollection: Int32? = nil) {
+    init(context: AccountContext, peerId: PeerId, profileGifts: ProfileGiftsContext, giftsCollections: ProfileGiftsCollectionsContext?, canSelect: Bool, ignoreCollection: Int32? = nil, remainingSelectionCount: Int32 = 0) {
         self.context = context
         self.peerId = peerId
         self.profileGifts = profileGifts
         self.giftsCollections = giftsCollections
         self.canSelect = canSelect
         self.ignoreCollection = ignoreCollection
+        self.remainingSelectionCount = remainingSelectionCount
                 
         if let value = context.currentAppConfiguration.with({ $0 }).data?["stargifts_pinned_to_top_limit"] as? Double {
             self.maxPinnedCount = Int(value)
@@ -406,6 +408,13 @@ final class GiftsListView: UIView {
         }
         return self.updateScrolling(interactive: interactive, topInset: topInset, visibleBounds: visibleBounds, transition: transition)
     }
+    
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        if let topInset = self.topInset, point.y < topInset {
+            return false
+        }
+        return super.point(inside: point, with: event)
+    }
         
     func updateScrolling(interactive: Bool = false, topInset: CGFloat, visibleBounds: CGRect, transition: ComponentTransition) -> CGFloat {
         self.topInset = topInset
@@ -548,8 +557,10 @@ final class GiftsListView: UIView {
                                     if self.selectedItemIds.contains(itemReferenceId) {
                                         self.selectedItemIds.remove(itemReferenceId)
                                     } else {
-                                        self.selectedItemIds.insert(itemReferenceId)
-                                        self.selectedItemsMap[itemReferenceId] = product
+                                        if self.selectedItemIds.count < self.remainingSelectionCount {
+                                            self.selectedItemIds.insert(itemReferenceId)
+                                            self.selectedItemsMap[itemReferenceId] = product
+                                        }
                                     }
                                     self.selectionUpdated()
                                     self.updateScrolling(transition: .easeInOut(duration: 0.25))
@@ -783,12 +794,11 @@ final class GiftsListView: UIView {
             panelTransition.setFrame(view: self.emptyResultsClippingView, frame: CGRect(origin: CGPoint(x: 0.0, y: 48.0), size: params.size))
             panelTransition.setBounds(view: self.emptyResultsClippingView, bounds: CGRect(origin: CGPoint(x: 0.0, y: 48.0), size: params.size))
             
-            //TODO:localize
             let emptyResultsTitleSize = self.emptyResultsTitle.update(
                 transition: .immediate,
                 component: AnyComponent(
                     MultilineTextComponent(
-                        text: .plain(NSAttributedString(string: "Organize Your Gifts", font: Font.semibold(17.0), textColor: presentationData.theme.list.itemPrimaryTextColor)),
+                        text: .plain(NSAttributedString(string: presentationData.strings.PeerInfo_Gifts_EmptyCollection_Title, font: Font.semibold(17.0), textColor: presentationData.theme.list.itemPrimaryTextColor)),
                         horizontalAlignment: .center
                     )
                 ),
@@ -799,14 +809,14 @@ final class GiftsListView: UIView {
                 transition: .immediate,
                 component: AnyComponent(
                     MultilineTextComponent(
-                        text: .plain(NSAttributedString(string: "Add some gifts to this collection.", font: Font.regular(15.0), textColor: presentationData.theme.list.itemSecondaryTextColor)),
+                        text: .plain(NSAttributedString(string: presentationData.strings.PeerInfo_Gifts_EmptyCollection_Text, font: Font.regular(15.0), textColor: presentationData.theme.list.itemSecondaryTextColor)),
                         horizontalAlignment: .center
                     )
                 ),
                 environment: {},
                 containerSize: CGSize(width: params.size.width - sideInset * 2.0, height: params.size.height)
             )
-            let buttonAttributedString = NSAttributedString(string: "Add to Collection", font: Font.semibold(17.0), textColor: .white, paragraphAlignment: .center)
+            let buttonAttributedString = NSAttributedString(string: presentationData.strings.PeerInfo_Gifts_EmptyCollection_Action, font: Font.semibold(17.0), textColor: .white, paragraphAlignment: .center)
             let emptyResultsActionSize = self.emptyResultsAction.update(
                 transition: .immediate,
                 component: AnyComponent(

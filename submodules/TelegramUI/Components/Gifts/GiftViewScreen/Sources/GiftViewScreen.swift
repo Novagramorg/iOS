@@ -288,11 +288,14 @@ private final class GiftViewSheetContent: CombinedComponent {
             }
             
             var minRequiredAmount = StarsAmount(value: 100, nanos: 0)
+            var canUpgrade = false
             if let resellStars = self.subject.arguments?.resellStars {
                 minRequiredAmount = StarsAmount(value: resellStars, nanos: 0)
+            } else if let arguments = self.subject.arguments, arguments.canUpgrade && arguments.upgradeStars == nil {
+                canUpgrade = true
             }
             
-            if let starsContext = context.starsContext, let state = starsContext.currentState, state.balance < minRequiredAmount {
+            if let starsContext = context.starsContext, let state = starsContext.currentState, state.balance < minRequiredAmount || canUpgrade {
                 self.optionsDisposable = (context.engine.payments.starsTopUpOptions()
                 |> deliverOnMainQueue).start(next: { [weak self] options in
                     guard let self else {

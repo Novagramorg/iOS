@@ -14697,3 +14697,63 @@ Sorry for the inconvenience.";
 "Premium.PricePer2Years" = "%@/2 years";
 
 "Chat.SensitiveContentShort" = "18+";
+
+"AccessDenied.AgeVerificationCamera" = "Telegram needs access to your camera for age verification.\n\nOpen your device's Settings > Privacy > Camera and set Telegram to ON.";
+
+"PeerInfo.Gifts.Collections.All" = "All Gifts";
+"PeerInfo.Gifts.Collections.Add" = "Add Collection";
+
+"PeerInfo.Gifts.AddGiftsButton" = "Add Gifts";
+
+"PeerInfo.Gifts.AddCollection" = "Add Collection";
+"PeerInfo.Gifts.AddGifts" = "Add Gifts";
+"PeerInfo.Gifts.RenameCollection" = "Rename";
+"PeerInfo.Gifts.ShareCollection" = "Share";
+"PeerInfo.Gifts.DeleteCollection" = "Delete Collection";
+
+"PeerInfo.Gifts.CreateCollection.Title" = "Create a New Collection";
+"PeerInfo.Gifts.CreateCollection.Text" = "Choose a name for your collection and start adding your gifts there.";
+"PeerInfo.Gifts.CreateCollection.Placeholder" = "Title";
+
+"PeerInfo.Gifts.RenameCollection.Title" = "Create a New Collection";
+
+"PeerInfo.Gifts.Context.AddToCollection" = "Add to Collection";
+"PeerInfo.Gifts.Context.NewCollection" = "New Collection";
+"PeerInfo.Gifts.Context.RemoveFromCollection" = "Remove from Collection";
+
+"PeerInfo.Gifts.CollectionLimitReached.Title" = "Limit Reached";
+"PeerInfo.Gifts.CollectionLimitReached.Text" = "Please remove one of the existing collections to add a new one.";
+
+"PeerInfo.Gifts.RemoveCollectionConfirmation" = "This will remove the collection.";
+"PeerInfo.Gifts.RemoveCollectionAction" = "Remove";
+
+"PeerInfo.Gifts.EmptyCollection.Title" = "Organize Your Gifts";
+"PeerInfo.Gifts.EmptyCollection.Text" = "Add some gifts to this collection.";
+"PeerInfo.Gifts.EmptyCollection.Action" = "Add to Collection";
+
+"PeerInfo.Gifts.AddedToCollection" = "The gift has been added to **%@**.";
+"PeerInfo.Gifts.RemovedFromCollection" = "The gift has been removed from **%@**.";
+
+"PeerInfo.Gifts.AddedToCollectionUnique" = "**%1$@** has been added to **%2$@**.";
+"PeerInfo.Gifts.RemovedFromCollectionUnique" = "**%1$@** has been removed from **%2$@**.";
+
+"AddGifts.Title" = "Add Gifts";
+"AddGifts.AddGifts_1" = "Add %@ Gift";
+"AddGifts.AddGifts_any" = "Add %@ Gifts";
+
+"Gift.Options.Gift.BuyLimitReached_1" = "You've already sent %@ of these gifts, and it's the limit.";
+"Gift.Options.Gift.BuyLimitReached_any" = "You've already sent %@ of these gifts, and it's the limit.";
+
+"AgeVerification.Title" = "Age Verification";
+"AgeVerification.Text" = "To access this content, you must confirm you are at least **18** years old.\n\nThis is a one-time process using your phone's camera. Your selfie will not be stored by Telegram.";
+"AgeVerification.Text.GB" = "To access this content, you must confirm you are at least **18** years old as required by UK law.\n\nThis is a one-time process using your phone's camera. Your selfie will not be stored by Telegram.";
+"AgeVerification.Verify" = "Verify My Age";
+
+"AgeVerification.Success.Title" = "Age check passed!";
+"AgeVerification.Success.Text" = "You can now view this content.";
+
+"AgeVerification.Fail.Title" = "Age check failed";
+"AgeVerification.Fail.Text" = "Sorry, you can't view this content.";
+
+"FaceScan.Instruction.Position" = "Position your face\nwithin the frame";
+"FaceScan.Instruction.Rotate" = "Move your head slowly to\ncomplete the circle";

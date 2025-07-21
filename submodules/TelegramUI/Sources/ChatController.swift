@@ -140,6 +140,7 @@ import PromptUI
 import SuggestedPostApproveAlert
 import AVFoundation
 import BalanceNeededScreen
+import FaceScanScreen
 
 public final class ChatControllerOverlayPresentationData {
     public let expandData: (ASDisplayNode?, () -> Void)
@@ -4770,10 +4771,20 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             guard let self else {
                 return
             }
-            let controller = chatAgeRestrictionAlertController(context: self.context, updatedPresentationData: self.updatedPresentationData, completion: { _ in
-                reveal()
-            })
-            self.present(controller, in: .window(.root))
+            if requireAgeVerification(context: context) {
+                presentAgeVerification(context: context, parentController: self, completion: {
+                    let _ = updateRemoteContentSettingsConfiguration(postbox: context.account.postbox, network: context.account.network, sensitiveContentEnabled: true).start()
+                    reveal()
+                })
+            } else {
+                let controller = chatAgeRestrictionAlertController(context: self.context, updatedPresentationData: self.updatedPresentationData, parentController: self, completion: { alwaysShow in
+                    if alwaysShow {
+                        let _ = updateRemoteContentSettingsConfiguration(postbox: context.account.postbox, network: context.account.network, sensitiveContentEnabled: true).start()
+                    }
+                    reveal()
+                })
+                self.present(controller, in: .window(.root))
+            }
         }, playMessageEffect: { [weak self] message in
             guard let self else {
                 return
@@ -8896,7 +8907,21 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                                 commit()
                             })
                         } else {
-                            self.context.sharedContext.openWebApp(context: self.context, parentController: self, updatedPresentationData: self.updatedPresentationData, botPeer: peer, chatPeer: nil, threadId: nil, buttonText: "", url: "", simple: true, source: .generic, skipTermsOfService: false, payload: botAppStart.payload)
+                            self.context.sharedContext.openWebApp(
+                                context: self.context,
+                                parentController: self,
+                                updatedPresentationData: self.updatedPresentationData,
+                                botPeer: peer,
+                                chatPeer: nil,
+                                threadId: nil,
+                                buttonText: "",
+                                url: "",
+                                simple: true,
+                                source: .generic,
+                                skipTermsOfService: false,
+                                payload: botAppStart.payload,
+                                verifyAgeCompletion: nil
+                            )
                             commit()
                         }
                     })

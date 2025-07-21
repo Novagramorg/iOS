@@ -543,12 +543,13 @@ public final class NavigateToChatControllerParams {
     public let changeColors: Bool
     public let setupController: (ChatController) -> Void
     public let completion: (ChatController) -> Void
-    public let chatListCompletion: ((ChatListController) -> Void)?
+    public let chatListCompletion: ((ChatListController) -> Void)
     public let pushController: ((ChatController, Bool, @escaping () -> Void) -> Void)?
     public let forceOpenChat: Bool
     public let customChatNavigationStack: [EnginePeer.Id]?
+    public let skipAgeVerification: Bool
     
-    public init(navigationController: NavigationController, chatController: ChatController? = nil, context: AccountContext, chatLocation: Location, chatLocationContextHolder: Atomic<ChatLocationContextHolder?> = Atomic<ChatLocationContextHolder?>(value: nil), subject: ChatControllerSubject? = nil, botStart: ChatControllerInitialBotStart? = nil, attachBotStart: ChatControllerInitialAttachBotStart? = nil, botAppStart: ChatControllerInitialBotAppStart? = nil, updateTextInputState: ChatTextInputState? = nil, activateInput: ChatControllerActivateInput? = nil, keepStack: NavigateToChatKeepStack = .default, useExisting: Bool = true, useBackAnimation: Bool = false, purposefulAction: (() -> Void)? = nil, scrollToEndIfExists: Bool = false, activateMessageSearch: (ChatSearchDomain, String)? = nil, peekData: ChatPeekTimeout? = nil, peerNearbyData: ChatPeerNearbyData? = nil, reportReason: NavigateToChatControllerParams.ReportReason? = nil, animated: Bool = true, forceAnimatedScroll: Bool = false, options: NavigationAnimationOptions = [], parentGroupId: PeerGroupId? = nil, chatListFilter: Int32? = nil, chatNavigationStack: [ChatNavigationStackItem] = [], changeColors: Bool = false, setupController: @escaping (ChatController) -> Void = { _ in }, pushController: ((ChatController, Bool, @escaping () -> Void) -> Void)? = nil, completion: @escaping (ChatController) -> Void = { _ in }, chatListCompletion: @escaping (ChatListController) -> Void = { _ in }, forceOpenChat: Bool = false, customChatNavigationStack: [EnginePeer.Id]? = nil) {
+    public init(navigationController: NavigationController, chatController: ChatController? = nil, context: AccountContext, chatLocation: Location, chatLocationContextHolder: Atomic<ChatLocationContextHolder?> = Atomic<ChatLocationContextHolder?>(value: nil), subject: ChatControllerSubject? = nil, botStart: ChatControllerInitialBotStart? = nil, attachBotStart: ChatControllerInitialAttachBotStart? = nil, botAppStart: ChatControllerInitialBotAppStart? = nil, updateTextInputState: ChatTextInputState? = nil, activateInput: ChatControllerActivateInput? = nil, keepStack: NavigateToChatKeepStack = .default, useExisting: Bool = true, useBackAnimation: Bool = false, purposefulAction: (() -> Void)? = nil, scrollToEndIfExists: Bool = false, activateMessageSearch: (ChatSearchDomain, String)? = nil, peekData: ChatPeekTimeout? = nil, peerNearbyData: ChatPeerNearbyData? = nil, reportReason: NavigateToChatControllerParams.ReportReason? = nil, animated: Bool = true, forceAnimatedScroll: Bool = false, options: NavigationAnimationOptions = [], parentGroupId: PeerGroupId? = nil, chatListFilter: Int32? = nil, chatNavigationStack: [ChatNavigationStackItem] = [], changeColors: Bool = false, setupController: @escaping (ChatController) -> Void = { _ in }, pushController: ((ChatController, Bool, @escaping () -> Void) -> Void)? = nil, completion: @escaping (ChatController) -> Void = { _ in }, chatListCompletion: @escaping (ChatListController) -> Void = { _ in }, forceOpenChat: Bool = false, customChatNavigationStack: [EnginePeer.Id]? = nil, skipAgeVerification: Bool = false) {
         self.navigationController = navigationController
         self.chatController = chatController
         self.chatLocationContextHolder = chatLocationContextHolder
@@ -582,6 +583,46 @@ public final class NavigateToChatControllerParams {
         self.chatListCompletion = chatListCompletion
         self.forceOpenChat = forceOpenChat
         self.customChatNavigationStack = customChatNavigationStack
+        self.skipAgeVerification = skipAgeVerification
+    }
+    
+    public func withSkipAgeVerification(_ skipAgeVerification: Bool) -> NavigateToChatControllerParams {
+        return NavigateToChatControllerParams(
+            navigationController: self.navigationController,
+            chatController: self.chatController,
+            context: self.context,
+            chatLocation: self.chatLocation,
+            chatLocationContextHolder: self.chatLocationContextHolder,
+            subject: self.subject,
+            botStart: self.botStart,
+            attachBotStart: self.attachBotStart,
+            botAppStart: self.botAppStart,
+            updateTextInputState: self.updateTextInputState,
+            activateInput: self.activateInput,
+            keepStack: self.keepStack,
+            useExisting: self.useExisting,
+            useBackAnimation: self.useBackAnimation,
+            purposefulAction: self.purposefulAction,
+            scrollToEndIfExists: self.scrollToEndIfExists,
+            activateMessageSearch: self.activateMessageSearch,
+            peekData: self.peekData,
+            peerNearbyData: self.peerNearbyData,
+            reportReason: self.reportReason,
+            animated: self.animated,
+            forceAnimatedScroll: self.forceAnimatedScroll,
+            options: self.options,
+            parentGroupId: self.parentGroupId,
+            chatListFilter: self.chatListFilter,
+            chatNavigationStack: self.chatNavigationStack,
+            changeColors: self.changeColors,
+            setupController: self.setupController,
+            pushController: self.pushController,
+            completion: self.completion,
+            chatListCompletion: self.chatListCompletion,
+            forceOpenChat: self.forceOpenChat,
+            customChatNavigationStack: self.customChatNavigationStack,
+            skipAgeVerification: skipAgeVerification
+        )
     }
 }
 
@@ -1255,7 +1296,7 @@ public protocol SharedAccountContext: AnyObject {
     
     func makeIncomingMessagePrivacyScreen(context: AccountContext, value: GlobalPrivacySettings.NonContactChatsPrivacy, exceptions: SelectivePrivacySettings, update: @escaping (GlobalPrivacySettings.NonContactChatsPrivacy) -> Void) -> ViewController
     
-    func openWebApp(context: AccountContext, parentController: ViewController, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)?, botPeer: EnginePeer, chatPeer: EnginePeer?, threadId: Int64?, buttonText: String, url: String, simple: Bool, source: ChatOpenWebViewSource, skipTermsOfService: Bool, payload: String?)
+    func openWebApp(context: AccountContext, parentController: ViewController, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)?, botPeer: EnginePeer, chatPeer: EnginePeer?, threadId: Int64?, buttonText: String, url: String, simple: Bool, source: ChatOpenWebViewSource, skipTermsOfService: Bool, payload: String?, verifyAgeCompletion: ((Int) -> Void)?)
     
     func makeAffiliateProgramSetupScreenInitialData(context: AccountContext, peerId: EnginePeer.Id, mode: AffiliateProgramSetupScreenMode) -> Signal<AffiliateProgramSetupScreenInitialData, NoError>
     func makeAffiliateProgramSetupScreen(context: AccountContext, initialData: AffiliateProgramSetupScreenInitialData) -> ViewController

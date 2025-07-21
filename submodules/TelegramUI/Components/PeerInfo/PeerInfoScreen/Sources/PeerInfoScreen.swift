@@ -1451,7 +1451,8 @@ private func infoItems(data: PeerInfoScreenData?, context: AccountContext, prese
                             simple: true,
                             source: .generic,
                             skipTermsOfService: true,
-                            payload: nil
+                            payload: nil,
+                            verifyAgeCompletion: nil
                         )
                     })
                 }
@@ -11363,13 +11364,12 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
             let canReorderEquals = lhs.2 == rhs.2
             return filterEquals && sortingEquals && canReorderEquals
         })
-        |> map { [weak self, weak pane, weak giftsContext] filter, sorting, canReorder -> ContextController.Items in
+        |> map { [weak pane, weak giftsContext] filter, sorting, canReorder -> ContextController.Items in
             var items: [ContextMenuItem] = []
                         
-            if canReorder && hasVisibility {
-                //TODO:localize
+            if hasVisibility {
                 if let pane, case .all = pane.currentCollection {
-                    items.append(.action(ContextMenuActionItem(text: "Add Collection", icon: { theme in
+                    items.append(.action(ContextMenuActionItem(text: strings.PeerInfo_Gifts_AddCollection, icon: { theme in
                         return generateTintedImage(image: UIImage(bundleImageName: "Peer Info/Gifts/AddCollection"), color: theme.contextMenu.primaryColor)
                     }, action: { [weak pane] _, f in
                         f(.default)
@@ -11379,7 +11379,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                         }
                     })))
                 } else {
-                    items.append(.action(ContextMenuActionItem(text: "Add Gifts", icon: { theme in
+                    items.append(.action(ContextMenuActionItem(text: strings.PeerInfo_Gifts_AddGifts, icon: { theme in
                         return generateTintedImage(image: UIImage(bundleImageName: "Peer Info/Gifts/AddGift"), color: theme.contextMenu.primaryColor)
                     }, action: { [weak pane] _, f in
                         f(.default)
@@ -11389,27 +11389,28 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                         }
                     })))
                     
-                    items.append(.action(ContextMenuActionItem(text: "Share", icon: { theme in
-                        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Forward"), color: theme.contextMenu.primaryColor)
-                    }, action: { [weak self] _, f in
-                        f(.default)
-                        
-                        self?.openShareLink(url: "https://t.me/")
-                    })))
+//                    items.append(.action(ContextMenuActionItem(text: strings.PeerInfo_Gifts_ShareCollection, icon: { theme in
+//                        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Forward"), color: theme.contextMenu.primaryColor)
+//                    }, action: { [weak self] _, f in
+//                        f(.default)
+//                        self?.openShareLink(url: "https://t.me/")
+//                    })))
                 }
 
-                items.append(.action(ContextMenuActionItem(text: strings.PeerInfo_Gifts_Reorder, icon: { theme in
-                    return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/ReorderItems"), color: theme.contextMenu.primaryColor)
-                }, action: { [weak pane] _, f in
-                    f(.default)
-                    
-                    if let pane {
-                        pane.beginReordering()
-                    }
-                })))
+                if canReorder {
+                    items.append(.action(ContextMenuActionItem(text: strings.PeerInfo_Gifts_Reorder, icon: { theme in
+                        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/ReorderItems"), color: theme.contextMenu.primaryColor)
+                    }, action: { [weak pane] _, f in
+                        f(.default)
+                        
+                        if let pane {
+                            pane.beginReordering()
+                        }
+                    })))
+                }
                 
                 if let pane, case let .collection(id) = pane.currentCollection {
-                    items.append(.action(ContextMenuActionItem(text: "Delete Collection", textColor: .destructive, icon: { theme in
+                    items.append(.action(ContextMenuActionItem(text: strings.PeerInfo_Gifts_DeleteCollection, textColor: .destructive, icon: { theme in
                         return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Delete"), color: theme.contextMenu.destructiveColor)
                     }, action: { [weak pane] _, f in
                         f(.default)
@@ -11709,7 +11710,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                     }
                 })))
                 
-                if pane.canReorder() {
+                /*if pane.canReorder() {
                     items.append(.action(ContextMenuActionItem(text: self.presentationData.strings.BotPreviews_MenuReorder, icon: { theme in
                         return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/ReorderItems"), color: theme.contextMenu.primaryColor)
                     }, action: { [weak pane] _, a in
@@ -11741,7 +11742,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                             pane.presentDeleteCurrentStoryFolder()
                         }
                     })))
-                }
+                }*/
                 
                 if let language = pane.currentBotPreviewLanguage {
                     items.append(.action(ContextMenuActionItem(text: self.presentationData.strings.BotPreviews_MenuDeleteLanguage(language.name).string, textColor: .destructive, icon: { theme in

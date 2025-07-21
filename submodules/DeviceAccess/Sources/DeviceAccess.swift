@@ -16,6 +16,7 @@ public enum DeviceAccessCameraSubject {
     case video
     case videoCall
     case qrCode
+    case ageVerification
 }
 
 public enum DeviceAccessMicrophoneSubject {
@@ -332,6 +333,8 @@ public final class DeviceAccess {
                                                 text = presentationData.strings.AccessDenied_VideoCallCamera
                                             case .qrCode:
                                                 text = presentationData.strings.AccessDenied_QrCamera
+                                            case .ageVerification:
+                                                text = presentationData.strings.AccessDenied_AgeVerificationCamera
                                         }
                                         present(standardTextAlertController(theme: AlertControllerTheme(presentationData: presentationData), title: presentationData.strings.AccessDenied_Title, text: text, actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_NotNow, action: {}), TextAlertAction(type: .genericAction, title: presentationData.strings.AccessDenied_Settings, action: {
                                             openSettings()
@@ -356,6 +359,8 @@ public final class DeviceAccess {
                                         text = presentationData.strings.AccessDenied_VideoCallCamera
                                     case .qrCode:
                                         text = presentationData.strings.AccessDenied_QrCamera
+                                    case .ageVerification:
+                                        text = presentationData.strings.AccessDenied_AgeVerificationCamera
                                 }
                             }
                             present(standardTextAlertController(theme: AlertControllerTheme(presentationData: presentationData), title: presentationData.strings.AccessDenied_Title, text: text, actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_NotNow, action: {}), TextAlertAction(type: .genericAction, title: presentationData.strings.AccessDenied_Settings, action: {
