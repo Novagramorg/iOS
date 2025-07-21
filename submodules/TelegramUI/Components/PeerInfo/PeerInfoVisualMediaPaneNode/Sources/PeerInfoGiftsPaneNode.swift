@@ -151,6 +151,15 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
                 
         super.init()
         
+        self.giftsListView.onContentUpdated = { [weak self] in
+            guard let self else {
+                return
+            }
+            if let params = self.currentParams {
+                self.update(size: params.size, topInset: params.topInset, sideInset: params.sideInset, bottomInset: params.bottomInset, deviceMetrics: params.deviceMetrics, visibleHeight: params.visibleHeight, isScrollingLockedAtTop: params.isScrollingLockedAtTop, expandProgress: params.expandProgress, navigationHeight: params.navigationHeight, presentationData: params.presentationData, synchronous: true, transition: .immediate)
+            }
+        }
+        
         self.addSubnode(self.backgroundNode)
         self.addSubnode(self.scrollNode)
         

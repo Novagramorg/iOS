@@ -11426,15 +11426,17 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                 items.append(.separator)
             }
             
-            items.append(.action(ContextMenuActionItem(text: sorting == .date ? strings.PeerInfo_Gifts_SortByValue : strings.PeerInfo_Gifts_SortByDate, icon: { theme in
-                return generateTintedImage(image: UIImage(bundleImageName: sorting == .date ? "Peer Info/SortValue" : "Peer Info/SortDate"), color: theme.contextMenu.primaryColor)
-            }, action: { [weak giftsContext] _, f in
-                f(.default)
-                
-                giftsContext?.updateSorting(sorting == .date ? .value : .date)
-            })))
+            if case .all = pane.currentCollection {
+                items.append(.action(ContextMenuActionItem(text: sorting == .date ? strings.PeerInfo_Gifts_SortByValue : strings.PeerInfo_Gifts_SortByDate, icon: { theme in
+                    return generateTintedImage(image: UIImage(bundleImageName: sorting == .date ? "Peer Info/SortValue" : "Peer Info/SortDate"), color: theme.contextMenu.primaryColor)
+                }, action: { [weak giftsContext] _, f in
+                    f(.default)
+                    
+                    giftsContext?.updateSorting(sorting == .date ? .value : .date)
+                })))
             
-            items.append(.separator)
+                items.append(.separator)
+            }
             
             let toggleFilter: (ProfileGiftsContext.Filters) -> Void = { [weak giftsContext] value in
                 var updatedFilter = filter
