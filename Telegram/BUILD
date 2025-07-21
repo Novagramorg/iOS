@@ -1736,7 +1736,6 @@ ios_application(
 
 xcodeproj(
     name = "Telegram_xcodeproj",
-    build_mode = "bazel",
     bazel_path = telegram_bazel_path,
     project_name = "Telegram",
     tags = ["manual"],
