@@ -460,9 +460,9 @@ final class GiftOptionsScreenComponent: Component {
                                                 }
                                                 if case let .generic(gift) = gift {
                                                     if let perUserLimit = gift.perUserLimit, perUserLimit.remains == 0 {
-                                                        //TODO:localize
+                                                        let text = environment.strings.Gift_Options_Gift_BuyLimitReached(perUserLimit.total)
                                                         let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
-                                                        let controller = UndoOverlayController(presentationData: presentationData, content: .sticker(context: component.context, file: gift.file, loop: true, title: nil, text: "You've already sent \(perUserLimit.total) of these gifts, and it's the limit.", undoText: nil, customAction: nil), action: { _ in return false })
+                                                        let controller = UndoOverlayController(presentationData: presentationData, content: .sticker(context: component.context, file: gift.file, loop: true, title: nil, text: text, undoText: nil, customAction: nil), action: { _ in return false })
                                                         mainController.present(controller, in: .current)
                                                         return
                                                     }

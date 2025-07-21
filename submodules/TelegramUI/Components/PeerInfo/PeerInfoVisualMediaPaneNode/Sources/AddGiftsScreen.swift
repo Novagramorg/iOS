@@ -23,17 +23,20 @@ final class AddGiftsScreenComponent: Component {
     let context: AccountContext
     let peerId: EnginePeer.Id
     let collectionId: Int32
+    let remainingCount: Int32
     let profileGifts: ProfileGiftsContext
 
     init(
         context: AccountContext,
         peerId: EnginePeer.Id,
         collectionId: Int32,
+        remainingCount: Int32,
         profileGifts: ProfileGiftsContext
     ) {
         self.context = context
         self.peerId = peerId
         self.collectionId = collectionId
+        self.remainingCount = remainingCount
         self.profileGifts = profileGifts
     }
 
@@ -111,6 +114,7 @@ final class AddGiftsScreenComponent: Component {
             var contentSize = CGSize(width: self.scrollView.bounds.width, height: contentHeight)
             contentSize.height += environment.safeInsets.bottom
             contentSize.height = max(contentSize.height, self.scrollView.bounds.size.height)
+            contentSize.height += 50.0 + 24.0
             transition.setFrame(view: giftsListView, frame: CGRect(origin: CGPoint(), size: contentSize))
             
             if self.scrollView.contentSize != contentSize {
@@ -128,7 +132,7 @@ final class AddGiftsScreenComponent: Component {
             if let current = self.giftsListView {
                 giftsListView = current
             } else {
-                giftsListView = GiftsListView(context: component.context, peerId: component.peerId, profileGifts: component.profileGifts, giftsCollections: nil, canSelect: true, ignoreCollection: component.collectionId)
+                giftsListView = GiftsListView(context: component.context, peerId: component.peerId, profileGifts: component.profileGifts, giftsCollections: nil, canSelect: true, ignoreCollection: component.collectionId, remainingSelectionCount: component.remainingCount)
                 giftsListView.selectionUpdated = { [weak self] in
                     guard let self else {
                         return
@@ -153,15 +157,7 @@ final class AddGiftsScreenComponent: Component {
                       
             let bottomPanelOffset: CGFloat = giftsListView.selectedItems.count > 0 ? 0.0 : bottomPanelHeight
             
-            //TODO:localize
-            var buttonString = ""
-            
-            if giftsListView.selectedItems.count > 1 {
-                buttonString = "Add \(giftsListView.selectedItems.count) Gifts"
-            } else {
-                buttonString = "Add 1 Gift"
-            }
-            
+            let buttonString = environment.strings.AddGifts_AddGifts(Int32(giftsListView.selectedItems.count))
             let bottomPanelSize = self.buttonBackground.update(
                 transition: transition,
                 component: AnyComponent(BlurredBackgroundComponent(
@@ -256,6 +252,7 @@ public final class AddGiftsScreen: ViewControllerComponentContainer {
         context: AccountContext,
         peerId: EnginePeer.Id,
         collectionId: Int32,
+        remainingCount: Int32,
         completion: @escaping ([ProfileGiftsContext.State.StarGift]) -> Void
     ) {
         self.context = context
@@ -272,12 +269,11 @@ public final class AddGiftsScreen: ViewControllerComponentContainer {
             context: context,
             peerId: peerId,
             collectionId: collectionId,
+            remainingCount: remainingCount,
             profileGifts: self.profileGifts
         ), navigationBarAppearance: .default, theme: .default, updatedPresentationData: nil)
         
-        
-        //TODO:localize
-        self.title = "Add Gifts"
+        self.title = presentationData.strings.AddGifts_Title
         self.navigationPresentation = .modal
         
         self.scrollToTop = { [weak self] in

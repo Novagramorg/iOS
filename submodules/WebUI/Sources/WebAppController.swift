@@ -653,10 +653,14 @@ public final class WebAppController: ViewController, AttachmentContainable {
                 self.animateTransitionIn()
             })
         }
-        
+                
         @available(iOSApplicationExtension 15.0, iOS 15.0, *)
         func webView(_ webView: WKWebView, requestMediaCapturePermissionFor origin: WKSecurityOrigin, initiatedByFrame frame: WKFrameInfo, type: WKMediaCaptureType, decisionHandler: @escaping (WKPermissionDecision) -> Void) {
-            decisionHandler(.prompt)
+            if self.controller?.isVerifyAgeBot == true && type == .camera {
+                decisionHandler(.grant)
+            } else {
+                decisionHandler(.prompt)
+            }
         }
                 
         func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping () -> Void) {
@@ -1756,6 +1760,12 @@ public final class WebAppController: ViewController, AttachmentContainable {
                 }
             case "web_app_hide_keyboard":
                 self.view.window?.endEditing(true)
+            case "web_app_verify_age":
+                if let json, self.controller?.isVerifyAgeBot == true {
+                    if let ageValue = json["age"] as? Double {
+                        self.controller?.verifyAgeCompletion?(Int(ageValue))
+                    }
+                }
             default:
                 break
             }
@@ -3281,6 +3291,8 @@ public final class WebAppController: ViewController, AttachmentContainable {
     public var completion: () -> Void = {}
     public var requestSwitchInline: (String, [ReplyMarkupButtonRequestPeerType]?, @escaping () -> Void) -> Void = { _, _, _ in }
     
+    public var verifyAgeCompletion: ((Int) -> Void)?
+    
     public init(context: AccountContext, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)? = nil, params: WebAppParameters, replyToMessageId: MessageId?, threadId: Int64?) {
         self.context = context
         self.source = params.source
@@ -3323,16 +3335,20 @@ public final class WebAppController: ViewController, AttachmentContainable {
         self.navigationItem.leftBarButtonItem?.action = #selector(self.cancelPressed)
         self.navigationItem.leftBarButtonItem?.target = self
         
-        self.navigationItem.rightBarButtonItem = UIBarButtonItem(customDisplayNode: self.moreButtonNode)
-        self.navigationItem.rightBarButtonItem?.action = #selector(self.moreButtonPressed)
-        self.navigationItem.rightBarButtonItem?.target = self
+        if !self.isVerifyAgeBot {
+            self.navigationItem.rightBarButtonItem = UIBarButtonItem(customDisplayNode: self.moreButtonNode)
+            self.navigationItem.rightBarButtonItem?.action = #selector(self.moreButtonPressed)
+            self.navigationItem.rightBarButtonItem?.target = self
+        }
         
         self.navigationItem.backBarButtonItem = UIBarButtonItem(title: self.presentationData.strings.Common_Back, style: .plain, target: nil, action: nil)
         
-        let titleView = WebAppTitleView(context: self.context, theme: self.presentationData.theme)
-        titleView.title = WebAppTitle(title: params.botName, counter: self.presentationData.strings.WebApp_Miniapp, isVerified: params.botVerified)
-        self.navigationItem.titleView = titleView
-        self.titleView = titleView
+        if !self.isVerifyAgeBot {
+            let titleView = WebAppTitleView(context: self.context, theme: self.presentationData.theme)
+            titleView.title = WebAppTitle(title: params.botName, counter: self.presentationData.strings.WebApp_Miniapp, isVerified: params.botVerified)
+            self.navigationItem.titleView = titleView
+            self.titleView = titleView
+        }
         
         self.moreButtonNode.action = { [weak self] _, gesture in
             if let strongSelf = self {
@@ -3385,6 +3401,13 @@ public final class WebAppController: ViewController, AttachmentContainable {
     deinit {
         assert(true)
         self.presentationDataDisposable?.dispose()
+    }
+    
+    private var isVerifyAgeBot: Bool {
+        if let ageBotUsername = self.context.currentAppConfiguration.with({ $0 }).data?["verify_age_bot_username"] as? String {
+            return self.botAddress == ageBotUsername
+        }
+        return false
     }
     
     public func beforeMaximize(navigationController: NavigationController, completion: @escaping () -> Void) {
@@ -3857,7 +3880,8 @@ public func standaloneWebAppController(
     willDismiss: @escaping () -> Void = {},
     didDismiss: @escaping () -> Void = {},
     getNavigationController: @escaping () -> NavigationController? = { return nil },
-    getSourceRect: (() -> CGRect?)? = nil
+    getSourceRect: (() -> CGRect?)? = nil,
+    verifyAgeCompletion: ((Int) -> Void)? = nil
 ) -> ViewController {
     let controller = AttachmentController(context: context, updatedPresentationData: updatedPresentationData, chatLocation: .peer(id: params.peerId), buttons: [.standalone], initialButton: .standalone, fromMenu: params.source == .menu, hasTextInput: false, isFullSize: params.fullSize, makeEntityInputView: {
         return nil
@@ -3868,6 +3892,7 @@ public func standaloneWebAppController(
         webAppController.completion = completion
         webAppController.getNavigationController = getNavigationController
         webAppController.requestSwitchInline = requestSwitchInline
+        webAppController.verifyAgeCompletion = verifyAgeCompletion
         present(webAppController, webAppController.mediaPickerContext)
     }
     controller.willDismiss = willDismiss
