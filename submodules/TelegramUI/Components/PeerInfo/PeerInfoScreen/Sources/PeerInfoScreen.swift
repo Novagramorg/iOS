@@ -11364,7 +11364,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
             let canReorderEquals = lhs.2 == rhs.2
             return filterEquals && sortingEquals && canReorderEquals
         })
-        |> map { [weak self, weak pane, weak giftsContext] filter, sorting, canReorder -> ContextController.Items in
+        |> map { [weak pane, weak giftsContext] filter, sorting, canReorder -> ContextController.Items in
             var items: [ContextMenuItem] = []
                         
             if hasVisibility {
@@ -11389,13 +11389,12 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                         }
                     })))
                     
-                    items.append(.action(ContextMenuActionItem(text: strings.PeerInfo_Gifts_ShareCollection, icon: { theme in
-                        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Forward"), color: theme.contextMenu.primaryColor)
-                    }, action: { [weak self] _, f in
-                        f(.default)
-                        //TODO:release
-                        self?.openShareLink(url: "https://t.me/")
-                    })))
+//                    items.append(.action(ContextMenuActionItem(text: strings.PeerInfo_Gifts_ShareCollection, icon: { theme in
+//                        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Forward"), color: theme.contextMenu.primaryColor)
+//                    }, action: { [weak self] _, f in
+//                        f(.default)
+//                        self?.openShareLink(url: "https://t.me/")
+//                    })))
                 }
 
                 if canReorder {

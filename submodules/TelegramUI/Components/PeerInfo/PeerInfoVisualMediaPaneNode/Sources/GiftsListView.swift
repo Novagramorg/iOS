@@ -408,6 +408,13 @@ final class GiftsListView: UIView {
         }
         return self.updateScrolling(interactive: interactive, topInset: topInset, visibleBounds: visibleBounds, transition: transition)
     }
+    
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        if let topInset = self.topInset, point.y < topInset {
+            return false
+        }
+        return super.point(inside: point, with: event)
+    }
         
     func updateScrolling(interactive: Bool = false, topInset: CGFloat, visibleBounds: CGRect, transition: ComponentTransition) -> CGFloat {
         self.topInset = topInset
