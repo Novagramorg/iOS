@@ -190,10 +190,15 @@ private func _internal_reorderStarGiftCollections(account: Account, peerId: Engi
     }
 }
 
-private func _internal_updateStarGiftCollection(account: Account, peerId: EnginePeer.Id, collectionId: Int32, giftsContext: ProfileGiftsContext?, actions: [ProfileGiftsCollectionsContext.UpdateAction]) -> Signal<StarGiftCollection?, NoError> {
+private func _internal_updateStarGiftCollection(account: Account, peerId: EnginePeer.Id, collectionId: Int32, giftsContext: ProfileGiftsContext?, allGiftsContext: ProfileGiftsContext?, actions: [ProfileGiftsCollectionsContext.UpdateAction]) -> Signal<StarGiftCollection?, NoError> {
     for action in actions {
         switch action {
         case let .addGifts(gifts):
+            let gifts = gifts.map { gift in
+                var collectionIds = gift.collectionIds ?? []
+                collectionIds.append(collectionId)
+                return gift.withCollectionIds(collectionIds)
+            }
             giftsContext?.insertStarGifts(gifts: gifts)
         case let .removeGifts(gifts):
             giftsContext?.removeStarGifts(references: gifts)
@@ -294,6 +299,7 @@ public final class ProfileGiftsCollectionsContext {
     private let queue: Queue = .mainQueue()
     private let account: Account
     private let peerId: EnginePeer.Id
+    private weak var allGiftsContext: ProfileGiftsContext?
     
     private let disposable = MetaDisposable()
     
@@ -306,9 +312,10 @@ public final class ProfileGiftsCollectionsContext {
         return self.stateValue.get()
     }
     
-    public init(account: Account, peerId: EnginePeer.Id) {
+    public init(account: Account, peerId: EnginePeer.Id, allGiftsContext: ProfileGiftsContext?) {
         self.account = account
         self.peerId = peerId
+        self.allGiftsContext = allGiftsContext
                 
         self.reload()
     }
@@ -362,7 +369,7 @@ public final class ProfileGiftsCollectionsContext {
     
     public func updateCollection(id: Int32, actions: [UpdateAction]) -> Signal<StarGiftCollection?, NoError> {
         let giftsContext = self.giftsContextForCollection(id: id)
-        return _internal_updateStarGiftCollection(account: self.account, peerId: self.peerId, collectionId: id, giftsContext: giftsContext, actions: actions)
+        return _internal_updateStarGiftCollection(account: self.account, peerId: self.peerId, collectionId: id, giftsContext: giftsContext, allGiftsContext: self.allGiftsContext, actions: actions)
         |> deliverOn(self.queue)
         |> afterNext { [weak self] collection in
             guard let self else {
