@@ -405,26 +405,81 @@ public func presentAgeVerification(context: AccountContext, parentController: Vi
         if state.verificationPassed {
             completion()
         } else {
+            let miniappPromise = Promise<EnginePeer?>(nil)
+            var useVerifyAgeBot = false
+            if let value = context.currentAppConfiguration.with({ $0 }).data?["force_verify_age_bot"] as? Bool, value {
+                useVerifyAgeBot = value
+            }
+            if useVerifyAgeBot, let verifyAgeBotUsername = context.currentAppConfiguration.with({ $0 }).data?["verify_age_bot_username"] as? String {
+                miniappPromise.set(context.engine.peers.resolvePeerByName(name: verifyAgeBotUsername, referrer: nil)
+                |> mapToSignal { result in
+                    if case let .result(peer) = result {
+                        return .single(peer)
+                    }
+                    return .complete()
+                })
+            }
             let infoScreen = AgeVerificationScreen(context: context, completion: { [weak parentController] check, availability in
                 if check {
-                    let scanScreen = FaceScanScreen(context: context, availability: availability, completion: { [weak parentController] passed in
-                        if passed {
-                            let _ = updateAgeVerificationState(engine: context.engine, { _ in
-                                return AgeVerificationState(verificationPassed: passed)
-                            }).start()
-                            completion()
-                
-                            let navigationController = parentController?.navigationController
-                            Queue.mainQueue().after(2.0) {
-                                let controller = UndoOverlayController(presentationData: presentationData, content: .actionSucceeded(title: presentationData.strings.AgeVerification_Success_Title, text: presentationData.strings.AgeVerification_Success_Text, cancel: nil, destructive: false), action: { _ in return true })
-                                (navigationController?.viewControllers.last as? ViewController)?.present(controller, in: .window(.root))
-                            }
+                    var requiredAge = 18
+                    if let value = context.currentAppConfiguration.with({ $0 }).data?["verify_age_min"] as? Double {
+                        requiredAge = Int(value)
+                    }
+                    
+                    let success = { [weak parentController] in
+                        let _ = updateAgeVerificationState(engine: context.engine, { _ in
+                            return AgeVerificationState(verificationPassed: true)
+                        }).start()
+                        completion()
+            
+                        let navigationController = parentController?.navigationController
+                        Queue.mainQueue().after(2.0) {
+                            let controller = UndoOverlayController(presentationData: presentationData, content: .actionSucceeded(title: presentationData.strings.AgeVerification_Success_Title, text: presentationData.strings.AgeVerification_Success_Text, cancel: nil, destructive: false), action: { _ in return true })
+                            (navigationController?.viewControllers.last as? ViewController)?.present(controller, in: .current)
+                        }
+                    }
+                    
+                    let failure = { [weak parentController] in
+                        let controller = UndoOverlayController(presentationData: presentationData, content: .universal(animation: "anim_banned", scale: 0.066, colors: [:], title: presentationData.strings.AgeVerification_Fail_Title, text: presentationData.strings.AgeVerification_Fail_Text, customUndoText: nil, timeout: nil), action: { _ in return true })
+                        parentController?.present(controller, in: .current)
+                    }
+                    
+                    let _ = (miniappPromise.get()
+                    |> take(1)
+                    |> deliverOnMainQueue).start(next: { peer in
+                        if let peer, let parentController {
+                            context.sharedContext.openWebApp(
+                                context: context,
+                                parentController: parentController,
+                                updatedPresentationData: nil,
+                                botPeer: peer,
+                                chatPeer: nil,
+                                threadId: nil,
+                                buttonText: "",
+                                url: "",
+                                simple: true,
+                                source: .generic,
+                                skipTermsOfService: true,
+                                payload: nil,
+                                verifyAgeCompletion: { age in
+                                    if age >= requiredAge {
+                                        success()
+                                    } else {
+                                        failure()
+                                    }
+                                }
+                            )
                         } else {
-                            let controller = UndoOverlayController(presentationData: presentationData, content: .universal(animation: "anim_banned", scale: 0.066, colors: [:], title: presentationData.strings.AgeVerification_Fail_Title, text: presentationData.strings.AgeVerification_Fail_Text, customUndoText: nil, timeout: nil), action: { _ in return true })
-                            parentController?.present(controller, in: .window(.root))
+                            let scanScreen = FaceScanScreen(context: context, availability: availability, completion: { age in
+                                if age >= requiredAge {
+                                    success()
+                                } else {
+                                    failure()
+                                }
+                            })
+                            parentController?.push(scanScreen)
                         }
                     })
-                    parentController?.push(scanScreen)
                 }
             })
             parentController?.push(infoScreen)
