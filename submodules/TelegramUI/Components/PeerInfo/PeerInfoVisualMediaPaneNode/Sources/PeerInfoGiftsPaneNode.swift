@@ -538,8 +538,6 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
         )
         self.parentController?.presentInGlobalOverlay(contextController)
     }
-        
-    
     
     func updateScrolling(interactive: Bool = false, transition: ComponentTransition) {
         if let params = self.currentParams {
@@ -590,12 +588,12 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
                             )
                         )),
                         isReorderable: collections.count > 1,
-                        contextAction: { [weak self] sourceNode, gesture in
+                        contextAction: canEditCollections ? { [weak self] sourceNode, gesture in
                             guard let self else {
                                 return
                             }
                             self.openCollectionContextMenu(id: collection.id, sourceNode: sourceNode, gesture: gesture)
-                        }
+                        } : nil
                     ))
                 }
                         
@@ -1024,6 +1022,7 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
                                 let undoController = UndoOverlayController(
                                     presentationData: currentParams.presentationData,
                                     content: .sticker(context: self.context, file: giftFile, loop: false, title: nil, text: text, undoText: nil, customAction: nil),
+                                    elevatedLayout: true,
                                     action: { _ in return true }
                                 )
                                 self.parentController?.present(undoController, in: .current)
@@ -1302,8 +1301,43 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
             items.append(.action(ContextMenuActionItem(text: strings.PeerInfo_Gifts_Context_RemoveFromCollection, textColor: .destructive, textLayout: .twoLinesMax, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Peer Info/Gifts/RemoveFromCollection"), color: theme.contextMenu.destructiveColor) }, action: { [weak self] c, f in
                 f(.default)
                 
+                guard let self else {
+                    return
+                }
+                
                 if let reference = gift.reference {
-                    let _ = self?.profileGiftsCollections.removeGifts(id: id, gifts: [reference]).start()
+                    let _ = self.profileGiftsCollections.removeGifts(id: id, gifts: [reference]).start()
+                }
+                
+                var giftFile: TelegramMediaFile?
+                var giftTitle: String?
+                switch gift.gift {
+                case let .generic(gift):
+                    giftFile = gift.file
+                case let .unique(uniqueGift):
+                    giftTitle = uniqueGift.title + " #\(presentationStringsFormattedNumber(uniqueGift.number, currentParams.presentationData.dateTimeFormat.groupingSeparator))"
+                    for attribute in uniqueGift.attributes {
+                        if case let .model(_, file, _) = attribute {
+                            giftFile = file
+                        }
+                    }
+                }
+                
+                if let giftFile, let collection = self.collections?.first(where: { $0.id == id }) {
+                    let text: String
+                    if let giftTitle {
+                        text = currentParams.presentationData.strings.PeerInfo_Gifts_RemovedFromCollectionUnique(giftTitle, collection.title).string
+                    } else {
+                        text = currentParams.presentationData.strings.PeerInfo_Gifts_RemovedFromCollection(collection.title).string
+                    }
+                    
+                    let undoController = UndoOverlayController(
+                        presentationData: currentParams.presentationData,
+                        content: .sticker(context: self.context, file: giftFile, loop: false, title: nil, text: text, undoText: nil, customAction: nil),
+                        elevatedLayout: true,
+                        action: { _ in return true }
+                    )
+                    self.parentController?.present(undoController, in: .current)
                 }
             })))
         }
