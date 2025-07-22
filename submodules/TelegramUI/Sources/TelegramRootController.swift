@@ -471,7 +471,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
                         
                         if let customTarget, case .botPreview = customTarget {
                             externalState.storyTarget = customTarget
-                            self.proceedWithStoryUpload(target: customTarget, results: results, existingMedia: nil, forwardInfo: nil, folders: [], externalState: externalState, commit: commit)
+                            self.proceedWithStoryUpload(target: customTarget, results: results, existingMedia: nil, forwardInfo: nil, externalState: externalState, commit: commit)
                             
                             dismissCameraImpl?()
                             return
@@ -504,7 +504,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
                                     externalState.isPeerArchived = channel.storiesHidden ?? false
                                 }
                                  
-                                self.proceedWithStoryUpload(target: target, results: results, existingMedia: nil, forwardInfo: nil, folders: [], externalState: externalState, commit: commit)
+                                 self.proceedWithStoryUpload(target: target, results: results, existingMedia: nil, forwardInfo: nil, externalState: externalState, commit: commit)
                                 
                                 dismissCameraImpl?()
                             })
@@ -568,7 +568,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
             })
     }
     
-    public func proceedWithStoryUpload(target: Stories.PendingTarget, results: [MediaEditorScreenResult], existingMedia: EngineMedia?, forwardInfo: Stories.PendingForwardInfo?, folders: [Int64], externalState: MediaEditorTransitionOutExternalState, commit: @escaping (@escaping () -> Void) -> Void) {
+    public func proceedWithStoryUpload(target: Stories.PendingTarget, results: [MediaEditorScreenResult], existingMedia: EngineMedia?, forwardInfo: Stories.PendingForwardInfo?, externalState: MediaEditorTransitionOutExternalState, commit: @escaping (@escaping () -> Void) -> Void) {
         guard let results = results as? [MediaEditorScreenImpl.Result] else {
             return
         }
@@ -582,6 +582,8 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         case .botPreview:
             targetPeerId = nil
         }
+        
+        let folders: [Int64] = results.first?.options.folderIds ?? []
 
         if let rootTabController = self.rootTabController {
             if let index = rootTabController.controllers.firstIndex(where: { $0 is ChatListController}) {

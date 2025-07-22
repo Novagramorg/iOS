@@ -1486,6 +1486,44 @@ public final class PeerStoryListContext: StoryListContext {
             }).start()
         }
         
+        func renameFolder(id: Int64, title: String) -> Disposable {
+            var state = self.stateValue
+            if let index = state.availableFolders.firstIndex(where: { $0.id == id }) {
+                state.availableFolders[index] = State.Folder(id: state.availableFolders[index].id, title: title)
+            }
+            self.stateValue = state
+            let updatedFolders = state.availableFolders
+            
+            let account = self.account
+            let peerId = self.peerId
+            return (account.postbox.transaction { transaction -> Api.InputPeer? in
+                let key = ValueBoxKey(length: 8 + 1)
+                key.setInt64(0, value: peerId.toInt64())
+                key.setInt8(8, value: 0)
+                
+                if let cached = transaction.retrieveItemCacheEntry(id: ItemCacheEntryId(collectionId: Namespaces.CachedItemCollection.cachedPeerStoryListHeads, key: key))?.get(CachedPeerStoryListHead.self) {
+                    if let entry = CodableEntry(CachedPeerStoryListHead(items: cached.items, pinnedIds: cached.pinnedIds, totalCount: cached.totalCount, folders: updatedFolders)) {
+                        transaction.putItemCacheEntry(id: ItemCacheEntryId(collectionId: Namespaces.CachedItemCollection.cachedPeerStoryListHeads, key: key), entry: entry)
+                    }
+                }
+                
+                return transaction.getPeer(peerId).flatMap(apiInputPeer)
+            }
+            |> mapToSignal { inputPeer -> Signal<Never, NoError> in
+                guard let inputPeer else {
+                    return .complete()
+                }
+                var flags: Int32 = 0
+                flags |= 1 << 0
+                return account.network.request(Api.functions.stories.updateAlbum(flags: flags, peer: inputPeer, albumId: Int32(clamping: id), title: title, deleteStories: nil, addStories: nil, order: nil))
+                |> map(Optional.init)
+                |> `catch` { _ -> Signal<Api.StoryAlbum?, NoError> in
+                    return .single(nil)
+                }
+                |> ignoreValues
+            }).start()
+        }
+        
         func reorderFolders(ids: [Int64]) -> Disposable {
             var state = self.stateValue
             var folders: [State.Folder] = []
@@ -1811,6 +1849,14 @@ public final class PeerStoryListContext: StoryListContext {
         let disposable = MetaDisposable()
         self.impl.with { impl in
             disposable.set(impl.removeFolder(id: id))
+        }
+        return disposable
+    }
+    
+    public func renameFolder(id: Int64, title: String) -> Disposable {
+        let disposable = MetaDisposable()
+        self.impl.with { impl in
+            disposable.set(impl.renameFolder(id: id, title: title))
         }
         return disposable
     }

@@ -2491,7 +2491,7 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
                     })))
                 } else {
                     //TODO:localize
-                    items.append(.action(ContextMenuActionItem(text: "Add to Album", icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Folder"), color: theme.contextMenu.primaryColor) }, action: { [weak self] c, f in
+                    items.append(.action(ContextMenuActionItem(text: "Add to Album", icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/AddToFolder"), color: theme.contextMenu.primaryColor) }, action: { [weak self] c, f in
                         guard let self, let c else {
                             f(.default)
                             return
@@ -2512,7 +2512,7 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
                             })))
                             items.append(.separator)
                             
-                            items.append(.action(ContextMenuActionItem(text: "New Album", icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Folder"), color: theme.contextMenu.primaryColor) }, iconPosition: .left, action: { [weak self] c, f in
+                            items.append(.action(ContextMenuActionItem(text: "New Album", icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/AddFolder"), color: theme.contextMenu.primaryColor) }, iconPosition: .left, action: { [weak self] c, f in
                                 guard let self else {
                                     f(.default)
                                     return
@@ -3884,6 +3884,18 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
                             })))
                             
                             //TODO:localize
+                            items.append(.action(ContextMenuActionItem(text: "Rename Album", textColor: .destructive, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Edit"), color: theme.contextMenu.destructiveColor) }, action: { [weak self] _, f in
+                                guard let self else {
+                                    f(.default)
+                                    return
+                                }
+                                
+                                f(.dismissWithoutContent)
+                                
+                                self.presentRenameStoryFolder(id: folder.id, title: folder.title)
+                            })))
+                            
+                            //TODO:localize
                             items.append(.action(ContextMenuActionItem(text: "Delete Album", textColor: .destructive, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Delete"), color: theme.contextMenu.destructiveColor) }, action: { [weak self] _, f in
                                 guard let self else {
                                     f(.default)
@@ -4931,7 +4943,7 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
                 }
                 if let value {
                     if let listSource = self.listSource as? PeerStoryListContext {
-                        let _ = listSource.addFolder(title: value, completion: { [weak self] id in
+                        let _ = listSource.addFolder(title: value, items: [], completion: { [weak self] id in
                             Queue.mainQueue().async {
                                 guard let self, let id, let listSource = self.listSource as? PeerStoryListContext else {
                                     return
@@ -4942,6 +4954,32 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
                                 self.setStoryFolder(id: id, assumeEmpty: addItems.isEmpty)
                             }
                         })
+                    }
+                }
+            }
+        )
+        self.parentController?.present(promptController, in: .window(.root))
+    }
+    
+    private func presentRenameStoryFolder(id: Int64, title: String) {
+        //TODO:localize
+        let promptController = promptController(
+            sharedContext: self.context.sharedContext,
+            updatedPresentationData: nil,
+            text: "Edit Album Name",
+            titleFont: .bold,
+            subtitle: "Choose a new name for your album.",
+            value: title,
+            placeholder: "Title",
+            characterLimit: 20,
+            displayCharacterLimit: true,
+            apply: { [weak self] value in
+                guard let self else {
+                    return
+                }
+                if let value {
+                    if let listSource = self.listSource as? PeerStoryListContext {
+                        let _ = listSource.renameFolder(id: id, title: value).start()
                     }
                 }
             }
