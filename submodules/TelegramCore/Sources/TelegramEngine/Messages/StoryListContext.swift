@@ -1388,7 +1388,7 @@ public final class PeerStoryListContext: StoryListContext {
             })
         }
         
-        func addFolder(title: String, completion: @escaping (Int64?) -> Void) -> Disposable {
+        func addFolder(title: String, items: [EngineStoryItem], completion: @escaping (Int64?) -> Void) -> Disposable {
             let peerId = self.peerId
             return (self.account.postbox.transaction { transaction -> Api.InputPeer? in
                 return transaction.getPeer(peerId).flatMap(apiInputPeer)
@@ -1398,7 +1398,7 @@ public final class PeerStoryListContext: StoryListContext {
                     return .single(nil)
                 }
                 return self.account.network.request(Api.functions.stories.createAlbum(
-                    peer: inputPeer, title: title, stories: []))
+                    peer: inputPeer, title: title, stories: items.map(\.id)))
                 |> map(Optional.init)
                 |> `catch` { _ -> Signal<Api.StoryAlbum?, NoError> in
                     return .single(nil)
@@ -1427,6 +1427,18 @@ public final class PeerStoryListContext: StoryListContext {
                             key.setInt8(8, value: isArchived ? 1 : 0)
                             if let entry = CodableEntry(CachedPeerStoryListHead(items: items.prefix(100).map { .item($0.storyItem.asStoryItem()) }, pinnedIds: pinnedIds, totalCount: Int32(totalCount), folders: folders)) {
                                 transaction.putItemCacheEntry(id: ItemCacheEntryId(collectionId: Namespaces.CachedItemCollection.cachedPeerStoryListHeads, key: key), entry: entry)
+                            }
+                            
+                            let mappedItems = items.map { item in
+                                return item.storyItem.asStoryItem()
+                            }
+                            
+                            let folderKey = ValueBoxKey(length: 8 + 1 + 8)
+                            folderKey.setInt64(0, value: peerId.toInt64())
+                            folderKey.setInt8(8, value: 0)
+                            folderKey.setInt64(8 + 1, value: Int64(albumId))
+                            if let entry = CodableEntry(CachedPeerStoryListHead(items: mappedItems.prefix(100).map { .item($0) }, pinnedIds: [], totalCount: Int32(mappedItems.count), folders: [])) {
+                                transaction.putItemCacheEntry(id: ItemCacheEntryId(collectionId: Namespaces.CachedItemCollection.cachedPeerStoryListHeads, key: folderKey), entry: entry)
                             }
                         } |> deliverOn(self.queue)).start(completed: {
                             completion(Int64(albumId))
@@ -1787,10 +1799,10 @@ public final class PeerStoryListContext: StoryListContext {
         }
     }
     
-    public func addFolder(title: String, completion: @escaping (Int64?) -> Void) -> Disposable {
+    public func addFolder(title: String, items: [EngineStoryItem], completion: @escaping (Int64?) -> Void) -> Disposable {
         let disposable = MetaDisposable()
         self.impl.with { impl in
-            disposable.set(impl.addFolder(title: title, completion: completion))
+            disposable.set(impl.addFolder(title: title, items: items, completion: completion))
         }
         return disposable
     }
