@@ -2937,6 +2937,9 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
                     if !storyFolders.contains(where: { $0.id == folder.id }) && !self.removedStoryFolders.contains(folder.id) {
                         storyFolders.append(folder)
                     }
+                    if let index = storyFolders.firstIndex(where: { $0.id == folder.id }) {
+                        storyFolders[index] = folder
+                    }
                 }
                 
                 var hadLocalItems = false
@@ -3857,6 +3860,18 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
                         }
                         
                         //TODO:localize
+                        items.append(.action(ContextMenuActionItem(text: "Rename Album", icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Edit"), color: theme.contextMenu.primaryColor) }, action: { [weak self] _, f in
+                            guard let self else {
+                                f(.default)
+                                return
+                            }
+                            
+                            f(.dismissWithoutContent)
+                            
+                            self.presentRenameStoryFolder(id: folder.id, title: folder.title)
+                        })))
+                        
+                        //TODO:localize
                         items.append(.action(ContextMenuActionItem(text: "Share", icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Forward"), color: theme.contextMenu.primaryColor) }, action: { [weak self] _, f in
                             guard let self else {
                                 f(.default)
@@ -3881,18 +3896,6 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
                                 a(.default)
                                 
                                 self.beginReordering()
-                            })))
-                            
-                            //TODO:localize
-                            items.append(.action(ContextMenuActionItem(text: "Rename Album", textColor: .destructive, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Edit"), color: theme.contextMenu.destructiveColor) }, action: { [weak self] _, f in
-                                guard let self else {
-                                    f(.default)
-                                    return
-                                }
-                                
-                                f(.dismissWithoutContent)
-                                
-                                self.presentRenameStoryFolder(id: folder.id, title: folder.title)
                             })))
                             
                             //TODO:localize
@@ -4979,7 +4982,7 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
                 }
                 if let value {
                     if let listSource = self.listSource as? PeerStoryListContext {
-                        let _ = listSource.renameFolder(id: id, title: value).start()
+                        let _ = listSource.renameFolder(id: id, title: value)
                     }
                 }
             }
