@@ -86,8 +86,9 @@ public final class EngineStoryItem: Equatable {
     public let myReaction: MessageReaction.Reaction?
     public let forwardInfo: ForwardInfo?
     public let author: EnginePeer?
+    public let folderIds: [Int64]?
     
-    public init(id: Int32, timestamp: Int32, expirationTimestamp: Int32, media: EngineMedia, alternativeMediaList: [EngineMedia], mediaAreas: [MediaArea], text: String, entities: [MessageTextEntity], views: Views?, privacy: EngineStoryPrivacy?, isPinned: Bool, isExpired: Bool, isPublic: Bool, isPending: Bool, isCloseFriends: Bool, isContacts: Bool, isSelectedContacts: Bool, isForwardingDisabled: Bool, isEdited: Bool, isMy: Bool, myReaction: MessageReaction.Reaction?, forwardInfo: ForwardInfo?, author: EnginePeer?) {
+    public init(id: Int32, timestamp: Int32, expirationTimestamp: Int32, media: EngineMedia, alternativeMediaList: [EngineMedia], mediaAreas: [MediaArea], text: String, entities: [MessageTextEntity], views: Views?, privacy: EngineStoryPrivacy?, isPinned: Bool, isExpired: Bool, isPublic: Bool, isPending: Bool, isCloseFriends: Bool, isContacts: Bool, isSelectedContacts: Bool, isForwardingDisabled: Bool, isEdited: Bool, isMy: Bool, myReaction: MessageReaction.Reaction?, forwardInfo: ForwardInfo?, author: EnginePeer?, folderIds: [Int64]?) {
         self.id = id
         self.timestamp = timestamp
         self.expirationTimestamp = expirationTimestamp
@@ -111,6 +112,7 @@ public final class EngineStoryItem: Equatable {
         self.myReaction = myReaction
         self.forwardInfo = forwardInfo
         self.author = author
+        self.folderIds = folderIds
     }
     
     public static func ==(lhs: EngineStoryItem, rhs: EngineStoryItem) -> Bool {
@@ -183,6 +185,9 @@ public final class EngineStoryItem: Equatable {
         if lhs.author != rhs.author {
             return false
         }
+        if lhs.folderIds != rhs.folderIds {
+            return false
+        }
         return true
     }
 }
@@ -237,7 +242,8 @@ public extension EngineStoryItem {
             
             myReaction: self.myReaction,
             forwardInfo: self.forwardInfo?.storedForwardInfo,
-            authorId: self.author?.id
+            authorId: self.author?.id,
+            folderIds: self.folderIds
         )
     }
 }
@@ -735,7 +741,8 @@ public final class PeerStoryListContext: StoryListContext {
                             isMy: item.isMy,
                             myReaction: item.myReaction,
                             forwardInfo: item.forwardInfo.flatMap { EngineStoryItem.ForwardInfo($0, transaction: transaction) },
-                            author: item.authorId.flatMap { transaction.getPeer($0).flatMap(EnginePeer.init) }
+                            author: item.authorId.flatMap { transaction.getPeer($0).flatMap(EnginePeer.init) },
+                            folderIds: item.folderIds
                         )
                         items.append(State.Item(
                             id: StoryId(peerId: peerId, id: mappedItem.id),
@@ -830,6 +837,7 @@ public final class PeerStoryListContext: StoryListContext {
             let accountPeerId = account.peerId
             let isArchived = self.isArchived
             let folderId = self.folderId
+            let queue = self.queue
             self.requestDisposable = (self.account.postbox.transaction { transaction -> Api.InputPeer? in
                 return transaction.getPeer(peerId).flatMap(apiInputPeer)
             }
@@ -838,7 +846,7 @@ public final class PeerStoryListContext: StoryListContext {
                     return .single(([], 0, nil, [], false))
                 }
                 
-                let signal: Signal<Api.stories.Stories?, MTRpcError>
+                var signal: Signal<Api.stories.Stories?, MTRpcError>
                 var additionalFolders: Signal<Api.stories.Albums?, MTRpcError> = .single(nil)
                 if let folderId {
                     signal = account.network.request(Api.functions.stories.getAlbumStories(peer: inputPeer, albumId: Int32(clamping: folderId), offset: Int32(loadMoreToken), limit: Int32(limit))) |> map(Optional.init)
@@ -851,6 +859,13 @@ public final class PeerStoryListContext: StoryListContext {
                         |> map(Optional.init)
                     }
                 }
+                
+                #if DEBUG
+                if folderId != nil {
+                    signal = signal |> delay(2.0, queue: queue)
+                }
+                #endif
+                
                 return combineLatest(
                     signal
                     |> `catch` { _ -> Signal<Api.stories.Stories?, NoError> in
@@ -945,7 +960,8 @@ public final class PeerStoryListContext: StoryListContext {
                                             isMy: item.isMy,
                                             myReaction: item.myReaction,
                                             forwardInfo: item.forwardInfo.flatMap { EngineStoryItem.ForwardInfo($0, transaction: transaction) },
-                                            author: item.authorId.flatMap { transaction.getPeer($0).flatMap(EnginePeer.init) }
+                                            author: item.authorId.flatMap { transaction.getPeer($0).flatMap(EnginePeer.init) },
+                                            folderIds: item.folderIds
                                         )
                                         storyItems.append(State.Item(
                                             id: StoryId(peerId: peerId, id: mappedItem.id),
@@ -988,7 +1004,7 @@ public final class PeerStoryListContext: StoryListContext {
                     }
                 }
             }
-            |> deliverOn(self.queue)).start(next: { [weak self] storyItems, totalCount, peerReference, folderItems, hasMore in
+            |> deliverOn(queue)).start(next: { [weak self] storyItems, totalCount, peerReference, folderItems, hasMore in
                 guard let self else {
                     return
                 }
@@ -1139,7 +1155,8 @@ public final class PeerStoryListContext: StoryListContext {
                                                                 isMy: item.isMy,
                                                                 myReaction: item.myReaction,
                                                                 forwardInfo: item.forwardInfo.flatMap { EngineStoryItem.ForwardInfo($0, peers: peers) },
-                                                                author: item.authorId.flatMap { peers[$0].flatMap(EnginePeer.init) }
+                                                                author: item.authorId.flatMap { peers[$0].flatMap(EnginePeer.init) },
+                                                                folderIds: item.folderIds
                                                             ), peer: nil)
                                                             finalUpdatedState = updatedState
                                                         }
@@ -1188,7 +1205,8 @@ public final class PeerStoryListContext: StoryListContext {
                                                             isMy: item.isMy,
                                                             myReaction: item.myReaction,
                                                             forwardInfo: item.forwardInfo.flatMap { EngineStoryItem.ForwardInfo($0, peers: peers) },
-                                                            author: item.authorId.flatMap { peers[$0].flatMap(EnginePeer.init) }
+                                                            author: item.authorId.flatMap { peers[$0].flatMap(EnginePeer.init) },
+                                                            folderIds: item.folderIds
                                                         ), peer: nil)
                                                         finalUpdatedState = updatedState
                                                     } else {
@@ -1239,7 +1257,8 @@ public final class PeerStoryListContext: StoryListContext {
                                                                 isMy: item.isMy,
                                                                 myReaction: item.myReaction,
                                                                 forwardInfo: item.forwardInfo.flatMap { EngineStoryItem.ForwardInfo($0, peers: peers) },
-                                                                author: item.authorId.flatMap { peers[$0].flatMap(EnginePeer.init) }
+                                                                author: item.authorId.flatMap { peers[$0].flatMap(EnginePeer.init) },
+                                                                folderIds: item.folderIds
                                                             ), peer: nil))
                                                             updatedState.items.sort(by: { lhs, rhs in
                                                                 let lhsPinned = updatedState.pinnedIds.firstIndex(of: lhs.storyItem.id)
@@ -1296,7 +1315,8 @@ public final class PeerStoryListContext: StoryListContext {
                                                             isMy: item.isMy,
                                                             myReaction: item.myReaction,
                                                             forwardInfo: item.forwardInfo.flatMap { EngineStoryItem.ForwardInfo($0, peers: peers) },
-                                                            author: item.authorId.flatMap { peers[$0].flatMap(EnginePeer.init) }
+                                                            author: item.authorId.flatMap { peers[$0].flatMap(EnginePeer.init) },
+                                                            folderIds: item.folderIds
                                                         ), peer: nil))
                                                         updatedState.items.sort(by: { lhs, rhs in
                                                             let lhsPinned = updatedState.pinnedIds.firstIndex(of: lhs.storyItem.id)
@@ -1575,7 +1595,8 @@ public final class PeerStoryListContext: StoryListContext {
                                 return .unknown(name: name, isModified: isModified)
                             }
                         },
-                        authorId: item.author?.id
+                        authorId: item.author?.id,
+                        folderIds: item.folderIds
                     )
                     if !updatedItems.contains(where: { $0.id == mappedItem.id }) {
                         updatedItems.insert(mappedItem, at: 0)
@@ -1910,7 +1931,8 @@ public final class PeerStoryListContext: StoryListContext {
                             isMy: item.isMy,
                             myReaction: item.myReaction,
                             forwardInfo: item.forwardInfo.flatMap { EngineStoryItem.ForwardInfo($0, transaction: transaction) },
-                            author: item.authorId.flatMap { transaction.getPeer($0).flatMap(EnginePeer.init) }
+                            author: item.authorId.flatMap { transaction.getPeer($0).flatMap(EnginePeer.init) },
+                            folderIds: item.folderIds
                         )
                     }
                 }
@@ -2092,7 +2114,8 @@ public final class SearchStoryListContext: StoryListContext {
                                             isMy: item.isMy,
                                             myReaction: item.myReaction,
                                             forwardInfo: item.forwardInfo.flatMap { EngineStoryItem.ForwardInfo($0, transaction: transaction) },
-                                            author: item.authorId.flatMap { transaction.getPeer($0).flatMap(EnginePeer.init) }
+                                            author: item.authorId.flatMap { transaction.getPeer($0).flatMap(EnginePeer.init) },
+                                            folderIds: item.folderIds
                                         )
                                         storyItems.append(State.Item(
                                             id: StoryId(peerId: peer.peerId, id: mappedItem.id),
@@ -2109,7 +2132,7 @@ public final class SearchStoryListContext: StoryListContext {
                 }
             }
             |> deliverOn(self.queue)).start(next: { [weak self] storyItems, totalCount, nextOffset in
-                guard let `self` = self else {
+                guard let self else {
                     return
                 }
                 
@@ -2241,7 +2264,8 @@ public final class SearchStoryListContext: StoryListContext {
                                                     isMy: item.isMy,
                                                     myReaction: item.myReaction,
                                                     forwardInfo: item.forwardInfo.flatMap { EngineStoryItem.ForwardInfo($0, peers: peers) },
-                                                    author: item.authorId.flatMap { peers[$0].flatMap(EnginePeer.init) }
+                                                    author: item.authorId.flatMap { peers[$0].flatMap(EnginePeer.init) },
+                                                    folderIds: item.folderIds
                                                 ),
                                                 peer: currentItem.peer
                                             )
@@ -2302,7 +2326,8 @@ public final class SearchStoryListContext: StoryListContext {
                                                 isMy: item.storyItem.isMy,
                                                 myReaction: reaction,
                                                 forwardInfo: item.storyItem.forwardInfo,
-                                                author: item.storyItem.author
+                                                author: item.storyItem.author,
+                                                folderIds: item.storyItem.folderIds
                                             ),
                                             peer: item.peer
                                         )
@@ -2431,7 +2456,8 @@ public final class PeerExpiringStoryListContext {
                                         isMy: item.isMy,
                                         myReaction: item.myReaction,
                                         forwardInfo: item.forwardInfo.flatMap { EngineStoryItem.ForwardInfo($0, transaction: transaction) },
-                                        author: item.authorId.flatMap { transaction.getPeer($0).flatMap(EnginePeer.init) }
+                                        author: item.authorId.flatMap { transaction.getPeer($0).flatMap(EnginePeer.init) },
+                                        folderIds: item.folderIds
                                     )
                                     items.append(.item(mappedItem))
                                 }
@@ -2877,7 +2903,8 @@ public final class BotPreviewStoryListContext: StoryListContext {
                                         isMy: false,
                                         myReaction: nil,
                                         forwardInfo: nil,
-                                        author: nil
+                                        author: nil,
+                                        folderIds: nil
                                     ),
                                     peer: nil
                                 ))
@@ -2926,7 +2953,8 @@ public final class BotPreviewStoryListContext: StoryListContext {
                                     isMy: false,
                                     myReaction: nil,
                                     forwardInfo: nil,
-                                    author: nil
+                                    author: nil,
+                                    folderIds: nil
                                 ),
                                 peer: nil
                             ))
@@ -3038,7 +3066,8 @@ public final class BotPreviewStoryListContext: StoryListContext {
                                 isMy: false,
                                 myReaction: nil,
                                 forwardInfo: nil,
-                                author: nil
+                                author: nil,
+                                folderIds: nil
                             ),
                             peer: nil
                         ))
@@ -3115,7 +3144,8 @@ public final class BotPreviewStoryListContext: StoryListContext {
                                     isMy: false,
                                     myReaction: nil,
                                     forwardInfo: nil,
-                                    author: nil
+                                    author: nil,
+                                    folderIds: nil
                                 ),
                                 peer: nil
                             ))
@@ -3178,7 +3208,8 @@ public final class BotPreviewStoryListContext: StoryListContext {
                                     isMy: false,
                                     myReaction: nil,
                                     forwardInfo: nil,
-                                    author: nil
+                                    author: nil,
+                                    folderIds: nil
                                 ),
                                 peer: nil
                             )
