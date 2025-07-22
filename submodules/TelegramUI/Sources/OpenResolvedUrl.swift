@@ -1498,5 +1498,26 @@ func openResolvedUrlImpl(
             } else {
                 present(textAlertController(context: context, updatedPresentationData: updatedPresentationData, title: nil, text: presentationData.strings.BusinessLink_ErrorExpired, actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]), nil)
             }
+        case let .storyFolder(peerId, id):
+            Task { @MainActor [weak navigationController] in
+                guard let peer = await context.engine.data.get(
+                    TelegramEngine.EngineData.Item.Peer.Peer(id: peerId)
+                ).get() else {
+                    return
+                }
+                
+                guard let controller = context.sharedContext.makePeerInfoController(
+                    context: context,
+                    updatedPresentationData: updatedPresentationData,
+                    peer: peer._asPeer(),
+                    mode: .storyAlbum(id: id),
+                    avatarInitiallyExpanded: false,
+                    fromChat: false,
+                    requestsContext: nil
+                ) else {
+                    return
+                }
+                navigationController?.pushViewController(controller)
+            }
     }
 }

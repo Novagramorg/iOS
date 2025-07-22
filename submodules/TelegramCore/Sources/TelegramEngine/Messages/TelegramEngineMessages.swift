@@ -1353,7 +1353,8 @@ public extension TelegramEngine {
                                     isMy: item.isMy,
                                     myReaction: item.myReaction,
                                     forwardInfo: item.forwardInfo,
-                                    authorId: item.authorId
+                                    authorId: item.authorId,
+                                    folderIds: item.folderIds
                                 ))
                                 if let entry = CodableEntry(updatedItem) {
                                     currentItems[i] = StoryItemsTableEntry(value: entry, id: updatedItem.id, expirationTimestamp: updatedItem.expirationTimestamp, isCloseFriends: updatedItem.isCloseFriends)

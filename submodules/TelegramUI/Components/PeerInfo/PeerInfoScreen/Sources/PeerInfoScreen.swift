@@ -2906,6 +2906,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
     private let callMessages: [Message]
     private let chatLocation: ChatLocation
     private let chatLocationContextHolder: Atomic<ChatLocationContextHolder?>
+    private let switchToStoryFolder: Int64?
     private let sharedMediaFromForumTopic: (EnginePeer.Id, Int64)?
     
     let isSettings: Bool
@@ -3030,7 +3031,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
     }
     private var didSetReady = false
     
-    init(controller: PeerInfoScreenImpl, context: AccountContext, peerId: PeerId, avatarInitiallyExpanded: Bool, isOpenedFromChat: Bool, nearbyPeerDistance: Int32?, reactionSourceMessageId: MessageId?, callMessages: [Message], isSettings: Bool, isMyProfile: Bool, hintGroupInCommon: PeerId?, requestsContext: PeerInvitationImportersContext?, profileGiftsContext: ProfileGiftsContext?, starsContext: StarsContext?, tonContext: StarsContext?, chatLocation: ChatLocation, chatLocationContextHolder: Atomic<ChatLocationContextHolder?>, initialPaneKey: PeerInfoPaneKey?, sharedMediaFromForumTopic: (EnginePeer.Id, Int64)?) {
+    init(controller: PeerInfoScreenImpl, context: AccountContext, peerId: PeerId, avatarInitiallyExpanded: Bool, isOpenedFromChat: Bool, nearbyPeerDistance: Int32?, reactionSourceMessageId: MessageId?, callMessages: [Message], isSettings: Bool, isMyProfile: Bool, hintGroupInCommon: PeerId?, requestsContext: PeerInvitationImportersContext?, profileGiftsContext: ProfileGiftsContext?, starsContext: StarsContext?, tonContext: StarsContext?, chatLocation: ChatLocation, chatLocationContextHolder: Atomic<ChatLocationContextHolder?>, switchToStoryFolder: Int64?, initialPaneKey: PeerInfoPaneKey?, sharedMediaFromForumTopic: (EnginePeer.Id, Int64)?) {
         self.controller = controller
         self.context = context
         self.peerId = peerId
@@ -3046,6 +3047,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
         self.chatLocationContextHolder = chatLocationContextHolder
         self.isMediaOnly = context.account.peerId == peerId && !isSettings && !isMyProfile
         self.initialExpandPanes = initialPaneKey != nil
+        self.switchToStoryFolder = switchToStoryFolder
         self.sharedMediaFromForumTopic = sharedMediaFromForumTopic
         
         self.scrollNode = ASScrollNode()
@@ -3057,7 +3059,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
             forumTopicThreadId = message.threadId
         }
         self.headerNode = PeerInfoHeaderNode(context: context, controller: controller, avatarInitiallyExpanded: avatarInitiallyExpanded, isOpenedFromChat: isOpenedFromChat, isMediaOnly: self.isMediaOnly, isSettings: isSettings, isMyProfile: isMyProfile, forumTopicThreadId: forumTopicThreadId, chatLocation: self.chatLocation)
-        self.paneContainerNode = PeerInfoPaneContainerNode(context: context, updatedPresentationData: controller.updatedPresentationData, peerId: peerId, chatLocation: chatLocation, sharedMediaFromForumTopic: sharedMediaFromForumTopic, chatLocationContextHolder: chatLocationContextHolder, isMediaOnly: self.isMediaOnly, initialPaneKey: initialPaneKey)
+        self.paneContainerNode = PeerInfoPaneContainerNode(context: context, updatedPresentationData: controller.updatedPresentationData, peerId: peerId, chatLocation: chatLocation, sharedMediaFromForumTopic: sharedMediaFromForumTopic, chatLocationContextHolder: chatLocationContextHolder, isMediaOnly: self.isMediaOnly, initialPaneKey: initialPaneKey, initialStoryFolderId: switchToStoryFolder)
         
         super.init()
         
@@ -5392,7 +5394,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
             let transition: ContainedViewLayoutTransition = .animated(duration: 0.35, curve: .spring)
             
             self.headerNode.updateIsAvatarExpanded(false, transition: transition)
-            self.updateNavigationExpansionPresentation(isExpanded: false, animated: true)
+            self.updateNavigationExpansionPresentation(isExpanded: false, animated: animated)
             
             if let (layout, navigationHeight) = self.validLayout {
                 self.containerLayoutUpdated(layout: layout, navigationHeight: navigationHeight, transition: transition, additive: true)
@@ -5403,7 +5405,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
             let contentOffset = self.scrollNode.view.contentOffset
             let paneAreaExpansionFinalPoint: CGFloat = self.paneContainerNode.frame.minY - navigationHeight
             if contentOffset.y < paneAreaExpansionFinalPoint - CGFloat.ulpOfOne {
-                let transition: ContainedViewLayoutTransition = .animated(duration: 0.4, curve: .spring)
+                let transition: ContainedViewLayoutTransition = animated ? .animated(duration: 0.4, curve: .spring) : .immediate
                 
                 self.ignoreScrolling = true
                 transition.updateBounds(node: self.scrollNode, bounds: CGRect(origin: CGPoint(x: 0.0, y: paneAreaExpansionFinalPoint), size: self.scrollNode.bounds.size))
@@ -11710,6 +11712,22 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                     }
                 })))
                 
+                if let _ = pane.currentStoryFolder {
+                    items.append(.action(ContextMenuActionItem(text: "Share", icon: { theme in
+                        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Forward"), color: theme.contextMenu.primaryColor)
+                    }, action: { [weak pane] _, a in
+                        if ignoreNextActions {
+                            return
+                        }
+                        ignoreNextActions = true
+                        a(.default)
+                        
+                        if let pane {
+                            pane.shareCurrentFolder()
+                        }
+                    })))
+                }
+                
                 if pane.canReorder() {
                     items.append(.action(ContextMenuActionItem(text: self.presentationData.strings.BotPreviews_MenuReorder, icon: { theme in
                         return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/ReorderItems"), color: theme.contextMenu.primaryColor)
@@ -13082,6 +13100,7 @@ public final class PeerInfoScreenImpl: ViewController, PeerInfoScreen, KeyShortc
     private let switchToRecommendedChannels: Bool
     private let switchToGifts: Bool
     private let switchToGroupsInCommon: Bool
+    private let switchToStoryFolder: Int64?
     private let sharedMediaFromForumTopic: (EnginePeer.Id, Int64)?
     let chatLocation: ChatLocation
     private let chatLocationContextHolder = Atomic<ChatLocationContextHolder?>(value: nil)
@@ -13157,7 +13176,8 @@ public final class PeerInfoScreenImpl: ViewController, PeerInfoScreen, KeyShortc
         sharedMediaFromForumTopic: (EnginePeer.Id, Int64)? = nil,
         switchToRecommendedChannels: Bool = false,
         switchToGifts: Bool = false,
-        switchToGroupsInCommon: Bool = false
+        switchToGroupsInCommon: Bool = false,
+        switchToStoryFolder: Int64? = nil
     ) {
         self.context = context
         self.updatedPresentationData = updatedPresentationData
@@ -13175,6 +13195,7 @@ public final class PeerInfoScreenImpl: ViewController, PeerInfoScreen, KeyShortc
         self.switchToRecommendedChannels = switchToRecommendedChannels
         self.switchToGifts = switchToGifts
         self.switchToGroupsInCommon = switchToGroupsInCommon
+        self.switchToStoryFolder = switchToStoryFolder
         self.sharedMediaFromForumTopic = sharedMediaFromForumTopic
         
         if let forumTopicThread = forumTopicThread {
@@ -13540,8 +13561,10 @@ public final class PeerInfoScreenImpl: ViewController, PeerInfoScreen, KeyShortc
             initialPaneKey = .gifts
         } else if self.switchToGroupsInCommon {
             initialPaneKey = .groupsInCommon
+        } else if self.switchToStoryFolder != nil {
+            initialPaneKey = .stories
         }
-        self.displayNode = PeerInfoScreenNode(controller: self, context: self.context, peerId: self.peerId, avatarInitiallyExpanded: self.avatarInitiallyExpanded, isOpenedFromChat: self.isOpenedFromChat, nearbyPeerDistance: self.nearbyPeerDistance, reactionSourceMessageId: self.reactionSourceMessageId, callMessages: self.callMessages, isSettings: self.isSettings, isMyProfile: self.isMyProfile, hintGroupInCommon: self.hintGroupInCommon, requestsContext: self.requestsContext, profileGiftsContext: self.profileGiftsContext, starsContext: self.starsContext, tonContext: self.tonContext, chatLocation: self.chatLocation, chatLocationContextHolder: self.chatLocationContextHolder, initialPaneKey: initialPaneKey, sharedMediaFromForumTopic: self.sharedMediaFromForumTopic)
+        self.displayNode = PeerInfoScreenNode(controller: self, context: self.context, peerId: self.peerId, avatarInitiallyExpanded: self.avatarInitiallyExpanded, isOpenedFromChat: self.isOpenedFromChat, nearbyPeerDistance: self.nearbyPeerDistance, reactionSourceMessageId: self.reactionSourceMessageId, callMessages: self.callMessages, isSettings: self.isSettings, isMyProfile: self.isMyProfile, hintGroupInCommon: self.hintGroupInCommon, requestsContext: self.requestsContext, profileGiftsContext: self.profileGiftsContext, starsContext: self.starsContext, tonContext: self.tonContext, chatLocation: self.chatLocation, chatLocationContextHolder: self.chatLocationContextHolder, switchToStoryFolder: self.switchToStoryFolder, initialPaneKey: initialPaneKey, sharedMediaFromForumTopic: self.sharedMediaFromForumTopic)
         self.controllerNode.accountsAndPeers.set(self.accountsAndPeers.get() |> map { $0.1 })
         self.controllerNode.activeSessionsContextAndCount.set(self.activeSessionsContextAndCount.get())
         self.cachedDataPromise.set(self.controllerNode.cachedDataPromise.get())
