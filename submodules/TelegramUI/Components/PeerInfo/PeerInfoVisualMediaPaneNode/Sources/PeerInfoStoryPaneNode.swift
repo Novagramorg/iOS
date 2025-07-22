@@ -3859,29 +3859,31 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
                             })))
                         }
                         
-                        //TODO:localize
-                        items.append(.action(ContextMenuActionItem(text: "Rename Album", icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Edit"), color: theme.contextMenu.primaryColor) }, action: { [weak self] _, f in
-                            guard let self else {
-                                f(.default)
-                                return
-                            }
+                        if self.canManageStories {
+                            //TODO:localize
+                            items.append(.action(ContextMenuActionItem(text: "Rename Album", icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Edit"), color: theme.contextMenu.primaryColor) }, action: { [weak self] _, f in
+                                guard let self else {
+                                    f(.default)
+                                    return
+                                }
+                                
+                                f(.dismissWithoutContent)
+                                
+                                self.presentRenameStoryFolder(id: folder.id, title: folder.title)
+                            })))
                             
-                            f(.dismissWithoutContent)
-                            
-                            self.presentRenameStoryFolder(id: folder.id, title: folder.title)
-                        })))
-                        
-                        //TODO:localize
-                        items.append(.action(ContextMenuActionItem(text: "Share", icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Forward"), color: theme.contextMenu.primaryColor) }, action: { [weak self] _, f in
-                            guard let self else {
-                                f(.default)
-                                return
-                            }
-                            
-                            f(.dismissWithoutContent)
-                            
-                            self.shareFolder(id: folder.id)
-                        })))
+                            //TODO:localize
+                            items.append(.action(ContextMenuActionItem(text: "Share", icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Forward"), color: theme.contextMenu.primaryColor) }, action: { [weak self] _, f in
+                                guard let self else {
+                                    f(.default)
+                                    return
+                                }
+                                
+                                f(.dismissWithoutContent)
+                                
+                                self.shareFolder(id: folder.id)
+                            })))
+                        }
                         
                         if self.canManageStories {
                             //TODO:localize
