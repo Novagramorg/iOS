@@ -20,8 +20,6 @@ import ZipArchive
 import PlainButtonComponent
 import MultilineTextComponent
 
-private let requiredAge = 18
-
 final class FaceScanScreenComponent: Component {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
     
@@ -109,7 +107,7 @@ final class FaceScanScreenComponent: Component {
             
             self.backgroundColor = .black
             
-            self.previewLayer.backgroundColor = UIColor.red.cgColor
+            //self.previewLayer.backgroundColor = UIColor.red.cgColor
             self.previewLayer.videoGravity = .resizeAspectFill
             self.layer.addSublayer(previewLayer)
             
@@ -240,7 +238,7 @@ final class FaceScanScreenComponent: Component {
             let targetCenter = CGPoint(x: 0.5, y: 0.5)
             let distance = sqrt(pow(faceCenter.x - targetCenter.x, 2) + pow(faceCenter.y - targetCenter.y, 2))
             
-            if distance < 0.35 {
+            if distance < 0.24 {
                 switch processState {
                 case .waitingForFace:
                     self.processState = .positioning
@@ -320,7 +318,7 @@ final class FaceScanScreenComponent: Component {
                         if !self.ages.isEmpty {
                             let averageAge = self.ages.reduce(0, +) / Double(self.ages.count)
                             if let environment = self.environment, let controller = environment.controller() as? FaceScanScreen {
-                                controller.completion(averageAge >= Double(requiredAge))
+                                controller.completion(Int(averageAge))
                                 controller.dismiss(animated: true)
                             }
                         } else {
@@ -436,7 +434,7 @@ final class FaceScanScreenComponent: Component {
             
             let center = CGPoint(x: availableSize.width / 2, y: environment.statusBarHeight + 10.0 + widthRadius * 1.3)
             
-            var previewScale = 1.0
+            var previewScale = 0.85
             if self.processState == .tracking || self.processState == .readyToStart || self.processState == .completed || self.transitioningToViewFinder {
                 let circlePath = CGPath(roundedRect: CGRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2), cornerWidth: radius, cornerHeight: radius, transform: nil)
                 path.addPath(circlePath)
@@ -457,7 +455,6 @@ final class FaceScanScreenComponent: Component {
             self.frameView.frame = frameViewFrame
             self.frameView.update(size: frameViewFrame.size)
             
-            //TODO:localize
             var instructionString = environment.strings.FaceScan_Instruction_Position
             switch self.processState {
             case .waitingForFace, .positioning:
@@ -545,12 +542,12 @@ final class FaceScanScreenComponent: Component {
 
 public final class FaceScanScreen: ViewControllerComponentContainer {
     private let context: AccountContext
-    fileprivate let completion: (Bool) -> Void
+    fileprivate let completion: (Int) -> Void
     
     public init(
         context: AccountContext,
         availability: Signal<AgeVerificationAvailability, NoError>,
-        completion: @escaping (Bool) -> Void
+        completion: @escaping (Int) -> Void
     ) {
         self.context = context
         self.completion = completion
