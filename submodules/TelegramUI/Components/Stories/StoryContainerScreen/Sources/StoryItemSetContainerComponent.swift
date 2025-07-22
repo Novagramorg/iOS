@@ -5090,7 +5090,7 @@ public final class StoryItemSetContainerComponent: Component {
                     context: context,
                     initialPrivacy: privacy,
                     stateContext: stateContext,
-                    completion: { [weak self] _, privacy, _, _, _, completed in
+                    completion: { [weak self] _, privacy, _, _, _, _, completed in
                         guard let self, let component = self.component, completed else {
                             return
                         }
@@ -5107,7 +5107,7 @@ public final class StoryItemSetContainerComponent: Component {
                         self.rewindCurrentItem()
                         self.updateIsProgressPaused()
                     },
-                    editCategory: { [weak self] privacy, _, _ in
+                    editCategory: { [weak self] privacy, _, _, _ in
                         guard let self else {
                             return
                         }
@@ -5118,7 +5118,7 @@ public final class StoryItemSetContainerComponent: Component {
                             self.openItemPrivacySettings(updatedPrivacy: privacy)
                         })
                     },
-                    editBlockedPeers: { [weak self] privacy, _, _ in
+                    editBlockedPeers: { [weak self] privacy, _, _, _ in
                         guard let self else {
                             return
                         }
@@ -5171,7 +5171,7 @@ public final class StoryItemSetContainerComponent: Component {
                     context: context,
                     initialPrivacy: privacy,
                     stateContext: stateContext,
-                    completion: { [weak self] _, result, _, _, peers, completed in
+                    completion: { [weak self] _, result, _, _, peers, _, completed in
                         guard completed else {
                             return
                         }
@@ -5188,8 +5188,8 @@ public final class StoryItemSetContainerComponent: Component {
                             completion(result)
                         }
                     },
-                    editCategory: { _, _, _ in },
-                    editBlockedPeers: { _, _, _ in }
+                    editCategory: { _, _, _, _ in },
+                    editBlockedPeers: { _, _, _, _ in }
                 )
                 controller.dismissed = { [weak self] in
                     if let self {
@@ -6110,7 +6110,7 @@ public final class StoryItemSetContainerComponent: Component {
                 var items: [ContextMenuItem] = []
                 
                 //TODO:localize
-                items.append(.action(ContextMenuActionItem(text: "Add to Album", icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Folder"), color: theme.contextMenu.primaryColor) }, action: { [weak self] c, f in
+                items.append(.action(ContextMenuActionItem(text: "Add to Album", icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/AddToFolder"), color: theme.contextMenu.primaryColor) }, action: { [weak self] c, f in
                     guard let self, let c else {
                         f(.default)
                         return
@@ -6131,7 +6131,7 @@ public final class StoryItemSetContainerComponent: Component {
                         })))
                         items.append(.separator)
                         
-                        items.append(.action(ContextMenuActionItem(text: "New Album", icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Folder"), color: theme.contextMenu.primaryColor) }, iconPosition: .left, action: { [weak self] c, f in
+                        items.append(.action(ContextMenuActionItem(text: "New Album", icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/AddFolder"), color: theme.contextMenu.primaryColor) }, iconPosition: .left, action: { [weak self] c, f in
                             guard let self else {
                                 f(.default)
                                 return

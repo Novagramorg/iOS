@@ -1695,7 +1695,7 @@ private final class StoryContainerScreenComponent: Component {
                                     
                                     if let content = component.content as? PeerStoryListContentContextImpl {
                                         if let listSource = content.listContext as? PeerStoryListContext {
-                                            let _ = listSource.addFolder(title: title, completion: { [weak listSource] id in
+                                            let _ = listSource.addFolder(title: title, items: [], completion: { [weak listSource] id in
                                                 Queue.mainQueue().async {
                                                     guard let listSource, let id else {
                                                         return

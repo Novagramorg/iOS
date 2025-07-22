@@ -44,9 +44,9 @@ final class ShareWithPeersScreenComponent: Component {
     let categoryItems: [CategoryItem]
     let optionItems: [OptionItem]
     let coverItem: CoverItem?
-    let completion: (EnginePeer.Id?, EngineStoryPrivacy, Bool, Bool, [EnginePeer], Bool) -> Void
-    let editCategory: (EngineStoryPrivacy, Bool, Bool) -> Void
-    let editBlockedPeers: (EngineStoryPrivacy, Bool, Bool) -> Void
+    let completion: (EnginePeer.Id?, EngineStoryPrivacy, Bool, Bool, [EnginePeer], [Int64], Bool) -> Void
+    let editCategory: (EngineStoryPrivacy, Bool, Bool, [Int64]) -> Void
+    let editBlockedPeers: (EngineStoryPrivacy, Bool, Bool, [Int64]) -> Void
     let editCover: () -> Void
     let peerCompletion: (EnginePeer.Id) -> Void
     
@@ -62,9 +62,9 @@ final class ShareWithPeersScreenComponent: Component {
         categoryItems: [CategoryItem],
         optionItems: [OptionItem],
         coverItem: CoverItem?,
-        completion: @escaping (EnginePeer.Id?, EngineStoryPrivacy, Bool, Bool, [EnginePeer], Bool) -> Void,
-        editCategory: @escaping (EngineStoryPrivacy, Bool, Bool) -> Void,
-        editBlockedPeers: @escaping (EngineStoryPrivacy, Bool, Bool) -> Void,
+        completion: @escaping (EnginePeer.Id?, EngineStoryPrivacy, Bool, Bool, [EnginePeer], [Int64], Bool) -> Void,
+        editCategory: @escaping (EngineStoryPrivacy, Bool, Bool, [Int64]) -> Void,
+        editBlockedPeers: @escaping (EngineStoryPrivacy, Bool, Bool, [Int64]) -> Void,
         editCover: @escaping () -> Void,
         peerCompletion: @escaping (EnginePeer.Id) -> Void
     ) {
@@ -833,9 +833,9 @@ final class ShareWithPeersScreenComponent: Component {
                     context: component.context,
                     initialPrivacy: EngineStoryPrivacy(base: .nobody, additionallyIncludePeers: []),
                     stateContext: stateContext,
-                    completion: { _, _, _, _, _, _ in },
-                    editCategory: { _, _, _ in },
-                    editBlockedPeers: { _, _, _ in },
+                    completion: { _, _, _, _, _, _, _ in },
+                    editCategory: { _, _, _, _ in },
+                    editBlockedPeers: { _, _, _, _ in },
                     peerCompletion: { [weak self] peerId in
                         guard let self else {
                             return
@@ -896,7 +896,7 @@ final class ShareWithPeersScreenComponent: Component {
                 
                 var items: [ContextMenuItem] = []
                 
-                items.append(.action(ContextMenuActionItem(text: "New Album", icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Folder"), color: theme.contextMenu.primaryColor) }, iconPosition: .left, action: { [weak self] c, f in
+                items.append(.action(ContextMenuActionItem(text: "New Album", icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/AddFolder"), color: theme.contextMenu.primaryColor) }, iconPosition: .left, action: { [weak self] c, f in
                     guard let self else {
                         f(.default)
                         return
@@ -1421,7 +1421,8 @@ final class ShareWithPeersScreenComponent: Component {
                                             component.editCategory(
                                                 EngineStoryPrivacy(base: .nobody, additionallyIncludePeers: []),
                                                 self.selectedOptions.contains(.screenshot),
-                                                self.selectedOptions.contains(.pin)
+                                                self.selectedOptions.contains(.pin),
+                                                self.shareToFolders.map(\.id)
                                             )
                                             controller.dismissAllTooltips()
                                             controller.dismiss()
@@ -1429,7 +1430,8 @@ final class ShareWithPeersScreenComponent: Component {
                                             component.editCategory(
                                                 EngineStoryPrivacy(base: .closeFriends, additionallyIncludePeers: []),
                                                 self.selectedOptions.contains(.screenshot),
-                                                self.selectedOptions.contains(.pin)
+                                                self.selectedOptions.contains(.pin),
+                                                self.shareToFolders.map(\.id)
                                             )
                                             controller.dismissAllTooltips()
                                             controller.dismiss()
@@ -1457,7 +1459,8 @@ final class ShareWithPeersScreenComponent: Component {
                                     component.editCategory(
                                         EngineStoryPrivacy(base: base, additionallyIncludePeers: selectedPeers),
                                         self.selectedOptions.contains(.screenshot),
-                                        self.selectedOptions.contains(.pin)
+                                        self.selectedOptions.contains(.pin),
+                                        self.shareToFolders.map(\.id)
                                     )
                                     controller.dismissAllTooltips()
                                     controller.dismiss()
@@ -1545,7 +1548,8 @@ final class ShareWithPeersScreenComponent: Component {
                                 component.editBlockedPeers(
                                     EngineStoryPrivacy(base: base, additionallyIncludePeers: self.selectedPeers),
                                     self.selectedOptions.contains(.screenshot),
-                                    self.selectedOptions.contains(.pin)
+                                    self.selectedOptions.contains(.pin),
+                                    self.shareToFolders.map(\.id)
                                 )
                                 controller.dismissAllTooltips()
                                 controller.dismiss()
@@ -2267,6 +2271,7 @@ final class ShareWithPeersScreenComponent: Component {
                 self.selectedOptions.contains(.screenshot),
                 self.selectedOptions.contains(.pin),
                 self.component?.stateContext.stateValue?.peers.filter { self.selectedPeers.contains($0.id) } ?? [],
+                self.shareToFolders.map(\.id),
                 false
             )
             controller.requestDismiss()
@@ -3019,6 +3024,7 @@ final class ShareWithPeersScreenComponent: Component {
                                             self.selectedOptions.contains(.screenshot),
                                             self.selectedOptions.contains(.pin),
                                             peers.values.compactMap { $0 },
+                                            self.shareToFolders.map(\.id),
                                             true
                                         )
                                         
@@ -3270,9 +3276,9 @@ public class ShareWithPeersScreen: ViewControllerComponentContainer {
         mentions: [String] = [],
         coverImage: UIImage? = nil,
         stateContext: StateContext,
-        completion: @escaping (EnginePeer.Id?, EngineStoryPrivacy, Bool, Bool, [EnginePeer], Bool) -> Void,
-        editCategory: @escaping (EngineStoryPrivacy, Bool, Bool) -> Void = { _, _, _ in },
-        editBlockedPeers: @escaping (EngineStoryPrivacy, Bool, Bool) -> Void = { _, _, _ in },
+        completion: @escaping (EnginePeer.Id?, EngineStoryPrivacy, Bool, Bool, [EnginePeer], [Int64], Bool) -> Void,
+        editCategory: @escaping (EngineStoryPrivacy, Bool, Bool, [Int64]) -> Void = { _, _, _, _ in },
+        editBlockedPeers: @escaping (EngineStoryPrivacy, Bool, Bool, [Int64]) -> Void = { _, _, _, _ in },
         editCover: @escaping () -> Void = { },
         peerCompletion: @escaping (EnginePeer.Id) -> Void = { _ in }
     ) {
