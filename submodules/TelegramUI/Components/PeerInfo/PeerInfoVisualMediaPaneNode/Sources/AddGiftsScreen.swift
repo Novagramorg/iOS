@@ -121,9 +121,9 @@ final class AddGiftsScreenComponent: Component {
                 self.scrollView.contentSize = contentSize
             }
             
-            let bottomContentOffset = max(0.0, self.scrollNode.view.contentSize.height - self.scrollNode.view.contentOffset.y - self.scrollNode.view.frame.height)
+            let bottomContentOffset = max(0.0, self.scrollView.contentSize.height - self.scrollView.contentOffset.y - self.scrollView.frame.height)
             if interactive, bottomContentOffset < 200.0 {
-                self.giftsListView.loadMore()
+                self.giftsListView?.loadMore()
             }
         }
         
