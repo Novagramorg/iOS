@@ -362,7 +362,7 @@ public final class PresentationCallManagerImpl: PresentationCallManager {
                     )
                     strongSelf.updateCurrentCall(call)
                 }))
-            } else if let currentCall = self.currentCall, currentCall.peerId == firstState.1.id, currentCall.peerId.id._internalGetInt64Value() < firstState.0.account.peerId.id._internalGetInt64Value() {
+            } else if !"".isEmpty, let currentCall = self.currentCall, currentCall.peerId == firstState.1.id, currentCall.peerId.id._internalGetInt64Value() < firstState.0.account.peerId.id._internalGetInt64Value() {
                 let _ = currentCall.hangUp().startStandalone()
                 
                 self.currentCallDisposable.set((combineLatest(
