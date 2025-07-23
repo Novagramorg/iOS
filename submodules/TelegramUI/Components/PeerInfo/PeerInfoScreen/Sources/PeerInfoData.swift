@@ -1082,7 +1082,7 @@ func peerInfoScreenData(context: AccountContext, peerId: PeerId, strings: Presen
             if case .user = kind {
                 if isMyProfile || userPeerId != context.account.peerId {
                     profileGiftsContext = existingProfileGiftsContext ?? ProfileGiftsContext(account: context.account, peerId: userPeerId)
-                    profileGiftsCollectionsContext = existingProfileGiftsCollectionsContext ?? ProfileGiftsCollectionsContext(account: context.account, peerId: userPeerId)
+                    profileGiftsCollectionsContext = existingProfileGiftsCollectionsContext ?? ProfileGiftsCollectionsContext(account: context.account, peerId: userPeerId, allGiftsContext: profileGiftsContext)
                 } else {
                     profileGiftsContext = nil
                     profileGiftsCollectionsContext = nil
@@ -1629,7 +1629,7 @@ func peerInfoScreenData(context: AccountContext, peerId: PeerId, strings: Presen
             }
             
             let profileGiftsContext = ProfileGiftsContext(account: context.account, peerId: peerId)
-            let profileGiftsCollectionsContext = ProfileGiftsCollectionsContext(account: context.account, peerId: peerId)
+            let profileGiftsCollectionsContext = ProfileGiftsCollectionsContext(account: context.account, peerId: peerId, allGiftsContext: profileGiftsContext)
             
             let personalChannel = peerInfoPersonalOrLinkedChannel(context: context, peerId: peerId, isSettings: false)
             

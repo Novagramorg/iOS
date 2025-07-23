@@ -2143,6 +2143,28 @@ public final class ProfileGiftsContext {
                     collectionIds: self.collectionIds
                 )
             }
+            
+            public func withCollectionIds(_ collectionIds: [Int32]?) -> StarGift {
+                return StarGift(
+                    gift: self.gift,
+                    reference: self.reference,
+                    fromPeer: self.fromPeer,
+                    date: self.date,
+                    text: self.text,
+                    entities: self.entities,
+                    nameHidden: self.nameHidden,
+                    savedToProfile: self.savedToProfile,
+                    pinnedToTop: self.pinnedToTop,
+                    convertStars: self.convertStars,
+                    canUpgrade: self.canUpgrade,
+                    canExportDate: self.canExportDate,
+                    upgradeStars: self.upgradeStars,
+                    transferStars: self.transferStars,
+                    canTransferDate: self.canTransferDate,
+                    canResaleDate: self.canResaleDate,
+                    collectionIds: collectionIds
+                )
+            }
         }
         
         public enum DataState: Equatable {
