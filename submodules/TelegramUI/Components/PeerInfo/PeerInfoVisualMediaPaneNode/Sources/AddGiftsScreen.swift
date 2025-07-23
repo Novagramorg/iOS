@@ -101,10 +101,10 @@ final class AddGiftsScreenComponent: Component {
         }
         
         func scrollViewDidScroll(_ scrollView: UIScrollView) {
-            self.updateScrolling(transition: .immediate)
+            self.updateScrolling(interactive: true, transition: .immediate)
         }
         
-        private func updateScrolling(transition: ComponentTransition) {
+        private func updateScrolling(interactive: Bool = false, transition: ComponentTransition) {
             guard let environment = self.environment, let giftsListView = self.giftsListView else {
                 return
             }
@@ -119,6 +119,11 @@ final class AddGiftsScreenComponent: Component {
             
             if self.scrollView.contentSize != contentSize {
                 self.scrollView.contentSize = contentSize
+            }
+            
+            let bottomContentOffset = max(0.0, self.scrollNode.view.contentSize.height - self.scrollNode.view.contentOffset.y - self.scrollNode.view.frame.height)
+            if interactive, bottomContentOffset < 200.0 {
+                self.giftsListView.loadMore()
             }
         }
         
