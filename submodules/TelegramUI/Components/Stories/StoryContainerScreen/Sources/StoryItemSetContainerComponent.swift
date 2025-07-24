@@ -6109,8 +6109,9 @@ public final class StoryItemSetContainerComponent: Component {
                 
                 var items: [ContextMenuItem] = []
                 
+                //TODO:release
                 //TODO:localize
-                items.append(.action(ContextMenuActionItem(text: "Add to Album", icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Folder"), color: theme.contextMenu.primaryColor) }, action: { [weak self] c, f in
+                /*items.append(.action(ContextMenuActionItem(text: "Add to Album", icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Folder"), color: theme.contextMenu.primaryColor) }, action: { [weak self] c, f in
                     guard let self, let c else {
                         f(.default)
                         return
@@ -6203,7 +6204,7 @@ public final class StoryItemSetContainerComponent: Component {
                         
                         c.pushItems(items: .single(ContextController.Items(content: .list(items))))
                     }
-                })))
+                })))*/
                 
                 if case .file = component.slice.item.storyItem.media {
                     var speedValue: String = presentationData.strings.PlaybackSpeed_Normal
