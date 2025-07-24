@@ -483,7 +483,7 @@ final class GiftsListView: UIView {
                 
                 let peer: GiftItemComponent.Peer?
                 let subject: GiftItemComponent.Subject
-                var resellPrice: Int64?
+                var resellAmount: CurrencyAmount?
                 
                 switch product.gift {
                 case let .generic(gift):
@@ -498,9 +498,9 @@ final class GiftsListView: UIView {
                 case let .unique(gift):
                     subject = .uniqueGift(gift: gift, price: nil)
                     peer = nil
-                    resellPrice = gift.resellStars
+                    resellAmount = gift.resellAmounts?.first
                     
-                    if let _ = resellPrice {
+                    if let _ = resellAmount {
                         ribbonText = params.presentationData.strings.PeerInfo_Gifts_Sale
                         ribbonFont = .larger
                         ribbonColor = .green
@@ -533,6 +533,7 @@ final class GiftsListView: UIView {
                     itemAlpha = 0.3
                 }
                 
+                //TODO:release
                 let _ = visibleItem.update(
                     transition: itemTransition,
                     component: AnyComponent(
@@ -543,7 +544,7 @@ final class GiftsListView: UIView {
                             peer: peer,
                             subject: subject,
                             ribbon: ribbonText.flatMap { GiftItemComponent.Ribbon(text: $0, font: ribbonFont, color: ribbonColor, outline: ribbonOutline) },
-                            resellPrice: resellPrice,
+                            resellPrice: resellAmount?.amount.value,
                             isHidden: !product.savedToProfile,
                             isSelected: self.selectedItemIds.contains(itemReferenceId),
                             isPinned: !self.canSelect && product.pinnedToTop,

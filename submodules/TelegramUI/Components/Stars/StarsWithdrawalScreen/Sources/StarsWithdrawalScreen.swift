@@ -942,8 +942,8 @@ private final class SheetContent: CombinedComponent {
             
             if case let .starGiftResell(giftToMatch, update, _) = self.mode {
                 if update {
-                    if let resellStars = giftToMatch.resellStars {
-                        self.amount = StarsAmount(value: resellStars, nanos: 0)
+                    if let resellStars = giftToMatch.resellAmounts?.first(where: { $0.currency == .stars }) {
+                        self.amount = resellStars.amount
                     }
                 } else {
                     let _ = (context.engine.payments.cachedStarGifts()

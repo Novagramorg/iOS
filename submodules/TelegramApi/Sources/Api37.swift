@@ -483,6 +483,64 @@ public extension Api.storage {
     }
 }
 public extension Api.stories {
+    enum Albums: TypeConstructorDescription {
+        case albums(hash: Int64, albums: [Api.StoryAlbum])
+        case albumsNotModified
+    
+    public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+    switch self {
+                case .albums(let hash, let albums):
+                    if boxed {
+                        buffer.appendInt32(-1013417414)
+                    }
+                    serializeInt64(hash, buffer: buffer, boxed: false)
+                    buffer.appendInt32(481674261)
+                    buffer.appendInt32(Int32(albums.count))
+                    for item in albums {
+                        item.serialize(buffer, true)
+                    }
+                    break
+                case .albumsNotModified:
+                    if boxed {
+                        buffer.appendInt32(1448008427)
+                    }
+                    
+                    break
+    }
+    }
+    
+    public func descriptionFields() -> (String, [(String, Any)]) {
+        switch self {
+                case .albums(let hash, let albums):
+                return ("albums", [("hash", hash as Any), ("albums", albums as Any)])
+                case .albumsNotModified:
+                return ("albumsNotModified", [])
+    }
+    }
+    
+        public static func parse_albums(_ reader: BufferReader) -> Albums? {
+            var _1: Int64?
+            _1 = reader.readInt64()
+            var _2: [Api.StoryAlbum]?
+            if let _ = reader.readInt32() {
+                _2 = Api.parseVector(reader, elementSignature: 0, elementType: Api.StoryAlbum.self)
+            }
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            if _c1 && _c2 {
+                return Api.stories.Albums.albums(hash: _1!, albums: _2!)
+            }
+            else {
+                return nil
+            }
+        }
+        public static func parse_albumsNotModified(_ reader: BufferReader) -> Albums? {
+            return Api.stories.Albums.albumsNotModified
+        }
+    
+    }
+}
+public extension Api.stories {
     enum AllStories: TypeConstructorDescription {
         case allStories(flags: Int32, count: Int32, state: String, peerStories: [Api.PeerStories], chats: [Api.Chat], users: [Api.User], stealthMode: Api.StoriesStealthMode)
         case allStoriesNotModified(flags: Int32, state: String, stealthMode: Api.StoriesStealthMode)
@@ -1420,58 +1478,6 @@ public extension Api.updates {
             let _c1 = _1 != nil
             if _c1 {
                 return Api.updates.Difference.differenceTooLong(pts: _1!)
-            }
-            else {
-                return nil
-            }
-        }
-    
-    }
-}
-public extension Api.updates {
-    enum State: TypeConstructorDescription {
-        case state(pts: Int32, qts: Int32, date: Int32, seq: Int32, unreadCount: Int32)
-    
-    public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-    switch self {
-                case .state(let pts, let qts, let date, let seq, let unreadCount):
-                    if boxed {
-                        buffer.appendInt32(-1519637954)
-                    }
-                    serializeInt32(pts, buffer: buffer, boxed: false)
-                    serializeInt32(qts, buffer: buffer, boxed: false)
-                    serializeInt32(date, buffer: buffer, boxed: false)
-                    serializeInt32(seq, buffer: buffer, boxed: false)
-                    serializeInt32(unreadCount, buffer: buffer, boxed: false)
-                    break
-    }
-    }
-    
-    public func descriptionFields() -> (String, [(String, Any)]) {
-        switch self {
-                case .state(let pts, let qts, let date, let seq, let unreadCount):
-                return ("state", [("pts", pts as Any), ("qts", qts as Any), ("date", date as Any), ("seq", seq as Any), ("unreadCount", unreadCount as Any)])
-    }
-    }
-    
-        public static func parse_state(_ reader: BufferReader) -> State? {
-            var _1: Int32?
-            _1 = reader.readInt32()
-            var _2: Int32?
-            _2 = reader.readInt32()
-            var _3: Int32?
-            _3 = reader.readInt32()
-            var _4: Int32?
-            _4 = reader.readInt32()
-            var _5: Int32?
-            _5 = reader.readInt32()
-            let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            let _c3 = _3 != nil
-            let _c4 = _4 != nil
-            let _c5 = _5 != nil
-            if _c1 && _c2 && _c3 && _c4 && _c5 {
-                return Api.updates.State.state(pts: _1!, qts: _2!, date: _3!, seq: _4!, unreadCount: _5!)
             }
             else {
                 return nil

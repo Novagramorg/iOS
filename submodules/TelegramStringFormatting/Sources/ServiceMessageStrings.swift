@@ -1204,7 +1204,14 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                                 attributedString = NSAttributedString(string: strings.Notification_StarsGift_SentSomeone, font: titleFont, textColor: primaryTextColor)
                             } else if message.author?.id == accountPeerId {
                                 if let resaleStars {
-                                    let starsString = strings.Notification_StarsGift_Bought_Stars(Int32(resaleStars))
+                                    let starsString: String
+                                    switch resaleStars.currency {
+                                    case .stars:
+                                        starsString = strings.Notification_StarsGift_Bought_Stars(Int32(resaleStars.amount.value))
+                                    case .ton:
+                                        //TODO:localize
+                                        starsString = "\(Int32(resaleStars.amount.value)) TON"
+                                    }
                                     if message.id.peerId == accountPeerId {
                                         attributedString = addAttributesToStringWithRanges(strings.Notification_StarsGift_BoughtForYouself(starsString)._tuple, body: bodyAttributes, argumentAttributes: [0: boldAttributes])
                                     } else {
@@ -1237,7 +1244,14 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                             } else {
                                 var attributes = peerMentionsAttributes(primaryTextColor: primaryTextColor, peerIds: peerIds)
                                 if let resaleStars {
-                                    let starsString = strings.Notification_StarsGift_Bought_Stars(Int32(resaleStars))
+                                    let starsString: String
+                                    switch resaleStars.currency {
+                                    case .stars:
+                                        starsString = strings.Notification_StarsGift_Bought_Stars(Int32(resaleStars.amount.value))
+                                    case .ton:
+                                        //TODO:localize
+                                        starsString = "\(Int32(resaleStars.amount.value)) TON"
+                                    }
                                     let giftTitle = "\(gift.title) #\(presentationStringsFormattedNumber(gift.number, dateTimeFormat.groupingSeparator))"
                                     attributes[1] = boldAttributes
                                     attributes[2] = boldAttributes
