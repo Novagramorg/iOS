@@ -2720,9 +2720,10 @@ final class ShareWithPeersScreenComponent: Component {
                         if hasCover {
                             itemCount += 1
                         }
-                        if self.selectedOptions.contains(.pin) {
+                        //TODO:release
+                        /*if self.selectedOptions.contains(.pin) {
                             itemCount += 1
-                        }
+                        }*/
                         sections.append(ItemLayout.Section(
                             id: 4,
                             insets: UIEdgeInsets(top: 28.0, left: 0.0, bottom: 0.0, right: 0.0),
