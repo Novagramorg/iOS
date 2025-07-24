@@ -388,7 +388,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[-625298705] = { return Api.InputInvoice.parse_inputInvoicePremiumGiftStars($0) }
     dict[-1020867857] = { return Api.InputInvoice.parse_inputInvoiceSlug($0) }
     dict[-396206446] = { return Api.InputInvoice.parse_inputInvoiceStarGift($0) }
-    dict[1674298252] = { return Api.InputInvoice.parse_inputInvoiceStarGiftResale($0) }
+    dict[-1012968668] = { return Api.InputInvoice.parse_inputInvoiceStarGiftResale($0) }
     dict[1247763417] = { return Api.InputInvoice.parse_inputInvoiceStarGiftTransfer($0) }
     dict[1300335965] = { return Api.InputInvoice.parse_inputInvoiceStarGiftUpgrade($0) }
     dict[1710230755] = { return Api.InputInvoice.parse_inputInvoiceStars($0) }
@@ -603,7 +603,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[1348510708] = { return Api.MessageAction.parse_messageActionSetChatWallPaper($0) }
     dict[1007897979] = { return Api.MessageAction.parse_messageActionSetMessagesTTL($0) }
     dict[1192749220] = { return Api.MessageAction.parse_messageActionStarGift($0) }
-    dict[775611918] = { return Api.MessageAction.parse_messageActionStarGiftUnique($0) }
+    dict[888627955] = { return Api.MessageAction.parse_messageActionStarGiftUnique($0) }
     dict[1474192222] = { return Api.MessageAction.parse_messageActionSuggestProfilePhoto($0) }
     dict[-293988970] = { return Api.MessageAction.parse_messageActionSuggestedPostApproval($0) }
     dict[1777932024] = { return Api.MessageAction.parse_messageActionSuggestedPostRefund($0) }
@@ -944,7 +944,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[1124938064] = { return Api.SponsoredMessageReportOption.parse_sponsoredMessageReportOption($0) }
     dict[-963180333] = { return Api.SponsoredPeer.parse_sponsoredPeer($0) }
     dict[12386139] = { return Api.StarGift.parse_starGift($0) }
-    dict[-164136786] = { return Api.StarGift.parse_starGiftUnique($0) }
+    dict[975654224] = { return Api.StarGift.parse_starGiftUnique($0) }
     dict[-650279524] = { return Api.StarGiftAttribute.parse_starGiftAttributeBackdrop($0) }
     dict[970559507] = { return Api.StarGiftAttribute.parse_starGiftAttributeModel($0) }
     dict[-524291476] = { return Api.StarGiftAttribute.parse_starGiftAttributeOriginalDetails($0) }
@@ -992,8 +992,9 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[872932635] = { return Api.StickerSetCovered.parse_stickerSetMultiCovered($0) }
     dict[2008112412] = { return Api.StickerSetCovered.parse_stickerSetNoCovered($0) }
     dict[1898850301] = { return Api.StoriesStealthMode.parse_storiesStealthMode($0) }
+    dict[-1826262950] = { return Api.StoryAlbum.parse_storyAlbum($0) }
     dict[-1205411504] = { return Api.StoryFwdHeader.parse_storyFwdHeader($0) }
-    dict[2041735716] = { return Api.StoryItem.parse_storyItem($0) }
+    dict[-302947087] = { return Api.StoryItem.parse_storyItem($0) }
     dict[1374088783] = { return Api.StoryItem.parse_storyItemDeleted($0) }
     dict[-5388013] = { return Api.StoryItem.parse_storyItemSkipped($0) }
     dict[1620104917] = { return Api.StoryReaction.parse_storyReaction($0) }
@@ -1476,6 +1477,8 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[172975040] = { return Api.storage.FileType.parse_filePng($0) }
     dict[-1432995067] = { return Api.storage.FileType.parse_fileUnknown($0) }
     dict[276907596] = { return Api.storage.FileType.parse_fileWebp($0) }
+    dict[-1013417414] = { return Api.stories.Albums.parse_albums($0) }
+    dict[1448008427] = { return Api.stories.Albums.parse_albumsNotModified($0) }
     dict[1862033025] = { return Api.stories.AllStories.parse_allStories($0) }
     dict[291044926] = { return Api.stories.AllStories.parse_allStoriesNotModified($0) }
     dict[-1014513586] = { return Api.stories.CanSendStoryCount.parse_canSendStoryCount($0) }
@@ -2196,6 +2199,8 @@ public extension Api {
                 _1.serialize(buffer, boxed)
             case let _1 as Api.StoriesStealthMode:
                 _1.serialize(buffer, boxed)
+            case let _1 as Api.StoryAlbum:
+                _1.serialize(buffer, boxed)
             case let _1 as Api.StoryFwdHeader:
                 _1.serialize(buffer, boxed)
             case let _1 as Api.StoryItem:
@@ -2613,6 +2618,8 @@ public extension Api {
             case let _1 as Api.stickers.SuggestedShortName:
                 _1.serialize(buffer, boxed)
             case let _1 as Api.storage.FileType:
+                _1.serialize(buffer, boxed)
+            case let _1 as Api.stories.Albums:
                 _1.serialize(buffer, boxed)
             case let _1 as Api.stories.AllStories:
                 _1.serialize(buffer, boxed)
