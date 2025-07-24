@@ -398,72 +398,92 @@ func generateCloseButtonImage(backgroundColor: UIColor, foregroundColor: UIColor
 
 public func presentAgeVerification(context: AccountContext, parentController: ViewController, completion: @escaping () -> Void) {
     let presentationData = context.sharedContext.currentPresentationData.with { $0 }
-    let _ = (context.engine.data.get(
-        TelegramEngine.EngineData.Item.Configuration.ApplicationSpecificPreference(key: ApplicationSpecificPreferencesKeys.ageVerificationState)
-    ) |> deliverOnMainQueue).start(next: { [weak parentController] ageVerificationStatePreference in
-        let state = ageVerificationStatePreference?.get(AgeVerificationState.self) ?? AgeVerificationState.default
-        if state.verificationPassed {
-            completion()
-        } else {
-            let infoScreen = AgeVerificationScreen(context: context, completion: { [weak parentController] check, availability in
-                if check {
-                    let scanScreen = FaceScanScreen(context: context, availability: availability, completion: { [weak parentController] passed in
-                        if passed {
-                            let _ = updateAgeVerificationState(engine: context.engine, { _ in
-                                return AgeVerificationState(verificationPassed: passed)
-                            }).start()
-                            completion()
-                
-                            let navigationController = parentController?.navigationController
-                            Queue.mainQueue().after(2.0) {
-                                let controller = UndoOverlayController(presentationData: presentationData, content: .actionSucceeded(title: presentationData.strings.AgeVerification_Success_Title, text: presentationData.strings.AgeVerification_Success_Text, cancel: nil, destructive: false), action: { _ in return true })
-                                (navigationController?.viewControllers.last as? ViewController)?.present(controller, in: .window(.root))
-                            }
-                        } else {
-                            let controller = UndoOverlayController(presentationData: presentationData, content: .universal(animation: "anim_banned", scale: 0.066, colors: [:], title: presentationData.strings.AgeVerification_Fail_Title, text: presentationData.strings.AgeVerification_Fail_Text, customUndoText: nil, timeout: nil), action: { _ in return true })
-                            parentController?.present(controller, in: .window(.root))
-                        }
-                    })
-                    parentController?.push(scanScreen)
+    let _ = (contentSettingsConfiguration(network: context.account.network)
+    |> deliverOnMainQueue).start(next: { [weak parentController] settings in
+        if !settings.canAdjustSensitiveContent {
+            let alertController = textAlertController(
+                context: context,
+                title: presentationData.strings.AgeVerification_Unavailable_Title,
+                text: presentationData.strings.AgeVerification_Unavailable_Text,
+                actions: []
+            )
+            parentController?.present(alertController, in: .window(.root))
+            return
+        }
+        let miniappPromise = Promise<EnginePeer?>(nil)
+        var useVerifyAgeBot = false
+        if let value = context.currentAppConfiguration.with({ $0 }).data?["force_verify_age_bot"] as? Bool, value {
+            useVerifyAgeBot = value
+        }
+        if useVerifyAgeBot, let verifyAgeBotUsername = context.currentAppConfiguration.with({ $0 }).data?["verify_age_bot_username"] as? String {
+            miniappPromise.set(context.engine.peers.resolvePeerByName(name: verifyAgeBotUsername, referrer: nil)
+            |> mapToSignal { result in
+                if case let .result(peer) = result {
+                    return .single(peer)
                 }
+                return .complete()
             })
-            parentController?.push(infoScreen)
         }
+        let infoScreen = AgeVerificationScreen(context: context, completion: { [weak parentController] check, availability in
+            if check {
+                var requiredAge = 18
+                if let value = context.currentAppConfiguration.with({ $0 }).data?["verify_age_min"] as? Double {
+                    requiredAge = Int(value)
+                }
+                
+                let success = { [weak parentController] in
+                    completion()
+        
+                    let navigationController = parentController?.navigationController
+                    Queue.mainQueue().after(2.0) {
+                        let controller = UndoOverlayController(presentationData: presentationData, content: .actionSucceeded(title: presentationData.strings.AgeVerification_Success_Title, text: presentationData.strings.AgeVerification_Success_Text, cancel: nil, destructive: false), action: { _ in return true })
+                        (navigationController?.viewControllers.last as? ViewController)?.present(controller, in: .current)
+                    }
+                }
+                
+                let failure = { [weak parentController] in
+                    let controller = UndoOverlayController(presentationData: presentationData, content: .universal(animation: "anim_banned", scale: 0.066, colors: [:], title: presentationData.strings.AgeVerification_Fail_Title, text: presentationData.strings.AgeVerification_Fail_Text, customUndoText: nil, timeout: nil), action: { _ in return true })
+                    parentController?.present(controller, in: .current)
+                }
+                
+                let _ = (miniappPromise.get()
+                |> take(1)
+                |> deliverOnMainQueue).start(next: { peer in
+                    if let peer, let parentController {
+                        context.sharedContext.openWebApp(
+                            context: context,
+                            parentController: parentController,
+                            updatedPresentationData: nil,
+                            botPeer: peer,
+                            chatPeer: nil,
+                            threadId: nil,
+                            buttonText: "",
+                            url: "",
+                            simple: true,
+                            source: .generic,
+                            skipTermsOfService: true,
+                            payload: nil,
+                            verifyAgeCompletion: { age in
+                                if age >= requiredAge {
+                                    success()
+                                } else {
+                                    failure()
+                                }
+                            }
+                        )
+                    } else {
+                        let scanScreen = FaceScanScreen(context: context, availability: availability, completion: { age in
+                            if age >= requiredAge {
+                                success()
+                            } else {
+                                failure()
+                            }
+                        })
+                        parentController?.push(scanScreen)
+                    }
+                })
+            }
+        })
+        parentController?.push(infoScreen)
     })
-}
-
-public func updateAgeVerificationState(engine: TelegramEngine, _ f: @escaping (AgeVerificationState) -> AgeVerificationState) -> Signal<Never, NoError> {
-    return engine.preferences.update(id: ApplicationSpecificPreferencesKeys.ageVerificationState, { entry in
-        let currentSettings: AgeVerificationState
-        if let entry = entry?.get(AgeVerificationState.self) {
-            currentSettings = entry
-        } else {
-            currentSettings = .default
-        }
-        return SharedPreferencesEntry(f(currentSettings))
-    })
-}
-
-public struct AgeVerificationState: Equatable, Codable {
-    public var verificationPassed: Bool
-    
-    public static var `default`: AgeVerificationState {
-        return AgeVerificationState(verificationPassed: false)
-    }
-    
-    public init(verificationPassed: Bool) {
-        self.verificationPassed = verificationPassed
-    }
-    
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: StringCodingKey.self)
-
-        self.verificationPassed = (try container.decode(Int32.self, forKey: "verificationPassed")) != 0
-    }
-    
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: StringCodingKey.self)
-
-        try container.encode((self.verificationPassed ? 1 : 0) as Int32, forKey: "verificationPassed")
-    }
 }

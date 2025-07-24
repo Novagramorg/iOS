@@ -3096,13 +3096,7 @@ private final class PremiumIntroScreenComponent: CombinedComponent {
                             products.append(PremiumProduct(option: option, storeProduct: product))
                         }
                     }
-                    
-                    //TODO:release
-                    if let product = availableProducts.first(where: { $0.id.hasSuffix(".annual") }) {
-                        let (currency, price) = product.priceCurrencyAndAmount
-                        products.insert(PremiumProduct(option: PremiumPromoConfiguration.PremiumProductOption(isCurrent: false, months: 24, currency: currency, amount: price * 2, botUrl: "", transactionId: nil, availableForUpgrade: true, storeProductId: "org.telegram.telegramPremium.biannual"), storeProduct: product), at: 0)
-                    }
-                    
+                                        
                     strongSelf.products = products
                     strongSelf.isPremium = forceHasPremium || isPremium
                     strongSelf.otherPeerName = otherPeerName

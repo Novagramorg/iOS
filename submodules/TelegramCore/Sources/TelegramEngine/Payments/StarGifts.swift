@@ -301,6 +301,8 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
             case availability
             case giftAddress
             case resellStars
+            case resellAmounts
+            case resellForTonOnly
             case releasedBy
         }
         
@@ -554,10 +556,11 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
         public let attributes: [Attribute]
         public let availability: Availability
         public let giftAddress: String?
-        public let resellStars: Int64?
+        public let resellAmounts: [CurrencyAmount]?
+        public let resellForTonOnly: Bool
         public let releasedBy: EnginePeer.Id?
         
-        public init(id: Int64, title: String, number: Int32, slug: String, owner: Owner, attributes: [Attribute], availability: Availability, giftAddress: String?, resellStars: Int64?, releasedBy: EnginePeer.Id?) {
+        public init(id: Int64, title: String, number: Int32, slug: String, owner: Owner, attributes: [Attribute], availability: Availability, giftAddress: String?, resellAmounts: [CurrencyAmount]?, resellForTonOnly: Bool, releasedBy: EnginePeer.Id?) {
             self.id = id
             self.title = title
             self.number = number
@@ -566,7 +569,8 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
             self.attributes = attributes
             self.availability = availability
             self.giftAddress = giftAddress
-            self.resellStars = resellStars
+            self.resellAmounts = resellAmounts
+            self.resellForTonOnly = resellForTonOnly
             self.releasedBy = releasedBy
         }
         
@@ -588,7 +592,14 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
             self.attributes = try container.decode([UniqueGift.Attribute].self, forKey: .attributes)
             self.availability = try container.decode(UniqueGift.Availability.self, forKey: .availability)
             self.giftAddress = try container.decodeIfPresent(String.self, forKey: .giftAddress)
-            self.resellStars = try container.decodeIfPresent(Int64.self, forKey: .resellStars)
+            if let resellAmounts = try container.decodeIfPresent([CurrencyAmount].self, forKey: .resellAmounts) {
+                self.resellAmounts = resellAmounts
+            } else if let resellStars = try container.decodeIfPresent(Int64.self, forKey: .resellStars) {
+                self.resellAmounts = [CurrencyAmount(amount: StarsAmount(value: resellStars, nanos: 0), currency: .stars)]
+            } else {
+                self.resellAmounts = []
+            }
+            self.resellForTonOnly = try container.decodeIfPresent(Bool.self, forKey: .resellForTonOnly) ?? false
             self.releasedBy = try container.decodeIfPresent(EnginePeer.Id.self, forKey: .releasedBy)
         }
         
@@ -609,7 +620,14 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
             self.attributes = (try? decoder.decodeObjectArrayWithCustomDecoderForKey(CodingKeys.attributes.rawValue, decoder: { UniqueGift.Attribute(decoder: $0) })) ?? []
             self.availability = decoder.decodeObjectForKey(CodingKeys.availability.rawValue, decoder: { UniqueGift.Availability(decoder: $0) }) as! UniqueGift.Availability
             self.giftAddress = decoder.decodeOptionalStringForKey(CodingKeys.giftAddress.rawValue)
-            self.resellStars = decoder.decodeOptionalInt64ForKey(CodingKeys.resellStars.rawValue)
+            if let resellAmounts = decoder.decodeCodable([CurrencyAmount].self, forKey: CodingKeys.resellAmounts.rawValue) {
+                self.resellAmounts = resellAmounts
+            } else if let resellStars = decoder.decodeOptionalInt64ForKey(CodingKeys.resellStars.rawValue) {
+                self.resellAmounts = [CurrencyAmount(amount: StarsAmount(value: resellStars, nanos: 0), currency: .stars)]
+            } else {
+                self.resellAmounts = nil
+            }
+            self.resellForTonOnly = decoder.decodeBoolForKey(CodingKeys.resellForTonOnly.rawValue, orElse: false)
             self.releasedBy = decoder.decodeOptionalInt64ForKey(CodingKeys.releasedBy.rawValue).flatMap { EnginePeer.Id($0) }
         }
         
@@ -630,7 +648,8 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
             try container.encode(self.attributes, forKey: .attributes)
             try container.encode(self.availability, forKey: .availability)
             try container.encodeIfPresent(self.giftAddress, forKey: .giftAddress)
-            try container.encodeIfPresent(self.resellStars, forKey: .resellStars)
+            try container.encodeIfPresent(self.resellAmounts, forKey: .resellAmounts)
+            try container.encode(self.resellForTonOnly, forKey: .resellForTonOnly)
             try container.encodeIfPresent(self.releasedBy, forKey: .releasedBy)
         }
         
@@ -654,11 +673,12 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
             } else {
                 encoder.encodeNil(forKey: CodingKeys.giftAddress.rawValue)
             }
-            if let resellStars = self.resellStars {
-                encoder.encodeInt64(resellStars, forKey: CodingKeys.resellStars.rawValue)
+            if let resellAmounts = self.resellAmounts {
+                encoder.encodeCodable(resellAmounts, forKey: CodingKeys.resellAmounts.rawValue)
             } else {
-                encoder.encodeNil(forKey: CodingKeys.resellStars.rawValue)
+                encoder.encodeNil(forKey: CodingKeys.resellAmounts.rawValue)
             }
+            encoder.encodeBool(self.resellForTonOnly, forKey: CodingKeys.resellForTonOnly.rawValue)
             if let releasedBy = self.releasedBy {
                 encoder.encodeInt64(releasedBy.toInt64(), forKey: CodingKeys.releasedBy.rawValue)
             } else {
@@ -666,7 +686,7 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
             }
         }
         
-        public func withResellStars(_ resellStars: Int64?) -> UniqueGift {
+        public func withResellAmounts(_ resellAmounts: [CurrencyAmount]?) -> UniqueGift {
             return UniqueGift(
                 id: self.id,
                 title: self.title,
@@ -676,7 +696,8 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
                 attributes: self.attributes,
                 availability: self.availability,
                 giftAddress: self.giftAddress,
-                resellStars: resellStars,
+                resellAmounts: resellAmounts,
+                resellForTonOnly: self.resellForTonOnly,
                 releasedBy: self.releasedBy
             )
         }
@@ -787,7 +808,7 @@ extension StarGift {
                 return nil
             }
             self = .generic(StarGift.Gift(id: id, title: title, file: file, price: stars, convertStars: convertStars, availability: availability, soldOut: soldOut, flags: flags, upgradeStars: upgradeStars, releasedBy: releasedBy?.peerId, perUserLimit: perUserLimit))
-        case let .starGiftUnique(_, id, title, slug, num, ownerPeerId, ownerName, ownerAddress, attributes, availabilityIssued, availabilityTotal, giftAddress, resellStars, releasedBy):
+        case let .starGiftUnique(flags, id, title, slug, num, ownerPeerId, ownerName, ownerAddress, attributes, availabilityIssued, availabilityTotal, giftAddress, resellAmounts, releasedBy):
             let owner: StarGift.UniqueGift.Owner
             if let ownerAddress {
                 owner = .address(ownerAddress)
@@ -798,7 +819,8 @@ extension StarGift {
             } else {
                 return nil
             }
-            self = .unique(StarGift.UniqueGift(id: id, title: title, number: num, slug: slug, owner: owner, attributes: attributes.compactMap { UniqueGift.Attribute(apiAttribute: $0) }, availability: UniqueGift.Availability(issued: availabilityIssued, total: availabilityTotal), giftAddress: giftAddress, resellStars: resellStars, releasedBy: releasedBy?.peerId))
+            let resellAmounts = resellAmounts?.compactMap { CurrencyAmount(apiAmount: $0) }
+            self = .unique(StarGift.UniqueGift(id: id, title: title, number: num, slug: slug, owner: owner, attributes: attributes.compactMap { UniqueGift.Attribute(apiAttribute: $0) }, availability: UniqueGift.Availability(issued: availabilityIssued, total: availabilityTotal), giftAddress: giftAddress, resellAmounts: resellAmounts, resellForTonOnly: (flags & (1 << 7)) != 0, releasedBy: releasedBy?.peerId))
         }
     }
 }
@@ -948,8 +970,8 @@ public enum UpgradeStarGiftError {
     case generic
 }
 
-func _internal_buyStarGift(account: Account, slug: String, peerId: EnginePeer.Id, price: Int64?) -> Signal<Never, BuyStarGiftError> {
-    let source: BotPaymentInvoiceSource = .starGiftResale(slug: slug, toPeerId: peerId)
+func _internal_buyStarGift(account: Account, slug: String, peerId: EnginePeer.Id, price: CurrencyAmount?) -> Signal<Never, BuyStarGiftError> {
+    let source: BotPaymentInvoiceSource = .starGiftResale(slug: slug, toPeerId: peerId, ton: price?.currency == .ton)
     return _internal_fetchBotPaymentForm(accountPeerId: account.peerId, postbox: account.postbox, network: account.network, source: source, themeParams: nil)
     |> map(Optional.init)
     |> `catch` { error -> Signal<BotPaymentForm?, BuyStarGiftError> in
@@ -960,7 +982,7 @@ func _internal_buyStarGift(account: Account, slug: String, peerId: EnginePeer.Id
     }
     |> mapToSignal { paymentForm in
         if let paymentForm {
-            if let paymentPrice = paymentForm.invoice.prices.first?.amount, let price, paymentPrice > price {
+            if let paymentPrice = paymentForm.invoice.prices.first?.amount, let price, paymentPrice > price.amount.value {
                 return .fail(.priceChanged(paymentPrice))
             }
             return _internal_sendStarsPaymentForm(account: account, formId: paymentForm.id, source: source)
@@ -1594,15 +1616,15 @@ private final class ProfileGiftsContextImpl {
         return _internal_transferStarGift(account: self.account, prepaid: prepaid, reference: reference, peerId: peerId)
     }
     
-    func buyStarGift(slug: String, peerId: EnginePeer.Id, price: Int64?) -> Signal<Never, BuyStarGiftError> {
-        var listingPrice: Int64?
+    func buyStarGift(slug: String, peerId: EnginePeer.Id, price: CurrencyAmount?) -> Signal<Never, BuyStarGiftError> {
+        var listingPrice: CurrencyAmount?
         if let gift = self.gifts.first(where: { gift in
             if case let .unique(uniqueGift) = gift.gift, uniqueGift.slug == slug {
                 return true
             }
             return false
         }), case let .unique(uniqueGift) = gift.gift {
-            listingPrice = uniqueGift.resellStars
+            listingPrice = uniqueGift.resellAmounts?.first(where: { $0.currency == .stars })
         }
         
         if listingPrice == nil {
@@ -1612,7 +1634,7 @@ private final class ProfileGiftsContextImpl {
                 }
                 return false
             }), case let .unique(uniqueGift) = gift.gift {
-                listingPrice = uniqueGift.resellStars
+                listingPrice = uniqueGift.resellAmounts?.first(where: { $0.currency == .stars })
             }
         }
                 
@@ -1776,7 +1798,7 @@ private final class ProfileGiftsContextImpl {
         }
     }
     
-    func updateStarGiftResellPrice(reference: StarGiftReference, price: Int64?, id: Int64?) -> Signal<Never, UpdateStarGiftPriceError> {
+    func updateStarGiftResellPrice(reference: StarGiftReference, price: CurrencyAmount?, id: Int64?) -> Signal<Never, UpdateStarGiftPriceError> {
         return Signal { [weak self] subscriber in
             guard let self else {
                 return EmptyDisposable
@@ -1806,7 +1828,7 @@ private final class ProfileGiftsContextImpl {
                         return false
                     }) {
                         if case let .unique(uniqueGift) = self.gifts[index].gift {
-                            let updatedUniqueGift = uniqueGift.withResellStars(price)
+                            let updatedUniqueGift = uniqueGift.withResellAmounts(price.flatMap { [$0] })
                             let updatedGift = self.gifts[index].withGift(.unique(updatedUniqueGift))
                             self.gifts[index] = updatedGift
                         }
@@ -1829,7 +1851,7 @@ private final class ProfileGiftsContextImpl {
                         return false
                     }) {
                         if case let .unique(uniqueGift) = self.filteredGifts[index].gift {
-                            let updatedUniqueGift = uniqueGift.withResellStars(price)
+                            let updatedUniqueGift = uniqueGift.withResellAmounts(price.flatMap { [$0] })
                             let updatedGift = self.filteredGifts[index].withGift(.unique(updatedUniqueGift))
                             self.filteredGifts[index] = updatedGift
                         }
@@ -2143,6 +2165,28 @@ public final class ProfileGiftsContext {
                     collectionIds: self.collectionIds
                 )
             }
+            
+            public func withCollectionIds(_ collectionIds: [Int32]?) -> StarGift {
+                return StarGift(
+                    gift: self.gift,
+                    reference: self.reference,
+                    fromPeer: self.fromPeer,
+                    date: self.date,
+                    text: self.text,
+                    entities: self.entities,
+                    nameHidden: self.nameHidden,
+                    savedToProfile: self.savedToProfile,
+                    pinnedToTop: self.pinnedToTop,
+                    convertStars: self.convertStars,
+                    canUpgrade: self.canUpgrade,
+                    canExportDate: self.canExportDate,
+                    upgradeStars: self.upgradeStars,
+                    transferStars: self.transferStars,
+                    canTransferDate: self.canTransferDate,
+                    canResaleDate: self.canResaleDate,
+                    collectionIds: collectionIds
+                )
+            }
         }
         
         public enum DataState: Equatable {
@@ -2232,7 +2276,7 @@ public final class ProfileGiftsContext {
         }
     }
     
-    public func buyStarGift(slug: String, peerId: EnginePeer.Id, price: Int64? = nil) -> Signal<Never, BuyStarGiftError> {
+    public func buyStarGift(slug: String, peerId: EnginePeer.Id, price: CurrencyAmount? = nil) -> Signal<Never, BuyStarGiftError> {
         return Signal { subscriber in
             let disposable = MetaDisposable()
             self.impl.with { impl in
@@ -2300,7 +2344,7 @@ public final class ProfileGiftsContext {
         }
     }
     
-    public func updateStarGiftResellPrice(reference: StarGiftReference, price: Int64?, id: Int64? = nil) -> Signal<Never, UpdateStarGiftPriceError> {
+    public func updateStarGiftResellPrice(reference: StarGiftReference, price: CurrencyAmount?, id: Int64? = nil) -> Signal<Never, UpdateStarGiftPriceError> {
         return Signal { subscriber in
             let disposable = MetaDisposable()
             self.impl.with { impl in
@@ -2646,7 +2690,7 @@ func _internal_toggleStarGiftsNotifications(account: Account, peerId: EnginePeer
     }
 }
 
-func _internal_updateStarGiftResalePrice(account: Account, reference: StarGiftReference, price: Int64?) -> Signal<Never, UpdateStarGiftPriceError> {
+func _internal_updateStarGiftResalePrice(account: Account, reference: StarGiftReference, price: CurrencyAmount?) -> Signal<Never, UpdateStarGiftPriceError> {
     return account.postbox.transaction { transaction in
         return reference.apiStarGiftReference(transaction: transaction)
     }
@@ -2655,7 +2699,8 @@ func _internal_updateStarGiftResalePrice(account: Account, reference: StarGiftRe
         guard let starGift else {
             return .complete()
         }
-        return account.network.request(Api.functions.payments.updateStarGiftPrice(stargift: starGift, resellStars: price ?? 0))
+        let apiAmount = (price ?? CurrencyAmount(amount: .zero, currency: .stars)).apiAmount
+        return account.network.request(Api.functions.payments.updateStarGiftPrice(stargift: starGift, resellAmount: apiAmount))
         |> mapError { error -> UpdateStarGiftPriceError in
             if error.errorDescription.hasPrefix("STARGIFT_RESELL_TOO_EARLY_") {
                 let timeout = String(error.errorDescription[error.errorDescription.index(error.errorDescription.startIndex, offsetBy: "STARGIFT_RESELL_TOO_EARLY_".count)...])
@@ -2818,7 +2863,7 @@ private final class ResaleGiftsContextImpl {
                         
                         var mappedGifts: [StarGift] = []
                         for gift in gifts {
-                            if let mappedGift = StarGift(apiStarGift: gift), case let .unique(uniqueGift) = mappedGift, let resellStars = uniqueGift.resellStars, resellStars > 0 {
+                            if let mappedGift = StarGift(apiStarGift: gift), case let .unique(uniqueGift) = mappedGift, let resellAmount = uniqueGift.resellAmounts?.first, resellAmount.amount.value > 0 {
                                 mappedGifts.append(mappedGift)
                             }
                         }
@@ -2882,15 +2927,15 @@ private final class ResaleGiftsContextImpl {
         self.loadMore()
     }
     
-    func buyStarGift(slug: String, peerId: EnginePeer.Id, price: Int64?) -> Signal<Never, BuyStarGiftError> {
-        var listingPrice: Int64?
+    func buyStarGift(slug: String, peerId: EnginePeer.Id, price: CurrencyAmount?) -> Signal<Never, BuyStarGiftError> {
+        var listingPrice: CurrencyAmount?
         if let gift = self.gifts.first(where: { gift in
             if case let .unique(uniqueGift) = gift, uniqueGift.slug == slug {
                 return true
             }
             return false
         }), case let .unique(uniqueGift) = gift {
-            listingPrice = uniqueGift.resellStars
+            listingPrice = uniqueGift.resellAmounts?.first(where: { $0.currency == .stars })
         }
         
         return _internal_buyStarGift(account: self.account, slug: slug, peerId: peerId, price: price ?? listingPrice)
@@ -2913,7 +2958,7 @@ private final class ResaleGiftsContextImpl {
         }
     }
     
-    func updateStarGiftResellPrice(slug: String, price: Int64?) -> Signal<Never, UpdateStarGiftPriceError> {
+    func updateStarGiftResellPrice(slug: String, price: CurrencyAmount?) -> Signal<Never, UpdateStarGiftPriceError> {
         return Signal { [weak self] subscriber in
             guard let self else {
                 return EmptyDisposable
@@ -2936,7 +2981,7 @@ private final class ResaleGiftsContextImpl {
                     }) {
                         if let price {
                             if case let .unique(uniqueGift) = self.gifts[index] {
-                                self.gifts[index] = .unique(uniqueGift.withResellStars(price))
+                                self.gifts[index] = .unique(uniqueGift.withResellAmounts([price]))
                             }
                         } else {
                             self.gifts.remove(at: index)
@@ -3040,7 +3085,7 @@ public final class ResaleGiftsContext {
         }
     }
     
-    public func buyStarGift(slug: String, peerId: EnginePeer.Id, price: Int64? = nil) -> Signal<Never, BuyStarGiftError> {
+    public func buyStarGift(slug: String, peerId: EnginePeer.Id, price: CurrencyAmount? = nil) -> Signal<Never, BuyStarGiftError> {
         return Signal { subscriber in
             let disposable = MetaDisposable()
             self.impl.with { impl in
@@ -3054,7 +3099,7 @@ public final class ResaleGiftsContext {
         }
     }
     
-    public func updateStarGiftResellPrice(slug: String, price: Int64?) -> Signal<Never, UpdateStarGiftPriceError> {
+    public func updateStarGiftResellPrice(slug: String, price: CurrencyAmount?) -> Signal<Never, UpdateStarGiftPriceError> {
         return Signal { subscriber in
             let disposable = MetaDisposable()
             self.impl.with { impl in

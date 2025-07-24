@@ -220,10 +220,10 @@ private func indexToRoman(_ index: Int) -> String {
 }
 
 private func chatInputStateString(attributedString: NSAttributedString) -> NSAttributedString? {
-    let preprocessedString = preprocessLists(attributedString: attributedString)
+    //let preprocessedString = preprocessLists(attributedString: attributedString)
         
-    let string = NSMutableAttributedString(string: preprocessedString.string)
-    preprocessedString.enumerateAttributes(in: NSRange(location: 0, length: attributedString.length), options: [], using: { attributes, range, _ in
+    let string = NSMutableAttributedString(string: attributedString.string)
+    attributedString.enumerateAttributes(in: NSRange(location: 0, length: attributedString.length), options: [], using: { attributes, range, _ in
         if let value = attributes[.link], let url = (value as? URL)?.absoluteString {
             string.addAttribute(ChatTextInputAttributes.textUrl, value: ChatTextInputTextUrlAttribute(url: url), range: range)
         }

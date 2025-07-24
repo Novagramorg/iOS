@@ -483,6 +483,14 @@ public final class TabSelectorComponent: Component {
             }
         }
         
+        public func scrollToStart() {
+            self.setContentOffset(.zero, animated: true)
+        }
+        
+        public func scrollToEnd() {
+            self.setContentOffset(CGPoint(x: self.contentSize.width - self.bounds.width, y: 0.0), animated: true)
+        }
+        
         func update(component: TabSelectorComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
             let selectionColorUpdated = component.colors.selection != self.component?.colors.selection
            

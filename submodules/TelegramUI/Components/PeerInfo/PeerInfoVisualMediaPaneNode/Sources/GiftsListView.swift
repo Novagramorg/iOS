@@ -36,6 +36,7 @@ final class GiftsListView: UIView {
     
     private let canSelect: Bool
     private let ignoreCollection: Int32?
+    private let remainingSelectionCount: Int32
     
     private var dataDisposable: Disposable?
         
@@ -124,13 +125,14 @@ final class GiftsListView: UIView {
     var contextAction: ((ProfileGiftsContext.State.StarGift, UIView, ContextGesture) -> Void)?
     var addToCollection: (() -> Void)?
     
-    init(context: AccountContext, peerId: PeerId, profileGifts: ProfileGiftsContext, giftsCollections: ProfileGiftsCollectionsContext?, canSelect: Bool, ignoreCollection: Int32? = nil) {
+    init(context: AccountContext, peerId: PeerId, profileGifts: ProfileGiftsContext, giftsCollections: ProfileGiftsCollectionsContext?, canSelect: Bool, ignoreCollection: Int32? = nil, remainingSelectionCount: Int32 = 0) {
         self.context = context
         self.peerId = peerId
         self.profileGifts = profileGifts
         self.giftsCollections = giftsCollections
         self.canSelect = canSelect
         self.ignoreCollection = ignoreCollection
+        self.remainingSelectionCount = remainingSelectionCount
                 
         if let value = context.currentAppConfiguration.with({ $0 }).data?["stargifts_pinned_to_top_limit"] as? Double {
             self.maxPinnedCount = Int(value)
@@ -406,6 +408,13 @@ final class GiftsListView: UIView {
         }
         return self.updateScrolling(interactive: interactive, topInset: topInset, visibleBounds: visibleBounds, transition: transition)
     }
+    
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        if let topInset = self.topInset, point.y < topInset {
+            return false
+        }
+        return super.point(inside: point, with: event)
+    }
         
     func updateScrolling(interactive: Bool = false, topInset: CGFloat, visibleBounds: CGRect, transition: ComponentTransition) -> CGFloat {
         self.topInset = topInset
@@ -474,7 +483,7 @@ final class GiftsListView: UIView {
                 
                 let peer: GiftItemComponent.Peer?
                 let subject: GiftItemComponent.Subject
-                var resellPrice: Int64?
+                var resellAmount: CurrencyAmount?
                 
                 switch product.gift {
                 case let .generic(gift):
@@ -489,9 +498,9 @@ final class GiftsListView: UIView {
                 case let .unique(gift):
                     subject = .uniqueGift(gift: gift, price: nil)
                     peer = nil
-                    resellPrice = gift.resellStars
+                    resellAmount = gift.resellAmounts?.first
                     
-                    if let _ = resellPrice {
+                    if let _ = resellAmount {
                         ribbonText = params.presentationData.strings.PeerInfo_Gifts_Sale
                         ribbonFont = .larger
                         ribbonColor = .green
@@ -524,6 +533,7 @@ final class GiftsListView: UIView {
                     itemAlpha = 0.3
                 }
                 
+                //TODO:release
                 let _ = visibleItem.update(
                     transition: itemTransition,
                     component: AnyComponent(
@@ -534,7 +544,7 @@ final class GiftsListView: UIView {
                             peer: peer,
                             subject: subject,
                             ribbon: ribbonText.flatMap { GiftItemComponent.Ribbon(text: $0, font: ribbonFont, color: ribbonColor, outline: ribbonOutline) },
-                            resellPrice: resellPrice,
+                            resellPrice: resellAmount?.amount.value,
                             isHidden: !product.savedToProfile,
                             isSelected: self.selectedItemIds.contains(itemReferenceId),
                             isPinned: !self.canSelect && product.pinnedToTop,
@@ -548,8 +558,10 @@ final class GiftsListView: UIView {
                                     if self.selectedItemIds.contains(itemReferenceId) {
                                         self.selectedItemIds.remove(itemReferenceId)
                                     } else {
-                                        self.selectedItemIds.insert(itemReferenceId)
-                                        self.selectedItemsMap[itemReferenceId] = product
+                                        if self.selectedItemIds.count < self.remainingSelectionCount {
+                                            self.selectedItemIds.insert(itemReferenceId)
+                                            self.selectedItemsMap[itemReferenceId] = product
+                                        }
                                     }
                                     self.selectionUpdated()
                                     self.updateScrolling(transition: .easeInOut(duration: 0.25))
