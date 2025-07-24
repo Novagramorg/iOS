@@ -1451,7 +1451,8 @@ private func infoItems(data: PeerInfoScreenData?, context: AccountContext, prese
                             simple: true,
                             source: .generic,
                             skipTermsOfService: true,
-                            payload: nil
+                            payload: nil,
+                            verifyAgeCompletion: nil
                         )
                     })
                 }
@@ -11363,7 +11364,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
             let canReorderEquals = lhs.2 == rhs.2
             return filterEquals && sortingEquals && canReorderEquals
         })
-        |> map { [weak self, weak pane, weak giftsContext] filter, sorting, canReorder -> ContextController.Items in
+        |> map { [weak pane, weak giftsContext] filter, sorting, canReorder -> ContextController.Items in
             var items: [ContextMenuItem] = []
                         
             if hasVisibility {
@@ -11388,13 +11389,12 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                         }
                     })))
                     
-                    items.append(.action(ContextMenuActionItem(text: strings.PeerInfo_Gifts_ShareCollection, icon: { theme in
-                        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Forward"), color: theme.contextMenu.primaryColor)
-                    }, action: { [weak self] _, f in
-                        f(.default)
-                        //TODO:release
-                        self?.openShareLink(url: "https://t.me/")
-                    })))
+//                    items.append(.action(ContextMenuActionItem(text: strings.PeerInfo_Gifts_ShareCollection, icon: { theme in
+//                        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Forward"), color: theme.contextMenu.primaryColor)
+//                    }, action: { [weak self] _, f in
+//                        f(.default)
+//                        self?.openShareLink(url: "https://t.me/")
+//                    })))
                 }
 
                 if canReorder {
@@ -11426,15 +11426,17 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                 items.append(.separator)
             }
             
-            items.append(.action(ContextMenuActionItem(text: sorting == .date ? strings.PeerInfo_Gifts_SortByValue : strings.PeerInfo_Gifts_SortByDate, icon: { theme in
-                return generateTintedImage(image: UIImage(bundleImageName: sorting == .date ? "Peer Info/SortValue" : "Peer Info/SortDate"), color: theme.contextMenu.primaryColor)
-            }, action: { [weak giftsContext] _, f in
-                f(.default)
-                
-                giftsContext?.updateSorting(sorting == .date ? .value : .date)
-            })))
+            if let pane, case .all = pane.currentCollection {
+                items.append(.action(ContextMenuActionItem(text: sorting == .date ? strings.PeerInfo_Gifts_SortByValue : strings.PeerInfo_Gifts_SortByDate, icon: { theme in
+                    return generateTintedImage(image: UIImage(bundleImageName: sorting == .date ? "Peer Info/SortValue" : "Peer Info/SortDate"), color: theme.contextMenu.primaryColor)
+                }, action: { [weak giftsContext] _, f in
+                    f(.default)
+                    
+                    giftsContext?.updateSorting(sorting == .date ? .value : .date)
+                })))
             
-            items.append(.separator)
+                items.append(.separator)
+            }
             
             let toggleFilter: (ProfileGiftsContext.Filters) -> Void = { [weak giftsContext] value in
                 var updatedFilter = filter

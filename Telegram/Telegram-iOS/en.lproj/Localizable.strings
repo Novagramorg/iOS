@@ -14700,6 +14700,9 @@ Sorry for the inconvenience.";
 
 "AccessDenied.AgeVerificationCamera" = "Telegram needs access to your camera for age verification.\n\nOpen your device's Settings > Privacy > Camera and set Telegram to ON.";
 
+"PeerInfo.Gifts.Collections.All" = "All Gifts";
+"PeerInfo.Gifts.Collections.Add" = "Add Collection";
+
 "PeerInfo.Gifts.AddGiftsButton" = "Add Gifts";
 
 "PeerInfo.Gifts.AddCollection" = "Add Collection";
@@ -14728,6 +14731,12 @@ Sorry for the inconvenience.";
 "PeerInfo.Gifts.EmptyCollection.Text" = "Add some gifts to this collection.";
 "PeerInfo.Gifts.EmptyCollection.Action" = "Add to Collection";
 
+"PeerInfo.Gifts.AddedToCollection" = "The gift has been added to **%@**.";
+"PeerInfo.Gifts.RemovedFromCollection" = "The gift has been removed from **%@**.";
+
+"PeerInfo.Gifts.AddedToCollectionUnique" = "**%1$@** has been added to **%2$@**.";
+"PeerInfo.Gifts.RemovedFromCollectionUnique" = "**%1$@** has been removed from **%2$@**.";
+
 "AddGifts.Title" = "Add Gifts";
 "AddGifts.AddGifts_1" = "Add %@ Gift";
 "AddGifts.AddGifts_any" = "Add %@ Gifts";
@@ -14736,9 +14745,12 @@ Sorry for the inconvenience.";
 "Gift.Options.Gift.BuyLimitReached_any" = "You've already sent %@ of these gifts, and it's the limit.";
 
 "AgeVerification.Title" = "Age Verification";
-"AgeVerification.Text" = "To access this content, you must confirm you are at least **18** years old as required by UK law.\n\nThis is a one-time process using your phone's camera. Your selfie will not be stored by Telegram.";
-"AgeVerification.Text.gb" = "To access this content, you must confirm you are at least **18** years old as required by UK law.\n\nThis is a one-time process using your phone's camera. Your selfie will not be stored by Telegram.";
+"AgeVerification.Text" = "To access this content, you must confirm you are at least **18** years old.\n\nThis is a one-time process using your phone's camera. Your selfie will not be stored by Telegram.";
+"AgeVerification.Text.GB" = "To access this content, you must confirm you are at least **18** years old as required by UK law.\n\nThis is a one-time process using your phone's camera. Your selfie will not be stored by Telegram.";
 "AgeVerification.Verify" = "Verify My Age";
+
+"AgeVerification.Unavailable.Title" = "18+";
+"AgeVerification.Unavailable.Text" = "This media may contain sensitive content suitable only for adults.";
 
 "AgeVerification.Success.Title" = "Age check passed!";
 "AgeVerification.Success.Text" = "You can now view this content.";

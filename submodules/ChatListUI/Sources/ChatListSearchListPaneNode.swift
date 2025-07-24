@@ -3282,7 +3282,8 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
                         simple: true,
                         source: .generic,
                         skipTermsOfService: true,
-                        payload: nil
+                        payload: nil,
+                        verifyAgeCompletion: nil
                     )
                     interaction.dismissSearch()
                 }
@@ -4268,7 +4269,8 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
                                         simple: true,
                                         source: .generic,
                                         skipTermsOfService: true,
-                                        payload: nil
+                                        payload: nil,
+                                        verifyAgeCompletion: nil
                                     )
                                 }
                             }
@@ -4287,7 +4289,8 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
                                 simple: true,
                                 source: .generic,
                                 skipTermsOfService: true,
-                                payload: nil
+                                payload: nil,
+                                verifyAgeCompletion: nil
                             )
                             interaction.dismissSearch()
                         } else {

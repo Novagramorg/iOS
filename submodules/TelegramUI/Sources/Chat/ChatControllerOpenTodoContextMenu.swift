@@ -128,8 +128,7 @@ extension ChatControllerImpl {
                 }
             }
             
-            if "".isEmpty {
-                //TODO:release
+            if canReplyInChat(self.presentationInterfaceState, accountPeerId: self.context.account.peerId) {
                 items.append(.action(ContextMenuActionItem(text: self.presentationData.strings.Chat_Todo_ReplyToItem, icon: { theme in
                     return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Reply"), color: theme.actionSheet.primaryTextColor)
                 }, action: { [weak self] c, _ in
