@@ -473,7 +473,7 @@ func _internal_searchMessages(account: Account, location: SearchMessagesLocation
                 folderId = nil
             }
         
-            if case let .general(scope, _, _, _) = location, case .globalPosts = scope {
+            if case let .general(scope, _, _, _) = location, case let .globalPosts(allowPaidStars) = scope {
                 remoteSearchResult = account.postbox.transaction { transaction -> (Int32, MessageIndex?, Api.InputPeer) in
                     var lowerBound: MessageIndex?
                     if let state = state, let message = state.main.messages.last {
@@ -488,7 +488,10 @@ func _internal_searchMessages(account: Account, location: SearchMessagesLocation
                 |> mapToSignal { (nextRate, lowerBound, inputPeer) in
                     var flags: Int32 = 0
                     flags |= 1 << 1
-                    return account.network.request(Api.functions.channels.searchPosts(flags: flags, hashtag: nil, query: query, offsetRate: nextRate, offsetPeer: inputPeer, offsetId: lowerBound?.id.id ?? 0, limit: limit, allowPaidStars: nil), automaticFloodWait: false)
+                    if allowPaidStars != nil {
+                        flags |= 1 << 2
+                    }
+                    return account.network.request(Api.functions.channels.searchPosts(flags: flags, hashtag: nil, query: query, offsetRate: nextRate, offsetPeer: inputPeer, offsetId: lowerBound?.id.id ?? 0, limit: limit, allowPaidStars: allowPaidStars.flatMap(Int64.init)), automaticFloodWait: false)
                     |> map { result -> (Api.messages.Messages?, Api.messages.Messages?) in
                         return (result, nil)
                     }
