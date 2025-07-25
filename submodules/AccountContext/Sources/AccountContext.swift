@@ -719,6 +719,7 @@ public enum ChatListSearchFilter: Equatable {
     case topics
     case channels
     case apps
+    case globalPosts
     case media
     case downloads
     case links
@@ -740,22 +741,24 @@ public enum ChatListSearchFilter: Equatable {
             return 2
         case .apps:
             return 3
-        case .media:
+        case .globalPosts:
             return 4
-        case .downloads:
+        case .media:
             return 5
-        case .links:
+        case .downloads:
             return 6
-        case .files:
+        case .links:
             return 7
-        case .music:
+        case .files:
             return 8
-        case .voice:
+        case .music:
             return 9
-        case .instantVideo:
+        case .voice:
             return 10
-        case .publicPosts:
+        case .instantVideo:
             return 11
+        case .publicPosts:
+            return 12
         case let .peer(peerId, _, _, _):
             return peerId.id._internalGetInt64Value()
         case let .date(_, date, _):

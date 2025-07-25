@@ -473,38 +473,64 @@ func _internal_searchMessages(account: Account, location: SearchMessagesLocation
                 folderId = nil
             }
         
-            if case let .general(scope, _, _, _) = location {
-                switch scope {
-                case .everywhere:
-                    break
-                case .channels:
-                    flags |= (1 << 1)
-                case .groups:
-                    flags |= (1 << 2)
-                case .privateChats:
-                    flags |= (1 << 3)
+            if case let .general(scope, _, _, _) = location, case .globalPosts = scope {
+                remoteSearchResult = account.postbox.transaction { transaction -> (Int32, MessageIndex?, Api.InputPeer) in
+                    var lowerBound: MessageIndex?
+                    if let state = state, let message = state.main.messages.last {
+                        lowerBound = message.index
+                    }
+                    if let lowerBound = lowerBound, let peer = transaction.getPeer(lowerBound.id.peerId), let inputPeer = apiInputPeer(peer) {
+                        return (state?.main.nextRate ?? 0, lowerBound, inputPeer)
+                    } else {
+                        return (0, lowerBound, .inputPeerEmpty)
+                    }
                 }
-            }
-        
-            let filter: Api.MessagesFilter = tags.flatMap { messageFilterForTagMask($0) } ?? .inputMessagesFilterEmpty
-            remoteSearchResult = account.postbox.transaction { transaction -> (Int32, MessageIndex?, Api.InputPeer) in
-                var lowerBound: MessageIndex?
-                if let state = state, let message = state.main.messages.last {
-                    lowerBound = message.index
+                |> mapToSignal { (nextRate, lowerBound, inputPeer) in
+                    var flags: Int32 = 0
+                    flags |= 1 << 1
+                    return account.network.request(Api.functions.channels.searchPosts(flags: flags, hashtag: nil, query: query, offsetRate: nextRate, offsetPeer: inputPeer, offsetId: lowerBound?.id.id ?? 0, limit: limit, allowPaidStars: nil), automaticFloodWait: false)
+                    |> map { result -> (Api.messages.Messages?, Api.messages.Messages?) in
+                        return (result, nil)
+                    }
+                    |> `catch` { _ -> Signal<(Api.messages.Messages?, Api.messages.Messages?), NoError> in
+                        return .single((nil, nil))
+                    }
                 }
-                if let lowerBound = lowerBound, let peer = transaction.getPeer(lowerBound.id.peerId), let inputPeer = apiInputPeer(peer) {
-                    return (state?.main.nextRate ?? 0, lowerBound, inputPeer)
-                } else {
-                    return (0, lowerBound, .inputPeerEmpty)
+            } else {
+                if case let .general(scope, _, _, _) = location {
+                    switch scope {
+                    case .everywhere:
+                        break
+                    case .channels:
+                        flags |= (1 << 1)
+                    case .groups:
+                        flags |= (1 << 2)
+                    case .privateChats:
+                        flags |= (1 << 3)
+                    case .globalPosts:
+                        break
+                    }
                 }
-            }
-            |> mapToSignal { (nextRate, lowerBound, inputPeer) in
-                return account.network.request(Api.functions.messages.searchGlobal(flags: flags, folderId: folderId, q: query, filter: filter, minDate: minDate ?? 0, maxDate: maxDate ?? (Int32.max - 1), offsetRate: nextRate, offsetPeer: inputPeer, offsetId: lowerBound?.id.id ?? 0, limit: limit), automaticFloodWait: false)
-                |> map { result -> (Api.messages.Messages?, Api.messages.Messages?) in
-                    return (result, nil)
+                let filter: Api.MessagesFilter = tags.flatMap { messageFilterForTagMask($0) } ?? .inputMessagesFilterEmpty
+                remoteSearchResult = account.postbox.transaction { transaction -> (Int32, MessageIndex?, Api.InputPeer) in
+                    var lowerBound: MessageIndex?
+                    if let state = state, let message = state.main.messages.last {
+                        lowerBound = message.index
+                    }
+                    if let lowerBound = lowerBound, let peer = transaction.getPeer(lowerBound.id.peerId), let inputPeer = apiInputPeer(peer) {
+                        return (state?.main.nextRate ?? 0, lowerBound, inputPeer)
+                    } else {
+                        return (0, lowerBound, .inputPeerEmpty)
+                    }
                 }
-                |> `catch` { _ -> Signal<(Api.messages.Messages?, Api.messages.Messages?), NoError> in
-                    return .single((nil, nil))
+                |> mapToSignal { (nextRate, lowerBound, inputPeer) in
+                    return account.network.request(Api.functions.messages.searchGlobal(flags: flags, folderId: folderId, q: query, filter: filter, minDate: minDate ?? 0, maxDate: maxDate ?? (Int32.max - 1), offsetRate: nextRate, offsetPeer: inputPeer, offsetId: lowerBound?.id.id ?? 0, limit: limit), automaticFloodWait: false)
+                    |> map { result -> (Api.messages.Messages?, Api.messages.Messages?) in
+                        return (result, nil)
+                    }
+                    |> `catch` { _ -> Signal<(Api.messages.Messages?, Api.messages.Messages?), NoError> in
+                        return .single((nil, nil))
+                    }
                 }
             }
         case let .sentMedia(tags):
@@ -594,7 +620,7 @@ func _internal_searchHashtagPosts(account: Account, hashtag: String, state: Sear
         }
     }
     |> mapToSignal { (nextRate, lowerBound, inputPeer) in
-        return account.network.request(Api.functions.channels.searchPosts(hashtag: hashtag, offsetRate: nextRate, offsetPeer: inputPeer, offsetId: lowerBound?.id.id ?? 0, limit: limit), automaticFloodWait: false)
+        return account.network.request(Api.functions.channels.searchPosts(flags: 1 << 0, hashtag: hashtag, query: nil, offsetRate: nextRate, offsetPeer: inputPeer, offsetId: lowerBound?.id.id ?? 0, limit: limit, allowPaidStars: nil), automaticFloodWait: false)
         |> map { result -> (Api.messages.Messages?, Api.messages.Messages?) in
             return (result, nil)
         }
