@@ -527,6 +527,7 @@ private final class PeerInfoPendingPane {
         chatLocation: ChatLocation,
         chatLocationContextHolder: Atomic<ChatLocationContextHolder?>,
         sharedMediaFromForumTopic: (EnginePeer.Id, Int64)?,
+        initialStoryFolderId: Int64?,
         key: PeerInfoPaneKey,
         hasBecomeReady: @escaping (PeerInfoPaneKey) -> Void,
         parentController: ViewController?,
@@ -609,7 +610,7 @@ private final class PeerInfoPendingPane {
                 listContext = data.storyListContext
             }
             
-            let visualPaneNode = PeerInfoStoryPaneNode(context: context, scope: scope, captureProtected: captureProtected, isProfileEmbedded: true, canManageStories: canManage, navigationController: chatControllerInteraction.navigationController, listContext: listContext)
+            let visualPaneNode = PeerInfoStoryPaneNode(context: context, scope: scope, captureProtected: captureProtected, isProfileEmbedded: true, canManageStories: canManage, navigationController: chatControllerInteraction.navigationController, listContext: listContext, initialStoryFolderId: initialStoryFolderId)
             paneNode = visualPaneNode
             visualPaneNode.openCurrentDate = {
                 openMediaCalendar()
@@ -728,6 +729,7 @@ final class PeerInfoPaneContainerNode: ASDisplayNode, ASGestureRecognizerDelegat
     private var currentPanes: [PeerInfoPaneKey: PeerInfoPaneWrapper] = [:]
     private var pendingPanes: [PeerInfoPaneKey: PeerInfoPendingPane] = [:]
     private var shouldFadeIn = false
+    private var initialStoryFolderId: Int64?
     
     private var transitionFraction: CGFloat = 0.0
     
@@ -753,7 +755,7 @@ final class PeerInfoPaneContainerNode: ASDisplayNode, ASGestureRecognizerDelegat
     
     private let initialPaneKey: PeerInfoPaneKey?
     
-    init(context: AccountContext, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)?, peerId: PeerId, chatLocation: ChatLocation, sharedMediaFromForumTopic: (EnginePeer.Id, Int64)?, chatLocationContextHolder: Atomic<ChatLocationContextHolder?>, isMediaOnly: Bool, initialPaneKey: PeerInfoPaneKey?) {
+    init(context: AccountContext, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)?, peerId: PeerId, chatLocation: ChatLocation, sharedMediaFromForumTopic: (EnginePeer.Id, Int64)?, chatLocationContextHolder: Atomic<ChatLocationContextHolder?>, isMediaOnly: Bool, initialPaneKey: PeerInfoPaneKey?, initialStoryFolderId: Int64?) {
         self.context = context
         self.updatedPresentationData = updatedPresentationData
         self.peerId = peerId
@@ -762,6 +764,7 @@ final class PeerInfoPaneContainerNode: ASDisplayNode, ASGestureRecognizerDelegat
         self.sharedMediaFromForumTopic = sharedMediaFromForumTopic
         self.isMediaOnly = isMediaOnly
         self.initialPaneKey = initialPaneKey
+        self.initialStoryFolderId = initialStoryFolderId
         
         self.additionalBackgroundNode = ASDisplayNode()
         
@@ -1088,7 +1091,7 @@ final class PeerInfoPaneContainerNode: ASDisplayNode, ASGestureRecognizerDelegat
                 }
             }
         }
-        if let pendingSwitchToPaneKey = self.pendingSwitchToPaneKey {
+        if let pendingSwitchToPaneKey = self.pendingSwitchToPaneKey, availablePanes.contains(pendingSwitchToPaneKey) {
             if self.currentPanes[pendingSwitchToPaneKey] == nil && self.pendingPanes[pendingSwitchToPaneKey] == nil {
                 if !requiredPendingKeys.contains(pendingSwitchToPaneKey) {
                     requiredPendingKeys.append(pendingSwitchToPaneKey)
@@ -1099,6 +1102,13 @@ final class PeerInfoPaneContainerNode: ASDisplayNode, ASGestureRecognizerDelegat
         for key in requiredPendingKeys {
             if self.pendingPanes[key] == nil, let data {
                 var leftScope = false
+                var initialStoryFolderId: Int64?
+                if case .stories = key {
+                    if let initialStoryFolderIdValue = self.initialStoryFolderId {
+                        self.initialStoryFolderId = nil
+                        initialStoryFolderId = initialStoryFolderIdValue
+                    }
+                }
                 let pane = PeerInfoPendingPane(
                     context: self.context,
                     updatedPresentationData: self.updatedPresentationData,
@@ -1117,6 +1127,7 @@ final class PeerInfoPaneContainerNode: ASDisplayNode, ASGestureRecognizerDelegat
                     chatLocation: self.chatLocation,
                     chatLocationContextHolder: self.chatLocationContextHolder,
                     sharedMediaFromForumTopic: self.sharedMediaFromForumTopic,
+                    initialStoryFolderId: initialStoryFolderId,
                     key: key,
                     hasBecomeReady: { [weak self] key in
                         let apply: () -> Void = {
@@ -1352,7 +1363,7 @@ final class PeerInfoPaneContainerNode: ASDisplayNode, ASGestureRecognizerDelegat
         
         var removeKeys: [PeerInfoPaneKey] = []
         for (key, paneNode) in self.pendingPanes {
-            if !availablePanes.contains(key) {
+            if !availablePanes.contains(key) && self.pendingSwitchToPaneKey != key {
                 removeKeys.append(key)
                 paneNode.pane.node.removeFromSupernode()
             }
@@ -1363,7 +1374,7 @@ final class PeerInfoPaneContainerNode: ASDisplayNode, ASGestureRecognizerDelegat
         removeKeys.removeAll()
         
         for (key, paneNode) in self.currentPanes {
-            if !availablePanes.contains(key) {
+            if !availablePanes.contains(key) && self.pendingSwitchToPaneKey != key {
                 removeKeys.append(key)
                 paneNode.node.removeFromSupernode()
             }

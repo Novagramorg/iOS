@@ -3964,6 +3964,7 @@ private func peerInfoControllerImpl(context: AccountContext, updatedPresentation
         var isMyProfile = false
         var switchToGifts = false
         var switchToGroupsInCommon = false
+        var switchToStoryFolder: Int64?
         
         switch mode {
         case let .nearbyPeer(distance):
@@ -3989,10 +3990,12 @@ private func peerInfoControllerImpl(context: AccountContext, updatedPresentation
             switchToGroupsInCommon = true
         case let .monoforum(peerId):
             sharedMediaFromForumTopic = (peerId, peer.id.toInt64())
+        case let .storyAlbum(id):
+            switchToStoryFolder = id
         default:
             break
         }
-        return PeerInfoScreenImpl(context: context, updatedPresentationData: updatedPresentationData, peerId: peer.id, avatarInitiallyExpanded: avatarInitiallyExpanded, isOpenedFromChat: isOpenedFromChat, nearbyPeerDistance: nearbyPeerDistance, reactionSourceMessageId: reactionSourceMessageId, callMessages: callMessages, isMyProfile: isMyProfile, hintGroupInCommon: hintGroupInCommon, forumTopicThread: forumTopicThread, sharedMediaFromForumTopic: sharedMediaFromForumTopic, switchToGifts: switchToGifts, switchToGroupsInCommon: switchToGroupsInCommon)
+        return PeerInfoScreenImpl(context: context, updatedPresentationData: updatedPresentationData, peerId: peer.id, avatarInitiallyExpanded: avatarInitiallyExpanded, isOpenedFromChat: isOpenedFromChat, nearbyPeerDistance: nearbyPeerDistance, reactionSourceMessageId: reactionSourceMessageId, callMessages: callMessages, isMyProfile: isMyProfile, hintGroupInCommon: hintGroupInCommon, forumTopicThread: forumTopicThread, sharedMediaFromForumTopic: sharedMediaFromForumTopic, switchToGifts: switchToGifts, switchToGroupsInCommon: switchToGroupsInCommon, switchToStoryFolder: switchToStoryFolder)
     } else if peer is TelegramSecretChat {
         return PeerInfoScreenImpl(context: context, updatedPresentationData: updatedPresentationData, peerId: peer.id, avatarInitiallyExpanded: avatarInitiallyExpanded, isOpenedFromChat: isOpenedFromChat, nearbyPeerDistance: nil, reactionSourceMessageId: nil, callMessages: [])
     }
