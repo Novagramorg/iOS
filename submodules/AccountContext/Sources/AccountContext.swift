@@ -330,6 +330,7 @@ public enum ResolvedUrl {
     case messageLink(link: TelegramResolvedMessageLink?)
     case stars
     case shareStory(Int64)
+    case storyFolder(peerId: PeerId, id: Int64)
 }
 
 public enum ResolveUrlResult {
@@ -667,6 +668,7 @@ public enum PeerInfoControllerMode {
     case myProfileGifts
     case groupsInCommon
     case monoforum(EnginePeer.Id)
+    case storyAlbum(id: Int64)
 }
 
 public enum ContactListActionItemInlineIconPosition {
