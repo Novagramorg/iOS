@@ -345,6 +345,8 @@ public final class ChatListSearchContainerNode: SearchDisplayControllerContentNo
                 key = .channels
             case .apps:
                 key = .apps
+            case .globalPosts:
+                key = .globalPosts
             case .media:
                 key = .media
             case .downloads:
@@ -388,7 +390,7 @@ public final class ChatListSearchContainerNode: SearchDisplayControllerContentNo
                 switch filter {
                 case let .filter(filter):
                     switch filter {
-                    case .downloads, .channels, .apps:
+                    case .downloads, .channels, .apps, .globalPosts:
                         return false
                     default:
                         return true
@@ -675,6 +677,8 @@ public final class ChatListSearchContainerNode: SearchDisplayControllerContentNo
             filterKey = .channels
         case .apps:
             filterKey = .apps
+        case .globalPosts:
+            filterKey = .globalPosts
         case .media:
             filterKey = .media
         case .downloads:
