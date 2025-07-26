@@ -498,7 +498,7 @@ final class GiftsListView: UIView {
                 case let .unique(gift):
                     subject = .uniqueGift(gift: gift, price: nil)
                     peer = nil
-                    resellAmount = gift.resellAmounts?.first
+                    resellAmount = gift.resellAmounts?.first(where: { $0.currency == .stars })
                     
                     if let _ = resellAmount {
                         ribbonText = params.presentationData.strings.PeerInfo_Gifts_Sale

@@ -420,7 +420,7 @@ final class GiftOptionsScreenComponent: Component {
                         case let .generic(gift):
                             if let availability = gift.availability, availability.remains == 0, let minResaleStars = availability.minResaleStars {
                                 let priceString = presentationStringsFormattedNumber(Int32(minResaleStars), environment.dateTimeFormat.groupingSeparator)
-                                if let resaleConfiguration = self.resaleConfiguration, minResaleStars == resaleConfiguration.starGiftResaleMaxAmount || availability.resale == 1 {
+                                if let resaleConfiguration = self.resaleConfiguration, minResaleStars == resaleConfiguration.starGiftResaleMaxStarsAmount || availability.resale == 1 {
                                     subject = .starGift(gift: gift, price: "# \(priceString)")
                                 } else {
                                     subject = .starGift(gift: gift, price: "# \(priceString)+")

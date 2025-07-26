@@ -61,6 +61,7 @@ private final class SheetContent: CombinedComponent {
         let amountSection = Child(ListSectionComponent.self)
         let amountAdditionalLabel = Child(MultilineTextComponent.self)
         let timestampSection = Child(ListSectionComponent.self)
+        let onlyTonSection = Child(ListSectionComponent.self)
         let button = Child(ButtonComponent.self)
         let balanceTitle = Child(MultilineTextComponent.self)
         let balanceValue = Child(MultilineTextComponent.self)
@@ -199,11 +200,19 @@ private final class SheetContent: CombinedComponent {
                 maxAmount = withdrawConfiguration.maxPaidMediaAmount.flatMap { StarsAmount(value: $0, nanos: 0) }
             case let .starGiftResell(_, update, _):
                 titleString = update ? environment.strings.Stars_SellGift_EditTitle : environment.strings.Stars_SellGift_Title
-                amountTitle = environment.strings.Stars_SellGift_AmountTitle
                 amountPlaceholder = environment.strings.Stars_SellGift_AmountPlaceholder
                 
-                minAmount = StarsAmount(value: resaleConfiguration.starGiftResaleMinAmount, nanos: 0)
-                maxAmount = StarsAmount(value: resaleConfiguration.starGiftResaleMaxAmount, nanos: 0)
+                switch state.currency {
+                case .stars:
+                    amountTitle = environment.strings.Stars_SellGift_AmountTitle
+                    minAmount = StarsAmount(value: resaleConfiguration.starGiftResaleMinStarsAmount, nanos: 0)
+                    maxAmount = StarsAmount(value: resaleConfiguration.starGiftResaleMaxStarsAmount, nanos: 0)
+                case .ton:
+                    //TODO:localize
+                    amountTitle = "PRICE IN TON"
+                    minAmount = StarsAmount(value: resaleConfiguration.starGiftResaleMinTonAmount, nanos: 0)
+                    maxAmount = StarsAmount(value: resaleConfiguration.starGiftResaleMaxTonAmount, nanos: 0)
+                }
             case let .paidMessages(_, minAmountValue, _, _, _):
                 titleString = environment.strings.Stars_SendMessage_AdjustmentTitle
                 amountTitle = environment.strings.Stars_SendMessage_AdjustmentSectionHeader
@@ -441,17 +450,32 @@ private final class SheetContent: CombinedComponent {
                 ))
             case .starGiftResell:
                 let amountInfoString: NSAttributedString
-                if let value = state.amount?.value, value > 0 {
-                    let starsValue = Int32(floor(Float(value) * Float(resaleConfiguration.starGiftCommissionPermille) / 1000.0))
-                    let starsString = environment.strings.Stars_SellGift_AmountInfo_Stars(starsValue)
-                    amountInfoString = NSAttributedString(attributedString: parseMarkdownIntoAttributedString(environment.strings.Stars_SellGift_AmountInfo(starsString).string, attributes: amountMarkdownAttributes, textAlignment: .natural))
-                    
-                    if let usdWithdrawRate = withdrawConfiguration.usdWithdrawRate {
-                        let usdRate = Double(usdWithdrawRate) / 1000.0 / 100.0
-                        amountRightLabel = "≈\(formatTonUsdValue(Int64(starsValue), divide: false, rate: usdRate, dateTimeFormat: environment.dateTimeFormat))"
+                switch state.currency {
+                case .stars:
+                    if let value = state.amount?.value, value > 0 {
+                        let starsValue = Int32(floor(Float(value) * Float(resaleConfiguration.starGiftCommissionStarsPermille) / 1000.0))
+                        let starsString = environment.strings.Stars_SellGift_AmountInfo_Stars(starsValue)
+                        amountInfoString = NSAttributedString(attributedString: parseMarkdownIntoAttributedString(environment.strings.Stars_SellGift_AmountInfo(starsString).string, attributes: amountMarkdownAttributes, textAlignment: .natural))
+                        
+                        if let usdWithdrawRate = withdrawConfiguration.usdWithdrawRate {
+                            let usdRate = Double(usdWithdrawRate) / 1000.0 / 100.0
+                            amountRightLabel = "≈\(formatTonUsdValue(Int64(starsValue), divide: false, rate: usdRate, dateTimeFormat: environment.dateTimeFormat))"
+                        }
+                    } else {
+                        amountInfoString = NSAttributedString(attributedString: parseMarkdownIntoAttributedString(environment.strings.Stars_SellGift_AmountInfo("\(resaleConfiguration.starGiftCommissionStarsPermille / 10)%").string, attributes: amountMarkdownAttributes, textAlignment: .natural))
                     }
-                } else {
-                    amountInfoString = NSAttributedString(attributedString: parseMarkdownIntoAttributedString(environment.strings.Stars_SellGift_AmountInfo("\(resaleConfiguration.starGiftCommissionPermille / 10)%").string, attributes: amountMarkdownAttributes, textAlignment: .natural))
+                case .ton:
+                    if let value = state.amount?.value, value > 0 {
+                        let tonValue = Int64(Float(value) * Float(resaleConfiguration.starGiftCommissionTonPermille) / 1000.0)
+                        let tonString = formatTonAmountText(tonValue, dateTimeFormat: environment.dateTimeFormat) + " TON"
+                        amountInfoString = NSAttributedString(attributedString: parseMarkdownIntoAttributedString(environment.strings.Stars_SellGift_AmountInfo(tonString).string, attributes: amountMarkdownAttributes, textAlignment: .natural))
+                        
+                        if let tonUsdRate = withdrawConfiguration.tonUsdRate {
+                            amountRightLabel = "≈\(formatTonUsdValue(tonValue, divide: true, rate: tonUsdRate, dateTimeFormat: environment.dateTimeFormat))"
+                        }
+                    } else {
+                        amountInfoString = NSAttributedString(attributedString: parseMarkdownIntoAttributedString(environment.strings.Stars_SellGift_AmountInfo("\(resaleConfiguration.starGiftCommissionTonPermille / 10)%").string, attributes: amountMarkdownAttributes, textAlignment: .natural))
+                    }
                 }
                 amountFooter = AnyComponent(MultilineTextComponent(
                     text: .plain(amountInfoString),
@@ -570,7 +594,77 @@ private final class SheetContent: CombinedComponent {
                     .position(CGPoint(x: context.availableSize.width - amountAdditionalLabel.size.width / 2.0 - sideInset - 16.0, y: contentSize.height - amountAdditionalLabel.size.height / 2.0)))
             }
             
-            if case let .suggestedPost(mode, _, _, _) = component.mode {
+            if case .starGiftResell = component.mode {
+                contentSize.height += 24.0
+                
+                //TODO:localize
+                let onlyTonFooterString = NSAttributedString(attributedString: parseMarkdownIntoAttributedString("If the buyer pays you in TON, there's no risk of refunds, unlike with Stars payments.", attributes: amountMarkdownAttributes, textAlignment: .natural))
+                let onlyTonFooter = AnyComponent(MultilineTextComponent(
+                    text: .plain(onlyTonFooterString),
+                    maximumNumberOfLines: 0
+                ))
+                
+                let onlyTonSection = onlyTonSection.update(
+                    component: ListSectionComponent(
+                        theme: theme,
+                        header: nil,
+                        footer: onlyTonFooter,
+                        items: [AnyComponentWithIdentity(
+                            id: "switch",
+                            component: AnyComponent(ListActionItemComponent(
+                                theme: theme,
+                                title: AnyComponent(VStack([
+                                    AnyComponentWithIdentity(id: AnyHashable(0), component: AnyComponent(MultilineTextComponent(
+                                        text: .plain(NSAttributedString(
+                                            string: "Only Accept TON",
+                                            font: Font.regular(presentationData.listsFontSize.baseDisplaySize),
+                                            textColor: theme.list.itemPrimaryTextColor
+                                        )),
+                                        maximumNumberOfLines: 1
+                                    ))),
+                                ], alignment: .left, spacing: 2.0)),
+                                accessory: .toggle(ListActionItemComponent.Toggle(style: .regular, isOn: state.currency == .ton, action: { [weak state] _ in
+                                    guard let state else {
+                                        return
+                                    }
+                                    if state.currency == .stars {
+                                        if let amount = state.amount, let tonUsdRate = withdrawConfiguration.tonUsdRate, let usdWithdrawRate = withdrawConfiguration.usdWithdrawRate {
+                                            let usdRate = usdWithdrawRate / 1000.0 / 100.0
+                                            let usdValue = Double(amount.value) * usdRate
+                                            let tonValue = usdValue / tonUsdRate * 1000000000.0
+                                            state.amount = StarsAmount(value: max(min(Int64(tonValue), resaleConfiguration.starGiftResaleMaxTonAmount), resaleConfiguration.starGiftResaleMinTonAmount), nanos: 0)
+                                        } else {
+                                            state.amount = StarsAmount(value: 0, nanos: 0)
+                                        }
+                                        state.currency = .ton
+                                    } else {
+                                        if let amount = state.amount, let tonUsdRate = withdrawConfiguration.tonUsdRate, let usdWithdrawRate = withdrawConfiguration.usdWithdrawRate {
+                                            let usdRate = usdWithdrawRate / 1000.0 / 100.0
+                                            let usdValue = Double(amount.value) / 1000000000 * tonUsdRate
+                                            let starsValue = usdValue / usdRate
+                                            state.amount = StarsAmount(value: max(min(Int64(starsValue), resaleConfiguration.starGiftResaleMaxStarsAmount), resaleConfiguration.starGiftResaleMinStarsAmount), nanos: 0)
+                                        } else {
+                                            state.amount = StarsAmount(value: 0, nanos: 0)
+                                        }
+                                        state.currency = .stars
+                                    }
+                                    state.updated(transition: .spring(duration: 0.4))
+                                })),
+                                action: nil
+                            ))
+                        )]
+                    ),
+                    environment: {},
+                    availableSize: CGSize(width: context.availableSize.width - sideInset * 2.0, height: .greatestFiniteMagnitude),
+                    transition: context.transition
+                )
+                context.add(onlyTonSection
+                    .position(CGPoint(x: context.availableSize.width / 2.0, y: contentSize.height + onlyTonSection.size.height / 2.0))
+                    .clipsToBounds(true)
+                    .cornerRadius(10.0)
+                )
+                contentSize.height += onlyTonSection.size.height
+            } else if case let .suggestedPost(mode, _, _, _) = component.mode {
                 contentSize.height += 24.0
                 
                 let footerString: String
@@ -676,7 +770,17 @@ private final class SheetContent: CombinedComponent {
                 buttonString = environment.strings.Stars_PaidContent_Create
             } else if case .starGiftResell = component.mode {
                 if let amount = state.amount, amount.value > 0 {
-                    buttonString = "\(environment.strings.Stars_SellGift_SellFor)  # \(presentationStringsFormattedNumber(amount, environment.dateTimeFormat.groupingSeparator))"
+                    let currencySymbol: String
+                    let currencyAmount: String
+                    switch state.currency {
+                    case .stars:
+                        currencySymbol = "#"
+                        currencyAmount = presentationStringsFormattedNumber(amount, environment.dateTimeFormat.groupingSeparator)
+                    case .ton:
+                        currencySymbol = "$"
+                        currencyAmount = formatTonAmountText(amount.value, dateTimeFormat: environment.dateTimeFormat)
+                    }
+                    buttonString = "\(environment.strings.Stars_SellGift_SellFor)  \(currencySymbol) \(currencyAmount)"
                 } else {
                     buttonString = environment.strings.Stars_SellGift_Sell
                 }
@@ -773,7 +877,7 @@ private final class SheetContent: CombinedComponent {
                                 case let .reaction(_, completion):
                                     completion(amount.value)
                                 case let .starGiftResell(_, _, completion):
-                                    completion(amount.value)
+                                    completion(CurrencyAmount(amount: amount, currency: state.currency))
                                 case let .paidMessages(_, _, _, _, completion):
                                     completion(amount.value)
                                 case let .suggestedPost(mode, _, _, completion):
@@ -793,8 +897,8 @@ private final class SheetContent: CombinedComponent {
                                                     return
                                                 }
                                                 let _ = (state.context.engine.payments.starsTopUpOptions()
-                                                         |> take(1)
-                                                         |> deliverOnMainQueue).startStandalone(next: { [weak controller, weak state] options in
+                                                |> take(1)
+                                                |> deliverOnMainQueue).startStandalone(next: { [weak controller, weak state] options in
                                                     guard let controller, let state else {
                                                         return
                                                     }
@@ -942,8 +1046,16 @@ private final class SheetContent: CombinedComponent {
             
             if case let .starGiftResell(giftToMatch, update, _) = self.mode {
                 if update {
-                    if let resellStars = giftToMatch.resellAmounts?.first(where: { $0.currency == .stars }) {
-                        self.amount = resellStars.amount
+                    if giftToMatch.resellForTonOnly {
+                        if let resellStars = giftToMatch.resellAmounts?.first(where: { $0.currency == .ton }) {
+                            self.amount = resellStars.amount
+                        }
+                        self.currency = .ton
+                    } else {
+                        if let resellStars = giftToMatch.resellAmounts?.first(where: { $0.currency == .stars }) {
+                            self.amount = resellStars.amount
+                        }
+                        self.currency = .stars
                     }
                 } else {
                     let _ = (context.engine.payments.cachedStarGifts()
@@ -1077,7 +1189,7 @@ public final class StarsWithdrawScreen: ViewControllerComponentContainer {
         case accountWithdraw(completion: (Int64) -> Void)
         case paidMedia(Int64?, completion: (Int64) -> Void)
         case reaction(Int64?, completion: (Int64) -> Void)
-        case starGiftResell(StarGift.UniqueGift, Bool, completion: (Int64) -> Void)
+        case starGiftResell(StarGift.UniqueGift, Bool, completion: (CurrencyAmount) -> Void)
         case paidMessages(current: Int64, minValue: Int64, fractionAfterCommission: Int, kind: StarsWithdrawalScreenSubject.PaidMessageKind, completion: (Int64) -> Void)
         case suggestedPost(mode: SuggestedPostMode, price: CurrencyAmount, timestamp: Int32?, completion: (CurrencyAmount, Int32?) -> Void)
     }

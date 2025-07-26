@@ -701,6 +701,22 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
                 releasedBy: self.releasedBy
             )
         }
+        
+        public func withResellForTonOnly(_ resellForTonOnly: Bool) -> UniqueGift {
+            return UniqueGift(
+                id: self.id,
+                title: self.title,
+                number: self.number,
+                slug: self.slug,
+                owner: self.owner,
+                attributes: self.attributes,
+                availability: self.availability,
+                giftAddress: self.giftAddress,
+                resellAmounts: self.resellAmounts,
+                resellForTonOnly: resellForTonOnly,
+                releasedBy: self.releasedBy
+            )
+        }
     }
     
     public enum DecodingError: Error {
@@ -1828,7 +1844,7 @@ private final class ProfileGiftsContextImpl {
                         return false
                     }) {
                         if case let .unique(uniqueGift) = self.gifts[index].gift {
-                            let updatedUniqueGift = uniqueGift.withResellAmounts(price.flatMap { [$0] })
+                            let updatedUniqueGift = uniqueGift.withResellAmounts(price.flatMap { [$0] }).withResellForTonOnly(price?.currency == .ton)
                             let updatedGift = self.gifts[index].withGift(.unique(updatedUniqueGift))
                             self.gifts[index] = updatedGift
                         }
@@ -1851,7 +1867,7 @@ private final class ProfileGiftsContextImpl {
                         return false
                     }) {
                         if case let .unique(uniqueGift) = self.filteredGifts[index].gift {
-                            let updatedUniqueGift = uniqueGift.withResellAmounts(price.flatMap { [$0] })
+                            let updatedUniqueGift = uniqueGift.withResellAmounts(price.flatMap { [$0] }).withResellForTonOnly(price?.currency == .ton)
                             let updatedGift = self.filteredGifts[index].withGift(.unique(updatedUniqueGift))
                             self.filteredGifts[index] = updatedGift
                         }
@@ -2981,7 +2997,7 @@ private final class ResaleGiftsContextImpl {
                     }) {
                         if let price {
                             if case let .unique(uniqueGift) = self.gifts[index] {
-                                self.gifts[index] = .unique(uniqueGift.withResellAmounts([price]))
+                                self.gifts[index] = .unique(uniqueGift.withResellAmounts([price]).withResellForTonOnly(price.currency == .ton))
                             }
                         } else {
                             self.gifts.remove(at: index)
