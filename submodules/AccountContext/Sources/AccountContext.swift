@@ -1277,7 +1277,7 @@ public protocol SharedAccountContext: AnyObject {
     func makeStarsAmountScreen(context: AccountContext, initialValue: Int64?, completion: @escaping (Int64) -> Void) -> ViewController
     func makeStarsWithdrawalScreen(context: AccountContext, stats: StarsRevenueStats, completion: @escaping (Int64) -> Void) -> ViewController
     func makeStarsWithdrawalScreen(context: AccountContext, subject: StarsWithdrawalScreenSubject) -> ViewController
-    func makeStarGiftResellScreen(context: AccountContext, gift: StarGift.UniqueGift, update: Bool, completion: @escaping (Int64) -> Void) -> ViewController
+    func makeStarGiftResellScreen(context: AccountContext, gift: StarGift.UniqueGift, update: Bool, completion: @escaping (CurrencyAmount) -> Void) -> ViewController
     func makeStarsGiftScreen(context: AccountContext, message: EngineMessage) -> ViewController
     func makeStarsGiveawayBoostScreen(context: AccountContext, peerId: EnginePeer.Id, boost: ChannelBoostersContext.State.Boost) -> ViewController
     func makeStarsIntroScreen(context: AccountContext) -> ViewController
@@ -1553,9 +1553,12 @@ public struct StarsSubscriptionConfiguration {
             paidMessageMaxAmount: 10000,
             paidMessageCommissionPermille: 850,
             paidMessagesAvailable: false,
-            starGiftResaleMinAmount: 125,
-            starGiftResaleMaxAmount: 3500,
-            starGiftCommissionPermille: 80,
+            starGiftResaleMinStarsAmount: 125,
+            starGiftResaleMaxStarsAmount: 100000,
+            starGiftCommissionStarsPermille: 800,
+            starGiftResaleMinTonAmount: 10000000,
+            starGiftResaleMaxTonAmount: 1000000000000000,
+            starGiftCommissionTonPermille: 800,
             channelMessageSuggestionStarsCommissionPermille: 850,
             channelMessageSuggestionTonCommissionPermille: 850,
             channelMessageSuggestionMaxStarsAmount: 10000,
@@ -1570,9 +1573,12 @@ public struct StarsSubscriptionConfiguration {
     public let paidMessageMaxAmount: Int64
     public let paidMessageCommissionPermille: Int32
     public let paidMessagesAvailable: Bool
-    public let starGiftResaleMinAmount: Int64
-    public let starGiftResaleMaxAmount: Int64
-    public let starGiftCommissionPermille: Int32
+    public let starGiftResaleMinStarsAmount: Int64
+    public let starGiftResaleMaxStarsAmount: Int64
+    public let starGiftCommissionStarsPermille: Int32
+    public let starGiftResaleMinTonAmount: Int64
+    public let starGiftResaleMaxTonAmount: Int64
+    public let starGiftCommissionTonPermille: Int32
     public let channelMessageSuggestionStarsCommissionPermille: Int32
     public let channelMessageSuggestionTonCommissionPermille: Int32
     public let channelMessageSuggestionMaxStarsAmount: Int64
@@ -1586,9 +1592,12 @@ public struct StarsSubscriptionConfiguration {
         paidMessageMaxAmount: Int64,
         paidMessageCommissionPermille: Int32,
         paidMessagesAvailable: Bool,
-        starGiftResaleMinAmount: Int64,
-        starGiftResaleMaxAmount: Int64,
-        starGiftCommissionPermille: Int32,
+        starGiftResaleMinStarsAmount: Int64,
+        starGiftResaleMaxStarsAmount: Int64,
+        starGiftCommissionStarsPermille: Int32,
+        starGiftResaleMinTonAmount: Int64,
+        starGiftResaleMaxTonAmount: Int64,
+        starGiftCommissionTonPermille: Int32,
         channelMessageSuggestionStarsCommissionPermille: Int32,
         channelMessageSuggestionTonCommissionPermille: Int32,
         channelMessageSuggestionMaxStarsAmount: Int64,
@@ -1601,9 +1610,12 @@ public struct StarsSubscriptionConfiguration {
         self.paidMessageMaxAmount = paidMessageMaxAmount
         self.paidMessageCommissionPermille = paidMessageCommissionPermille
         self.paidMessagesAvailable = paidMessagesAvailable
-        self.starGiftResaleMinAmount = starGiftResaleMinAmount
-        self.starGiftResaleMaxAmount = starGiftResaleMaxAmount
-        self.starGiftCommissionPermille = starGiftCommissionPermille
+        self.starGiftResaleMinStarsAmount = starGiftResaleMinStarsAmount
+        self.starGiftResaleMaxStarsAmount = starGiftResaleMaxStarsAmount
+        self.starGiftCommissionStarsPermille = starGiftCommissionStarsPermille
+        self.starGiftResaleMinTonAmount = starGiftResaleMinTonAmount
+        self.starGiftResaleMaxTonAmount = starGiftResaleMaxTonAmount
+        self.starGiftCommissionTonPermille = starGiftCommissionTonPermille
         self.channelMessageSuggestionStarsCommissionPermille = channelMessageSuggestionStarsCommissionPermille
         self.channelMessageSuggestionTonCommissionPermille = channelMessageSuggestionTonCommissionPermille
         self.channelMessageSuggestionMaxStarsAmount = channelMessageSuggestionMaxStarsAmount
@@ -1619,9 +1631,14 @@ public struct StarsSubscriptionConfiguration {
             let paidMessageMaxAmount = (data["stars_paid_message_amount_max"] as? Double).flatMap(Int64.init) ?? StarsSubscriptionConfiguration.defaultValue.paidMessageMaxAmount
             let paidMessageCommissionPermille = (data["stars_paid_message_commission_permille"] as? Double).flatMap(Int32.init) ?? StarsSubscriptionConfiguration.defaultValue.paidMessageCommissionPermille
             let paidMessagesAvailable = (data["stars_paid_messages_available"] as? Bool) ?? StarsSubscriptionConfiguration.defaultValue.paidMessagesAvailable
-            let starGiftResaleMinAmount = (data["stars_stargift_resale_amount_min"] as? Double).flatMap(Int64.init) ?? StarsSubscriptionConfiguration.defaultValue.starGiftResaleMinAmount
-            let starGiftResaleMaxAmount = (data["stars_stargift_resale_amount_max"] as? Double).flatMap(Int64.init) ?? StarsSubscriptionConfiguration.defaultValue.starGiftResaleMaxAmount
-            let starGiftCommissionPermille = (data["stars_stargift_resale_commission_permille"] as? Double).flatMap(Int32.init) ?? StarsSubscriptionConfiguration.defaultValue.starGiftCommissionPermille
+            
+            let starGiftResaleMinStarsAmount = (data["stars_stargift_resale_amount_min"] as? Double).flatMap(Int64.init) ?? StarsSubscriptionConfiguration.defaultValue.starGiftResaleMinStarsAmount
+            let starGiftResaleMaxStarsAmount = (data["stars_stargift_resale_amount_max"] as? Double).flatMap(Int64.init) ?? StarsSubscriptionConfiguration.defaultValue.starGiftResaleMaxStarsAmount
+            let starGiftCommissionStarsPermille = (data["stars_stargift_resale_commission_permille"] as? Double).flatMap(Int32.init) ?? StarsSubscriptionConfiguration.defaultValue.starGiftCommissionStarsPermille
+            
+            let starGiftResaleMinTonAmount = (data["ton_stargift_resale_amount_min"] as? Double).flatMap(Int64.init) ?? StarsSubscriptionConfiguration.defaultValue.starGiftResaleMinTonAmount
+            let starGiftResaleMaxTonAmount = (data["ton_stargift_resale_amount_max"] as? Double).flatMap(Int64.init) ?? StarsSubscriptionConfiguration.defaultValue.starGiftResaleMaxTonAmount
+            let starGiftCommissionTonPermille = (data["ton_stargift_resale_commission_permille"] as? Double).flatMap(Int32.init) ?? StarsSubscriptionConfiguration.defaultValue.starGiftCommissionTonPermille
             
             let channelMessageSuggestionStarsCommissionPermille = (data["stars_suggested_post_commission_permille"] as? Double).flatMap(Int32.init) ?? StarsSubscriptionConfiguration.defaultValue.channelMessageSuggestionStarsCommissionPermille
             let channelMessageSuggestionTonCommissionPermille = (data["ton_suggested_post_commission_permille"] as? Double).flatMap(Int32.init) ?? StarsSubscriptionConfiguration.defaultValue.channelMessageSuggestionTonCommissionPermille
@@ -1637,9 +1654,12 @@ public struct StarsSubscriptionConfiguration {
                 paidMessageMaxAmount: paidMessageMaxAmount,
                 paidMessageCommissionPermille: paidMessageCommissionPermille,
                 paidMessagesAvailable: paidMessagesAvailable,
-                starGiftResaleMinAmount: starGiftResaleMinAmount,
-                starGiftResaleMaxAmount: starGiftResaleMaxAmount,
-                starGiftCommissionPermille: starGiftCommissionPermille,
+                starGiftResaleMinStarsAmount: starGiftResaleMinStarsAmount,
+                starGiftResaleMaxStarsAmount: starGiftResaleMaxStarsAmount,
+                starGiftCommissionStarsPermille: starGiftCommissionStarsPermille,
+                starGiftResaleMinTonAmount: starGiftResaleMinTonAmount,
+                starGiftResaleMaxTonAmount: starGiftResaleMaxTonAmount,
+                starGiftCommissionTonPermille: starGiftCommissionTonPermille,
                 channelMessageSuggestionStarsCommissionPermille: channelMessageSuggestionStarsCommissionPermille,
                 channelMessageSuggestionTonCommissionPermille: channelMessageSuggestionTonCommissionPermille,
                 channelMessageSuggestionMaxStarsAmount: channelMessageSuggestionMaxStarsAmount,
