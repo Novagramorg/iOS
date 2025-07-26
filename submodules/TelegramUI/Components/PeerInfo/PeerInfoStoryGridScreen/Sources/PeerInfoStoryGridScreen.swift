@@ -488,7 +488,8 @@ final class PeerInfoStoryGridScreenComponent: Component {
                         }
                         return self.environment?.controller()?.navigationController as? NavigationController
                     },
-                    listContext: nil
+                    listContext: nil,
+                    initialStoryFolderId: nil
                 )
                 paneNode.isEmptyUpdated = { [weak self] _ in
                     guard let self else {

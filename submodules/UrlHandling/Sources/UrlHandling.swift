@@ -81,6 +81,7 @@ public enum ParsedInternalPeerUrlParameter {
     case text(String)
     case profile
     case referrer(String)
+    case storyFolder(Int64)
 }
 
 public enum ParsedInternalUrl {
@@ -345,6 +346,8 @@ public func parseInternalUrl(sharedContext: SharedAccountContext, context: Accou
                                     }
                                  } else if queryItem.name == "ref", let referrer = queryItem.value {
                                      return .peer(.name(peerName), .referrer(referrer))
+                                 } else if queryItem.name == "stories", let value = queryItem.value, let folderId = Int64(value) {
+                                     return .peer(.name(peerName), .storyFolder(folderId))
                                  }
                             } else if ["voicechat", "videochat", "livestream"].contains(queryItem.name)  {
                                 return .peer(.name(peerName), .voiceChat(nil))
@@ -401,6 +404,8 @@ public func parseInternalUrl(sharedContext: SharedAccountContext, context: Accou
                                 return .peer(.name(peerName), .appStart("", queryItem.value, mode))
                             } else if queryItem.name == "ref", let referrer = queryItem.value {
                                 return .peer(.name(peerName), .referrer(referrer))
+                            } else if queryItem.name == "stories", let value = queryItem.value, let folderId = Int64(value) {
+                                return .peer(.name(peerName), .storyFolder(folderId))
                             }
                         }
                     }
@@ -939,6 +944,8 @@ private func resolveInternalUrl(context: AccountContext, url: ParsedInternalUrl)
                                 )
                             case .referrer:
                                 return .single(.result(.peer(peer._asPeer(), .chat(textInputState: nil, subject: nil, peekData: nil))))
+                            case let .storyFolder(folderId):
+                                return .single(.result(.storyFolder(peerId: peer.id, id: folderId)))
                         }
                     } else {
                         return .single(.result(.peer(peer._asPeer(), .chat(textInputState: nil, subject: nil, peekData: nil))))

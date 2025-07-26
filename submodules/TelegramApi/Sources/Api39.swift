@@ -3511,15 +3511,18 @@ public extension Api.functions.channels {
                 }
 }
 public extension Api.functions.channels {
-                static func searchPosts(hashtag: String, offsetRate: Int32, offsetPeer: Api.InputPeer, offsetId: Int32, limit: Int32) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.messages.Messages>) {
+                static func searchPosts(flags: Int32, hashtag: String?, query: String?, offsetRate: Int32, offsetPeer: Api.InputPeer, offsetId: Int32, limit: Int32, allowPaidStars: Int64?) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.messages.Messages>) {
                     let buffer = Buffer()
-                    buffer.appendInt32(-778069893)
-                    serializeString(hashtag, buffer: buffer, boxed: false)
+                    buffer.appendInt32(-221973939)
+                    serializeInt32(flags, buffer: buffer, boxed: false)
+                    if Int(flags) & Int(1 << 0) != 0 {serializeString(hashtag!, buffer: buffer, boxed: false)}
+                    if Int(flags) & Int(1 << 1) != 0 {serializeString(query!, buffer: buffer, boxed: false)}
                     serializeInt32(offsetRate, buffer: buffer, boxed: false)
                     offsetPeer.serialize(buffer, true)
                     serializeInt32(offsetId, buffer: buffer, boxed: false)
                     serializeInt32(limit, buffer: buffer, boxed: false)
-                    return (FunctionDescription(name: "channels.searchPosts", parameters: [("hashtag", String(describing: hashtag)), ("offsetRate", String(describing: offsetRate)), ("offsetPeer", String(describing: offsetPeer)), ("offsetId", String(describing: offsetId)), ("limit", String(describing: limit))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.messages.Messages? in
+                    if Int(flags) & Int(1 << 2) != 0 {serializeInt64(allowPaidStars!, buffer: buffer, boxed: false)}
+                    return (FunctionDescription(name: "channels.searchPosts", parameters: [("flags", String(describing: flags)), ("hashtag", String(describing: hashtag)), ("query", String(describing: query)), ("offsetRate", String(describing: offsetRate)), ("offsetPeer", String(describing: offsetPeer)), ("offsetId", String(describing: offsetId)), ("limit", String(describing: limit)), ("allowPaidStars", String(describing: allowPaidStars))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.messages.Messages? in
                         let reader = BufferReader(buffer)
                         var result: Api.messages.Messages?
                         if let signature = reader.readInt32() {
