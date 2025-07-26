@@ -1917,7 +1917,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         let apparentBackgroundHeight = (1.0 - transitionFraction) * backgroundHeight + transitionFraction * transitionSourceHeight
         
         var subtitleRatingSize: CGSize?
-        if !"".isEmpty, let cachedData = cachedData as? CachedUserData, let starRating = cachedData.starRating {
+        if let cachedData = cachedData as? CachedUserData, let starRating = cachedData.starRating {
             let subtitleRating: ComponentView<Empty>
             var subtitleRatingTransition = ComponentTransition(transition)
             if let current = self.subtitleRating {
@@ -1978,7 +1978,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                         
                         if self.subtitleRatingIsExpanded, let controller = self.controller, let presentationData = self.presentationData, !self.didDisplayRatingTooltip {
                             self.didDisplayRatingTooltip = true
-                            controller.presentInGlobalOverlay(UndoOverlayController(
+                            controller.present(UndoOverlayController(
                                 presentationData: presentationData,
                                 content: .info(
                                     title: nil,
@@ -1987,10 +1987,21 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                                     customUndoText: "Learn More"
                                 ),
                                 position: .top,
-                                action: { _ in
+                                action: { [weak self] action in
+                                    guard let self else {
+                                        return true
+                                    }
+                                    
+                                    if case .undo = action {
+                                        var infoUrl = "https://telegram.org/blog/telegram-stars"
+                                        if let data = self.context.currentAppConfiguration.with({ $0 }).data, let value = data["stars_rating_learnmore_url"] as? String {
+                                            infoUrl = value
+                                        }
+                                        self.context.sharedContext.applicationBindings.openUrl(infoUrl)
+                                    }
                                     return true
                                 }
-                            ))
+                            ), in: .current)
                         }
                     }
                 )),

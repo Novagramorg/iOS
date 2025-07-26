@@ -152,8 +152,17 @@ public final class PeerInfoRatingComponent: Component {
             let baseHeight: CGFloat = 20.0
             let innerInset: CGFloat = 2.0
             
+            let compactLabelSize = self.compactLabel.update(
+                transition: .immediate,
+                component: AnyComponent(MultilineTextComponent(
+                    text: .plain(NSAttributedString(string: component.compactLabel, font: Font.medium(11.0), textColor: .black))
+                )),
+                environment: {},
+                containerSize: CGSize(width: 100.0, height: 100.0)
+            )
+            
             let expandedSize = CGSize(width: 174.0, height: baseHeight)
-            let collapsedSize = CGSize(width: baseHeight, height: baseHeight)
+            let collapsedSize = CGSize(width: max(baseHeight, compactLabelSize.width + 6.0 * 2.0), height: baseHeight)
             
             if self.backgroundView.image == nil {
                 self.backgroundView.image = generateStretchableFilledCircleImage(diameter: baseHeight, color: .white)?.withRenderingMode(.alwaysTemplate)
@@ -189,19 +198,11 @@ public final class PeerInfoRatingComponent: Component {
             self.foregroundClippedView.backgroundColor = component.foregroundColor
             transition.setFrame(view: self.foregroundClippedShapeView, frame: foregroundFrame)
             
-            let compactLabelSize = self.compactLabel.update(
-                transition: .immediate,
-                component: AnyComponent(MultilineTextComponent(
-                    text: .plain(NSAttributedString(string: component.compactLabel, font: Font.medium(11.0), textColor: .black))
-                )),
-                environment: {},
-                containerSize: CGSize(width: 100.0, height: 100.0)
-            )
             if let compactLabelView = self.compactLabel.view {
                 if compactLabelView.superview == nil {
                     self.foregroundMaskView.addSubview(compactLabelView)
                 }
-                compactLabelView.frame = CGRect(origin: CGPoint(x: floorToScreenPixels((baseHeight - innerInset * 2.0 - compactLabelSize.width) * 0.5), y: floorToScreenPixels((baseHeight - innerInset * 2.0 - compactLabelSize.height) * 0.5) + UIScreenPixel), size: compactLabelSize)
+                compactLabelView.frame = CGRect(origin: CGPoint(x: floorToScreenPixels((collapsedSize.width - innerInset * 2.0 - compactLabelSize.width) * 0.5), y: floorToScreenPixels((baseHeight - innerInset * 2.0 - compactLabelSize.height) * 0.5) + UIScreenPixel), size: compactLabelSize)
                 alphaTransition.setAlpha(view: compactLabelView, alpha: component.isExpanded ? 0.0 : 1.0)
             }
             
@@ -284,49 +285,56 @@ public final class PeerInfoRatingComponent: Component {
                 })
             }
             
-            let tooltipController: TooltipScreen
-            if let current = self.tooltipController {
-                tooltipController = current
+            if !component.tooltipLabel.isEmpty {
+                let tooltipController: TooltipScreen
+                if let current = self.tooltipController {
+                    tooltipController = current
+                } else {
+                    tooltipController = TooltipScreen(
+                        context: component.context,
+                        account: component.context.account,
+                        sharedContext: component.context.sharedContext,
+                        text: .attributedString(text: NSAttributedString(string: component.tooltipLabel, font: Font.semibold(11.0), textColor: .white)),
+                        style: .customBlur(component.tooltipBackgroundColor, -4.0),
+                        arrowStyle: .small,
+                        location: .point(CGRect(origin: CGPoint(x: 100.0, y: 100.0), size: CGSize()), .bottom),
+                        displayDuration: .infinite,
+                        isShimmering: true,
+                        cornerRadius: 10.0,
+                        shouldDismissOnTouch: { _, _ in
+                            return .ignore
+                        }
+                    )
+                    self.tooltipController = tooltipController
+                    
+                    tooltipController.containerLayoutUpdated(ContainerViewLayout(
+                        size: CGSize(width: 200.0, height: 200.0),
+                        metrics: LayoutMetrics(),
+                        deviceMetrics: DeviceMetrics.iPhoneXSMax,
+                        intrinsicInsets: UIEdgeInsets(),
+                        safeInsets: UIEdgeInsets(),
+                        additionalInsets: UIEdgeInsets(),
+                        statusBarHeight: nil,
+                        inputHeight: nil,
+                        inputHeightIsInteractivellyChanging: false,
+                        inVoiceOver: false
+                    ), transition: .immediate)
+                    
+                    self.layer.addSublayer(tooltipController.view.layer)
+                    tooltipController.viewWillAppear(false)
+                    tooltipController.viewDidAppear(false)
+                    tooltipController.setIgnoreAppearanceMethodInvocations(true)
+                    tooltipController.view.isUserInteractionEnabled = false
+                }
+                
+                transition.setFrame(view: tooltipController.view, frame: CGRect(origin: CGPoint(), size: CGSize(width: 200.0, height: 200.0)).offsetBy(dx: -200.0 * 0.5 + foregroundFrame.width + 2.0, dy: -200.0 * 0.5))
+                alphaTransition.setAlpha(view: tooltipController.view, alpha: component.isExpanded ? 1.0 : 0.0)
             } else {
-                tooltipController = TooltipScreen(
-                    context: component.context,
-                    account: component.context.account,
-                    sharedContext: component.context.sharedContext,
-                    text: .attributedString(text: NSAttributedString(string: component.tooltipLabel, font: Font.semibold(11.0), textColor: .white)),
-                    style: .customBlur(component.tooltipBackgroundColor, -4.0),
-                    arrowStyle: .small,
-                    location: .point(CGRect(origin: CGPoint(x: 100.0, y: 100.0), size: CGSize()), .bottom),
-                    displayDuration: .infinite,
-                    isShimmering: true,
-                    cornerRadius: 10.0,
-                    shouldDismissOnTouch: { _, _ in
-                        return .ignore
-                    }
-                )
-                self.tooltipController = tooltipController
-                
-                tooltipController.containerLayoutUpdated(ContainerViewLayout(
-                    size: CGSize(width: 200.0, height: 200.0),
-                    metrics: LayoutMetrics(),
-                    deviceMetrics: DeviceMetrics.iPhoneXSMax,
-                    intrinsicInsets: UIEdgeInsets(),
-                    safeInsets: UIEdgeInsets(),
-                    additionalInsets: UIEdgeInsets(),
-                    statusBarHeight: nil,
-                    inputHeight: nil,
-                    inputHeightIsInteractivellyChanging: false,
-                    inVoiceOver: false
-                ), transition: .immediate)
-                
-                self.layer.addSublayer(tooltipController.view.layer)
-                tooltipController.viewWillAppear(false)
-                tooltipController.viewDidAppear(false)
-                tooltipController.setIgnoreAppearanceMethodInvocations(true)
-                tooltipController.view.isUserInteractionEnabled = false
+                if let tooltipController = self.tooltipController {
+                    self.tooltipController = nil
+                    tooltipController.view.layer.removeFromSuperlayer()
+                }
             }
-            
-            transition.setFrame(view: tooltipController.view, frame: CGRect(origin: CGPoint(), size: CGSize(width: 200.0, height: 200.0)).offsetBy(dx: -200.0 * 0.5 + foregroundFrame.width + 2.0, dy: -200.0 * 0.5))
-            alphaTransition.setAlpha(view: tooltipController.view, alpha: component.isExpanded ? 1.0 : 0.0)
             
             return size
         }

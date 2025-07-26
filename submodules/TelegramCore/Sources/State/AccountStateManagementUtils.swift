@@ -5115,7 +5115,8 @@ func replayFinalState(
                             isMy: item.isMy,
                             myReaction: updatedReaction,
                             forwardInfo: item.forwardInfo,
-                            authorId: item.authorId
+                            authorId: item.authorId,
+                            folderIds: item.folderIds
                         ))
                         if let entry = CodableEntry(updatedItem) {
                             updatedPeerEntries[index] = StoryItemsTableEntry(value: entry, id: item.id, expirationTimestamp: item.expirationTimestamp, isCloseFriends: item.isCloseFriends)
@@ -5149,7 +5150,8 @@ func replayFinalState(
                         isMy: item.isMy,
                         myReaction: MessageReaction.Reaction(apiReaction: reaction),
                         forwardInfo: item.forwardInfo,
-                        authorId: item.authorId
+                        authorId: item.authorId,
+                        folderIds: item.folderIds
                     ))
                     if let entry = CodableEntry(updatedItem) {
                         transaction.setStory(id: StoryId(peerId: peerId, id: id), value: entry)
