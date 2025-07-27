@@ -421,7 +421,6 @@ private final class GiftViewSheetContent: CombinedComponent {
                 UndoOverlayController(
                     presentationData: presentationData,
                     content: .copy(text: presentationData.strings.Gift_View_CopiedAddress),
-                    elevatedLayout: false,
                     position: .bottom,
                     action: { _ in return true }
                 ),
@@ -484,7 +483,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                                 undoText: presentationData.strings.Gift_Displayed_View,
                                 customAction: nil
                             ),
-                            elevatedLayout: lastController is ChatController,
+                            elevatedLayout: !(lastController is ChatController),
                             action: { [weak navigationController] action in
                                 if case .undo = action, let navigationController, let giftsPeerId {
                                     let _ = (self.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: giftsPeerId))
@@ -508,7 +507,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                                 return true
                             }
                         )
-                        lastController.present(resultController, in: .window(.root))
+                        lastController.present(resultController, in: .current)
                     }
                 }
             }
@@ -608,10 +607,10 @@ private final class GiftViewSheetContent: CombinedComponent {
                                                 customUndoText: nil,
                                                 timeout: nil
                                             ),
-                                            elevatedLayout: lastController is ChatController,
+                                            elevatedLayout: !(lastController is ChatController),
                                             action: { _ in return true }
                                         )
-                                        lastController.present(resultController, in: .window(.root))
+                                        lastController.present(resultController, in: .current)
                                     }
                                 }
                             }
@@ -799,6 +798,8 @@ private final class GiftViewSheetContent: CombinedComponent {
                 return
             }
             
+            let isTablet = controller.validLayout?.metrics.isTablet ?? false
+            
             controller.dismissAllTooltips()
             
             let presentationData = self.context.sharedContext.currentPresentationData.with { $0 }
@@ -862,12 +863,12 @@ private final class GiftViewSheetContent: CombinedComponent {
                                     ),
                                     position: .bottom,
                                     animateInAsReplacement: false,
-                                    appearance: UndoOverlayController.Appearance(sideInset: 16.0, bottomInset: 62.0),
+                                    appearance: isTablet ? nil : UndoOverlayController.Appearance(sideInset: 16.0, bottomInset: 62.0),
                                     action: { action in
                                         return false
                                     }
                                 )
-                                controller.present(tooltipController, in: .window(.root))
+                                controller.present(tooltipController, in: isTablet ? .current : .window(.root))
                             })
                         }),
                         TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: {
@@ -932,7 +933,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                             case .stars:
                                 priceString = presentationData.strings.Gift_View_Resale_Relist_Success_Stars(Int32(price.amount.value))
                             case .ton:
-                                priceString = formatTonAmountText(price.amount.value, dateTimeFormat: presentationData.dateTimeFormat) + " TON"
+                                priceString = formatTonAmountText(price.amount.value, dateTimeFormat: presentationData.dateTimeFormat, maxDecimalPositions: nil) + " TON"
                             }
                             text = presentationData.strings.Gift_View_Resale_Relist_Success(giftTitle, priceString).string
                         }
@@ -949,12 +950,12 @@ private final class GiftViewSheetContent: CombinedComponent {
                             ),
                             position: .bottom,
                             animateInAsReplacement: false,
-                            appearance: UndoOverlayController.Appearance(sideInset: 16.0, bottomInset: 62.0),
+                            appearance: isTablet ? nil : UndoOverlayController.Appearance(sideInset: 16.0, bottomInset: 62.0),
                             action: { action in
                                 return false
                             }
                         )
-                        controller.present(tooltipController, in: .window(.root))
+                        controller.present(tooltipController, in: isTablet ? .current : .window(.root))
                     })
                 })
                 controller.push(resellController)
@@ -1012,7 +1013,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                 let strings = presentationData.strings
                 
                 if let _ = arguments.reference, case .unique = arguments.gift, let togglePinnedToTop = controller.togglePinnedToTop, let pinnedToTop = arguments.pinnedToTop {
-                    items.append(.action(ContextMenuActionItem(text: pinnedToTop ? strings.PeerInfo_Gifts_Context_Unpin  : strings.PeerInfo_Gifts_Context_Pin , icon: { theme in generateTintedImage(image: UIImage(bundleImageName: pinnedToTop ? "Chat/Context Menu/Unpin" : "Chat/Context Menu/Pin"), color: theme.contextMenu.primaryColor) }, action: { [weak self] c, f in
+                    items.append(.action(ContextMenuActionItem(text: pinnedToTop ? strings.PeerInfo_Gifts_Context_Unpin : strings.PeerInfo_Gifts_Context_Pin , icon: { theme in generateTintedImage(image: UIImage(bundleImageName: pinnedToTop ? "Chat/Context Menu/Unpin" : "Chat/Context Menu/Pin"), color: theme.contextMenu.primaryColor) }, action: { [weak self] c, f in
                         c?.dismiss(completion: { [weak self, weak controller] in
                             guard let self, let controller else {
                                 return
@@ -1257,7 +1258,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                                 case .stars:
                                     originalPriceString = presentationData.strings.Gift_Buy_ErrorPriceChanged_Text_Stars(Int32(resellAmount.amount.value))
                                 case .ton:
-                                    originalPriceString = formatTonAmountText(resellAmount.amount.value, dateTimeFormat: presentationData.dateTimeFormat) + " TON"
+                                    originalPriceString = formatTonAmountText(resellAmount.amount.value, dateTimeFormat: presentationData.dateTimeFormat, maxDecimalPositions: nil) + " TON"
                                 }
                                 
                                 let newPriceString: String
@@ -1267,7 +1268,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                                     newPriceString = presentationData.strings.Gift_Buy_ErrorPriceChanged_Text_Stars(Int32(newPrice.amount.value))
                                     buttonText = presentationData.strings.Gift_Buy_Confirm_BuyFor(Int32(newPrice.amount.value))
                                 case .ton:
-                                    let tonValueString = formatTonAmountText(newPrice.amount.value, dateTimeFormat: presentationData.dateTimeFormat)
+                                    let tonValueString = formatTonAmountText(newPrice.amount.value, dateTimeFormat: presentationData.dateTimeFormat, maxDecimalPositions: nil)
                                     newPriceString = tonValueString + " TON"
                                     buttonText = presentationData.strings.Gift_Buy_Confirm_BuyForTon(tonValueString).string
                                 }
@@ -1323,12 +1324,12 @@ private final class GiftViewSheetContent: CombinedComponent {
                                             let resultController = UndoOverlayController(
                                                 presentationData: presentationData,
                                                 content: .sticker(context: context, file: animationFile, loop: false, title: presentationData.strings.Gift_View_Resale_SuccessYou_Title, text: presentationData.strings.Gift_View_Resale_SuccessYou_Text(giftTitle).string, undoText: nil, customAction: nil),
-                                                elevatedLayout: lastController is ChatController,
+                                                elevatedLayout: !(lastController is ChatController),
                                                 action: {  _ in
                                                     return true
                                                 }
                                             )
-                                            lastController.present(resultController, in: .window(.root))
+                                            lastController.present(resultController, in: .current)
                                         }
                                     })
                                 } else {
@@ -1345,12 +1346,12 @@ private final class GiftViewSheetContent: CombinedComponent {
                                                 let resultController = UndoOverlayController(
                                                     presentationData: presentationData,
                                                     content: .sticker(context: context, file: animationFile, loop: false, title: presentationData.strings.Gift_View_Resale_Success_Title, text: presentationData.strings.Gift_View_Resale_Success_Text(peer.compactDisplayTitle).string, undoText: nil, customAction: nil),
-                                                    elevatedLayout: lastController is ChatController,
+                                                    elevatedLayout: !(lastController is ChatController),
                                                     action: {  _ in
                                                         return true
                                                     }
                                                 )
-                                                lastController.present(resultController, in: .window(.root))
+                                                lastController.present(resultController, in: .current)
                                             }
                                         })
                                     })
@@ -3383,6 +3384,8 @@ private final class GiftViewSheetContent: CombinedComponent {
                                             HapticFeedback().impact(.light)
                                         }))
                                     } else {
+                                        let isTablet = environment.metrics.isTablet
+                                        
                                         let presentationData = context.sharedContext.currentPresentationData.with { $0 }
                                         let text = strings.Gift_View_TooltipPremiumWearing
                                         let tooltipController = UndoOverlayController(
@@ -3390,7 +3393,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                                             content: .premiumPaywall(title: nil, text: text, customUndoText: nil, timeout: nil, linkAction: nil),
                                             position: .bottom,
                                             animateInAsReplacement: false,
-                                            appearance: UndoOverlayController.Appearance(sideInset: 16.0, bottomInset: 62.0),
+                                            appearance: isTablet ? nil : UndoOverlayController.Appearance(sideInset: 16.0, bottomInset: 62.0),
                                             action: { [weak controller, weak state] action in
                                                 if case .info = action {
                                                     controller?.dismissAllTooltips()
@@ -3404,7 +3407,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                                                 return false
                                             }
                                         )
-                                        controller.present(tooltipController, in: .window(.root))
+                                        controller.present(tooltipController, in: isTablet ? .current : .window(.root))
                                     }
                                 } else {
                                     state.commitWear(uniqueGift)
@@ -3540,7 +3543,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                     currencyAmount = formatStarsAmountText(resellAmount.amount, dateTimeFormat: environment.dateTimeFormat)
                 case .ton:
                     currencySymbol = "$"
-                    currencyAmount = formatTonAmountText(resellAmount.amount.value, dateTimeFormat: environment.dateTimeFormat)
+                    currencyAmount = formatTonAmountText(resellAmount.amount.value, dateTimeFormat: environment.dateTimeFormat, maxDecimalPositions: nil)
                     
                     if let starsAmount = uniqueGift?.resellAmounts?.first(where: { $0.currency == .stars }) {
                         //TODO:localize
@@ -3723,12 +3726,19 @@ final class GiftViewSheetComponent: CombinedComponent {
             )
             
             if let controller = controller(), !controller.automaticallyControlPresentationContextLayout {
+                var sideInset: CGFloat = 0.0
+                var bottomInset: CGFloat = max(environment.safeInsets.bottom, sheetExternalState.contentHeight)
+                if case .regular = environment.metrics.widthClass {
+                    sideInset = floor((context.availableSize.width - 430.0) / 2.0) - 12.0
+                    bottomInset = (context.availableSize.height - sheetExternalState.contentHeight) / 2.0 + sheetExternalState.contentHeight
+                }
+                
                 let layout = ContainerViewLayout(
                     size: context.availableSize,
                     metrics: environment.metrics,
                     deviceMetrics: environment.deviceMetrics,
-                    intrinsicInsets: UIEdgeInsets(top: 0.0, left: 0.0, bottom: max(environment.safeInsets.bottom, sheetExternalState.contentHeight), right: 0.0),
-                    safeInsets: UIEdgeInsets(top: 0.0, left: environment.safeInsets.left, bottom: 0.0, right: environment.safeInsets.right),
+                    intrinsicInsets: UIEdgeInsets(top: 0.0, left: 0.0, bottom: bottomInset, right: 0.0),
+                    safeInsets: UIEdgeInsets(top: 0.0, left: max(sideInset, environment.safeInsets.left), bottom: 0.0, right: max(sideInset, environment.safeInsets.right)),
                     additionalInsets: .zero,
                     statusBarHeight: environment.statusBarHeight,
                     inputHeight: nil,
