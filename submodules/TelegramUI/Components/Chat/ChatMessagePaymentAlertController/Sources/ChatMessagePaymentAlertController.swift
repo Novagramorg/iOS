@@ -323,17 +323,28 @@ public class ChatMessagePaymentAlertController: AlertController {
     private weak var parentNavigationController: NavigationController?
     private let chatPeerId: EnginePeer.Id
     private let showBalance: Bool
+    
+    public var currency: CurrencyAmount.Currency {
+        didSet {
+            if let layout = self.validLayout {
+                self.containerLayoutUpdated(layout, transition: .immediate)
+            }
+        }
+    }
    
     private let balance = ComponentView<Empty>()
     
     private var didAppear = false
     
-    public init(context: AccountContext?, presentationData: PresentationData, contentNode: AlertContentNode, navigationController: NavigationController?, chatPeerId: EnginePeer.Id, showBalance: Bool = true) {
+    private var validLayout: ContainerViewLayout?
+    
+    public init(context: AccountContext?, presentationData: PresentationData, contentNode: AlertContentNode, navigationController: NavigationController?, chatPeerId: EnginePeer.Id, showBalance: Bool = true, currency: CurrencyAmount.Currency = .stars) {
         self.context = context
         self.presentationData = presentationData
         self.parentNavigationController = navigationController
         self.chatPeerId = chatPeerId
         self.showBalance = showBalance
+        self.currency = currency
         
         super.init(theme: AlertControllerTheme(presentationData: presentationData), contentNode: contentNode)
         
@@ -365,6 +376,8 @@ public class ChatMessagePaymentAlertController: AlertController {
     public override func containerLayoutUpdated(_ layout: ContainerViewLayout, transition: ContainedViewLayoutTransition) {
         super.containerLayoutUpdated(layout, transition: transition)
         
+        self.validLayout = layout
+        
         if !self.didAppear {
             self.didAppear = true
             if !layout.metrics.isTablet && layout.size.width > layout.size.height {
@@ -383,6 +396,7 @@ public class ChatMessagePaymentAlertController: AlertController {
                         context: context,
                         peerId: self.chatPeerId.namespace == Namespaces.Peer.CloudChannel ? self.chatPeerId : context.account.peerId,
                         theme: self.presentationData.theme,
+                        currency: self.currency,
                         action: { [weak self] in
                             guard let self, let starsContext = context.starsContext, let navigationController = self.parentNavigationController else {
                                 return

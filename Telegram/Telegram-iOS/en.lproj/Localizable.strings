@@ -14760,3 +14760,5 @@ Sorry for the inconvenience.";
 
 "FaceScan.Instruction.Position" = "Position your face\nwithin the frame";
 "FaceScan.Instruction.Rotate" = "Move your head slowly to\ncomplete the circle";
+
+"Gift.Buy.Confirm.BuyForTon" = "Buy for %@ TON";

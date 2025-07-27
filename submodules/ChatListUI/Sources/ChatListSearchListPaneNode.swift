@@ -5137,7 +5137,7 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
                                                 content: .starsSent(context: self.context, title: "", text: [AnimatedTextComponent.Item(
                                                     id: AnyHashable(0),
                                                     isUnbreakable: true,
-                                                    content: .text("\(price) Stars spent on extra search."),
+                                                    content: .text("\(price) Stars spent on extra search.")
                                                 )], hasUndo: false),
                                                 elevatedLayout: false,
                                                 animateInAsReplacement: false,

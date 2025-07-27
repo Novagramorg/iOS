@@ -1209,8 +1209,7 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                                     case .stars:
                                         starsString = strings.Notification_StarsGift_Bought_Stars(Int32(resaleStars.amount.value))
                                     case .ton:
-                                        //TODO:localize
-                                        starsString = "\(Int32(resaleStars.amount.value)) TON"
+                                        starsString = formatTonAmountText(resaleStars.amount.value, dateTimeFormat: dateTimeFormat) + " TON"
                                     }
                                     if message.id.peerId == accountPeerId {
                                         attributedString = addAttributesToStringWithRanges(strings.Notification_StarsGift_BoughtForYouself(starsString)._tuple, body: bodyAttributes, argumentAttributes: [0: boldAttributes])
@@ -1249,8 +1248,7 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                                     case .stars:
                                         starsString = strings.Notification_StarsGift_Bought_Stars(Int32(resaleStars.amount.value))
                                     case .ton:
-                                        //TODO:localize
-                                        starsString = "\(Int32(resaleStars.amount.value)) TON"
+                                        starsString = formatTonAmountText(resaleStars.amount.value, dateTimeFormat: dateTimeFormat) + " TON"
                                     }
                                     let giftTitle = "\(gift.title) #\(presentationStringsFormattedNumber(gift.number, dateTimeFormat.groupingSeparator))"
                                     attributes[1] = boldAttributes

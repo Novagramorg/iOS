@@ -21,6 +21,7 @@ swift_library(
         "//submodules/TelegramPresentationData",
         "//submodules/TextFormat",
         "//submodules/Markdown",
+        "//submodules/TelegramStringFormatting",
     ],
     visibility = [
         "//visibility:public",

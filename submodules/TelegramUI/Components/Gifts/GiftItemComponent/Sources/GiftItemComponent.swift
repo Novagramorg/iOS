@@ -16,6 +16,7 @@ import AvatarNode
 import PeerInfoCoverComponent
 import Markdown
 import CheckNode
+import BundleIconComponent
 
 public final class GiftItemComponent: Component {
     public enum Subject: Equatable {
@@ -277,6 +278,7 @@ public final class GiftItemComponent: Component {
         private let subtitle = ComponentView<Empty>()
         private let button = ComponentView<Empty>()
         private let label = ComponentView<Empty>()
+        private let ton = ComponentView<Empty>()
        
         private let ribbonOutline = UIImageView()
         private let ribbon = UIImageView()
@@ -599,7 +601,13 @@ public final class GiftItemComponent: Component {
                     }
                     price = priceValue
                 case let .uniqueGift(_, priceValue):
-                    buttonColor = UIColor.white
+                    if let ribbon = component.ribbon, case let .custom(bottomValue, topValue) = ribbon.color {
+                        let topColor = UIColor(rgb: UInt32(bitPattern: topValue)).withMultiplied(hue: 1.01, saturation: 1.22, brightness: 1.04)
+                        let bottomColor = UIColor(rgb: UInt32(bitPattern: bottomValue)).withMultiplied(hue: 0.97, saturation: 1.45, brightness: 0.89)
+                        buttonColor = topColor.mixedWith(bottomColor, alpha: 0.8)
+                    } else {
+                        buttonColor = UIColor.white
+                    }
                     price = priceValue ?? component.strings.Gift_Options_Gift_Transfer
                     tinted = true
                 }
@@ -628,6 +636,29 @@ public final class GiftItemComponent: Component {
                         self.addSubview(buttonView)
                     }
                     transition.setFrame(view: buttonView, frame: buttonFrame)
+                }
+                
+                if case let .uniqueGift(gift, _) = component.subject, gift.resellForTonOnly {
+                    let tonSize = self.ton.update(
+                        transition: .immediate,
+                        component: AnyComponent(
+                            ZStack([
+                                AnyComponentWithIdentity(id: "background", component: AnyComponent(RoundedRectangle(color: buttonColor, cornerRadius: 12.0))),
+                                AnyComponentWithIdentity(id: "icon", component: AnyComponent(BundleIconComponent(name: "Ads/TonMedium", tintColor: .white, maxSize: CGSize(width: 13.0, height: 13.0))))
+                            ])
+                        ),
+                        environment: {},
+                        containerSize: CGSize(width: 24.0, height: 24.0)
+                    )
+                    let tonFrame = CGRect(origin: CGPoint(x: 4.0, y: 4.0), size: tonSize)
+                    if let tonView = self.ton.view {
+                        if tonView.superview == nil {
+                            self.addSubview(tonView)
+                        }
+                        transition.setFrame(view: tonView, frame: tonFrame)
+                    }
+                } else if let tonView = self.ton.view, tonView.superview != nil {
+                    tonView.removeFromSuperview()
                 }
                 
                 if let label = component.label {
@@ -1060,8 +1091,7 @@ public final class GiftItemComponent: Component {
                             context.translateBy(x: 0.0, y: size.height)
                             context.scaleBy(x: 1.0, y: -1.0)
                             
-                            //58
-                            context.clip(to: CGRect(origin: CGPoint(x: 68.0, y: 91.0 - UIScreenPixel), size: ribbonOutline.size), mask: cgImage)
+                            context.clip(to: CGRect(origin: CGPoint(x: size.width - 58.0, y: 91.0 - UIScreenPixel), size: ribbonOutline.size), mask: cgImage)
                             context.setBlendMode(.clear)
                             context.setFillColor(UIColor.clear.cgColor)
                             context.fill(CGRect(origin: .zero, size: size))
@@ -1162,8 +1192,13 @@ private final class ButtonContentComponent: Component {
         func update(component: ButtonContentComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
             self.component = component
             self.componentState = state
+            
+            var textColor = component.color
+            if component.tinted {
+                textColor = .white
+            }
                         
-            let attributedText = NSMutableAttributedString(string: component.text, font: Font.semibold(11.0), textColor: component.color)
+            let attributedText = NSMutableAttributedString(string: component.text, font: Font.semibold(11.0), textColor: textColor)
             let range = (attributedText.string as NSString).range(of: "#")
             if range.location != NSNotFound {
                 attributedText.addAttribute(ChatTextInputAttributes.customEmoji, value: ChatTextInputTextCustomEmojiAttribute(interactivelySelectedFromPackId: nil, fileId: 0, file: nil, custom: .stars(tinted: component.tinted)), range: range)
@@ -1219,7 +1254,11 @@ private final class ButtonContentComponent: Component {
             if component.color.rgb == 0xd3720a {
                 backgroundColor = UIColor(rgb: 0xffc83d, alpha: 0.2)
             } else {
-                backgroundColor = component.color.withAlphaComponent(0.1)
+                if component.tinted {
+                    backgroundColor = component.color
+                } else {
+                    backgroundColor = component.color.withAlphaComponent(0.1)
+                }
             }
             
             self.backgroundLayer.backgroundColor = backgroundColor.cgColor
