@@ -456,6 +456,7 @@ public func giftPurchaseAlertController(
     var commitImpl: (() -> Void)?
     let actions: [TextAlertAction] = [TextAlertAction(type: .defaultAction, title: "", action: {
         commitImpl?()
+        dismissImpl?(true)
     }), TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: {
         dismissImpl?(true)
     })]
@@ -486,7 +487,7 @@ public func giftPurchaseAlertController(
                 let absoluteFrame = headerView.convert(headerView.bounds, to: nil)
                 let location = CGRect(origin: CGPoint(x: absoluteFrame.minX + floor(absoluteFrame.width * 0.75), y: absoluteFrame.minY - 8.0), size: CGSize())
                 //TODO:localize
-                let tooltipController = TooltipScreen(account: context.account, sharedContext: context.sharedContext, text: .plain(text: "Pay with TON to skip the 21-day wait before transfering the gift again."), style: .wide, location: .point(location, .bottom), displayDuration: .default, inset: 16.0, shouldDismissOnTouch: { _, _ in
+                let tooltipController = TooltipScreen(account: context.account, sharedContext: context.sharedContext, text: .plain(text: "Pay with TON to skip the 21-day wait before transferring the gift again."), style: .wide, location: .point(location, .bottom), displayDuration: .default, inset: 16.0, shouldDismissOnTouch: { _, _ in
                     return .dismiss(consume: false)
                 })
                 controller.present(tooltipController, in: .window(.root))
