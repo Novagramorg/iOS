@@ -701,6 +701,22 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
                 releasedBy: self.releasedBy
             )
         }
+        
+        public func withResellForTonOnly(_ resellForTonOnly: Bool) -> UniqueGift {
+            return UniqueGift(
+                id: self.id,
+                title: self.title,
+                number: self.number,
+                slug: self.slug,
+                owner: self.owner,
+                attributes: self.attributes,
+                availability: self.availability,
+                giftAddress: self.giftAddress,
+                resellAmounts: self.resellAmounts,
+                resellForTonOnly: resellForTonOnly,
+                releasedBy: self.releasedBy
+            )
+        }
     }
     
     public enum DecodingError: Error {
@@ -957,7 +973,7 @@ public enum TransferStarGiftError {
 
 public enum BuyStarGiftError {
     case generic
-    case priceChanged(Int64)
+    case priceChanged(CurrencyAmount)
     case starGiftResellTooEarly(Int32)
 }
 
@@ -983,7 +999,13 @@ func _internal_buyStarGift(account: Account, slug: String, peerId: EnginePeer.Id
     |> mapToSignal { paymentForm in
         if let paymentForm {
             if let paymentPrice = paymentForm.invoice.prices.first?.amount, let price, paymentPrice > price.amount.value {
-                return .fail(.priceChanged(paymentPrice))
+                let currencyAmount: CurrencyAmount
+                if paymentForm.invoice.currency == "TON" {
+                    currencyAmount = CurrencyAmount(amount: StarsAmount(value: paymentPrice, nanos: 0), currency: .ton)
+                } else {
+                    currencyAmount = CurrencyAmount(amount: StarsAmount(value: paymentPrice, nanos: 0), currency: .stars)
+                }
+                return .fail(.priceChanged(currencyAmount))
             }
             return _internal_sendStarsPaymentForm(account: account, formId: paymentForm.id, source: source)
             |> mapError { _ -> BuyStarGiftError in
@@ -1828,7 +1850,7 @@ private final class ProfileGiftsContextImpl {
                         return false
                     }) {
                         if case let .unique(uniqueGift) = self.gifts[index].gift {
-                            let updatedUniqueGift = uniqueGift.withResellAmounts(price.flatMap { [$0] })
+                            let updatedUniqueGift = uniqueGift.withResellAmounts(price.flatMap { [$0] }).withResellForTonOnly(price?.currency == .ton)
                             let updatedGift = self.gifts[index].withGift(.unique(updatedUniqueGift))
                             self.gifts[index] = updatedGift
                         }
@@ -1851,7 +1873,7 @@ private final class ProfileGiftsContextImpl {
                         return false
                     }) {
                         if case let .unique(uniqueGift) = self.filteredGifts[index].gift {
-                            let updatedUniqueGift = uniqueGift.withResellAmounts(price.flatMap { [$0] })
+                            let updatedUniqueGift = uniqueGift.withResellAmounts(price.flatMap { [$0] }).withResellForTonOnly(price?.currency == .ton)
                             let updatedGift = self.filteredGifts[index].withGift(.unique(updatedUniqueGift))
                             self.filteredGifts[index] = updatedGift
                         }
@@ -2981,7 +3003,7 @@ private final class ResaleGiftsContextImpl {
                     }) {
                         if let price {
                             if case let .unique(uniqueGift) = self.gifts[index] {
-                                self.gifts[index] = .unique(uniqueGift.withResellAmounts([price]))
+                                self.gifts[index] = .unique(uniqueGift.withResellAmounts([price]).withResellForTonOnly(price.currency == .ton))
                             }
                         } else {
                             self.gifts.remove(at: index)
