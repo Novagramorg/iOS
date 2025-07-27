@@ -467,7 +467,7 @@ private final class SheetContent: CombinedComponent {
                 case .ton:
                     if let value = state.amount?.value, value > 0 {
                         let tonValue = Int64(Float(value) * Float(resaleConfiguration.starGiftCommissionTonPermille) / 1000.0)
-                        let tonString = formatTonAmountText(tonValue, dateTimeFormat: environment.dateTimeFormat) + " TON"
+                        let tonString = formatTonAmountText(tonValue, dateTimeFormat: environment.dateTimeFormat, maxDecimalPositions: nil) + " TON"
                         amountInfoString = NSAttributedString(attributedString: parseMarkdownIntoAttributedString(environment.strings.Stars_SellGift_AmountInfo(tonString).string, attributes: amountMarkdownAttributes, textAlignment: .natural))
                         
                         if let tonUsdRate = withdrawConfiguration.tonUsdRate {
@@ -778,7 +778,7 @@ private final class SheetContent: CombinedComponent {
                         currencyAmount = presentationStringsFormattedNumber(amount, environment.dateTimeFormat.groupingSeparator)
                     case .ton:
                         currencySymbol = "$"
-                        currencyAmount = formatTonAmountText(amount.value, dateTimeFormat: environment.dateTimeFormat)
+                        currencyAmount = formatTonAmountText(amount.value, dateTimeFormat: environment.dateTimeFormat, maxDecimalPositions: nil)
                     }
                     buttonString = "\(environment.strings.Stars_SellGift_SellFor)  \(currencySymbol) \(currencyAmount)"
                 } else {
@@ -798,7 +798,7 @@ private final class SheetContent: CombinedComponent {
                             currencyAmount = presentationStringsFormattedNumber(amount, environment.dateTimeFormat.groupingSeparator)
                         case .ton:
                             currencySymbol = "$"
-                            currencyAmount = formatTonAmountText(amount.value, dateTimeFormat: environment.dateTimeFormat)
+                            currencyAmount = formatTonAmountText(amount.value, dateTimeFormat: environment.dateTimeFormat, maxDecimalPositions: nil)
                         }
                         buttonString = environment.strings.Chat_PostSuggestion_Suggest_OfferButtonPrice("\(currencySymbol) \(currencyAmount)").string
                     } else {
@@ -1423,7 +1423,7 @@ private final class AmountFieldStarsFormatter: NSObject, UITextFieldDelegate {
             case .stars:
                 textField.text = "\(self.maxValue)"
             case .ton:
-                textField.text = "\(formatTonAmountText(self.maxValue, dateTimeFormat: PresentationDateTimeFormat(timeFormat: self.dateTimeFormat.timeFormat, dateFormat: self.dateTimeFormat.dateFormat, dateSeparator: "", dateSuffix: "", requiresFullYear: false, decimalSeparator: ".", groupingSeparator: "")))"
+                textField.text = "\(formatTonAmountText(self.maxValue, dateTimeFormat: PresentationDateTimeFormat(timeFormat: self.dateTimeFormat.timeFormat, dateFormat: self.dateTimeFormat.dateFormat, dateSeparator: "", dateSuffix: "", requiresFullYear: false, decimalSeparator: ".", groupingSeparator: ""), maxDecimalPositions: nil))"
             }
             self.onTextChanged(text: self.textField.text ?? "")
             self.animateError()
@@ -1592,7 +1592,7 @@ private final class AmountFieldComponent: Component {
                     case .stars:
                         text = "\(value)"
                     case .ton:
-                        text = "\(formatTonAmountText(value, dateTimeFormat: PresentationDateTimeFormat(timeFormat: component.dateTimeFormat.timeFormat, dateFormat: component.dateTimeFormat.dateFormat, dateSeparator: "", dateSuffix: "", requiresFullYear: false, decimalSeparator: ".", groupingSeparator: "")))"
+                        text = "\(formatTonAmountText(value, dateTimeFormat: PresentationDateTimeFormat(timeFormat: component.dateTimeFormat.timeFormat, dateFormat: component.dateTimeFormat.dateFormat, dateSeparator: "", dateSuffix: "", requiresFullYear: false, decimalSeparator: ".", groupingSeparator: ""), maxDecimalPositions: nil))"
                     }
                     self.textField.text = text
                     self.didSetValueOnce = true

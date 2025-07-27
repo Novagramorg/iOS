@@ -45,7 +45,7 @@ public final class StarsBalanceOverlayComponent: Component {
     
     public final class View: UIView {
         private let backgroundView = BlurredBackgroundView(color: nil)
-        private let text = ComponentView<Empty>()
+        private var text = ComponentView<Empty>()
         private let action = ComponentView<Empty>()
                 
         private var component: StarsBalanceOverlayComponent?
@@ -89,6 +89,7 @@ public final class StarsBalanceOverlayComponent: Component {
             defer {
                 self.isUpdating = false
             }
+            let previousComponent = self.component
             self.component = component
             self.state = state
             
@@ -169,6 +170,13 @@ public final class StarsBalanceOverlayComponent: Component {
                 attributedText.addAttribute(.baselineOffset, value: 1.0, range: tonRange)
             }
             
+            if previousComponent?.currency != component.currency {
+                if let textView = self.text.view {
+                    textView.removeFromSuperview()
+                }
+                self.text = ComponentView()
+            }
+            
             let textSize = self.text.update(
                 transition: .immediate,
                 component: AnyComponent(
@@ -222,7 +230,6 @@ public final class StarsBalanceOverlayComponent: Component {
                     actionView.removeFromSuperview()
                 }
             }
-            
 
             if let textView = self.text.view {
                 if textView.superview == nil {
