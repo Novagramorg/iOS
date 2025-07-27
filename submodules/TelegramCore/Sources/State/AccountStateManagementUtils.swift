@@ -2683,7 +2683,7 @@ private func resolveAssociatedMessages(accountPeerId: PeerId, postbox: Postbox, 
                         switch result {
                             case let .messages(messages, chats, users):
                                 return (messages, chats, users)
-                            case let .messagesSlice(_, _, _, _, messages, chats, users):
+                            case let .messagesSlice(_, _, _, _, _, messages, chats, users):
                                 return (messages, chats, users)
                             case let .channelMessages(_, _, _, _, messages, apiTopics, chats, users):
                                 let _ = apiTopics
@@ -2714,7 +2714,7 @@ private func resolveAssociatedMessages(accountPeerId: PeerId, postbox: Postbox, 
                         switch result {
                             case let .messages(messages, chats, users):
                                 return (messages, chats, users)
-                            case let .messagesSlice(_, _, _, _, messages, chats, users):
+                            case let .messagesSlice(_, _, _, _, _, messages, chats, users):
                                 return (messages, chats, users)
                             case let .channelMessages(_, _, _, _, messages, apiTopics, chats, users):
                                 let _ = apiTopics

@@ -104,7 +104,7 @@ private func fetchWebpage(account: Account, messageId: MessageId, threadId: Int6
                         messages = apiMessages
                         chats = apiChats
                         users = apiUsers
-                    case let .messagesSlice(_, _, _, _, messages: apiMessages, chats: apiChats, users: apiUsers):
+                    case let .messagesSlice(_, _, _, _, _, messages: apiMessages, chats: apiChats, users: apiUsers):
                         messages = apiMessages
                         chats = apiChats
                         users = apiUsers
@@ -1087,7 +1087,7 @@ public final class AccountViewTracker {
                                 switch result {
                                     case let .messages(messages, chats, users):
                                         return (peer, messages, chats, users)
-                                    case let .messagesSlice(_, _, _, _, messages, chats, users):
+                                    case let .messagesSlice(_, _, _, _, _, messages, chats, users):
                                         return (peer, messages, chats, users)
                                     case let .channelMessages(_, _, _, _, messages, _, chats, users):
                                         return (peer, messages, chats, users)

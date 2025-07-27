@@ -2757,6 +2757,21 @@ public extension Api.functions.bots {
                 }
 }
 public extension Api.functions.channels {
+                static func checkSearchPostsFlood() -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.SearchPostsFlood>) {
+                    let buffer = Buffer()
+                    buffer.appendInt32(-1146490591)
+                    
+                    return (FunctionDescription(name: "channels.checkSearchPostsFlood", parameters: []), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.SearchPostsFlood? in
+                        let reader = BufferReader(buffer)
+                        var result: Api.SearchPostsFlood?
+                        if let signature = reader.readInt32() {
+                            result = Api.parse(reader, signature: signature) as? Api.SearchPostsFlood
+                        }
+                        return result
+                    })
+                }
+}
+public extension Api.functions.channels {
                 static func checkUsername(channel: Api.InputChannel, username: String) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Bool>) {
                     let buffer = Buffer()
                     buffer.appendInt32(283557164)

@@ -317,6 +317,7 @@ private enum PreferencesKeyValues: Int32 {
     case secureBotStorageState = 43
     case serverSuggestionInfo = 44
     case persistentChatInterfaceData = 45
+    case globalPostSearchState = 46
 }
 
 public func applicationSpecificPreferencesKey(_ value: Int32) -> ValueBoxKey {
@@ -571,6 +572,12 @@ public struct PreferencesKeys {
         let key = ValueBoxKey(length: 4 + 8)
         key.setInt32(0, value: PreferencesKeyValues.persistentChatInterfaceData.rawValue)
         key.setInt64(4, value: peerId.toInt64())
+        return key
+    }
+    
+    public static func globalPostSearchState() -> ValueBoxKey {
+        let key = ValueBoxKey(length: 4 + 8)
+        key.setInt32(0, value: PreferencesKeyValues.globalPostSearchState.rawValue)
         return key
     }
 }
