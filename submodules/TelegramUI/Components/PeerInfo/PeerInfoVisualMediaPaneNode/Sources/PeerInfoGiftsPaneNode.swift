@@ -618,10 +618,14 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
                         context: self.context,
                         colors: TabSelectorComponent.Colors(
                             foreground: params.presentationData.theme.list.itemSecondaryTextColor,
-                            selection: params.presentationData.theme.list.itemSecondaryTextColor.withMultipliedAlpha(0.15),
+                            selection: params.presentationData.theme.list.itemPrimaryTextColor.withMultipliedAlpha(0.05)
                             simple: true
                         ),
                         theme: params.presentationData.theme,
+                        customLayout: TabSelectorComponent.CustomLayout(
+                            font: Font.medium(14.0),
+                            spacing: 2.0
+                        ),
                         items: tabSelectorItems,
                         selectedId: AnyHashable(self.currentCollection.rawValue),
                         reorderItem: self.isReordering ? { [weak self] fromId, toId in
@@ -1464,13 +1468,19 @@ private final class CollectionTabItemComponent: Component {
                 
         func update(component: CollectionTabItemComponent, availableSize: CGSize, state: State, environment: Environment<EnvironmentType>, transition: ComponentTransition) -> CGSize {
             self.component = component
+            
+            let environment = environment[EnvironmentType.self].value
                         
             let iconSpacing: CGFloat = 3.0
+            
+            let normalColor = component.theme.list.itemSecondaryTextColor
+            let selectedColor = component.theme.list.freeTextColor
+            let effectiveColor = normalColor.mixedWith(selectedColor, alpha: environment.selectionFraction)
             
             let titleSize = self.title.update(
                 transition: .immediate,
                 component: AnyComponent(MultilineTextComponent(
-                    text: .plain(NSAttributedString(string: component.title, font: Font.semibold(14.0), textColor: component.theme.list.itemSecondaryTextColor))
+                    text: .plain(NSAttributedString(string: component.title, font: Font.medium(14.0), textColor: effectiveColor))
                 )),
                 environment: {},
                 containerSize: CGSize(width: availableSize.width, height: 100.0)
