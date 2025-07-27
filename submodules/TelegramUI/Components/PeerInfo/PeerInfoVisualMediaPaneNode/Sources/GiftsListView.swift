@@ -533,7 +533,6 @@ final class GiftsListView: UIView {
                     itemAlpha = 0.3
                 }
                 
-                //TODO:release
                 let _ = visibleItem.update(
                     transition: itemTransition,
                     component: AnyComponent(

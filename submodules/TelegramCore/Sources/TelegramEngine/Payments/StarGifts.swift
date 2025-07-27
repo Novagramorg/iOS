@@ -973,7 +973,7 @@ public enum TransferStarGiftError {
 
 public enum BuyStarGiftError {
     case generic
-    case priceChanged(Int64)
+    case priceChanged(CurrencyAmount)
     case starGiftResellTooEarly(Int32)
 }
 
@@ -999,7 +999,13 @@ func _internal_buyStarGift(account: Account, slug: String, peerId: EnginePeer.Id
     |> mapToSignal { paymentForm in
         if let paymentForm {
             if let paymentPrice = paymentForm.invoice.prices.first?.amount, let price, paymentPrice > price.amount.value {
-                return .fail(.priceChanged(paymentPrice))
+                let currencyAmount: CurrencyAmount
+                if paymentForm.invoice.currency == "TON" {
+                    currencyAmount = CurrencyAmount(amount: StarsAmount(value: paymentPrice, nanos: 0), currency: .ton)
+                } else {
+                    currencyAmount = CurrencyAmount(amount: StarsAmount(value: paymentPrice, nanos: 0), currency: .stars)
+                }
+                return .fail(.priceChanged(currencyAmount))
             }
             return _internal_sendStarsPaymentForm(account: account, formId: paymentForm.id, source: source)
             |> mapError { _ -> BuyStarGiftError in
