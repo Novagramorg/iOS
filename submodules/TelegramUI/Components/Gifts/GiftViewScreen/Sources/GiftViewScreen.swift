@@ -484,7 +484,6 @@ private final class GiftViewSheetContent: CombinedComponent {
                                 undoText: presentationData.strings.Gift_Displayed_View,
                                 customAction: nil
                             ),
-                            elevatedLayout: lastController is ChatController,
                             action: { [weak navigationController] action in
                                 if case .undo = action, let navigationController, let giftsPeerId {
                                     let _ = (self.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: giftsPeerId))
@@ -508,7 +507,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                                 return true
                             }
                         )
-                        lastController.present(resultController, in: .window(.root))
+                        lastController.present(resultController, in: .current)
                     }
                 }
             }
@@ -608,10 +607,9 @@ private final class GiftViewSheetContent: CombinedComponent {
                                                 customUndoText: nil,
                                                 timeout: nil
                                             ),
-                                            elevatedLayout: lastController is ChatController,
                                             action: { _ in return true }
                                         )
-                                        lastController.present(resultController, in: .window(.root))
+                                        lastController.present(resultController, in: .current)
                                     }
                                 }
                             }
@@ -867,7 +865,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                                         return false
                                     }
                                 )
-                                controller.present(tooltipController, in: .window(.root))
+                                controller.present(tooltipController, in: .current)
                             })
                         }),
                         TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: {
@@ -954,7 +952,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                                 return false
                             }
                         )
-                        controller.present(tooltipController, in: .window(.root))
+                        controller.present(tooltipController, in: .current)
                     })
                 })
                 controller.push(resellController)
@@ -1323,12 +1321,11 @@ private final class GiftViewSheetContent: CombinedComponent {
                                             let resultController = UndoOverlayController(
                                                 presentationData: presentationData,
                                                 content: .sticker(context: context, file: animationFile, loop: false, title: presentationData.strings.Gift_View_Resale_SuccessYou_Title, text: presentationData.strings.Gift_View_Resale_SuccessYou_Text(giftTitle).string, undoText: nil, customAction: nil),
-                                                elevatedLayout: lastController is ChatController,
                                                 action: {  _ in
                                                     return true
                                                 }
                                             )
-                                            lastController.present(resultController, in: .window(.root))
+                                            lastController.present(resultController, in: .current)
                                         }
                                     })
                                 } else {
@@ -1345,12 +1342,11 @@ private final class GiftViewSheetContent: CombinedComponent {
                                                 let resultController = UndoOverlayController(
                                                     presentationData: presentationData,
                                                     content: .sticker(context: context, file: animationFile, loop: false, title: presentationData.strings.Gift_View_Resale_Success_Title, text: presentationData.strings.Gift_View_Resale_Success_Text(peer.compactDisplayTitle).string, undoText: nil, customAction: nil),
-                                                    elevatedLayout: lastController is ChatController,
                                                     action: {  _ in
                                                         return true
                                                     }
                                                 )
-                                                lastController.present(resultController, in: .window(.root))
+                                                lastController.present(resultController, in: .current)
                                             }
                                         })
                                     })
@@ -3404,7 +3400,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                                                 return false
                                             }
                                         )
-                                        controller.present(tooltipController, in: .window(.root))
+                                        controller.present(tooltipController, in: .current)
                                     }
                                 } else {
                                     state.commitWear(uniqueGift)
@@ -3723,12 +3719,19 @@ final class GiftViewSheetComponent: CombinedComponent {
             )
             
             if let controller = controller(), !controller.automaticallyControlPresentationContextLayout {
+                var sideInset: CGFloat = 0.0
+                var bottomInset: CGFloat = max(environment.safeInsets.bottom, sheetExternalState.contentHeight)
+                if case .regular = environment.metrics.widthClass {
+                    sideInset = floor((context.availableSize.width - 430.0) / 2.0) - 12.0
+                    bottomInset = (context.availableSize.height - sheetExternalState.contentHeight) / 2.0 + sheetExternalState.contentHeight
+                }
+                
                 let layout = ContainerViewLayout(
                     size: context.availableSize,
                     metrics: environment.metrics,
                     deviceMetrics: environment.deviceMetrics,
-                    intrinsicInsets: UIEdgeInsets(top: 0.0, left: 0.0, bottom: max(environment.safeInsets.bottom, sheetExternalState.contentHeight), right: 0.0),
-                    safeInsets: UIEdgeInsets(top: 0.0, left: environment.safeInsets.left, bottom: 0.0, right: environment.safeInsets.right),
+                    intrinsicInsets: UIEdgeInsets(top: 0.0, left: 0.0, bottom: bottomInset, right: 0.0),
+                    safeInsets: UIEdgeInsets(top: 0.0, left: max(sideInset, environment.safeInsets.left), bottom: 0.0, right: max(sideInset, environment.safeInsets.right)),
                     additionalInsets: .zero,
                     statusBarHeight: environment.statusBarHeight,
                     inputHeight: nil,
