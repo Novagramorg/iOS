@@ -618,7 +618,7 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
                         context: self.context,
                         colors: TabSelectorComponent.Colors(
                             foreground: params.presentationData.theme.list.itemSecondaryTextColor,
-                            selection: params.presentationData.theme.list.itemPrimaryTextColor.withMultipliedAlpha(0.05)
+                            selection: params.presentationData.theme.list.itemPrimaryTextColor.withMultipliedAlpha(0.05),
                             simple: true
                         ),
                         theme: params.presentationData.theme,
