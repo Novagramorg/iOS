@@ -13,11 +13,7 @@ swift_library(
         "//submodules/Display",
         "//submodules/ComponentFlow",
         "//submodules/Components/MultilineTextComponent",
-        "//submodules/TelegramUI/Components/TextLoadingEffect",
-        "//submodules/Components/ComponentDisplayAdapters",
-        "//submodules/TooltipUI",
-        "//submodules/AccountContext",
-        "//submodules/UIKitRuntimeUtils",
+        "//submodules/Svg",
     ],
     visibility = [
         "//visibility:public",

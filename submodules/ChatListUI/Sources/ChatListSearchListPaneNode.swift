@@ -3451,6 +3451,8 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
                 break
             case let .peer(peerData):
                 if let peer = peerData.peer.peer, let message = peerData.messages.first {
+                    let _ = context.engine.peers.ensurePeerIsLocallyAvailable(peer: peer).startStandalone()
+                    
                     peerContextAction(peer, .search(message.id), node, gesture, location)
                 }
             case .groupReference:
