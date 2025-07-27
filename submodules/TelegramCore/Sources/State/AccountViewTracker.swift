@@ -2261,7 +2261,7 @@ public final class AccountViewTracker {
                 return -1
             }
         }, next: { [weak self] next, viewId in
-            if let strongSelf = self, let account = strongSelf.account, updateData {
+            if let strongSelf = self, let account = strongSelf.account {
                 strongSelf.updateCachedPeerData(peerId: peerId, accountPeerId: account.peerId, viewId: viewId, hasCachedData: next.cachedData != nil)
             }
         }, disposed: { [weak self] viewId in

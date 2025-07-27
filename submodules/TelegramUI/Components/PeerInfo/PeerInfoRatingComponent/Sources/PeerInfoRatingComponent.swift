@@ -3,131 +3,72 @@ import UIKit
 import Display
 import ComponentFlow
 import MultilineTextComponent
-import TextLoadingEffect
-import ComponentDisplayAdapters
-import TooltipUI
-import AccountContext
-import UIKitRuntimeUtils
+import Svg
 
 public final class PeerInfoRatingComponent: Component {
-    let context: AccountContext
     let backgroundColor: UIColor
+    let borderColor: UIColor
     let foregroundColor: UIColor
-    let tooltipBackgroundColor: UIColor
-    let isExpanded: Bool
-    let compactLabel: String
-    let fraction: CGFloat
-    let label: String
-    let nextLabel: String
-    let tooltipLabel: String
+    let level: Int
     let action: () -> Void
     
     public init(
-        context: AccountContext,
         backgroundColor: UIColor,
+        borderColor: UIColor,
         foregroundColor: UIColor,
-        tooltipBackgroundColor: UIColor,
-        isExpanded: Bool,
-        compactLabel: String,
-        fraction: CGFloat,
-        label: String,
-        nextLabel: String,
-        tooltipLabel: String,
+        level: Int,
         action: @escaping () -> Void
     ) {
-        self.context = context
         self.backgroundColor = backgroundColor
+        self.borderColor = borderColor
         self.foregroundColor = foregroundColor
-        self.tooltipBackgroundColor = tooltipBackgroundColor
-        self.isExpanded = isExpanded
-        self.compactLabel = compactLabel
-        self.fraction = fraction
-        self.label = label
-        self.nextLabel = nextLabel
-        self.tooltipLabel = tooltipLabel
+        self.level = level
         self.action = action
     }
     
     public static func ==(lhs: PeerInfoRatingComponent, rhs: PeerInfoRatingComponent) -> Bool {
-        if lhs.context !== rhs.context {
+        if lhs.backgroundColor != rhs.backgroundColor {
             return false
         }
-        if lhs.backgroundColor != rhs.backgroundColor {
+        if lhs.borderColor != rhs.borderColor {
             return false
         }
         if lhs.foregroundColor != rhs.foregroundColor {
             return false
         }
-        if lhs.tooltipBackgroundColor != rhs.tooltipBackgroundColor {
-            return false
-        }
-        if lhs.isExpanded != rhs.isExpanded {
-            return false
-        }
-        if lhs.compactLabel != rhs.compactLabel {
-            return false
-        }
-        if lhs.fraction != rhs.fraction {
-            return false
-        }
-        if lhs.label != rhs.label {
-            return false
-        }
-        if lhs.nextLabel != rhs.nextLabel {
-            return false
-        }
-        if lhs.tooltipLabel != rhs.tooltipLabel {
+        if lhs.level != rhs.level {
             return false
         }
         return true
     }
     
-    public final class View: UIView {
-        private let backgroundView: UIImageView
-        private let foregroundView: UIImageView
-        private let foregroundMaskView: UIView
-        private let foregroundClippedView: UIView
-        private let foregroundClippedMaskView: UIView
-        private let foregroundClippedShapeView: UIImageView
-        private let compactLabel = ComponentView<Empty>()
-        private let expandedLabel = ComponentView<Empty>()
-        private let expandedClippedLabel = ComponentView<Empty>()
-        private let nextLabel = ComponentView<Empty>()
+    private struct TextLayout {
+        var size: CGSize
+        var opticalBounds: CGRect
         
-        private var shimmerEffectView: TextLoadingEffectView?
+        init(size: CGSize, opticalBounds: CGRect) {
+            self.size = size
+            self.opticalBounds = opticalBounds
+        }
+    }
+    
+    public final class View: UIView {
+        private let borderLayer: SimpleLayer
+        private let backgroundLayer: SimpleLayer
+        
+        private var tempLevel: Int = 1
         
         private var component: PeerInfoRatingComponent?
-        
-        private var tooltipController: TooltipScreen?
+        private weak var state: EmptyComponentState?
         
         override public init(frame: CGRect) {
-            self.backgroundView = UIImageView()
-            
-            self.foregroundView = UIImageView()
-            self.foregroundMaskView = UIView()
-            self.foregroundMaskView.backgroundColor = .white
-            self.foregroundView.mask = self.foregroundMaskView
-            if let filter = CALayer.luminanceToAlpha() {
-                self.foregroundMaskView.layer.filters = [filter]
-            }
-            
-            self.foregroundClippedView = UIView()
-            self.foregroundClippedMaskView = UIView()
-            self.foregroundClippedMaskView.backgroundColor = .black
-            self.foregroundClippedView.mask = self.foregroundClippedMaskView
-            if let filter = CALayer.luminanceToAlpha() {
-                self.foregroundClippedMaskView.layer.filters = [filter]
-            }
-            
-            self.foregroundClippedShapeView = UIImageView()
-            self.foregroundClippedMaskView.addSubview(self.foregroundClippedShapeView)
-            
+            self.borderLayer = SimpleLayer()
+            self.backgroundLayer = SimpleLayer()
             
             super.init(frame: frame)
             
-            self.addSubview(self.backgroundView)
-            self.addSubview(self.foregroundClippedView)
-            self.addSubview(self.foregroundView)
+            self.layer.addSublayer(self.borderLayer)
+            self.layer.addSublayer(self.backgroundLayer)
             
             self.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(self.onTapGesture(_:))))
         }
@@ -139,202 +80,171 @@ public final class PeerInfoRatingComponent: Component {
         @objc private func onTapGesture(_ recognizer: UITapGestureRecognizer) {
             if case .ended = recognizer.state {
                 self.component?.action()
+                
+                if self.tempLevel < 10 {
+                    self.tempLevel += 1
+                } else {
+                    self.tempLevel += 10
+                }
+                if self.tempLevel >= 110 {
+                    self.tempLevel = 1
+                }
+                self.state?.updated(transition: .immediate)
             }
         }
         
         func update(component: PeerInfoRatingComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
-            self.component = component
-            
-            let previousBackgroundFrame = self.backgroundView.frame
+            let size = CGSize(width: 30.0, height: 30.0)
             
             let alphaTransition: ComponentTransition = transition.animation.isImmediate ? .immediate : .easeInOut(duration: 0.2)
             
-            let baseHeight: CGFloat = 20.0
-            let innerInset: CGFloat = 2.0
+            let previousComponent = self.component
+            self.component = component
+            self.state = state
             
-            let compactLabelSize = self.compactLabel.update(
-                transition: .immediate,
-                component: AnyComponent(MultilineTextComponent(
-                    text: .plain(NSAttributedString(string: component.compactLabel, font: Font.medium(11.0), textColor: .black))
-                )),
-                environment: {},
-                containerSize: CGSize(width: 100.0, height: 100.0)
-            )
+            //TODO:localize
+            //let level = component.level
+            let level = self.tempLevel
             
-            let expandedSize = CGSize(width: 174.0, height: baseHeight)
-            let collapsedSize = CGSize(width: max(baseHeight, compactLabelSize.width + 6.0 * 2.0), height: baseHeight)
+            let iconSize = CGSize(width: 26.0, height: 26.0)
             
-            if self.backgroundView.image == nil {
-                self.backgroundView.image = generateStretchableFilledCircleImage(diameter: baseHeight, color: .white)?.withRenderingMode(.alwaysTemplate)
-            }
-            if self.foregroundView.image == nil {
-                self.foregroundView.image = generateStretchableFilledCircleImage(diameter: baseHeight - innerInset * 2.0, color: .white)?.withRenderingMode(.alwaysTemplate)
-            }
-            if self.foregroundClippedShapeView.image == nil {
-                self.foregroundClippedShapeView.image = generateStretchableFilledCircleImage(diameter: baseHeight - innerInset * 2.0, color: .black)
-            }
-            
-            self.backgroundView.tintColor = component.backgroundColor
-            self.foregroundView.tintColor = component.foregroundColor
-            
-            let size = component.isExpanded ? expandedSize : collapsedSize
-            let backgroundFrame = CGRect(origin: CGPoint(), size: size)
-            
-            transition.setFrame(view: self.backgroundView, frame: backgroundFrame)
-            
-            let foregroundFrame: CGRect
-            if component.isExpanded {
-                let foregroundWidth = floorToScreenPixels(backgroundFrame.insetBy(dx: innerInset, dy: innerInset).width * component.fraction)
-                foregroundFrame = CGRect(origin: CGPoint(x: innerInset, y: innerInset), size: CGSize(width: foregroundWidth, height: backgroundFrame.height - innerInset * 2.0))
-            } else {
-                foregroundFrame = backgroundFrame.insetBy(dx: innerInset, dy: innerInset)
-            }
-            
-            transition.setFrame(view: self.foregroundView, frame: foregroundFrame)
-            transition.setFrame(view: self.foregroundMaskView, frame: CGRect(origin: CGPoint(), size: foregroundFrame.size))
-            
-            transition.setFrame(view: self.foregroundClippedView, frame: CGRect(origin: CGPoint(), size: size))
-            transition.setFrame(view: self.foregroundClippedMaskView, frame: CGRect(origin: CGPoint(), size: size))
-            self.foregroundClippedView.backgroundColor = component.foregroundColor
-            transition.setFrame(view: self.foregroundClippedShapeView, frame: foregroundFrame)
-            
-            if let compactLabelView = self.compactLabel.view {
-                if compactLabelView.superview == nil {
-                    self.foregroundMaskView.addSubview(compactLabelView)
-                }
-                compactLabelView.frame = CGRect(origin: CGPoint(x: floorToScreenPixels((collapsedSize.width - innerInset * 2.0 - compactLabelSize.width) * 0.5), y: floorToScreenPixels((baseHeight - innerInset * 2.0 - compactLabelSize.height) * 0.5) + UIScreenPixel), size: compactLabelSize)
-                alphaTransition.setAlpha(view: compactLabelView, alpha: component.isExpanded ? 0.0 : 1.0)
-            }
-            
-            let expandedLabelSize = self.expandedLabel.update(
-                transition: .immediate,
-                component: AnyComponent(MultilineTextComponent(
-                    text: .plain(NSAttributedString(string: component.label, font: Font.medium(11.0), textColor: .black))
-                )),
-                environment: {},
-                containerSize: CGSize(width: 100.0, height: 100.0)
-            )
-            if let expandedLabelView = self.expandedLabel.view {
-                if expandedLabelView.superview == nil {
-                    self.foregroundMaskView.addSubview(expandedLabelView)
-                }
-                expandedLabelView.frame = CGRect(origin: CGPoint(x: 4.0, y: floorToScreenPixels((baseHeight - innerInset * 2.0 - expandedLabelSize.height) * 0.5) + UIScreenPixel), size: expandedLabelSize)
-                alphaTransition.setAlpha(view: expandedLabelView, alpha: component.isExpanded ? 1.0 : 0.0)
-            }
-            
-            let expandedClippedLabelSize = self.expandedClippedLabel.update(
-                transition: .immediate,
-                component: AnyComponent(MultilineTextComponent(
-                    text: .plain(NSAttributedString(string: component.label, font: Font.medium(11.0), textColor: .white))
-                )),
-                environment: {},
-                containerSize: CGSize(width: 100.0, height: 100.0)
-            )
-            if let expandedClippedLabelView = self.expandedClippedLabel.view {
-                if expandedClippedLabelView.superview == nil {
-                    self.foregroundClippedMaskView.insertSubview(expandedClippedLabelView, belowSubview: self.foregroundClippedShapeView)
-                }
-                expandedClippedLabelView.frame = CGRect(origin: CGPoint(x: innerInset + 4.0, y: innerInset + floorToScreenPixels((baseHeight - innerInset * 2.0 - expandedClippedLabelSize.height) * 0.5) + UIScreenPixel), size: expandedClippedLabelSize)
-                alphaTransition.setAlpha(view: expandedClippedLabelView, alpha: component.isExpanded ? 1.0 : 0.0)
-            }
-            
-            let nextLabelSize = self.nextLabel.update(
-                transition: .immediate,
-                component: AnyComponent(MultilineTextComponent(
-                    text: .plain(NSAttributedString(string: component.nextLabel, font: Font.medium(11.0), textColor: component.foregroundColor.withMultipliedAlpha(0.5)))
-                )),
-                environment: {},
-                containerSize: CGSize(width: 100.0, height: 100.0)
-            )
-            if let nextLabelView = self.nextLabel.view {
-                if nextLabelView.superview == nil {
-                    self.insertSubview(nextLabelView, belowSubview: self.foregroundView)
-                }
-                let nextLabelFrame = CGRect(origin: CGPoint(x: size.width - nextLabelSize.width - 4.0 - innerInset, y: floorToScreenPixels((baseHeight - nextLabelSize.height) * 0.5) + UIScreenPixel), size: nextLabelSize)
-                transition.setPosition(view: nextLabelView, position: nextLabelFrame.center)
-                nextLabelView.bounds = CGRect(origin: CGPoint(), size: nextLabelFrame.size)
-                alphaTransition.setAlpha(view: nextLabelView, alpha: component.isExpanded ? 1.0 : 0.0)
-            }
-            
-            if component.isExpanded {
-                var shimmerEffectTransition = transition
-                let shimmerEffectView: TextLoadingEffectView
-                if let current = self.shimmerEffectView {
-                    shimmerEffectView = current
-                } else {
-                    shimmerEffectTransition = .immediate
-                    shimmerEffectView = TextLoadingEffectView(frame: CGRect())
-                    self.shimmerEffectView = shimmerEffectView
-                    self.addSubview(shimmerEffectView)
-                    shimmerEffectView.frame = previousBackgroundFrame
-                    shimmerEffectView.alpha = 0.0
-                }
-                transition.setFrame(view: shimmerEffectView, frame: backgroundFrame)
-                alphaTransition.setAlpha(view: shimmerEffectView, alpha: 1.0)
+            //TODO:localize
+            if previousComponent?.level != level || previousComponent?.borderColor != component.borderColor || previousComponent?.foregroundColor != component.foregroundColor || previousComponent?.backgroundColor != component.backgroundColor || "".isEmpty {
+                let attributedText = NSAttributedString(string: "\(level)", attributes: [
+                    NSAttributedString.Key.font: Font.semibold(10.0),
+                    NSAttributedString.Key.foregroundColor: component.foregroundColor
+                ])
                 
-                shimmerEffectView.update(color: .clear, borderColor: component.foregroundColor, rect: CGRect(origin: CGPoint(), size: backgroundFrame.size), path: UIBezierPath(roundedRect: CGRect(origin: CGPoint(), size: backgroundFrame.size).insetBy(dx: 1.0, dy: 1.0), cornerRadius: backgroundFrame.height * 0.5).cgPath, transition: shimmerEffectTransition.containedViewLayoutTransition)
-            } else if let shimmerEffectView = self.shimmerEffectView {
-                self.shimmerEffectView = nil
+                var boundingRect = attributedText.boundingRect(with: CGSize(width: 100.0, height: 100.0), options: .usesLineFragmentOrigin, context: nil)
+                boundingRect.size.width = ceil(boundingRect.size.width)
+                boundingRect.size.height = ceil(boundingRect.size.height)
                 
-                transition.setFrame(view: shimmerEffectView, frame: backgroundFrame)
-                
-                shimmerEffectView.update(color: .clear, borderColor: component.foregroundColor, rect: CGRect(origin: CGPoint(), size: backgroundFrame.size), path: UIBezierPath(roundedRect: CGRect(origin: CGPoint(), size: backgroundFrame.size), cornerRadius: backgroundFrame.height * 0.5).cgPath, transition: transition.containedViewLayoutTransition)
-                
-                alphaTransition.setAlpha(view: shimmerEffectView, alpha: 0.0, completion: { [weak shimmerEffectView] _ in
-                    shimmerEffectView?.removeFromSuperview()
-                })
-            }
-            
-            if !component.tooltipLabel.isEmpty {
-                let tooltipController: TooltipScreen
-                if let current = self.tooltipController {
-                    tooltipController = current
-                } else {
-                    tooltipController = TooltipScreen(
-                        context: component.context,
-                        account: component.context.account,
-                        sharedContext: component.context.sharedContext,
-                        text: .attributedString(text: NSAttributedString(string: component.tooltipLabel, font: Font.semibold(11.0), textColor: .white)),
-                        style: .customBlur(component.tooltipBackgroundColor, -4.0),
-                        arrowStyle: .small,
-                        location: .point(CGRect(origin: CGPoint(x: 100.0, y: 100.0), size: CGSize()), .bottom),
-                        displayDuration: .infinite,
-                        isShimmering: true,
-                        cornerRadius: 10.0,
-                        shouldDismissOnTouch: { _, _ in
-                            return .ignore
+                var textLayout: TextLayout?
+                if let context = DrawingContext(size: boundingRect.size, scale: 0.0, opaque: false, clear: true) {
+                    context.withContext { c in
+                        UIGraphicsPushContext(c)
+                        defer {
+                            UIGraphicsPopContext()
                         }
-                    )
-                    self.tooltipController = tooltipController
+                        
+                        attributedText.draw(at: CGPoint())
+                    }
+                    var minFilledLineY = Int(context.scaledSize.height) - 1
+                    var maxFilledLineY = 0
+                    var minFilledLineX = Int(context.scaledSize.width) - 1
+                    var maxFilledLineX = 0
+                    for y in 0 ..< Int(context.scaledSize.height) {
+                        let linePtr = context.bytes.advanced(by: max(0, y) * context.bytesPerRow).assumingMemoryBound(to: UInt32.self)
+                        
+                        for x in 0 ..< Int(context.scaledSize.width) {
+                            let pixelPtr = linePtr.advanced(by: x)
+                            if pixelPtr.pointee != 0 {
+                                minFilledLineY = min(y, minFilledLineY)
+                                maxFilledLineY = max(y, maxFilledLineY)
+                                minFilledLineX = min(x, minFilledLineX)
+                                maxFilledLineX = max(x, maxFilledLineX)
+                            }
+                        }
+                    }
                     
-                    tooltipController.containerLayoutUpdated(ContainerViewLayout(
-                        size: CGSize(width: 200.0, height: 200.0),
-                        metrics: LayoutMetrics(),
-                        deviceMetrics: DeviceMetrics.iPhoneXSMax,
-                        intrinsicInsets: UIEdgeInsets(),
-                        safeInsets: UIEdgeInsets(),
-                        additionalInsets: UIEdgeInsets(),
-                        statusBarHeight: nil,
-                        inputHeight: nil,
-                        inputHeightIsInteractivellyChanging: false,
-                        inVoiceOver: false
-                    ), transition: .immediate)
+                    var opticalBounds = CGRect()
+                    if minFilledLineX <= maxFilledLineX && minFilledLineY <= maxFilledLineY {
+                        opticalBounds.origin.x = CGFloat(minFilledLineX) / context.scale
+                        opticalBounds.origin.y = CGFloat(minFilledLineY) / context.scale
+                        opticalBounds.size.width = CGFloat(maxFilledLineX - minFilledLineX) / context.scale
+                        opticalBounds.size.height = CGFloat(maxFilledLineY - minFilledLineY) / context.scale
+                    }
                     
-                    self.layer.addSublayer(tooltipController.view.layer)
-                    tooltipController.viewWillAppear(false)
-                    tooltipController.viewDidAppear(false)
-                    tooltipController.setIgnoreAppearanceMethodInvocations(true)
-                    tooltipController.view.isUserInteractionEnabled = false
+                    textLayout = TextLayout(size: boundingRect.size, opticalBounds: opticalBounds)
                 }
                 
-                transition.setFrame(view: tooltipController.view, frame: CGRect(origin: CGPoint(), size: CGSize(width: 200.0, height: 200.0)).offsetBy(dx: -200.0 * 0.5 + foregroundFrame.width + 2.0, dy: -200.0 * 0.5))
-                alphaTransition.setAlpha(view: tooltipController.view, alpha: component.isExpanded ? 1.0 : 0.0)
-            } else {
-                if let tooltipController = self.tooltipController {
-                    self.tooltipController = nil
-                    tooltipController.view.layer.removeFromSuperlayer()
+                let levelIndex: Int
+                if level <= 10 {
+                    levelIndex = max(0, component.level)
+                } else if level <= 90 {
+                    levelIndex = (level / 10) * 10
+                } else {
+                    levelIndex = 90
+                }
+                let borderImage = generateImage(iconSize, rotatedContext: { size, context in
+                    UIGraphicsPushContext(context)
+                    defer {
+                        UIGraphicsPopContext()
+                    }
+                    
+                    context.clear(CGRect(origin: CGPoint(), size: size))
+                    
+                    if let url = Bundle.main.url(forResource: "profile_level\(levelIndex)_outer", withExtension: "svg"), let data = try? Data(contentsOf: url) {
+                        if let image = generateTintedImage(image: drawSvgImage(data, size, nil, nil, 0.0, false), color: component.borderColor) {
+                            image.draw(in: CGRect(origin: CGPoint(), size: size), blendMode: .normal, alpha: 1.0)
+                        }
+                    }
+                })
+                
+                if let previousContents = self.borderLayer.contents, CFGetTypeID(previousContents as CFTypeRef) == CGImage.typeID {
+                    self.borderLayer.contents = borderImage!.cgImage
+                    alphaTransition.animateContentsImage(layer: self.borderLayer, from: previousContents as! CGImage, to: borderImage!.cgImage!, duration: 0.2, curve: .easeInOut)
+                } else {
+                    self.borderLayer.contents = borderImage!.cgImage
+                }
+                
+                let backgroundImage = generateImage(iconSize, rotatedContext: { size, context in
+                    UIGraphicsPushContext(context)
+                    defer {
+                        UIGraphicsPopContext()
+                    }
+                    
+                    context.clear(CGRect(origin: CGPoint(), size: size))
+                    
+                    if let url = Bundle.main.url(forResource: "profile_level\(levelIndex)_inner", withExtension: "svg"), let data = try? Data(contentsOf: url) {
+                        if let image = generateTintedImage(image: drawSvgImage(data, size, nil, nil, 0.0, false), color: component.backgroundColor) {
+                            image.draw(in: CGRect(origin: CGPoint(), size: size), blendMode: .normal, alpha: 1.0)
+                        }
+                    }
+                    
+                    if component.foregroundColor.alpha < 1.0 {
+                        context.setBlendMode(.copy)
+                    } else {
+                        context.setBlendMode(.normal)
+                    }
+                    
+                    if let textLayout {
+                        let titleScale: CGFloat
+                        if level < 10 {
+                            titleScale = 1.0
+                        } else if level < 100 {
+                            titleScale = 0.8
+                        } else {
+                            titleScale = 0.6
+                        }
+                        
+                        var textFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((size.width - textLayout.size.width) * 0.5), y: floorToScreenPixels((size.height - textLayout.size.height) * 0.5)), size: textLayout.size)
+                        if level == 1 {
+                        } else {
+                            textFrame.origin.x += UIScreenPixel
+                        }
+                        
+                        context.saveGState()
+                        context.translateBy(x: textFrame.midX, y: textFrame.midY)
+                        context.scaleBy(x: titleScale, y: titleScale)
+                        context.translateBy(x: -textFrame.midX, y: -textFrame.midY)
+                        
+                        attributedText.draw(at: textFrame.origin)
+                        
+                        context.restoreGState()
+                    }
+                })
+                if let previousContents = self.backgroundLayer.contents, CFGetTypeID(previousContents as CFTypeRef) == CGImage.typeID {
+                    self.backgroundLayer.contents = backgroundImage!.cgImage
+                    alphaTransition.animateContentsImage(layer: self.backgroundLayer, from: previousContents as! CGImage, to: backgroundImage!.cgImage!, duration: 0.2, curve: .easeInOut)
+                } else {
+                    self.backgroundLayer.contents = backgroundImage!.cgImage
                 }
             }
+            
+            let backgroundFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((size.width - iconSize.width) * 0.5), y: floorToScreenPixels((size.height - iconSize.height) * 0.5)), size: iconSize)
+            transition.setFrame(layer: self.backgroundLayer, frame: backgroundFrame)
+            transition.setFrame(layer: self.borderLayer, frame: backgroundFrame)
             
             return size
         }
