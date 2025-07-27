@@ -881,6 +881,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[-1115174036] = { return Api.SavedDialog.parse_savedDialog($0) }
     dict[-881854424] = { return Api.SavedReactionTag.parse_savedReactionTag($0) }
     dict[514213599] = { return Api.SavedStarGift.parse_savedStarGift($0) }
+    dict[-1810993028] = { return Api.SearchPostsFlood.parse_searchPostsFlood($0) }
     dict[-911191137] = { return Api.SearchResultsCalendarPeriod.parse_searchResultsCalendarPeriod($0) }
     dict[2137295719] = { return Api.SearchResultsPosition.parse_searchResultPosition($0) }
     dict[871426631] = { return Api.SecureCredentialsEncrypted.parse_secureCredentialsEncrypted($0) }
@@ -1381,7 +1382,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[-948520370] = { return Api.messages.Messages.parse_channelMessages($0) }
     dict[-1938715001] = { return Api.messages.Messages.parse_messages($0) }
     dict[1951620897] = { return Api.messages.Messages.parse_messagesNotModified($0) }
-    dict[978610270] = { return Api.messages.Messages.parse_messagesSlice($0) }
+    dict[1982539325] = { return Api.messages.Messages.parse_messagesSlice($0) }
     dict[-83926371] = { return Api.messages.MyStickers.parse_myStickers($0) }
     dict[863093588] = { return Api.messages.PeerDialogs.parse_peerDialogs($0) }
     dict[1753266509] = { return Api.messages.PeerSettings.parse_peerSettings($0) }
@@ -2098,6 +2099,8 @@ public extension Api {
             case let _1 as Api.SavedReactionTag:
                 _1.serialize(buffer, boxed)
             case let _1 as Api.SavedStarGift:
+                _1.serialize(buffer, boxed)
+            case let _1 as Api.SearchPostsFlood:
                 _1.serialize(buffer, boxed)
             case let _1 as Api.SearchResultsCalendarPeriod:
                 _1.serialize(buffer, boxed)

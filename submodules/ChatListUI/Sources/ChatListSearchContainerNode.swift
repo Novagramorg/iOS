@@ -157,6 +157,7 @@ public final class ChatListSearchContainerNode: SearchDisplayControllerContentNo
     
     private let sharedOpenStoryDisposable = MetaDisposable()
     private var recentAppsDisposable: Disposable?
+    private var refreshedGlobalPostSearchStateDisposable: Disposable?
     
     public init(context: AccountContext, animationCache: AnimationCache, animationRenderer: MultiAnimationRenderer, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)? = nil, filter: ChatListNodePeersFilter, requestPeerType: [ReplyMarkupButtonRequestPeerType]?, location: ChatListControllerLocation, displaySearchFilters: Bool, hasDownloads: Bool, initialFilter: ChatListSearchFilter = .chats, openPeer originalOpenPeer: @escaping (EnginePeer, EnginePeer?, Int64?, Bool) -> Void, openDisabledPeer: @escaping (EnginePeer, Int64?, ChatListDisabledPeerReason) -> Void, openRecentPeerOptions: @escaping (EnginePeer) -> Void, openMessage originalOpenMessage: @escaping (EnginePeer, Int64?, EngineMessage.Id, Bool) -> Void, addContact: ((String) -> Void)?, peerContextAction: ((EnginePeer, ChatListSearchContextActionSource, ASDisplayNode, ContextGesture?, CGPoint?) -> Void)?, present: @escaping (ViewController, Any?) -> Void, presentInGlobalOverlay: @escaping (ViewController, Any?) -> Void, navigationController: NavigationController?, parentController: @escaping () -> ViewController?) {
         var initialFilter = initialFilter
@@ -531,6 +532,7 @@ public final class ChatListSearchContainerNode: SearchDisplayControllerContentNo
         }
         
         self.recentAppsDisposable = context.engine.peers.managedUpdatedRecentApps().startStrict()
+        self.refreshedGlobalPostSearchStateDisposable = context.engine.messages.refreshGlobalPostSearchState().startStrict()
         
         self._ready.set(self.paneContainerNode.isReady.get()
         |> map { _ in Void() })
@@ -543,6 +545,7 @@ public final class ChatListSearchContainerNode: SearchDisplayControllerContentNo
         self.shareStatusDisposable?.dispose()
         self.sharedOpenStoryDisposable.dispose()
         self.recentAppsDisposable?.dispose()
+        self.refreshedGlobalPostSearchStateDisposable?.dispose()
         
         self.copyProtectionTooltipController?.dismiss()
     }

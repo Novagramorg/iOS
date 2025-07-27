@@ -1298,11 +1298,10 @@ public struct ChatListSearchContainerTransition {
     public let isLoading: Bool
     public let query: String?
     public let approvedGlobalPostQueryState: ApprovedGlobalPostQueryState?
-    public let remainingGlobalSearches: Int
-    public let globalSearchUnlockTimestamp: Int32?
+    public let globalSearchStateValue: TelegramGlobalPostSearchState?
     public var animated: Bool
     
-    public init(deletions: [ListViewDeleteItem], insertions: [ListViewInsertItem], updates: [ListViewUpdateItem], displayingResults: Bool, isEmpty: Bool, isLoading: Bool, query: String?, approvedGlobalPostQueryState: ApprovedGlobalPostQueryState?, remainingGlobalSearches: Int, globalSearchUnlockTimestamp: Int32?, animated: Bool) {
+    public init(deletions: [ListViewDeleteItem], insertions: [ListViewInsertItem], updates: [ListViewUpdateItem], displayingResults: Bool, isEmpty: Bool, isLoading: Bool, query: String?, approvedGlobalPostQueryState: ApprovedGlobalPostQueryState?, globalSearchStateValue: TelegramGlobalPostSearchState?, animated: Bool) {
         self.deletions = deletions
         self.insertions = insertions
         self.updates = updates
@@ -1310,8 +1309,7 @@ public struct ChatListSearchContainerTransition {
         self.isEmpty = isEmpty
         self.isLoading = isLoading
         self.approvedGlobalPostQueryState = approvedGlobalPostQueryState
-        self.remainingGlobalSearches = remainingGlobalSearches
-        self.globalSearchUnlockTimestamp = globalSearchUnlockTimestamp
+        self.globalSearchStateValue = globalSearchStateValue
         self.query = query
         self.animated = animated
     }
@@ -1376,8 +1374,7 @@ public func chatListSearchContainerPreparedTransition(
     searchPeer: @escaping (EnginePeer) -> Void,
     searchQuery: String?,
     approvedGlobalPostQueryState: ApprovedGlobalPostQueryState?,
-    remainingGlobalSearches: Int,
-    globalSearchUnlockTimestamp: Int32?,
+    globalSearchStateValue: TelegramGlobalPostSearchState?,
     searchOptions: ChatListSearchOptions?,
     messageContextAction: ((EngineMessage, ASDisplayNode?, CGRect?, UIGestureRecognizer?, ChatListSearchPaneKey, (id: String, size: Int64, isFirstInList: Bool)?) -> Void)?,
     openClearRecentlyDownloaded: @escaping () -> Void,
@@ -1393,7 +1390,7 @@ public func chatListSearchContainerPreparedTransition(
     let insertions = indicesAndItems.map { ListViewInsertItem(index: $0.0, previousIndex: $0.2, item: $0.1.item(context: context, presentationData: presentationData, enableHeaders: enableHeaders, filter: filter, requestPeerType: requestPeerType, location: location, key: key, tagMask: tagMask, interaction: interaction, listInteraction: listInteraction, peerContextAction: peerContextAction, toggleExpandLocalResults: toggleExpandLocalResults, toggleExpandGlobalResults: toggleExpandGlobalResults, searchPeer: searchPeer, searchQuery: searchQuery, searchOptions: searchOptions, messageContextAction: messageContextAction, openClearRecentlyDownloaded: openClearRecentlyDownloaded, toggleAllPaused: toggleAllPaused, openStories: openStories, openPublicPosts: openPublicPosts, openMessagesFilter: openMessagesFilter, switchMessagesFilter: switchMessagesFilter), directionHint: nil) }
     let updates = updateIndices.map { ListViewUpdateItem(index: $0.0, previousIndex: $0.2, item: $0.1.item(context: context, presentationData: presentationData, enableHeaders: enableHeaders, filter: filter, requestPeerType: requestPeerType, location: location, key: key, tagMask: tagMask,  interaction: interaction, listInteraction: listInteraction, peerContextAction: peerContextAction, toggleExpandLocalResults: toggleExpandLocalResults, toggleExpandGlobalResults: toggleExpandGlobalResults, searchPeer: searchPeer, searchQuery: searchQuery, searchOptions: searchOptions, messageContextAction: messageContextAction, openClearRecentlyDownloaded: openClearRecentlyDownloaded, toggleAllPaused: toggleAllPaused, openStories: openStories, openPublicPosts: openPublicPosts, openMessagesFilter: openMessagesFilter, switchMessagesFilter: switchMessagesFilter), directionHint: nil) }
     
-    return ChatListSearchContainerTransition(deletions: deletions, insertions: insertions, updates: updates, displayingResults: displayingResults, isEmpty: isEmpty, isLoading: isLoading, query: searchQuery, approvedGlobalPostQueryState: approvedGlobalPostQueryState, remainingGlobalSearches: remainingGlobalSearches, globalSearchUnlockTimestamp: globalSearchUnlockTimestamp, animated: animated)
+    return ChatListSearchContainerTransition(deletions: deletions, insertions: insertions, updates: updates, displayingResults: displayingResults, isEmpty: isEmpty, isLoading: isLoading, query: searchQuery, approvedGlobalPostQueryState: approvedGlobalPostQueryState, globalSearchStateValue: globalSearchStateValue, animated: animated)
 }
 
 private struct ChatListSearchListPaneNodeState: Equatable {
@@ -1620,16 +1617,6 @@ public struct ApprovedGlobalPostQueryState: Equatable {
     }
 }
 
-struct TelegramGlobalPostSearchState: Equatable {
-    var remainingSearches: Int
-    var unlockTimestamp: Int32?
-    
-    init(remainingSearches: Int, unlockTimestamp: Int32?) {
-        self.remainingSearches = remainingSearches
-        self.unlockTimestamp = unlockTimestamp
-    }
-}
-
 final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
     private let context: AccountContext
     private let animationCache: AnimationCache
@@ -1676,7 +1663,7 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
     private var searchQueryValue: String?
     private var searchOptionsValue: ChatListSearchOptions?
     private var approvedGlobalPostQueryStateValue: ApprovedGlobalPostQueryState?
-    private var globalPostSearchStateValue: TelegramGlobalPostSearchState
+    private var globalPostSearchStateValue: TelegramGlobalPostSearchState?
     private var globalPostSearchUnlockTimer: Foundation.Timer?
     private var isPremium: Bool = false
     
@@ -1737,7 +1724,9 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
     private let searchScopePromise = ValuePromise<TelegramSearchPeersScope>(.everywhere)
     
     private let approvedGlobalPostQueryState = ValuePromise<ApprovedGlobalPostQueryState?>(nil, ignoreRepeated: true)
-    private let globalPostSearchState = Promise<TelegramGlobalPostSearchState>()
+    private let globalPostSearchState = Promise<TelegramGlobalPostSearchState?>()
+    
+    private var refreshGlobalPostSearchStateDisposable: Disposable?
     
     init(context: AccountContext, animationCache: AnimationCache, animationRenderer: MultiAnimationRenderer, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)? = nil, interaction: ChatListSearchInteraction, key: ChatListSearchPaneKey, peersFilter: ChatListNodePeersFilter, requestPeerType: [ReplyMarkupButtonRequestPeerType]?, location: ChatListControllerLocation, searchQuery: Signal<String?, NoError>, searchOptions: Signal<ChatListSearchOptions?, NoError>, navigationController: NavigationController?, parentController: ViewController?, globalPeerSearchContext: GlobalPeerSearchContext?) {
         self.context = context
@@ -1752,8 +1741,6 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
         let globalPeerSearchContext = globalPeerSearchContext ?? GlobalPeerSearchContext()
         
         self.globalPeerSearchContext = globalPeerSearchContext
-        
-        self.globalPostSearchStateValue = TelegramGlobalPostSearchState(remainingSearches: 2, unlockTimestamp: nil)
 
         var peersFilter = peersFilter
         if case .forum = location {
@@ -2056,6 +2043,9 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
         
         let globalPostSearchStateType = self.globalPostSearchState.get()
         |> map { state -> Bool in
+            guard let state else {
+                return false
+            }
             return state.unlockTimestamp != nil
         }
         |> distinctUntilChanged
@@ -3624,7 +3614,9 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
             listInteraction?.searchTextHighightState = query
             chatListInteraction?.searchTextHighightState = query
         })
-        self.globalPostSearchState.set(.single(self.globalPostSearchStateValue))
+        self.globalPostSearchState.set(context.engine.data.subscribe(
+            TelegramEngine.EngineData.Item.Messages.GlobalPostSearchState()
+        ))
         self.approvedSearchQueryDisposable = (combineLatest(queue: .mainQueue(), self.approvedGlobalPostQueryState.get(), self.globalPostSearchState.get(), isPremium)
         |> deliverOnMainQueue).startStrict(next: { [weak self] approvedGlobalPostQueryState, globalPostSearchState, isPremium in
             guard let self else {
@@ -3634,27 +3626,25 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
             self.globalPostSearchStateValue = globalPostSearchState
             self.isPremium = isPremium
             
-            if globalPostSearchState.unlockTimestamp != nil {
+            if let globalPostSearchState, globalPostSearchState.unlockTimestamp != nil {
                 if self.globalPostSearchUnlockTimer == nil {
                     self.globalPostSearchUnlockTimer = Foundation.Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true, block: { [weak self] _ in
                         guard let self else {
                             return
                         }
                         
-                        if let unlockTimestamp = self.globalPostSearchStateValue.unlockTimestamp {
+                        if let unlockTimestamp = self.globalPostSearchStateValue?.unlockTimestamp {
                             var remainingTime: Int32 = unlockTimestamp - Int32(Date().timeIntervalSince1970)
                             remainingTime = max(0, remainingTime)
                             if remainingTime == 0 {
-                                if let globalPostSearchUnlockTimer = self.globalPostSearchUnlockTimer {
-                                    self.globalPostSearchUnlockTimer = nil
-                                    globalPostSearchUnlockTimer.invalidate()
+                                if self.refreshGlobalPostSearchStateDisposable == nil {
+                                    self.refreshGlobalPostSearchStateDisposable = self.context.engine.messages.refreshGlobalPostSearchState().start(completed: { [weak self] in
+                                        guard let self else {
+                                            return
+                                        }
+                                        self.refreshGlobalPostSearchStateDisposable = nil
+                                    })
                                 }
-                                
-                                //TODO:localize
-                                var globalPostSearchState = self.globalPostSearchStateValue
-                                globalPostSearchState.unlockTimestamp = nil
-                                globalPostSearchState.remainingSearches = 2
-                                self.globalPostSearchState.set(.single(globalPostSearchState))
                             }
                         }
                     })
@@ -3816,8 +3806,7 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
                 },
                 searchQuery: strongSelf.searchQueryValue,
                 approvedGlobalPostQueryState: strongSelf.approvedGlobalPostQueryStateValue,
-                remainingGlobalSearches: strongSelf.globalPostSearchStateValue.remainingSearches,
-                globalSearchUnlockTimestamp: strongSelf.globalPostSearchStateValue.unlockTimestamp,
+                globalSearchStateValue: strongSelf.globalPostSearchStateValue,
                 searchOptions: strongSelf.searchOptionsValue, messageContextAction: { message, node, rect, gesture, paneKey, downloadResource in
                     interaction.messageContextAction(message, node, rect, gesture, paneKey, downloadResource)
                 }, openClearRecentlyDownloaded: {
@@ -4694,6 +4683,7 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
         self.approvedSearchQueryDisposable?.dispose()
         self.searchOptionsDisposable?.dispose()
         self.globalPostSearchUnlockTimer?.invalidate()
+        self.refreshGlobalPostSearchStateDisposable?.dispose()
     }
     
     override func didLoad() {
@@ -4767,6 +4757,7 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
     
     func update(size: CGSize, sideInset: CGFloat, bottomInset: CGFloat, visibleHeight: CGFloat, presentationData: PresentationData, synchronous: Bool, transition: ContainedViewLayoutTransition) {
         let hadValidLayout = self.currentParams != nil
+        let layoutChanged = self.currentParams?.size != size || self.currentParams?.sideInset != sideInset || self.currentParams?.bottomInset != bottomInset || self.currentParams?.visibleHeight != visibleHeight
         self.currentParams = (size, sideInset, bottomInset, visibleHeight, presentationData)
         
         var topPanelHeight: CGFloat = 0.0
@@ -5128,8 +5119,7 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
                                 if let searchQueryValue = self.searchQueryValue, !searchQueryValue.isEmpty, self.approvedGlobalPostQueryStateValue?.query != searchQueryValue {
                                     var price: Int?
                                     
-                                    var globalPostSearchStateValue = self.globalPostSearchStateValue
-                                    if globalPostSearchStateValue.remainingSearches == 0 {
+                                    if let globalPostSearchStateValue = self.globalPostSearchStateValue, globalPostSearchStateValue.remainingFreeSearches == 0 {
                                         //TODO:localize
                                         price = 10
                                     }
@@ -5138,15 +5128,6 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
                                         query: searchQueryValue,
                                         price: price
                                     ))
-                                    
-                                    
-                                    if globalPostSearchStateValue.remainingSearches > 0 {
-                                        globalPostSearchStateValue.remainingSearches -= 1
-                                        if globalPostSearchStateValue.remainingSearches == 0 {
-                                            globalPostSearchStateValue.unlockTimestamp = Int32(Date().timeIntervalSince1970) + 30
-                                        }
-                                    }
-                                    self.globalPostSearchState.set(.single(globalPostSearchStateValue))
                                     
                                     if let price {
                                         //TODO:localize
@@ -5230,7 +5211,7 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
                 emptyTitleY = emptyAnimationY
             }
             
-            let textTransition = ContainedViewLayoutTransition.immediate
+            let textTransition: ContainedViewLayoutTransition = layoutChanged ? transition : .immediate
             textTransition.updateFrame(node: self.emptyResultsAnimationNode, frame: CGRect(origin: CGPoint(x: sideInset + padding + (size.width - sideInset * 2.0 - padding * 2.0 - self.emptyResultsAnimationSize.width) / 2.0, y: emptyAnimationY), size: self.emptyResultsAnimationSize))
             textTransition.updateFrame(node: self.emptyResultsTitleNode, frame: CGRect(origin: CGPoint(x: sideInset + padding + (size.width - sideInset * 2.0 - padding * 2.0 - emptyTitleSize.width) / 2.0, y: emptyTitleY), size: emptyTitleSize))
             textTransition.updateFrame(node: self.emptyResultsTextNode, frame: CGRect(origin: CGPoint(x: sideInset + padding + (size.width - sideInset * 2.0 - padding * 2.0 - emptyTextSize.width) / 2.0, y: emptyTitleY + emptyTitleSize.height + emptyTextSpacing), size: emptyTextSize))
@@ -5240,20 +5221,24 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
             if let emptyButtonView = self.emptyResultsButton?.view, let emptyButtonSize {
                 nextY += emptyButtonSpacing
                 
+                var emptyButtonTransition = textTransition
                 if emptyButtonView.superview == nil {
+                    emptyButtonTransition = .immediate
                     self.view.insertSubview(emptyButtonView, aboveSubview: self.emptyResultsTextNode.view)
                 }
-                emptyButtonView.frame = CGRect(origin: CGPoint(x: floor((size.width - emptyButtonSize.width) * 0.5), y: nextY), size: emptyButtonSize)
+                emptyButtonTransition.updateFrame(view: emptyButtonView, frame: CGRect(origin: CGPoint(x: floor((size.width - emptyButtonSize.width) * 0.5), y: nextY), size: emptyButtonSize))
                 
                 nextY += emptyButtonSize.height
             }
             if let emptyButtonSubtitleView = self.emptyResultsButtonSubtitle?.view, let emptyButtonSubtitleSize {
                 nextY += emptyButtonSubtitleSpacing
                 
+                var emptyButtonSubtitleTransition = textTransition
                 if emptyButtonSubtitleView.superview == nil {
+                    emptyButtonSubtitleTransition = .immediate
                     self.view.insertSubview(emptyButtonSubtitleView, aboveSubview: self.emptyResultsTextNode.view)
                 }
-                emptyButtonSubtitleView.frame = CGRect(origin: CGPoint(x: floor((size.width - emptyButtonSubtitleSize.width) * 0.5), y: nextY), size: emptyButtonSubtitleSize)
+                emptyButtonSubtitleTransition.updateFrame(view: emptyButtonSubtitleView, frame: CGRect(origin: CGPoint(x: floor((size.width - emptyButtonSubtitleSize.width) * 0.5), y: nextY), size: emptyButtonSubtitleSize))
                 
                 nextY += emptyButtonSubtitleSize.height
             }
@@ -5408,7 +5393,7 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
                         var emptyResultsButtonContent: EmptyResultsButton.Content?
                         var emptyResultsButtonSubtitleText: String?
                         
-                        if strongSelf.key == .globalPosts {
+                        if strongSelf.key == .globalPosts, let globalSearchStateValue = transition.globalSearchStateValue {
                             if !strongSelf.isPremium {
                                 emptyResultsButtonContent = .premiumRequired
                                 emptyResultsTitle = "Global Search"
@@ -5420,13 +5405,13 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
                                     emptyResultsTitle = strongSelf.presentationData.strings.ChatList_Search_NoResults
                                     emptyResultsText = strongSelf.presentationData.strings.ChatList_Search_NoResultsQueryDescription(query).string
                                 } else {
-                                    if transition.remainingGlobalSearches != 0 {
+                                    if globalSearchStateValue.remainingFreeSearches != 0 {
                                         emptyResultsTitle = "Global Search"
                                         emptyResultsText = "Type a keyword to search all posts\nfrom public channels."
-                                        if transition.remainingGlobalSearches == 1 {
+                                        if globalSearchStateValue.remainingFreeSearches == 1 {
                                             emptyResultsButtonSubtitleText = "1 free search remaining today."
                                         } else {
-                                            emptyResultsButtonSubtitleText = "\(transition.remainingGlobalSearches) free searches remaining today."
+                                            emptyResultsButtonSubtitleText = "\(globalSearchStateValue.remainingFreeSearches) free searches remaining today."
                                         }
                                         
                                         emptyResultsButtonContent = .searchQuery(query)
@@ -5435,29 +5420,29 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
                                         emptyResultsText = "You can make up to\n10 search queries per day."
                                         
                                         emptyResultsButtonContent = .paidSearch(
-                                            price: 10,
-                                            timestamp: transition.globalSearchUnlockTimestamp
+                                            price: Int(globalSearchStateValue.price.value),
+                                            timestamp: globalSearchStateValue.unlockTimestamp
                                         )
                                     }
                                 }
                             } else {
-                                if transition.remainingGlobalSearches != 0 {
+                                if globalSearchStateValue.remainingFreeSearches != 0 {
                                     emptyResultsButtonContent = .searchEmpty
                                     emptyResultsTitle = "Global Search"
                                     emptyResultsText = "Type a keyword to search all posts\nfrom public channels."
                                     
-                                    if transition.remainingGlobalSearches == 1 {
+                                    if globalSearchStateValue.remainingFreeSearches == 1 {
                                         emptyResultsButtonSubtitleText = "1 free search remaining today."
                                     } else {
-                                        emptyResultsButtonSubtitleText = "\(transition.remainingGlobalSearches) free searches remaining today."
+                                        emptyResultsButtonSubtitleText = "\(globalSearchStateValue.remainingFreeSearches) free searches remaining today."
                                     }
                                 } else {
                                     emptyResultsTitle = "Limit Reached"
                                     emptyResultsText = "You can make up to\n10 search queries per day."
                                     
                                     emptyResultsButtonContent = .paidSearch(
-                                        price: 10,
-                                        timestamp: transition.globalSearchUnlockTimestamp
+                                        price: Int(globalSearchStateValue.price.value),
+                                        timestamp: globalSearchStateValue.unlockTimestamp
                                     )
                                 }
                             }

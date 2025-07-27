@@ -101,7 +101,7 @@ private func mergedState(transaction: Transaction, seedConfiguration: SeedConfig
             users = apiUsers
             totalCount = Int32(messages.count)
             nextRate = nil
-        case let .messagesSlice(_, count, apiNextRate, _, apiMessages, apiChats, apiUsers):
+        case let .messagesSlice(_, count, apiNextRate, _, _, apiMessages, apiChats, apiUsers):
             messages = apiMessages
             chats = apiChats
             users = apiUsers
@@ -288,7 +288,7 @@ func _internal_getSearchMessageCount(account: Account, location: SearchMessagesL
                 return messages.count
             case let .messagesNotModified(count):
                 return Int(count)
-            case let .messagesSlice(_, count, _, _, _, _, _):
+            case let .messagesSlice(_, count, _, _, _, _, _, _):
                 return Int(count)
             }
         }
@@ -602,6 +602,26 @@ func _internal_searchMessages(account: Account, location: SearchMessagesLocation
                 }
             }
             
+            if let result {
+                switch result {
+                case let .messagesSlice(_, _, _, _, searchFlood, _, _, _):
+                    if let searchFlood {
+                        transaction.updatePreferencesEntry(key: PreferencesKeys.globalPostSearchState(), { _ in
+                            switch searchFlood {
+                            case let .searchPostsFlood(_, remains, waitTill, starsAmount):
+                                return PreferencesEntry(TelegramGlobalPostSearchState(
+                                    remainingFreeSearches: remains,
+                                    price: StarsAmount(value: starsAmount, nanos: 0),
+                                    unlockTimestamp: waitTill
+                                ))
+                            }
+                        })
+                    }
+                default:
+                    break
+                }
+            }
+            
             let updatedState = SearchMessagesState(main: mergedState(transaction: transaction, seedConfiguration: account.postbox.seedConfiguration, accountPeerId: account.peerId, state: state?.main, result: result) ?? SearchMessagesPeerState(messages: [], readStates: [:], threadInfo: [:], totalCount: 0, completed: true, nextRate: nil), additional: additional)
             return (mergedResult(updatedState), updatedState)
         }
@@ -682,7 +702,7 @@ func _internal_downloadMessage(accountPeerId: PeerId, postbox: Postbox, network:
                             messages = apiMessages
                             chats = apiChats
                             users = apiUsers
-                        case let .messagesSlice(_, _, _, _, apiMessages, apiChats, apiUsers):
+                        case let .messagesSlice(_, _, _, _, _, apiMessages, apiChats, apiUsers):
                             messages = apiMessages
                             chats = apiChats
                             users = apiUsers
@@ -773,7 +793,7 @@ func fetchRemoteMessage(accountPeerId: PeerId, postbox: Postbox, source: FetchMe
                 messages = apiMessages
                 chats = apiChats
                 users = apiUsers
-            case let .messagesSlice(_, _, _, _, apiMessages, apiChats, apiUsers):
+            case let .messagesSlice(_, _, _, _, _, apiMessages, apiChats, apiUsers):
                 messages = apiMessages
                 chats = apiChats
                 users = apiUsers
@@ -839,7 +859,7 @@ func _internal_searchMessageIdByTimestamp(account: Account, peerId: PeerId, thre
                             messages = apiMessages
                         case let .channelMessages(_, _, _, _, apiMessages, _, _, _):
                             messages = apiMessages
-                        case let .messagesSlice(_, _, _, _, apiMessages, _, _):
+                        case let .messagesSlice(_, _, _, _, _, apiMessages, _, _):
                             messages = apiMessages
                         case .messagesNotModified:
                             messages = []
@@ -876,7 +896,7 @@ func _internal_searchMessageIdByTimestamp(account: Account, peerId: PeerId, thre
                             messages = apiMessages
                         case let .channelMessages(_, _, _, _, apiMessages, _, _, _):
                             messages = apiMessages
-                        case let .messagesSlice(_, _, _, _, apiMessages, _, _):
+                        case let .messagesSlice(_, _, _, _, _, apiMessages, _, _):
                             messages = apiMessages
                         case .messagesNotModified:
                             messages = []
@@ -909,7 +929,7 @@ func _internal_searchMessageIdByTimestamp(account: Account, peerId: PeerId, thre
                                 messages = apiMessages
                             case let .channelMessages(_, _, _, _, apiMessages, _, _, _):
                                 messages = apiMessages
-                            case let .messagesSlice(_, _, _, _, apiMessages, _, _):
+                            case let .messagesSlice(_, _, _, _, _, apiMessages, _, _):
                                 messages = apiMessages
                             case .messagesNotModified:
                                 messages = []
@@ -933,7 +953,7 @@ func _internal_searchMessageIdByTimestamp(account: Account, peerId: PeerId, thre
                             messages = apiMessages
                         case let .channelMessages(_, _, _, _, apiMessages, _, _, _):
                             messages = apiMessages
-                        case let .messagesSlice(_, _, _, _, apiMessages, _, _):
+                        case let .messagesSlice(_, _, _, _, _, apiMessages, _, _):
                             messages = apiMessages
                         case .messagesNotModified:
                             messages = []
@@ -1065,5 +1085,31 @@ func _internal_updatedRemotePeer(accountPeerId: PeerId, postbox: Postbox, networ
         }
     } else {
         return .fail(.generic)
+    }
+}
+
+func _internal_refreshGlobalPostSearchState(account: Account) -> Signal<Never, NoError> {
+    return account.network.request(Api.functions.channels.checkSearchPostsFlood())
+    |> map(Optional.init)
+    |> `catch` { _ -> Signal<Api.SearchPostsFlood?, NoError> in
+        return .single(nil)
+    }
+    |> mapToSignal { result -> Signal<Never, NoError> in
+        return account.postbox.transaction { transaction -> Void in
+            guard let result else {
+                return
+            }
+            transaction.updatePreferencesEntry(key: PreferencesKeys.globalPostSearchState(), { _ in
+                switch result {
+                case let .searchPostsFlood(_, remains, waitTill, starsAmount):
+                    return PreferencesEntry(TelegramGlobalPostSearchState(
+                        remainingFreeSearches: remains,
+                        price: StarsAmount(value: starsAmount, nanos: 0),
+                        unlockTimestamp: waitTill
+                    ))
+                }
+            })
+        }
+        |> ignoreValues
     }
 }

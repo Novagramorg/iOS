@@ -37,6 +37,31 @@ public final class StoryPreloadInfo {
     }
 }
 
+public final class TelegramGlobalPostSearchState: Codable, Equatable {
+    public let remainingFreeSearches: Int32
+    public let price: StarsAmount
+    public let unlockTimestamp: Int32?
+    
+    public init(remainingFreeSearches: Int32, price: StarsAmount, unlockTimestamp: Int32?) {
+        self.remainingFreeSearches = remainingFreeSearches
+        self.price = price
+        self.unlockTimestamp = unlockTimestamp
+    }
+    
+    public static func ==(lhs: TelegramGlobalPostSearchState, rhs: TelegramGlobalPostSearchState) -> Bool {
+        if lhs.remainingFreeSearches != rhs.remainingFreeSearches {
+            return false
+        }
+        if lhs.price != rhs.price {
+            return false
+        }
+        if lhs.unlockTimestamp != rhs.unlockTimestamp {
+            return false
+        }
+        return true
+    }
+}
+
 public extension TelegramEngine {
     final class Messages {
         private let account: Account
@@ -514,7 +539,7 @@ public extension TelegramEngine {
                     signals.append(self.account.network.request(Api.functions.messages.search(flags: flags, peer: inputPeer, q: "", fromId: nil, savedPeerId: inputSavedPeer, savedReaction: nil, topMsgId: topMsgId, filter: filter, minDate: 0, maxDate: 0, offsetId: 0, addOffset: 0, limit: 1, maxId: 0, minId: 0, hash: 0))
                     |> map { result -> (count: Int32?, topId: Int32?) in
                         switch result {
-                        case let .messagesSlice(_, count, _, _, messages, _, _):
+                        case let .messagesSlice(_, count, _, _, _, messages, _, _):
                             return (count, messages.first?.id(namespace: Namespaces.Message.Cloud)?.id)
                         case let .channelMessages(_, _, count, _, messages, _, _, _):
                             return (count, messages.first?.id(namespace: Namespaces.Message.Cloud)?.id)
@@ -1596,6 +1621,10 @@ public extension TelegramEngine {
         
         public func monoforumPerformSuggestedPostAction(id: EngineMessage.Id, action: MonoforumSuggestedPostAction) -> Signal<Never, NoError> {
             return _internal_monoforumPerformSuggestedPostAction(account: self.account, id: id, action: action)
+        }
+        
+        public func refreshGlobalPostSearchState() -> Signal<Never, NoError> {
+            return _internal_refreshGlobalPostSearchState(account: self.account)
         }
     }
 }
