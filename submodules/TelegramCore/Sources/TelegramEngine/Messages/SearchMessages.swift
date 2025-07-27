@@ -101,7 +101,7 @@ private func mergedState(transaction: Transaction, seedConfiguration: SeedConfig
             users = apiUsers
             totalCount = Int32(messages.count)
             nextRate = nil
-        case let .messagesSlice(_, count, apiNextRate, _, apiMessages, apiChats, apiUsers):
+        case let .messagesSlice(_, count, apiNextRate, _, _, apiMessages, apiChats, apiUsers):
             messages = apiMessages
             chats = apiChats
             users = apiUsers
@@ -288,7 +288,7 @@ func _internal_getSearchMessageCount(account: Account, location: SearchMessagesL
                 return messages.count
             case let .messagesNotModified(count):
                 return Int(count)
-            case let .messagesSlice(_, count, _, _, _, _, _):
+            case let .messagesSlice(_, count, _, _, _, _, _, _):
                 return Int(count)
             }
         }
@@ -682,7 +682,7 @@ func _internal_downloadMessage(accountPeerId: PeerId, postbox: Postbox, network:
                             messages = apiMessages
                             chats = apiChats
                             users = apiUsers
-                        case let .messagesSlice(_, _, _, _, apiMessages, apiChats, apiUsers):
+                        case let .messagesSlice(_, _, _, _, _, apiMessages, apiChats, apiUsers):
                             messages = apiMessages
                             chats = apiChats
                             users = apiUsers
@@ -773,7 +773,7 @@ func fetchRemoteMessage(accountPeerId: PeerId, postbox: Postbox, source: FetchMe
                 messages = apiMessages
                 chats = apiChats
                 users = apiUsers
-            case let .messagesSlice(_, _, _, _, apiMessages, apiChats, apiUsers):
+            case let .messagesSlice(_, _, _, _, _, apiMessages, apiChats, apiUsers):
                 messages = apiMessages
                 chats = apiChats
                 users = apiUsers
@@ -839,7 +839,7 @@ func _internal_searchMessageIdByTimestamp(account: Account, peerId: PeerId, thre
                             messages = apiMessages
                         case let .channelMessages(_, _, _, _, apiMessages, _, _, _):
                             messages = apiMessages
-                        case let .messagesSlice(_, _, _, _, apiMessages, _, _):
+                        case let .messagesSlice(_, _, _, _, _, apiMessages, _, _):
                             messages = apiMessages
                         case .messagesNotModified:
                             messages = []
@@ -876,7 +876,7 @@ func _internal_searchMessageIdByTimestamp(account: Account, peerId: PeerId, thre
                             messages = apiMessages
                         case let .channelMessages(_, _, _, _, apiMessages, _, _, _):
                             messages = apiMessages
-                        case let .messagesSlice(_, _, _, _, apiMessages, _, _):
+                        case let .messagesSlice(_, _, _, _, _, apiMessages, _, _):
                             messages = apiMessages
                         case .messagesNotModified:
                             messages = []
@@ -909,7 +909,7 @@ func _internal_searchMessageIdByTimestamp(account: Account, peerId: PeerId, thre
                                 messages = apiMessages
                             case let .channelMessages(_, _, _, _, apiMessages, _, _, _):
                                 messages = apiMessages
-                            case let .messagesSlice(_, _, _, _, apiMessages, _, _):
+                            case let .messagesSlice(_, _, _, _, _, apiMessages, _, _):
                                 messages = apiMessages
                             case .messagesNotModified:
                                 messages = []
@@ -933,7 +933,7 @@ func _internal_searchMessageIdByTimestamp(account: Account, peerId: PeerId, thre
                             messages = apiMessages
                         case let .channelMessages(_, _, _, _, apiMessages, _, _, _):
                             messages = apiMessages
-                        case let .messagesSlice(_, _, _, _, apiMessages, _, _):
+                        case let .messagesSlice(_, _, _, _, _, apiMessages, _, _):
                             messages = apiMessages
                         case .messagesNotModified:
                             messages = []

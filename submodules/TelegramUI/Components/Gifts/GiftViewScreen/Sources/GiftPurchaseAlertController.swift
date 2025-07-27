@@ -28,7 +28,7 @@ private final class GiftPurchaseAlertContentNode: AlertContentNode {
     private let gift: StarGift.UniqueGift
     private let peer: EnginePeer
     
-    private var currency: CurrencyAmount.Currency
+    fileprivate var currency: CurrencyAmount.Currency
     
     fileprivate let header = ComponentView<Empty>()
     private let title = ComponentView<Empty>()
@@ -154,8 +154,8 @@ private final class GiftPurchaseAlertContentNode: AlertContentNode {
             case .ton:
                 if let resellAmount = self.gift.resellAmounts?.first(where: { $0.currency == .ton }) {
                     resellPrice = resellAmount
-                    let valueString = formatTonAmountText(resellAmount.amount.value, dateTimeFormat: presentationData.dateTimeFormat) + " TON"
-                    actionNode.action = TextAlertAction(type: .defaultAction, title: "Buy for \(valueString)", action: actionNode.action.action)
+                    let valueString = formatTonAmountText(resellAmount.amount.value, dateTimeFormat: presentationData.dateTimeFormat)
+                    actionNode.action = TextAlertAction(type: .defaultAction, title: self.strings.Gift_Buy_Confirm_BuyForTon(valueString).string, action: actionNode.action.action)
                 }
             }
         }
@@ -446,17 +446,16 @@ public func giftPurchaseAlertController(
     gift: StarGift.UniqueGift,
     peer: EnginePeer,
     navigationController: NavigationController?,
-    commit: @escaping () -> Void
+    commit: @escaping (CurrencyAmount.Currency) -> Void
 ) -> AlertController {
     let presentationData = context.sharedContext.currentPresentationData.with { $0 }
     let strings = presentationData.strings
                 
     var contentNode: GiftPurchaseAlertContentNode?
     var dismissImpl: ((Bool) -> Void)?
-    let actions: [TextAlertAction] = [TextAlertAction(type: .defaultAction, title: "", action: { [weak contentNode] in
-        contentNode?.inProgress = true
-        dismissImpl?(true)
-        commit()
+    var commitImpl: (() -> Void)?
+    let actions: [TextAlertAction] = [TextAlertAction(type: .defaultAction, title: "", action: {
+        commitImpl?()
     }), TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: {
         dismissImpl?(true)
     })]
@@ -472,6 +471,11 @@ public func giftPurchaseAlertController(
             controller?.dismiss()
         }
     }
+    commitImpl = { [weak contentNode] in
+        contentNode?.inProgress = true
+        commit(contentNode?.currency ?? .stars)
+    }
+    
     contentNode?.updatedCurrency = { [weak controller] currency in
         controller?.currency = currency
     }

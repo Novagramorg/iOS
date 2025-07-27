@@ -295,6 +295,54 @@ public extension Api {
     }
 }
 public extension Api {
+    enum SearchPostsFlood: TypeConstructorDescription {
+        case searchPostsFlood(flags: Int32, remains: Int32, waitTill: Int32?, starsAmount: Int64)
+    
+    public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+    switch self {
+                case .searchPostsFlood(let flags, let remains, let waitTill, let starsAmount):
+                    if boxed {
+                        buffer.appendInt32(-1810993028)
+                    }
+                    serializeInt32(flags, buffer: buffer, boxed: false)
+                    serializeInt32(remains, buffer: buffer, boxed: false)
+                    if Int(flags) & Int(1 << 0) != 0 {serializeInt32(waitTill!, buffer: buffer, boxed: false)}
+                    serializeInt64(starsAmount, buffer: buffer, boxed: false)
+                    break
+    }
+    }
+    
+    public func descriptionFields() -> (String, [(String, Any)]) {
+        switch self {
+                case .searchPostsFlood(let flags, let remains, let waitTill, let starsAmount):
+                return ("searchPostsFlood", [("flags", flags as Any), ("remains", remains as Any), ("waitTill", waitTill as Any), ("starsAmount", starsAmount as Any)])
+    }
+    }
+    
+        public static func parse_searchPostsFlood(_ reader: BufferReader) -> SearchPostsFlood? {
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: Int32?
+            _2 = reader.readInt32()
+            var _3: Int32?
+            if Int(_1!) & Int(1 << 0) != 0 {_3 = reader.readInt32() }
+            var _4: Int64?
+            _4 = reader.readInt64()
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            let _c3 = (Int(_1!) & Int(1 << 0) == 0) || _3 != nil
+            let _c4 = _4 != nil
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.SearchPostsFlood.searchPostsFlood(flags: _1!, remains: _2!, waitTill: _3, starsAmount: _4!)
+            }
+            else {
+                return nil
+            }
+        }
+    
+    }
+}
+public extension Api {
     enum SearchResultsCalendarPeriod: TypeConstructorDescription {
         case searchResultsCalendarPeriod(date: Int32, minMsgId: Int32, maxMsgId: Int32, count: Int32)
     
