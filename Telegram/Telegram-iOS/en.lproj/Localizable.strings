@@ -14762,3 +14762,14 @@ Sorry for the inconvenience.";
 "FaceScan.Instruction.Rotate" = "Move your head slowly to\ncomplete the circle";
 
 "Gift.Buy.Confirm.BuyForTon" = "Buy for %@ TON";
+
+"Gift.View.DisplayedInfoNew" = "This gift is visible. [Hide from Profile >]()";
+"Gift.View.HiddenInfoNew" = "This gift is hidden. [Show on Profile >]()";
+
+"Gift.View.DisplayedInfoChannelNew" = "This gift is visible. [Hide from Profile >]()";
+"Gift.View.HiddenInfoChannelNew" = "This gift is hidden. [Show on Profile >]()";
+
+"Gift.View.Upgrade" = "Upgrade";
+
+"Gift.View.UpgradeDescription" = "Upgrade this gift to turn it to a unique collectible.";
+"Gift.View.UpgradeFreeDescription" = "Upgrade this gift for free to turn it to a unique collectible.";
