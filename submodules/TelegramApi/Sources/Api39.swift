@@ -2757,11 +2757,12 @@ public extension Api.functions.bots {
                 }
 }
 public extension Api.functions.channels {
-                static func checkSearchPostsFlood() -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.SearchPostsFlood>) {
+                static func checkSearchPostsFlood(flags: Int32, query: String?) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.SearchPostsFlood>) {
                     let buffer = Buffer()
-                    buffer.appendInt32(-1146490591)
-                    
-                    return (FunctionDescription(name: "channels.checkSearchPostsFlood", parameters: []), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.SearchPostsFlood? in
+                    buffer.appendInt32(576090389)
+                    serializeInt32(flags, buffer: buffer, boxed: false)
+                    if Int(flags) & Int(1 << 0) != 0 {serializeString(query!, buffer: buffer, boxed: false)}
+                    return (FunctionDescription(name: "channels.checkSearchPostsFlood", parameters: [("flags", String(describing: flags)), ("query", String(describing: query))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.SearchPostsFlood? in
                         let reader = BufferReader(buffer)
                         var result: Api.SearchPostsFlood?
                         if let signature = reader.readInt32() {

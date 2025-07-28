@@ -38,17 +38,22 @@ public final class StoryPreloadInfo {
 }
 
 public final class TelegramGlobalPostSearchState: Codable, Equatable {
+    public let totalFreeSearches: Int32
     public let remainingFreeSearches: Int32
     public let price: StarsAmount
     public let unlockTimestamp: Int32?
     
-    public init(remainingFreeSearches: Int32, price: StarsAmount, unlockTimestamp: Int32?) {
+    public init(totalFreeSearches: Int32, remainingFreeSearches: Int32, price: StarsAmount, unlockTimestamp: Int32?) {
+        self.totalFreeSearches = totalFreeSearches
         self.remainingFreeSearches = remainingFreeSearches
         self.price = price
         self.unlockTimestamp = unlockTimestamp
     }
     
     public static func ==(lhs: TelegramGlobalPostSearchState, rhs: TelegramGlobalPostSearchState) -> Bool {
+        if lhs.totalFreeSearches != rhs.totalFreeSearches {
+            return false
+        }
         if lhs.remainingFreeSearches != rhs.remainingFreeSearches {
             return false
         }

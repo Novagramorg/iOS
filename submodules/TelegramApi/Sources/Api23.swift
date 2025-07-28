@@ -296,17 +296,18 @@ public extension Api {
 }
 public extension Api {
     enum SearchPostsFlood: TypeConstructorDescription {
-        case searchPostsFlood(flags: Int32, remains: Int32, waitTill: Int32?, starsAmount: Int64)
+        case searchPostsFlood(flags: Int32, totalDaily: Int32, remains: Int32, waitTill: Int32?, starsAmount: Int64)
     
     public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
     switch self {
-                case .searchPostsFlood(let flags, let remains, let waitTill, let starsAmount):
+                case .searchPostsFlood(let flags, let totalDaily, let remains, let waitTill, let starsAmount):
                     if boxed {
-                        buffer.appendInt32(-1810993028)
+                        buffer.appendInt32(1040931690)
                     }
                     serializeInt32(flags, buffer: buffer, boxed: false)
+                    serializeInt32(totalDaily, buffer: buffer, boxed: false)
                     serializeInt32(remains, buffer: buffer, boxed: false)
-                    if Int(flags) & Int(1 << 0) != 0 {serializeInt32(waitTill!, buffer: buffer, boxed: false)}
+                    if Int(flags) & Int(1 << 1) != 0 {serializeInt32(waitTill!, buffer: buffer, boxed: false)}
                     serializeInt64(starsAmount, buffer: buffer, boxed: false)
                     break
     }
@@ -314,8 +315,8 @@ public extension Api {
     
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
-                case .searchPostsFlood(let flags, let remains, let waitTill, let starsAmount):
-                return ("searchPostsFlood", [("flags", flags as Any), ("remains", remains as Any), ("waitTill", waitTill as Any), ("starsAmount", starsAmount as Any)])
+                case .searchPostsFlood(let flags, let totalDaily, let remains, let waitTill, let starsAmount):
+                return ("searchPostsFlood", [("flags", flags as Any), ("totalDaily", totalDaily as Any), ("remains", remains as Any), ("waitTill", waitTill as Any), ("starsAmount", starsAmount as Any)])
     }
     }
     
@@ -325,15 +326,18 @@ public extension Api {
             var _2: Int32?
             _2 = reader.readInt32()
             var _3: Int32?
-            if Int(_1!) & Int(1 << 0) != 0 {_3 = reader.readInt32() }
-            var _4: Int64?
-            _4 = reader.readInt64()
+            _3 = reader.readInt32()
+            var _4: Int32?
+            if Int(_1!) & Int(1 << 1) != 0 {_4 = reader.readInt32() }
+            var _5: Int64?
+            _5 = reader.readInt64()
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            let _c3 = (Int(_1!) & Int(1 << 0) == 0) || _3 != nil
-            let _c4 = _4 != nil
-            if _c1 && _c2 && _c3 && _c4 {
-                return Api.SearchPostsFlood.searchPostsFlood(flags: _1!, remains: _2!, waitTill: _3, starsAmount: _4!)
+            let _c3 = _3 != nil
+            let _c4 = (Int(_1!) & Int(1 << 1) == 0) || _4 != nil
+            let _c5 = _5 != nil
+            if _c1 && _c2 && _c3 && _c4 && _c5 {
+                return Api.SearchPostsFlood.searchPostsFlood(flags: _1!, totalDaily: _2!, remains: _3!, waitTill: _4, starsAmount: _5!)
             }
             else {
                 return nil
