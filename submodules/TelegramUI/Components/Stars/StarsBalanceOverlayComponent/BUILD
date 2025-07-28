@@ -16,6 +16,7 @@ swift_library(
         "//submodules/SSignalKit/SwiftSignalKit",
         "//submodules/AccountContext",
         "//submodules/ComponentFlow",
+        "//submodules/Components/ComponentDisplayAdapters",
         "//submodules/Components/MultilineTextComponent",
         "//submodules/Components/MultilineTextWithEntitiesComponent",
         "//submodules/TelegramPresentationData",

@@ -1367,8 +1367,9 @@ private final class GiftViewSheetContent: CombinedComponent {
                     )
                 }
                 
-                if let buyForm = self.buyForm, let price = buyForm.invoice.prices.first?.amount {
-                    if buyForm.invoice.currency == "XTR", let starsContext = context.starsContext, let starsState = context.starsContext?.currentState, starsState.balance < StarsAmount(value: price, nanos: 0) {
+                
+                if let _ = self.buyForm {
+                    if resellAmount.currency == .stars, let starsContext = context.starsContext, let starsState = context.starsContext?.currentState, starsState.balance < resellAmount.amount {
                         if self.options.isEmpty {
                             self.inProgress = true
                             self.updated()
@@ -1384,7 +1385,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                                 context: context,
                                 starsContext: starsContext,
                                 options: options ?? [],
-                                purpose: .buyStarGift(requiredStars: price),
+                                purpose: .buyStarGift(requiredStars: resellAmount.amount.value),
                                 completion: { [weak self, weak starsContext] stars in
                                     guard let self, let starsContext else {
                                         return
@@ -1402,7 +1403,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                                             guard let self, let starsContext = self.context.starsContext, let starsState = starsContext.currentState else {
                                                 return
                                             }
-                                            if starsState.balance < StarsAmount(value: price, nanos: 0) {
+                                            if starsState.balance < resellAmount.amount {
                                                 self.inProgress = false
                                                 self.updated()
                                                 
@@ -1416,11 +1417,11 @@ private final class GiftViewSheetContent: CombinedComponent {
                             )
                             controller.push(purchaseController)
                         })
-                    } else if buyForm.invoice.currency == "TON", let tonState = context.tonContext?.currentState, tonState.balance < StarsAmount(value: price, nanos: 0) {
+                    } else if resellAmount.currency == .ton, let tonState = context.tonContext?.currentState, tonState.balance < resellAmount.amount {
                         guard let controller = self.getController() else {
                             return
                         }
-                        let needed = StarsAmount(value: price, nanos: 0) - tonState.balance
+                        let needed = resellAmount.amount - tonState.balance
                         var fragmentUrl = "https://fragment.com/ads/topup"
                         if let data = self.context.currentAppConfiguration.with({ $0 }).data, let value = data["ton_topup_url"] as? String {
                             fragmentUrl = value
@@ -1463,9 +1464,18 @@ private final class GiftViewSheetContent: CombinedComponent {
                             navigationController: controller.navigationController as? NavigationController,
                             commit: { currency in
                                 action(currency)
+                            },
+                            dismissed: { [weak controller] in
+                                if let balanceView = controller?.balanceOverlay.view {
+                                    balanceView.isHidden = false
+                                }
                             }
                         )
                         controller.present(alertController, in: .window(.root))
+                        
+                        if let balanceView = controller.balanceOverlay.view {
+                            balanceView.isHidden = true
+                        }
                     }
                 })
             }
@@ -3835,7 +3845,7 @@ public class GiftViewScreen: ViewControllerComponentContainer {
     }
     fileprivate var balanceCurrency: CurrencyAmount.Currency
     
-    private let balanceOverlay = ComponentView<Empty>()
+    fileprivate let balanceOverlay = ComponentView<Empty>()
     
     fileprivate let updateSavedToProfile: ((StarGiftReference, Bool) -> Void)?
     fileprivate let convertToStars: (() -> Void)?
@@ -4007,20 +4017,28 @@ public class GiftViewScreen: ViewControllerComponentContainer {
                             guard let self, let starsContext = context.starsContext, let navigationController = self.navigationController as? NavigationController else {
                                 return
                             }
+                            switch self.balanceCurrency {
+                            case .stars:
+                                let _ = (context.engine.payments.starsTopUpOptions()
+                                |> take(1)
+                                |> deliverOnMainQueue).startStandalone(next: { options in
+                                    let controller = context.sharedContext.makeStarsPurchaseScreen(
+                                        context: context,
+                                        starsContext: starsContext,
+                                        options: options,
+                                        purpose: .generic,
+                                        completion: { _ in }
+                                    )
+                                    navigationController.pushViewController(controller)
+                                })
+                            case .ton:
+                                var fragmentUrl = "https://fragment.com/ads/topup"
+                                if let data = context.currentAppConfiguration.with({ $0 }).data, let value = data["ton_topup_url"] as? String {
+                                    fragmentUrl = value
+                                }
+                                context.sharedContext.applicationBindings.openUrl(fragmentUrl)
+                            }
                             self.dismissAnimated()
-                            
-                            let _ = (context.engine.payments.starsTopUpOptions()
-                            |> take(1)
-                            |> deliverOnMainQueue).startStandalone(next: { options in
-                                let controller = context.sharedContext.makeStarsPurchaseScreen(
-                                    context: context,
-                                    starsContext: starsContext,
-                                    options: options,
-                                    purpose: .generic,
-                                    completion: { _ in }
-                                )
-                                navigationController.pushViewController(controller)
-                            })
                         }
                     )
                 ),
