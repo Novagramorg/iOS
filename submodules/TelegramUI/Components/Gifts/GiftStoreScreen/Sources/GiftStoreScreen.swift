@@ -162,9 +162,11 @@ final class GiftStoreScreenComponent: Component {
         }
         
         private func updateScrolling(interactive: Bool = false, transition: ComponentTransition) {
-            guard let environment = self.environment, let component = self.component, self.state?.starGiftsState?.dataState != .loading else {
+            guard let environment = self.environment, let component = self.component else {
                 return
             }
+            
+            //, self.state?.starGiftsState?.dataState != .loading
                
             let availableWidth = self.scrollView.bounds.width
             let availableHeight = self.scrollView.bounds.height
@@ -456,7 +458,7 @@ final class GiftStoreScreenComponent: Component {
             }
             
             let bottomContentOffset = max(0.0, self.scrollView.contentSize.height - self.scrollView.contentOffset.y - self.scrollView.frame.height)
-            if interactive, bottomContentOffset < 1000.0 {
+            if interactive, bottomContentOffset < 800.0 {
                 self.state?.starGiftsContext.loadMore()
             }
         }
@@ -1142,7 +1144,7 @@ final class GiftStoreScreenComponent: Component {
                     context: component.context,
                     colors: FilterSelectorComponent.Colors(
                         foreground: theme.list.itemPrimaryTextColor.withMultipliedAlpha(0.65),
-                        background: theme.list.itemSecondaryTextColor.mixedWith(theme.list.blocksBackgroundColor, alpha: 0.85)
+                        background: theme.list.itemSecondaryTextColor.withMultipliedAlpha(0.15)
                     ),
                     items: filterItems,
                     selectedItemId: self.selectedFilterId

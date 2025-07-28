@@ -2,6 +2,7 @@ import Foundation
 import UIKit
 import Display
 import ComponentFlow
+import ComponentDisplayAdapters
 import SwiftSignalKit
 import TelegramCore
 import AccountContext
@@ -172,7 +173,13 @@ public final class StarsBalanceOverlayComponent: Component {
             
             if previousComponent?.currency != component.currency {
                 if let textView = self.text.view {
-                    textView.removeFromSuperview()
+                    if !transition.animation.isImmediate {
+                        transition.setAlpha(view: textView, alpha: 0.0, completion: { _ in
+                            textView.removeFromSuperview()
+                        })
+                    } else {
+                        textView.removeFromSuperview()
+                    }
                 }
                 self.text = ComponentView()
             }
@@ -185,7 +192,8 @@ public final class StarsBalanceOverlayComponent: Component {
                         animationCache: component.context.animationCache,
                         animationRenderer: component.context.animationRenderer,
                         placeholderColor: .white,
-                        text: .plain(attributedText)
+                        text: .plain(attributedText),
+                        displaysAsynchronously: false
                     )
                 ),
                 environment: {},
@@ -219,7 +227,12 @@ public final class StarsBalanceOverlayComponent: Component {
                 
                 if let actionView = self.action.view {
                     if actionView.superview == nil {
+                        actionView.alpha = 1.0
                         self.backgroundView.addSubview(actionView)
+                        
+                        if !transition.animation.isImmediate {
+                            transition.animateAlpha(view: actionView, from: 0.0, to: 1.0)
+                        }
                     }
                     actionView.frame = CGRect(origin: CGPoint(x: floorToScreenPixels((size.width - actionSize.width) / 2.0), y: 29.0), size: actionSize)
                 }
@@ -227,19 +240,30 @@ public final class StarsBalanceOverlayComponent: Component {
                 size = CGSize(width: textSize.width + 40.0, height: 35.0)
                 
                 if let actionView = self.action.view, actionView.superview != nil {
-                    actionView.removeFromSuperview()
+                    if !transition.animation.isImmediate {
+                        transition.setAlpha(view: actionView, alpha: 0.0, completion: { _ in
+                            actionView.removeFromSuperview()
+                        })
+                    } else {
+                        actionView.removeFromSuperview()
+                    }
                 }
             }
 
             if let textView = self.text.view {
                 if textView.superview == nil {
+                    textView.alpha = 1.0
                     self.backgroundView.addSubview(textView)
+                    
+                    if !transition.animation.isImmediate {
+                        transition.animateAlpha(view: textView, from: 0.0, to: 1.0)
+                    }
                 }
                 textView.frame = CGRect(origin: CGPoint(x: floorToScreenPixels((size.width - textSize.width) / 2.0), y: 10.0), size: textSize)
             }
             
             self.backgroundView.updateColor(color: component.theme.rootController.navigationBar.opaqueBackgroundColor, transition: .immediate)
-            self.backgroundView.update(size: size, cornerRadius: size.height / 2.0, transition: .immediate)
+            self.backgroundView.update(size: size, cornerRadius: size.height / 2.0, transition: transition.containedViewLayoutTransition)
             transition.setFrame(view: self.backgroundView, frame: CGRect(origin: CGPoint(x: floor((availableSize.width - size.width) / 2.0), y: 0.0), size: size))
             
             return CGSize(width: availableSize.width, height: size.height)
