@@ -373,11 +373,11 @@ private final class ProfileLevelInfoScreenComponent: Component {
                 component: AnyComponent(PremiumLimitDisplayComponent(
                     inactiveColor: environment.theme.list.itemBlocksSeparatorColor.withAlphaComponent(0.5),
                     activeColors: gradientColors,
-                    inactiveTitle: component.starRating.nextLevelStars == nil ? "" : "Level \(component.starRating.level + 1)",
+                    inactiveTitle: "Level \(component.starRating.level)",
                     inactiveValue: "",
                     inactiveTitleColor: environment.theme.list.itemPrimaryTextColor,
                     activeTitle: "",
-                    activeValue: "Level \(component.starRating.level)",
+                    activeValue: component.starRating.nextLevelStars == nil ? "" : "Level \(component.starRating.level + 1)",
                     activeTitleColor: .white,
                     badgeIconName: "Peer Info/ProfileLevelProgressIcon",
                     badgeText: badgeText,
