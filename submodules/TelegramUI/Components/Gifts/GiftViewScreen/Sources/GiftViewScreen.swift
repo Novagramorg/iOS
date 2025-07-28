@@ -2239,7 +2239,11 @@ private final class GiftViewSheetContent: CombinedComponent {
                     } else if let convertStars, !upgraded {
                         if !converted {
                             if canUpgrade || upgradeStars != nil {
-                                descriptionText = isChannelGift ? strings.Gift_View_KeepUpgradeOrConvertDescription_Channel(strings.Gift_View_KeepOrConvertDescription_Stars(Int32(convertStars))).string : strings.Gift_View_KeepUpgradeOrConvertDescription(strings.Gift_View_KeepOrConvertDescription_Stars(Int32(convertStars))).string
+                                if let upgradeStars, upgradeStars > 0 {
+                                    descriptionText = strings.Gift_View_UpgradeFreeDescription
+                                } else {
+                                    descriptionText = strings.Gift_View_UpgradeDescription
+                                }
                             } else {
                                 descriptionText = isChannelGift ? strings.Gift_View_KeepOrConvertDescription_Channel(strings.Gift_View_KeepOrConvertDescription_Stars(Int32(convertStars))).string : strings.Gift_View_KeepOrConvertDescription(strings.Gift_View_KeepOrConvertDescription_Stars(Int32(convertStars))).string
                             }
@@ -3047,6 +3051,17 @@ private final class GiftViewSheetContent: CombinedComponent {
                             canConvert = false
                         }
                     }
+                    
+                    if canConvert, let date = subject.arguments?.date {
+                        let configuration = GiftConfiguration.with(appConfiguration: component.context.currentAppConfiguration.with { $0 })
+                        let starsConvertMaxDate = date + configuration.convertToStarsPeriod
+                        
+                        let currentTime = Int32(CFAbsoluteTimeGetCurrent() + kCFAbsoluteTimeIntervalSince1970)
+                        if currentTime > starsConvertMaxDate {
+                            canConvert = false
+                        }
+                    }
+                    
                     if let convertStars, incoming && !converted && canConvert {
                         tableItems.append(.init(
                             id: "value_convert",
@@ -3121,23 +3136,6 @@ private final class GiftViewSheetContent: CombinedComponent {
                                 component: AnyComponent(MultilineTextComponent(text: .plain(NSAttributedString(string: strings.Gift_View_Status_NonUnique, font: tableFont, textColor: tableTextColor))))
                             )
                         )
-                        if incoming {
-                            items.append(
-                                AnyComponentWithIdentity(
-                                    id: AnyHashable(1),
-                                    component: AnyComponent(Button(
-                                        content: AnyComponent(ButtonContentComponent(
-                                            context: component.context,
-                                            text: strings.Gift_View_Status_Upgrade,
-                                            color: theme.list.itemAccentColor
-                                        )),
-                                        action: { [weak state] in
-                                            state?.requestUpgradePreview()
-                                        }
-                                    ))
-                                )
-                            )
-                        }
                         tableItems.append(.init(
                             id: "status",
                             title: strings.Gift_View_Status,
@@ -3241,15 +3239,11 @@ private final class GiftViewSheetContent: CombinedComponent {
                 } else if let uniqueGift, let address = uniqueGift.giftAddress, case .address = uniqueGift.owner {
                     addressToOpen = address
                     descriptionText = strings.Gift_View_TonGiftAddressInfo
-                } else if savedToProfile {
-                    descriptionText = isChannelGift ? strings.Gift_View_DisplayedInfoHide_Channel : strings.Gift_View_DisplayedInfoHide
-                } else if let upgradeStars, upgradeStars > 0 && !upgraded {
-                    descriptionText = isChannelGift ? strings.Gift_View_HiddenInfoShow_Channel : strings.Gift_View_HiddenInfoShow
                 } else {
-                    if let _ = uniqueGift {
-                        descriptionText = isChannelGift ? strings.Gift_View_UniqueHiddenInfo_Channel : strings.Gift_View_UniqueHiddenInfo
+                    if isChannelGift {
+                        descriptionText = savedToProfile ? strings.Gift_View_DisplayedInfoChannelNew : strings.Gift_View_HiddenInfoChannelNew
                     } else {
-                        descriptionText = isChannelGift ? strings.Gift_View_HiddenInfo_Channel : strings.Gift_View_HiddenInfo
+                        descriptionText = savedToProfile ? strings.Gift_View_DisplayedInfoNew : strings.Gift_View_HiddenInfoNew
                     }
                 }
                 
@@ -3484,13 +3478,18 @@ private final class GiftViewSheetContent: CombinedComponent {
                     availableSize: buttonSize,
                     transition: context.transition
                 )
-            } else if incoming && !converted && !upgraded, let upgradeStars, upgradeStars > 0 {
-                let buttonTitle = strings.Gift_View_UpgradeForFree
+            } else if incoming && !converted && !upgraded {
+                let buttonTitle: String
+                if let upgradeStars, upgradeStars > 0 {
+                    buttonTitle = strings.Gift_View_UpgradeForFree
+                } else {
+                    buttonTitle = strings.Gift_View_Upgrade
+                }
                 buttonChild = button.update(
                     component: ButtonComponent(
                         background: buttonBackground.withIsShimmering(true),
                         content: AnyComponentWithIdentity(
-                            id: AnyHashable("freeUpgrade"),
+                            id: AnyHashable("previewUpgrade"),
                             component: AnyComponent(HStack([
                                 AnyComponentWithIdentity(id: 0, component: AnyComponent(
                                     MultilineTextComponent(text: .plain(NSAttributedString(string: buttonTitle, font: Font.semibold(17.0), textColor: theme.list.itemCheckColors.foregroundColor, paragraphAlignment: .center))
