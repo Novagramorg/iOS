@@ -3248,10 +3248,14 @@ private final class GiftViewSheetContent: CombinedComponent {
                     addressToOpen = address
                     descriptionText = strings.Gift_View_TonGiftAddressInfo
                 } else {
-                    if isChannelGift {
-                        descriptionText = savedToProfile ? strings.Gift_View_DisplayedInfoChannelNew : strings.Gift_View_HiddenInfoChannelNew
+                    if canUpgrade || savedToProfile {
+                        if isChannelGift {
+                            descriptionText = savedToProfile ? strings.Gift_View_DisplayedInfoChannelNew : strings.Gift_View_HiddenInfoChannelNew
+                        } else {
+                            descriptionText = savedToProfile ? strings.Gift_View_DisplayedInfoNew : strings.Gift_View_HiddenInfoNew
+                        }
                     } else {
-                        descriptionText = savedToProfile ? strings.Gift_View_DisplayedInfoNew : strings.Gift_View_HiddenInfoNew
+                        descriptionText = isChannelGift ? strings.Gift_View_UniqueHiddenInfo_Channel : strings.Gift_View_UniqueHiddenInfo
                     }
                     if !savedToProfile {
                         descriptionText = "#   \(descriptionText)"
@@ -3492,7 +3496,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                     availableSize: buttonSize,
                     transition: context.transition
                 )
-            } else if incoming && !converted && !upgraded {
+            } else if incoming && !converted && !upgraded && canUpgrade {
                 let buttonTitle: String
                 if let upgradeStars, upgradeStars > 0 {
                     buttonTitle = strings.Gift_View_UpgradeForFree
