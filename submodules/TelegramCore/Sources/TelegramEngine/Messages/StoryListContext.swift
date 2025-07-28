@@ -904,7 +904,7 @@ public final class PeerStoryListContext: StoryListContext {
                             case .albumsNotModified:
                                 break
                             }
-                        } else {
+                        } else if !isArchived {
                             let key = ValueBoxKey(length: 8 + 1)
                             key.setInt64(0, value: peerId.toInt64())
                             key.setInt8(8, value: 0)
@@ -1437,7 +1437,7 @@ public final class PeerStoryListContext: StoryListContext {
                             folderKey.setInt64(0, value: peerId.toInt64())
                             folderKey.setInt8(8, value: 0)
                             folderKey.setInt64(8 + 1, value: Int64(albumId))
-                            if let entry = CodableEntry(CachedPeerStoryListHead(items: mappedItems.prefix(100).map { .item($0) }, pinnedIds: [], totalCount: Int32(mappedItems.count), folders: [])) {
+                            if let entry = CodableEntry(CachedPeerStoryListHead(items: [], pinnedIds: [], totalCount: Int32(mappedItems.count), folders: [])) {
                                 transaction.putItemCacheEntry(id: ItemCacheEntryId(collectionId: Namespaces.CachedItemCollection.cachedPeerStoryListHeads, key: folderKey), entry: entry)
                             }
                         } |> deliverOn(self.queue)).start(completed: {

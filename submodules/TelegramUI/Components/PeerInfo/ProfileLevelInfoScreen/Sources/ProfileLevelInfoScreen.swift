@@ -327,7 +327,12 @@ private final class ProfileLevelInfoScreenComponent: Component {
 
             //TODO:localize
             let titleString: String = "Rating"
-            let descriptionTextString: String = "The rating reflects **\(component.peer.compactDisplayTitle)'s** activity on Telegram. What affects it:"
+            let descriptionTextString: String
+            if component.peer.id == component.context.account.peerId {
+                descriptionTextString = "The rating reflects **your** activity on Telegram. What affects it:"
+            } else {
+                descriptionTextString = "The rating reflects **\(component.peer.compactDisplayTitle)'s** activity on Telegram. What affects it:"
+            }
             
             let titleSize = self.title.update(
                 transition: .immediate,
