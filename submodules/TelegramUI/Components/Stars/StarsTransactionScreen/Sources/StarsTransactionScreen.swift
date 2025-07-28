@@ -927,8 +927,13 @@ private final class StarsTransactionSheetContent: CombinedComponent {
                     title = count.amount < StarsAmount.zero || countIsGeneric ? strings.Stars_Transaction_To : strings.Stars_Transaction_From
                 }
                 
+                var isGiftResale = false
+                if count.amount < StarsAmount.zero, case let .transaction(transaction, _) = subject, transaction.flags.contains(.isStarGiftResale) {
+                    isGiftResale = true
+                }
+                
                 let toComponent: AnyComponent<Empty>
-                if let _ = giftAnimationSubject, !toPeer.isDeleted && !isGiftUpgrade {
+                if let _ = giftAnimationSubject, !toPeer.isDeleted && !isGiftUpgrade && !isGiftResale {
                     toComponent = AnyComponent(
                         HStack([
                             AnyComponentWithIdentity(
