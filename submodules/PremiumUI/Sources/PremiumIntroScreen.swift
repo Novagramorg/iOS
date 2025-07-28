@@ -1831,8 +1831,7 @@ private final class PremiumIntroScreenContentComponent: CombinedComponent {
             var link = ""
             let textString: String
             if case .premiumGift = context.component.source {
-                //TODO:localize
-                textString = "Subscribe to **Telegram Premium** to send up to **5** of these gifts and unlock access to multiple additional features."
+                textString = strings.Premium_PremiumGift_Description
             } else if case .emojiStatus = context.component.source {
                 textString = strings.Premium_EmojiStatusText.replacingOccurrences(of: "#", with: "# ")
             } else if case .giftTerms = context.component.source {
@@ -3459,8 +3458,7 @@ private final class PremiumIntroScreenComponent: CombinedComponent {
             
             let titleString: String
             if case .premiumGift = context.component.source {
-                //TODO:localize
-                titleString = "Premium Gift"
+                titleString = environment.strings.Premium_PremiumGift_Title
             } else if case .business = context.component.mode {
                 titleString = environment.strings.Business_Title
             } else if case .emojiStatus = context.component.source {

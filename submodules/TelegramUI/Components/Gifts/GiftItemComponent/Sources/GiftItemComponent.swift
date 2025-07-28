@@ -644,7 +644,7 @@ public final class GiftItemComponent: Component {
                         component: AnyComponent(
                             ZStack([
                                 AnyComponentWithIdentity(id: "background", component: AnyComponent(RoundedRectangle(color: buttonColor, cornerRadius: 12.0))),
-                                AnyComponentWithIdentity(id: "icon", component: AnyComponent(BundleIconComponent(name: "Ads/TonMedium", tintColor: .white, maxSize: CGSize(width: 13.0, height: 13.0))))
+                                AnyComponentWithIdentity(id: "icon", component: AnyComponent(BundleIconComponent(name: "Premium/TonGift", tintColor: .white)))
                             ])
                         ),
                         environment: {},

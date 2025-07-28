@@ -14773,3 +14773,17 @@ Sorry for the inconvenience.";
 
 "Gift.View.UpgradeDescription" = "Upgrade this gift to turn it to a unique collectible.";
 "Gift.View.UpgradeFreeDescription" = "Upgrade this gift for free to turn it to a unique collectible.";
+
+"Gift.View.EqualsTo" = "Equals to %@";
+
+"Gift.Buy.AcceptsTonOnly" = "The seller only accepts\nTON as payment.";
+"Gift.Buy.PayInStars" = "Pay in Stars";
+"Gift.Buy.PayInTon" = "Pay in TON";
+"Gift.Buy.PayInTon.Tooltip" = "Pay with TON to skip the 21-day wait before transferring the gift again.";
+
+"Premium.PremiumGift.Title" = "Premium Gift";
+"Premium.PremiumGift.Description" = "Subscribe to **Telegram Premium** to send up to **5** of these gifts and unlock access to multiple additional features.";
+
+"Stars.SellGift.TonAmountTitle" = "PRICE IN TON";
+"Stars.SellGift.OnlyTon" = "Only Accept TON";
+"Stars.SellGift.OnlyTonInfo" = "If the buyer pays you in TON, there's no risk of refunds, unlike with Stars payments.";
