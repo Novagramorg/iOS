@@ -6198,17 +6198,17 @@ private final class EmptyResultsButtonSearchContent: Component {
         }
         
         func update(component: EmptyResultsButtonSearchContent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
-            let iconSpacing: CGFloat = 0.0
-            let arrowSpacing: CGFloat = 0.0
+            let iconSpacing: CGFloat = 2.0
+            let arrowSpacing: CGFloat = 4.0
             
             self.component = component
             
             let iconSize = self.icon.update(
                 transition: .immediate,
                 component: AnyComponent(BundleIconComponent(
-                    name: "Peer Info/ButtonSearch",
+                    name: "Chat List/SearchInlineButtonIcon",
                     tintColor: component.theme.list.itemCheckColors.foregroundColor,
-                    scaleFactor: 0.8
+                    scaleFactor: 1.0
                 )),
                 environment: {},
                 containerSize: CGSize(width: 100.0, height: 100.0)
@@ -6217,7 +6217,7 @@ private final class EmptyResultsButtonSearchContent: Component {
             let arrowSize = self.arrow.update(
                 transition: .immediate,
                 component: AnyComponent(BundleIconComponent(
-                    name: "Item List/DisclosureArrow",
+                    name: "Chat List/ArrowInlineButtonIcon",
                     tintColor: component.theme.list.itemCheckColors.foregroundColor,
                     scaleFactor: 1.0
                 )),

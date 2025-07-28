@@ -830,7 +830,14 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             
             headerButtonBackgroundColor = regularHeaderButtonBackgroundColor.mixedWith(collapsedHeaderButtonBackgroundColor, alpha: effectiveTransitionFraction)
             
-            if let profileColor = peer?.profileColor {
+            if let status = peer?.emojiStatus, case let .starGift(_, _, _, _, _, innerColor, outerColor, _, _) = status.content {
+                let _ = outerColor
+                let mainColor = UIColor(rgb: UInt32(bitPattern: innerColor))
+                
+                ratingBackgroundColor = UIColor(white: 1.0, alpha: 1.0).mixedWith(presentationData.theme.list.itemCheckColors.fillColor, alpha: effectiveTransitionFraction)
+                ratingForegroundColor = mainColor.withMultiplied(hue: 1.0, saturation: 1.1, brightness: 0.9).mixedWith(UIColor.clear, alpha: effectiveTransitionFraction)
+                ratingBorderColor = ratingForegroundColor.mixedWith(presentationData.theme.list.itemCheckColors.foregroundColor, alpha: effectiveTransitionFraction)
+            } else if let profileColor = peer?.profileColor {
                 let backgroundColors = self.context.peerNameColors.getProfile(profileColor, dark: presentationData.theme.overallDarkAppearance)
                 
                 ratingBackgroundColor = UIColor(white: 1.0, alpha: 1.0).mixedWith(presentationData.theme.list.itemCheckColors.fillColor, alpha: effectiveTransitionFraction)
@@ -1976,7 +1983,12 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                         guard let self, let peer, let currentStarRating = self.currentStarRating else {
                             return
                         }
-                        self.controller?.push(ProfileLevelInfoScreen(context: self.context, peer: EnginePeer(peer), starRating: currentStarRating))
+                        self.controller?.push(ProfileLevelInfoScreen(
+                            context: self.context,
+                            peer: EnginePeer(peer),
+                            starRating: currentStarRating,
+                            customTheme: self.presentationData?.theme
+                        ))
                     }
                 )),
                 environment: {},
@@ -2038,7 +2050,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                 
                 if let subtitleRatingView = self.subtitleRating?.view, let subtitleRatingSize {
                     let subtitleBadgeFrame: CGRect
-                    subtitleBadgeFrame = CGRect(origin: CGPoint(x: (-subtitleSize.width) * 0.5 - subtitleRatingSize.width + 1.0, y: floor((-subtitleRatingSize.height) * 0.5)), size: subtitleRatingSize)
+                    subtitleBadgeFrame = CGRect(origin: CGPoint(x: (-subtitleSize.width) * 0.5 - subtitleRatingSize.width + 1.0, y: subtitleOffset + floor((-subtitleRatingSize.height) * 0.5)), size: subtitleRatingSize)
                     transition.updateFrameAdditive(view: subtitleRatingView, frame: subtitleBadgeFrame)
                     transition.updateAlpha(layer: subtitleRatingView.layer, alpha: (1.0 - transitionFraction))
                 }
@@ -2097,6 +2109,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                 if let subtitleRatingView = self.subtitleRating?.view, let subtitleRatingSize {
                     let subtitleBadgeFrame = CGRect(origin: CGPoint(x: (-subtitleSize.width) * 0.5 - subtitleRatingSize.width + 1.0, y: floor((-subtitleRatingSize.height) * 0.5)), size: subtitleRatingSize)
                     transition.updateFrameAdditive(view: subtitleRatingView, frame: subtitleBadgeFrame)
+                    transition.updateAlpha(layer: subtitleRatingView.layer, alpha: subtitleAlpha)
                 }
             }
         }

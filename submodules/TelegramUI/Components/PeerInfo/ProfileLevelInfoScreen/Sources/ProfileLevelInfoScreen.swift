@@ -361,10 +361,12 @@ private final class ProfileLevelInfoScreenComponent: Component {
             
             let levelFraction: CGFloat
             if let nextLevelStars = component.starRating.nextLevelStars {
-                levelFraction = Double(component.starRating.currentLevelStars) / Double(nextLevelStars)
+                levelFraction = Double(component.starRating.stars) / Double(nextLevelStars)
             } else {
                 levelFraction = 1.0
             }
+            
+            let badgeText = starCountString(Int64(component.starRating.stars), decimalSeparator: ".")
 
             let levelInfoSize = self.levelInfo.update(
                 transition: .immediate,
@@ -377,8 +379,8 @@ private final class ProfileLevelInfoScreenComponent: Component {
                     activeTitle: "",
                     activeValue: "Level \(component.starRating.level)",
                     activeTitleColor: .white,
-                    badgeIconName: "Premium/Boost",
-                    badgeText: "\(component.starRating.currentLevelStars)",
+                    badgeIconName: "Peer Info/ProfileLevelProgressIcon",
+                    badgeText: badgeText,
                     badgePosition: levelFraction,
                     badgeGraphPosition: levelFraction,
                     invertProgress: true,
@@ -442,21 +444,21 @@ private final class ProfileLevelInfoScreenComponent: Component {
                     text: "100% of the Stars spent on gifts purchased from Telegram.",
                     badgeText: "ADDED",
                     isBadgeAccent: true,
-                    icon: "Premium/BoostPerk/CoverColor"
+                    icon: "Chat/Input/Accessory Panels/Gift"
                 ),
                 Item(
                     title: "Gifts and Posts from Users",
                     text: "20% of the Stars spent on gifts or posts from users and channels.",
                     badgeText: "ADDED",
                     isBadgeAccent: true,
-                    icon: "Premium/BoostPerk/CoverColor"
+                    icon: "Peer Info/ProfileLevelInfo2"
                 ),
                 Item(
                     title: "Refunds and Conversions",
                     text: "10x of refunded Stars and 85% of bought gifts converted to Stars.",
                     badgeText: "DEDUCTED",
                     isBadgeAccent: false,
-                    icon: "Premium/BoostPerk/CoverColor"
+                    icon: "Peer Info/ProfileLevelInfo3"
                 )
             ]
             
@@ -608,15 +610,16 @@ public class ProfileLevelInfoScreen: ViewControllerComponentContainer {
     public init(
         context: AccountContext,
         peer: EnginePeer,
-        starRating: TelegramStarRating
+        starRating: TelegramStarRating,
+        customTheme: PresentationTheme?
     ) {
         self.context = context
         
         super.init(context: context, component: ProfileLevelInfoScreenComponent(
             context: context,
             peer: peer,
-            starRating: starRating
-        ), navigationBarAppearance: .none)
+            starRating: starRating,
+        ), navigationBarAppearance: .none, theme: customTheme.flatMap { .custom($0) } ?? .default)
         
         self.statusBar.statusBarStyle = .Ignore
         self.navigationPresentation = .flatModal
@@ -830,7 +833,7 @@ private final class ItemComponent: Component {
                 if iconView.superview == nil {
                     self.addSubview(iconView)
                 }
-                iconView.frame = CGRect(origin: CGPoint(x: floor((leftInset - iconSize.width) * 0.5), y: 3.0), size: iconSize)
+                iconView.frame = CGRect(origin: CGPoint(x: floor((leftInset - iconSize.width) * 0.5) - 2.0, y: 4.0), size: iconSize)
             }
             
             return CGSize(width: availableSize.width, height: textFrame.maxY)
@@ -843,5 +846,25 @@ private final class ItemComponent: Component {
     
     func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
         return view.update(component: self, availableSize: availableSize, state: state, environment: environment, transition: transition)
+    }
+}
+
+private func starCountString(_ size: Int64, forceDecimal: Bool = false, decimalSeparator: String) -> String {
+    if size >= 1000 * 1000 {
+        let remainder = Int64((Double(size % (1000 * 1000)) / (1000.0 * 100.0)).rounded(.down))
+        if remainder != 0 || forceDecimal {
+            return "\(size / (1000 * 1000))\(decimalSeparator)\(remainder)M"
+        } else {
+            return "\(size / (1000 * 1000))M"
+        }
+    } else if size >= 1000 {
+        let remainder = (size % (1000)) / (100)
+        if remainder != 0 || forceDecimal {
+            return "\(size / 1000)\(decimalSeparator)\(remainder)K"
+        } else {
+            return "\(size / 1000)K"
+        }
+    } else {
+        return "\(size)"
     }
 }

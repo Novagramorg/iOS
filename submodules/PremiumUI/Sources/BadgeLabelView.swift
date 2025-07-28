@@ -99,7 +99,7 @@ final class BadgeLabelView: UIView {
     }
     
     func update(value: String, transition: ComponentTransition) -> CGSize {
-        if value.contains(" ") {
+        if value.contains(" ") || value.contains(".") || value.contains(where: { !$0.isNumber }) {
             for (_, view) in self.itemViews {
                 view.isHidden = true
             }
