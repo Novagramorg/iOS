@@ -56,7 +56,7 @@ public final class PeerInfoRatingComponent: Component {
         private let borderLayer: SimpleLayer
         private let backgroundLayer: SimpleLayer
         
-        private var tempLevel: Int = 1
+        //private var tempLevel: Int = 1
         
         private var component: PeerInfoRatingComponent?
         private weak var state: EmptyComponentState?
@@ -81,7 +81,7 @@ public final class PeerInfoRatingComponent: Component {
             if case .ended = recognizer.state {
                 self.component?.action()
                 
-                if self.tempLevel < 10 {
+                /*if self.tempLevel < 10 {
                     self.tempLevel += 1
                 } else {
                     self.tempLevel += 10
@@ -89,7 +89,7 @@ public final class PeerInfoRatingComponent: Component {
                 if self.tempLevel >= 110 {
                     self.tempLevel = 1
                 }
-                self.state?.updated(transition: .immediate)
+                self.state?.updated(transition: .immediate)*/
             }
         }
         
@@ -102,9 +102,8 @@ public final class PeerInfoRatingComponent: Component {
             self.component = component
             self.state = state
             
-            //TODO:localize
-            //let level = component.level
-            let level = self.tempLevel
+            let level = component.level
+            //let level = self.tempLevel
             
             let iconSize = CGSize(width: 26.0, height: 26.0)
             

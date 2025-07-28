@@ -608,8 +608,9 @@ func _internal_searchMessages(account: Account, location: SearchMessagesLocation
                     if let searchFlood {
                         transaction.updatePreferencesEntry(key: PreferencesKeys.globalPostSearchState(), { _ in
                             switch searchFlood {
-                            case let .searchPostsFlood(_, remains, waitTill, starsAmount):
+                            case let .searchPostsFlood(_, totalDaily, remains, waitTill, starsAmount):
                                 return PreferencesEntry(TelegramGlobalPostSearchState(
+                                    totalFreeSearches: totalDaily,
                                     remainingFreeSearches: remains,
                                     price: StarsAmount(value: starsAmount, nanos: 0),
                                     unlockTimestamp: waitTill
@@ -1089,7 +1090,7 @@ func _internal_updatedRemotePeer(accountPeerId: PeerId, postbox: Postbox, networ
 }
 
 func _internal_refreshGlobalPostSearchState(account: Account) -> Signal<Never, NoError> {
-    return account.network.request(Api.functions.channels.checkSearchPostsFlood())
+    return account.network.request(Api.functions.channels.checkSearchPostsFlood(flags: 0, query: nil))
     |> map(Optional.init)
     |> `catch` { _ -> Signal<Api.SearchPostsFlood?, NoError> in
         return .single(nil)
@@ -1101,8 +1102,9 @@ func _internal_refreshGlobalPostSearchState(account: Account) -> Signal<Never, N
             }
             transaction.updatePreferencesEntry(key: PreferencesKeys.globalPostSearchState(), { _ in
                 switch result {
-                case let .searchPostsFlood(_, remains, waitTill, starsAmount):
+                case let .searchPostsFlood(_, totalDaily, remains, waitTill, starsAmount):
                     return PreferencesEntry(TelegramGlobalPostSearchState(
+                        totalFreeSearches: totalDaily,
                         remainingFreeSearches: remains,
                         price: StarsAmount(value: starsAmount, nanos: 0),
                         unlockTimestamp: waitTill

@@ -5122,8 +5122,7 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
                                     var price: Int?
                                     
                                     if let globalPostSearchStateValue = self.globalPostSearchStateValue, globalPostSearchStateValue.remainingFreeSearches == 0 {
-                                        //TODO:localize
-                                        price = 10
+                                        price = Int(globalPostSearchStateValue.price.value)
                                     }
                                     
                                     self.approvedGlobalPostQueryState.set(ApprovedGlobalPostQueryState(
@@ -5419,7 +5418,7 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
                                         emptyResultsButtonContent = .searchQuery(query)
                                     } else {
                                         emptyResultsTitle = "Limit Reached"
-                                        emptyResultsText = "You can make up to\n10 search queries per day."
+                                        emptyResultsText = "You can make up to\n\(globalSearchStateValue.totalFreeSearches) search queries per day."
                                         
                                         emptyResultsButtonContent = .paidSearch(
                                             price: Int(globalSearchStateValue.price.value),

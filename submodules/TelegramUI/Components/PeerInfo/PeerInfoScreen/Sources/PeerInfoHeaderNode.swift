@@ -40,6 +40,7 @@ import PeerInfoPaneNode
 import MultilineTextComponent
 import PeerInfoRatingComponent
 import UndoUI
+import ProfileLevelInfoScreen
 
 final class PeerInfoHeaderNavigationTransition {
     let sourceNavigationBar: NavigationBar
@@ -194,6 +195,8 @@ final class PeerInfoHeaderNode: ASDisplayNode {
     private var appliedCustomNavigationContentNode: PeerInfoPanelNodeNavigationContentNode?
     
     private var validLayout: (width: CGFloat, statusBarHeight: CGFloat, deviceMetrics: DeviceMetrics)?
+    
+    private var currentStarRating: TelegramStarRating?
     
     init(context: AccountContext, controller: PeerInfoScreenImpl, avatarInitiallyExpanded: Bool, isOpenedFromChat: Bool, isMediaOnly: Bool, isSettings: Bool, isMyProfile: Bool, forumTopicThreadId: Int64?, chatLocation: ChatLocation) {
         self.context = context
@@ -1942,9 +1945,15 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         let apparentBackgroundHeight = (1.0 - transitionFraction) * backgroundHeight + transitionFraction * transitionSourceHeight
         
         var subtitleRatingSize: CGSize?
-        //TODO:localize
-        //if let cachedData = cachedData as? CachedUserData, let starRating = cachedData.starRating {
-        if "".isEmpty {
+        
+        if let cachedData = cachedData as? CachedUserData, let starRating = cachedData.starRating {
+            self.currentStarRating = starRating
+        } else {
+            self.currentStarRating = nil
+        }
+        
+        if let cachedData = cachedData as? CachedUserData, let starRating = cachedData.starRating {
+        //if "".isEmpty {
             let subtitleRating: ComponentView<Empty>
             var subtitleRatingTransition = ComponentTransition(transition)
             if let current = self.subtitleRating {
@@ -1962,13 +1971,12 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                     backgroundColor: ratingBackgroundColor,
                     borderColor: ratingBorderColor,
                     foregroundColor: ratingForegroundColor,
-                    //TODO:localize
-                    level: 1,//Int(starRating.level),
+                    level: Int(starRating.level),
                     action: { [weak self] in
-                        guard let self else {
+                        guard let self, let peer, let currentStarRating = self.currentStarRating else {
                             return
                         }
-                        let _ = self
+                        self.controller?.push(ProfileLevelInfoScreen(context: self.context, peer: EnginePeer(peer), starRating: currentStarRating))
                     }
                 )),
                 environment: {},
