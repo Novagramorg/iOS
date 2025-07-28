@@ -624,7 +624,7 @@ public class ProfileLevelInfoScreen: ViewControllerComponentContainer {
         super.init(context: context, component: ProfileLevelInfoScreenComponent(
             context: context,
             peer: peer,
-            starRating: starRating,
+            starRating: starRating
         ), navigationBarAppearance: .none, theme: theme)
         
         self.statusBar.statusBarStyle = .Ignore
