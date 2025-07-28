@@ -2087,9 +2087,9 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
         let defaultFoundRemoteMessages = Promise<([FoundRemoteMessages], Bool)>()
         defaultFoundRemoteMessages.set(defaultFoundRemoteMessagesSignal)
         
-        let foundItems: Signal<([ChatListSearchEntry], Bool, String?)?, NoError> = combineLatest(queue: .mainQueue(), searchQuery, self.approvedGlobalPostQueryState.get(), searchOptions, self.searchScopePromise.get(), downloadItems, globalPostSearchStateType)
+        let foundItems: Signal<([ChatListSearchEntry], Bool, String?)?, NoError> = combineLatest(queue: .mainQueue(), searchQuery, self.approvedGlobalPostQueryState.get(), searchOptions, self.searchScopePromise.get(), downloadItems, globalPostSearchStateType, isPremium)
         |> debounceOnMainThread
-        |> mapToSignal { [weak self] query, approvedGlobalPostQueryState, options, searchScope, downloadItems, _ -> Signal<([ChatListSearchEntry], Bool, String?)?, NoError> in
+        |> mapToSignal { [weak self] query, approvedGlobalPostQueryState, options, searchScope, downloadItems, _, _ -> Signal<([ChatListSearchEntry], Bool, String?)?, NoError> in
             if query == nil && options == nil && [.chats, .topics, .channels, .apps].contains(key) {
                 let _ = currentRemotePeers.swap(nil)
                 return .single(nil)
@@ -2678,6 +2678,8 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
                 foundPublicMessages = .single(([FoundRemoteMessages(messages: [], readCounters: [:], threadsData: [:], totalCount: 0)], false))
             }
             
+            let cleanFinalQuery = finalQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+            
             let foundRemoteMessages: Signal<([FoundRemoteMessages], Bool), NoError>
             if key == .publicPosts {
                 foundRemoteMessages = .single(([FoundRemoteMessages(messages: [], readCounters: [:], threadsData: [:], totalCount: 0)], false))
@@ -2687,8 +2689,8 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
                 foundRemoteMessages = .single(([FoundRemoteMessages(messages: [], readCounters: [:], threadsData: [:], totalCount: 0)], false))
             } else if key == .apps {
                 foundRemoteMessages = .single(([FoundRemoteMessages(messages: [], readCounters: [:], threadsData: [:], totalCount: 0)], false))
-            } else if key == .globalPosts && (finalQuery.isEmpty || approvedGlobalPostQueryState?.query != finalQuery) {
-                if finalQuery.isEmpty {
+            } else if key == .globalPosts && (cleanFinalQuery.isEmpty || approvedGlobalPostQueryState?.query != finalQuery) {
+                if cleanFinalQuery.isEmpty {
                     foundRemoteMessages = defaultFoundRemoteMessages.get()
                 } else {
                     foundRemoteMessages = .single(([FoundRemoteMessages(messages: [], readCounters: [:], threadsData: [:], totalCount: 0)], false))
@@ -5366,6 +5368,7 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
             if isFirstTime && [.chats, .topics, .channels, .apps, .globalPosts].contains(self.key) {
                 options.insert(.PreferSynchronousDrawing)
                 options.insert(.PreferSynchronousResourceLoading)
+                options.insert(.Synchronous)
             } else if transition.animated {
                 options.insert(.AnimateInsertion)
             }
@@ -6228,7 +6231,7 @@ private final class EmptyResultsButtonSearchContent: Component {
             //TODO:localize
             let string = NSMutableAttributedString()
             string.append(NSAttributedString(string: "Search ", font: Font.semibold(17.0), textColor: component.theme.list.itemCheckColors.foregroundColor))
-            string.append(NSAttributedString(string: component.query, font: Font.semibold(17.0), textColor: component.theme.list.itemCheckColors.foregroundColor.withMultipliedAlpha(0.7)))
+            string.append(NSAttributedString(string: component.query.trimmingCharacters(in: .whitespacesAndNewlines), font: Font.semibold(17.0), textColor: component.theme.list.itemCheckColors.foregroundColor.withMultipliedAlpha(0.7)))
             
             let textSize = self.text.update(
                 transition: .immediate,
