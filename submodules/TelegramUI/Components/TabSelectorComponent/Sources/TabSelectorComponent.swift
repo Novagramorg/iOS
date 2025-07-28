@@ -842,7 +842,8 @@ private final class ItemComponent: CombinedComponent {
                         animationCache: component.context?.animationCache,
                         animationRenderer: component.context?.animationRenderer,
                         placeholderColor: .white,
-                        text: .plain(attributedTitle)
+                        text: .plain(attributedTitle),
+                        displaysAsynchronously: false
                     ),
                     availableSize: context.availableSize,
                     transition: .immediate
@@ -864,7 +865,8 @@ private final class ItemComponent: CombinedComponent {
                         animationCache: nil,
                         animationRenderer: nil,
                         placeholderColor: .white,
-                        text: .plain(selectedAttributedTitle)
+                        text: .plain(selectedAttributedTitle),
+                        displaysAsynchronously: false
                     ),
                     availableSize: context.availableSize,
                     transition: .immediate
