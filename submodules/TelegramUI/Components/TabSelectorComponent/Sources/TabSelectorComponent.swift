@@ -10,6 +10,14 @@ import AccountContext
 import TelegramPresentationData
 
 public final class TabSelectorComponent: Component {
+    public final class TransitionHint {
+        public let scrollToEnd: Bool
+        
+        public init(scrollToEnd: Bool) {
+            self.scrollToEnd = scrollToEnd
+        }
+    }
+    
     public final class ItemEnvironment: Equatable {
         public let selectionFraction: CGFloat
         
@@ -745,12 +753,19 @@ public final class TabSelectorComponent: Component {
             }
             self.disablesInteractiveTransitionGestureRecognizer = contentWidth > availableSize.width
             
-            if let selectedBackgroundRect, self.bounds.width > 0.0 && !self.didInitiallyScroll {
-                self.scrollRectToVisible(selectedBackgroundRect.insetBy(dx: -spacing, dy: 0.0), animated: false)
-                self.didInitiallyScroll = true
+            let size = CGSize(width: min(contentWidth, availableSize.width), height: baseHeight + verticalInset * 2.0)
+            
+            if self.bounds.width > 0.0 {
+                if let hint = transition.userData(TransitionHint.self), hint.scrollToEnd {
+                    self.setContentOffset(CGPoint(x: max(0.0, contentSize.width - size.width), y: 0.0), animated: false)
+                    self.didInitiallyScroll = true
+                } else if let selectedBackgroundRect, !self.didInitiallyScroll {
+                    self.scrollRectToVisible(selectedBackgroundRect.insetBy(dx: -spacing, dy: 0.0), animated: false)
+                    self.didInitiallyScroll = true
+                }
             }
             
-            return CGSize(width: min(contentWidth, availableSize.width), height: baseHeight + verticalInset * 2.0)
+            return size
         }
     }
     

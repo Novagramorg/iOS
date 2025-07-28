@@ -892,7 +892,8 @@ final class ShareWithPeersScreenComponent: Component {
                 
                 let presentationData = component.context.sharedContext.currentPresentationData.with({ $0 }).withUpdated(theme: environment.theme)
                 
-                let (peerReference, folderPreviews) = await PeerStoryListContext.folderPreviews(peerId: component.context.account.peerId, account: component.context.account).get()
+                
+                let (peerReference, folderPreviews) = await PeerStoryListContext.folderPreviews(peerId: self.sendAsPeerId ?? component.context.account.peerId, account: component.context.account).get()
                 
                 var items: [ContextMenuItem] = []
                 
@@ -1005,7 +1006,7 @@ final class ShareWithPeersScreenComponent: Component {
                         return
                     }
                     if let value, !value.isEmpty {
-                        let _ = PeerStoryListContext.addFolderExternal(account: component.context.account, peerId: component.context.account.peerId, title: value, completion: { [weak self] id in
+                        let _ = PeerStoryListContext.addFolderExternal(account: component.context.account, peerId: self.sendAsPeerId ?? component.context.account.peerId, title: value, completion: { [weak self] id in
                             guard let self, let id else {
                                 return
                             }
