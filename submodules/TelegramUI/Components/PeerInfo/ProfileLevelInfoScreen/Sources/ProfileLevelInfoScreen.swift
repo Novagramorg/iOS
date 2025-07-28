@@ -615,11 +615,17 @@ public class ProfileLevelInfoScreen: ViewControllerComponentContainer {
     ) {
         self.context = context
         
+        let theme: ViewControllerComponentContainer.Theme
+        if let customTheme {
+            theme = .custom(customTheme)
+        } else {
+            theme = .default
+        }
         super.init(context: context, component: ProfileLevelInfoScreenComponent(
             context: context,
             peer: peer,
             starRating: starRating,
-        ), navigationBarAppearance: .none, theme: customTheme.flatMap { .custom($0) } ?? .default)
+        ), navigationBarAppearance: .none, theme: theme)
         
         self.statusBar.statusBarStyle = .Ignore
         self.navigationPresentation = .flatModal
