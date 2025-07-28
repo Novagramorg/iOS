@@ -446,7 +446,8 @@ public func giftPurchaseAlertController(
     gift: StarGift.UniqueGift,
     peer: EnginePeer,
     navigationController: NavigationController?,
-    commit: @escaping (CurrencyAmount.Currency) -> Void
+    commit: @escaping (CurrencyAmount.Currency) -> Void,
+    dismissed: @escaping () -> Void
 ) -> AlertController {
     let presentationData = context.sharedContext.currentPresentationData.with { $0 }
     let strings = presentationData.strings
@@ -463,7 +464,19 @@ public func giftPurchaseAlertController(
     
     contentNode = GiftPurchaseAlertContentNode(context: context, theme: AlertControllerTheme(presentationData: presentationData), presentationTheme: presentationData.theme, strings: strings, gift: gift, peer: peer, actions: actions)
     
-    let controller = ChatMessagePaymentAlertController(context: context, presentationData: presentationData, contentNode: contentNode!, navigationController: navigationController, chatPeerId: context.account.peerId, showBalance: true, currency: gift.resellForTonOnly ? .ton : .stars)
+    let controller = ChatMessagePaymentAlertController(
+        context: context,
+        presentationData: presentationData,
+        contentNode: contentNode!,
+        navigationController: navigationController,
+        chatPeerId: context.account.peerId,
+        showBalance: true,
+        currency: gift.resellForTonOnly ? .ton : .stars,
+        animateBalanceOverlay: false
+    )
+    controller.dismissed = { _ in
+        dismissed()
+    }
         
     dismissImpl = { [weak controller] animated in
         if animated {
