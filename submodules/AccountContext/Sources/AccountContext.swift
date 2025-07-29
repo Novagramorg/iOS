@@ -1186,7 +1186,7 @@ public protocol SharedAccountContext: AnyObject {
     func makeHashtagSearchController(context: AccountContext, peer: EnginePeer?, query: String, stories: Bool, forceDark: Bool) -> ViewController
     func makeStorySearchController(context: AccountContext, scope: StorySearchControllerScope, listContext: SearchStoryListContext?) -> ViewController
     func makeMyStoriesController(context: AccountContext, isArchive: Bool) -> ViewController
-    func makeStorySelectionController(context: AccountContext, peerId: EnginePeer.Id, completion: @escaping ([EngineStoryItem]) -> Void) -> ViewController
+    func makeStorySelectionController(context: AccountContext, peerId: EnginePeer.Id, excludeIds: [Int32], completion: @escaping ([EngineStoryItem]) -> Void) -> ViewController
     func makeArchiveSettingsController(context: AccountContext) -> ViewController
     func makeFilterSettingsController(context: AccountContext, modal: Bool, scrollToTags: Bool, dismissed: (() -> Void)?) -> ViewController
     func makeBusinessSetupScreen(context: AccountContext) -> ViewController

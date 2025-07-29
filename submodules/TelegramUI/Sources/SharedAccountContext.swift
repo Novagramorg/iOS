@@ -2427,7 +2427,7 @@ public final class SharedAccountContextImpl: SharedAccountContext {
             chatLocation = .peer(id: messages.first!.id.peerId)
         }
         
-        return ChatMessageItemImpl(presentationData: ChatPresentationData(theme: ChatPresentationThemeData(theme: theme, wallpaper: wallpaper), fontSize: fontSize, strings: strings, dateTimeFormat: dateTimeFormat, nameDisplayOrder: nameOrder, disableAnimations: false, largeEmoji: false, chatBubbleCorners: chatBubbleCorners, animatedEmojiScale: 1.0, isPreview: isPreview), context: context, chatLocation: chatLocation, associatedData: ChatMessageItemAssociatedData(automaticDownloadPeerType: .contact, automaticDownloadPeerId: nil, automaticDownloadNetworkType: .cellular, isRecentActions: false, subject: nil, contactsPeerIds: Set(), animatedEmojiStickers: [:], forcedResourceStatus: forcedResourceStatus, availableReactions: availableReactions, availableMessageEffects: nil, savedMessageTags: nil, defaultReaction: nil, isPremium: false, accountPeer: accountPeer.flatMap(EnginePeer.init), forceInlineReactions: true, isStandalone: isStandalone), controllerInteraction: controllerInteraction, content: content, disableDate: true, additionalContent: nil)
+        return ChatMessageItemImpl(presentationData: ChatPresentationData(theme: ChatPresentationThemeData(theme: theme, wallpaper: wallpaper), fontSize: fontSize, strings: strings, dateTimeFormat: dateTimeFormat, nameDisplayOrder: nameOrder, disableAnimations: false, largeEmoji: false, chatBubbleCorners: chatBubbleCorners, animatedEmojiScale: 1.0, isPreview: isPreview), context: context, chatLocation: chatLocation, associatedData: ChatMessageItemAssociatedData(automaticDownloadPeerType: .contact, automaticDownloadPeerId: nil, automaticDownloadNetworkType: .cellular, isRecentActions: false, subject: nil, contactsPeerIds: Set(), animatedEmojiStickers: [:], forcedResourceStatus: forcedResourceStatus, availableReactions: availableReactions, availableMessageEffects: nil, savedMessageTags: nil, defaultReaction: nil, areStarReactionsEnabled: false, isPremium: false, accountPeer: accountPeer.flatMap(EnginePeer.init), forceInlineReactions: true, isStandalone: isStandalone), controllerInteraction: controllerInteraction, content: content, disableDate: true, additionalContent: nil)
     }
     
     public func makeChatMessageDateHeaderItem(context: AccountContext, timestamp: Int32, theme: PresentationTheme, strings: PresentationStrings, wallpaper: TelegramWallpaper, fontSize: PresentationFontSize, chatBubbleCorners: PresentationChatBubbleCorners, dateTimeFormat: PresentationDateTimeFormat, nameOrder: PresentationPersonNameOrder) -> ListViewItemHeader {
@@ -2546,8 +2546,8 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         return PeerInfoStoryGridScreen(context: context, peerId: context.account.peerId, scope: isArchive ? .archive : .saved)
     }
     
-    public func makeStorySelectionController(context: AccountContext, peerId: EnginePeer.Id, completion: @escaping ([EngineStoryItem]) -> Void) -> ViewController {
-        return PeerInfoStoryGridScreen(context: context, peerId: peerId, scope: .saved, selectionModeCompletion: completion)
+    public func makeStorySelectionController(context: AccountContext, peerId: EnginePeer.Id, excludeIds: [Int32], completion: @escaping ([EngineStoryItem]) -> Void) -> ViewController {
+        return PeerInfoStoryGridScreen(context: context, peerId: peerId, scope: .saved, excludeIds: excludeIds, selectionModeCompletion: completion)
     }
     
     public func makeArchiveSettingsController(context: AccountContext) -> ViewController {
@@ -3993,8 +3993,14 @@ private func peerInfoControllerImpl(context: AccountContext, updatedPresentation
             sharedMediaFromForumTopic = (peerId, peer.id.toInt64())
         case let .storyAlbum(id):
             switchToStoryFolder = id
+            if peer.id == context.account.peerId {
+                isMyProfile = true
+            }
         case let .giftCollection(id):
             switchToGiftCollection = id
+            if peer.id == context.account.peerId {
+                isMyProfile = true
+            }
         default:
             break
         }

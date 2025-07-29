@@ -46,6 +46,7 @@ import TabSelectorComponent
 import LanguageSelectionScreen
 import PromptUI
 import BottomButtonPanelComponent
+import BundleIconComponent
 
 private let mediaBadgeBackgroundColor = UIColor(white: 0.0, alpha: 0.6)
 private let mediaBadgeTextColor = UIColor.white
@@ -107,6 +108,7 @@ private final class VisualMediaItem: SparseItemGrid.Item {
     let authorPeer: EnginePeer?
     let isPinned: Bool
     let isReorderableValue: Bool
+    let isEnabled: Bool
 
     override var id: AnyHashable {
         return AnyHashable(self.storyId)
@@ -120,7 +122,7 @@ private final class VisualMediaItem: SparseItemGrid.Item {
         return VisualMediaHoleAnchor(index: self.index, storyId: self.storyId, localMonthTimestamp: self.localMonthTimestamp)
     }
     
-    init(index: Int, peer: PeerReference, storyId: StoryId, story: EngineStoryItem, authorPeer: EnginePeer?, isPinned: Bool, localMonthTimestamp: Int32, isReorderable: Bool) {
+    init(index: Int, peer: PeerReference, storyId: StoryId, story: EngineStoryItem, authorPeer: EnginePeer?, isPinned: Bool, localMonthTimestamp: Int32, isReorderable: Bool, isEnabled: Bool) {
         self.indexValue = index
         self.peer = peer
         self.storyId = storyId
@@ -129,6 +131,7 @@ private final class VisualMediaItem: SparseItemGrid.Item {
         self.isPinned = isPinned
         self.localMonthTimestamp = localMonthTimestamp
         self.isReorderableValue = isReorderable
+        self.isEnabled = isEnabled
     }
 }
 
@@ -1309,7 +1312,7 @@ private final class SparseItemGridBindingImpl: SparseItemGridBinding {
             }
             
             var isSelected: Bool?
-            if let selectedIds = self.itemInteraction?.selectedIds {
+            if item.isEnabled, let selectedIds = self.itemInteraction?.selectedIds {
                 isSelected = selectedIds.contains(story.id)
             }
             layer.updateSelection(theme: self.checkNodeTheme, isSelected: isSelected, animated: false)
@@ -1350,6 +1353,8 @@ private final class SparseItemGridBindingImpl: SparseItemGridBinding {
         }
         
         layer.updateDuration(size: layer.bounds.size, viewCount: viewCount, duration: duration, topRightIcon: topRightIcon, author: item.authorPeer, isMin: isMin, minFactor: min(1.0, layer.bounds.height / 74.0), directMediaImageCache: self.directMediaImageCache, synchronous: synchronous)
+        
+        layer.opacity = item.isEnabled ? 1.0 : 0.6
     }
 
     func unbindLayer(layer: SparseItemGridLayer) {
@@ -1548,6 +1553,7 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
     public let scope: Scope
     private let isProfileEmbedded: Bool
     private let canManageStories: Bool
+    private let excludeIds: Set<Int32>
     
     private let navigationController: () -> NavigationController?
     
@@ -1670,6 +1676,9 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
     private var currentStoryFolders: [StoryListContext.State.Folder] = []
     private var removedStoryFolders = Set<Int64>()
     
+    private let maxStoryFolders: Int
+    private let maxStoriesPerFolder: Int
+    
     private var numberOfItemsToRequest: Int = 50
     private var isRequestingView: Bool = false
     private var isFirstHistoryView: Bool = true
@@ -1744,12 +1753,13 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
         return 0.0
     }
         
-    public init(context: AccountContext, scope: Scope, captureProtected: Bool, isProfileEmbedded: Bool, canManageStories: Bool, navigationController: @escaping () -> NavigationController?, listContext: StoryListContext?, initialStoryFolderId: Int64?) {
+    public init(context: AccountContext, scope: Scope, captureProtected: Bool, isProfileEmbedded: Bool, canManageStories: Bool, excludeIds: [Int32] = [], navigationController: @escaping () -> NavigationController?, listContext: StoryListContext?, initialStoryFolderId: Int64?) {
         self.context = context
         self.scope = scope
         self.navigationController = navigationController
         self.isProfileEmbedded = isProfileEmbedded
         self.canManageStories = canManageStories
+        self.excludeIds = Set(excludeIds)
         self.initialStoryFolderId = initialStoryFolderId
         
         switch scope {
@@ -1790,10 +1800,28 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
         self.calendarSource = nil
         
         var maxBotPreviewCount = 10
-        if let data = self.context.currentAppConfiguration.with({ $0 }).data, let value = data["bot_preview_medias_max"] as? Double {
-            maxBotPreviewCount = Int(value)
+        var maxStoryFolders = 100
+        var maxStoriesPerFolder = 1000
+        if let data = self.context.currentAppConfiguration.with({ $0 }).data {
+            if let value = data["bot_preview_medias_max"] as? Double {
+                maxBotPreviewCount = Int(value)
+            }
+            if let value = data["stories_albums_limit"] as? Double {
+                maxStoryFolders = Int(value)
+            }
+            if let value = data["stories_album_stories_limit"] as? Double {
+                maxStoriesPerFolder = Int(value)
+            }
         }
+        
+        #if DEBUG
+        //maxStoryFolders = 10
+        //maxStoriesPerFolder = 5
+        #endif
+        
         self.maxBotPreviewCount = maxBotPreviewCount
+        self.maxStoryFolders = maxStoryFolders
+        self.maxStoriesPerFolder = maxStoriesPerFolder
         
         super.init()
 
@@ -2127,6 +2155,9 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
             },
             toggleSelection: { [weak self] id, value in
                 guard let self, let itemInteraction = self._itemInteraction else {
+                    return
+                }
+                if self.excludeIds.contains(id) {
                     return
                 }
                 
@@ -2476,118 +2507,105 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
         
         if canManage, case let .peer(peerId, _, isArchived) = self.scope {
             if !isArchived && self.canManageStories && self.isProfileEmbedded {
-                if let folder = self.currentStoryFolder {
-                    //TODO:localize
-                    items.append(.action(ContextMenuActionItem(text: "Remove from Album", textColor: .destructive, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Delete"), color: theme.contextMenu.destructiveColor) }, action: { [weak self] _, f in
-                        guard let self else {
-                            f(.default)
-                            return
-                        }
-                                
-                        if let listSource = self.listSource as? PeerStoryListContext {
-                            let _ = listSource.removeFromFolder(id: folder.id, itemIds: [item.id])
-                        }
-                        
-                        f(.dismissWithoutContent)
-                    })))
-                } else {
-                    //TODO:localize
-                    items.append(.action(ContextMenuActionItem(text: "Add to Album", icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/AddToFolder"), color: theme.contextMenu.primaryColor) }, action: { [weak self] c, f in
+                //TODO:localize
+                items.append(.action(ContextMenuActionItem(text: "Add to Album", icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/AddToFolder"), color: theme.contextMenu.primaryColor) }, action: { [weak self] c, f in
+                    guard let self, let c else {
+                        f(.default)
+                        return
+                    }
+                    
+                    Task { @MainActor [weak self, weak c] in
                         guard let self, let c else {
-                            f(.default)
                             return
                         }
                         
-                        Task { @MainActor [weak self, weak c] in
-                            guard let self, let c else {
+                        let (peerReference, folderPreviews) = await PeerStoryListContext.folderPreviews(peerId: peerId, account: self.context.account).get()
+                        
+                        var items: [ContextMenuItem] = []
+                        items.append(.action(ContextMenuActionItem(text: self.presentationData.strings.Common_Back, icon: { theme in
+                            return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Back"), color: theme.contextMenu.primaryColor)
+                        }, iconPosition: .left, action: { c ,f in
+                            c?.popItems()
+                        })))
+                        items.append(.separator)
+                        
+                        items.append(.action(ContextMenuActionItem(text: "New Album", icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/AddFolder"), color: theme.contextMenu.primaryColor) }, iconPosition: .left, action: { [weak self] c, f in
+                            guard let self else {
+                                f(.default)
                                 return
                             }
                             
-                            let (peerReference, folderPreviews) = await PeerStoryListContext.folderPreviews(peerId: peerId, account: self.context.account).get()
+                            c?.dismiss(completion: { [weak self] in
+                                guard let self else {
+                                    return
+                                }
+                                self.presentAddStoryFolder(addItems: [item])
+                            })
+                        })))
+                        
+                        for folderPreview in folderPreviews {
+                            if folderPreview.folder.id == self.currentStoryFolder?.id {
+                                continue
+                            }
+                            var iconSource: ContextMenuActionItemIconSource?
+                            if let story = folderPreview.item {
+                                var imageSignal: Signal<UIImage?, NoError>?
+                                
+                                var selectedMedia: Media?
+                                if let image = story.media._asMedia() as? TelegramMediaImage {
+                                    selectedMedia = image
+                                } else if let file = story.media._asMedia() as? TelegramMediaFile {
+                                    selectedMedia = file
+                                }
+                                
+                                if let selectedMedia {
+                                    if let result = self.directMediaImageCache.getImage(peer: peerReference, story: story, media: selectedMedia, width: 48, aspectRatio: 1.0, possibleWidths: [48], includeBlurred: false, synchronous: true) {
+                                        if let loadSignal = result.loadSignal {
+                                            imageSignal = .single(result.image) |> then(loadSignal)
+                                        } else {
+                                            imageSignal = .single(result.image)
+                                        }
+                                    }
+                                }
+                                
+                                if let imageSignal {
+                                    iconSource = ContextMenuActionItemIconSource(
+                                        size: CGSize(width: 24.0, height: 24.0),
+                                        cornerRadius: 5.0,
+                                        signal: imageSignal
+                                    )
+                                }
+                            }
                             
-                            var items: [ContextMenuItem] = []
-                            items.append(.action(ContextMenuActionItem(text: self.presentationData.strings.Common_Back, icon: { theme in
-                                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Back"), color: theme.contextMenu.primaryColor)
-                            }, iconPosition: .left, action: { c ,f in
-                                c?.popItems()
-                            })))
-                            items.append(.separator)
+                            var icon: (PresentationTheme) -> UIImage? = { _ in nil }
+                            if iconSource == nil {
+                                icon = { theme in
+                                    return generateImage(CGSize(width: 24.0, height: 24.0), opaque: false, scale: nil, rotatedContext: { size, context in
+                                        context.clear(CGRect(origin: CGPoint(), size: size))
+                                        context.setFillColor(theme.contextMenu.primaryColor.withMultipliedAlpha(0.1).cgColor)
+                                        context.addPath(UIBezierPath(roundedRect: CGRect(origin: CGPoint(), size: size), cornerRadius: 5.0).cgPath)
+                                        context.fillPath()
+                                    })
+                                }
+                            }
                             
-                            items.append(.action(ContextMenuActionItem(text: "New Album", icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/AddFolder"), color: theme.contextMenu.primaryColor) }, iconPosition: .left, action: { [weak self] c, f in
+                            items.append(.action(ContextMenuActionItem(text: folderPreview.folder.title, icon: icon, iconSource: iconSource, iconPosition: .left, action: { [weak self] c, f in
                                 guard let self else {
                                     f(.default)
                                     return
                                 }
                                 
-                                c?.dismiss(completion: { [weak self] in
-                                    guard let self else {
-                                        return
-                                    }
-                                    self.presentAddStoryFolder(addItems: [item])
-                                })
+                                c?.dismiss(completion: {})
+                                
+                                if let listSource = self.listSource as? PeerStoryListContext {
+                                    let _ = listSource.addToFolder(id: folderPreview.folder.id, items: [item])
+                                }
                             })))
-                            
-                            for folderPreview in folderPreviews {
-                                var iconSource: ContextMenuActionItemIconSource?
-                                if let story = folderPreview.item {
-                                    var imageSignal: Signal<UIImage?, NoError>?
-                                    
-                                    var selectedMedia: Media?
-                                    if let image = story.media._asMedia() as? TelegramMediaImage {
-                                        selectedMedia = image
-                                    } else if let file = story.media._asMedia() as? TelegramMediaFile {
-                                        selectedMedia = file
-                                    }
-                                    
-                                    if let selectedMedia {
-                                        if let result = self.directMediaImageCache.getImage(peer: peerReference, story: story, media: selectedMedia, width: 24, aspectRatio: 1.0, possibleWidths: [24], includeBlurred: false, synchronous: true) {
-                                            if let loadSignal = result.loadSignal {
-                                                imageSignal = .single(result.image) |> then(loadSignal)
-                                            } else {
-                                                imageSignal = .single(result.image)
-                                            }
-                                        }
-                                    }
-                                    
-                                    if let imageSignal {
-                                        iconSource = ContextMenuActionItemIconSource(
-                                            size: CGSize(width: 24.0, height: 24.0),
-                                            cornerRadius: 5.0,
-                                            signal: imageSignal
-                                        )
-                                    }
-                                }
-                                
-                                var icon: (PresentationTheme) -> UIImage? = { _ in nil }
-                                if iconSource == nil {
-                                    icon = { theme in
-                                        return generateImage(CGSize(width: 24.0, height: 24.0), opaque: false, scale: nil, rotatedContext: { size, context in
-                                            context.clear(CGRect(origin: CGPoint(), size: size))
-                                            context.setFillColor(theme.contextMenu.primaryColor.withMultipliedAlpha(0.1).cgColor)
-                                            context.addPath(UIBezierPath(roundedRect: CGRect(origin: CGPoint(), size: size), cornerRadius: 5.0).cgPath)
-                                            context.fillPath()
-                                        })
-                                    }
-                                }
-                                
-                                items.append(.action(ContextMenuActionItem(text: folderPreview.folder.title, icon: icon, iconSource: iconSource, iconPosition: .left, action: { [weak self] c, f in
-                                    guard let self else {
-                                        f(.default)
-                                        return
-                                    }
-                                    
-                                    c?.dismiss(completion: {})
-                                    
-                                    if let listSource = self.listSource as? PeerStoryListContext {
-                                        let _ = listSource.addToFolder(id: folderPreview.folder.id, items: [item])
-                                    }
-                                })))
-                            }
-                            
-                            c.pushItems(items: .single(ContextController.Items(content: .list(items))))
                         }
-                    })))
-                }
+                        
+                        c.pushItems(items: .single(ContextController.Items(content: .list(items))))
+                    }
+                })))
                 items.append(.separator)
             }
             
@@ -2767,6 +2785,22 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
         }
         
         if canManage {
+            if let folder = self.currentStoryFolder {
+                //TODO:localize
+                items.append(.action(ContextMenuActionItem(text: "Remove from Album", icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/RemoveFromFolderUp"), color: theme.contextMenu.primaryColor) }, action: { [weak self] _, f in
+                    guard let self else {
+                        f(.default)
+                        return
+                    }
+                            
+                    if let listSource = self.listSource as? PeerStoryListContext {
+                        let _ = listSource.removeFromFolder(id: folder.id, itemIds: [item.id])
+                    }
+                    
+                    f(.dismissWithoutContent)
+                })))
+            }
+            
             items.append(.action(ContextMenuActionItem(text: self.presentationData.strings.StoryList_ItemAction_Delete, textColor: .destructive, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Delete"), color: theme.contextMenu.destructiveColor) }, action: { [weak self] c, _ in
                 c?.dismiss(completion: {
                     guard let self else {
@@ -3060,7 +3094,8 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
                 authorPeer: authorPeer,
                 isPinned: state.pinnedIds.contains(item.storyItem.id),
                 localMonthTimestamp: Month(localTimestamp: item.storyItem.timestamp + timezoneOffset).packedValue,
-                isReorderable: isReorderable
+                isReorderable: isReorderable,
+                isEnabled: !self.excludeIds.contains(item.storyItem.id)
             ))
         }
         if mappedItems.count < state.totalCount, let lastItem = state.items.last, let _ = state.loadMoreToken {
@@ -3437,7 +3472,7 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
             tempContextContentItemNode.frame = rect
             
             var isSelected: Bool?
-            if let selectedIds = self.itemInteraction.selectedIds {
+            if !self.excludeIds.contains(tempContextContentItemNode.item.id), let selectedIds = self.itemInteraction.selectedIds {
                 isSelected = selectedIds.contains(tempContextContentItemNode.item.id)
             }
             tempContextContentItemNode.itemView.updateSelection(theme: self.itemGridBinding.checkNodeTheme, isSelected: isSelected, animated: true)
@@ -3460,7 +3495,11 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
             guard let itemLayer = item.layer as? ItemLayer, let item = itemLayer.item else {
                 return
             }
-            itemLayer.updateSelection(theme: self.itemGridBinding.checkNodeTheme, isSelected: self.itemInteraction.selectedIds?.contains(item.story.id), animated: animated)
+            var isSelected: Bool?
+            if item.isEnabled {
+                isSelected = self.itemInteraction.selectedIds?.contains(item.story.id)
+            }
+            itemLayer.updateSelection(theme: self.itemGridBinding.checkNodeTheme, isSelected: isSelected, animated: animated)
         }
 
         var isSelecting = false
@@ -3805,14 +3844,18 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
         
         var folderItems: [TabSelectorComponent.Item] = []
         let mainTitle: String
-        let addTitle: String
+        let addTitle: String?
         if case .botPreview = self.scope {
             mainTitle = self.presentationData.strings.BotPreviews_LanguageTab_Main
             addTitle = self.presentationData.strings.BotPreviews_LanguageTab_Add
         } else {
             //TODO:localize
             mainTitle = "All Stories"
-            addTitle = "+ Add Album"
+            if self.currentStoryFolders.count < self.maxStoryFolders {
+                addTitle = "+ Add Album"
+            } else {
+                addTitle = nil
+            }
         }
         folderItems.append(TabSelectorComponent.Item(
             id: AnyHashable("_main"),
@@ -3836,112 +3879,123 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
                         guard let self else {
                             return
                         }
-                        guard let sourceNode = sourceNode as? ContextExtractedContentContainingNode else {
-                            return
-                        }
-                        guard let controller = self.parentController else {
-                            return
-                        }
                         
-                        var items: [ContextMenuItem] = []
-                        
-                        if self.canManageStories {
-                            //TODO:localize
-                            items.append(.action(ContextMenuActionItem(text: "Add Stories", icon: { theme in
-                                return generateTintedImage(image: UIImage(bundleImageName: "Chat List/AddStoryIcon"), color: theme.contextMenu.primaryColor)
-                            }, action: { [weak self] _, a in
-                                guard let self else {
-                                    a(.default)
-                                    return
-                                }
-                                
-                                a(.default)
-                                
-                                self.presentAddStoriesToFolder()
-                            })))
-                        }
-                        
-                        if self.canManageStories {
-                            //TODO:localize
-                            items.append(.action(ContextMenuActionItem(text: "Rename Album", icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Edit"), color: theme.contextMenu.primaryColor) }, action: { [weak self] c, _ in
-                                guard let self else {
-                                    c?.dismiss(completion: nil)
-                                    return
-                                }
-                                
-                                c?.dismiss(completion: { [weak self] in
-                                    guard let self else {
-                                        return
-                                    }
-                                    self.presentRenameStoryFolder(id: folder.id, title: folder.title)
-                                })
-                            })))
+                        Task { @MainActor [weak self] in
+                            guard let self else {
+                                return
+                            }
                             
-                            //TODO:localize
-                            items.append(.action(ContextMenuActionItem(text: "Share", icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Forward"), color: theme.contextMenu.primaryColor) }, action: { [weak self] c, _ in
-                                guard let self else {
-                                    c?.dismiss(completion: nil)
-                                    return
-                                }
-                                
-                                c?.dismiss(completion: { [weak self] in
-                                    guard let self else {
-                                        return
-                                    }
-                                    self.shareFolder(id: folder.id)
-                                })
-                            })))
-                        }
-                        
-                        if self.canManageStories {
-                            //TODO:localize
-                            items.append(.action(ContextMenuActionItem(text: "Reorder", icon: { theme in
-                                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/ReorderItems"), color: theme.contextMenu.primaryColor)
-                            }, action: { [weak self] _, a in
-                                guard let self else {
-                                    a(.default)
-                                    return
-                                }
-                                
-                                a(.default)
-                                
-                                self.beginReordering()
-                            })))
+                            guard let sourceNode = sourceNode as? ContextExtractedContentContainingNode else {
+                                return
+                            }
+                            guard let controller = self.parentController else {
+                                return
+                            }
                             
-                            //TODO:localize
-                            items.append(.action(ContextMenuActionItem(text: "Delete Album", textColor: .destructive, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Delete"), color: theme.contextMenu.destructiveColor) }, action: { [weak self] c, _ in
-                                guard let self else {
-                                    c?.dismiss(completion: nil)
-                                    return
-                                }
-                                
-                                c?.dismiss(completion: { [weak self] in
+                            var items: [ContextMenuItem] = []
+                            
+                            var canAddStories = false
+                            if self.canManageStories {
+                                canAddStories = await self.canAddStoriesToFolder(folder: folder)
+                            }
+                            if canAddStories {
+                                //TODO:localize
+                                items.append(.action(ContextMenuActionItem(text: "Add Stories", icon: { theme in
+                                    return generateTintedImage(image: UIImage(bundleImageName: "Chat List/AddStoryIcon"), color: theme.contextMenu.primaryColor)
+                                }, action: { [weak self] _, a in
                                     guard let self else {
+                                        a(.default)
                                         return
                                     }
-                                    self.presentDeleteStoryFolder(id: folder.id)
-                                })
-                            })))
+                                    
+                                    a(.default)
+                                    
+                                    self.presentAddStoriesToFolder(folderId: folder.id)
+                                })))
+                            }
+                            
+                            if self.canManageStories {
+                                //TODO:localize
+                                items.append(.action(ContextMenuActionItem(text: "Rename Album", icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Edit"), color: theme.contextMenu.primaryColor) }, action: { [weak self] c, _ in
+                                    guard let self else {
+                                        c?.dismiss(completion: nil)
+                                        return
+                                    }
+                                    
+                                    c?.dismiss(completion: { [weak self] in
+                                        guard let self else {
+                                            return
+                                        }
+                                        self.presentRenameStoryFolder(id: folder.id, title: folder.title)
+                                    })
+                                })))
+                                
+                                //TODO:localize
+                                items.append(.action(ContextMenuActionItem(text: "Share", icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Forward"), color: theme.contextMenu.primaryColor) }, action: { [weak self] c, _ in
+                                    guard let self else {
+                                        c?.dismiss(completion: nil)
+                                        return
+                                    }
+                                    
+                                    c?.dismiss(completion: { [weak self] in
+                                        guard let self else {
+                                            return
+                                        }
+                                        self.shareFolder(id: folder.id)
+                                    })
+                                })))
+                            }
+                            
+                            if self.canManageStories {
+                                //TODO:localize
+                                items.append(.action(ContextMenuActionItem(text: "Reorder", icon: { theme in
+                                    return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/ReorderItems"), color: theme.contextMenu.primaryColor)
+                                }, action: { [weak self] _, a in
+                                    guard let self else {
+                                        a(.default)
+                                        return
+                                    }
+                                    
+                                    a(.default)
+                                    
+                                    self.beginReordering()
+                                })))
+                                
+                                //TODO:localize
+                                items.append(.action(ContextMenuActionItem(text: "Delete Album", textColor: .destructive, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Delete"), color: theme.contextMenu.destructiveColor) }, action: { [weak self] c, _ in
+                                    guard let self else {
+                                        c?.dismiss(completion: nil)
+                                        return
+                                    }
+                                    
+                                    c?.dismiss(completion: { [weak self] in
+                                        guard let self else {
+                                            return
+                                        }
+                                        self.presentDeleteStoryFolder(id: folder.id)
+                                    })
+                                })))
+                            }
+                            
+                            let presentationData = self.presentationData
+                            let contextController = ContextController(
+                                presentationData: presentationData,
+                                source: .extracted(ItemExtractedContentSource(
+                                    sourceNode: sourceNode,
+                                    containerView: controller.view,
+                                    keepInPlace: false
+                                )),
+                                items: .single(ContextController.Items(content: .list(items))),
+                                recognizer: nil,
+                                gesture: gesture
+                            )
+                            controller.presentInGlobalOverlay(contextController)
                         }
-                        
-                        let presentationData = self.presentationData
-                        let contextController = ContextController(
-                            presentationData: presentationData,
-                            source: .extracted(ItemExtractedContentSource(
-                                sourceNode: sourceNode,
-                                containerView: controller.view,
-                                keepInPlace: false
-                            )),
-                            items: .single(ContextController.Items(content: .list(items))),
-                            recognizer: nil,
-                            gesture: gesture
-                        )
-                        controller.presentInGlobalOverlay(contextController)
                     }
                 ))
             }
         }
-        if self.canManageStories {
+        if self.canManageStories, let addTitle {
             folderItems.append(TabSelectorComponent.Item(
                 id: AnyHashable("_add"),
                 title: addTitle
@@ -4412,7 +4466,7 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
         } else {
             actionPanelGeneralTransition = ComponentTransition(transition)
         }
-        if self.selectionPanel == nil, self.isProfileEmbedded, self.canManageStories, case let .peer(_, _, isArchived) = self.scope, self.canManageStories, !isArchived, self.isProfileEmbedded, self.currentStoryFolder != nil, let items = self.items, !items.items.isEmpty {
+        if self.selectionPanel == nil, self.isProfileEmbedded, self.canManageStories, case let .peer(_, _, isArchived) = self.scope, self.canManageStories, !isArchived, self.isProfileEmbedded, self.currentStoryFolder != nil, let items = self.items, !items.items.isEmpty, items.count < self.maxStoriesPerFolder {
             let actionPanel: ComponentView<Empty>
             var actionPanelTransition = ComponentTransition(transition)
             if let current = self.actionPanel {
@@ -4430,13 +4484,18 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
                     theme: presentationData.theme,
                     title: "Add Stories",
                     label: nil,
+                    icon: AnyComponentWithIdentity(id: 0, component: AnyComponent(BundleIconComponent(
+                        name: "Item List/AddItemIcon",
+                        tintColor: presentationData.theme.list.itemCheckColors.foregroundColor,
+                        maxSize: CGSize(width: 18.0, height: 18.0)
+                    ))),
                     isEnabled: true,
                     insets: UIEdgeInsets(top: 0.0, left: sideInset + 12.0, bottom: bottomInset, right: sideInset + 12.0),
                     action: { [weak self] in
-                        guard let self else {
+                        guard let self, let currentStoryFolder = self.currentStoryFolder else {
                             return
                         }
-                        self.presentAddStoriesToFolder()
+                        self.presentAddStoriesToFolder(folderId: currentStoryFolder.id)
                     }
                 )),
                 environment: {},
@@ -4487,10 +4546,10 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
                         text: "Add some stories to this album.",
                         actionTitle: "Add to Album",
                         action: { [weak self] in
-                            guard let self else {
+                            guard let self, let currentStoryFolder = self.currentStoryFolder else {
                                 return
                             }
-                            self.presentAddStoriesToFolder()
+                            self.presentAddStoriesToFolder(folderId: currentStoryFolder.id)
                         },
                         additionalActionTitle: nil,
                         additionalAction: {},
@@ -4927,7 +4986,7 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
             return items.count > 1
         } else {
             if self.currentStoryFolder == nil {
-                return false
+                return self.canManageStories
             }
             
             guard let items = self.items else {
@@ -4965,13 +5024,10 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
                 }
                 if let value {
                     if let listSource = self.listSource as? PeerStoryListContext {
-                        let _ = listSource.addFolder(title: value, items: [], completion: { [weak self] id in
+                        let _ = listSource.addFolder(title: value, items: addItems, completion: { [weak self] id in
                             Queue.mainQueue().async {
-                                guard let self, let id, let listSource = self.listSource as? PeerStoryListContext else {
+                                guard let self, let id else {
                                     return
-                                }
-                                if !addItems.isEmpty {
-                                    let _ = listSource.addToFolder(id: id, items: addItems)
                                 }
                                 self.isSwitchingToCreatedFolder = true
                                 self.setStoryFolder(id: id, assumeEmpty: addItems.isEmpty)
@@ -5010,25 +5066,54 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
         self.parentController?.present(promptController, in: .window(.root))
     }
     
-    private func presentAddStoriesToFolder() {
+    @MainActor
+    private func canAddStoriesToFolder(folder: PeerStoryListContext.State.Folder) async  -> Bool {
         guard case let .peer(peerId, _, _) = self.scope else {
-            return
-        }
-        guard let folder = self.currentStoryFolder else {
-            return
+            return false
         }
         
-        let controller = self.context.sharedContext.makeStorySelectionController(context: self.context, peerId: peerId, completion: { [weak self] items in
+        if self.currentStoryFolder?.id == folder.id {
+            let state = await (self.listSource.state |> take(1)).get()
+            return state.totalCount < self.maxStoriesPerFolder
+        } else {
+            if let cachedState = await PeerStoryListContext.cachedFolderState(peerId: peerId, account: self.context.account, folderId: folder.id).get() {
+                return cachedState.count < self.maxStoriesPerFolder
+            } else {
+                return true
+            }
+        }
+    }
+    
+    private func presentAddStoriesToFolder(folderId: Int64) {
+        Task { @MainActor [weak self] in
             guard let self else {
                 return
             }
-            if let listSource = self.listSource as? PeerStoryListContext {
-                let _ = listSource.addToFolder(id: folder.id, items: items)
+            guard case let .peer(peerId, _, _) = self.scope else {
+                return
             }
-        })
-        controller.navigationPresentation = .modal
-        
-        self.parentController?.push(controller)
+            
+            var existingIds: [Int32] = []
+            if self.currentStoryFolder?.id == folderId {
+                existingIds = (await self.listSource.state.get()).items.map(\.id.id)
+            } else {
+                if let cachedState = await PeerStoryListContext.cachedFolderState(peerId: peerId, account: self.context.account, folderId: folderId).get() {
+                    existingIds = cachedState.ids
+                }
+            }
+            
+            let controller = self.context.sharedContext.makeStorySelectionController(context: self.context, peerId: peerId, excludeIds: existingIds, completion: { [weak self] items in
+                guard let self else {
+                    return
+                }
+                if let listSource = self.listSource as? PeerStoryListContext {
+                    let _ = listSource.addToFolder(id: folderId, items: items)
+                }
+            })
+            controller.navigationPresentation = .modal
+            
+            self.parentController?.push(controller)
+        }
     }
     
     public func presentDeleteCurrentStoryFolder() {
@@ -5304,7 +5389,7 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
             
             let shareController = ShareController(
                 context: self.context,
-                subject: .url("https://t.me/\(urlBase)?stories=\(id)"),
+                subject: .url("https://t.me/\(urlBase)/a/\(id)"),
                 presetText: nil,
                 preferredAction: .default,
                 showInChat: nil,
