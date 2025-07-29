@@ -344,10 +344,12 @@ public func parseInternalUrl(sharedContext: SharedAccountContext, context: Accou
                                     if let id = Int32(value) {
                                         return .peer(.name(peerName), .story(id))
                                     }
+                                 } else if queryItem.name == "album" {
+                                    if let id = Int64(value) {
+                                        return .peer(.name(peerName), .storyFolder(id))
+                                    }
                                  } else if queryItem.name == "ref", let referrer = queryItem.value {
                                      return .peer(.name(peerName), .referrer(referrer))
-                                 } else if queryItem.name == "stories", let value = queryItem.value, let folderId = Int64(value) {
-                                     return .peer(.name(peerName), .storyFolder(folderId))
                                  }
                             } else if ["voicechat", "videochat", "livestream"].contains(queryItem.name)  {
                                 return .peer(.name(peerName), .voiceChat(nil))
@@ -404,8 +406,6 @@ public func parseInternalUrl(sharedContext: SharedAccountContext, context: Accou
                                 return .peer(.name(peerName), .appStart("", queryItem.value, mode))
                             } else if queryItem.name == "ref", let referrer = queryItem.value {
                                 return .peer(.name(peerName), .referrer(referrer))
-                            } else if queryItem.name == "stories", let value = queryItem.value, let folderId = Int64(value) {
-                                return .peer(.name(peerName), .storyFolder(folderId))
                             }
                         }
                     }
@@ -655,6 +655,12 @@ public func parseInternalUrl(sharedContext: SharedAccountContext, context: Accou
                         } else {
                             return nil
                         }
+                    } else {
+                        return nil
+                    }
+                } else if pathComponents.count >= 3 && pathComponents[1] == "a" {
+                    if let folderId = Int64(pathComponents[2]) {
+                        return .peer(.name(pathComponents[0]), .storyFolder(folderId))
                     } else {
                         return nil
                     }

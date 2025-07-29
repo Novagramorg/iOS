@@ -46,6 +46,7 @@ import TabSelectorComponent
 import LanguageSelectionScreen
 import PromptUI
 import BottomButtonPanelComponent
+import BundleIconComponent
 
 private let mediaBadgeBackgroundColor = UIColor(white: 0.0, alpha: 0.6)
 private let mediaBadgeTextColor = UIColor.white
@@ -4483,6 +4484,11 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
                     theme: presentationData.theme,
                     title: "Add Stories",
                     label: nil,
+                    icon: AnyComponentWithIdentity(id: 0, component: AnyComponent(BundleIconComponent(
+                        name: "Item List/AddItemIcon",
+                        tintColor: presentationData.theme.list.itemCheckColors.foregroundColor,
+                        maxSize: CGSize(width: 18.0, height: 18.0)
+                    ))),
                     isEnabled: true,
                     insets: UIEdgeInsets(top: 0.0, left: sideInset + 12.0, bottom: bottomInset, right: sideInset + 12.0),
                     action: { [weak self] in
@@ -5018,13 +5024,10 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
                 }
                 if let value {
                     if let listSource = self.listSource as? PeerStoryListContext {
-                        let _ = listSource.addFolder(title: value, items: [], completion: { [weak self] id in
+                        let _ = listSource.addFolder(title: value, items: addItems, completion: { [weak self] id in
                             Queue.mainQueue().async {
-                                guard let self, let id, let listSource = self.listSource as? PeerStoryListContext else {
+                                guard let self, let id else {
                                     return
-                                }
-                                if !addItems.isEmpty {
-                                    let _ = listSource.addToFolder(id: id, items: addItems)
                                 }
                                 self.isSwitchingToCreatedFolder = true
                                 self.setStoryFolder(id: id, assumeEmpty: addItems.isEmpty)
@@ -5386,7 +5389,7 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
             
             let shareController = ShareController(
                 context: self.context,
-                subject: .url("https://t.me/\(urlBase)?stories=\(id)"),
+                subject: .url("https://t.me/\(urlBase)/a/\(id)"),
                 presetText: nil,
                 preferredAction: .default,
                 showInChat: nil,
