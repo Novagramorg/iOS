@@ -208,8 +208,7 @@ private final class SheetContent: CombinedComponent {
                     minAmount = StarsAmount(value: resaleConfiguration.starGiftResaleMinStarsAmount, nanos: 0)
                     maxAmount = StarsAmount(value: resaleConfiguration.starGiftResaleMaxStarsAmount, nanos: 0)
                 case .ton:
-                    //TODO:localize
-                    amountTitle = "PRICE IN TON"
+                    amountTitle = environment.strings.Stars_SellGift_TonAmountTitle
                     minAmount = StarsAmount(value: resaleConfiguration.starGiftResaleMinTonAmount, nanos: 0)
                     maxAmount = StarsAmount(value: resaleConfiguration.starGiftResaleMaxTonAmount, nanos: 0)
                 }
@@ -597,8 +596,7 @@ private final class SheetContent: CombinedComponent {
             if case .starGiftResell = component.mode {
                 contentSize.height += 24.0
                 
-                //TODO:localize
-                let onlyTonFooterString = NSAttributedString(attributedString: parseMarkdownIntoAttributedString("If the buyer pays you in TON, there's no risk of refunds, unlike with Stars payments.", attributes: amountMarkdownAttributes, textAlignment: .natural))
+                let onlyTonFooterString = NSAttributedString(attributedString: parseMarkdownIntoAttributedString(environment.strings.Stars_SellGift_OnlyTonInfo, attributes: amountMarkdownAttributes, textAlignment: .natural))
                 let onlyTonFooter = AnyComponent(MultilineTextComponent(
                     text: .plain(onlyTonFooterString),
                     maximumNumberOfLines: 0
@@ -616,7 +614,7 @@ private final class SheetContent: CombinedComponent {
                                 title: AnyComponent(VStack([
                                     AnyComponentWithIdentity(id: AnyHashable(0), component: AnyComponent(MultilineTextComponent(
                                         text: .plain(NSAttributedString(
-                                            string: "Only Accept TON",
+                                            string: environment.strings.Stars_SellGift_OnlyTon,
                                             font: Font.regular(presentationData.listsFontSize.baseDisplaySize),
                                             textColor: theme.list.itemPrimaryTextColor
                                         )),

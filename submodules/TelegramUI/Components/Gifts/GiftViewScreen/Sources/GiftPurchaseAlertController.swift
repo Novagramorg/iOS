@@ -161,12 +161,11 @@ private final class GiftPurchaseAlertContentNode: AlertContentNode {
         }
         
         if self.gift.resellForTonOnly {
-            //TODO:localize
             let headerSize = self.header.update(
                 transition: .immediate,
                 component: AnyComponent(
                     MultilineTextComponent(
-                        text: .plain(NSAttributedString(string: "The seller only accepts\nTON as payment.", font: Font.regular(13.0), textColor: self.presentationTheme.actionSheet.secondaryTextColor)),
+                        text: .plain(NSAttributedString(string: self.strings.Gift_Buy_AcceptsTonOnly, font: Font.regular(13.0), textColor: self.presentationTheme.actionSheet.secondaryTextColor)),
                         horizontalAlignment: .center,
                         maximumNumberOfLines: 2
                     )
@@ -184,7 +183,7 @@ private final class GiftPurchaseAlertContentNode: AlertContentNode {
             origin.y += headerSize.height + 17.0
         } else {
             origin.y -= 4.0
-            //TODO:localize
+
             let headerSize = self.header.update(
                 transition: ComponentTransition(transition),
                 component: AnyComponent(TabSelectorComponent(
@@ -201,11 +200,11 @@ private final class GiftPurchaseAlertContentNode: AlertContentNode {
                     items: [
                         TabSelectorComponent.Item(
                             id: AnyHashable(0),
-                            content: .text("Pay in Stars")
+                            content: .text(self.strings.Gift_Buy_PayInStars)
                         ),
                         TabSelectorComponent.Item(
                             id: AnyHashable(1),
-                            content: .text("Pay in TON")
+                            content: .text(self.strings.Gift_Buy_PayInTon)
                         )
                     ],
                     selectedId: self.currency == .ton ? AnyHashable(1) : AnyHashable(0),
@@ -499,8 +498,7 @@ public func giftPurchaseAlertController(
             if let headerView = contentNode?.header.view {
                 let absoluteFrame = headerView.convert(headerView.bounds, to: nil)
                 let location = CGRect(origin: CGPoint(x: absoluteFrame.minX + floor(absoluteFrame.width * 0.75), y: absoluteFrame.minY - 8.0), size: CGSize())
-                //TODO:localize
-                let tooltipController = TooltipScreen(account: context.account, sharedContext: context.sharedContext, text: .plain(text: "Pay with TON to skip the 21-day wait before transferring the gift again."), style: .wide, location: .point(location, .bottom), displayDuration: .default, inset: 16.0, shouldDismissOnTouch: { _, _ in
+                let tooltipController = TooltipScreen(account: context.account, sharedContext: context.sharedContext, text: .plain(text: presentationData.strings.Gift_Buy_PayInTon_Tooltip), style: .wide, location: .point(location, .bottom), displayDuration: .default, inset: 16.0, shouldDismissOnTouch: { _, _ in
                     return .dismiss(consume: false)
                 })
                 controller.present(tooltipController, in: .window(.root))
