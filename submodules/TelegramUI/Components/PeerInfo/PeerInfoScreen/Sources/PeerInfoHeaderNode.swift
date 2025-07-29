@@ -197,6 +197,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
     private var validLayout: (width: CGFloat, statusBarHeight: CGFloat, deviceMetrics: DeviceMetrics)?
     
     private var currentStarRating: TelegramStarRating?
+    private var currentPendingStarRating: TelegramStarPendingRating?
     
     init(context: AccountContext, controller: PeerInfoScreenImpl, avatarInitiallyExpanded: Bool, isOpenedFromChat: Bool, isMediaOnly: Bool, isSettings: Bool, isMyProfile: Bool, forumTopicThreadId: Int64?, chatLocation: ChatLocation) {
         self.context = context
@@ -1955,8 +1956,14 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         
         if let cachedData = cachedData as? CachedUserData, let starRating = cachedData.starRating {
             self.currentStarRating = starRating
+            self.currentPendingStarRating = cachedData.pendingStarRating
+            
+            #if DEBUG
+            self.currentPendingStarRating = TelegramStarPendingRating(rating: TelegramStarRating(level: starRating.level, currentLevelStars: starRating.currentLevelStars, stars: starRating.stars + 123, nextLevelStars: starRating.nextLevelStars), timestamp: 0)
+            #endif
         } else {
             self.currentStarRating = nil
+            self.currentPendingStarRating = nil
         }
         
         if let cachedData = cachedData as? CachedUserData, let starRating = cachedData.starRating {
@@ -1987,6 +1994,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                             context: self.context,
                             peer: EnginePeer(peer),
                             starRating: currentStarRating,
+                            pendingStarRating: self.currentPendingStarRating,
                             customTheme: self.presentationData?.theme
                         ))
                     }
