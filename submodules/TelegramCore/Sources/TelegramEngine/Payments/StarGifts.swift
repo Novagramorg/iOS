@@ -1838,11 +1838,11 @@ private final class ProfileGiftsContextImpl {
                             return true
                         }
                         switch gift.gift {
-                        case .generic(let gift):
+                        case let .generic(gift):
                             if gift.id == id {
                                 return true
                             }
-                        case .unique(let uniqueGift):
+                        case let .unique(uniqueGift):
                             if uniqueGift.id == id {
                                 return true
                             }
@@ -1861,11 +1861,11 @@ private final class ProfileGiftsContextImpl {
                             return true
                         }
                         switch gift.gift {
-                        case .generic(let gift):
+                        case let .generic(gift):
                             if gift.id == id {
                                 return true
                             }
-                        case .unique(let uniqueGift):
+                        case let .unique(uniqueGift):
                             if uniqueGift.id == id {
                                 return true
                             }

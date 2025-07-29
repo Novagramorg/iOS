@@ -70,6 +70,8 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
     private let profileGifts: ProfileGiftsContext
     private let canManage: Bool
     private let canGift: Bool
+    private let initialGiftCollectionId: Int64?
+    
     private var resultsAreEmpty = false
     
     private let chatControllerInteraction: ChatControllerInteraction
@@ -130,7 +132,7 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
     
     private let collectionsMaxCount: Int
     
-    public init(context: AccountContext, peerId: PeerId, chatControllerInteraction: ChatControllerInteraction, profileGiftsCollections: ProfileGiftsCollectionsContext, profileGifts: ProfileGiftsContext, canManage: Bool, canGift: Bool) {
+    public init(context: AccountContext, peerId: PeerId, chatControllerInteraction: ChatControllerInteraction, profileGiftsCollections: ProfileGiftsCollectionsContext, profileGifts: ProfileGiftsContext, canManage: Bool, canGift: Bool, initialGiftCollectionId: Int64?) {
         self.context = context
         self.peerId = peerId
         self.chatControllerInteraction = chatControllerInteraction
@@ -138,6 +140,7 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
         self.profileGifts = profileGifts
         self.canManage = canManage
         self.canGift = canGift
+        self.initialGiftCollectionId = initialGiftCollectionId
         
         if let value = context.currentAppConfiguration.with({ $0 }).data?["stargifts_collections_limit"] as? Double {
             self.collectionsMaxCount = Int(value)
@@ -150,6 +153,12 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
         self.giftsListView = GiftsListView(context: context, peerId: peerId, profileGifts: profileGifts, giftsCollections: profileGiftsCollections, canSelect: false)
                 
         super.init()
+                
+        self.addSubnode(self.backgroundNode)
+        self.addSubnode(self.scrollNode)
+        
+        self.statusPromise.set(self.giftsListView.status)
+        self.ready.set(self.giftsListView.isReady)
         
         self.giftsListView.onContentUpdated = { [weak self] in
             guard let self else {
@@ -159,18 +168,17 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
                 self.update(size: params.size, topInset: params.topInset, sideInset: params.sideInset, bottomInset: params.bottomInset, deviceMetrics: params.deviceMetrics, visibleHeight: params.visibleHeight, isScrollingLockedAtTop: params.isScrollingLockedAtTop, expandProgress: params.expandProgress, navigationHeight: params.navigationHeight, presentationData: params.presentationData, synchronous: true, transition: .immediate)
             }
         }
-        
-        self.addSubnode(self.backgroundNode)
-        self.addSubnode(self.scrollNode)
-        
-        self.statusPromise.set(self.giftsListView.status)
-        self.ready.set(self.giftsListView.isReady)
-        
         self.giftsListView.contextAction = { [weak self] gift, view, gesture in
             guard let self else {
                 return
             }
             self.contextAction(gift: gift, view: view, gesture: gesture)
+        }
+        self.giftsListView.displayUnpinScreen = { [weak self] gift, completion in
+            guard let self else {
+                return
+            }
+            self.displayUnpinScreen(gift: gift, completion: completion)
         }
         
         self.collectionsDisposable = (profileGiftsCollections.state
@@ -181,6 +189,10 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
             self.collections = state.collections
             self.updateScrolling(transition: .easeInOut(duration: 0.2))
         })
+        
+        if let initialGiftCollectionId {
+            self.setCurrentCollection(collection: .collection(Int32(initialGiftCollectionId)))
+        }
     }
     
     deinit {
@@ -435,13 +447,19 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
                 self.update(size: params.size, topInset: params.topInset, sideInset: params.sideInset, bottomInset: params.bottomInset, deviceMetrics: params.deviceMetrics, visibleHeight: params.visibleHeight, isScrollingLockedAtTop: params.isScrollingLockedAtTop, expandProgress: params.expandProgress, navigationHeight: params.navigationHeight, presentationData: params.presentationData, synchronous: true, transition: .immediate)
             }
         }
-        self.giftsListView.parentController = self.parentController
+        self.giftsListView.displayUnpinScreen = { [weak self] gift, completion in
+            guard let self else {
+                return
+            }
+            self.displayUnpinScreen(gift: gift, completion: completion)
+        }
         self.giftsListView.contextAction = { [weak self] gift, view, gesture in
             guard let self else {
                 return
             }
             self.contextAction(gift: gift, view: view, gesture: gesture)
         }
+        self.giftsListView.parentController = self.parentController
         self.giftsListView.frame = previousGiftsListView.frame
                                         
         self.scrollNode.view.insertSubview(self.giftsListView, aboveSubview: previousGiftsListView)
@@ -494,6 +512,7 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
             }
         })))
 
+        
 //        items.append(.action(ContextMenuActionItem(text: params.presentationData.strings.PeerInfo_Gifts_ShareCollection, icon: { theme in
 //            return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Forward"), color: theme.actionSheet.primaryTextColor)
 //        }, action: { [weak self] _, f in
