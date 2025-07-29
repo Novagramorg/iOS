@@ -476,6 +476,9 @@ public final class ChatMessageWebpageBubbleContentNode: ChatMessageBubbleContent
                             entities = nil
                         case "telegram_call":
                             actionTitle = item.presentationData.strings.Chat_ViewGroupCall
+                        case "telegram_collection":
+                            //TODO:localize
+                            actionTitle = "VIEW COLLECTION"
                         default:
                             break
                     }
@@ -483,6 +486,9 @@ public final class ChatMessageWebpageBubbleContentNode: ChatMessageBubbleContent
                 for attribute in webpage.attributes {
                     if case let .stickerPack(stickerPack) = attribute, !stickerPack.files.isEmpty {
                         mediaAndFlags = (stickerPack.files, [.preferMediaInline, .stickerPack])
+                        break
+                    } else if case let .giftCollection(giftCollection) = attribute, !giftCollection.files.isEmpty {
+                        mediaAndFlags = (giftCollection.files, [.preferMediaInline, .stickerPack])
                         break
                     }
                 }

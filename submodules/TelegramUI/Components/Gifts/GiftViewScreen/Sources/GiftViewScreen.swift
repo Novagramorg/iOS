@@ -843,9 +843,9 @@ private final class GiftViewSheetContent: CombinedComponent {
                                 }
                                 switch self.subject {
                                 case let .profileGift(peerId, currentSubject):
-                                    self.subject = .profileGift(peerId, currentSubject.withGift(.unique(gift.withResellAmounts(nil))))
+                                    self.subject = .profileGift(peerId, currentSubject.withGift(.unique(gift.withResellAmounts(nil).withResellForTonOnly(false))))
                                 case let .uniqueGift(_, recipientPeerId):
-                                    self.subject = .uniqueGift(gift.withResellAmounts(nil), recipientPeerId)
+                                    self.subject = .uniqueGift(gift.withResellAmounts(nil).withResellForTonOnly(false), recipientPeerId)
                                 default:
                                     break
                                 }
@@ -919,9 +919,9 @@ private final class GiftViewSheetContent: CombinedComponent {
                         
                         switch self.subject {
                         case let .profileGift(peerId, currentSubject):
-                            self.subject = .profileGift(peerId, currentSubject.withGift(.unique(gift.withResellAmounts([price]))))
+                            self.subject = .profileGift(peerId, currentSubject.withGift(.unique(gift.withResellAmounts([price]).withResellForTonOnly(price.currency == .ton))))
                         case let .uniqueGift(_, recipientPeerId):
-                            self.subject = .uniqueGift(gift.withResellAmounts([price]), recipientPeerId)
+                            self.subject = .uniqueGift(gift.withResellAmounts([price]).withResellForTonOnly(price.currency == .ton), recipientPeerId)
                         default:
                             break
                         }

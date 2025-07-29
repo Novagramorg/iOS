@@ -82,6 +82,7 @@ public enum ParsedInternalPeerUrlParameter {
     case profile
     case referrer(String)
     case storyFolder(Int64)
+    case giftCollection(Int64)
 }
 
 public enum ParsedInternalUrl {
@@ -603,6 +604,12 @@ public func parseInternalUrl(sharedContext: SharedAccountContext, context: Accou
                     } else {
                         return nil
                     }
+                } else if pathComponents.count >= 3 && pathComponents[1] == "c" {
+                    if let collectionId = Int64(pathComponents[2]) {
+                        return .peer(.name(pathComponents[0]), .giftCollection(collectionId))
+                    } else {
+                        return nil
+                    }
                 } else if pathComponents.count == 4 && pathComponents[0] == "c" {
                     if let channelId = Int64(pathComponents[1]),  let threadId = Int32(pathComponents[2]), let messageId = Int32(pathComponents[3]), channelId > 0 {
                         var timecode: Double?
@@ -946,6 +953,8 @@ private func resolveInternalUrl(context: AccountContext, url: ParsedInternalUrl)
                                 return .single(.result(.peer(peer._asPeer(), .chat(textInputState: nil, subject: nil, peekData: nil))))
                             case let .storyFolder(folderId):
                                 return .single(.result(.storyFolder(peerId: peer.id, id: folderId)))
+                            case let .giftCollection(collectionId):
+                                return .single(.result(.giftCollection(peerId: peer.id, id: collectionId)))
                         }
                     } else {
                         return .single(.result(.peer(peer._asPeer(), .chat(textInputState: nil, subject: nil, peekData: nil))))
