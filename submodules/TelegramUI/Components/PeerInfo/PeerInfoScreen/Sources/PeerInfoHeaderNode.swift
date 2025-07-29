@@ -1959,7 +1959,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             self.currentPendingStarRating = cachedData.pendingStarRating
             
             #if DEBUG
-            self.currentPendingStarRating = TelegramStarPendingRating(rating: TelegramStarRating(level: starRating.level, currentLevelStars: starRating.currentLevelStars, stars: starRating.stars + 123, nextLevelStars: starRating.nextLevelStars), timestamp: 0)
+            self.currentPendingStarRating = TelegramStarPendingRating(rating: TelegramStarRating(level: starRating.level, currentLevelStars: starRating.currentLevelStars, stars: starRating.stars + 123, nextLevelStars: starRating.nextLevelStars), timestamp: Int32(Date().timeIntervalSince1970) + 60 * 60 * 24 * 3)
             #endif
         } else {
             self.currentStarRating = nil
