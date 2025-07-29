@@ -16,6 +16,7 @@ import PresentationDataUtils
 import PlainButtonComponent
 import Markdown
 import PremiumUI
+import LottieComponent
 
 private final class ProfileLevelInfoScreenComponent: Component {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
@@ -23,15 +24,18 @@ private final class ProfileLevelInfoScreenComponent: Component {
     let context: AccountContext
     let peer: EnginePeer
     let starRating: TelegramStarRating
+    let pendingStarRating: TelegramStarPendingRating?
     
     init(
         context: AccountContext,
         peer: EnginePeer,
-        starRating: TelegramStarRating
+        starRating: TelegramStarRating,
+        pendingStarRating: TelegramStarPendingRating?
     ) {
         self.context = context
         self.peer = peer
         self.starRating = starRating
+        self.pendingStarRating = pendingStarRating
     }
     
     static func ==(lhs: ProfileLevelInfoScreenComponent, rhs: ProfileLevelInfoScreenComponent) -> Bool {
@@ -77,6 +81,7 @@ private final class ProfileLevelInfoScreenComponent: Component {
         
         private let title = ComponentView<Empty>()
         private let levelInfo = ComponentView<Empty>()
+        private var secondaryDescriptionText: ComponentView<Empty>?
         private let descriptionText = ComponentView<Empty>()
         
         private var items: [ComponentView<Empty>] = []
@@ -328,8 +333,16 @@ private final class ProfileLevelInfoScreenComponent: Component {
             //TODO:localize
             let titleString: String = "Rating"
             let descriptionTextString: String
+            var secondaryDescriptionTextString: String?
             if component.peer.id == component.context.account.peerId {
-                descriptionTextString = "The rating reflects **your** activity on Telegram. What affects it:"
+                descriptionTextString = "The rating reflects your activity on Telegram. What affects it:"
+                
+                if let pendingStarRating = component.pendingStarRating {
+                    if pendingStarRating.rating.stars > component.starRating.stars {
+                        let pendingPoints = pendingStarRating.rating.stars - component.starRating.stars
+                        secondaryDescriptionTextString = "The rating updates in 21 days after purchases.\n\(pendingPoints) points are pending."
+                    }
+                }
             } else {
                 descriptionTextString = "The rating reflects **\(component.peer.compactDisplayTitle)'s** activity on Telegram. What affects it:"
             }
@@ -372,6 +385,10 @@ private final class ProfileLevelInfoScreenComponent: Component {
             }
             
             let badgeText = starCountString(Int64(component.starRating.stars), decimalSeparator: ".")
+            var badgeTextSuffix: String?
+            if let nextLevelStars = component.starRating.nextLevelStars {
+                badgeTextSuffix = " / \(starCountString(Int64(nextLevelStars), decimalSeparator: "."))"
+            }
 
             let levelInfoSize = self.levelInfo.update(
                 transition: .immediate,
@@ -386,6 +403,7 @@ private final class ProfileLevelInfoScreenComponent: Component {
                     activeTitleColor: .white,
                     badgeIconName: "Peer Info/ProfileLevelProgressIcon",
                     badgeText: badgeText,
+                    badgeTextSuffix: badgeTextSuffix,
                     badgePosition: levelFraction,
                     badgeGraphPosition: levelFraction,
                     invertProgress: true,
@@ -402,6 +420,51 @@ private final class ProfileLevelInfoScreenComponent: Component {
             }
 
             contentHeight += 129.0
+            
+            if let secondaryDescriptionTextString {
+                contentHeight -= 8.0
+                let secondaryDescriptionText: ComponentView<Empty>
+                if let current = self.secondaryDescriptionText {
+                    secondaryDescriptionText = current
+                } else {
+                    secondaryDescriptionText = ComponentView()
+                    self.secondaryDescriptionText = secondaryDescriptionText
+                }
+                let secondaryDescriptionTextSize = secondaryDescriptionText.update(
+                    transition: .immediate,
+                    component: AnyComponent(BalancedTextComponent(
+                        text: .markdown(
+                            text: secondaryDescriptionTextString,
+                            attributes: MarkdownAttributes(
+                                body: MarkdownAttributeSet(font: Font.regular(13.0), textColor: environment.theme.list.itemSecondaryTextColor),
+                                bold: MarkdownAttributeSet(font: Font.semibold(13.0), textColor: environment.theme.list.itemSecondaryTextColor),
+                                link: MarkdownAttributeSet(font: Font.regular(13.0), textColor: environment.theme.list.itemAccentColor),
+                                linkAttribute: { url in
+                                    return ("URL", url)
+                                }
+                            )
+                        ),
+                        horizontalAlignment: .center,
+                        maximumNumberOfLines: 0,
+                        lineSpacing: 0.2
+                    )),
+                    environment: {},
+                    containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 10000.0)
+                )
+                let secondaryDescriptionTextFrame = CGRect(origin: CGPoint(x: floor((availableSize.width - secondaryDescriptionTextSize.width) * 0.5), y: contentHeight), size: secondaryDescriptionTextSize)
+                if let secondaryDescriptionTextView = secondaryDescriptionText.view {
+                    if secondaryDescriptionTextView.superview == nil {
+                        self.scrollContentView.addSubview(secondaryDescriptionTextView)
+                    }
+                    transition.setPosition(view: secondaryDescriptionTextView, position: secondaryDescriptionTextFrame.center)
+                    secondaryDescriptionTextView.bounds = CGRect(origin: CGPoint(), size: secondaryDescriptionTextFrame.size)
+                }
+                contentHeight += secondaryDescriptionTextSize.height
+                contentHeight += 23.0
+            } else if let secondaryDescriptionText = self.secondaryDescriptionText {
+                self.secondaryDescriptionText = nil
+                secondaryDescriptionText.view?.removeFromSuperview()
+            }
 
             let descriptionTextSize = self.descriptionText.update(
                 transition: .immediate,
@@ -511,6 +574,24 @@ private final class ProfileLevelInfoScreenComponent: Component {
             
             //TODO:localize
             let actionButtonTitle: String = "Understood"
+            
+            var buttonTitle: [AnyComponentWithIdentity<Empty>] = []
+            let playButtonAnimation = ActionSlot<Void>()
+            buttonTitle.append(AnyComponentWithIdentity(id: 0, component: AnyComponent(LottieComponent(
+                content: LottieComponent.AppBundleContent(name: "anim_ok"),
+                color: environment.theme.list.itemCheckColors.foregroundColor,
+                startingPosition: .begin,
+                size: CGSize(width: 28.0, height: 28.0),
+                playOnce: playButtonAnimation
+            ))))
+            buttonTitle.append(AnyComponentWithIdentity(id: 1, component: AnyComponent(ButtonTextContentComponent(
+                text: actionButtonTitle,
+                badge: 0,
+                textColor: environment.theme.list.itemCheckColors.foregroundColor,
+                badgeBackground: environment.theme.list.itemCheckColors.foregroundColor,
+                badgeForeground: environment.theme.list.itemCheckColors.fillColor
+            ))))
+            
             let actionButtonSize = self.actionButton.update(
                 transition: transition,
                 component: AnyComponent(ButtonComponent(
@@ -521,13 +602,7 @@ private final class ProfileLevelInfoScreenComponent: Component {
                     ),
                     content: AnyComponentWithIdentity(
                         id: AnyHashable(0),
-                        component: AnyComponent(ButtonTextContentComponent(
-                            text: actionButtonTitle,
-                            badge: 0,
-                            textColor: environment.theme.list.itemCheckColors.foregroundColor,
-                            badgeBackground: environment.theme.list.itemCheckColors.foregroundColor,
-                            badgeForeground: environment.theme.list.itemCheckColors.fillColor
-                        ))
+                        component: AnyComponent(HStack(buttonTitle, spacing: 2.0))
                     ),
                     isEnabled: true,
                     displaysProgress: false,
@@ -551,6 +626,7 @@ private final class ProfileLevelInfoScreenComponent: Component {
             if let actionButtonView = self.actionButton.view {
                 if actionButtonView.superview == nil {
                     self.bottomPanelContainer.addSubview(actionButtonView)
+                    playButtonAnimation.invoke(Void())
                 }
                 transition.setFrame(view: actionButtonView, frame: actionButtonFrame)
             }
@@ -616,6 +692,7 @@ public class ProfileLevelInfoScreen: ViewControllerComponentContainer {
         context: AccountContext,
         peer: EnginePeer,
         starRating: TelegramStarRating,
+        pendingStarRating: TelegramStarPendingRating?,
         customTheme: PresentationTheme?
     ) {
         self.context = context
@@ -629,7 +706,8 @@ public class ProfileLevelInfoScreen: ViewControllerComponentContainer {
         super.init(context: context, component: ProfileLevelInfoScreenComponent(
             context: context,
             peer: peer,
-            starRating: starRating
+            starRating: starRating,
+            pendingStarRating: pendingStarRating
         ), navigationBarAppearance: .none, theme: theme)
         
         self.statusBar.statusBarStyle = .Ignore
@@ -868,7 +946,7 @@ private func starCountString(_ size: Int64, forceDecimal: Bool = false, decimalS
         } else {
             return "\(size / (1000 * 1000))M"
         }
-    } else if size >= 1000 {
+    } else if size >= 100000 {
         let remainder = (size % (1000)) / (100)
         if remainder != 0 || forceDecimal {
             return "\(size / 1000)\(decimalSeparator)\(remainder)K"
