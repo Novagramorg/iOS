@@ -775,17 +775,31 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
             let buttonSideInset = sideInset + 16.0
             
             let buttonTitle: String
+            var buttonIconName: String?
             if self.peerId == self.context.account.peerId {
                 if case .all = self.currentCollection {
                     buttonTitle = params.presentationData.strings.PeerInfo_Gifts_Send
                 } else {
                     buttonTitle = params.presentationData.strings.PeerInfo_Gifts_AddGiftsButton
+                    buttonIconName = "Item List/AddItemIcon"
                 }
             } else {
                 buttonTitle = params.presentationData.strings.PeerInfo_Gifts_SendGift
             }
             
             let buttonAttributedString = NSAttributedString(string: buttonTitle, font: Font.semibold(17.0), textColor: .white, paragraphAlignment: .center)
+            var buttonTitleContent: AnyComponent<Empty> = AnyComponent(MultilineTextComponent(text: .plain(buttonAttributedString)))
+            if let buttonIconName {
+                buttonTitleContent = AnyComponent(HStack([
+                    AnyComponentWithIdentity(id: "_icon", component: AnyComponent(BundleIconComponent(
+                        name: buttonIconName,
+                        tintColor: presentationData.theme.list.itemCheckColors.foregroundColor,
+                        maxSize: CGSize(width: 18.0, height: 18.0)
+                    ))),
+                    AnyComponentWithIdentity(id: "_title", component: buttonTitleContent)
+                ], spacing: 7.0))
+            }
+            
             let panelButtonSize = panelButton.update(
                 transition: transition,
                 component: AnyComponent(
@@ -796,8 +810,8 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
                             pressedColor: presentationData.theme.list.itemCheckColors.fillColor.withMultipliedAlpha(0.8)
                         ),
                         content: AnyComponentWithIdentity(
-                            id: AnyHashable(buttonAttributedString.string),
-                            component: AnyComponent(MultilineTextComponent(text: .plain(buttonAttributedString)))
+                            id: AnyHashable(buttonTitle),
+                            component: buttonTitleContent
                         ),
                         isEnabled: true,
                         action: { [weak self] in
