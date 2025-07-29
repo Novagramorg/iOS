@@ -98,6 +98,7 @@ private final class GiftViewSheetContent: CombinedComponent {
         
         var cachedChevronImage: (UIImage, PresentationTheme)?
         var cachedSmallChevronImage: (UIImage, PresentationTheme)?
+        var cachedHiddenImage: (UIImage, PresentationTheme)?
         
         var inProgress = false
         
@@ -3222,10 +3223,17 @@ private final class GiftViewSheetContent: CombinedComponent {
             }
             
             if ((incoming && !converted && !upgraded) || exported || selling) && (!showUpgradePreview && !showWearPreview) {
+                let textFont = Font.regular(13.0)
+                let textColor = theme.list.itemSecondaryTextColor
                 let linkColor = theme.actionSheet.controlAccentColor
+                
                 if state.cachedSmallChevronImage == nil || state.cachedSmallChevronImage?.1 !== environment.theme {
                     state.cachedSmallChevronImage = (generateTintedImage(image: UIImage(bundleImageName: "Item List/InlineTextRightArrow"), color: linkColor)!, theme)
                 }
+                if state.cachedHiddenImage == nil || state.cachedHiddenImage?.1 !== environment.theme {
+                    state.cachedHiddenImage = (generateTintedImage(image: UIImage(bundleImageName: "Premium/Collectible/Hidden"), color: textColor)!, theme)
+                }
+                
                 var addressToOpen: String?
                 var descriptionText: String
                 if let uniqueGift, selling {
@@ -3240,15 +3248,20 @@ private final class GiftViewSheetContent: CombinedComponent {
                     addressToOpen = address
                     descriptionText = strings.Gift_View_TonGiftAddressInfo
                 } else {
-                    if isChannelGift {
-                        descriptionText = savedToProfile ? strings.Gift_View_DisplayedInfoChannelNew : strings.Gift_View_HiddenInfoChannelNew
+                    if canUpgrade || savedToProfile {
+                        if isChannelGift {
+                            descriptionText = savedToProfile ? strings.Gift_View_DisplayedInfoChannelNew : strings.Gift_View_HiddenInfoChannelNew
+                        } else {
+                            descriptionText = savedToProfile ? strings.Gift_View_DisplayedInfoNew : strings.Gift_View_HiddenInfoNew
+                        }
                     } else {
-                        descriptionText = savedToProfile ? strings.Gift_View_DisplayedInfoNew : strings.Gift_View_HiddenInfoNew
+                        descriptionText = isChannelGift ? strings.Gift_View_UniqueHiddenInfo_Channel : strings.Gift_View_UniqueHiddenInfo
+                    }
+                    if !savedToProfile {
+                        descriptionText = "#   \(descriptionText)"
                     }
                 }
                 
-                let textFont = Font.regular(13.0)
-                let textColor = theme.list.itemSecondaryTextColor
                 let markdownAttributes = MarkdownAttributes(body: MarkdownAttributeSet(font: textFont, textColor: textColor), bold: MarkdownAttributeSet(font: textFont, textColor: textColor), link: MarkdownAttributeSet(font: textFont, textColor: linkColor), linkAttribute: { contents in
                     return (TelegramTextAttributes.URL, contents)
                 })
@@ -3258,6 +3271,10 @@ private final class GiftViewSheetContent: CombinedComponent {
                 if let range = attributedString.string.range(of: ">"), let chevronImage = state.cachedSmallChevronImage?.0 {
                     attributedString.addAttribute(.attachment, value: chevronImage, range: NSRange(range, in: attributedString.string))
                 }
+                if let range = attributedString.string.range(of: "#"), let hiddenImage = state.cachedHiddenImage?.0 {
+                    attributedString.addAttribute(.attachment, value: hiddenImage, range: NSRange(range, in: attributedString.string))
+                    attributedString.addAttribute(.baselineOffset, value: 1.5, range: NSRange(range, in: attributedString.string))
+                }
                 
                 originY -= 5.0
                 let additionalText = additionalText.update(
@@ -3266,6 +3283,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                         horizontalAlignment: .center,
                         maximumNumberOfLines: 5,
                         lineSpacing: 0.2,
+                        insets: UIEdgeInsets(top: 0.0, left: 2.0, bottom: 0.0, right: 2.0),
                         highlightColor: linkColor.withAlphaComponent(0.1),
                         highlightInset: UIEdgeInsets(top: 0.0, left: 0.0, bottom: 0.0, right: -8.0),
                         highlightAction: { attributes in
@@ -3478,7 +3496,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                     availableSize: buttonSize,
                     transition: context.transition
                 )
-            } else if incoming && !converted && !upgraded {
+            } else if incoming && !converted && !upgraded && canUpgrade {
                 let buttonTitle: String
                 if let upgradeStars, upgradeStars > 0 {
                     buttonTitle = strings.Gift_View_UpgradeForFree
@@ -3555,8 +3573,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                     currencyAmount = formatTonAmountText(resellAmount.amount.value, dateTimeFormat: environment.dateTimeFormat, maxDecimalPositions: nil)
                     
                     if let starsAmount = uniqueGift?.resellAmounts?.first(where: { $0.currency == .stars }) {
-                        //TODO:localize
-                        buttonAttributedSubtitleString = NSMutableAttributedString(string: "Equals to  # \(formatStarsAmountText(starsAmount.amount, dateTimeFormat: environment.dateTimeFormat))", font: Font.medium(11.0), textColor: theme.list.itemCheckColors.foregroundColor.withAlphaComponent(0.7), paragraphAlignment: .center)
+                        buttonAttributedSubtitleString = NSMutableAttributedString(string: strings.Gift_View_EqualsTo(" # \(formatStarsAmountText(starsAmount.amount, dateTimeFormat: environment.dateTimeFormat))").string, font: Font.medium(11.0), textColor: theme.list.itemCheckColors.foregroundColor.withAlphaComponent(0.7), paragraphAlignment: .center)
                     }
                 }
                 buyString += "  \(currencySymbol) \(currencyAmount)"
