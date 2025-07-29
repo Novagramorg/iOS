@@ -627,20 +627,14 @@ private final class SheetContent: CombinedComponent {
                                     }
                                     if state.currency == .stars {
                                         if let amount = state.amount, let tonUsdRate = withdrawConfiguration.tonUsdRate, let usdWithdrawRate = withdrawConfiguration.usdWithdrawRate {
-                                            let usdRate = usdWithdrawRate / 1000.0 / 100.0
-                                            let usdValue = Double(amount.value) * usdRate
-                                            let tonValue = usdValue / tonUsdRate * 1000000000.0
-                                            state.amount = StarsAmount(value: max(min(Int64(tonValue), resaleConfiguration.starGiftResaleMaxTonAmount), resaleConfiguration.starGiftResaleMinTonAmount), nanos: 0)
+                                            state.amount = StarsAmount(value: max(min(convertStarsToTon(amount, tonUsdRate: tonUsdRate, starsUsdRate: usdWithdrawRate), resaleConfiguration.starGiftResaleMaxTonAmount), resaleConfiguration.starGiftResaleMinTonAmount), nanos: 0)
                                         } else {
                                             state.amount = StarsAmount(value: 0, nanos: 0)
                                         }
                                         state.currency = .ton
                                     } else {
                                         if let amount = state.amount, let tonUsdRate = withdrawConfiguration.tonUsdRate, let usdWithdrawRate = withdrawConfiguration.usdWithdrawRate {
-                                            let usdRate = usdWithdrawRate / 1000.0 / 100.0
-                                            let usdValue = Double(amount.value) / 1000000000 * tonUsdRate
-                                            let starsValue = usdValue / usdRate
-                                            state.amount = StarsAmount(value: max(min(Int64(starsValue), resaleConfiguration.starGiftResaleMaxStarsAmount), resaleConfiguration.starGiftResaleMinStarsAmount), nanos: 0)
+                                            state.amount = StarsAmount(value: max(min(convertTonToStars(amount, tonUsdRate: tonUsdRate, starsUsdRate: usdWithdrawRate), resaleConfiguration.starGiftResaleMaxStarsAmount), resaleConfiguration.starGiftResaleMinStarsAmount), nanos: 0)
                                         } else {
                                             state.amount = StarsAmount(value: 0, nanos: 0)
                                         }

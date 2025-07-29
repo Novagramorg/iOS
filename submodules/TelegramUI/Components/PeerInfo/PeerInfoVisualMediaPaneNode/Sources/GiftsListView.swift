@@ -80,6 +80,8 @@ final class GiftsListView: UIView {
     private var selectedItemsMap: [AnyHashable: ProfileGiftsContext.State.StarGift] = [:]
     var selectionUpdated: () -> Void = { }
     
+    var displayUnpinScreen: ((ProfileGiftsContext.State.StarGift, (() -> Void)?) -> Void)?
+    
     var selectedItems: [ProfileGiftsContext.State.StarGift] {
         var gifts: [ProfileGiftsContext.State.StarGift] = []
         var existingIds = Set<AnyHashable>()
@@ -645,9 +647,9 @@ final class GiftsListView: UIView {
                                             }
                                             if let reference = product.reference {
                                                 if pinnedToTop && self.pinnedReferences.count >= self.maxPinnedCount {
-//                                                    self.displayUnpinScreen(gift: product, completion: {
+                                                    self.displayUnpinScreen?(product, {
                                                         dismissImpl?()
-//                                                    })
+                                                    })
                                                     return false
                                                 }
                                                 self.profileGifts.updateStarGiftPinnedToTop(reference: reference, pinnedToTop: pinnedToTop)

@@ -329,8 +329,10 @@ public enum ResolvedUrl {
     case collectible(gift: StarGift.UniqueGift?)
     case messageLink(link: TelegramResolvedMessageLink?)
     case stars
+    case ton
     case shareStory(Int64)
     case storyFolder(peerId: PeerId, id: Int64)
+    case giftCollection(peerId: PeerId, id: Int64)
 }
 
 public enum ResolveUrlResult {
@@ -669,6 +671,7 @@ public enum PeerInfoControllerMode {
     case groupsInCommon
     case monoforum(EnginePeer.Id)
     case storyAlbum(id: Int64)
+    case giftCollection(id: Int64)
 }
 
 public enum ContactListActionItemInlineIconPosition {
