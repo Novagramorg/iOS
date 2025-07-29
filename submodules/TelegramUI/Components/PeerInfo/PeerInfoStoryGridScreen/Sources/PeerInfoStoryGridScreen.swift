@@ -353,14 +353,11 @@ final class PeerInfoStoryGridScreenComponent: Component {
                 let buttonText: String
                 var buttonIsEnabled = true
                 if component.selectionModeCompletion != nil {
-                    //TODO:localize
                     if self.selectedCount == 0 {
-                        buttonText = "Add Stories"
+                        buttonText = environment.strings.Stories_AddStoriesEmpty
                         buttonIsEnabled = false
-                    } else if self.selectedCount == 1 {
-                        buttonText = "Add 1 Story"
                     } else {
-                        buttonText = "Add \(self.selectedCount) Stories"
+                        buttonText = environment.strings.Stories_AddStories(Int32(self.selectedCount))
                     }
                 } else {
                     switch component.scope {
@@ -679,8 +676,7 @@ public class PeerInfoStoryGridScreen: ViewControllerComponentContainer {
         let presentationData = self.context.sharedContext.currentPresentationData.with { $0 }
         
         if self.selectionModeCompletion != nil {
-            //TODO:localize
-            self.titleView?.titleContent = .custom("Add Stories", nil, false)
+            self.titleView?.titleContent = .custom(presentationData.strings.Stories_AddStoriesTitle, nil, false)
         } else {
             switch self.scope {
             case .saved:

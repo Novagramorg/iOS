@@ -14787,3 +14787,82 @@ Sorry for the inconvenience.";
 "Stars.SellGift.TonAmountTitle" = "PRICE IN TON";
 "Stars.SellGift.OnlyTon" = "Only Accept TON";
 "Stars.SellGift.OnlyTonInfo" = "If the buyer pays you in TON, there's no risk of refunds, unlike with Stars payments.";
+
+"CallList.DeleteConfirmation" = "Do you want to delete the information about this call?";
+
+"ChatList.Search.FilterGlobalPosts" = "Posts";
+"ChatList.HeaderPublicPosts" = "PUBLIC POSTS";
+"ChatList.PaidSearchToast.Text_1" = "%@ Star spent on extra search.";
+"ChatList.PaidSearchToast.Text_any" = "%@ Stars spent on extra search.";
+
+"ChatList.GlobalSearch.StartPlaceholder.Title" = "Global Search";
+"ChatList.GlobalSearch.StartPlaceholder.Text" = "Type a keyword to search all posts\nfrom public channels.";
+"ChatList.GlobalSearch.StartPlaceholder.Subtitle" = "Global search is a Premium feature.";
+"ChatList.GlobalSearch.StartPlaceholder.RemainingSubtitle_1" = "%@ free search remaining today.";
+"ChatList.GlobalSearch.StartPlaceholder.RemainingSubtitle_any" = "%@ free searches remaining today.";
+"ChatList.GlobalSearch.LimitPlaceholder.Title" = "Limit Reached";
+"ChatList.GlobalSearch.LimitPlaceholder.Text_1" = "You can make up to\n%@ search query per day.";
+"ChatList.GlobalSearch.LimitPlaceholder.Text_any" = "You can make up to\n%@ search queries per day.";
+"ChatList.GlobalSearch.SearchButton" = "Search";
+"ChatList.GlobalSearch.SearchButtonPremium" = "Subscribe to Premium";
+"ChatList.GlobalSearch.SearchButtonQuery" = "Search {}";
+"ChatList.GlobalSearch.SearchButtonPaidTitle" = "Search for  *  %@";
+"ChatList.GlobalSearch.SearchButtonPaidSubtitle" = "free search unlocks in %@";
+
+"Chat.ViewCollection" = "VIEW COLLECTION";
+"Chat.ViewAlbum" = "VIEW ALBUM";
+
+"PeerInfo.MenuAddStories" = "Add Stories";
+"Stories.MenuDeleteAlbum" = "Delete Album";
+"Stories.AddStoriesTitle" = "Add Stories";
+"Stories.AddStoriesEmpty" = "Add Stories";
+"Stories.AddStories_1" = "Add %@ Story";
+"Stories.AddStories_any" = "Add %@ Stories";
+"Stories.MenuAddToAlbum" = "Add to Album";
+"Stories.MenuRemoveFromAlbum" = "Remove from Album";
+"Stories.MenuNewAlbum" = "New Album";
+"Stories.MenuRenameAlbum" = "Rename Album";
+"Stories.StatusEmpty" = "no stories";
+"Stories.AlbumAll" = "All Stories";
+"Stories.AlbumAdd" = "+ Add Album";
+"Stories.AlbumEmptyTitle" = "Organize Your Stories";
+"Stories.AlbumEmptyText" = "Add some stories to this album.";
+"Stories.AlbumEmptyButton" = "Add to Album";
+"Stories.CreateAlbum.Title" = "Create a New Album";
+"Stories.CreateAlbum.Text" = "Choose a name for your album and start adding your stories there.";
+"Stories.CreateAlbum.Placeholder" = "Title";
+"Stories.EditAlbum.Title" = "Edit Album Name";
+"Stories.EditAlbum.Text" = "Choose a new name for your album.";
+"Stories.DeleteAlbum.Confirmation" = "Delete %@?";
+
+"ProfileLevelInfo.Title" = "Rating";
+"ProfileLevelInfo.MyText" = "The rating reflects your activity on Telegram. What affects it:";
+"ProfileLevelInfo.MyDescriptionToday_1" = "The rating updates today.\n\%@ point is pending.";
+"ProfileLevelInfo.MyDescriptionToday_any" = "The rating updates today.\n\%@ points are pending.";
+"ProfileLevelInfo.MyDescriptionDays_1" = "%@ day";
+"ProfileLevelInfo.MyDescriptionDays_any" = "%@ days";
+"ProfileLevelInfo.MyDescriptionPoints_1" = "%@ point is";
+"ProfileLevelInfo.MyDescriptionPoints_any" = "%@ points are";
+"ProfileLevelInfo.MyDescription" = "The rating updates in %@ after purchases.\n\%@ pending.";
+"ProfileLevelInfo.OtherDescription" = "The rating reflects **%@'s** activity on Telegram. What affects it:";
+"ProfileLevelInfo.LevelIndex_1" = "Level %@";
+"ProfileLevelInfo.LevelIndex_any" = "Level %@";
+"ProfileLevelInfo.CloseButton" = "Understood";
+
+"ProfileLevelInfo.Item0.Title" = "Gifts from Telegram";
+"ProfileLevelInfo.Item0.Text" = "100% of the Stars spent on gifts purchased from Telegram.";
+"ProfileLevelInfo.Item0.Badge" = "ADDED";
+"ProfileLevelInfo.Item1.Title" = "Gifts and Posts from Users";
+"ProfileLevelInfo.Item1.Text" = "20% of the Stars spent on gifts or posts from users and channels.";
+"ProfileLevelInfo.Item1.Badge" = "ADDED";
+"ProfileLevelInfo.Item2.Title" = "Refunds and Conversions";
+"ProfileLevelInfo.Item2.Text" = "10x of refunded Stars and 85% of bought gifts converted to Stars.";
+"ProfileLevelInfo.Item2.Badge" = "DEDUCTED";
+
+"Call.AlertMoveToConference" = "End current call and start a conference?";
+
+"Stories.Post.Album" = "Album";
+"Stories.Post.AlbumFooter" = "Choose the albums where you want to share your story.";
+"Stories.Post.AlbumAll" = "All Stories";
+"Stories.Post.AlbumCount_1" = "%@ Album";
+"Stories.Post.AlbumCount_any" = "%@ Albums";

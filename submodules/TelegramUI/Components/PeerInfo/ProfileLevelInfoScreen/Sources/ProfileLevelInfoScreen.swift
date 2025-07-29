@@ -342,12 +342,11 @@ private final class ProfileLevelInfoScreenComponent: Component {
             
             let clippingY: CGFloat
 
-            //TODO:localize
-            let titleString: String = "Rating"
+            let titleString: String = environment.strings.ProfileLevelInfo_Title
             let descriptionTextString: String
             var secondaryDescriptionTextString: String?
             if component.peer.id == component.context.account.peerId {
-                descriptionTextString = "The rating reflects your activity on Telegram. What affects it:"
+                descriptionTextString = environment.strings.ProfileLevelInfo_MyText
                 
                 let timestamp = Int32(Date().timeIntervalSince1970)
                 if let pendingStarRating = component.pendingStarRating, pendingStarRating.timestamp > timestamp {
@@ -359,15 +358,15 @@ private final class ProfileLevelInfoScreenComponent: Component {
                         } else {
                             let dayCount = (pendingStarRating.timestamp - timestamp) / (24 * 60 * 60)
                             if dayCount == 0 {
-                                secondaryDescriptionTextString = "The rating updates today.\n\(pendingPoints) points are pending."
+                                secondaryDescriptionTextString = environment.strings.ProfileLevelInfo_MyDescriptionToday(Int32(pendingPoints))
                             } else {
-                                secondaryDescriptionTextString = "The rating updates in \(dayCount) days after purchases.\n\(pendingPoints) points are pending."
+                                secondaryDescriptionTextString = environment.strings.ProfileLevelInfo_MyDescription(environment.strings.ProfileLevelInfo_MyDescriptionDays(Int32(dayCount)), environment.strings.ProfileLevelInfo_MyDescriptionPoints(Int32(pendingPoints))).string
                             }
                         }
                     }
                 }
             } else {
-                descriptionTextString = "The rating reflects **\(component.peer.compactDisplayTitle)'s** activity on Telegram. What affects it:"
+                descriptionTextString = environment.strings.ProfileLevelInfo_OtherDescription(component.peer.compactDisplayTitle).string
             }
             
             let titleSize = self.title.update(
@@ -438,11 +437,11 @@ private final class ProfileLevelInfoScreenComponent: Component {
                 component: AnyComponent(PremiumLimitDisplayComponent(
                     inactiveColor: environment.theme.list.itemBlocksSeparatorColor.withAlphaComponent(0.5),
                     activeColors: gradientColors,
-                    inactiveTitle: "Level \(component.starRating.level)",
+                    inactiveTitle: environment.strings.ProfileLevelInfo_LevelIndex(Int32(currentLevel)),
                     inactiveValue: "",
                     inactiveTitleColor: environment.theme.list.itemPrimaryTextColor,
                     activeTitle: "",
-                    activeValue: nextLevel.flatMap { "Level \($0)" } ?? "",
+                    activeValue: nextLevel.flatMap { environment.strings.ProfileLevelInfo_LevelIndex(Int32($0)) } ?? "",
                     activeTitleColor: .white,
                     badgeIconName: "Peer Info/ProfileLevelProgressIcon",
                     badgeText: badgeText,
@@ -659,8 +658,7 @@ private final class ProfileLevelInfoScreenComponent: Component {
             
             contentHeight += 31.0
             
-            //TODO:localize
-            let actionButtonTitle: String = "Understood"
+            let actionButtonTitle: String = environment.strings.ProfileLevelInfo_CloseButton
             
             var buttonTitle: [AnyComponentWithIdentity<Empty>] = []
             let playButtonAnimation = ActionSlot<Void>()

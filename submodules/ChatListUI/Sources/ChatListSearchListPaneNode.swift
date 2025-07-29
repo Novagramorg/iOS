@@ -291,8 +291,7 @@ private enum ChatListRecentEntry: Comparable, Identifiable {
                         }
                     }
                 } else if case .globalPosts = key {
-                    //TODO:localize
-                    header = ChatListSearchItemHeader(type: .text("Public Posts", 0), theme: theme, strings: strings, actionTitle: nil, action: nil)
+                    header = ChatListSearchItemHeader(type: .text(strings.ChatList_HeaderPublicPosts, 0), theme: theme, strings: strings, actionTitle: nil, action: nil)
                 } else {
                     header = ChatListSearchItemHeader(type: .recentPeers, theme: theme, strings: strings, actionTitle: strings.WebSearch_RecentSectionClear, action: { _ in
                         clearRecentlySearchedPeers()
@@ -1121,7 +1120,7 @@ public enum ChatListSearchEntry: Comparable, Identifiable {
                         var headerType: ChatListSearchItemHeaderType = .messages(location: nil)
                         var actionTitle: String?
                         if key == .globalPosts {
-                            headerType = .text("Public Posts", 0)
+                            headerType = .text(presentationData.strings.ChatList_HeaderPublicPosts, 0)
                         } else {
                             if case let .forum(peerId) = location, let peer = peer.peer, peer.id == peerId {
                                 headerType = .messages(location: peer.compactDisplayTitle)
@@ -1138,8 +1137,7 @@ public enum ChatListSearchEntry: Comparable, Identifiable {
                                 case .privateChats:
                                     filterTitle = presentationData.strings.ChatList_Search_Messages_PrivateChats
                                 case .globalPosts:
-                                    //TODO:localize
-                                    filterTitle = "Public Posts"
+                                    filterTitle = presentationData.strings.ChatList_HeaderPublicPosts
                                 }
                                 actionTitle = "\(filterTitle)  <"
                             }
@@ -1230,14 +1228,13 @@ public enum ChatListSearchEntry: Comparable, Identifiable {
                 case .privateChats:
                     filterTitle = presentationData.strings.ChatList_Search_Messages_PrivateChats
                 case .globalPosts:
-                    filterTitle = "Public Posts"
+                    filterTitle = presentationData.strings.ChatList_HeaderPublicPosts
                 }
                 actionTitle = "\(filterTitle)  <"
                 
                 let header: ChatListSearchItemHeader
                 if key == .globalPosts {
-                    //TODO:localize
-                    header = ChatListSearchItemHeader(type: .text("Public Posts", 0), theme: presentationData.theme, strings: presentationData.strings, actionTitle: nil, action: nil)
+                    header = ChatListSearchItemHeader(type: .text(presentationData.strings.ChatList_HeaderPublicPosts, 0), theme: presentationData.theme, strings: presentationData.strings, actionTitle: nil, action: nil)
                 } else {
                     header = ChatListSearchItemHeader(type: .messages(location: nil), theme: presentationData.theme, strings: presentationData.strings, actionTitle: actionTitle, action: { sourceNode in
                         openMessagesFilter(sourceNode)
@@ -1257,8 +1254,7 @@ public enum ChatListSearchEntry: Comparable, Identifiable {
                 case .privateChats:
                     filterTitle = presentationData.strings.ChatList_Search_Messages_PrivateChats
                 case .globalPosts:
-                    //TODO:localize
-                    filterTitle = "Public Posts"
+                    filterTitle = presentationData.strings.ChatList_HeaderPublicPosts
                 }
                 actionTitle = "\(filterTitle)  <"
                 
@@ -5133,14 +5129,13 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
                                     ))
                                     
                                     if let price {
-                                        //TODO:localize
                                         if let controller = self.navigationController?.topViewController as? ViewController {
                                             controller.present(UndoOverlayController(
                                                 presentationData: presentationData,
                                                 content: .starsSent(context: self.context, title: "", text: [AnimatedTextComponent.Item(
                                                     id: AnyHashable(0),
                                                     isUnbreakable: true,
-                                                    content: .text("\(price) Stars spent on extra search.")
+                                                    content: .text(presentationData.strings.ChatList_PaidSearchToast_Text(Int32(price)))
                                                 )], hasUndo: false),
                                                 elevatedLayout: false,
                                                 animateInAsReplacement: false,
@@ -5400,9 +5395,9 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
                         if strongSelf.key == .globalPosts, let globalSearchStateValue = transition.globalSearchStateValue {
                             if !strongSelf.isPremium {
                                 emptyResultsButtonContent = .premiumRequired
-                                emptyResultsTitle = "Global Search"
-                                emptyResultsText = "Type a keyword to search all posts\nfrom public channels."
-                                emptyResultsButtonSubtitleText = "Global search is a Premium feature."
+                                emptyResultsTitle = strongSelf.presentationData.strings.ChatList_GlobalSearch_StartPlaceholder_Title
+                                emptyResultsText = strongSelf.presentationData.strings.ChatList_GlobalSearch_StartPlaceholder_Text
+                                emptyResultsButtonSubtitleText = strongSelf.presentationData.strings.ChatList_GlobalSearch_StartPlaceholder_Subtitle
                             } else if let query = transition.query, !query.isEmpty {
                                 if transition.approvedGlobalPostQueryState?.query == query {
                                     emptyResultsButtonContent = nil
@@ -5410,18 +5405,14 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
                                     emptyResultsText = strongSelf.presentationData.strings.ChatList_Search_NoResultsQueryDescription(query).string
                                 } else {
                                     if globalSearchStateValue.remainingFreeSearches != 0 {
-                                        emptyResultsTitle = "Global Search"
-                                        emptyResultsText = "Type a keyword to search all posts\nfrom public channels."
-                                        if globalSearchStateValue.remainingFreeSearches == 1 {
-                                            emptyResultsButtonSubtitleText = "1 free search remaining today."
-                                        } else {
-                                            emptyResultsButtonSubtitleText = "\(globalSearchStateValue.remainingFreeSearches) free searches remaining today."
-                                        }
+                                        emptyResultsTitle = strongSelf.presentationData.strings.ChatList_GlobalSearch_StartPlaceholder_Title
+                                        emptyResultsText = strongSelf.presentationData.strings.ChatList_GlobalSearch_StartPlaceholder_Text
+                                        emptyResultsButtonSubtitleText = strongSelf.presentationData.strings.ChatList_GlobalSearch_StartPlaceholder_RemainingSubtitle(Int32(globalSearchStateValue.remainingFreeSearches))
                                         
                                         emptyResultsButtonContent = .searchQuery(query)
                                     } else {
-                                        emptyResultsTitle = "Limit Reached"
-                                        emptyResultsText = "You can make up to\n\(globalSearchStateValue.totalFreeSearches) search queries per day."
+                                        emptyResultsTitle = strongSelf.presentationData.strings.ChatList_GlobalSearch_LimitPlaceholder_Title
+                                        emptyResultsText = strongSelf.presentationData.strings.ChatList_GlobalSearch_LimitPlaceholder_Text(Int32(globalSearchStateValue.totalFreeSearches))
                                         
                                         emptyResultsButtonContent = .paidSearch(
                                             price: Int(globalSearchStateValue.price.value),
@@ -5432,17 +5423,12 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
                             } else {
                                 if globalSearchStateValue.remainingFreeSearches != 0 {
                                     emptyResultsButtonContent = .searchEmpty
-                                    emptyResultsTitle = "Global Search"
-                                    emptyResultsText = "Type a keyword to search all posts\nfrom public channels."
-                                    
-                                    if globalSearchStateValue.remainingFreeSearches == 1 {
-                                        emptyResultsButtonSubtitleText = "1 free search remaining today."
-                                    } else {
-                                        emptyResultsButtonSubtitleText = "\(globalSearchStateValue.remainingFreeSearches) free searches remaining today."
-                                    }
+                                    emptyResultsTitle = strongSelf.presentationData.strings.ChatList_GlobalSearch_StartPlaceholder_Title
+                                    emptyResultsText = strongSelf.presentationData.strings.ChatList_GlobalSearch_StartPlaceholder_Text
+                                    emptyResultsButtonSubtitleText = strongSelf.presentationData.strings.ChatList_GlobalSearch_StartPlaceholder_RemainingSubtitle(Int32(globalSearchStateValue.remainingFreeSearches))
                                 } else {
-                                    emptyResultsTitle = "Limit Reached"
-                                    emptyResultsText = "You can make up to\n10 search queries per day."
+                                    emptyResultsTitle = strongSelf.presentationData.strings.ChatList_GlobalSearch_LimitPlaceholder_Title
+                                    emptyResultsText = strongSelf.presentationData.strings.ChatList_GlobalSearch_LimitPlaceholder_Text(Int32(globalSearchStateValue.totalFreeSearches))
                                     
                                     emptyResultsButtonContent = .paidSearch(
                                         price: Int(globalSearchStateValue.price.value),
@@ -6228,10 +6214,20 @@ private final class EmptyResultsButtonSearchContent: Component {
                 containerSize: CGSize(width: 100.0, height: 100.0)
             )
             
-            //TODO:localize
             let string = NSMutableAttributedString()
-            string.append(NSAttributedString(string: "Search ", font: Font.semibold(17.0), textColor: component.theme.list.itemCheckColors.foregroundColor))
-            string.append(NSAttributedString(string: component.query.trimmingCharacters(in: .whitespacesAndNewlines), font: Font.semibold(17.0), textColor: component.theme.list.itemCheckColors.foregroundColor.withMultipliedAlpha(0.7)))
+            
+            let rawString = component.strings.ChatList_GlobalSearch_SearchButtonQuery
+            if let range = rawString.range(of: "{}") {
+                if range.lowerBound != rawString.startIndex {
+                    string.append(NSAttributedString(string: String(rawString[rawString.startIndex ..< range.lowerBound]), font: Font.semibold(17.0), textColor: component.theme.list.itemCheckColors.foregroundColor))
+                }
+                string.append(NSAttributedString(string: component.query.trimmingCharacters(in: .whitespacesAndNewlines), font: Font.semibold(17.0), textColor: component.theme.list.itemCheckColors.foregroundColor.withMultipliedAlpha(0.7)))
+                if range.upperBound != rawString.endIndex {
+                    string.append(NSAttributedString(string: String(rawString[range.upperBound...]), font: Font.semibold(17.0), textColor: component.theme.list.itemCheckColors.foregroundColor))
+                }
+            } else {
+                string.append(NSAttributedString(string: rawString, font: Font.semibold(17.0), textColor: component.theme.list.itemCheckColors.foregroundColor))
+            }
             
             let textSize = self.text.update(
                 transition: .immediate,
@@ -6338,14 +6334,13 @@ private final class EmptyResultsButtonPaidSearchContent: Component {
             self.component = component
             self.state = state
             
-            let attributedString = NSMutableAttributedString(attributedString: NSAttributedString(string: "Search for  *  \(component.price)", font: Font.semibold(17.0), textColor: component.theme.list.itemCheckColors.foregroundColor))
+            let attributedString = NSMutableAttributedString(attributedString: NSAttributedString(string: component.strings.ChatList_GlobalSearch_SearchButtonPaidTitle("\(component.price)").string, font: Font.semibold(17.0), textColor: component.theme.list.itemCheckColors.foregroundColor))
             if let range = attributedString.string.range(of: "*"), let starImage = self.cachedStarImage {
                 attributedString.addAttribute(.attachment, value: starImage, range: NSRange(range, in: attributedString.string))
                 attributedString.addAttribute(.foregroundColor, value: component.theme.list.itemCheckColors.foregroundColor, range: NSRange(range, in: attributedString.string))
                 attributedString.addAttribute(.baselineOffset, value: 1.0, range: NSRange(range, in: attributedString.string))
             }
             
-            //TODO:localize
             let titleSize = self.title.update(
                 transition: .immediate,
                 component: AnyComponent(MultilineTextComponent(
@@ -6359,7 +6354,7 @@ private final class EmptyResultsButtonPaidSearchContent: Component {
             if let unlockTimestamp = component.unlockTimestamp {
                 var remainingTime: Int32 = unlockTimestamp - Int32(Date().timeIntervalSince1970)
                 remainingTime = max(0, remainingTime)
-                subtitleText = "free search unlocks in \(stringForRemainingTime(remainingTime))"
+                subtitleText = component.strings.ChatList_GlobalSearch_SearchButtonPaidSubtitle(stringForRemainingTime(remainingTime)).string
                 
                 if self.timer == nil {
                     self.timer = Foundation.Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true, block: { [weak self] _ in
@@ -6484,7 +6479,7 @@ private final class EmptyResultsButton: Component {
                 isEnabled = false
                 buttonContent = AnyComponentWithIdentity(id: "empty", component: AnyComponent(MultilineTextComponent(
                     text: .plain(NSAttributedString(
-                        string: "Search",
+                        string: component.strings.ChatList_GlobalSearch_SearchButton,
                         font: Font.medium(17.0),
                         textColor: component.theme.list.itemCheckColors.foregroundColor
                     ))
@@ -6492,7 +6487,7 @@ private final class EmptyResultsButton: Component {
             case .premiumRequired:
                 buttonContent = AnyComponentWithIdentity(id: "premium", component: AnyComponent(MultilineTextComponent(
                     text: .plain(NSAttributedString(
-                        string: "Subscribe to Premium",
+                        string: component.strings.ChatList_GlobalSearch_SearchButtonPremium,
                         font: Font.medium(17.0),
                         textColor: component.theme.list.itemCheckColors.foregroundColor
                     ))

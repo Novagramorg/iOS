@@ -477,8 +477,9 @@ public final class ChatMessageWebpageBubbleContentNode: ChatMessageBubbleContent
                         case "telegram_call":
                             actionTitle = item.presentationData.strings.Chat_ViewGroupCall
                         case "telegram_collection":
-                            //TODO:localize
-                            actionTitle = "VIEW COLLECTION"
+                            actionTitle = item.presentationData.strings.Chat_ViewCollection
+                        case "telegram_story_album":
+                            actionTitle = item.presentationData.strings.Chat_ViewAlbum
                         default:
                             break
                     }

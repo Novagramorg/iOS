@@ -2507,8 +2507,7 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
         
         if canManage, case let .peer(peerId, _, isArchived) = self.scope {
             if !isArchived && self.canManageStories && self.isProfileEmbedded {
-                //TODO:localize
-                items.append(.action(ContextMenuActionItem(text: "Add to Album", icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/AddToFolder"), color: theme.contextMenu.primaryColor) }, action: { [weak self] c, f in
+                items.append(.action(ContextMenuActionItem(text: self.presentationData.strings.Stories_MenuAddToAlbum, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/AddToFolder"), color: theme.contextMenu.primaryColor) }, action: { [weak self] c, f in
                     guard let self, let c else {
                         f(.default)
                         return
@@ -2529,7 +2528,7 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
                         })))
                         items.append(.separator)
                         
-                        items.append(.action(ContextMenuActionItem(text: "New Album", icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/AddFolder"), color: theme.contextMenu.primaryColor) }, iconPosition: .left, action: { [weak self] c, f in
+                        items.append(.action(ContextMenuActionItem(text: self.presentationData.strings.Stories_MenuNewAlbum, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/AddFolder"), color: theme.contextMenu.primaryColor) }, iconPosition: .left, action: { [weak self] c, f in
                             guard let self else {
                                 f(.default)
                                 return
@@ -2786,8 +2785,7 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
         
         if canManage {
             if let folder = self.currentStoryFolder {
-                //TODO:localize
-                items.append(.action(ContextMenuActionItem(text: "Remove from Album", icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/RemoveFromFolderUp"), color: theme.contextMenu.primaryColor) }, action: { [weak self] _, f in
+                items.append(.action(ContextMenuActionItem(text: self.presentationData.strings.Stories_MenuRemoveFromAlbum, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/RemoveFromFolderUp"), color: theme.contextMenu.primaryColor) }, action: { [weak self] _, f in
                     guard let self else {
                         f(.default)
                         return
@@ -2924,8 +2922,7 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
                     if state.isLoading {
                         title = self.presentationData.strings.BotPreviews_SubtitleLoading
                     } else {
-                        //TODO:localize
-                        title = "no stories"
+                        title = self.presentationData.strings.Stories_StatusEmpty
                     }
                 }
             } else if case let .peer(_, isSaved, isArchived) = self.scope {
@@ -3849,10 +3846,9 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
             mainTitle = self.presentationData.strings.BotPreviews_LanguageTab_Main
             addTitle = self.presentationData.strings.BotPreviews_LanguageTab_Add
         } else {
-            //TODO:localize
-            mainTitle = "All Stories"
+            mainTitle = self.presentationData.strings.Stories_AlbumAll
             if self.currentStoryFolders.count < self.maxStoryFolders {
-                addTitle = "+ Add Album"
+                addTitle = self.presentationData.strings.Stories_AlbumAdd
             } else {
                 addTitle = nil
             }
@@ -3899,8 +3895,7 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
                                 canAddStories = await self.canAddStoriesToFolder(folder: folder)
                             }
                             if canAddStories {
-                                //TODO:localize
-                                items.append(.action(ContextMenuActionItem(text: "Add Stories", icon: { theme in
+                                items.append(.action(ContextMenuActionItem(text: self.presentationData.strings.PeerInfo_MenuAddStories, icon: { theme in
                                     return generateTintedImage(image: UIImage(bundleImageName: "Chat List/AddStoryIcon"), color: theme.contextMenu.primaryColor)
                                 }, action: { [weak self] _, a in
                                     guard let self else {
@@ -3915,8 +3910,7 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
                             }
                             
                             if self.canManageStories {
-                                //TODO:localize
-                                items.append(.action(ContextMenuActionItem(text: "Rename Album", icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Edit"), color: theme.contextMenu.primaryColor) }, action: { [weak self] c, _ in
+                                items.append(.action(ContextMenuActionItem(text: self.presentationData.strings.Stories_MenuRenameAlbum, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Edit"), color: theme.contextMenu.primaryColor) }, action: { [weak self] c, _ in
                                     guard let self else {
                                         c?.dismiss(completion: nil)
                                         return
@@ -3930,8 +3924,7 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
                                     })
                                 })))
                                 
-                                //TODO:localize
-                                items.append(.action(ContextMenuActionItem(text: "Share", icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Forward"), color: theme.contextMenu.primaryColor) }, action: { [weak self] c, _ in
+                                items.append(.action(ContextMenuActionItem(text: self.presentationData.strings.Conversation_ContextMenuShare, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Forward"), color: theme.contextMenu.primaryColor) }, action: { [weak self] c, _ in
                                     guard let self else {
                                         c?.dismiss(completion: nil)
                                         return
@@ -3947,8 +3940,7 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
                             }
                             
                             if self.canManageStories {
-                                //TODO:localize
-                                items.append(.action(ContextMenuActionItem(text: "Reorder", icon: { theme in
+                                items.append(.action(ContextMenuActionItem(text: self.presentationData.strings.BotPreviews_MenuReorder, icon: { theme in
                                     return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/ReorderItems"), color: theme.contextMenu.primaryColor)
                                 }, action: { [weak self] _, a in
                                     guard let self else {
@@ -3961,8 +3953,7 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
                                     self.beginReordering()
                                 })))
                                 
-                                //TODO:localize
-                                items.append(.action(ContextMenuActionItem(text: "Delete Album", textColor: .destructive, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Delete"), color: theme.contextMenu.destructiveColor) }, action: { [weak self] c, _ in
+                                items.append(.action(ContextMenuActionItem(text: self.presentationData.strings.Stories_MenuDeleteAlbum, textColor: .destructive, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Delete"), color: theme.contextMenu.destructiveColor) }, action: { [weak self] c, _ in
                                     guard let self else {
                                         c?.dismiss(completion: nil)
                                         return
@@ -4477,12 +4468,11 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
                 self.actionPanel = actionPanel
             }
             
-            //TODO:localize
             let actionPanelSize = actionPanel.update(
                 transition: actionPanelTransition,
                 component: AnyComponent(BottomButtonPanelComponent(
                     theme: presentationData.theme,
-                    title: "Add Stories",
+                    title: presentationData.strings.Stories_AddStoriesEmpty,
                     label: nil,
                     icon: AnyComponentWithIdentity(id: 0, component: AnyComponent(BundleIconComponent(
                         name: "Item List/AddItemIcon",
@@ -4534,7 +4524,6 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
                     self.emptyStateView = emptyStateView
                 }
                 
-                //TODO:localize
                 let emptyStateSize = emptyStateView.update(
                     transition: emptyStateTransition,
                     component: AnyComponent(EmptyStateIndicatorComponent(
@@ -4542,9 +4531,9 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
                         theme: presentationData.theme,
                         fitToHeight: self.isProfileEmbedded,
                         animationName: nil,
-                        title: "Organize Your Stories",
-                        text: "Add some stories to this album.",
-                        actionTitle: "Add to Album",
+                        title: presentationData.strings.Stories_AlbumEmptyTitle,
+                        text: presentationData.strings.Stories_AlbumEmptyText,
+                        actionTitle: presentationData.strings.Stories_AlbumEmptyButton,
                         action: { [weak self] in
                             guard let self, let currentStoryFolder = self.currentStoryFolder else {
                                 return
@@ -5007,15 +4996,14 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
     }
     
     private func presentAddStoryFolder(addItems: [EngineStoryItem] = []) {
-        //TODO:localize
         let promptController = promptController(
             sharedContext: self.context.sharedContext,
             updatedPresentationData: nil,
-            text: "Create a New Album",
+            text: self.presentationData.strings.Stories_CreateAlbum_Title,
             titleFont: .bold,
-            subtitle: "Choose a name for your album and start adding your stories there.",
+            subtitle: self.presentationData.strings.Stories_CreateAlbum_Text,
             value: "",
-            placeholder: "Title",
+            placeholder: self.presentationData.strings.Stories_CreateAlbum_Placeholder,
             characterLimit: 20,
             displayCharacterLimit: true,
             apply: { [weak self] value in
@@ -5041,15 +5029,14 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
     }
     
     private func presentRenameStoryFolder(id: Int64, title: String) {
-        //TODO:localize
         let promptController = promptController(
             sharedContext: self.context.sharedContext,
             updatedPresentationData: nil,
-            text: "Edit Album Name",
+            text: self.presentationData.strings.Stories_EditAlbum_Title,
             titleFont: .bold,
-            subtitle: "Choose a new name for your album.",
+            subtitle: self.presentationData.strings.Stories_EditAlbum_Text,
             value: title,
-            placeholder: "Title",
+            placeholder: self.presentationData.strings.Stories_CreateAlbum_Placeholder,
             characterLimit: 20,
             displayCharacterLimit: true,
             apply: { [weak self] value in
@@ -5133,13 +5120,12 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
             controller?.dismissAnimated()
         }
         
-        //TODO:localize
-        let title: String = "Delete \(folder.title)?"
+        let title: String = presentationData.strings.Stories_DeleteAlbum_Confirmation(folder.title).string
         
         controller.setItemGroups([
             ActionSheetItemGroup(items: [
                 ActionSheetTextItem(title: title),
-                ActionSheetButtonItem(title: "Delete", color: .destructive, action: { [weak self] in
+                ActionSheetButtonItem(title: presentationData.strings.Common_Delete, color: .destructive, action: { [weak self] in
                     dismissAction()
                     
                     guard let self else {
