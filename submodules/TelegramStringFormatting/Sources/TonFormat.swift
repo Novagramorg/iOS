@@ -11,6 +11,20 @@ public func formatTonAddress(_ address: String) -> String {
     return address
 }
 
+public func convertStarsToTon(_ amount: StarsAmount, tonUsdRate: Double, starsUsdRate: Double) -> Int64 {
+    let usdRate = starsUsdRate / 1000.0 / 100.0
+    let usdValue = Double(amount.value) * usdRate
+    let tonValue = usdValue / tonUsdRate * 1000000000.0
+    return Int64(tonValue)
+}
+
+public func convertTonToStars(_ amount: StarsAmount, tonUsdRate: Double, starsUsdRate: Double) -> Int64 {
+    let usdRate = starsUsdRate / 1000.0 / 100.0
+    let usdValue = Double(amount.value) / 1000000000 * tonUsdRate
+    let starsValue = usdValue / usdRate
+    return Int64(starsValue)
+}
+
 public func formatTonUsdValue(_ value: Int64, divide: Bool = true, rate: Double = 1.0, dateTimeFormat: PresentationDateTimeFormat) -> String {
     let decimalSeparator = dateTimeFormat.decimalSeparator
     let normalizedValue: Double = divide ? Double(value) / 1000000000 : Double(value)

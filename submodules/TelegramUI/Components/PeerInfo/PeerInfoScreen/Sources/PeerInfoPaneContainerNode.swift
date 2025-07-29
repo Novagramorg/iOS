@@ -528,6 +528,7 @@ private final class PeerInfoPendingPane {
         chatLocationContextHolder: Atomic<ChatLocationContextHolder?>,
         sharedMediaFromForumTopic: (EnginePeer.Id, Int64)?,
         initialStoryFolderId: Int64?,
+        initialGiftCollectionId: Int64?,
         key: PeerInfoPaneKey,
         hasBecomeReady: @escaping (PeerInfoPaneKey) -> Void,
         parentController: ViewController?,
@@ -577,7 +578,7 @@ private final class PeerInfoPendingPane {
                     }
                 }
             }
-            paneNode = PeerInfoGiftsPaneNode(context: context, peerId: peerId, chatControllerInteraction: chatControllerInteraction, profileGiftsCollections: data.profileGiftsCollectionsContext!, profileGifts: data.profileGiftsContext!, canManage: canManage, canGift: canGift)
+            paneNode = PeerInfoGiftsPaneNode(context: context, peerId: peerId, chatControllerInteraction: chatControllerInteraction, profileGiftsCollections: data.profileGiftsCollectionsContext!, profileGifts: data.profileGiftsContext!, canManage: canManage, canGift: canGift, initialGiftCollectionId: initialGiftCollectionId)
         case .stories, .storyArchive, .botPreview:
             var canManage = false
             if let peer = data.peer {
@@ -730,6 +731,7 @@ final class PeerInfoPaneContainerNode: ASDisplayNode, ASGestureRecognizerDelegat
     private var pendingPanes: [PeerInfoPaneKey: PeerInfoPendingPane] = [:]
     private var shouldFadeIn = false
     private var initialStoryFolderId: Int64?
+    private var initialGiftCollectionId: Int64?
     
     private var transitionFraction: CGFloat = 0.0
     
@@ -755,7 +757,7 @@ final class PeerInfoPaneContainerNode: ASDisplayNode, ASGestureRecognizerDelegat
     
     private let initialPaneKey: PeerInfoPaneKey?
     
-    init(context: AccountContext, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)?, peerId: PeerId, chatLocation: ChatLocation, sharedMediaFromForumTopic: (EnginePeer.Id, Int64)?, chatLocationContextHolder: Atomic<ChatLocationContextHolder?>, isMediaOnly: Bool, initialPaneKey: PeerInfoPaneKey?, initialStoryFolderId: Int64?) {
+    init(context: AccountContext, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)?, peerId: PeerId, chatLocation: ChatLocation, sharedMediaFromForumTopic: (EnginePeer.Id, Int64)?, chatLocationContextHolder: Atomic<ChatLocationContextHolder?>, isMediaOnly: Bool, initialPaneKey: PeerInfoPaneKey?, initialStoryFolderId: Int64?, initialGiftCollectionId: Int64?) {
         self.context = context
         self.updatedPresentationData = updatedPresentationData
         self.peerId = peerId
@@ -765,6 +767,7 @@ final class PeerInfoPaneContainerNode: ASDisplayNode, ASGestureRecognizerDelegat
         self.isMediaOnly = isMediaOnly
         self.initialPaneKey = initialPaneKey
         self.initialStoryFolderId = initialStoryFolderId
+        self.initialGiftCollectionId = initialGiftCollectionId
         
         self.additionalBackgroundNode = ASDisplayNode()
         
@@ -1103,10 +1106,17 @@ final class PeerInfoPaneContainerNode: ASDisplayNode, ASGestureRecognizerDelegat
             if self.pendingPanes[key] == nil, let data {
                 var leftScope = false
                 var initialStoryFolderId: Int64?
+                var initialGiftCollectionId: Int64?
                 if case .stories = key {
                     if let initialStoryFolderIdValue = self.initialStoryFolderId {
                         self.initialStoryFolderId = nil
                         initialStoryFolderId = initialStoryFolderIdValue
+                    }
+                }
+                if case .gifts = key {
+                    if let initialGiftCollectionIdValue = self.initialGiftCollectionId {
+                        self.initialGiftCollectionId = nil
+                        initialGiftCollectionId = initialGiftCollectionIdValue
                     }
                 }
                 let pane = PeerInfoPendingPane(
@@ -1128,6 +1138,7 @@ final class PeerInfoPaneContainerNode: ASDisplayNode, ASGestureRecognizerDelegat
                     chatLocationContextHolder: self.chatLocationContextHolder,
                     sharedMediaFromForumTopic: self.sharedMediaFromForumTopic,
                     initialStoryFolderId: initialStoryFolderId,
+                    initialGiftCollectionId: initialGiftCollectionId,
                     key: key,
                     hasBecomeReady: { [weak self] key in
                         let apply: () -> Void = {
