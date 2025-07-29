@@ -93,9 +93,8 @@ private final class ItemNode: ASDisplayNode {
             title = presentationData.strings.ChatList_Search_FilterApps
             icon = nil
         case .globalPosts:
-            //TODO:localize
-            title = "Posts"
-            titleBadge = "NEW"
+            title = presentationData.strings.ChatList_Search_FilterGlobalPosts
+            titleBadge = presentationData.strings.ChatList_ContextMenuBadgeNew
             icon = nil
         case .media:
             title = presentationData.strings.ChatList_Search_FilterMedia

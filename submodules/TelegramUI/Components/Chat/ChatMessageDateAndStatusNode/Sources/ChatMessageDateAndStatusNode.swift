@@ -837,7 +837,6 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
                         )
                     }
                     
-                    //TODO:localize
                     if arguments.areStarReactionsEnabled && !hadStars && !mappedReactions.isEmpty {
                         var centerAnimation: TelegramMediaFile?
                         let animationFileId: Int64? = nil

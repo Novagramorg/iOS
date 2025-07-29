@@ -6109,8 +6109,7 @@ public final class StoryItemSetContainerComponent: Component {
                 
                 var items: [ContextMenuItem] = []
                 
-                //TODO:localize
-                items.append(.action(ContextMenuActionItem(text: "Add to Album", icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/AddToFolder"), color: theme.contextMenu.primaryColor) }, action: { [weak self] c, f in
+                items.append(.action(ContextMenuActionItem(text: component.strings.Stories_MenuAddToAlbum, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/AddToFolder"), color: theme.contextMenu.primaryColor) }, action: { [weak self] c, f in
                     guard let self, let c else {
                         f(.default)
                         return
@@ -6131,7 +6130,7 @@ public final class StoryItemSetContainerComponent: Component {
                         })))
                         items.append(.separator)
                         
-                        items.append(.action(ContextMenuActionItem(text: "New Album", icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/AddFolder"), color: theme.contextMenu.primaryColor) }, iconPosition: .left, action: { [weak self] c, f in
+                        items.append(.action(ContextMenuActionItem(text: component.strings.Stories_MenuNewAlbum, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/AddFolder"), color: theme.contextMenu.primaryColor) }, iconPosition: .left, action: { [weak self] c, f in
                             guard let self else {
                                 f(.default)
                                 return
@@ -7142,11 +7141,11 @@ public final class StoryItemSetContainerComponent: Component {
             let promptController = promptController(
                 sharedContext: component.context.sharedContext,
                 updatedPresentationData: (initial: presentationData, signal: .single(presentationData)),
-                text: "Create a New Album",
+                text: presentationData.strings.Stories_CreateAlbum_Title,
                 titleFont: .bold,
-                subtitle: "Choose a name for your album and start adding your stories there.",
+                subtitle: presentationData.strings.Stories_CreateAlbum_Text,
                 value: "",
-                placeholder: "Title",
+                placeholder: presentationData.strings.Stories_CreateAlbum_Placeholder,
                 characterLimit: 20,
                 apply: { [weak self] value in
                     guard let self, let component = self.component else {

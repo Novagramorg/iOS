@@ -11711,12 +11711,10 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                 var items: [ContextMenuItem] = []
                 
                 let strings = self.presentationData.strings
-                let _ = strings
                 
                 var ignoreNextActions = false
                 
-                //TODO:localize
-                items.append(.action(ContextMenuActionItem(text: "Add Stories", icon: { theme in
+                items.append(.action(ContextMenuActionItem(text: strings.PeerInfo_MenuAddStories, icon: { theme in
                     return generateTintedImage(image: UIImage(bundleImageName: "Chat List/AddStoryIcon"), color: theme.contextMenu.primaryColor)
                 }, action: { [weak self] _, a in
                     if ignoreNextActions {
@@ -11731,7 +11729,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                 })))
                 
                 if let _ = pane.currentStoryFolder {
-                    items.append(.action(ContextMenuActionItem(text: "Share", icon: { theme in
+                    items.append(.action(ContextMenuActionItem(text: strings.Conversation_ContextMenuShare, icon: { theme in
                         return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Forward"), color: theme.contextMenu.primaryColor)
                     }, action: { [weak pane] _, a in
                         if ignoreNextActions {
@@ -11765,7 +11763,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                 if let folder = pane.currentStoryFolder {
                     let _ = folder
                     
-                    items.append(.action(ContextMenuActionItem(text: "Delete Album", textColor: .destructive, icon: { theme in
+                    items.append(.action(ContextMenuActionItem(text: strings.Stories_MenuDeleteAlbum, textColor: .destructive, icon: { theme in
                         return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Delete"), color: theme.contextMenu.destructiveColor)
                     }, action: { [weak pane] _, a in
                         if ignoreNextActions {

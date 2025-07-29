@@ -787,8 +787,7 @@ public final class AccountContextImpl: AccountContext {
                     }
                 } else if case .peer = currentCallType {
                     let text: String
-                    //TODO:localize
-                    text = "End current call and start a conference?";
+                    text = presentationData.strings.Call_AlertMoveToConference
                     strongSelf.sharedContext.mainWindow?.present(textAlertController(context: strongSelf, title: presentationData.strings.Call_CallInProgressTitle, text: text, actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_Cancel, action: {}), TextAlertAction(type: .genericAction, title: presentationData.strings.Common_OK, action: {
                         guard let self else {
                             return
