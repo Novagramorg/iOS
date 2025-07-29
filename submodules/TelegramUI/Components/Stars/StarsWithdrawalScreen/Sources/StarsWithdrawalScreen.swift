@@ -1037,15 +1037,16 @@ private final class SheetContent: CombinedComponent {
             }
             
             if case let .starGiftResell(giftToMatch, update, _) = self.mode {
+                let resaleConfiguration = StarsSubscriptionConfiguration.with(appConfiguration: self.context.currentAppConfiguration.with { $0 })
                 if update {
                     if giftToMatch.resellForTonOnly {
                         if let resellStars = giftToMatch.resellAmounts?.first(where: { $0.currency == .ton }) {
-                            self.amount = resellStars.amount
+                            self.amount = StarsAmount(value: max(resellStars.amount.value, resaleConfiguration.starGiftResaleMinTonAmount), nanos: 0)
                         }
                         self.currency = .ton
                     } else {
                         if let resellStars = giftToMatch.resellAmounts?.first(where: { $0.currency == .stars }) {
-                            self.amount = resellStars.amount
+                            self.amount = StarsAmount(value: max(resellStars.amount.value, resaleConfiguration.starGiftResaleMinStarsAmount), nanos: 0)
                         }
                         self.currency = .stars
                     }
@@ -1067,7 +1068,7 @@ private final class SheetContent: CombinedComponent {
                             return
                         }
                         if case let .generic(genericGift) = matchingGift, let minResaleStars = genericGift.availability?.minResaleStars {
-                            self.amount = StarsAmount(value: minResaleStars, nanos: 0)
+                            self.amount = StarsAmount(value: max(minResaleStars, resaleConfiguration.starGiftResaleMinStarsAmount), nanos: 0)
                             self.updated()
                         }
                     })

@@ -537,7 +537,8 @@ private final class PeerInfoPendingPane {
         paneDidScroll: @escaping () -> Void,
         expandIfNeeded: @escaping () -> Void,
         ensureRectVisible: @escaping (UIView, CGRect) -> Void,
-        externalDataUpdated: @escaping (ContainedViewLayoutTransition) -> Void
+        externalDataUpdated: @escaping (ContainedViewLayoutTransition) -> Void,
+        openShareLink: @escaping (String) -> Void
     ) {
         var chatLocationPeerId = peerId
         var chatLocation = chatLocation
@@ -578,7 +579,9 @@ private final class PeerInfoPendingPane {
                     }
                 }
             }
-            paneNode = PeerInfoGiftsPaneNode(context: context, peerId: peerId, chatControllerInteraction: chatControllerInteraction, profileGiftsCollections: data.profileGiftsCollectionsContext!, profileGifts: data.profileGiftsContext!, canManage: canManage, canGift: canGift, initialGiftCollectionId: initialGiftCollectionId)
+            let giftPaneNode = PeerInfoGiftsPaneNode(context: context, peerId: peerId, chatControllerInteraction: chatControllerInteraction, profileGiftsCollections: data.profileGiftsCollectionsContext!, profileGifts: data.profileGiftsContext!, canManage: canManage, canGift: canGift, initialGiftCollectionId: initialGiftCollectionId)
+            giftPaneNode.openShareLink = openShareLink
+            paneNode = giftPaneNode
         case .stories, .storyArchive, .botPreview:
             var canManage = false
             if let peer = data.peer {
@@ -748,6 +751,7 @@ final class PeerInfoPaneContainerNode: ASDisplayNode, ASGestureRecognizerDelegat
 
     var openMediaCalendar: (() -> Void)?
     var openAddStory: (() -> Void)?
+    var openShareLink: ((String) -> Void)?
     var paneDidScroll: (() -> Void)?
     
     var ensurePaneRectVisible: ((UIView, CGRect) -> Void)?
@@ -1181,6 +1185,12 @@ final class PeerInfoPaneContainerNode: ASDisplayNode, ASGestureRecognizerDelegat
                             return
                         }
                         self.requestUpdate?(transition)
+                    },
+                    openShareLink: { [weak self] url in
+                        guard let self else {
+                            return
+                        }
+                        self.openShareLink?(url)
                     }
                 )
                 self.pendingPanes[key] = pane

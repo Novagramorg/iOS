@@ -14787,3 +14787,5 @@ Sorry for the inconvenience.";
 "Stars.SellGift.TonAmountTitle" = "PRICE IN TON";
 "Stars.SellGift.OnlyTon" = "Only Accept TON";
 "Stars.SellGift.OnlyTonInfo" = "If the buyer pays you in TON, there's no risk of refunds, unlike with Stars payments.";
+
+"Chat.ViewCollection" = "VIEW COLLECTION";
