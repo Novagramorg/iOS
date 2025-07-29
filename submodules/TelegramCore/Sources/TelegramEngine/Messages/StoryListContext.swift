@@ -1424,14 +1424,13 @@ public final class PeerStoryListContext: StoryListContext {
                             key.setInt64(0, value: peerId.toInt64())
                             key.setInt8(8, value: 0)
                             
-                            var updatedFolders: [State.Folder] = []
                             if let cached = transaction.retrieveItemCacheEntry(id: ItemCacheEntryId(collectionId: Namespaces.CachedItemCollection.cachedPeerStoryListHeads, key: key))?.get(CachedPeerStoryListHead.self) {
+                                var updatedFolders: [State.Folder] = []
                                 updatedFolders = cached.folders
-                            }
-                            updatedFolders.append(StoryListContextState.Folder(id: Int64(albumId), title: title))
-                            
-                            if let entry = CodableEntry(CachedPeerStoryListHead(items: items.prefix(100).map { .item($0.storyItem.asStoryItem()) }, pinnedIds: pinnedIds, totalCount: Int32(totalCount), folders: updatedFolders)) {
-                                transaction.putItemCacheEntry(id: ItemCacheEntryId(collectionId: Namespaces.CachedItemCollection.cachedPeerStoryListHeads, key: key), entry: entry)
+                                updatedFolders.append(StoryListContextState.Folder(id: Int64(albumId), title: title))
+                                if let entry = CodableEntry(CachedPeerStoryListHead(items: items.prefix(100).map { .item($0.storyItem.asStoryItem()) }, pinnedIds: pinnedIds, totalCount: Int32(totalCount), folders: updatedFolders)) {
+                                    transaction.putItemCacheEntry(id: ItemCacheEntryId(collectionId: Namespaces.CachedItemCollection.cachedPeerStoryListHeads, key: key), entry: entry)
+                                }
                             }
                             
                             let mappedItems = items.map { item in
@@ -1442,7 +1441,7 @@ public final class PeerStoryListContext: StoryListContext {
                             folderKey.setInt64(0, value: peerId.toInt64())
                             folderKey.setInt8(8, value: 0)
                             folderKey.setInt64(8 + 1, value: Int64(albumId))
-                            if let entry = CodableEntry(CachedPeerStoryListHead(items: [], pinnedIds: [], totalCount: Int32(mappedItems.count), folders: [])) {
+                            if let entry = CodableEntry(CachedPeerStoryListHead(items: mappedItems.map { .item($0) }, pinnedIds: [], totalCount: Int32(mappedItems.count), folders: [])) {
                                 transaction.putItemCacheEntry(id: ItemCacheEntryId(collectionId: Namespaces.CachedItemCollection.cachedPeerStoryListHeads, key: folderKey), entry: entry)
                             }
                         } |> deliverOn(self.queue)).start(completed: {

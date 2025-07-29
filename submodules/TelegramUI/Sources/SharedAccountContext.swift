@@ -3992,6 +3992,9 @@ private func peerInfoControllerImpl(context: AccountContext, updatedPresentation
             sharedMediaFromForumTopic = (peerId, peer.id.toInt64())
         case let .storyAlbum(id):
             switchToStoryFolder = id
+            if peer.id == context.account.peerId {
+                isMyProfile = true
+            }
         default:
             break
         }
