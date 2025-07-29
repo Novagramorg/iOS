@@ -1978,7 +1978,6 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                 self.subtitleRating = subtitleRating
             }
             
-            //TODO:localize
             subtitleRatingSize = subtitleRating.update(
                 transition: subtitleRatingTransition,
                 component: AnyComponent(PeerInfoRatingComponent(

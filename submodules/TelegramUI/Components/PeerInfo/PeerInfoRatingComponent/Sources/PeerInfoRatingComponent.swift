@@ -107,7 +107,6 @@ public final class PeerInfoRatingComponent: Component {
             
             let iconSize = CGSize(width: 26.0, height: 26.0)
             
-            //TODO:localize
             if previousComponent?.level != level || previousComponent?.borderColor != component.borderColor || previousComponent?.foregroundColor != component.foregroundColor || previousComponent?.backgroundColor != component.backgroundColor || "".isEmpty {
                 let attributedText = NSAttributedString(string: "\(level)", attributes: [
                     NSAttributedString.Key.font: Font.semibold(10.0),

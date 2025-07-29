@@ -350,8 +350,7 @@ final class CallListControllerNode: ASDisplayNode {
                 let actionSheet = ActionSheetController(presentationData: strongSelf.presentationData)
                 var items: [ActionSheetItem] = []
                 
-                //TODO:localize
-                items.append(ActionSheetTextItem(title: "Do you want to delete the information about this call?", parseMarkdown: true))
+                items.append(ActionSheetTextItem(title: strongSelf.presentationData.strings.CallList_DeleteConfirmation, parseMarkdown: true))
                 
                 items.append(ActionSheetButtonItem(title: strongSelf.presentationData.strings.Conversation_DeleteMessagesFor(peer.displayTitle(strings: strongSelf.presentationData.strings, displayOrder: strongSelf.presentationData.nameDisplayOrder)).string, color: .destructive, action: { [weak actionSheet] in
                     actionSheet?.dismissAnimated()
