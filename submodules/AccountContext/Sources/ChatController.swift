@@ -48,6 +48,7 @@ public final class ChatMessageItemAssociatedData: Equatable {
     public let availableMessageEffects: AvailableMessageEffects?
     public let savedMessageTags: SavedMessageTags?
     public let defaultReaction: MessageReaction.Reaction?
+    public let areStarReactionsEnabled: Bool
     public let isPremium: Bool
     public let forceInlineReactions: Bool
     public let alwaysDisplayTranscribeButton: DisplayTranscribeButton
@@ -83,6 +84,7 @@ public final class ChatMessageItemAssociatedData: Equatable {
         availableMessageEffects: AvailableMessageEffects?,
         savedMessageTags: SavedMessageTags?,
         defaultReaction: MessageReaction.Reaction?,
+        areStarReactionsEnabled: Bool,
         isPremium: Bool,
         accountPeer: EnginePeer?,
         forceInlineReactions: Bool = false,
@@ -117,6 +119,7 @@ public final class ChatMessageItemAssociatedData: Equatable {
         self.availableMessageEffects = availableMessageEffects
         self.savedMessageTags = savedMessageTags
         self.defaultReaction = defaultReaction
+        self.areStarReactionsEnabled = areStarReactionsEnabled
         self.isPremium = isPremium
         self.accountPeer = accountPeer
         self.forceInlineReactions = forceInlineReactions
