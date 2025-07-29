@@ -925,7 +925,7 @@ final class ShareWithPeersScreenComponent: Component {
                         
                         if let selectedMedia {
                             let directMediaImageCache = DirectMediaImageCache(account: component.context.account)
-                            if let result = directMediaImageCache.getImage(peer: peerReference, story: story, media: selectedMedia, width: 24, aspectRatio: 1.0, possibleWidths: [24], includeBlurred: false, synchronous: true) {
+                            if let result = directMediaImageCache.getImage(peer: peerReference, story: story, media: selectedMedia, width: 48, aspectRatio: 1.0, possibleWidths: [48], includeBlurred: false, synchronous: true) {
                                 if let loadSignal = result.loadSignal {
                                     imageSignal = .single(result.image) |> then(loadSignal)
                                 } else {

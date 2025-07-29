@@ -24,17 +24,20 @@ final class PeerInfoStoryGridScreenComponent: Component {
     let context: AccountContext
     let peerId: EnginePeer.Id
     let scope: PeerInfoStoryGridScreen.Scope
+    let excludeIds: [Int32]
     let selectionModeCompletion: (([EngineStoryItem]) -> Void)?
 
     init(
         context: AccountContext,
         peerId: EnginePeer.Id,
         scope: PeerInfoStoryGridScreen.Scope,
+        excludeIds: [Int32],
         selectionModeCompletion: (([EngineStoryItem]) -> Void)?
     ) {
         self.context = context
         self.peerId = peerId
         self.scope = scope
+        self.excludeIds = excludeIds
         self.selectionModeCompletion = selectionModeCompletion
     }
 
@@ -46,6 +49,9 @@ final class PeerInfoStoryGridScreenComponent: Component {
             return false
         }
         if lhs.scope != rhs.scope {
+            return false
+        }
+        if lhs.excludeIds != rhs.excludeIds {
             return false
         }
 
@@ -482,6 +488,7 @@ final class PeerInfoStoryGridScreenComponent: Component {
                     captureProtected: false,
                     isProfileEmbedded: false,
                     canManageStories: true,
+                    excludeIds: component.excludeIds,
                     navigationController: { [weak self] in
                         guard let self else {
                             return nil
@@ -604,6 +611,7 @@ public class PeerInfoStoryGridScreen: ViewControllerComponentContainer {
         context: AccountContext,
         peerId: EnginePeer.Id,
         scope: Scope,
+        excludeIds: [Int32] = [],
         selectionModeCompletion: (([EngineStoryItem]) -> Void)? = nil
     ) {
         self.context = context
@@ -614,6 +622,7 @@ public class PeerInfoStoryGridScreen: ViewControllerComponentContainer {
             context: context,
             peerId: peerId,
             scope: scope,
+            excludeIds: excludeIds,
             selectionModeCompletion: selectionModeCompletion
         ), navigationBarAppearance: .default, theme: .default)
         

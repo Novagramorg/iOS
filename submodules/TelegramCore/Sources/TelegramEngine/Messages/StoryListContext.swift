@@ -862,7 +862,7 @@ public final class PeerStoryListContext: StoryListContext {
                 
                 #if DEBUG
                 if folderId != nil {
-                    signal = signal |> delay(2.0, queue: queue)
+                    //signal = signal |> delay(2.0, queue: queue)
                 }
                 #endif
                 
@@ -2006,6 +2006,21 @@ public final class PeerStoryListContext: StoryListContext {
             }
             
             return (peerReference, result)
+        }
+    }
+    
+    public static func cachedFolderState(peerId: EnginePeer.Id, account: Account, folderId: Int64) -> Signal<(count: Int, ids: [Int32])?, NoError> {
+        return account.postbox.transaction { transaction -> (count: Int, ids: [Int32])? in
+            let key = ValueBoxKey(length: 8 + 1 + 8)
+            key.setInt64(0, value: peerId.toInt64())
+            key.setInt8(8, value: 0)
+            key.setInt64(8 + 1, value: folderId)
+            
+            if let cached = transaction.retrieveItemCacheEntry(id: ItemCacheEntryId(collectionId: Namespaces.CachedItemCollection.cachedPeerStoryListHeads, key: key))?.get(CachedPeerStoryListHead.self) {
+                return (Int(cached.totalCount), cached.items.map(\.id))
+            } else {
+                return nil
+            }
         }
     }
 }
