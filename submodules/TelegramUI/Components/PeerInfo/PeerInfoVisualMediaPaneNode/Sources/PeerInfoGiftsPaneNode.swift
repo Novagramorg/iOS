@@ -70,6 +70,7 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
     private let profileGifts: ProfileGiftsContext
     private let canManage: Bool
     private let canGift: Bool
+    private var peer: EnginePeer?
     private let initialGiftCollectionId: Int64?
     
     private var resultsAreEmpty = false
@@ -129,6 +130,8 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
     public var giftsContext: ProfileGiftsContext {
         return self.giftsListView.profileGifts
     }
+    
+    public var openShareLink: ((String) -> Void)?
     
     private let collectionsMaxCount: Int
     
@@ -193,6 +196,15 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
         if let initialGiftCollectionId {
             self.setCurrentCollection(collection: .collection(Int32(initialGiftCollectionId)))
         }
+        
+        let _ = (context.engine.data.subscribe(TelegramEngine.EngineData.Item.Peer.Peer(id: peerId))
+        |> deliverOnMainQueue).start(next: { [weak self] peer in
+            guard let self else {
+                return
+            }
+            self.peer = peer
+            self.updateScrolling(transition: .immediate)
+        })
     }
     
     deinit {
@@ -485,68 +497,78 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
             return
         }
         
+        var canEditCollections = false
+        if self.peerId == self.context.account.peerId || self.canManage {
+            canEditCollections = true
+        }
+        
         var items: [ContextMenuItem] = []
         
-        items.append(.action(ContextMenuActionItem(text: params.presentationData.strings.PeerInfo_Gifts_AddGifts, icon: { theme in
-            return generateTintedImage(image: UIImage(bundleImageName: "Peer Info/Gifts/AddGift"), color: theme.actionSheet.primaryTextColor)
-        }, action: { [weak self] _, f in
-            guard let self else {
-                return
-            }
-            f(.default)
-            
-            self.setCurrentCollection(collection: .collection(id))
-            self.addGiftsToCollection(id: id)
-        })))
-        
-        items.append(.action(ContextMenuActionItem(text: params.presentationData.strings.PeerInfo_Gifts_RenameCollection, icon: { theme in
-            return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Edit"), color: theme.actionSheet.primaryTextColor)
-        }, action: { [weak self] _, f in
-            guard let self else {
-                return
-            }
-            f(.default)
-            
-            Queue.mainQueue().after(0.15) {
-                self.renameCollection(id: id)
-            }
-        })))
-
-        
-//        items.append(.action(ContextMenuActionItem(text: params.presentationData.strings.PeerInfo_Gifts_ShareCollection, icon: { theme in
-//            return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Forward"), color: theme.actionSheet.primaryTextColor)
-//        }, action: { [weak self] _, f in
-//            guard let self else {
-//                return
-//            }
-//            f(.default)
-//            
-//            let _ = self
-//        })))
-        
-        items.append(.action(ContextMenuActionItem(text: params.presentationData.strings.PeerInfo_Gifts_Reorder, icon: { theme in
-            return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/ReorderItems"), color: theme.actionSheet.primaryTextColor)
-        }, action: { [weak self] c, f in
-            c?.dismiss(completion: { [weak self] in
+        if canEditCollections {
+            items.append(.action(ContextMenuActionItem(text: params.presentationData.strings.PeerInfo_Gifts_AddGifts, icon: { theme in
+                return generateTintedImage(image: UIImage(bundleImageName: "Peer Info/Gifts/AddGift"), color: theme.actionSheet.primaryTextColor)
+            }, action: { [weak self] _, f in
                 guard let self else {
                     return
                 }
-                self.beginReordering()
-            })
-        })))
-        
-        items.append(.action(ContextMenuActionItem(text: params.presentationData.strings.PeerInfo_Gifts_DeleteCollection, textColor: .destructive, icon: { theme in
-            return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Delete"), color: theme.contextMenu.destructiveColor)
-        }, action: { [weak self] _, f in
-            guard let self else {
-                return
-            }
-            f(.default)
+                f(.default)
+                
+                self.setCurrentCollection(collection: .collection(id))
+                self.addGiftsToCollection(id: id)
+            })))
             
-            Queue.mainQueue().after(0.15) {
-                self.deleteCollection(id: id)
-            }
-        })))
+            items.append(.action(ContextMenuActionItem(text: params.presentationData.strings.PeerInfo_Gifts_RenameCollection, icon: { theme in
+                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Edit"), color: theme.actionSheet.primaryTextColor)
+            }, action: { [weak self] _, f in
+                guard let self else {
+                    return
+                }
+                f(.default)
+                
+                Queue.mainQueue().after(0.15) {
+                    self.renameCollection(id: id)
+                }
+            })))
+        }
+
+        if let peer = self.peer, let addressName = peer.addressName, !addressName.isEmpty {
+            items.append(.action(ContextMenuActionItem(text: params.presentationData.strings.PeerInfo_Gifts_ShareCollection, icon: { theme in
+                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Forward"), color: theme.actionSheet.primaryTextColor)
+            }, action: { [weak self] _, f in
+                guard let self else {
+                    return
+                }
+                f(.default)
+                
+                self.openShareLink?("https://t.me/\(addressName)/c/\(id)")
+            })))
+        }
+        
+        if canEditCollections {
+            items.append(.action(ContextMenuActionItem(text: params.presentationData.strings.PeerInfo_Gifts_Reorder, icon: { theme in
+                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/ReorderItems"), color: theme.actionSheet.primaryTextColor)
+            }, action: { [weak self] c, f in
+                c?.dismiss(completion: { [weak self] in
+                    guard let self else {
+                        return
+                    }
+                    self.beginReordering()
+                })
+            })))
+            
+            items.append(.action(ContextMenuActionItem(text: params.presentationData.strings.PeerInfo_Gifts_DeleteCollection, textColor: .destructive, icon: { theme in
+                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Delete"), color: theme.contextMenu.destructiveColor)
+            }, action: { [weak self] _, f in
+                guard let self else {
+                    return
+                }
+                f(.default)
+                
+                Queue.mainQueue().after(0.15) {
+                    self.deleteCollection(id: id)
+                }
+            })))
+        }
         
         let contextController = ContextController(
             presentationData: params.presentationData,
@@ -567,6 +589,10 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
             var canEditCollections = false
             if self.peerId == self.context.account.peerId || self.canManage {
                 canEditCollections = true
+            }
+            var canShare = false
+            if let peer = self.peer, let addressName = peer.addressName, !addressName.isEmpty {
+                canShare = true
             }
             
             let hasNonEmptyCollections = self.collections?.contains(where: { $0.count > 0 }) ?? false
@@ -607,7 +633,7 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
                             )
                         )),
                         isReorderable: collections.count > 1,
-                        contextAction: canEditCollections ? { [weak self] sourceNode, gesture in
+                        contextAction: canEditCollections || canShare ? { [weak self] sourceNode, gesture in
                             guard let self else {
                                 return
                             }

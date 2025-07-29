@@ -4103,6 +4103,13 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
             }
         }
         
+        self.paneContainerNode.openShareLink = { [weak self] url in
+            guard let self else {
+                return
+            }
+            self.openShareLink(url: url)
+        }
+        
         self.headerNode.performButtonAction = { [weak self] key, gesture in
             self?.performButtonAction(key: key, gesture: gesture)
         }
@@ -11392,17 +11399,6 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                             pane.addGiftsToCollection(id: id)
                         }
                     })))
-                    
-                    if let addressName = data.peer?.addressName, !addressName.isEmpty {
-                        items.append(.action(ContextMenuActionItem(text: strings.PeerInfo_Gifts_ShareCollection, icon: { theme in
-                            return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Forward"), color: theme.contextMenu.primaryColor)
-                        }, action: { [weak self] _, f in
-                            f(.default)
-                            if let pane, case let .collection(id) = pane.currentCollection {
-                                self?.openShareLink(url: "https://t.me/\(addressName)/c/\(id)")
-                            }
-                        })))
-                    }
                 }
 
                 if canReorder {
@@ -11427,6 +11423,20 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                             pane.deleteCollection(id: id)
                         }
                     })))
+                }
+            }
+            
+            if let pane, case let .collection(id) = pane.currentCollection, let addressName = data.peer?.addressName, !addressName.isEmpty {
+                let shareAction: ContextMenuItem = .action(ContextMenuActionItem(text: strings.PeerInfo_Gifts_ShareCollection, icon: { theme in
+                    return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Forward"), color: theme.contextMenu.primaryColor)
+                }, action: { [weak self] _, f in
+                    f(.default)
+                    self?.openShareLink(url: "https://t.me/\(addressName)/c/\(id)")
+                }))
+                if items.isEmpty {
+                    items.append(shareAction)
+                } else {
+                    items.insert(shareAction, at: 1)
                 }
             }
             
