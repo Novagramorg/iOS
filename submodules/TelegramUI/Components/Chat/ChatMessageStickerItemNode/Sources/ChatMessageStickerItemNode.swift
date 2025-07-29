@@ -665,6 +665,7 @@ public class ChatMessageStickerItemNode: ChatMessageItemView {
                 reactionPeers: dateReactionsAndPeers.peers,
                 displayAllReactionPeers: item.message.id.peerId.namespace == Namespaces.Peer.CloudUser,
                 areReactionsTags: item.message.areReactionsTags(accountPeerId: item.context.account.peerId),
+                areStarReactionsEnabled: item.associatedData.areStarReactionsEnabled,
                 messageEffect: item.message.messageEffect(availableMessageEffects: item.associatedData.availableMessageEffects),
                 replyCount: dateReplies,
                 starsCount: starsCount,

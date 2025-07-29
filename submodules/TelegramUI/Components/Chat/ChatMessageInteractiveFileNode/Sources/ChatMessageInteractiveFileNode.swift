@@ -957,6 +957,7 @@ public final class ChatMessageInteractiveFileNode: ASDisplayNode {
                         reactionPeers: dateReactionsAndPeers.peers,
                         displayAllReactionPeers: arguments.message.id.peerId.namespace == Namespaces.Peer.CloudUser,
                         areReactionsTags: arguments.message.areReactionsTags(accountPeerId: arguments.context.account.peerId),
+                        areStarReactionsEnabled: arguments.associatedData.areStarReactionsEnabled,
                         messageEffect: arguments.message.messageEffect(availableMessageEffects: arguments.associatedData.availableMessageEffects),
                         replyCount: dateReplies,
                         starsCount: starsCount,
