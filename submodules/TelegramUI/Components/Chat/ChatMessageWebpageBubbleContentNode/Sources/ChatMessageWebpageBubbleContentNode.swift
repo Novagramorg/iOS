@@ -478,6 +478,8 @@ public final class ChatMessageWebpageBubbleContentNode: ChatMessageBubbleContent
                             actionTitle = item.presentationData.strings.Chat_ViewGroupCall
                         case "telegram_collection":
                             actionTitle = item.presentationData.strings.Chat_ViewCollection
+                        case "telegram_story_album":
+                            actionTitle = item.presentationData.strings.Chat_ViewAlbum
                         default:
                             break
                     }

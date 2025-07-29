@@ -991,15 +991,14 @@ final class ShareWithPeersScreenComponent: Component {
             
             let presentationData = component.context.sharedContext.currentPresentationData.with({ $0 }).withUpdated(theme: environment.theme)
             
-            //TODO:localize
             let promptController = promptController(
                 sharedContext: component.context.sharedContext,
                 updatedPresentationData: (initial: presentationData, signal: .single(presentationData)),
-                text: "Create a New Album",
+                text: presentationData.strings.Stories_CreateAlbum_Title,
                 titleFont: .bold,
-                subtitle: "Choose a name for your album and start adding your stories there.",
+                subtitle: presentationData.strings.Stories_CreateAlbum_Text,
                 value: "",
-                placeholder: "Title",
+                placeholder: presentationData.strings.Stories_CreateAlbum_Placeholder,
                 characterLimit: 20,
                 apply: { [weak self] value in
                     guard let self, let component = self.component else {
@@ -1834,7 +1833,8 @@ final class ShareWithPeersScreenComponent: Component {
                     sectionOffset += footerSize.height
                 } else if section.id == 4 && section.itemCount > 0 {
                     var sectionItemOffset: CGFloat = 0.0
-                    if self.selectedOptions.contains(.pin) {
+                    //TODO:release
+                    if self.selectedOptions.contains(.pin) && !"".isEmpty {
                         let itemFrame = CGRect(origin: CGPoint(x: itemLayout.sideInset, y: sectionOffset + section.insets.top + sectionItemOffset), size: CGSize(width: itemLayout.containerSize.width, height: section.itemHeight))
                         if !visibleBounds.intersects(itemFrame) {
                             continue
@@ -1855,17 +1855,15 @@ final class ShareWithPeersScreenComponent: Component {
                             self.visibleItems[itemId] = visibleItem
                         }
                         
-                        //TODO:localize
-                        var foldersText = "All Stories"
+                        var foldersText = environment.strings.Stories_Post_AlbumAll
                         if !self.shareToFolders.isEmpty {
                             if self.shareToFolders.count == 1 {
                                 foldersText = self.shareToFolders[0].title
                             } else {
-                                foldersText = "\(self.shareToFolders.count) Albums"
+                                foldersText = environment.strings.Stories_Post_AlbumCount(Int32(self.shareToFolders.count))
                             }
                         }
                         
-                        //TODO:localize
                         let _ = visibleItem.update(
                             transition: itemTransition,
                             component: AnyComponent(ListActionItemComponent(
@@ -1874,7 +1872,7 @@ final class ShareWithPeersScreenComponent: Component {
                                 title: AnyComponent(VStack([
                                     AnyComponentWithIdentity(id: AnyHashable(0), component: AnyComponent(MultilineTextComponent(
                                         text: .plain(NSAttributedString(
-                                            string: "Album",
+                                            string: environment.strings.Stories_Post_Album,
                                             font: Font.regular(17.0),
                                             textColor: environment.theme.list.itemPrimaryTextColor
                                         )),
@@ -1977,7 +1975,7 @@ final class ShareWithPeersScreenComponent: Component {
                         footerText = isSendAsGroup ? environment.strings.Story_Privacy_ChooseCoverGroupInfo : environment.strings.Story_Privacy_ChooseCoverChannelInfo
                     }
                     if component.coverItem == nil {
-                        footerText = "Choose the albums where you want to share your story."
+                        footerText = environment.strings.Stories_Post_AlbumFooter
                     }
                     
                     let footerSize = sectionFooter.update(
@@ -2731,15 +2729,18 @@ final class ShareWithPeersScreenComponent: Component {
                         if hasCover {
                             itemCount += 1
                         }
-                        if self.selectedOptions.contains(.pin) {
+                        //TODO:release
+                        /*if self.selectedOptions.contains(.pin) {
                             itemCount += 1
+                        }*/
+                        if itemCount != 0 {
+                            sections.append(ItemLayout.Section(
+                                id: 4,
+                                insets: UIEdgeInsets(top: 28.0, left: 0.0, bottom: 0.0, right: 0.0),
+                                itemHeight: optionItemSize.height,
+                                itemCount: itemCount
+                            ))
                         }
-                        sections.append(ItemLayout.Section(
-                            id: 4,
-                            insets: UIEdgeInsets(top: 28.0, left: 0.0, bottom: 0.0, right: 0.0),
-                            itemHeight: optionItemSize.height,
-                            itemCount: 1
-                        ))
                     }
                 } else {
                     sections.append(ItemLayout.Section(
