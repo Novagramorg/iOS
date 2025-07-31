@@ -582,20 +582,12 @@ final class StarsStatisticsScreenComponent: Component {
                             count: self.starsState?.balances.availableBalance.amount ?? StarsAmount.zero,
                             currency: .stars,
                             rate: self.starsState?.usdRate ?? 0,
-                            actionTitle: strings.Stars_Intro_BuyShort,
-                            actionAvailable: true,
+                            actionTitle: strings.Stars_Intro_Withdraw,
+                            actionAvailable: withdrawEnabled,
                             actionIsEnabled: true,
-                            actionIcon: PresentationResourcesItemList.itemListRoundTopupIcon(environment.theme),
+                            actionCooldownUntilTimestamp: self.starsState?.balances.nextWithdrawalTimestamp,
+                            actionIcon: PresentationResourcesItemList.itemListRoundWithdrawIcon(environment.theme),
                             action: { [weak self] in
-                                guard let self, let component = self.component else {
-                                    return
-                                }
-                                component.buy()
-                            },
-                            secondaryActionTitle: withdrawEnabled ? strings.Stars_Intro_Withdraw : nil,
-                            secondaryActionIcon: PresentationResourcesItemList.itemListRoundWithdrawIcon(environment.theme),
-                            secondaryActionCooldownUntilTimestamp: self.starsState?.balances.nextWithdrawalTimestamp,
-                            secondaryAction: { [weak self] in
                                 guard let self, let component = self.component else {
                                     return
                                 }
