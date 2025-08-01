@@ -395,7 +395,7 @@ final class GiftOptionsScreenComponent: Component {
                             
                             if gift.flags.contains(.requiresPremium) {
                                 ribbon = GiftItemComponent.Ribbon(
-                                    text: "premium",
+                                    text: environment.strings.Gift_Options_Gift_Premium,
                                     color: .orange
                                 )
                                 outline = .orange

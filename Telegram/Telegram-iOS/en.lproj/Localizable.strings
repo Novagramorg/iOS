@@ -14882,3 +14882,5 @@ Sorry for the inconvenience.";
 "Stories.ToastAddedToFolder_any" = "%@ stories added to folder.";
 "Stories.ToastAlbumNotAvailable" = "The album is no longer available.";
 
+
+"Gift.Options.Gift.Premium" = "premium";
