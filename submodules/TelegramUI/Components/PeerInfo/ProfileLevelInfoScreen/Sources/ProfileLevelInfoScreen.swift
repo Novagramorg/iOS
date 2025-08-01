@@ -142,7 +142,7 @@ private final class ProfileLevelInfoScreenComponent: Component {
             self.addSubview(self.dimView)
             self.layer.addSublayer(self.backgroundLayer)
             
-            self.scrollView.delaysContentTouches = true
+            self.scrollView.delaysContentTouches = false
             self.scrollView.canCancelContentTouches = true
             self.scrollView.clipsToBounds = false
             self.scrollView.contentInsetAdjustmentBehavior = .never
@@ -283,6 +283,8 @@ private final class ProfileLevelInfoScreenComponent: Component {
                 self.isUpdating = false
             }
             
+            let isChangingPreview = transition.userData(TransitionHint.self)?.isChangingPreview ?? false
+            
             let alphaTransition: ComponentTransition = transition.animation.isImmediate ? .immediate : .easeInOut(duration: 0.16)
             
             let environment = environment[ViewControllerComponentContainer.Environment.self].value
@@ -354,13 +356,14 @@ private final class ProfileLevelInfoScreenComponent: Component {
                         let pendingPoints = pendingStarRating.rating.stars - component.starRating.stars
                         
                         if self.isPreviewingPendingRating {
+                            //TODO:localize
                             secondaryDescriptionTextString = "This will be your rating in 21 days,\n after \(pendingPoints) points are added. [Back >]()"
                         } else {
                             let dayCount = (pendingStarRating.timestamp - timestamp) / (24 * 60 * 60)
                             if dayCount == 0 {
                                 secondaryDescriptionTextString = environment.strings.ProfileLevelInfo_MyDescriptionToday(Int32(pendingPoints))
                             } else {
-                                secondaryDescriptionTextString = environment.strings.ProfileLevelInfo_MyDescription(environment.strings.ProfileLevelInfo_MyDescriptionDays(Int32(dayCount)), environment.strings.ProfileLevelInfo_MyDescriptionPoints(Int32(pendingPoints))).string
+                                secondaryDescriptionTextString = environment.strings.ProfileLevelInfo_MyDescriptionPreview(environment.strings.ProfileLevelInfo_MyDescriptionDays(Int32(dayCount)), environment.strings.ProfileLevelInfo_MyDescriptionPoints(Int32(pendingPoints))).string
                             }
                         }
                     }
@@ -398,8 +401,9 @@ private final class ProfileLevelInfoScreenComponent: Component {
                 environment.theme.list.itemCheckColors.fillColor,
                 environment.theme.list.itemCheckColors.fillColor
             ]
+            let _ = gradientColors
             
-            let levelFraction: CGFloat
+            var levelFraction: CGFloat
             
             let badgeText: String
             var badgeTextSuffix: String?
@@ -413,8 +417,8 @@ private final class ProfileLevelInfoScreenComponent: Component {
                 if let nextLevelStars = pendingStarRating.rating.nextLevelStars {
                     badgeTextSuffix = " / \(starCountString(Int64(nextLevelStars), decimalSeparator: "."))"
                 }
-                if let nextLevelStars = pendingStarRating.rating.nextLevelStars {
-                    levelFraction = Double(pendingStarRating.rating.stars) / Double(nextLevelStars)
+                if let nextLevelStars = pendingStarRating.rating.nextLevelStars, nextLevelStars > pendingStarRating.rating.stars {
+                    levelFraction = Double(pendingStarRating.rating.stars - pendingStarRating.rating.currentLevelStars) / Double(nextLevelStars - pendingStarRating.rating.currentLevelStars)
                 } else {
                     levelFraction = 1.0
                 }
@@ -426,13 +430,17 @@ private final class ProfileLevelInfoScreenComponent: Component {
                     badgeTextSuffix = " / \(starCountString(Int64(nextLevelStars), decimalSeparator: "."))"
                 }
                 if let nextLevelStars = component.starRating.nextLevelStars {
-                    levelFraction = Double(component.starRating.stars) / Double(nextLevelStars)
-                } else {
+                    levelFraction = Double(component.starRating.stars - component.starRating.currentLevelStars) / Double(nextLevelStars - component.starRating.currentLevelStars)
+                } else if component.starRating.stars > 0 {
                     levelFraction = 1.0
+                } else {
+                    levelFraction = 0.0
                 }
             }
+            
+            levelFraction = max(0.0, levelFraction)
 
-            let levelInfoSize = self.levelInfo.update(
+            /*let levelInfoSize = self.levelInfo.update(
                 transition: .immediate,
                 component: AnyComponent(PremiumLimitDisplayComponent(
                     inactiveColor: environment.theme.list.itemBlocksSeparatorColor.withAlphaComponent(0.5),
@@ -453,17 +461,30 @@ private final class ProfileLevelInfoScreenComponent: Component {
                 )),
                 environment: {},
                 containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 200.0)
+            )*/
+            let _ = levelFraction
+            let levelInfoSize = self.levelInfo.update(
+                transition: isChangingPreview ? ComponentTransition.immediate.withUserData(ProfileLevelRatingBarComponent.TransitionHint(animate: true)) : .immediate,
+                component: AnyComponent(ProfileLevelRatingBarComponent(
+                    theme: environment.theme,
+                    value: levelFraction,
+                    leftLabel: environment.strings.ProfileLevelInfo_LevelIndex(Int32(currentLevel)),
+                    rightLabel: nextLevel.flatMap { environment.strings.ProfileLevelInfo_LevelIndex(Int32($0)) } ?? "",
+                    badgeValue: badgeText,
+                    badgeTotal: badgeTextSuffix,
+                    level: Int(currentLevel)
+                )),
+                environment: {},
+                containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 110.0)
             )
             if let levelInfoView = self.levelInfo.view {
                 if levelInfoView.superview == nil {
                     self.scrollContentView.addSubview(levelInfoView)
                 }
-                levelInfoView.frame = CGRect(origin: CGPoint(x: floor((availableSize.width - levelInfoSize.width) * 0.5), y: contentHeight - 16.0), size: levelInfoSize)
+                levelInfoView.frame = CGRect(origin: CGPoint(x: floor((availableSize.width - levelInfoSize.width) * 0.5), y: contentHeight - 6.0), size: levelInfoSize)
             }
 
             contentHeight += 129.0
-            
-            let isChangingPreview = transition.userData(TransitionHint.self)?.isChangingPreview ?? false
             
             if let secondaryDescriptionTextString {
                 if isChangingPreview, let secondaryDescriptionTextView = self.secondaryDescriptionText?.view {
