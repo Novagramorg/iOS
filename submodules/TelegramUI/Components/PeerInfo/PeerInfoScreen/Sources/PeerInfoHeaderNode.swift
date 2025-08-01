@@ -1990,7 +1990,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             #if DEBUG
             if let _ = starRating.nextLevelStars {
                 self.currentPendingStarRating = TelegramStarPendingRating(rating: TelegramStarRating(level: starRating.level, currentLevelStars: starRating.currentLevelStars, stars: starRating.stars + 234, nextLevelStars: starRating.nextLevelStars), timestamp: Int32(Date().timeIntervalSince1970) + 60 * 60 * 24 * 3)
-                self.currentPendingStarRating = TelegramStarPendingRating(rating: TelegramStarRating(level: starRating.level + 1, currentLevelStars: starRating.nextLevelStars!, stars: starRating.nextLevelStars! + starRating.nextLevelStars! / 2, nextLevelStars: starRating.nextLevelStars! * 2), timestamp: Int32(Date().timeIntervalSince1970) + 60 * 60 * 24 * 3)
+                self.currentPendingStarRating = TelegramStarPendingRating(rating: TelegramStarRating(level: starRating.level + 1, currentLevelStars: starRating.nextLevelStars!, stars: starRating.nextLevelStars! + starRating.nextLevelStars! / 2 + starRating.nextLevelStars! / 4, nextLevelStars: starRating.nextLevelStars! * 2), timestamp: Int32(Date().timeIntervalSince1970) + 60 * 60 * 24 * 3)
             }
             #endif
         } else {
@@ -2092,7 +2092,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                     let subtitleBadgeFrame: CGRect
                     subtitleBadgeFrame = CGRect(origin: CGPoint(x: (-subtitleSize.width) * 0.5 - subtitleRatingSize.width + 1.0, y: subtitleOffset + floor((-subtitleRatingSize.height) * 0.5)), size: subtitleRatingSize)
                     transition.updateFrameAdditive(view: subtitleRatingView, frame: subtitleBadgeFrame)
-                    transition.updateAlpha(layer: subtitleRatingView.layer, alpha: (1.0 - transitionFraction))
+                    transition.updateAlpha(layer: subtitleRatingView.layer, alpha: subtitleAlpha)
                 }
             } else {
                 let titleScale: CGFloat

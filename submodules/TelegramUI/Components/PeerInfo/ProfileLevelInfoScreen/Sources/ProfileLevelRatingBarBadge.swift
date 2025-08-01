@@ -6,6 +6,7 @@ import ComponentFlow
 import RoundedRectWithTailPath
 import AnimatedTextComponent
 import MultilineTextComponent
+import LottieComponent
 
 final class ProfileLevelRatingBarBadge: Component {
     final class TransitionHint {
@@ -47,6 +48,7 @@ final class ProfileLevelRatingBarBadge: Component {
         private let badgeView: UIView
         private let badgeMaskView: UIView
         private let badgeShapeLayer = SimpleShapeLayer()
+        private let badgeShapeAnimation = ComponentView<Empty>()
         
         private let badgeForeground: SimpleLayer
         let badgeIcon: UIImageView
@@ -64,6 +66,7 @@ final class ProfileLevelRatingBarBadge: Component {
         override init(frame: CGRect) {
             self.badgeView = UIView()
             self.badgeView.alpha = 0.0
+            self.badgeView.layer.anchorPoint = CGPoint()
             
             self.badgeShapeLayer.fillColor = UIColor.white.cgColor
             self.badgeShapeLayer.transform = CATransform3DMakeScale(1.0, -1.0, 1.0)
@@ -147,7 +150,7 @@ final class ProfileLevelRatingBarBadge: Component {
                 containerSize: CGSize(width: 300.0, height: 100.0)
             )
             
-            var badgeWidth: CGFloat = badgeLabelSize.width + 3.0 + 54.0
+            var badgeWidth: CGFloat = badgeLabelSize.width + 3.0 + 60.0
             if component.suffix != nil {
                 badgeWidth += badgeSuffixSize.width + badgeSuffixSpacing
             }
@@ -161,7 +164,7 @@ final class ProfileLevelRatingBarBadge: Component {
             
             self.badgeForeground.bounds = CGRect(origin: CGPoint(), size: CGSize(width: 600.0, height: badgeFullSize.height + 10.0))
     
-            self.badgeIcon.frame = CGRect(x: 10.0, y: 8.0, width: 30.0, height: 30.0)
+            self.badgeIcon.frame = CGRect(x: 13.0, y: 8.0, width: 30.0, height: 30.0)
             
             self.badgeView.alpha = 1.0
             
@@ -172,7 +175,7 @@ final class ProfileLevelRatingBarBadge: Component {
                 badgeContentWidth += badgeSuffixSpacing + badgeSuffixSize.width
             }
             
-            let badgeLabelFrame = CGRect(origin: CGPoint(x: 14.0 + floorToScreenPixels((badgeFullSize.width - badgeContentWidth) / 2.0), y: 9.0), size: badgeLabelSize)
+            let badgeLabelFrame = CGRect(origin: CGPoint(x: 15.0 + floorToScreenPixels((badgeFullSize.width - badgeContentWidth) / 2.0), y: 9.0), size: badgeLabelSize)
             if let badgeLabelView = self.badgeLabel.view {
                 if badgeLabelView.superview == nil {
                     self.badgeView.addSubview(badgeLabelView)
@@ -214,6 +217,11 @@ final class ProfileLevelRatingBarBadge: Component {
         }
         
         func adjustTail(size: CGSize, overflowWidth: CGFloat, transition: ComponentTransition) {
+            guard let component else {
+                return
+            }
+            let _ = component
+            
             var tailPosition = size.width * 0.5
             tailPosition += overflowWidth
             tailPosition = max(36.0, min(size.width - 36.0, tailPosition))
@@ -221,9 +229,46 @@ final class ProfileLevelRatingBarBadge: Component {
             let tailPositionFraction = tailPosition / size.width
             transition.setShapeLayerPath(layer: self.badgeShapeLayer, path: generateRoundedRectWithTailPath(rectSize: size, tailPosition: tailPositionFraction, transformTail: false).cgPath)
             
-            let transition: ContainedViewLayoutTransition = .immediate
-            transition.updateAnchorPoint(layer: self.badgeView.layer, anchorPoint: CGPoint(x: tailPositionFraction, y: 1.0))
-            transition.updatePosition(layer: self.badgeView.layer, position: CGPoint(x: (tailPositionFraction - 0.5) * size.width, y: 0.0))
+            let badgeShapeSize = CGSize(width: 128, height: 128)
+            let _ = self.badgeShapeAnimation.update(
+                transition: .immediate,
+                component: AnyComponent(LottieComponent(
+                    content: LottieComponent.AppBundleContent(name: "badge_with_tail"),
+                    color: .red,//component.theme.list.itemCheckColors.fillColor,
+                    placeholderColor: nil,
+                    startingPosition: .begin,
+                    size: badgeShapeSize,
+                    renderingScale: nil,
+                    loop: false,
+                    playOnce: nil
+                )),
+                environment: {},
+                containerSize: badgeShapeSize
+            )
+            if let badgeShapeAnimationView = self.badgeShapeAnimation.view as? LottieComponent.View, !"".isEmpty {
+                if badgeShapeAnimationView.superview == nil {
+                    badgeShapeAnimationView.layer.anchorPoint = CGPoint()
+                    self.addSubview(badgeShapeAnimationView)
+                }
+                
+                let transition: ComponentTransition = .immediate
+                
+                let shapeFrame = CGRect(origin: CGPoint(x: 0.0, y: -10.0), size: badgeShapeSize)
+                badgeShapeAnimationView.center = shapeFrame.origin
+                badgeShapeAnimationView.bounds = CGRect(origin: CGPoint(), size: shapeFrame.size)
+                
+                let scaleFactor: CGFloat = 144.0 / (946.0 / 4.0)
+                transition.setScale(view: badgeShapeAnimationView, scale: scaleFactor)
+                
+                let badgeShapeWidth = floor(shapeFrame.width * scaleFactor)
+                let badgeShapeOffset = -overflowWidth / badgeShapeWidth
+                let _ = badgeShapeOffset
+                
+                //badgeShapeAnimationView.setFrameIndex(index: 0)
+            }
+            
+            //let transition: ContainedViewLayoutTransition = .immediate
+            //transition.updateAnchorPoint(layer: self.badgeView.layer, anchorPoint: CGPoint(x: tailPositionFraction, y: 1.0))
         }
         
         func updateBadgeAngle(angle: CGFloat) {
@@ -272,168 +317,3 @@ final class ProfileLevelRatingBarBadge: Component {
         return view.update(component: self, availableSize: availableSize, state: state, environment: environment, transition: transition)
     }
 }
-
-private let labelWidth: CGFloat = 16.0
-private let labelHeight: CGFloat = 36.0
-private let labelSize = CGSize(width: labelWidth, height: labelHeight)
-private let font = Font.with(size: 24.0, design: .round, weight: .semibold, traits: [])
-
-private final class BadgeLabelView: UIView {
-    private class StackView: UIView {
-        var labels: [UILabel] = []
-        
-        var currentValue: Int32 = 0
-        
-        var color: UIColor = .white {
-            didSet {
-                for view in self.labels {
-                    view.textColor = self.color
-                }
-            }
-        }
-        
-        init() {
-            super.init(frame: CGRect(origin: .zero, size: labelSize))
-             
-            var height: CGFloat = -labelHeight
-            for i in -1 ..< 10 {
-                let label = UILabel()
-                if i == -1 {
-                    label.text = "9"
-                } else {
-                    label.text = "\(i)"
-                }
-                label.textColor = self.color
-                label.font = font
-                label.textAlignment = .center
-                label.frame = CGRect(x: 0, y: height, width: labelWidth, height: labelHeight)
-                self.addSubview(label)
-                self.labels.append(label)
-                
-                height += labelHeight
-            }
-        }
-        
-        required init?(coder: NSCoder) {
-            fatalError("init(coder:) has not been implemented")
-        }
-        
-        func update(value: Int32, isFirst: Bool, isLast: Bool, transition: ComponentTransition) {
-            let previousValue = self.currentValue
-            self.currentValue = value
-                        
-            self.labels[1].alpha = isFirst && !isLast ? 0.0 : 1.0
-            
-            if previousValue == 9 && value < 9 {
-                self.bounds = CGRect(
-                    origin: CGPoint(
-                        x: 0.0,
-                        y: -1.0 * labelSize.height
-                    ),
-                    size: labelSize
-                )
-            }
-            
-            let bounds = CGRect(
-                origin: CGPoint(
-                    x: 0.0,
-                    y: CGFloat(value) * labelSize.height
-                ),
-                size: labelSize
-            )
-            transition.setBounds(view: self, bounds: bounds)
-        }
-    }
-    
-    private var itemViews: [Int: StackView] = [:]
-    private var staticLabel = UILabel()
-    
-    init() {
-        super.init(frame: .zero)
-        
-        self.clipsToBounds = true
-        self.isUserInteractionEnabled = false
-    }
-    
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-    
-    var color: UIColor = .white {
-        didSet {
-            self.staticLabel.textColor = self.color
-            for (_, view) in self.itemViews {
-                view.color = self.color
-            }
-        }
-    }
-    
-    func update(value: String, transition: ComponentTransition) -> CGSize {
-        if value.contains(" ") {
-            for (_, view) in self.itemViews {
-                view.isHidden = true
-            }
-            
-            if self.staticLabel.superview == nil {
-                self.staticLabel.textColor = self.color
-                self.staticLabel.font = font
-                
-                self.addSubview(self.staticLabel)
-            }
-            
-            self.staticLabel.text = value
-            let size = self.staticLabel.sizeThatFits(CGSize(width: 100.0, height: 100.0))
-            self.staticLabel.frame = CGRect(origin: .zero, size: CGSize(width: size.width, height: labelHeight))
-            
-            return CGSize(width: ceil(self.staticLabel.bounds.width), height: ceil(self.staticLabel.bounds.height))
-        }
-        
-        let string = value
-        let stringArray = Array(string.map { String($0) }.reversed())
-        
-        let labelSpacing: CGFloat = 0.0
-        
-        let totalWidth = CGFloat(stringArray.count) * labelWidth + CGFloat(stringArray.count - 1) * labelSpacing
-        
-        var validIds: [Int] = []
-        for i in 0 ..< stringArray.count {
-            validIds.append(i)
-            
-            let itemView: StackView
-            var itemTransition = transition
-            if let current = self.itemViews[i] {
-                itemView = current
-            } else {
-                itemTransition = transition.withAnimation(.none)
-                itemView = StackView()
-                itemView.color = self.color
-                self.itemViews[i] = itemView
-                self.addSubview(itemView)
-            }
-            
-            let digit = Int32(stringArray[i]) ?? 0
-            itemView.update(value: digit, isFirst: i == stringArray.count - 1, isLast: i == 0, transition: transition)
-            
-            itemTransition.setFrame(
-                view: itemView,
-                frame: CGRect(x: totalWidth - labelWidth * CGFloat(i + 1) + labelSpacing * CGFloat(i), y: 0.0, width: labelWidth, height: labelHeight)
-            )
-        }
-        
-        var removeIds: [Int] = []
-        for (id, itemView) in self.itemViews {
-            if !validIds.contains(id) {
-                removeIds.append(id)
-                
-                transition.setAlpha(view: itemView, alpha: 0.0, completion: { _ in
-                    itemView.removeFromSuperview()
-                })
-            }
-        }
-        for id in removeIds {
-            self.itemViews.removeValue(forKey: id)
-        }
-        return CGSize(width: totalWidth, height: labelHeight)
-    }
-}
-

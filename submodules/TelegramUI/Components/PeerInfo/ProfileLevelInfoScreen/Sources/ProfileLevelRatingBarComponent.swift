@@ -6,6 +6,7 @@ import ComponentFlow
 import MultilineTextComponent
 import BundleIconComponent
 import HierarchyTrackingLayer
+import AnimatedTextComponent
 
 final class ProfileLevelRatingBarComponent: Component {
     final class TransitionHint {
@@ -286,33 +287,53 @@ final class ProfileLevelRatingBarComponent: Component {
             let labelFont = Font.semibold(14.0)
             
             let leftLabelSize = self.backgroundLeftLabel.update(
-                transition: .immediate,
-                component: AnyComponent(MultilineTextComponent(
-                    text: .plain(NSAttributedString(string: component.leftLabel, font: labelFont, textColor: component.theme.list.itemPrimaryTextColor))
+                transition: labelsTransition,
+                component: AnyComponent(AnimatedTextComponent(
+                    font: labelFont,
+                    color: component.theme.list.itemPrimaryTextColor,
+                    items: [AnimatedTextComponent.Item(
+                        id: AnyHashable(0),
+                        content: .text(component.leftLabel)
+                    )]
                 )),
                 environment: {},
                 containerSize: CGSize(width: barBackgroundFrame.width, height: 100.0)
             )
             let _ = self.foregroundLeftLabel.update(
-                transition: .immediate,
-                component: AnyComponent(MultilineTextComponent(
-                    text: .plain(NSAttributedString(string: component.leftLabel, font: labelFont, textColor: component.theme.list.itemCheckColors.foregroundColor))
+                transition: labelsTransition,
+                component: AnyComponent(AnimatedTextComponent(
+                    font: labelFont,
+                    color: component.theme.list.itemCheckColors.foregroundColor,
+                    items: [AnimatedTextComponent.Item(
+                        id: AnyHashable(0),
+                        content: .text(component.leftLabel)
+                    )]
                 )),
                 environment: {},
                 containerSize: CGSize(width: barBackgroundFrame.width, height: 100.0)
             )
             let rightLabelSize = self.backgroundRightLabel.update(
-                transition: .immediate,
-                component: AnyComponent(MultilineTextComponent(
-                    text: .plain(NSAttributedString(string: component.rightLabel, font: labelFont, textColor: component.theme.list.itemPrimaryTextColor))
+                transition: labelsTransition,
+                component: AnyComponent(AnimatedTextComponent(
+                    font: labelFont,
+                    color: component.theme.list.itemPrimaryTextColor,
+                    items: [AnimatedTextComponent.Item(
+                        id: AnyHashable(0),
+                        content: .text(component.rightLabel)
+                    )]
                 )),
                 environment: {},
                 containerSize: CGSize(width: barBackgroundFrame.width, height: 100.0)
             )
             let _ =  self.foregroundRightLabel.update(
-                transition: .immediate,
-                component: AnyComponent(MultilineTextComponent(
-                    text: .plain(NSAttributedString(string: component.rightLabel, font: labelFont, textColor: component.theme.list.itemCheckColors.foregroundColor))
+                transition: labelsTransition,
+                component: AnyComponent(AnimatedTextComponent(
+                    font: labelFont,
+                    color: component.theme.list.itemCheckColors.foregroundColor,
+                    items: [AnimatedTextComponent.Item(
+                        id: AnyHashable(0),
+                        content: .text(component.rightLabel)
+                    )]
                 )),
                 environment: {},
                 containerSize: CGSize(width: barBackgroundFrame.width, height: 100.0)
@@ -365,36 +386,32 @@ final class ProfileLevelRatingBarComponent: Component {
                 containerSize: CGSize(width: 200.0, height: 200.0)
             )
             
-            var badgeFrame = CGRect(origin: CGPoint(x: barBackgroundFrame.minX + barForegroundFrame.width, y: barBackgroundFrame.minY - 7.0), size: badgeSize)
             if let badgeView = self.badge.view as? ProfileLevelRatingBarBadge.View {
                 if badgeView.superview == nil {
                     self.addSubview(badgeView)
                 }
                 
                 let apparentBadgeSize: CGSize
-                var apparentBadgeOffset: CGFloat = 0.0
                 if let animationState = self.animationState {
                     apparentBadgeSize = animationState.badgeSize(at: CACurrentMediaTime(), endValue: badgeSize)
-                    apparentBadgeOffset = (animationState.fromBadgeSize.width - badgeSize.width) * (1.0 - animationState.fraction(at: CACurrentMediaTime()))
-                    apparentBadgeOffset = -apparentBadgeOffset * 0.25
                 } else {
                     apparentBadgeSize = badgeSize
                 }
                 
-                badgeFrame.size = apparentBadgeSize
+                var badgeFrame = CGRect(origin: CGPoint(x: barBackgroundFrame.minX + barForegroundFrame.width - apparentBadgeSize.width * 0.5, y: barBackgroundFrame.minY - 18.0 - badgeSize.height), size: apparentBadgeSize)
                 
                 let badgeSideInset: CGFloat = 0.0
                 
                 let badgeOverflowWidth: CGFloat
-                if badgeFrame.minX - apparentBadgeSize.width * 0.5 < badgeSideInset {
-                    badgeOverflowWidth = badgeSideInset - (badgeFrame.minX - apparentBadgeSize.width * 0.5)
-                } else if badgeFrame.minX + apparentBadgeSize.width * 0.5 > availableSize.width - badgeSideInset {
-                    badgeOverflowWidth = availableSize.width - badgeSideInset - (badgeFrame.minX + apparentBadgeSize.width * 0.5)
+                if badgeFrame.minX < badgeSideInset {
+                    badgeOverflowWidth = badgeSideInset - badgeFrame.minX
+                } else if badgeFrame.minX + badgeFrame.width > availableSize.width - badgeSideInset {
+                    badgeOverflowWidth = availableSize.width - badgeSideInset - badgeFrame.width - badgeFrame.minX
                 } else {
                     badgeOverflowWidth = 0.0
                 }
                 
-                badgeFrame.origin.x += badgeOverflowWidth + apparentBadgeOffset
+                badgeFrame.origin.x += badgeOverflowWidth
                 badgeView.frame = badgeFrame
                 
                 badgeView.adjustTail(size: apparentBadgeSize, overflowWidth: -badgeOverflowWidth, transition: transition)
