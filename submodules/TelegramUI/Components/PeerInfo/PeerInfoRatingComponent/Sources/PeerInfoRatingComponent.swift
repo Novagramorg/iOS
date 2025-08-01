@@ -7,10 +7,10 @@ import Svg
 
 private func generateNumberOffsets() -> [CGPoint] {
     return [
-        CGPoint(x: 0.33, y: -0.33),
+        CGPoint(x: 0.25, y: -0.33),
         CGPoint(x: 0.24749999999999983, y: -0.495),
         CGPoint(x: 0.0, y: -1.4025),
-        CGPoint(x: 0.5775, y: -0.495),
+        CGPoint(x: 0.33, y: -0.495),
         CGPoint(x: 0.33, y: 0.0),
         CGPoint(x: 0.5775, y: 0.0),
         CGPoint(x: 0.49500000000000005, y: 0.0),
@@ -324,7 +324,7 @@ public final class PeerInfoRatingComponent: Component {
                 let backgroundOffsetsY: [Int: CGFloat] = [
                     3: -0.8250000000000001,
                     7: 0.33,
-                    40: 1.4025,
+                    40: 1.0,
                     60: 0.2475,
                     70: 0.33,
                     80: 0.2475,

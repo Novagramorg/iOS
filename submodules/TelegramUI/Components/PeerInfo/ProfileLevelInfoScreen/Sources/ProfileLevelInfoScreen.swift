@@ -355,11 +355,15 @@ private final class ProfileLevelInfoScreenComponent: Component {
                     if pendingStarRating.rating.stars > component.starRating.stars {
                         let pendingPoints = pendingStarRating.rating.stars - component.starRating.stars
                         
+                        let dayCount = (pendingStarRating.timestamp - timestamp) / (24 * 60 * 60)
+                        
                         if self.isPreviewingPendingRating {
-                            //TODO:localize
-                            secondaryDescriptionTextString = "This will be your rating in 21 days,\n after \(pendingPoints) points are added. [Back >]()"
+                            if dayCount == 0 {
+                                secondaryDescriptionTextString = environment.strings.ProfileLevelInfo_MyDescriptionInPreviewToday(Int32(pendingPoints))
+                            } else {
+                                secondaryDescriptionTextString = environment.strings.ProfileLevelInfo_MyDescriptionInPreview(environment.strings.ProfileLevelInfo_MyDescriptionInPreviewDays(Int32(dayCount)), environment.strings.ProfileLevelInfo_MyDescriptionInPreviewPoints(Int32(pendingPoints))).string
+                            }
                         } else {
-                            let dayCount = (pendingStarRating.timestamp - timestamp) / (24 * 60 * 60)
                             if dayCount == 0 {
                                 secondaryDescriptionTextString = environment.strings.ProfileLevelInfo_MyDescriptionToday(Int32(pendingPoints))
                             } else {
@@ -615,23 +619,23 @@ private final class ProfileLevelInfoScreenComponent: Component {
             }
             let items: [Item] = [
                 Item(
-                    title: "Gifts from Telegram",
-                    text: "100% of the Stars spent on gifts purchased from Telegram.",
-                    badgeText: "ADDED",
+                    title: environment.strings.ProfileLevelInfo_Item0_Title,
+                    text: environment.strings.ProfileLevelInfo_Item0_Text,
+                    badgeText: environment.strings.ProfileLevelInfo_Item0_Badge,
                     isBadgeAccent: true,
                     icon: "Chat/Input/Accessory Panels/Gift"
                 ),
                 Item(
-                    title: "Gifts and Posts from Users",
-                    text: "20% of the Stars spent on gifts or posts from users and channels.",
-                    badgeText: "ADDED",
+                    title: environment.strings.ProfileLevelInfo_Item1_Title,
+                    text: environment.strings.ProfileLevelInfo_Item1_Text,
+                    badgeText: environment.strings.ProfileLevelInfo_Item1_Badge,
                     isBadgeAccent: true,
                     icon: "Peer Info/ProfileLevelInfo2"
                 ),
                 Item(
-                    title: "Refunds and Conversions",
-                    text: "10x of refunded Stars and 85% of bought gifts converted to Stars.",
-                    badgeText: "DEDUCTED",
+                    title: environment.strings.ProfileLevelInfo_Item2_Title,
+                    text: environment.strings.ProfileLevelInfo_Item2_Text,
+                    badgeText: environment.strings.ProfileLevelInfo_Item2_Badge,
                     isBadgeAccent: false,
                     icon: "Peer Info/ProfileLevelInfo3"
                 )
