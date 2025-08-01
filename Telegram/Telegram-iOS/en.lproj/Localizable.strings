@@ -14845,7 +14845,16 @@ Sorry for the inconvenience.";
 "ProfileLevelInfo.MyDescriptionDays_any" = "%@ days";
 "ProfileLevelInfo.MyDescriptionPoints_1" = "%@ point is";
 "ProfileLevelInfo.MyDescriptionPoints_any" = "%@ points are";
-"ProfileLevelInfo.MyDescriptionPreview" = "The rating updates in %@ after purchases.\n\%@ pending. [Preview >]()";
+"ProfileLevelInfo.MyDescriptionPreview" = "The rating will update in %@.\n\%@ pending. [Preview >]()";
+
+"ProfileLevelInfo.MyDescriptionInPreviewDays_1" = "%@ day";
+"ProfileLevelInfo.MyDescriptionInPreviewDays_any" = "%@ days";
+"ProfileLevelInfo.MyDescriptionInPreviewPoints_1" = "%@ point is";
+"ProfileLevelInfo.MyDescriptionInPreviewPoints_any" = "%@ points are";
+"ProfileLevelInfo.MyDescriptionInPreview" = "The rating will update in %1$@,\n after %2$@ added. [Back >]()";
+"ProfileLevelInfo.MyDescriptionInPreviewToday_1" = "This will be your rating today,\n after %@ is added. [Back >]()";
+"ProfileLevelInfo.MyDescriptionInPreviewToday_any" = "This will be your rating today,\n after %@ added. [Back >]()";
+
 "ProfileLevelInfo.OtherDescription" = "The rating reflects **%@'s** activity on Telegram. What affects it:";
 "ProfileLevelInfo.LevelIndex_1" = "Level %@";
 "ProfileLevelInfo.LevelIndex_any" = "Level %@";
@@ -14868,3 +14877,8 @@ Sorry for the inconvenience.";
 "Stories.Post.AlbumAll" = "All Stories";
 "Stories.Post.AlbumCount_1" = "%@ Album";
 "Stories.Post.AlbumCount_any" = "%@ Albums";
+
+"Stories.ToastAddedToFolder_1" = "Story added to folder.";
+"Stories.ToastAddedToFolder_any" = "%@ stories added to folder.";
+"Stories.ToastAlbumNotAvailable" = "The album is no longer available.";
+
