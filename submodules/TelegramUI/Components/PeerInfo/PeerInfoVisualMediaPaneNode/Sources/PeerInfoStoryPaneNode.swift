@@ -2601,9 +2601,8 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
                                 }
                                 
                                 let presentationData = self.context.sharedContext.currentPresentationData.with { $0 }
-                                //TODO:localize
                                 let text: String
-                                text = "Story added to folder."
+                                text = presentationData.strings.Stories_ToastAddedToFolder(1)
                                 self.parentController?.present(UndoOverlayController(presentationData: presentationData, content: .actionSucceeded(title: nil, text: text, cancel: nil, destructive: false), elevatedLayout: false, animateInAsReplacement: false, action: { _ in return false }), in: .window(.root))
                             })))
                         }
@@ -2999,8 +2998,7 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
                         self.initialStoryFolderId = nil
                         
                         let presentationData = self.context.sharedContext.currentPresentationData.with { $0 }
-                        //TODO:localize
-                        self.parentController?.present(UndoOverlayController(presentationData: presentationData, content: .actionSucceeded(title: nil, text: "The album is no longer available.", cancel: nil, destructive: false), elevatedLayout: false, animateInAsReplacement: false, action: { _ in return false }), in: .current)
+                        self.parentController?.present(UndoOverlayController(presentationData: presentationData, content: .actionSucceeded(title: nil, text: presentationData.strings.Stories_ToastAlbumNotAvailable, cancel: nil, destructive: false), elevatedLayout: false, animateInAsReplacement: false, action: { _ in return false }), in: .current)
                     }
                     
                     self.currentListState = state
@@ -5111,13 +5109,7 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
                     let _ = listSource.addToFolder(id: folderId, items: items)
                     
                     let presentationData = self.context.sharedContext.currentPresentationData.with { $0 }
-                    //TODO:localize
-                    let text: String
-                    if items.count == 1 {
-                        text = "Story added to folder."
-                    } else {
-                        text = "\(items.count) stories added to folder."
-                    }
+                    let text: String = presentationData.strings.Stories_ToastAddedToFolder(Int32(items.count))
                     self.parentController?.present(UndoOverlayController(presentationData: presentationData, content: .actionSucceeded(title: nil, text: text, cancel: nil, destructive: false), elevatedLayout: false, animateInAsReplacement: false, action: { _ in return false }), in: .current)
                 }
             })

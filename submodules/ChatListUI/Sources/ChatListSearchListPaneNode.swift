@@ -6189,6 +6189,7 @@ private final class EmptyResultsButtonSearchContent: Component {
         }
         
         func update(component: EmptyResultsButtonSearchContent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
+            let sideInset: CGFloat = 8.0
             let iconSpacing: CGFloat = 2.0
             let arrowSpacing: CGFloat = 4.0
             
@@ -6237,7 +6238,7 @@ private final class EmptyResultsButtonSearchContent: Component {
                     text: .plain(string)
                 )),
                 environment: {},
-                containerSize: CGSize(width: availableSize.width - iconSize.width - iconSpacing - arrowSize.width - arrowSpacing, height: 100.0)
+                containerSize: CGSize(width: availableSize.width - iconSize.width - iconSpacing - arrowSize.width - arrowSpacing - sideInset * 2.0, height: 100.0)
             )
             let textFrame = CGRect(origin: CGPoint(x: iconSize.width + iconSpacing, y: 0.0), size: textSize)
             if let textView = self.text.view {

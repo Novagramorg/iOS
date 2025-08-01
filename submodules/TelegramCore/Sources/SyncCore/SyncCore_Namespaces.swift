@@ -576,7 +576,7 @@ public struct PreferencesKeys {
     }
     
     public static func globalPostSearchState() -> ValueBoxKey {
-        let key = ValueBoxKey(length: 4 + 8)
+        let key = ValueBoxKey(length: 4)
         key.setInt32(0, value: PreferencesKeyValues.globalPostSearchState.rawValue)
         return key
     }
