@@ -1031,7 +1031,8 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                                     creatorButtonBackgroundNode.removeFromSupernode()
                                 }
                             }
-                            strongSelf.creatorButtonTitleNode.frame = CGRect(origin: CGPoint(x: 9.0, y: 1.0), size: creatorButtonTitleLayout.size)
+                            let creatorButtonTitleNodeFrame = CGRect(origin: CGPoint(x: 9.0, y: 1.0 + UIScreenPixel), size: creatorButtonTitleLayout.size)
+                            strongSelf.creatorButtonTitleNode.frame = creatorButtonTitleNodeFrame
                                   
                             animation.animator.updateFrame(layer: strongSelf.creatorButtonNode.layer, frame: creatorButtonFrame, completion: nil)
                             
