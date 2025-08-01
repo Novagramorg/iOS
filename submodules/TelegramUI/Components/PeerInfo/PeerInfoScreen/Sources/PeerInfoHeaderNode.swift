@@ -840,7 +840,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                 let backgroundColor = innerColor.mixedWith(outerColor, alpha: 0.8)
 
                 let patternColor = UIColor(rgb: UInt32(bitPattern: patternColorValue))
-                ratingBorderColor = patternColor.withAlphaComponent(0.3).blendOver(background: backgroundColor).mixedWith(.clear, alpha: effectiveTransitionFraction)
+                ratingBorderColor = patternColor.withAlphaComponent(0.1).blendOver(background: backgroundColor).mixedWith(.clear, alpha: effectiveTransitionFraction)
                 ratingForegroundColor = ratingBorderColor.mixedWith(presentationData.theme.list.itemCheckColors.foregroundColor, alpha: effectiveTransitionFraction)
             } else if let profileColor = peer?.profileColor {
                 ratingBackgroundColor = UIColor(white: 1.0, alpha: 1.0).mixedWith(presentationData.theme.list.itemCheckColors.fillColor, alpha: effectiveTransitionFraction)
@@ -852,7 +852,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                 let backgroundColor = innerColor.mixedWith(outerColor, alpha: 0.8)
 
                 let patternColor = UIColor(white: 0.0, alpha: 0.6)
-                ratingBorderColor = patternColor.withAlphaComponent(0.3).blendOver(background: backgroundColor).mixedWith(.clear, alpha: effectiveTransitionFraction)
+                ratingBorderColor = patternColor.withAlphaComponent(0.1).blendOver(background: backgroundColor).mixedWith(.clear, alpha: effectiveTransitionFraction)
                 ratingForegroundColor = ratingBorderColor.mixedWith(presentationData.theme.list.itemCheckColors.foregroundColor, alpha: effectiveTransitionFraction)
             } else {
                 ratingBackgroundColor = presentationData.theme.list.itemCheckColors.fillColor
