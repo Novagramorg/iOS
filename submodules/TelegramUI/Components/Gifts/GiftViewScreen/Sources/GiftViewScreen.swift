@@ -3595,10 +3595,10 @@ private final class GiftViewSheetContent: CombinedComponent {
                     buttonAttributedString.addAttribute(.kern, value: 2.0, range: NSRange(range, in: buttonAttributedString.string))
                 }
                 if let buttonAttributedSubtitleString, let range = buttonAttributedSubtitleString.string.range(of: "#"), let starImage = state.cachedSubtitleStarImage?.0 {
-                    buttonAttributedSubtitleString.addAttribute(.attachment, value: starImage, range: NSRange(range, in: buttonAttributedString.string))
-                    buttonAttributedSubtitleString.addAttribute(.foregroundColor, value: theme.list.itemCheckColors.foregroundColor.withAlphaComponent(0.7), range: NSRange(range, in: buttonAttributedString.string))
-                    buttonAttributedSubtitleString.addAttribute(.baselineOffset, value: 1.5, range: NSRange(range, in: buttonAttributedString.string))
-                    buttonAttributedSubtitleString.addAttribute(.kern, value: 2.0, range: NSRange(range, in: buttonAttributedString.string))
+                    buttonAttributedSubtitleString.addAttribute(.attachment, value: starImage, range: NSRange(range, in: buttonAttributedSubtitleString.string))
+                    buttonAttributedSubtitleString.addAttribute(.foregroundColor, value: theme.list.itemCheckColors.foregroundColor.withAlphaComponent(0.7), range: NSRange(range, in: buttonAttributedSubtitleString.string))
+                    buttonAttributedSubtitleString.addAttribute(.baselineOffset, value: 1.5, range: NSRange(range, in: buttonAttributedSubtitleString.string))
+                    buttonAttributedSubtitleString.addAttribute(.kern, value: 2.0, range: NSRange(range, in: buttonAttributedSubtitleString.string))
                 }
                 
                 var items: [AnyComponentWithIdentity<Empty>] = [
