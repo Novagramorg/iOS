@@ -756,6 +756,7 @@ func openExternalUrlImpl(context: AccountContext, urlContext: OpenURLContext, ur
                         var profile: Bool = false
                         var referrer: String?
                         var albumId: Int64?
+                        var collectionId: Int64?
                         if let queryItems = components.queryItems {
                             for queryItem in queryItems {
                                 if let value = queryItem.value {
@@ -793,6 +794,8 @@ func openExternalUrlImpl(context: AccountContext, urlContext: OpenURLContext, ur
                                         referrer = value
                                     } else if queryItem.name == "album" {
                                         albumId = Int64(value)
+                                    } else if queryItem.name == "collection" {
+                                        collectionId = Int64(value)
                                     }
                                 } else if ["voicechat", "videochat", "livestream"].contains(queryItem.name) {
                                     voiceChat = ""
@@ -866,6 +869,8 @@ func openExternalUrlImpl(context: AccountContext, urlContext: OpenURLContext, ur
                                 result += "?attach=\(attach)"
                             } else if let albumId {
                                 result += "/a/\(albumId)"
+                            } else if let collectionId {
+                                result += "/c/\(collectionId)"
                             }
                             if let startAttach = startAttach {
                                 if attach == nil {

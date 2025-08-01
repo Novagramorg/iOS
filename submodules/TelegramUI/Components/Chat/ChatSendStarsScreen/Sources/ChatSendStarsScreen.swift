@@ -1866,7 +1866,7 @@ private final class ChatSendStarsScreenComponent: Component {
             switch component.initialData.subjectInitialData {
             case let .react(reactData):
                 if let currentSentAmount = reactData.currentSentAmount {
-                    text = environment.strings.SendStarReactions_TextSentStars(Int32(currentSentAmount))
+                    text = environment.strings.SendStarReactions_TextSentStars(Int32(clamping: currentSentAmount))
                 } else {
                     text = environment.strings.SendStarReactions_TextGeneric(reactData.peer.debugDisplayTitle).string
                 }

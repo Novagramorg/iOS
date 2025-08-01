@@ -14870,3 +14870,9 @@ Sorry for the inconvenience.";
 "Stories.Post.AlbumCount_any" = "%@ Albums";
 
 "Gift.Options.Gift.Premium" = "premium";
+
+"Stars.Transaction.FragmentTopUpTon.Title" = "TON Top-Up";
+"Stars.Transaction.FragmentWithdrawalTon.Title" = "TON Withdrawal";
+
+"Stars.Transaction.SearchFee.Title" = "Extra Search Fee";
+"Stars.Intro.Transaction.SearchFee" = "Extra Search Fee";

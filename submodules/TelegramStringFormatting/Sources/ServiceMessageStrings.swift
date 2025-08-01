@@ -96,7 +96,7 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
         for attribute in message.attributes {
             if let attribute = attribute as? PaidStarsMessageAttribute {
                 let messageCount = Int32(messageCount ?? 1)
-                let price = strings.Notification_PaidMessage_Stars(Int32(attribute.stars.value) * messageCount)
+                let price = strings.Notification_PaidMessage_Stars(Int32(clamping: attribute.stars.value) * messageCount)
                 if message.author?.id == accountPeerId {
                     if messageCount > 1 {
                         let messagesString = strings.Notification_PaidMessage_Messages(messageCount)
@@ -1048,7 +1048,7 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                 }
                 let resultTitleString: PresentationStrings.FormattedString
                 if let stars {
-                    let starsString = strings.Notification_StarsGiveawayStarted_Stars(Int32(stars))
+                    let starsString = strings.Notification_StarsGiveawayStarted_Stars(Int32(clamping: stars))
                     resultTitleString = isGroup ? strings.Notification_StarsGiveawayStartedGroup(compactAuthorName, starsString) : strings.Notification_StarsGiveawayStarted(compactAuthorName, starsString)
                 } else {
                     resultTitleString = isGroup ? strings.Notification_GiveawayStartedGroup(compactAuthorName) : strings.Notification_GiveawayStarted(compactAuthorName)
@@ -1146,7 +1146,7 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                     if let upgradeStars {
                         finalPrice += upgradeStars
                     }
-                    let starsPrice = strings.Notification_StarsGift_Stars(Int32(finalPrice))
+                    let starsPrice = strings.Notification_StarsGift_Stars(Int32(clamping: finalPrice))
                     var authorName = compactAuthorName
                     var peerIds: [(Int, EnginePeer.Id?)] = [(0, message.author?.id)]
                     if message.id.peerId.namespace == Namespaces.Peer.CloudUser && message.id.peerId.id._internalGetInt64Value() == 777000 {
@@ -1207,7 +1207,7 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                                     let starsString: String
                                     switch resaleStars.currency {
                                     case .stars:
-                                        starsString = strings.Notification_StarsGift_Bought_Stars(Int32(resaleStars.amount.value))
+                                        starsString = strings.Notification_StarsGift_Bought_Stars(Int32(clamping: resaleStars.amount.value))
                                     case .ton:
                                         starsString = formatTonAmountText(resaleStars.amount.value, dateTimeFormat: dateTimeFormat) + " TON"
                                     }
@@ -1246,7 +1246,7 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                                     let starsString: String
                                     switch resaleStars.currency {
                                     case .stars:
-                                        starsString = strings.Notification_StarsGift_Bought_Stars(Int32(resaleStars.amount.value))
+                                        starsString = strings.Notification_StarsGift_Bought_Stars(Int32(clamping: resaleStars.amount.value))
                                     case .ton:
                                         starsString = formatTonAmountText(resaleStars.amount.value, dateTimeFormat: dateTimeFormat) + " TON"
                                     }
@@ -1262,7 +1262,7 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                     }
                 }
             case let .paidMessagesRefunded(_, stars):
-                let starsString = strings.Notification_PaidMessageRefund_Stars(Int32(stars))
+                let starsString = strings.Notification_PaidMessageRefund_Stars(Int32(clamping: stars))
                 
                 var isOutgoing = false
                 var messagePeer: EnginePeer?
@@ -1306,7 +1306,7 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                     attributedString = addAttributesToStringWithRanges(resultString._tuple, body: bodyAttributes, argumentAttributes: attributes)
                 }
             case let .paidMessagesPriceEdited(stars, broadcastMessagesAllowed):
-                let starsString = strings.Notification_PaidMessagePriceChanged_Stars(Int32(stars))
+                let starsString = strings.Notification_PaidMessagePriceChanged_Stars(Int32(clamping: stars))
                 if message.author?.id == accountPeerId {
                     let resultString: PresentationStrings.FormattedString
                     resultString = strings.Notification_PaidMessagePriceChangedYou(starsString)

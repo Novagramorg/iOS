@@ -331,7 +331,7 @@ private final class StarsPurchaseScreenContentComponent: CombinedComponent {
                         continue
                     }
                     
-                    let title = strings.Stars_Purchase_Stars(Int32(product.count))
+                    let title = strings.Stars_Purchase_Stars(Int32(clamping: product.count))
                     let price = product.price
                     
                     let titleComponent = AnyComponent(MultilineTextComponent(
