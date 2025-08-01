@@ -924,7 +924,7 @@ public final class StarsStatisticsScreen: ViewControllerComponentContainer {
                             scale: 0.066,
                             colors: [:],
                             title: presentationData.strings.Stars_Intro_PurchasedTitle,
-                            text: presentationData.strings.Stars_Intro_PurchasedText(presentationData.strings.Stars_Intro_PurchasedText_Stars(Int32(stars))).string,
+                            text: presentationData.strings.Stars_Intro_PurchasedText(presentationData.strings.Stars_Intro_PurchasedText_Stars(Int32(clamping: stars))).string,
                             customUndoText: nil,
                             timeout: nil
                         ),

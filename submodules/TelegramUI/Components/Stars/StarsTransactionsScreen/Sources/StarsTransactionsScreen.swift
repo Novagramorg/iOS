@@ -969,7 +969,7 @@ final class StarsTransactionsScreenComponent: Component {
                                 theme: environment.theme,
                                 title: AnyComponent(VStack(titleComponents, alignment: .left, spacing: 2.0)),
                                 contentInsets: UIEdgeInsets(top: 9.0, left: 0.0, bottom: 8.0, right: 0.0),
-                                leftIcon: .custom(AnyComponentWithIdentity(id: "avatar", component: AnyComponent(StarsAvatarComponent(context: component.context, theme: environment.theme, peer: .peer(subscription.peer), photo: nil, media: [], uniqueGift: nil, backgroundColor: environment.theme.list.plainBackgroundColor))), false),
+                                leftIcon: .custom(AnyComponentWithIdentity(id: "avatar", component: AnyComponent(StarsAvatarComponent(context: component.context, theme: environment.theme, peer: .transactionPeer(.peer(subscription.peer)), photo: nil, media: [], uniqueGift: nil, backgroundColor: environment.theme.list.plainBackgroundColor))), false),
                                 icon: nil,
                                 accessory: .custom(ListActionItemComponent.CustomAccessory(component: labelComponent, insets: UIEdgeInsets(top: 0, left: 0, bottom: 0, right: 16.0))),
                                 action: { [weak self] _ in
@@ -1336,7 +1336,7 @@ public final class StarsTransactionsScreen: ViewControllerComponentContainer {
                             scale: 0.066,
                             colors: [:],
                             title: presentationData.strings.Stars_Intro_PurchasedTitle, 
-                            text: presentationData.strings.Stars_Intro_PurchasedText(presentationData.strings.Stars_Intro_PurchasedText_Stars(Int32(stars))).string,
+                            text: presentationData.strings.Stars_Intro_PurchasedText(presentationData.strings.Stars_Intro_PurchasedText_Stars(Int32(clamping: stars))).string,
                             customUndoText: nil,
                             timeout: nil
                         ),

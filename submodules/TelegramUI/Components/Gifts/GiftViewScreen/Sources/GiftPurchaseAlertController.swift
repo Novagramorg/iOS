@@ -310,7 +310,7 @@ private final class GiftPurchaseAlertContentNode: AlertContentNode {
         if let resellPrice {
             switch resellPrice.currency {
             case .stars:
-                priceString = self.strings.Gift_Buy_Confirm_Text_Stars(Int32(resellPrice.amount.value))
+                priceString = self.strings.Gift_Buy_Confirm_Text_Stars(Int32(clamping: resellPrice.amount.value))
             case .ton:
                 priceString = "**\(formatTonAmountText(resellPrice.amount.value, dateTimeFormat: presentationData.dateTimeFormat)) TON**"
             }

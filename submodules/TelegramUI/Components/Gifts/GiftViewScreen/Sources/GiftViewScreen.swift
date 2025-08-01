@@ -548,7 +548,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                 
                 let text = presentationData.strings.Gift_Convert_Period_Text(
                     fromPeerName,
-                    presentationData.strings.Gift_Convert_Period_Stars(Int32(convertStars)),
+                    presentationData.strings.Gift_Convert_Period_Stars(Int32(clamping: convertStars)),
                     presentationData.strings.Gift_Convert_Period_Days(days)
                 ).string
                 
@@ -579,11 +579,11 @@ private final class GiftViewSheetContent: CombinedComponent {
                                     let text: String
                                     if isChannelGift {
                                         text = presentationData.strings.Gift_Convert_Success_ChannelText(
-                                            presentationData.strings.Gift_Convert_Success_ChannelText_Stars(Int32(convertStars))
+                                            presentationData.strings.Gift_Convert_Success_ChannelText_Stars(Int32(clamping: convertStars))
                                         ).string
                                     } else {
                                         text = presentationData.strings.Gift_Convert_Success_Text(
-                                            presentationData.strings.Gift_Convert_Success_Text_Stars(Int32(convertStars))
+                                            presentationData.strings.Gift_Convert_Success_Text_Stars(Int32(clamping: convertStars))
                                         ).string
                                         if let starsContext = self.context.starsContext {
                                             navigationController.pushViewController(
@@ -932,7 +932,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                             let priceString: String
                             switch price.currency {
                             case .stars:
-                                priceString = presentationData.strings.Gift_View_Resale_Relist_Success_Stars(Int32(price.amount.value))
+                                priceString = presentationData.strings.Gift_View_Resale_Relist_Success_Stars(Int32(clamping: price.amount.value))
                             case .ton:
                                 priceString = formatTonAmountText(price.amount.value, dateTimeFormat: presentationData.dateTimeFormat, maxDecimalPositions: nil) + " TON"
                             }
@@ -1257,7 +1257,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                                 let originalPriceString: String
                                 switch resellAmount.currency {
                                 case .stars:
-                                    originalPriceString = presentationData.strings.Gift_Buy_ErrorPriceChanged_Text_Stars(Int32(resellAmount.amount.value))
+                                    originalPriceString = presentationData.strings.Gift_Buy_ErrorPriceChanged_Text_Stars(Int32(clamping: resellAmount.amount.value))
                                 case .ton:
                                     originalPriceString = formatTonAmountText(resellAmount.amount.value, dateTimeFormat: presentationData.dateTimeFormat, maxDecimalPositions: nil) + " TON"
                                 }
@@ -1266,7 +1266,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                                 let buttonText: String
                                 switch newPrice.currency {
                                 case .stars:
-                                    newPriceString = presentationData.strings.Gift_Buy_ErrorPriceChanged_Text_Stars(Int32(newPrice.amount.value))
+                                    newPriceString = presentationData.strings.Gift_Buy_ErrorPriceChanged_Text_Stars(Int32(clamping: newPrice.amount.value))
                                     buttonText = presentationData.strings.Gift_Buy_Confirm_BuyFor(Int32(newPrice.amount.value))
                                 case .ton:
                                     let tonValueString = formatTonAmountText(newPrice.amount.value, dateTimeFormat: presentationData.dateTimeFormat, maxDecimalPositions: nil)
@@ -2246,10 +2246,10 @@ private final class GiftViewSheetContent: CombinedComponent {
                                     descriptionText = strings.Gift_View_UpgradeDescription
                                 }
                             } else {
-                                descriptionText = isChannelGift ? strings.Gift_View_KeepOrConvertDescription_Channel(strings.Gift_View_KeepOrConvertDescription_Stars(Int32(convertStars))).string : strings.Gift_View_KeepOrConvertDescription(strings.Gift_View_KeepOrConvertDescription_Stars(Int32(convertStars))).string
+                                descriptionText = isChannelGift ? strings.Gift_View_KeepOrConvertDescription_Channel(strings.Gift_View_KeepOrConvertDescription_Stars(Int32(clamping: convertStars))).string : strings.Gift_View_KeepOrConvertDescription(strings.Gift_View_KeepOrConvertDescription_Stars(Int32(clamping: convertStars))).string
                             }
                         } else {
-                            descriptionText = strings.Gift_View_ConvertedDescription(strings.Gift_View_ConvertedDescription_Stars(Int32(convertStars))).string
+                            descriptionText = strings.Gift_View_ConvertedDescription(strings.Gift_View_ConvertedDescription_Stars(Int32(clamping: convertStars))).string
                         }
                     } else {
                         descriptionText = strings.Gift_View_BotDescription
@@ -2258,7 +2258,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                     if let _ = upgradeStars {
                         descriptionText = strings.Gift_View_FreeUpgradeOtherDescription(peer.compactDisplayTitle).string
                     } else if case .message = subject, let convertStars {
-                        descriptionText = strings.Gift_View_OtherDescription(peer.compactDisplayTitle, strings.Gift_View_OtherDescription_Stars(Int32(convertStars))).string
+                        descriptionText = strings.Gift_View_OtherDescription(peer.compactDisplayTitle, strings.Gift_View_OtherDescription_Stars(Int32(clamping: convertStars))).string
                     } else {
                         descriptionText = ""
                     }
@@ -3085,7 +3085,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                                         component: AnyComponent(Button(
                                             content: AnyComponent(ButtonContentComponent(
                                                 context: component.context,
-                                                text: strings.Gift_View_Sale(strings.Gift_View_Sale_Stars(Int32(convertStars))).string,
+                                                text: strings.Gift_View_Sale(strings.Gift_View_Sale_Stars(Int32(clamping: convertStars))).string,
                                                 color: theme.list.itemAccentColor
                                             )),
                                             action: { [weak state] in

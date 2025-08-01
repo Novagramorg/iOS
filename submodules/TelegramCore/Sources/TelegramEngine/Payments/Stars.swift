@@ -720,6 +720,9 @@ private extension StarsContext.State.Transaction {
             if (apiFlags & (1 << 22)) != 0 {
                 flags.insert(.isStarGiftResale)
             }
+            if (apiFlags & (1 << 24)) != 0 {
+                flags.insert(.isPostsSearch)
+            }
             
             let media = extendedMedia.flatMap({ $0.compactMap { textMediaAndExpirationTimerFromApiMedia($0, PeerId(0)).media } }) ?? []
             let _ = subscriptionPeriod
@@ -774,6 +777,7 @@ public final class StarsContext {
                 public static let isPaidMessage = Flags(rawValue: 1 << 7)
                 public static let isBusinessTransfer = Flags(rawValue: 1 << 8)
                 public static let isStarGiftResale = Flags(rawValue: 1 << 9)
+                public static let isPostsSearch = Flags(rawValue: 1 << 10)
             }
             
             public enum Peer: Equatable {

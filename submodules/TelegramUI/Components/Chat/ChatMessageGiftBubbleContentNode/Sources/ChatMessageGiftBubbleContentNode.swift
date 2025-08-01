@@ -503,7 +503,7 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                                 peerName = EnginePeer(channel).compactDisplayTitle
                             }
                             title = item.presentationData.strings.Notification_StarsGiveaway_Title
-                            let starsString = item.presentationData.strings.Notification_StarsGiveaway_Subtitle_Stars(Int32(count)).replacingOccurrences(of: " ", with: "\u{00A0}")
+                            let starsString = item.presentationData.strings.Notification_StarsGiveaway_Subtitle_Stars(Int32(clamping: count)).replacingOccurrences(of: " ", with: "\u{00A0}")
                             text = item.presentationData.strings.Notification_StarsGiveaway_Subtitle(peerName, starsString).string
                         case let .giftCode(_, fromGiveaway, unclaimed, channelId, monthsValue, _, _, _, _, giftText, giftEntities):
                             if channelId == nil {
@@ -576,23 +576,23 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                                         text = item.presentationData.strings.Notification_StarGift_Subtitle_Upgraded
                                     } else if incoming {
                                         if converted {
-                                            text = item.presentationData.strings.Notification_StarGift_Subtitle_Converted(item.presentationData.strings.Notification_StarGift_Subtitle_Converted_Stars(Int32(convertStars ?? 0))).string
+                                            text = item.presentationData.strings.Notification_StarGift_Subtitle_Converted(item.presentationData.strings.Notification_StarGift_Subtitle_Converted_Stars(Int32(clamping: convertStars ?? 0))).string
                                         } else if upgradeStars != nil {
                                             text = item.presentationData.strings.Notification_StarGift_Subtitle_Upgrade
                                         } else if isSelfGift && canUpgrade {
                                             text = item.presentationData.strings.Notification_StarsGift_Subtitle_Self
                                         } else if savedToProfile {
                                             if let convertStars {
-                                                text =  item.presentationData.strings.Notification_StarGift_Subtitle_Displaying(item.presentationData.strings.Notification_StarGift_Subtitle_Displaying_Stars(Int32(convertStars))).string
+                                                text =  item.presentationData.strings.Notification_StarGift_Subtitle_Displaying(item.presentationData.strings.Notification_StarGift_Subtitle_Displaying_Stars(Int32(clamping: convertStars))).string
                                             } else {
                                                 text = item.presentationData.strings.Notification_StarGift_Bot_Subtitle_Displaying
                                             }
                                         } else {
                                             if let convertStars, convertStars > 0 {
                                                 if isChannelGift {
-                                                    text = item.presentationData.strings.Notification_StarGift_Subtitle_Channel(item.presentationData.strings.Notification_StarGift_Subtitle_Stars(Int32(convertStars))).string
+                                                    text = item.presentationData.strings.Notification_StarGift_Subtitle_Channel(item.presentationData.strings.Notification_StarGift_Subtitle_Stars(Int32(clamping: convertStars))).string
                                                 } else {
-                                                    text = item.presentationData.strings.Notification_StarGift_Subtitle(item.presentationData.strings.Notification_StarGift_Subtitle_Stars(Int32(convertStars))).string
+                                                    text = item.presentationData.strings.Notification_StarGift_Subtitle(item.presentationData.strings.Notification_StarGift_Subtitle_Stars(Int32(clamping: convertStars))).string
                                                 }
                                             } else {
                                                 text = item.presentationData.strings.Notification_StarGift_Bot_Subtitle
@@ -605,7 +605,7 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                                         }
                                         if peerName.isEmpty {
                                             if let convertStars, convertStars > 0 {
-                                                let starsString = item.presentationData.strings.Notification_StarGift_Subtitle_Stars(Int32(convertStars)).replacingOccurrences(of: " ", with: "\u{00A0}")
+                                                let starsString = item.presentationData.strings.Notification_StarGift_Subtitle_Stars(Int32(clamping: convertStars)).replacingOccurrences(of: " ", with: "\u{00A0}")
                                                 text = item.presentationData.strings.Notification_StarGift_Subtitle(starsString).string
                                             } else {
                                                 text =  item.presentationData.strings.Notification_StarGift_Bot_Subtitle
@@ -614,7 +614,7 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                                             if upgradeStars != nil {
                                                 text =  item.presentationData.strings.Notification_StarGift_Subtitle_Upgrade_Other(peerName).string
                                             } else if let convertStars, convertStars > 0 {
-                                                let starsString = item.presentationData.strings.Notification_StarGift_Subtitle_Other_Stars(Int32(convertStars)).replacingOccurrences(of: " ", with: "\u{00A0}")
+                                                let starsString = item.presentationData.strings.Notification_StarGift_Subtitle_Other_Stars(Int32(clamping: convertStars)).replacingOccurrences(of: " ", with: "\u{00A0}")
                                                 let formattedString = item.presentationData.strings.Notification_StarGift_Subtitle_Other(peerName, starsString)
                                                 text = formattedString.string
                                                 if let starsRange = formattedString.ranges.last {
