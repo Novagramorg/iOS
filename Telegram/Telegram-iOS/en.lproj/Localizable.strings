@@ -14845,7 +14845,7 @@ Sorry for the inconvenience.";
 "ProfileLevelInfo.MyDescriptionDays_any" = "%@ days";
 "ProfileLevelInfo.MyDescriptionPoints_1" = "%@ point is";
 "ProfileLevelInfo.MyDescriptionPoints_any" = "%@ points are";
-"ProfileLevelInfo.MyDescription" = "The rating updates in %@ after purchases.\n\%@ pending.";
+"ProfileLevelInfo.MyDescriptionPreview" = "The rating updates in %@ after purchases.\n\%@ pending. [Preview >]()";
 "ProfileLevelInfo.OtherDescription" = "The rating reflects **%@'s** activity on Telegram. What affects it:";
 "ProfileLevelInfo.LevelIndex_1" = "Level %@";
 "ProfileLevelInfo.LevelIndex_any" = "Level %@";
