@@ -14882,7 +14882,6 @@ Sorry for the inconvenience.";
 "Stories.ToastAddedToFolder_any" = "%@ stories added to folder.";
 "Stories.ToastAlbumNotAvailable" = "The album is no longer available.";
 
-
 "Gift.Options.Gift.Premium" = "premium";
 
 "Stars.Transaction.FragmentTopUpTon.Title" = "TON Top-Up";
@@ -14890,3 +14889,6 @@ Sorry for the inconvenience.";
 
 "Stars.Transaction.SearchFee.Title" = "Extra Search Fee";
 "Stars.Intro.Transaction.SearchFee" = "Extra Search Fee";
+
+"PeerInfo.Gifts.Upgradable" = "Upgradable";
+
