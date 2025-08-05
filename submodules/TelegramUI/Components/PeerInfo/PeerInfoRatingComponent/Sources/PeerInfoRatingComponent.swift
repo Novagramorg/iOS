@@ -338,6 +338,10 @@ public final class PeerInfoRatingComponent: Component {
                     
                     context.clear(CGRect(origin: CGPoint(), size: size))
                     
+                    if level < 0 {
+                        return
+                    }
+                    
                     if let url = Bundle.main.url(forResource: "profile_level\(levelIndex)_outer", withExtension: "svg"), let data = try? Data(contentsOf: url) {
                         if let image = generateTintedImage(image: drawSvgImage(data, size, nil, nil, 0.0, false), color: component.borderColor) {
                             image.draw(in: CGRect(origin: CGPoint(x: 0.0, y: backgroundOffsetsY[levelIndex] ?? 0.0), size: size), blendMode: .normal, alpha: 1.0)
@@ -359,6 +363,13 @@ public final class PeerInfoRatingComponent: Component {
                     }
                     
                     context.clear(CGRect(origin: CGPoint(), size: size))
+                    
+                    if level < 0 {
+                        if let image = generateTintedImage(image: UIImage(bundleImageName: "Peer Info/InlineRatingWarning"), color: component.backgroundColor) {
+                            image.draw(in: CGRect(origin: CGPoint(x: floorToScreenPixels((size.width - image.size.width) * 0.5), y: floorToScreenPixels((size.height - image.size.height) * 0.5)), size: image.size))
+                        }
+                        return
+                    }
                     
                     if let url = Bundle.main.url(forResource: "profile_level\(levelIndex)_inner", withExtension: "svg"), let data = try? Data(contentsOf: url) {
                         if let image = generateTintedImage(image: drawSvgImage(data, size, nil, nil, 0.0, false), color: component.backgroundColor) {

@@ -47,11 +47,12 @@ final class ProfileLevelRatingBarBadge: Component {
     final class View: UIView {
         private let badgeView: UIView
         private let badgeMaskView: UIView
-        private let badgeShapeLayer = SimpleShapeLayer()
+        private let badgeShapeView: UIImageView
         private let badgeShapeAnimation = ComponentView<Empty>()
         
         private let badgeForeground: SimpleLayer
-        let badgeIcon: UIImageView
+        private let badgeIcon: UIImageView
+        private var disappearingBadgeIcon: UIImageView?
         private let badgeLabel = ComponentView<Empty>()
         private let suffixLabel = ComponentView<Empty>()
         
@@ -68,11 +69,10 @@ final class ProfileLevelRatingBarBadge: Component {
             self.badgeView.alpha = 0.0
             self.badgeView.layer.anchorPoint = CGPoint()
             
-            self.badgeShapeLayer.fillColor = UIColor.white.cgColor
-            self.badgeShapeLayer.transform = CATransform3DMakeScale(1.0, -1.0, 1.0)
+            self.badgeShapeView = UIImageView()
             
             self.badgeMaskView = UIView()
-            self.badgeMaskView.layer.addSublayer(self.badgeShapeLayer)
+            self.badgeMaskView.addSubview(self.badgeShapeView)
             self.badgeView.mask = self.badgeMaskView
             
             self.badgeForeground = SimpleLayer()
@@ -108,17 +108,49 @@ final class ProfileLevelRatingBarBadge: Component {
                 self.isUpdating = false
             }
             
-            if self.component == nil {
-                self.badgeIcon.image = UIImage(bundleImageName: "Peer Info/ProfileLevelProgressIcon")?.withRenderingMode(.alwaysTemplate)
+            var labelsTransition = transition
+            if let hint = transition.userData(TransitionHint.self), hint.animateText {
+                labelsTransition = .spring(duration: 0.5)
+            }
+            
+            let previousComponent = self.component
+            if previousComponent == nil || (previousComponent?.title == "") != (component.title == "") {
+                if !labelsTransition.animation.isImmediate, self.badgeIcon.image != nil {
+                    if let disappearingBadgeIcon = self.disappearingBadgeIcon {
+                        self.disappearingBadgeIcon = nil
+                        disappearingBadgeIcon.removeFromSuperview()
+                    }
+                    let disappearingBadgeIcon = UIImageView()
+                    disappearingBadgeIcon.contentMode = self.badgeIcon.contentMode
+                    disappearingBadgeIcon.frame = self.badgeIcon.frame
+                    disappearingBadgeIcon.image = self.badgeIcon.image
+                    disappearingBadgeIcon.tintColor = self.badgeIcon.tintColor
+                    
+                    self.badgeView.insertSubview(disappearingBadgeIcon, aboveSubview: self.badgeIcon)
+                    labelsTransition.setScale(view: disappearingBadgeIcon, scale: 0.001)
+                    labelsTransition.setAlpha(view: disappearingBadgeIcon, alpha: 0.0, completion: { [weak self, weak disappearingBadgeIcon] _ in
+                        guard let self, let disappearingBadgeIcon else {
+                            return
+                        }
+                        disappearingBadgeIcon.removeFromSuperview()
+                        if self.disappearingBadgeIcon === disappearingBadgeIcon {
+                            self.disappearingBadgeIcon = nil
+                        }
+                    })
+                    labelsTransition.animateScale(view: self.badgeIcon, from: 0.001, to: 1.0)
+                    labelsTransition.animateAlpha(view: self.badgeIcon, from: 0.0, to: 1.0)
+                }
+                
+                if component.title.isEmpty {
+                    self.badgeIcon.image = UIImage(bundleImageName: "Peer Info/ProfileLevelWarningIcon")?.withRenderingMode(.alwaysTemplate)
+                } else {
+                    self.badgeIcon.image = UIImage(bundleImageName: "Peer Info/ProfileLevelProgressIcon")?.withRenderingMode(.alwaysTemplate)
+                }
             }
              
             self.component = component
             self.badgeIcon.tintColor = component.theme.list.itemCheckColors.foregroundColor
-            
-            var labelsTransition = transition
-            if let hint = transition.userData(TransitionHint.self), hint.animateText {
-                labelsTransition = .spring(duration: 0.4)
-            }
+            self.disappearingBadgeIcon?.tintColor = component.theme.list.itemCheckColors.foregroundColor
             
             let badgeLabelSize = self.badgeLabel.update(
                 transition: labelsTransition,
@@ -150,7 +182,12 @@ final class ProfileLevelRatingBarBadge: Component {
                 containerSize: CGSize(width: 300.0, height: 100.0)
             )
             
-            var badgeWidth: CGFloat = badgeLabelSize.width + 3.0 + 60.0
+            var badgeWidth: CGFloat = 0.0
+            if !component.title.isEmpty {
+                badgeWidth += badgeLabelSize.width + 3.0 + 60.0
+            } else {
+                badgeWidth += 78.0
+            }
             if component.suffix != nil {
                 badgeWidth += badgeSuffixSize.width + badgeSuffixSpacing
             }
@@ -158,13 +195,21 @@ final class ProfileLevelRatingBarBadge: Component {
             let badgeSize = CGSize(width: badgeWidth, height: 48.0)
             let badgeFullSize = CGSize(width: badgeWidth, height: 48.0 + 12.0)
             self.badgeMaskView.frame = CGRect(origin: .zero, size: badgeFullSize)
-            self.badgeShapeLayer.frame = CGRect(origin: CGPoint(x: 0.0, y: -4.0), size: badgeFullSize)
             
             self.badgeView.bounds = CGRect(origin: .zero, size: badgeFullSize)
             
             self.badgeForeground.bounds = CGRect(origin: CGPoint(), size: CGSize(width: 600.0, height: badgeFullSize.height + 10.0))
     
-            self.badgeIcon.frame = CGRect(x: 13.0, y: 8.0, width: 30.0, height: 30.0)
+            let badgeIconFrame: CGRect
+            if !component.title.isEmpty {
+                badgeIconFrame = CGRect(x: 13.0, y: 8.0, width: 30.0, height: 30.0)
+            } else {
+                badgeIconFrame = CGRect(x: floor((badgeWidth - 30.0) * 0.5), y: 8.0, width: 30.0, height: 30.0)
+            }
+            labelsTransition.setFrame(view: self.badgeIcon, frame: badgeIconFrame)
+            if let disappearingBadgeIcon = self.disappearingBadgeIcon {
+                labelsTransition.setFrame(view: disappearingBadgeIcon, frame: badgeIconFrame)
+            }
             
             self.badgeView.alpha = 1.0
             
@@ -194,77 +239,63 @@ final class ProfileLevelRatingBarBadge: Component {
             
             if self.previousAvailableSize != availableSize {
                 self.previousAvailableSize = availableSize
-                
-                let activeColors: [UIColor] = [
-                    component.theme.list.itemCheckColors.fillColor,
-                    component.theme.list.itemCheckColors.fillColor
-                ]
-                
-                var locations: [CGFloat] = []
-                let delta = 1.0 / CGFloat(activeColors.count - 1)
-                for i in 0 ..< activeColors.count {
-                    locations.append(delta * CGFloat(i))
-                }
-                
-                let gradient = generateGradientImage(size: CGSize(width: 200.0, height: 60.0), colors: activeColors, locations: locations, direction: .horizontal)
-                self.badgeForeground.contentsGravity = .resizeAspectFill
-                self.badgeForeground.contents = gradient?.cgImage
-                
-                self.setupGradientAnimations()
             }
             
             return size
         }
         
-        func adjustTail(size: CGSize, overflowWidth: CGFloat, transition: ComponentTransition) {
-            guard let component else {
-                return
+        func updateColors(background: UIColor) {
+            self.badgeForeground.backgroundColor = background.cgColor
+        }
+        
+        func adjustTail(size: CGSize, tailOffset: CGFloat, transition: ComponentTransition) {
+            if self.badgeShapeView.image == nil {
+                self.badgeShapeView.image = generateStretchableFilledCircleImage(diameter: 48.0, color: UIColor.white)
             }
-            let _ = component
+            self.badgeShapeView.frame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: size.width, height: 48.0))
             
-            var tailPosition = size.width * 0.5
-            tailPosition += overflowWidth
-            tailPosition = max(36.0, min(size.width - 36.0, tailPosition))
-            
-            let tailPositionFraction = tailPosition / size.width
-            transition.setShapeLayerPath(layer: self.badgeShapeLayer, path: generateRoundedRectWithTailPath(rectSize: size, tailPosition: tailPositionFraction, transformTail: false).cgPath)
-            
-            let badgeShapeSize = CGSize(width: 128, height: 128)
+            let badgeShapeSize = CGSize(width: 78, height: 60)
             let _ = self.badgeShapeAnimation.update(
                 transition: .immediate,
                 component: AnyComponent(LottieComponent(
                     content: LottieComponent.AppBundleContent(name: "badge_with_tail"),
-                    color: .red,//component.theme.list.itemCheckColors.fillColor,
+                    color: .white,
                     placeholderColor: nil,
                     startingPosition: .begin,
                     size: badgeShapeSize,
-                    renderingScale: nil,
+                    renderingScale: UIScreenScale,
                     loop: false,
                     playOnce: nil
                 )),
                 environment: {},
                 containerSize: badgeShapeSize
             )
-            if let badgeShapeAnimationView = self.badgeShapeAnimation.view as? LottieComponent.View, !"".isEmpty {
+            if let badgeShapeAnimationView = self.badgeShapeAnimation.view as? LottieComponent.View {
                 if badgeShapeAnimationView.superview == nil {
                     badgeShapeAnimationView.layer.anchorPoint = CGPoint()
-                    self.addSubview(badgeShapeAnimationView)
+                    self.badgeMaskView.addSubview(badgeShapeAnimationView)
                 }
                 
-                let transition: ComponentTransition = .immediate
+                var shapeFrame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: badgeShapeSize)
                 
-                let shapeFrame = CGRect(origin: CGPoint(x: 0.0, y: -10.0), size: badgeShapeSize)
+                let badgeShapeWidth = badgeShapeSize.width
+                
+                let midFrame = 359 / 2
+                if tailOffset < badgeShapeWidth * 0.5 {
+                    let frameIndex = Int(floor(CGFloat(midFrame) * tailOffset / (badgeShapeWidth * 0.5)))
+                    badgeShapeAnimationView.setFrameIndex(index: frameIndex)
+                } else if tailOffset >= size.width - badgeShapeWidth * 0.5 {
+                    let endOffset = tailOffset - (size.width - badgeShapeWidth * 0.5)
+                    let frameIndex = midFrame + Int(floor(CGFloat(359 - midFrame) * endOffset / (badgeShapeWidth * 0.5)))
+                    badgeShapeAnimationView.setFrameIndex(index: frameIndex)
+                    shapeFrame.origin.x = size.width - badgeShapeWidth
+                } else {
+                    badgeShapeAnimationView.setFrameIndex(index: midFrame)
+                    shapeFrame.origin.x = tailOffset - badgeShapeWidth * 0.5
+                }
+                
                 badgeShapeAnimationView.center = shapeFrame.origin
                 badgeShapeAnimationView.bounds = CGRect(origin: CGPoint(), size: shapeFrame.size)
-                
-                let scaleFactor: CGFloat = 144.0 / (946.0 / 4.0)
-                transition.setScale(view: badgeShapeAnimationView, scale: scaleFactor)
-                
-                let badgeShapeWidth = floor(shapeFrame.width * scaleFactor)
-                let badgeShapeOffset = -overflowWidth / badgeShapeWidth
-                let _ = badgeShapeOffset
-                
-                //badgeShapeAnimationView.setFrameIndex(index: 0)
             }
             
             //let transition: ContainedViewLayoutTransition = .immediate
@@ -274,38 +305,6 @@ final class ProfileLevelRatingBarBadge: Component {
         func updateBadgeAngle(angle: CGFloat) {
             let transition: ContainedViewLayoutTransition = .immediate
             transition.updateTransformRotation(view: self.badgeView, angle: angle)
-        }
-        
-        private func setupGradientAnimations() {
-            guard let _ = self.component else {
-                return
-            }
-            if let _ = self.badgeForeground.animation(forKey: "movement") {
-            } else {
-                CATransaction.begin()
-                
-                let badgePreviousValue = self.badgeForeground.position.x
-                let badgeNewValue: CGFloat
-                if self.badgeForeground.position.x == -300.0 {
-                    badgeNewValue = 0.0
-                } else {
-                    badgeNewValue = -300.0
-                }
-                self.badgeForeground.position = CGPoint(x: badgeNewValue, y: 0.0)
-                
-                let badgeAnimation = CABasicAnimation(keyPath: "position.x")
-                badgeAnimation.duration = 4.5
-                badgeAnimation.fromValue = badgePreviousValue
-                badgeAnimation.toValue = badgeNewValue
-                badgeAnimation.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-                
-                CATransaction.setCompletionBlock { [weak self] in
-                    self?.setupGradientAnimations()
-                }
-                self.badgeForeground.add(badgeAnimation, forKey: "movement")
-                
-                CATransaction.commit()
-            }
         }
     }
     

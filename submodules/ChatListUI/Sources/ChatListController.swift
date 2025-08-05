@@ -4613,44 +4613,46 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
             
             let _ = (combineLatest(self.chatListDisplayNode.mainContainerNode.currentItemNode.contentsReady |> take(1), self.context.account.postbox.tailChatListView(groupId: .root, count: 16, summaryComponents: ChatListEntrySummaryComponents(components: [:])) |> take(1))
             |> deliverOnMainQueue).startStandalone(next: { [weak self] _, chatListView in
-                guard let strongSelf = self else {
-                    return
-                }
-                
-                /*if let scrollToTop = strongSelf.scrollToTop {
-                    scrollToTop()
-                }*/
-                
-                let tabsIsEmpty: Bool
-                if let (resolvedItems, displayTabsAtBottom, _) = strongSelf.tabContainerData {
-                    tabsIsEmpty = resolvedItems.count <= 1 || displayTabsAtBottom
-                } else {
-                    tabsIsEmpty = true
-                }
-                let _ = tabsIsEmpty
-                //TODO:swap tabs
-                
-                let displaySearchFilters = true
-                                  
-                if let filterContainerNodeAndActivate = strongSelf.chatListDisplayNode.activateSearch(placeholderNode: searchContentNode.placeholderNode, displaySearchFilters: displaySearchFilters, hasDownloads: strongSelf.hasDownloads, initialFilter: filter, navigationController: strongSelf.navigationController as? NavigationController) {
-                    let (filterContainerNode, activate) = filterContainerNodeAndActivate
-                    if displaySearchFilters {
-                        let searchTabsNode = SparseNode()
-                        strongSelf.searchTabsNode = searchTabsNode
-                        searchTabsNode.addSubnode(filterContainerNode)
+                Task { @MainActor in
+                    guard let strongSelf = self else {
+                        return
                     }
                     
-                    activate(filter != .downloads)
+                    /*if let scrollToTop = strongSelf.scrollToTop {
+                     scrollToTop()
+                     }*/
                     
-                    if let searchContentNode = strongSelf.chatListDisplayNode.searchDisplayController?.contentNode as? ChatListSearchContainerNode {
-                        searchContentNode.search(filter: filter, query: query)
+                    let tabsIsEmpty: Bool
+                    if let (resolvedItems, displayTabsAtBottom, _) = strongSelf.tabContainerData {
+                        tabsIsEmpty = resolvedItems.count <= 1 || displayTabsAtBottom
+                    } else {
+                        tabsIsEmpty = true
                     }
+                    let _ = tabsIsEmpty
+                    //TODO:swap tabs
+                    
+                    let displaySearchFilters = true
+                    
+                    if let filterContainerNodeAndActivate = await strongSelf.chatListDisplayNode.activateSearch(placeholderNode: searchContentNode.placeholderNode, displaySearchFilters: displaySearchFilters, hasDownloads: strongSelf.hasDownloads, initialFilter: filter, navigationController: strongSelf.navigationController as? NavigationController) {
+                        let (filterContainerNode, activate) = filterContainerNodeAndActivate
+                        if displaySearchFilters {
+                            let searchTabsNode = SparseNode()
+                            strongSelf.searchTabsNode = searchTabsNode
+                            searchTabsNode.addSubnode(filterContainerNode)
+                        }
+                        
+                        activate(filter != .downloads)
+                        
+                        if let searchContentNode = strongSelf.chatListDisplayNode.searchDisplayController?.contentNode as? ChatListSearchContainerNode {
+                            searchContentNode.search(filter: filter, query: query)
+                        }
+                    }
+                    
+                    let transition: ContainedViewLayoutTransition = .animated(duration: 0.4, curve: .spring)
+                    strongSelf.setDisplayNavigationBar(false, transition: transition)
+                    
+                    (strongSelf.parent as? TabBarController)?.updateIsTabBarHidden(true, transition: .animated(duration: 0.4, curve: .spring))
                 }
-                
-                let transition: ContainedViewLayoutTransition = .animated(duration: 0.4, curve: .spring)
-                strongSelf.setDisplayNavigationBar(false, transition: transition)
-                
-                (strongSelf.parent as? TabBarController)?.updateIsTabBarHidden(true, transition: .animated(duration: 0.4, curve: .spring))
             })
             
             self.isSearchActive = true
