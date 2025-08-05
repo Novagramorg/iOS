@@ -1363,8 +1363,11 @@ private final class ProfileGiftsContextImpl {
                 if !filter.contains(.unlimited) {
                     flags |= (1 << 2)
                 }
-                if !filter.contains(.limited) {
-                    flags |= (1 << 3)
+                if !filter.contains(.limitedUpgradable) {
+                    flags |= (1 << 7)
+                }
+                if !filter.contains(.limitedNonUpgradable) {
+                    flags |= (1 << 8)
                 }
                 if !filter.contains(.unique) {
                     flags |= (1 << 4)
@@ -1948,13 +1951,14 @@ public final class ProfileGiftsContext {
         }
         
         public static let unlimited = Filters(rawValue: 1 << 0)
-        public static let limited = Filters(rawValue: 1 << 1)
-        public static let unique = Filters(rawValue: 1 << 2)
-        public static let displayed = Filters(rawValue: 1 << 3)
-        public static let hidden = Filters(rawValue: 1 << 4)
+        public static let limitedUpgradable = Filters(rawValue: 1 << 1)
+        public static let limitedNonUpgradable = Filters(rawValue: 1 << 2)
+        public static let unique = Filters(rawValue: 1 << 3)
+        public static let displayed = Filters(rawValue: 1 << 4)
+        public static let hidden = Filters(rawValue: 1 << 5)
         
         public static var All: Filters {
-            return [.unlimited, .limited, .unique, .displayed, .hidden]
+            return [.unlimited, .limitedUpgradable, .limitedNonUpgradable, .unique, .displayed, .hidden]
         }
     }
     
