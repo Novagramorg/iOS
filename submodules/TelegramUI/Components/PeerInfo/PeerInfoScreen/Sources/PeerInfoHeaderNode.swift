@@ -781,6 +781,13 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             self.avatarClippingNode.clipsToBounds = true
         }
         
+        let accentRatingBackgroundColor: UIColor
+        if let currentStarRating = self.currentStarRating, currentStarRating.level < 0 {
+            accentRatingBackgroundColor = UIColor(rgb: 0xFF3B30)
+        } else {
+            accentRatingBackgroundColor = presentationData.theme.list.itemCheckColors.fillColor
+        }
+        
         let ratingBackgroundColor: UIColor
         let ratingBorderColor: UIColor
         let ratingForegroundColor: UIColor
@@ -796,7 +803,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             
             headerButtonBackgroundColor = collapsedHeaderButtonBackgroundColor
             
-            ratingBackgroundColor = presentationData.theme.list.itemCheckColors.fillColor
+            ratingBackgroundColor = accentRatingBackgroundColor
             ratingBorderColor = .clear
             ratingForegroundColor = presentationData.theme.list.itemCheckColors.foregroundColor
         } else if self.isAvatarExpanded {
@@ -833,7 +840,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             
             if let status = peer?.emojiStatus, case let .starGift(_, _, _, _, _, innerColor, outerColor, patternColorValue, _) = status.content {
                 let _ = innerColor
-                ratingBackgroundColor = UIColor(white: 1.0, alpha: 1.0).mixedWith(presentationData.theme.list.itemCheckColors.fillColor, alpha: effectiveTransitionFraction)
+                ratingBackgroundColor = UIColor(white: 1.0, alpha: 1.0).mixedWith(accentRatingBackgroundColor, alpha: effectiveTransitionFraction)
                 
                 let innerColor = UIColor(rgb: UInt32(bitPattern: innerColor))
                 let outerColor = UIColor(rgb: UInt32(bitPattern: outerColor))
@@ -855,29 +862,10 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                 ratingBorderColor = patternColor.withAlphaComponent(0.1).blendOver(background: backgroundColor).mixedWith(.clear, alpha: effectiveTransitionFraction)
                 ratingForegroundColor = ratingBorderColor.mixedWith(presentationData.theme.list.itemCheckColors.foregroundColor, alpha: effectiveTransitionFraction)
             } else {
-                ratingBackgroundColor = presentationData.theme.list.itemCheckColors.fillColor
+                ratingBackgroundColor = accentRatingBackgroundColor
                 ratingBorderColor = UIColor.clear
                 ratingForegroundColor = presentationData.theme.list.itemCheckColors.foregroundColor
             }
-            
-            /*if let status = peer?.emojiStatus, case let .starGift(_, _, _, _, _, innerColor, outerColor, _, _) = status.content {
-                let _ = outerColor
-                let mainColor = UIColor(rgb: UInt32(bitPattern: innerColor))
-                
-                ratingBackgroundColor = UIColor(white: 1.0, alpha: 1.0).mixedWith(presentationData.theme.list.itemCheckColors.fillColor, alpha: effectiveTransitionFraction)
-                ratingForegroundColor = mainColor.withMultiplied(hue: 1.0, saturation: 1.1, brightness: 0.9).mixedWith(UIColor.clear, alpha: effectiveTransitionFraction)
-                ratingBorderColor = ratingForegroundColor.mixedWith(presentationData.theme.list.itemCheckColors.foregroundColor, alpha: effectiveTransitionFraction)
-            } else if let profileColor = peer?.profileColor {
-                let backgroundColors = self.context.peerNameColors.getProfile(profileColor, dark: presentationData.theme.overallDarkAppearance)
-                
-                ratingBackgroundColor = UIColor(white: 1.0, alpha: 1.0).mixedWith(presentationData.theme.list.itemCheckColors.fillColor, alpha: effectiveTransitionFraction)
-                ratingForegroundColor = backgroundColors.main.withMultiplied(hue: 1.0, saturation: 1.1, brightness: 0.9).mixedWith(UIColor.clear, alpha: effectiveTransitionFraction)
-                ratingBorderColor = ratingForegroundColor.mixedWith(presentationData.theme.list.itemCheckColors.foregroundColor, alpha: effectiveTransitionFraction)
-            } else {
-                ratingBackgroundColor = presentationData.theme.list.itemCheckColors.fillColor
-                ratingBorderColor = UIColor.clear
-                ratingForegroundColor = presentationData.theme.list.itemCheckColors.foregroundColor
-            }*/
         }
         
         do {
@@ -1986,20 +1974,30 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         if let cachedData = cachedData as? CachedUserData, let starRating = cachedData.starRating {
             self.currentStarRating = starRating
             self.currentPendingStarRating = cachedData.pendingStarRating
-            
-            #if DEBUG
-            if let _ = starRating.nextLevelStars {
-                self.currentPendingStarRating = TelegramStarPendingRating(rating: TelegramStarRating(level: starRating.level, currentLevelStars: starRating.currentLevelStars, stars: starRating.stars + 234, nextLevelStars: starRating.nextLevelStars), timestamp: Int32(Date().timeIntervalSince1970) + 60 * 60 * 24 * 3)
-                self.currentPendingStarRating = TelegramStarPendingRating(rating: TelegramStarRating(level: starRating.level + 1, currentLevelStars: starRating.nextLevelStars!, stars: starRating.nextLevelStars! + starRating.nextLevelStars! / 2 + starRating.nextLevelStars! / 4, nextLevelStars: starRating.nextLevelStars! * 2), timestamp: Int32(Date().timeIntervalSince1970) + 60 * 60 * 24 * 3)
-            }
-            #endif
         } else {
             self.currentStarRating = nil
             self.currentPendingStarRating = nil
         }
         
-        if let cachedData = cachedData as? CachedUserData, let starRating = cachedData.starRating {
-        //if "".isEmpty {
+        #if DEBUG
+        if "".isEmpty {
+            let starRating: TelegramStarRating
+            
+            if self.context.account.peerId.id._internalGetInt64Value() == 654152421 {
+                starRating = TelegramStarRating(level: -1, currentLevelStars: -1, stars: -100, nextLevelStars: 0)
+            } else {
+                starRating = TelegramStarRating(level: 2, currentLevelStars: 1000, stars: 2000, nextLevelStars: 3000)
+            }
+            self.currentStarRating = starRating
+            
+            if let _ = starRating.nextLevelStars {
+                //self.currentPendingStarRating = TelegramStarPendingRating(rating: TelegramStarRating(level: starRating.level, currentLevelStars: starRating.currentLevelStars, stars: starRating.stars + 234, nextLevelStars: starRating.nextLevelStars), timestamp: Int32(Date().timeIntervalSince1970) + 60 * 60 * 24 * 3)
+                self.currentPendingStarRating = TelegramStarPendingRating(rating: TelegramStarRating(level: starRating.level + 2, currentLevelStars: starRating.nextLevelStars!, stars: max(500, starRating.nextLevelStars! + starRating.nextLevelStars! / 2 - starRating.nextLevelStars! / 4), nextLevelStars: max(1000, starRating.nextLevelStars! * 2)), timestamp: Int32(Date().timeIntervalSince1970) + 60 * 60 * 24 * 3)
+            }
+        }
+        #endif
+        
+        if let starRating = self.currentStarRating {
             let subtitleRating: ComponentView<Empty>
             var subtitleRatingTransition = ComponentTransition(transition)
             if let current = self.subtitleRating {
@@ -2018,7 +2016,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                     foregroundColor: ratingForegroundColor,
                     level: Int(starRating.level),
                     action: { [weak self] in
-                        guard let self, let peer, let currentStarRating = self.currentStarRating else {
+                        guard let self, let peer = self.peer, let currentStarRating = self.currentStarRating else {
                             return
                         }
                         self.controller?.push(ProfileLevelInfoScreen(
