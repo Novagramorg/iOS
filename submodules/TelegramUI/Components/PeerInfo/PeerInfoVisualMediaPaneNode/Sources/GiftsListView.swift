@@ -656,7 +656,7 @@ final class GiftsListView: UIView {
                                                 
                                                 var title = ""
                                                 if case let .unique(uniqueGift) = product.gift {
-                                                    title = "\(uniqueGift.title) #\(presentationStringsFormattedNumber(uniqueGift.number, params.presentationData.dateTimeFormat.groupingSeparator))"
+                                                    title = "\(uniqueGift.title) #\(formatCollectibleNumber(uniqueGift.number, dateTimeFormat: params.presentationData.dateTimeFormat))"
                                                 }
                                                 
                                                 if pinnedToTop {

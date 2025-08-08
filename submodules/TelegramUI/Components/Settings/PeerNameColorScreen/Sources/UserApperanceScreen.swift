@@ -449,6 +449,7 @@ final class UserAppearanceScreenComponent: Component {
                         if let file = self.cachedIconFiles[fileId], let patternFile = self.cachedIconFiles[patternFileId], let numberString = slugComponents.last, let number = Int32(numberString) {
                             let gift = StarGift.UniqueGift(
                                 id: id,
+                                giftId: 0,
                                 title: title,
                                 number: number,
                                 slug: slug,

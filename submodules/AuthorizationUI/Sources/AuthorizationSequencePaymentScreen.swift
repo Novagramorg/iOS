@@ -393,7 +393,7 @@ public final class AuthorizationSequencePaymentScreen: ViewControllerComponentCo
         
         loadServerCountryCodes(accountManager: sharedContext.accountManager, engine: engine, completion: { [weak self] in
             if let strongSelf = self {
-                strongSelf.requestLayout(forceUpdate: true, transition: .immediate)
+                strongSelf.requestLayout(forceUpdate: true, transition: ContainedViewLayoutTransition.immediate)
             }
         })
         

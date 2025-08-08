@@ -64,6 +64,7 @@ public final class SheetComponent<ChildEnvironmentType: Sendable & Equatable>: C
     public let followContentSizeChanges: Bool
     public let clipsContent: Bool
     public let isScrollEnabled: Bool
+    public let hasDimView: Bool
     public let externalState: ExternalState?
     public let animateOut: ActionSlot<Action<()>>
     public let onPan: () -> Void
@@ -75,6 +76,7 @@ public final class SheetComponent<ChildEnvironmentType: Sendable & Equatable>: C
         followContentSizeChanges: Bool = false,
         clipsContent: Bool = false,
         isScrollEnabled: Bool = true,
+        hasDimView: Bool = true,
         externalState: ExternalState? = nil,
         animateOut: ActionSlot<Action<()>>,
         onPan: @escaping () -> Void = {},
@@ -85,6 +87,7 @@ public final class SheetComponent<ChildEnvironmentType: Sendable & Equatable>: C
         self.followContentSizeChanges = followContentSizeChanges
         self.clipsContent = clipsContent
         self.isScrollEnabled = isScrollEnabled
+        self.hasDimView = hasDimView
         self.externalState = externalState
         self.animateOut = animateOut
         self.onPan = onPan
@@ -99,6 +102,12 @@ public final class SheetComponent<ChildEnvironmentType: Sendable & Equatable>: C
             return false
         }
         if lhs.followContentSizeChanges != rhs.followContentSizeChanges {
+            return false
+        }
+        if lhs.isScrollEnabled != rhs.isScrollEnabled {
+            return false
+        }
+        if lhs.hasDimView != rhs.hasDimView {
             return false
         }
         if lhs.animateOut != rhs.animateOut {
@@ -413,6 +422,10 @@ public final class SheetComponent<ChildEnvironmentType: Sendable & Equatable>: C
             }
             
             self.currentAvailableSize = availableSize
+            
+            if !component.hasDimView {
+                self.dimView.backgroundColor = .clear
+            }
             
             if environment[SheetComponentEnvironment.self].value.isDisplaying, !self.previousIsDisplaying, let _ = transition.userData(ViewControllerComponentContainer.AnimateInTransition.self) {
                 self.animateIn()

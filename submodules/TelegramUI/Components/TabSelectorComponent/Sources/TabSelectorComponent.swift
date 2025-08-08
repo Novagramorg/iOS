@@ -499,6 +499,13 @@ public final class TabSelectorComponent: Component {
             self.setContentOffset(CGPoint(x: self.contentSize.width - self.bounds.width, y: 0.0), animated: true)
         }
         
+        public func frameForItem(_ id: AnyHashable) -> CGRect? {
+            if let item = self.visibleItems[id] {
+                return item.convert(item.bounds, to: self)
+            }
+            return nil
+        }
+        
         func update(component: TabSelectorComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
             let selectionColorUpdated = component.colors.selection != self.component?.colors.selection
            
