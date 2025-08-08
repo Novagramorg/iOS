@@ -274,7 +274,7 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
         for media in item.message.media {
             if let action = media as? TelegramMediaAction {
                 switch action.action {
-                case let .starGift(gift, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _):
+                case let .starGift(gift, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _):
                     releasedBy = gift.releasedBy
                 case let .starGiftUnique(gift, _, _, _, _, _, _, _, _, _, _, _, _, _):
                     releasedBy = gift.releasedBy
@@ -547,7 +547,7 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                                 buttonTitle = item.presentationData.strings.Notification_PremiumPrize_View
                                 hasServiceMessage = false
                             }
-                        case let .starGift(gift, convertStars, giftText, giftEntities, _, savedToProfile, converted, upgraded, canUpgrade, upgradeStars, isRefunded, _, _, channelPeerId, senderPeerId, _):
+                        case let .starGift(gift, convertStars, giftText, giftEntities, _, savedToProfile, converted, upgraded, canUpgrade, upgradeStars, isRefunded, isPrepaidUpgrade, _, channelPeerId, senderPeerId, _, _):
                             if case let .generic(gift) = gift {
                                 if let releasedBy = gift.releasedBy, let peer = item.message.peers[releasedBy], let addressName = peer.addressName {
                                     creatorButtonTitle = item.presentationData.strings.Notification_StarGift_ReleasedBy("**@\(addressName)**").string
@@ -561,10 +561,14 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                                 if isSelfGift {
                                     title = item.presentationData.strings.Notification_StarGift_Self_Title
                                 } else {
-                                    if let senderPeerId, let name = item.message.peers[senderPeerId].flatMap(EnginePeer.init)?.compactDisplayTitle {
-                                        authorName = name
+                                    if isPrepaidUpgrade && senderPeerId == channelPeerId {
+                                        title = item.presentationData.strings.Gift_View_Unknown_Title
+                                    } else {
+                                        if let senderPeerId, let name = item.message.peers[senderPeerId].flatMap(EnginePeer.init)?.compactDisplayTitle {
+                                            authorName = name
+                                        }
+                                        title = item.presentationData.strings.Notification_StarGift_Title(authorName).string
                                     }
-                                    title = item.presentationData.strings.Notification_StarGift_Title(authorName).string
                                 }
                                 if let giftText, !giftText.isEmpty {
                                     text = giftText
@@ -611,7 +615,9 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                                                 text =  item.presentationData.strings.Notification_StarGift_Bot_Subtitle
                                             }
                                         } else {
-                                            if upgradeStars != nil {
+                                            if isPrepaidUpgrade {
+                                                text =  item.presentationData.strings.Notification_StarGift_Subtitle_Upgrade_Prepaid(peerName).string
+                                            } else if upgradeStars != nil {
                                                 text =  item.presentationData.strings.Notification_StarGift_Subtitle_Upgrade_Other(peerName).string
                                             } else if let convertStars, convertStars > 0 {
                                                 let starsString = item.presentationData.strings.Notification_StarGift_Subtitle_Other_Stars(Int32(clamping: convertStars)).replacingOccurrences(of: " ", with: "\u{00A0}")

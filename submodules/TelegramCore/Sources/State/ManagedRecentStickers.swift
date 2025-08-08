@@ -343,6 +343,7 @@ func managedUniqueStarGifts(accountPeerId: PeerId, postbox: Postbox, network: Ne
                             if let file = files[fileId], let patternFile = files[patternFileId], let numberString = slugComponents.last, let number = Int32(numberString) {
                                 let gift = StarGift.UniqueGift(
                                     id: id,
+                                    giftId: 0,
                                     title: title,
                                     number: number,
                                     slug: slug,

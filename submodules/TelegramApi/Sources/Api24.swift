@@ -637,7 +637,7 @@ public extension Api {
 public extension Api {
     enum StarGift: TypeConstructorDescription {
         case starGift(flags: Int32, id: Int64, sticker: Api.Document, stars: Int64, availabilityRemains: Int32?, availabilityTotal: Int32?, availabilityResale: Int64?, convertStars: Int64, firstSaleDate: Int32?, lastSaleDate: Int32?, upgradeStars: Int64?, resellMinStars: Int64?, title: String?, releasedBy: Api.Peer?, perUserTotal: Int32?, perUserRemains: Int32?)
-        case starGiftUnique(flags: Int32, id: Int64, title: String, slug: String, num: Int32, ownerId: Api.Peer?, ownerName: String?, ownerAddress: String?, attributes: [Api.StarGiftAttribute], availabilityIssued: Int32, availabilityTotal: Int32, giftAddress: String?, resellAmount: [Api.StarsAmount]?, releasedBy: Api.Peer?, valueAmount: Int64?, valueCurrency: String?)
+        case starGiftUnique(flags: Int32, id: Int64, giftId: Int64, title: String, slug: String, num: Int32, ownerId: Api.Peer?, ownerName: String?, ownerAddress: String?, attributes: [Api.StarGiftAttribute], availabilityIssued: Int32, availabilityTotal: Int32, giftAddress: String?, resellAmount: [Api.StarsAmount]?, releasedBy: Api.Peer?, valueAmount: Int64?, valueCurrency: String?)
     
     public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
     switch self {
@@ -662,12 +662,13 @@ public extension Api {
                     if Int(flags) & Int(1 << 8) != 0 {serializeInt32(perUserTotal!, buffer: buffer, boxed: false)}
                     if Int(flags) & Int(1 << 8) != 0 {serializeInt32(perUserRemains!, buffer: buffer, boxed: false)}
                     break
-                case .starGiftUnique(let flags, let id, let title, let slug, let num, let ownerId, let ownerName, let ownerAddress, let attributes, let availabilityIssued, let availabilityTotal, let giftAddress, let resellAmount, let releasedBy, let valueAmount, let valueCurrency):
+                case .starGiftUnique(let flags, let id, let giftId, let title, let slug, let num, let ownerId, let ownerName, let ownerAddress, let attributes, let availabilityIssued, let availabilityTotal, let giftAddress, let resellAmount, let releasedBy, let valueAmount, let valueCurrency):
                     if boxed {
-                        buffer.appendInt32(352555441)
+                        buffer.appendInt32(648369470)
                     }
                     serializeInt32(flags, buffer: buffer, boxed: false)
                     serializeInt64(id, buffer: buffer, boxed: false)
+                    serializeInt64(giftId, buffer: buffer, boxed: false)
                     serializeString(title, buffer: buffer, boxed: false)
                     serializeString(slug, buffer: buffer, boxed: false)
                     serializeInt32(num, buffer: buffer, boxed: false)
@@ -698,8 +699,8 @@ public extension Api {
         switch self {
                 case .starGift(let flags, let id, let sticker, let stars, let availabilityRemains, let availabilityTotal, let availabilityResale, let convertStars, let firstSaleDate, let lastSaleDate, let upgradeStars, let resellMinStars, let title, let releasedBy, let perUserTotal, let perUserRemains):
                 return ("starGift", [("flags", flags as Any), ("id", id as Any), ("sticker", sticker as Any), ("stars", stars as Any), ("availabilityRemains", availabilityRemains as Any), ("availabilityTotal", availabilityTotal as Any), ("availabilityResale", availabilityResale as Any), ("convertStars", convertStars as Any), ("firstSaleDate", firstSaleDate as Any), ("lastSaleDate", lastSaleDate as Any), ("upgradeStars", upgradeStars as Any), ("resellMinStars", resellMinStars as Any), ("title", title as Any), ("releasedBy", releasedBy as Any), ("perUserTotal", perUserTotal as Any), ("perUserRemains", perUserRemains as Any)])
-                case .starGiftUnique(let flags, let id, let title, let slug, let num, let ownerId, let ownerName, let ownerAddress, let attributes, let availabilityIssued, let availabilityTotal, let giftAddress, let resellAmount, let releasedBy, let valueAmount, let valueCurrency):
-                return ("starGiftUnique", [("flags", flags as Any), ("id", id as Any), ("title", title as Any), ("slug", slug as Any), ("num", num as Any), ("ownerId", ownerId as Any), ("ownerName", ownerName as Any), ("ownerAddress", ownerAddress as Any), ("attributes", attributes as Any), ("availabilityIssued", availabilityIssued as Any), ("availabilityTotal", availabilityTotal as Any), ("giftAddress", giftAddress as Any), ("resellAmount", resellAmount as Any), ("releasedBy", releasedBy as Any), ("valueAmount", valueAmount as Any), ("valueCurrency", valueCurrency as Any)])
+                case .starGiftUnique(let flags, let id, let giftId, let title, let slug, let num, let ownerId, let ownerName, let ownerAddress, let attributes, let availabilityIssued, let availabilityTotal, let giftAddress, let resellAmount, let releasedBy, let valueAmount, let valueCurrency):
+                return ("starGiftUnique", [("flags", flags as Any), ("id", id as Any), ("giftId", giftId as Any), ("title", title as Any), ("slug", slug as Any), ("num", num as Any), ("ownerId", ownerId as Any), ("ownerName", ownerName as Any), ("ownerAddress", ownerAddress as Any), ("attributes", attributes as Any), ("availabilityIssued", availabilityIssued as Any), ("availabilityTotal", availabilityTotal as Any), ("giftAddress", giftAddress as Any), ("resellAmount", resellAmount as Any), ("releasedBy", releasedBy as Any), ("valueAmount", valueAmount as Any), ("valueCurrency", valueCurrency as Any)])
     }
     }
     
@@ -768,60 +769,63 @@ public extension Api {
             _1 = reader.readInt32()
             var _2: Int64?
             _2 = reader.readInt64()
-            var _3: String?
-            _3 = parseString(reader)
+            var _3: Int64?
+            _3 = reader.readInt64()
             var _4: String?
             _4 = parseString(reader)
-            var _5: Int32?
-            _5 = reader.readInt32()
-            var _6: Api.Peer?
+            var _5: String?
+            _5 = parseString(reader)
+            var _6: Int32?
+            _6 = reader.readInt32()
+            var _7: Api.Peer?
             if Int(_1!) & Int(1 << 0) != 0 {if let signature = reader.readInt32() {
-                _6 = Api.parse(reader, signature: signature) as? Api.Peer
+                _7 = Api.parse(reader, signature: signature) as? Api.Peer
             } }
-            var _7: String?
-            if Int(_1!) & Int(1 << 1) != 0 {_7 = parseString(reader) }
             var _8: String?
-            if Int(_1!) & Int(1 << 2) != 0 {_8 = parseString(reader) }
-            var _9: [Api.StarGiftAttribute]?
+            if Int(_1!) & Int(1 << 1) != 0 {_8 = parseString(reader) }
+            var _9: String?
+            if Int(_1!) & Int(1 << 2) != 0 {_9 = parseString(reader) }
+            var _10: [Api.StarGiftAttribute]?
             if let _ = reader.readInt32() {
-                _9 = Api.parseVector(reader, elementSignature: 0, elementType: Api.StarGiftAttribute.self)
+                _10 = Api.parseVector(reader, elementSignature: 0, elementType: Api.StarGiftAttribute.self)
             }
-            var _10: Int32?
-            _10 = reader.readInt32()
             var _11: Int32?
             _11 = reader.readInt32()
-            var _12: String?
-            if Int(_1!) & Int(1 << 3) != 0 {_12 = parseString(reader) }
-            var _13: [Api.StarsAmount]?
+            var _12: Int32?
+            _12 = reader.readInt32()
+            var _13: String?
+            if Int(_1!) & Int(1 << 3) != 0 {_13 = parseString(reader) }
+            var _14: [Api.StarsAmount]?
             if Int(_1!) & Int(1 << 4) != 0 {if let _ = reader.readInt32() {
-                _13 = Api.parseVector(reader, elementSignature: 0, elementType: Api.StarsAmount.self)
+                _14 = Api.parseVector(reader, elementSignature: 0, elementType: Api.StarsAmount.self)
             } }
-            var _14: Api.Peer?
+            var _15: Api.Peer?
             if Int(_1!) & Int(1 << 5) != 0 {if let signature = reader.readInt32() {
-                _14 = Api.parse(reader, signature: signature) as? Api.Peer
+                _15 = Api.parse(reader, signature: signature) as? Api.Peer
             } }
-            var _15: Int64?
-            if Int(_1!) & Int(1 << 8) != 0 {_15 = reader.readInt64() }
-            var _16: String?
-            if Int(_1!) & Int(1 << 8) != 0 {_16 = parseString(reader) }
+            var _16: Int64?
+            if Int(_1!) & Int(1 << 8) != 0 {_16 = reader.readInt64() }
+            var _17: String?
+            if Int(_1!) & Int(1 << 8) != 0 {_17 = parseString(reader) }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
             let _c4 = _4 != nil
             let _c5 = _5 != nil
-            let _c6 = (Int(_1!) & Int(1 << 0) == 0) || _6 != nil
-            let _c7 = (Int(_1!) & Int(1 << 1) == 0) || _7 != nil
-            let _c8 = (Int(_1!) & Int(1 << 2) == 0) || _8 != nil
-            let _c9 = _9 != nil
+            let _c6 = _6 != nil
+            let _c7 = (Int(_1!) & Int(1 << 0) == 0) || _7 != nil
+            let _c8 = (Int(_1!) & Int(1 << 1) == 0) || _8 != nil
+            let _c9 = (Int(_1!) & Int(1 << 2) == 0) || _9 != nil
             let _c10 = _10 != nil
             let _c11 = _11 != nil
-            let _c12 = (Int(_1!) & Int(1 << 3) == 0) || _12 != nil
-            let _c13 = (Int(_1!) & Int(1 << 4) == 0) || _13 != nil
-            let _c14 = (Int(_1!) & Int(1 << 5) == 0) || _14 != nil
-            let _c15 = (Int(_1!) & Int(1 << 8) == 0) || _15 != nil
+            let _c12 = _12 != nil
+            let _c13 = (Int(_1!) & Int(1 << 3) == 0) || _13 != nil
+            let _c14 = (Int(_1!) & Int(1 << 4) == 0) || _14 != nil
+            let _c15 = (Int(_1!) & Int(1 << 5) == 0) || _15 != nil
             let _c16 = (Int(_1!) & Int(1 << 8) == 0) || _16 != nil
-            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 && _c10 && _c11 && _c12 && _c13 && _c14 && _c15 && _c16 {
-                return Api.StarGift.starGiftUnique(flags: _1!, id: _2!, title: _3!, slug: _4!, num: _5!, ownerId: _6, ownerName: _7, ownerAddress: _8, attributes: _9!, availabilityIssued: _10!, availabilityTotal: _11!, giftAddress: _12, resellAmount: _13, releasedBy: _14, valueAmount: _15, valueCurrency: _16)
+            let _c17 = (Int(_1!) & Int(1 << 8) == 0) || _17 != nil
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 && _c10 && _c11 && _c12 && _c13 && _c14 && _c15 && _c16 && _c17 {
+                return Api.StarGift.starGiftUnique(flags: _1!, id: _2!, giftId: _3!, title: _4!, slug: _5!, num: _6!, ownerId: _7, ownerName: _8, ownerAddress: _9, attributes: _10!, availabilityIssued: _11!, availabilityTotal: _12!, giftAddress: _13, resellAmount: _14, releasedBy: _15, valueAmount: _16, valueCurrency: _17)
             }
             else {
                 return nil

@@ -291,6 +291,7 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
     public struct UniqueGift: Equatable, Codable, PostboxCoding {
         enum CodingKeys: String, CodingKey {
             case id
+            case giftId
             case title
             case number
             case slug
@@ -548,6 +549,7 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
         
         public struct ValueInfo: Equatable {
             public let isLastSaleOnFragment: Bool
+            public let valueIsAverage: Bool
             public let value: Int64
             public let currency: String
             public let initialSaleDate: Int32
@@ -567,6 +569,7 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
         }
         
         public let id: Int64
+        public let giftId: Int64
         public let title: String
         public let number: Int32
         public let slug: String
@@ -580,8 +583,9 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
         public let valueAmount: Int64?
         public let valueCurrency: String?
         
-        public init(id: Int64, title: String, number: Int32, slug: String, owner: Owner, attributes: [Attribute], availability: Availability, giftAddress: String?, resellAmounts: [CurrencyAmount]?, resellForTonOnly: Bool, releasedBy: EnginePeer.Id?, valueAmount: Int64?, valueCurrency: String?) {
+        public init(id: Int64, giftId: Int64, title: String, number: Int32, slug: String, owner: Owner, attributes: [Attribute], availability: Availability, giftAddress: String?, resellAmounts: [CurrencyAmount]?, resellForTonOnly: Bool, releasedBy: EnginePeer.Id?, valueAmount: Int64?, valueCurrency: String?) {
             self.id = id
+            self.giftId = giftId
             self.title = title
             self.number = number
             self.slug = slug
@@ -599,6 +603,7 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
         public init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             self.id = try container.decode(Int64.self, forKey: .id)
+            self.giftId = try container.decode(Int64.self, forKey: .giftId)
             self.title = try container.decode(String.self, forKey: .title)
             self.number = try container.decode(Int32.self, forKey: .number)
             self.slug = try container.decodeIfPresent(String.self, forKey: .slug) ?? ""
@@ -629,6 +634,7 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
         
         public init(decoder: PostboxDecoder) {
             self.id = decoder.decodeInt64ForKey(CodingKeys.id.rawValue, orElse: 0)
+            self.giftId = decoder.decodeInt64ForKey(CodingKeys.giftId.rawValue, orElse: 0)
             self.title = decoder.decodeStringForKey(CodingKeys.title.rawValue, orElse: "")
             self.number = decoder.decodeInt32ForKey(CodingKeys.number.rawValue, orElse: 0)
             self.slug = decoder.decodeStringForKey(CodingKeys.slug.rawValue, orElse: "")
@@ -660,6 +666,7 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
         public func encode(to encoder: Encoder) throws {
             var container = encoder.container(keyedBy: CodingKeys.self)
             try container.encode(self.id, forKey: .id)
+            try container.encode(self.giftId, forKey: .giftId)
             try container.encode(self.title, forKey: .title)
             try container.encode(self.number, forKey: .number)
             try container.encode(self.slug, forKey: .slug)
@@ -683,6 +690,7 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
         
         public func encode(_ encoder: PostboxEncoder) {
             encoder.encodeInt64(self.id, forKey: CodingKeys.id.rawValue)
+            encoder.encodeInt64(self.giftId, forKey: CodingKeys.giftId.rawValue)
             encoder.encodeString(self.title, forKey: CodingKeys.title.rawValue)
             encoder.encodeInt32(self.number, forKey: CodingKeys.number.rawValue)
             encoder.encodeString(self.slug, forKey: CodingKeys.slug.rawValue)
@@ -724,6 +732,7 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
         public func withResellAmounts(_ resellAmounts: [CurrencyAmount]?) -> UniqueGift {
             return UniqueGift(
                 id: self.id,
+                giftId: self.giftId,
                 title: self.title,
                 number: self.number,
                 slug: self.slug,
@@ -742,6 +751,7 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
         public func withResellForTonOnly(_ resellForTonOnly: Bool) -> UniqueGift {
             return UniqueGift(
                 id: self.id,
+                giftId: self.giftId,
                 title: self.title,
                 number: self.number,
                 slug: self.slug,
@@ -863,7 +873,7 @@ extension StarGift {
                 return nil
             }
             self = .generic(StarGift.Gift(id: id, title: title, file: file, price: stars, convertStars: convertStars, availability: availability, soldOut: soldOut, flags: flags, upgradeStars: upgradeStars, releasedBy: releasedBy?.peerId, perUserLimit: perUserLimit))
-        case let .starGiftUnique(flags, id, title, slug, num, ownerPeerId, ownerName, ownerAddress, attributes, availabilityIssued, availabilityTotal, giftAddress, resellAmounts, releasedBy, valueAmount, valueCurrency):
+        case let .starGiftUnique(flags, id, giftId, title, slug, num, ownerPeerId, ownerName, ownerAddress, attributes, availabilityIssued, availabilityTotal, giftAddress, resellAmounts, releasedBy, valueAmount, valueCurrency):
             let owner: StarGift.UniqueGift.Owner
             if let ownerAddress {
                 owner = .address(ownerAddress)
@@ -875,7 +885,7 @@ extension StarGift {
                 return nil
             }
             let resellAmounts = resellAmounts?.compactMap { CurrencyAmount(apiAmount: $0) }
-            self = .unique(StarGift.UniqueGift(id: id, title: title, number: num, slug: slug, owner: owner, attributes: attributes.compactMap { UniqueGift.Attribute(apiAttribute: $0) }, availability: UniqueGift.Availability(issued: availabilityIssued, total: availabilityTotal), giftAddress: giftAddress, resellAmounts: resellAmounts, resellForTonOnly: (flags & (1 << 7)) != 0, releasedBy: releasedBy?.peerId, valueAmount: valueAmount, valueCurrency: valueCurrency))
+            self = .unique(StarGift.UniqueGift(id: id, giftId: giftId, title: title, number: num, slug: slug, owner: owner, attributes: attributes.compactMap { UniqueGift.Attribute(apiAttribute: $0) }, availability: UniqueGift.Availability(issued: availabilityIssued, total: availabilityTotal), giftAddress: giftAddress, resellAmounts: resellAmounts, resellForTonOnly: (flags & (1 << 7)) != 0, releasedBy: releasedBy?.peerId, valueAmount: valueAmount, valueCurrency: valueCurrency))
         }
     }
 }
@@ -2579,8 +2589,11 @@ func _internal_getUniqueStarGiftValueInfo(account: Account, slug: String) -> Sig
         if let result {
             switch result {
             case let .uniqueStarGiftValueInfo(flags, currency, value, initialSaleDate, initialSaleStars, initialSalePrice, lastSaleDate, lastSalePrice, floorPrice, averagePrice, listedCount, fragmentListedCount, fragmentListedUrl):
+                let _ = listedCount
+                let _ = fragmentListedCount
                 return StarGift.UniqueGift.ValueInfo(
-                    isLastSaleOnFragment: flags & (1 << 0) != 0,
+                    isLastSaleOnFragment: flags & (1 << 1) != 0,
+                    valueIsAverage: flags & (1 << 6) != 0,
                     value: value,
                     currency: currency,
                     initialSaleDate: initialSaleDate,

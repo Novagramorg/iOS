@@ -14892,3 +14892,22 @@ Sorry for the inconvenience.";
 
 "PeerInfo.Gifts.Upgradable" = "Upgradable";
 
+"Gift.Upgrade.GiftTitle" = "Make Unique";
+"Gift.Upgrade.GiftDescription" = "Let %@ turn this gift into a unique collectible.";
+"Gift.Upgrade.Unique.GiftDescription" = "%@ will get a unique number, model, backdrop, and symbol for the gift.";
+"Gift.Upgrade.Transferable.GiftDescription" = "%@ will be able to send the gift to anyone Telegram.";
+"Gift.Upgrade.Tradable.GiftDescription" = "%@ will be able to auction the gift on third-party NFT marketplaces.";
+
+"Notification.StarGift.Subtitle.Upgrade.Prepaid" = "%@ can now turn this gift to a unique collectible";
+
+"Notification.StarsGift.SentUpgradeYou" = "You sent an upgrade worth %1$@ for your gift to %2$@";
+"Notification.StarsGift.SentUpgradeYouOther" = "You sent an upgrade worth %1$@ for the gift %2$@ received from %3$@";
+"Notification.StarsGift.SentUpgradeYouUnknown" = "You sent an upgrade worth %1$@ for the gift to %2$@";
+
+"Notification.StarsGift.SentUpgrade" = "%1$@ sent an upgrade worth %2$@ for your gift";
+"Notification.StarsGift.SentUpgradeOther" = "%1$@ sent an upgrade worth %2$@ for the gift you received from %3$@";
+
+"Notification.StarsGift.UpgradePrepaidYou" = "You unpacked the gift that %@ helped upgrade";
+"Notification.StarsGift.UpgradePrepaid" = "%@ unpacked the gift that you helped upgrade";
+
+"Gift.View.Unknown.Title" = "Gift";
