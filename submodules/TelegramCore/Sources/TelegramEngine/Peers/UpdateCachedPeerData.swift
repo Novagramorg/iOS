@@ -265,7 +265,7 @@ func _internal_fetchAndUpdateCachedPeerData(accountPeerId: PeerId, peerId rawPee
                             }
                             
                             switch fullUser {
-                            case let .userFull(_, _, _, _, _, _, _, _, userFullNotifySettings, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _):
+                            case let .userFull(_, _, _, _, _, _, _, _, userFullNotifySettings, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _):
                                 updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: parsedPeers)
                                 transaction.updateCurrentPeerNotificationSettings([peerId: TelegramPeerNotificationSettings(apiSettings: userFullNotifySettings)])
                             }
@@ -277,7 +277,7 @@ func _internal_fetchAndUpdateCachedPeerData(accountPeerId: PeerId, peerId rawPee
                                     previous = CachedUserData()
                                 }
                                 switch fullUser {
-                                    case let .userFull(userFullFlags, userFullFlags2, _, userFullAbout, userFullSettings, personalPhoto, profilePhoto, fallbackPhoto, _, userFullBotInfo, userFullPinnedMsgId, userFullCommonChatsCount, _, userFullTtlPeriod, userFullThemeEmoticon, _, groupAdminRights, channelAdminRights, userWallpaper, _, businessWorkHours, businessLocation, greetingMessage, awayMessage, businessIntro, birthday, personalChannelId, personalChannelMessage, starGiftsCount, starRefProgram, verification, sendPaidMessageStars, disallowedStarGifts, starsRating, starsMyPendingRating, starsMyPendingRatingDate):
+                                    case let .userFull(userFullFlags, userFullFlags2, _, userFullAbout, userFullSettings, personalPhoto, profilePhoto, fallbackPhoto, _, userFullBotInfo, userFullPinnedMsgId, userFullCommonChatsCount, _, userFullTtlPeriod, userFullThemeEmoticon, _, groupAdminRights, channelAdminRights, userWallpaper, _, businessWorkHours, businessLocation, greetingMessage, awayMessage, businessIntro, birthday, personalChannelId, personalChannelMessage, starGiftsCount, starRefProgram, verification, sendPaidMessageStars, disallowedStarGifts, starsRating, starsMyPendingRating, starsMyPendingRatingDate, linkedBotChannelId):
                                         let botInfo = userFullBotInfo.flatMap(BotInfo.init(apiBotInfo:))
                                         let isBlocked = (userFullFlags & (1 << 0)) != 0
                                         let voiceCallsAvailable = (userFullFlags & (1 << 4)) != 0
@@ -381,7 +381,7 @@ func _internal_fetchAndUpdateCachedPeerData(accountPeerId: PeerId, peerId rawPee
                                             var subscriberCount: Int32?
                                             for chat in chats {
                                                 if chat.peerId == channelPeerId {
-                                                    if case let .channel(_, _, _, _, _, _, _, _, _, _, _, _, participantsCount, _, _, _, _, _, _, _, _, _, _) = chat {
+                                                    if case let .channel(_, _, _, _, _, _, _, _, _, _, _, _, participantsCount, _, _, _, _, _, _, _, _, _, _, _) = chat {
                                                         subscriberCount = participantsCount
                                                     }
                                                 }
@@ -431,6 +431,8 @@ func _internal_fetchAndUpdateCachedPeerData(accountPeerId: PeerId, peerId rawPee
                                             )
                                         }
                                     
+                                        let parsedLinkedBotChannelId = linkedBotChannelId.flatMap { PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value($0)) }
+                                    
                                         return previous.withUpdatedAbout(userFullAbout)
                                             .withUpdatedBotInfo(botInfo)
                                             .withUpdatedEditableBotInfo(editableBotInfo)
@@ -469,6 +471,7 @@ func _internal_fetchAndUpdateCachedPeerData(accountPeerId: PeerId, peerId rawPee
                                             .withUpdatedBotChannelAdminRights(botChannelAdminRights)
                                             .withUpdatedStarRating(parsedStarRating)
                                             .withUpdatedPendingStarRating(pendingRating)
+                                            .withUpdatedLinkedBotChannelId(parsedLinkedBotChannelId)
                                 }
                             })
                         }

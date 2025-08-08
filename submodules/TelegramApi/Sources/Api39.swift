@@ -2804,6 +2804,21 @@ public extension Api.functions.channels {
                 }
 }
 public extension Api.functions.channels {
+                static func createBotForum(botId: Api.InputUser) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Updates>) {
+                    let buffer = Buffer()
+                    buffer.appendInt32(-801027632)
+                    botId.serialize(buffer, true)
+                    return (FunctionDescription(name: "channels.createBotForum", parameters: [("botId", String(describing: botId))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.Updates? in
+                        let reader = BufferReader(buffer)
+                        var result: Api.Updates?
+                        if let signature = reader.readInt32() {
+                            result = Api.parse(reader, signature: signature) as? Api.Updates
+                        }
+                        return result
+                    })
+                }
+}
+public extension Api.functions.channels {
                 static func createChannel(flags: Int32, title: String, about: String, geoPoint: Api.InputGeoPoint?, address: String?, ttlPeriod: Int32?) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Updates>) {
                     let buffer = Buffer()
                     buffer.appendInt32(-1862244601)
