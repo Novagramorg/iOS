@@ -18,6 +18,7 @@ public enum BotPaymentInvoiceSource {
     case starGiftTransfer(reference: StarGiftReference, toPeerId: EnginePeer.Id)
     case premiumGift(peerId: EnginePeer.Id, option: CachedPremiumGiftOption, text: String?, entities: [MessageTextEntity]?)
     case starGiftResale(slug: String, toPeerId: EnginePeer.Id, ton: Bool)
+    case starGiftPrepaidUpgrade(peerId: EnginePeer.Id, hash: String)
 }
 
 public struct BotPaymentInvoiceFields: OptionSet {
@@ -412,6 +413,11 @@ func _internal_parseInputInvoice(transaction: Transaction, source: BotPaymentInv
             flags |= 1 << 0
         }
         return .inputInvoiceStarGiftResale(flags: flags, slug: slug, toId: inputPeer)
+    case let .starGiftPrepaidUpgrade(peerId, hash):
+        guard let peer = transaction.getPeer(peerId), let inputPeer = apiInputPeer(peer) else {
+            return nil
+        }
+        return .inputInvoiceStarGiftPrepaidUpgrade(peer: inputPeer, hash: hash)
     }
 }
 
@@ -753,7 +759,7 @@ func _internal_sendBotPaymentForm(account: Account, formId: Int64, source: BotPa
                                                     receiptMessageId = id
                                                 }
                                             }
-                                        case .giftCode, .stars, .starsGift, .starsChatSubscription, .starGift, .starGiftUpgrade, .starGiftTransfer, .premiumGift, .starGiftResale:
+                                        case .giftCode, .stars, .starsGift, .starsChatSubscription, .starGift, .starGiftUpgrade, .starGiftTransfer, .premiumGift, .starGiftResale, .starGiftPrepaidUpgrade:
                                             receiptMessageId = nil
                                         }
                                     }
