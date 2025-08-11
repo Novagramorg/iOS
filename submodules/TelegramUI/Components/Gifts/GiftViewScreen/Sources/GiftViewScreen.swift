@@ -35,6 +35,7 @@ import TelegramNotices
 import PremiumLockButtonSubtitleComponent
 import StarsBalanceOverlayComponent
 import BalanceNeededScreen
+import GiftItemComponent
 
 private final class GiftViewSheetContent: CombinedComponent {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
@@ -101,6 +102,7 @@ private final class GiftViewSheetContent: CombinedComponent {
         
         var inProgress = false
         
+        var nextGiftToUpgrade: ProfileGiftsContext.State.StarGift?
         var inUpgradePreview = false
         var upgradeForm: BotPaymentForm?
         var upgradeFormDisposable: Disposable?
@@ -210,7 +212,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                     if let releasedBy = gift.releasedBy {
                         peerIds.append(releasedBy)
                     }
-                    if arguments.canUpgrade || arguments.upgradeStars != nil {
+                    if arguments.canUpgrade || arguments.upgradeStars != nil || arguments.prepaidUpgradeHash != nil {
                         self.sampleDisposable.add((context.engine.payments.starGiftUpgradePreview(giftId: gift.id)
                         |> deliverOnMainQueue).start(next: { [weak self] attributes in
                             guard let self else {
@@ -630,6 +632,20 @@ private final class GiftViewSheetContent: CombinedComponent {
             controller.push(introController)
         }
         
+        func openValue() {
+            guard let controller = self.getController(), case let .profileGift(_, gift) = self.subject, case let .unique(uniqueGift) = gift.gift else {
+                return
+            }
+            let _ = (self.context.engine.payments.getUniqueStarGiftValueInfo(slug: uniqueGift.slug)
+            |> deliverOnMainQueue).start(next: { [weak self] valueInfo in
+                guard let self, let valueInfo else {
+                    return
+                }
+                let valueController = GiftValueScreen(context: self.context, gift: gift, valueInfo: valueInfo)
+                controller.push(valueController)
+            })
+        }
+        
         func sendGift(peerId: EnginePeer.Id) {
             guard let controller = self.getController() else {
                 return
@@ -820,7 +836,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                 return
             }
             
-            let giftTitle = "\(gift.title) #\(presentationStringsFormattedNumber(gift.number, presentationData.dateTimeFormat.groupingSeparator))"
+            let giftTitle = "\(gift.title) #\(formatCollectibleNumber(gift.number, dateTimeFormat: presentationData.dateTimeFormat))"
             let reference = arguments.reference ?? .slug(slug: gift.slug)
             
             if let resellStars = gift.resellAmounts?.first, resellStars.amount.value > 0, !update {
@@ -1113,6 +1129,7 @@ private final class GiftViewSheetContent: CombinedComponent {
             if animated {
                 controller.dismissAllTooltips()
                 controller.dismissBalanceOverlay()
+                controller.requestLayout(forceUpdate: true, transition: .easeInOut(duration: 0.3).withUserData(ViewControllerComponentContainer.AnimateOutTransition()))
                 self.animateOut.invoke(Action { [weak controller] _ in
                     controller?.dismiss(completion: nil)
                 })
@@ -1154,9 +1171,6 @@ private final class GiftViewSheetContent: CombinedComponent {
         }
         
         func requestUpgradePreview() {
-            guard let arguments = self.subject.arguments, arguments.canUpgrade || arguments.upgradeStars != nil else {
-                return
-            }
             self.context.starsContext?.load(force: false)
             
             self.inUpgradePreview = true
@@ -1202,7 +1216,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                 return
             }
             
-            let giftTitle = "\(uniqueGift.title) #\(uniqueGift.number)"
+            let giftTitle = "\(uniqueGift.title) #\(formatCollectibleNumber(uniqueGift.number, dateTimeFormat: presentationData.dateTimeFormat))"
             let recipientPeerId = self.recipientPeerId ?? self.context.account.peerId
                         
             let action: (CurrencyAmount.Currency) -> Void = { currency in
@@ -1485,9 +1499,9 @@ private final class GiftViewSheetContent: CombinedComponent {
             guard let arguments = self.subject.arguments, let peerId = arguments.peerId, let starsContext = self.context.starsContext, let starsState = starsContext.currentState else {
                 return
             }
-            
-            let proceed: (Int64?) -> Void = { formId in
-                guard let controller = self.getController() as? GiftViewScreen else {
+                        
+            let proceed: (Int64?) -> Void = { [weak self] formId in
+                guard let self, let controller = self.getController() as? GiftViewScreen else {
                     return
                 }
                 self.inProgress = true
@@ -1528,6 +1542,11 @@ private final class GiftViewSheetContent: CombinedComponent {
                     self.inProgress = false
                     self.inUpgradePreview = false
                     
+                    if let reference = arguments.reference {
+                        controller.upgradedGiftReferences.insert(reference)
+                        self.nextGiftToUpgrade = controller.nextUpgradableGift
+                    }
+                     
                     self.subject = .profileGift(peerId, result)
                     controller.animateSuccess()
                     self.updated(transition: .spring(duration: 0.4))
@@ -1579,6 +1598,100 @@ private final class GiftViewSheetContent: CombinedComponent {
                 controller.showBalance = true
             }
         }
+        
+        func commitPrepaidUpgrade() {
+            guard let arguments = self.subject.arguments, let peerId = arguments.peerId, let prepaidUpgradeHash = arguments.prepaidUpgradeHash, let starsContext = self.context.starsContext, let starsState = starsContext.currentState else {
+                return
+            }
+            guard case let .generic(gift) = arguments.gift else {
+                return
+            }
+            guard let gift = self.starGiftsMap[gift.id], let price = gift.upgradeStars else {
+                return
+            }
+            let context = self.context
+            let proceed: () -> Void = { [weak self, weak starsContext] in
+                guard let self else {
+                    return
+                }
+                self.inProgress = true
+                self.updated()
+                     
+                let source: BotPaymentInvoiceSource = .starGiftPrepaidUpgrade(peerId: peerId, hash: prepaidUpgradeHash)
+                let signal = context.engine.payments.fetchBotPaymentForm(source: source, themeParams: nil)
+                |> map(Optional.init)
+                |> `catch` { _ in
+                    return .single(nil)
+                }
+                |> mapToSignal { paymentForm in
+                    if let paymentForm {
+                        return context.engine.payments.sendStarsPaymentForm(formId: paymentForm.id, source: source)
+                    } else {
+                        return .fail(.generic)
+                    }
+                }
+                
+                self.upgradeDisposable = (signal
+                |> deliverOnMainQueue).start(next: { [weak self, weak starsContext] result in
+                    guard let self else {
+                        return
+                    }
+                    self.dismiss(animated: true)
+                    Queue.mainQueue().after(0.5) {
+                        starsContext?.load(force: true)
+                    }
+                    
+                    let _ = (self.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: peerId))
+                    |> deliverOnMainQueue).start(next: { [weak self] peer in
+                        guard let self, let peer else {
+                            return
+                        }
+                        self.openPeer(peer, gifts: false, dismiss: true)
+                    })
+                }, error: { _ in
+                    
+                })
+            }
+            
+            if starsState.balance < StarsAmount(value: price, nanos: 0) {
+                let _ = (self.optionsPromise.get()
+                |> filter { $0 != nil }
+                |> take(1)
+                |> deliverOnMainQueue).startStandalone(next: { [weak self] options in
+                    guard let self, let controller = self.getController() else {
+                        return
+                    }
+                    let purchaseController = self.context.sharedContext.makeStarsPurchaseScreen(
+                        context: self.context,
+                        starsContext: starsContext,
+                        options: options ?? [],
+                        purpose: .upgradeStarGift(requiredStars: price),
+                        completion: { [weak self, weak starsContext] stars in
+                            guard let self, let starsContext else {
+                                return
+                            }
+                            self.inProgress = true
+                            self.updated()
+                            
+                            starsContext.add(balance: StarsAmount(value: stars, nanos: 0))
+                            let _ = (starsContext.onUpdate
+                            |> deliverOnMainQueue).start(next: {
+                                proceed()
+                            })
+                        }
+                    )
+                    controller.push(purchaseController)
+                })
+            } else {
+                proceed()
+            }
+        }
+        
+        func switchToNextUpgradable() {
+            if let controller = self.getController() as? GiftViewScreen {
+                controller.switchToNextUpgradable()
+            }
+        }
     }
     
     func makeState() -> State {
@@ -1611,6 +1724,7 @@ private final class GiftViewSheetContent: CombinedComponent {
         let table = Child(TableComponent.self)
         let additionalText = Child(MultilineTextComponent.self)
         let button = Child(ButtonComponent.self)
+        let upgradeNextButton = Child(PlainButtonComponent.self)
         
         let upgradeTitle = Child(MultilineTextComponent.self)
         let upgradeDescription = Child(BalancedTextComponent.self)
@@ -1661,6 +1775,7 @@ private final class GiftViewSheetContent: CombinedComponent {
             var isChannelGift = false
             var isMyUniqueGift = false
             var releasedByPeer: EnginePeer?
+            var canGiftUpgrade = false
             
             if case let .soldOutGift(gift) = subject {
                 animationFile = gift.file
@@ -1703,13 +1818,14 @@ private final class GiftViewSheetContent: CombinedComponent {
                     uniqueGift = gift
                 }
                 savedToProfile = arguments.savedToProfile
-                if let reference = arguments.reference, case .peer = reference {
+                if let reference = arguments.reference, case let .peer(peerId, _) = reference, peerId.namespace == Namespaces.Peer.CloudChannel {
                     isChannelGift = true
                     incoming = true
                 } else {
                     incoming = arguments.incoming || arguments.peerId == component.context.account.peerId
                 }
                 nameHidden = arguments.nameHidden
+                canGiftUpgrade = arguments.prepaidUpgradeHash != nil
                 
                 isSelfGift = arguments.messageId?.peerId == component.context.account.peerId
                 
@@ -1735,7 +1851,7 @@ private final class GiftViewSheetContent: CombinedComponent {
             if !canUpgrade, let gift = state.starGiftsMap[giftId], let _ = gift.upgradeStars {
                 canUpgrade = true
             }
-                        
+                                    
             var showUpgradePreview = false
             if state.inUpgradePreview, let _ = state.sampleGiftAttributes {
                 showUpgradePreview = true
@@ -1837,8 +1953,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                 if case .wearPreview = component.subject {
                     giftTitle = uniqueGift.title
                 } else {
-                    
-                    giftTitle = "\(uniqueGift.title) #\(presentationStringsFormattedNumber(uniqueGift.number, environment.dateTimeFormat.groupingSeparator))"
+                    giftTitle = "\(uniqueGift.title) #\(formatCollectibleNumber(uniqueGift.number, dateTimeFormat: environment.dateTimeFormat))"
                 }
                 
                 let wearTitle = wearTitle.update(
@@ -2042,7 +2157,14 @@ private final class GiftViewSheetContent: CombinedComponent {
                 let uniqueText: String
                 let transferableText: String
                 let tradableText: String
-                if case let .upgradePreview(_, name) = component.subject {
+                if !incoming, case let .profileGift(peerId, _) = subject, let peer = state.peerMap[peerId] {
+                    let name = peer.compactDisplayTitle
+                    title = environment.strings.Gift_Upgrade_GiftTitle
+                    description = environment.strings.Gift_Upgrade_GiftDescription(name).string
+                    uniqueText = strings.Gift_Upgrade_Unique_GiftDescription(name).string
+                    transferableText = strings.Gift_Upgrade_Transferable_GiftDescription(name).string
+                    tradableText = strings.Gift_Upgrade_Tradable_GiftDescription(name).string
+                } else if case let .upgradePreview(_, name) = component.subject {
                     title = environment.strings.Gift_Upgrade_IncludeTitle
                     description = environment.strings.Gift_Upgrade_IncludeDescription(name).string
                     uniqueText = strings.Gift_Upgrade_Unique_IncludeDescription
@@ -2166,6 +2288,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                 
                 if case .upgradePreview = component.subject {
                     
+                } else if !incoming {
                 } else {
                     let checkTheme = CheckComponent.Theme(
                         backgroundColor: theme.list.itemCheckColors.fillColor,
@@ -2222,10 +2345,10 @@ private final class GiftViewSheetContent: CombinedComponent {
                 var hasDescriptionButton = false
                 if let uniqueGift {
                     titleString = uniqueGift.title
-                    descriptionText = "\(strings.Gift_Unique_Collectible) #\(presentationStringsFormattedNumber(uniqueGift.number, environment.dateTimeFormat.groupingSeparator))"
+                    descriptionText = "\(strings.Gift_Unique_Collectible) #\(formatCollectibleNumber(uniqueGift.number, dateTimeFormat: environment.dateTimeFormat))"
                     
                     if let releasedBy = uniqueGift.releasedBy, let peer = state.peerMap[releasedBy], let addressName = peer.addressName {
-                        descriptionText = strings.Gift_Unique_CollectibleBy("#\(presentationStringsFormattedNumber(uniqueGift.number, environment.dateTimeFormat.groupingSeparator))", "[@\(addressName)]()").string
+                        descriptionText = strings.Gift_Unique_CollectibleBy("#\(formatCollectibleNumber(uniqueGift.number, dateTimeFormat: environment.dateTimeFormat))", "[@\(addressName)]()").string
                         hasDescriptionButton = true
                         releasedByPeer = peer
                     }
@@ -2775,7 +2898,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                                         if isWearing {
                                             state.commitTakeOff()
 
-                                            state.showAttributeInfo(tag: state.statusTag, text: strings.Gift_View_TookOff("\(uniqueGift.title) #\(presentationStringsFormattedNumber(uniqueGift.number, environment.dateTimeFormat.groupingSeparator))").string)
+                                            state.showAttributeInfo(tag: state.statusTag, text: strings.Gift_View_TookOff("\(uniqueGift.title) #\(formatCollectibleNumber(uniqueGift.number, dateTimeFormat: environment.dateTimeFormat))").string)
                                         } else {
                                             if let controller = controller() as? GiftViewScreen {
                                                 controller.dismissAllTooltips()
@@ -2802,7 +2925,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                                                     state.requestWearPreview()
                                                 } else {
                                                     state.commitWear(uniqueGift)
-                                                    state.showAttributeInfo(tag: state.statusTag, text: strings.Gift_View_PutOn("\(uniqueGift.title) #\(presentationStringsFormattedNumber(uniqueGift.number, environment.dateTimeFormat.groupingSeparator))").string)
+                                                    state.showAttributeInfo(tag: state.statusTag, text: strings.Gift_View_PutOn("\(uniqueGift.title) #\(formatCollectibleNumber(uniqueGift.number, dateTimeFormat: environment.dateTimeFormat))").string)
                                                 }
                                             })
                                         }
@@ -3006,6 +3129,36 @@ private final class GiftViewSheetContent: CombinedComponent {
                             MultilineTextComponent(text: .plain(NSAttributedString(string: strings.Gift_Unique_Issued("\(issuedString)/\(totalString)").string, font: tableFont, textColor: tableTextColor)))
                         )
                     ), at: hasOriginalInfo ? tableItems.count - 1 : tableItems.count)
+                    
+                    //TODO:localize
+                    if let valueAmount = uniqueGift.valueAmount, let valueCurrency = uniqueGift.valueCurrency {
+                        tableItems.insert(.init(
+                            id: "fiatValue",
+                            title: "Value",
+                            component: AnyComponent(
+                                HStack([
+                                    AnyComponentWithIdentity(
+                                        id: AnyHashable(0),
+                                        component: AnyComponent(MultilineTextComponent(text: .plain(NSAttributedString(string: "≈\(formatCurrencyAmount(valueAmount, currency: valueCurrency))", font: tableFont, textColor: tableTextColor))))
+                                    ),
+                                    AnyComponentWithIdentity(
+                                        id: AnyHashable(1),
+                                        component: AnyComponent(Button(
+                                            content: AnyComponent(ButtonContentComponent(
+                                                context: component.context,
+                                                text: "learn more",
+                                                color: theme.list.itemAccentColor
+                                            )),
+                                            action: { [weak state] in
+                                                state?.openValue()
+                                            }
+                                        ))
+                                    )
+                                ], spacing: 4.0)
+                            ),
+                            insets: UIEdgeInsets(top: 0.0, left: 10.0, bottom: 0.0, right: 12.0)
+                        ), at: hasOriginalInfo ? tableItems.count - 1 : tableItems.count)
+                    }
                 } else {
                     if case let .soldOutGift(gift) = subject, let soldOut = gift.soldOut {
                         tableItems.append(.init(
@@ -3129,23 +3282,16 @@ private final class GiftViewSheetContent: CombinedComponent {
                     }
                     
                     if !soldOut && canUpgrade {
-                        var items: [AnyComponentWithIdentity<Empty>] = []
-                        items.append(
-                            AnyComponentWithIdentity(
-                                id: AnyHashable(0),
-                                component: AnyComponent(MultilineTextComponent(text: .plain(NSAttributedString(string: strings.Gift_View_Status_NonUnique, font: tableFont, textColor: tableTextColor))))
-                            )
-                        )
                         tableItems.append(.init(
                             id: "status",
                             title: strings.Gift_View_Status,
                             component: AnyComponent(
-                                HStack(items, spacing: 4.0)
+                                MultilineTextComponent(text: .plain(NSAttributedString(string: strings.Gift_View_Status_NonUnique, font: tableFont, textColor: tableTextColor)))
                             ),
                             insets: UIEdgeInsets(top: 0.0, left: 10.0, bottom: 0.0, right: 12.0)
                         ))
                     }
-                    
+                                        
                     if let text {
                         let attributedText = stringWithAppliedEntities(text, entities: entities ?? [], baseColor: tableTextColor, linkColor: tableLinkColor, baseFont: tableFont, linkFont: tableFont, boldFont: tableBoldFont, italicFont: tableItalicFont, boldItalicFont: tableBoldItalicFont, fixedFont: tableMonospaceFont, blockQuoteFont: tableFont, message: nil)
                         
@@ -3436,7 +3582,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                                         state.dismiss(animated: true)
                                     } else {
                                         Queue.mainQueue().after(0.2) {
-                                            state.showAttributeInfo(tag: state.statusTag, text: strings.Gift_View_PutOn("\(uniqueGift.title) #\(presentationStringsFormattedNumber(uniqueGift.number, environment.dateTimeFormat.groupingSeparator))").string)
+                                            state.showAttributeInfo(tag: state.statusTag, text: strings.Gift_View_PutOn("\(uniqueGift.title) #\(formatCollectibleNumber(uniqueGift.number, dateTimeFormat: environment.dateTimeFormat))").string)
                                         }
                                     }
                                 }
@@ -3450,7 +3596,12 @@ private final class GiftViewSheetContent: CombinedComponent {
                     state.cachedStarImage = (generateTintedImage(image: UIImage(bundleImageName: "Item List/PremiumIcon"), color: theme.list.itemCheckColors.foregroundColor)!, theme)
                 }
                 var upgradeString = strings.Gift_Upgrade_Upgrade
-                if let upgradeForm = state.upgradeForm, let price = upgradeForm.invoice.prices.first?.amount {
+                if !incoming {
+                    //TODO:localize
+                    if let gift = state.starGiftsMap[giftId], let upgradeStars = gift.upgradeStars {
+                        upgradeString = "Pay  # \(upgradeStars) for Upgrade"
+                    }
+                } else if let upgradeForm = state.upgradeForm, let price = upgradeForm.invoice.prices.first?.amount {
                     upgradeString += "  # \(presentationStringsFormattedNumber(Int32(price), environment.dateTimeFormat.groupingSeparator))"
                 }
                 let buttonTitle = subject.arguments?.upgradeStars != nil ? strings.Gift_Upgrade_Confirm : upgradeString
@@ -3471,7 +3622,11 @@ private final class GiftViewSheetContent: CombinedComponent {
                         isEnabled: true,
                         displaysProgress: state.inProgress,
                         action: { [weak state] in
-                            state?.commitUpgrade()
+                            if canGiftUpgrade {
+                                state?.commitPrepaidUpgrade()
+                            } else {
+                                state?.commitUpgrade()
+                            }
                         }),
                     availableSize: buttonSize,
                     transition: context.transition
@@ -3495,9 +3650,12 @@ private final class GiftViewSheetContent: CombinedComponent {
                     availableSize: buttonSize,
                     transition: context.transition
                 )
-            } else if incoming && !converted && !upgraded && canUpgrade {
+            } else if (incoming && !converted && !upgraded && canUpgrade) || canGiftUpgrade {
                 let buttonTitle: String
-                if let upgradeStars, upgradeStars > 0 {
+                if canGiftUpgrade {
+                    //TODO:localize
+                    buttonTitle = "Gift an Upgrade"
+                } else if let upgradeStars, upgradeStars > 0 {
                     buttonTitle = strings.Gift_View_UpgradeForFree
                 } else {
                     buttonTitle = strings.Gift_View_Upgrade
@@ -3641,9 +3799,50 @@ private final class GiftViewSheetContent: CombinedComponent {
                 )
             }
             let buttonFrame = CGRect(origin: CGPoint(x: sideInset, y: originY), size: buttonChild.size)
+            
+            var buttonAlpha: CGFloat = 1.0
+            if let nextGiftToUpgrade = state.nextGiftToUpgrade, case let .generic(gift) = nextGiftToUpgrade.gift {
+                buttonAlpha = 0.0
+                
+                let upgradeNextButton = upgradeNextButton.update(
+                    component: PlainButtonComponent(
+                        content: AnyComponent(
+                            HStack([
+                                AnyComponentWithIdentity(id: "label", component: AnyComponent(
+                                    MultilineTextComponent(text: .plain(NSAttributedString(string: "Upgrade Next Gift", font: Font.regular(17.0), textColor: theme.actionSheet.controlAccentColor)))
+                                )),
+                                AnyComponentWithIdentity(id: "icon", component: AnyComponent(
+                                    GiftItemComponent(
+                                        context: component.context,
+                                        theme: theme,
+                                        strings: strings,
+                                        peer: nil,
+                                        subject: .starGift(gift: gift, price: ""),
+                                        mode: .buttonIcon
+                                    )
+                                )),
+                            ], spacing: 5.0)
+                        ),
+                        action: { [weak state] in
+                            state?.switchToNextUpgradable()
+                        },
+                        animateScale: false
+                    ),
+                    environment: {},
+                    availableSize: buttonChild.size,
+                    transition: .immediate
+                )
+                context.add(upgradeNextButton
+                    .position(CGPoint(x: buttonFrame.midX, y: buttonFrame.midY))
+                    .appear(.default(scale: true, alpha: true))
+                    .disappear(.default(scale: true, alpha: true))
+                )
+            }
+            
             context.add(buttonChild
                 .position(CGPoint(x: buttonFrame.midX, y: buttonFrame.midY))
                 .cornerRadius(10.0)
+                .opacity(buttonAlpha)
             )
             originY += buttonChild.size.height
             originY += 7.0
@@ -3703,6 +3902,7 @@ final class GiftViewSheetComponent: CombinedComponent {
                     backgroundColor: .color(environment.theme.actionSheet.opaqueItemBackgroundColor),
                     followContentSizeChanges: true,
                     clipsContent: true,
+                    hasDimView: false,
                     externalState: sheetExternalState,
                     animateOut: animateOut,
                     onPan: {
@@ -3713,6 +3913,7 @@ final class GiftViewSheetComponent: CombinedComponent {
                     willDismiss: {
                         if let controller = controller() as? GiftViewScreen {
                             controller.dismissBalanceOverlay()
+                            controller.requestLayout(forceUpdate: true, transition: .easeInOut(duration: 0.3).withUserData(ViewControllerComponentContainer.AnimateOutTransition()))
                         }
                     }
                 ),
@@ -3726,6 +3927,7 @@ final class GiftViewSheetComponent: CombinedComponent {
                         dismiss: { animated in
                             if animated {
                                 if let controller = controller() as? GiftViewScreen {
+                                    controller.requestLayout(forceUpdate: true, transition: .easeInOut(duration: 0.3).withUserData(ViewControllerComponentContainer.AnimateOutTransition()))
                                     controller.dismissAllTooltips()
                                     controller.dismissBalanceOverlay()
                                     animateOut.invoke(Action { _ in
@@ -3787,19 +3989,19 @@ public class GiftViewScreen: ViewControllerComponentContainer {
         case upgradePreview([StarGift.UniqueGift.Attribute], String)
         case wearPreview(StarGift.UniqueGift)
         
-        var arguments: (peerId: EnginePeer.Id?, fromPeerId: EnginePeer.Id?, fromPeerName: String?, messageId: EngineMessage.Id?, reference: StarGiftReference?, incoming: Bool, gift: StarGift, date: Int32, convertStars: Int64?, text: String?, entities: [MessageTextEntity]?, nameHidden: Bool, savedToProfile: Bool, pinnedToTop: Bool?, converted: Bool, upgraded: Bool, refunded: Bool, canUpgrade: Bool, upgradeStars: Int64?, transferStars: Int64?, resellAmounts: [CurrencyAmount]?, canExportDate: Int32?, upgradeMessageId: Int32?, canTransferDate: Int32?, canResaleDate: Int32?)? {
+        var arguments: (peerId: EnginePeer.Id?, fromPeerId: EnginePeer.Id?, fromPeerName: String?, messageId: EngineMessage.Id?, reference: StarGiftReference?, incoming: Bool, gift: StarGift, date: Int32, convertStars: Int64?, text: String?, entities: [MessageTextEntity]?, nameHidden: Bool, savedToProfile: Bool, pinnedToTop: Bool?, converted: Bool, upgraded: Bool, refunded: Bool, canUpgrade: Bool, upgradeStars: Int64?, transferStars: Int64?, resellAmounts: [CurrencyAmount]?, canExportDate: Int32?, upgradeMessageId: Int32?, canTransferDate: Int32?, canResaleDate: Int32?, prepaidUpgradeHash: String?)? {
             switch self {
             case let .message(message):
                 if let action = message.media.first(where: { $0 is TelegramMediaAction }) as? TelegramMediaAction {
                     switch action.action {
-                    case let .starGift(gift, convertStars, text, entities, nameHidden, savedToProfile, converted, upgraded, canUpgrade, upgradeStars, isRefunded, _, upgradeMessageId, peerId, senderId, savedId):
+                    case let .starGift(gift, convertStars, text, entities, nameHidden, savedToProfile, converted, upgraded, canUpgrade, upgradeStars, isRefunded, _, upgradeMessageId, peerId, senderId, savedId, prepaidUpgradeHash):
                         var reference: StarGiftReference
                         if let peerId, let savedId {
                             reference = .peer(peerId: peerId, id: savedId)
                         } else {
                             reference = .message(messageId: message.id)
                         }
-                        return (message.id.peerId, senderId ?? message.author?.id, message.author?.compactDisplayTitle, message.id, reference, message.flags.contains(.Incoming), gift, message.timestamp, convertStars, text, entities, nameHidden, savedToProfile, nil, converted, upgraded, isRefunded, canUpgrade, upgradeStars, nil, nil, nil, upgradeMessageId, nil, nil)
+                        return (message.id.peerId, senderId ?? message.author?.id, message.author?.compactDisplayTitle, message.id, reference, message.flags.contains(.Incoming), gift, message.timestamp, convertStars, text, entities, nameHidden, savedToProfile, nil, converted, upgraded, isRefunded, canUpgrade, upgradeStars, nil, nil, nil, upgradeMessageId, nil, nil, prepaidUpgradeHash)
                     case let .starGiftUnique(gift, isUpgrade, isTransferred, savedToProfile, canExportDate, transferStars, _, _, peerId, senderId, savedId, _, canTransferDate, canResaleDate):
                         var reference: StarGiftReference
                         if let peerId, let savedId {
@@ -3824,13 +4026,13 @@ public class GiftViewScreen: ViewControllerComponentContainer {
                         if case let .unique(uniqueGift) = gift {
                             resellAmounts = uniqueGift.resellAmounts
                         }
-                        return (message.id.peerId, senderId ?? message.author?.id, message.author?.compactDisplayTitle, message.id, reference, incoming, gift, message.timestamp, nil, nil, nil, false, savedToProfile, nil, false, false, false, false, nil, transferStars, resellAmounts, canExportDate, nil, canTransferDate, canResaleDate)
+                        return (message.id.peerId, senderId ?? message.author?.id, message.author?.compactDisplayTitle, message.id, reference, incoming, gift, message.timestamp, nil, nil, nil, false, savedToProfile, nil, false, false, false, false, nil, transferStars, resellAmounts, canExportDate, nil, canTransferDate, canResaleDate, nil)
                     default:
                         return nil
                     }
                 }
             case let .uniqueGift(gift, _), let .wearPreview(gift):
-                return (nil, nil, nil, nil, nil, false, .unique(gift), 0, nil, nil, nil, false, false, nil, false, false, false, false, nil, nil, gift.resellAmounts, nil, nil, nil, nil)
+                return (nil, nil, nil, nil, nil, false, .unique(gift), 0, nil, nil, nil, false, false, nil, false, false, false, false, nil, nil, gift.resellAmounts, nil, nil, nil, nil, nil)
             case let .profileGift(peerId, gift):
                 var messageId: EngineMessage.Id?
                 if case let .message(messageIdValue) = gift.reference {
@@ -3840,7 +4042,7 @@ public class GiftViewScreen: ViewControllerComponentContainer {
                 if case let .unique(uniqueGift) = gift.gift {
                     resellAmounts = uniqueGift.resellAmounts
                 }
-                return (peerId, gift.fromPeer?.id, gift.fromPeer?.compactDisplayTitle, messageId, gift.reference, false, gift.gift, gift.date, gift.convertStars, gift.text, gift.entities, gift.nameHidden, gift.savedToProfile, gift.pinnedToTop, false, false, false, gift.canUpgrade, gift.upgradeStars, gift.transferStars, resellAmounts, gift.canExportDate, nil, gift.canTransferDate, gift.canResaleDate)
+                return (peerId, gift.fromPeer?.id, gift.fromPeer?.compactDisplayTitle, messageId, gift.reference, false, gift.gift, gift.date, gift.convertStars, gift.text, gift.entities, gift.nameHidden, gift.savedToProfile, gift.pinnedToTop, false, false, false, gift.canUpgrade, gift.upgradeStars, gift.transferStars, resellAmounts, gift.canExportDate, nil, gift.canTransferDate, gift.canResaleDate, gift.prepaidUpgradeHash)
             case .soldOutGift:
                 return nil
             case .upgradePreview:
@@ -3852,6 +4054,24 @@ public class GiftViewScreen: ViewControllerComponentContainer {
     
     private let context: AccountContext
     private let subject: GiftViewScreen.Subject
+    
+    private var upgradableGiftsContext: ProfileGiftsContext?
+    fileprivate private(set) var upgradableGifts: [ProfileGiftsContext.State.StarGift]?
+    fileprivate var upgradedGiftReferences = Set<StarGiftReference>()
+    private var upgradableDisposable: Disposable?
+    fileprivate var nextUpgradableGift: ProfileGiftsContext.State.StarGift? {
+        if let upgradableGifts = self.upgradableGifts {
+            return upgradableGifts.first(where: { gift in
+                if let reference = gift.reference {
+                    if !self.upgradedGiftReferences.contains(reference) {
+                        return true
+                    }
+                }
+                return false
+            })
+        }
+        return nil
+    }
     
     fileprivate var showBalance = false {
         didSet {
@@ -3910,7 +4130,13 @@ public class GiftViewScreen: ViewControllerComponentContainer {
         if let allSubjects, !allSubjects.isEmpty {
             items.removeAll()
             for i in 0 ..< allSubjects.count {
-                items.append(GiftPagerComponent.Item(id: i, subject: allSubjects[i]))
+                var id: AnyHashable
+                if case let .profileGift(_, starGift) = allSubjects[i], let reference = starGift.reference {
+                    id = reference.stringValue
+                } else {
+                    id = i
+                }
+                items.append(GiftPagerComponent.Item(id: id, subject: allSubjects[i]))
             }
         }
         var dismissTooltipsImpl: (() -> Void)?
@@ -3920,6 +4146,7 @@ public class GiftViewScreen: ViewControllerComponentContainer {
                 context: context,
                 items: items,
                 index: index ?? 0,
+                itemSpacing: 10.0,
                 updated: { _, _ in
                     dismissTooltipsImpl?()
                 }
@@ -3934,6 +4161,18 @@ public class GiftViewScreen: ViewControllerComponentContainer {
         
         self.navigationPresentation = .flatModal
         self.automaticallyControlPresentationContextLayout = false
+        
+        if "".isEmpty {
+            let upgradableGiftsContext = ProfileGiftsContext(account: context.account, peerId: context.account.peerId, collectionId: nil, sorting: .date, filter: [.displayed, .hidden, .limitedUpgradable])
+            self.upgradableDisposable = (upgradableGiftsContext.state
+            |> deliverOnMainQueue).start(next: { [weak self] state in
+                guard let self else {
+                    return
+                }
+                self.upgradableGifts = state.filteredGifts
+            })
+            self.upgradableGiftsContext = upgradableGiftsContext
+        }
     }
     
     required public init(coder aDecoder: NSCoder) {
@@ -3942,6 +4181,50 @@ public class GiftViewScreen: ViewControllerComponentContainer {
     
     deinit {
         self.disposed()
+        self.upgradableDisposable?.dispose()
+    }
+    
+    fileprivate func switchToNextUpgradable() {
+        guard let upgradableGifts = self.upgradableGifts, case let .profileGift(peerId, _) = self.subject else {
+            return
+        }
+        var effectiveUpgradableGifts: [ProfileGiftsContext.State.StarGift] = []
+        for gift in upgradableGifts {
+            if let reference = gift.reference {
+                if !self.upgradedGiftReferences.contains(reference) {
+                    effectiveUpgradableGifts.append(gift)
+                }
+            }
+        }
+        
+        guard !effectiveUpgradableGifts.isEmpty else {
+            return
+        }
+        
+        var items: [GiftPagerComponent.Item] = []
+        for i in 0 ..< effectiveUpgradableGifts.count {
+            let gift = effectiveUpgradableGifts[i]
+            var id: AnyHashable
+            if let reference = gift.reference {
+                id = reference.stringValue
+            } else {
+                id = i
+            }
+            items.append(GiftPagerComponent.Item(id: id, subject: .profileGift(peerId, gift)))
+        }
+        
+        self.updateComponent(
+            component: AnyComponent(GiftPagerComponent(
+                context: self.context,
+                items: items,
+                index: 0,
+                itemSpacing: 10.0,
+                updated: { [weak self] _, _ in
+                    self?.dismissAllTooltips()
+                }
+            )),
+            transition: .spring(duration: 0.3)
+        )
     }
     
     public override func viewDidLoad() {
@@ -4081,11 +4364,9 @@ public class GiftViewScreen: ViewControllerComponentContainer {
     }
 }
 
-private func formatPercentage(_ value: Float) -> String {
+func formatPercentage(_ value: Float) -> String {
     return String(format: "%0.1f%%", value).replacingOccurrences(of: ".0%", with: "%").replacingOccurrences(of: ",0%", with: "%")
 }
-
-
 
 private final class PeerCellComponent: Component {
     let context: AccountContext
@@ -4193,12 +4474,12 @@ private final class PeerCellComponent: Component {
     }
 }
 
-private final class ButtonContentComponent: Component {
+final class ButtonContentComponent: Component {
     let context: AccountContext
     let text: String
     let color: UIColor
     
-    public init(
+    init(
         context: AccountContext,
         text: String,
         color: UIColor
@@ -4208,7 +4489,7 @@ private final class ButtonContentComponent: Component {
         self.color = color
     }
 
-    public static func ==(lhs: ButtonContentComponent, rhs: ButtonContentComponent) -> Bool {
+    static func ==(lhs: ButtonContentComponent, rhs: ButtonContentComponent) -> Bool {
         if lhs.context !== rhs.context {
             return false
         }
@@ -4221,7 +4502,7 @@ private final class ButtonContentComponent: Component {
         return true
     }
 
-    public final class View: UIView {
+    final class View: UIView {
         private var component: ButtonContentComponent?
         private weak var componentState: EmptyComponentState?
         
@@ -4279,11 +4560,11 @@ private final class ButtonContentComponent: Component {
         }
     }
 
-    public func makeView() -> View {
+    func makeView() -> View {
         return View(frame: CGRect())
     }
 
-    public func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
+    func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
         return view.update(component: self, availableSize: availableSize, state: state, environment: environment, transition: transition)
     }
 }
@@ -4690,6 +4971,19 @@ private struct GiftViewConfiguration {
             return GiftViewConfiguration(explorerUrl: value)
         } else {
             return .defaultValue
+        }
+    }
+}
+
+private extension StarGiftReference {
+    var stringValue: String {
+        switch self {
+        case let .message(messageId):
+            return "m_\(messageId.id)"
+        case let .peer(peerId, id):
+            return "p_\(peerId.toInt64())_\(id)"
+        case let .slug(slug):
+            return "s_\(slug)"
         }
     }
 }
