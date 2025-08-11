@@ -620,7 +620,7 @@ public extension Api {
     switch self {
                 case .userFull(let flags, let flags2, let id, let about, let settings, let personalPhoto, let profilePhoto, let fallbackPhoto, let notifySettings, let botInfo, let pinnedMsgId, let commonChatsCount, let folderId, let ttlPeriod, let themeEmoticon, let privateForwardName, let botGroupAdminRights, let botBroadcastAdminRights, let wallpaper, let stories, let businessWorkHours, let businessLocation, let businessGreetingMessage, let businessAwayMessage, let businessIntro, let birthday, let personalChannelId, let personalChannelMessage, let stargiftsCount, let starrefProgram, let botVerification, let sendPaidMessagesStars, let disallowedGifts, let starsRating, let starsMyPendingRating, let starsMyPendingRatingDate, let linkedBotforumChannelId):
                     if boxed {
-                        buffer.appendInt32(1323346321)
+                        buffer.appendInt32(-510712709)
                     }
                     serializeInt32(flags, buffer: buffer, boxed: false)
                     serializeInt32(flags2, buffer: buffer, boxed: false)
@@ -658,7 +658,7 @@ public extension Api {
                     if Int(flags2) & Int(1 << 17) != 0 {starsRating!.serialize(buffer, true)}
                     if Int(flags2) & Int(1 << 18) != 0 {starsMyPendingRating!.serialize(buffer, true)}
                     if Int(flags2) & Int(1 << 18) != 0 {serializeInt32(starsMyPendingRatingDate!, buffer: buffer, boxed: false)}
-                    if Int(flags) & Int(1 << 19) != 0 {serializeInt64(linkedBotforumChannelId!, buffer: buffer, boxed: false)}
+                    if Int(flags2) & Int(1 << 19) != 0 {serializeInt64(linkedBotforumChannelId!, buffer: buffer, boxed: false)}
                     break
     }
     }
@@ -786,7 +786,7 @@ public extension Api {
             var _36: Int32?
             if Int(_2!) & Int(1 << 18) != 0 {_36 = reader.readInt32() }
             var _37: Int64?
-            if Int(_1!) & Int(1 << 19) != 0 {_37 = reader.readInt64() }
+            if Int(_2!) & Int(1 << 19) != 0 {_37 = reader.readInt64() }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
@@ -823,7 +823,7 @@ public extension Api {
             let _c34 = (Int(_2!) & Int(1 << 17) == 0) || _34 != nil
             let _c35 = (Int(_2!) & Int(1 << 18) == 0) || _35 != nil
             let _c36 = (Int(_2!) & Int(1 << 18) == 0) || _36 != nil
-            let _c37 = (Int(_1!) & Int(1 << 19) == 0) || _37 != nil
+            let _c37 = (Int(_2!) & Int(1 << 19) == 0) || _37 != nil
             if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 && _c10 && _c11 && _c12 && _c13 && _c14 && _c15 && _c16 && _c17 && _c18 && _c19 && _c20 && _c21 && _c22 && _c23 && _c24 && _c25 && _c26 && _c27 && _c28 && _c29 && _c30 && _c31 && _c32 && _c33 && _c34 && _c35 && _c36 && _c37 {
                 return Api.UserFull.userFull(flags: _1!, flags2: _2!, id: _3!, about: _4, settings: _5!, personalPhoto: _6, profilePhoto: _7, fallbackPhoto: _8, notifySettings: _9!, botInfo: _10, pinnedMsgId: _11, commonChatsCount: _12!, folderId: _13, ttlPeriod: _14, themeEmoticon: _15, privateForwardName: _16, botGroupAdminRights: _17, botBroadcastAdminRights: _18, wallpaper: _19, stories: _20, businessWorkHours: _21, businessLocation: _22, businessGreetingMessage: _23, businessAwayMessage: _24, businessIntro: _25, birthday: _26, personalChannelId: _27, personalChannelMessage: _28, stargiftsCount: _29, starrefProgram: _30, botVerification: _31, sendPaidMessagesStars: _32, disallowedGifts: _33, starsRating: _34, starsMyPendingRating: _35, starsMyPendingRatingDate: _36, linkedBotforumChannelId: _37)
             }

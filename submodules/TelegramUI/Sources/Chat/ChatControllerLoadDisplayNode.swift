@@ -163,6 +163,11 @@ extension ChatControllerImpl {
                 return
             }
             
+            if let historyNodeData = contentData.state.historyNodeData {
+                self.updateChatLocationToOther(chatLocation: historyNodeData.chatLocation)
+                return
+            }
+            
             apply({ [weak self, weak contentData] forceAnimation in
                 guard let self, let contentData, self.pendingContentData?.contentData === contentData else {
                     return
@@ -170,6 +175,7 @@ extension ChatControllerImpl {
                 
                 self.contentData = contentData
                 self.pendingContentData = nil
+                
                 self.contentDataUpdated(synchronous: true, forceAnimation: forceAnimation, previousState: contentData.state)
                 
                 self.chatThemeEmoticonPromise.set(contentData.chatThemeEmoticonPromise.get())
@@ -187,6 +193,12 @@ extension ChatControllerImpl {
                     guard let self, let contentData, self.contentData === contentData else {
                         return
                     }
+                    
+                    if let historyNodeData = contentData.state.historyNodeData {
+                        self.updateChatLocationToOther(chatLocation: historyNodeData.chatLocation)
+                        return
+                    }
+                    
                     self.contentDataUpdated(synchronous: false, forceAnimation: false, previousState: previousState)
                 }
             })
