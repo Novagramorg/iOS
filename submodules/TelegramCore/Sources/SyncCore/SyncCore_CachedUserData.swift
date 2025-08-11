@@ -1031,6 +1031,11 @@ public final class CachedUserData: CachedPeerData {
         }
     }
     
+    public enum LinkedBotChannelId: Equatable {
+        case unknown
+        case known(PeerId?)
+    }
+    
     public let about: String?
     public let botInfo: BotInfo?
     public let editableBotInfo: EditableBotInfo?
@@ -1069,7 +1074,7 @@ public final class CachedUserData: CachedPeerData {
     public let botChannelAdminRights: TelegramChatAdminRights?
     public let starRating: TelegramStarRating?
     public let pendingStarRating: TelegramStarPendingRating?
-    public let linkedBotChannelId: PeerId?
+    public let linkedBotChannelId: LinkedBotChannelId
     
     public let peerIds: Set<PeerId>
     public let messageIds: Set<MessageId>
@@ -1116,10 +1121,10 @@ public final class CachedUserData: CachedPeerData {
         self.botChannelAdminRights = nil
         self.starRating = nil
         self.pendingStarRating = nil
-        self.linkedBotChannelId = nil
+        self.linkedBotChannelId = .unknown
     }
     
-    public init(about: String?, botInfo: BotInfo?, editableBotInfo: EditableBotInfo?, peerStatusSettings: PeerStatusSettings?, pinnedMessageId: MessageId?, isBlocked: Bool, commonGroupCount: Int32, voiceCallsAvailable: Bool, videoCallsAvailable: Bool, callsPrivate: Bool, canPinMessages: Bool, hasScheduledMessages: Bool, autoremoveTimeout: CachedPeerAutoremoveTimeout, themeEmoticon: String?, photo: CachedPeerProfilePhoto, personalPhoto: CachedPeerProfilePhoto, fallbackPhoto: CachedPeerProfilePhoto, voiceMessagesAvailable: Bool, wallpaper: TelegramWallpaper?, flags: CachedUserFlags, businessHours: TelegramBusinessHours?, businessLocation: TelegramBusinessLocation?, greetingMessage: TelegramBusinessGreetingMessage?, awayMessage: TelegramBusinessAwayMessage?, connectedBot: TelegramAccountConnectedBot?, businessIntro: CachedTelegramBusinessIntro, birthday: TelegramBirthday?, personalChannel: CachedTelegramPersonalChannel, botPreview: BotPreview?, starGiftsCount: Int32?, starRefProgram: TelegramStarRefProgram?, verification: PeerVerification?, sendPaidMessageStars: StarsAmount?, disallowedGifts: TelegramDisallowedGifts?, botGroupAdminRights: TelegramChatAdminRights?, botChannelAdminRights: TelegramChatAdminRights?, starRating: TelegramStarRating?, pendingStarRating: TelegramStarPendingRating?, linkedBotChannelId: PeerId?) {
+    public init(about: String?, botInfo: BotInfo?, editableBotInfo: EditableBotInfo?, peerStatusSettings: PeerStatusSettings?, pinnedMessageId: MessageId?, isBlocked: Bool, commonGroupCount: Int32, voiceCallsAvailable: Bool, videoCallsAvailable: Bool, callsPrivate: Bool, canPinMessages: Bool, hasScheduledMessages: Bool, autoremoveTimeout: CachedPeerAutoremoveTimeout, themeEmoticon: String?, photo: CachedPeerProfilePhoto, personalPhoto: CachedPeerProfilePhoto, fallbackPhoto: CachedPeerProfilePhoto, voiceMessagesAvailable: Bool, wallpaper: TelegramWallpaper?, flags: CachedUserFlags, businessHours: TelegramBusinessHours?, businessLocation: TelegramBusinessLocation?, greetingMessage: TelegramBusinessGreetingMessage?, awayMessage: TelegramBusinessAwayMessage?, connectedBot: TelegramAccountConnectedBot?, businessIntro: CachedTelegramBusinessIntro, birthday: TelegramBirthday?, personalChannel: CachedTelegramPersonalChannel, botPreview: BotPreview?, starGiftsCount: Int32?, starRefProgram: TelegramStarRefProgram?, verification: PeerVerification?, sendPaidMessageStars: StarsAmount?, disallowedGifts: TelegramDisallowedGifts?, botGroupAdminRights: TelegramChatAdminRights?, botChannelAdminRights: TelegramChatAdminRights?, starRating: TelegramStarRating?, pendingStarRating: TelegramStarPendingRating?, linkedBotChannelId: LinkedBotChannelId) {
         self.about = about
         self.botInfo = botInfo
         self.editableBotInfo = editableBotInfo
@@ -1240,7 +1245,15 @@ public final class CachedUserData: CachedPeerData {
         self.starRating = decoder.decodeCodable(TelegramStarRating.self, forKey: "starRating")
         self.pendingStarRating = decoder.decodeCodable(TelegramStarPendingRating.self, forKey: "pendingStarRating")
         
-        self.linkedBotChannelId = decoder.decodeOptionalInt64ForKey("linkedBotChannelId").flatMap(PeerId.init)
+        if let linkedBotChannelId = decoder.decodeOptionalInt64ForKey("linkedBotChannelId") {
+            if linkedBotChannelId == 0 {
+                self.linkedBotChannelId = .known(nil)
+            } else {
+                self.linkedBotChannelId = .known(PeerId(linkedBotChannelId))
+            }
+        } else {
+            self.linkedBotChannelId = .unknown
+        }
     }
     
     public func encode(_ encoder: PostboxEncoder) {
@@ -1400,10 +1413,15 @@ public final class CachedUserData: CachedPeerData {
             encoder.encodeNil(forKey: "pendingStarRating")
         }
         
-        if let linkedBotChannelId = self.linkedBotChannelId {
-            encoder.encodeInt64(linkedBotChannelId.toInt64(), forKey: "linkedBotChannelId")
-        } else {
+        switch self.linkedBotChannelId {
+        case .unknown:
             encoder.encodeNil(forKey: "linkedBotChannelId")
+        case let .known(value):
+            if let value = value {
+                encoder.encodeInt64(value.toInt64(), forKey: "linkedBotChannelId")
+            } else {
+                encoder.encodeInt64(0, forKey: "linkedBotChannelId")
+            }
         }
     }
     
@@ -1632,7 +1650,7 @@ public final class CachedUserData: CachedPeerData {
     }
     
     public func withUpdatedLinkedBotChannelId(_ linkedBotChannelId: PeerId?) -> CachedUserData {
-        return CachedUserData(about: self.about, botInfo: self.botInfo, editableBotInfo: self.editableBotInfo, peerStatusSettings: self.peerStatusSettings, pinnedMessageId: self.pinnedMessageId, isBlocked: self.isBlocked, commonGroupCount: self.commonGroupCount, voiceCallsAvailable: self.voiceCallsAvailable, videoCallsAvailable: self.videoCallsAvailable, callsPrivate: self.callsPrivate, canPinMessages: self.canPinMessages, hasScheduledMessages: self.hasScheduledMessages, autoremoveTimeout: self.autoremoveTimeout, themeEmoticon: self.themeEmoticon, photo: self.photo, personalPhoto: self.personalPhoto, fallbackPhoto: self.fallbackPhoto, voiceMessagesAvailable: self.voiceMessagesAvailable, wallpaper: self.wallpaper, flags: self.flags, businessHours: self.businessHours, businessLocation: self.businessLocation, greetingMessage: self.greetingMessage, awayMessage: self.awayMessage, connectedBot: self.connectedBot, businessIntro: self.businessIntro, birthday: self.birthday, personalChannel: self.personalChannel, botPreview: self.botPreview, starGiftsCount: self.starGiftsCount, starRefProgram: self.starRefProgram, verification: self.verification, sendPaidMessageStars: self.sendPaidMessageStars, disallowedGifts: disallowedGifts, botGroupAdminRights: self.botGroupAdminRights, botChannelAdminRights: self.botChannelAdminRights, starRating: self.starRating, pendingStarRating: self.pendingStarRating, linkedBotChannelId: linkedBotChannelId)
+        return CachedUserData(about: self.about, botInfo: self.botInfo, editableBotInfo: self.editableBotInfo, peerStatusSettings: self.peerStatusSettings, pinnedMessageId: self.pinnedMessageId, isBlocked: self.isBlocked, commonGroupCount: self.commonGroupCount, voiceCallsAvailable: self.voiceCallsAvailable, videoCallsAvailable: self.videoCallsAvailable, callsPrivate: self.callsPrivate, canPinMessages: self.canPinMessages, hasScheduledMessages: self.hasScheduledMessages, autoremoveTimeout: self.autoremoveTimeout, themeEmoticon: self.themeEmoticon, photo: self.photo, personalPhoto: self.personalPhoto, fallbackPhoto: self.fallbackPhoto, voiceMessagesAvailable: self.voiceMessagesAvailable, wallpaper: self.wallpaper, flags: self.flags, businessHours: self.businessHours, businessLocation: self.businessLocation, greetingMessage: self.greetingMessage, awayMessage: self.awayMessage, connectedBot: self.connectedBot, businessIntro: self.businessIntro, birthday: self.birthday, personalChannel: self.personalChannel, botPreview: self.botPreview, starGiftsCount: self.starGiftsCount, starRefProgram: self.starRefProgram, verification: self.verification, sendPaidMessageStars: self.sendPaidMessageStars, disallowedGifts: disallowedGifts, botGroupAdminRights: self.botGroupAdminRights, botChannelAdminRights: self.botChannelAdminRights, starRating: self.starRating, pendingStarRating: self.pendingStarRating, linkedBotChannelId: .known(linkedBotChannelId))
     }
 }
 

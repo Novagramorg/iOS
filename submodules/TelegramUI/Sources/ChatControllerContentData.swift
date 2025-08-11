@@ -81,6 +81,23 @@ extension ChatControllerImpl {
             }
         }
         
+        struct HistoryNodeData: Equatable {
+            let chatLocation: ChatLocation
+            let chatLocationContextHolder: Atomic<ChatLocationContextHolder?>
+            
+            init(chatLocation: ChatLocation, chatLocationContextHolder: Atomic<ChatLocationContextHolder?>) {
+                self.chatLocation = chatLocation
+                self.chatLocationContextHolder = chatLocationContextHolder
+            }
+            
+            static func ==(lhs: HistoryNodeData, rhs: HistoryNodeData) -> Bool {
+                if lhs.chatLocation != rhs.chatLocation {
+                    return false
+                }
+                return true
+            }
+        }
+        
         struct State {
             var peerView: PeerView?
             var threadInfo: EngineMessageHistoryThread.Info?
@@ -144,6 +161,8 @@ extension ChatControllerImpl {
             var removePaidMessageFeeData: ChatPresentationInterfaceState.RemovePaidMessageFeeData?
             
             var preloadNextChatPeerId: EnginePeer.Id?
+            
+            var historyNodeData: HistoryNodeData?
         }
         
         private let presentationData: PresentationData
@@ -792,6 +811,7 @@ extension ChatControllerImpl {
                     var sendPaidMessageStars: StarsAmount?
                     var alwaysShowGiftButton = false
                     var disallowedGifts: TelegramDisallowedGifts?
+                    var switchToBotForum: EnginePeer.Id?
                     if let peer = peerView.peers[peerView.peerId] {
                         if let cachedData = peerView.cachedData as? CachedUserData {
                             contactStatus = ChatContactStatus(canAddContact: !peerView.peerIsContact, peerStatusSettings: cachedData.peerStatusSettings, invitedBy: nil, managingBot: managingBot)
@@ -805,6 +825,11 @@ extension ChatControllerImpl {
                                     alwaysShowGiftButton = globalPrivacySettings.displayGiftButton || cachedData.flags.contains(.displayGiftButton)
                                 }
                                 disallowedGifts = cachedData.disallowedGifts
+                            }
+                            if case let .known(value) = cachedData.linkedBotChannelId {
+                                if let value {
+                                    switchToBotForum = value
+                                }
                             }
                         } else if let cachedData = peerView.cachedData as? CachedGroupData {
                             var invitedBy: Peer?
@@ -1005,6 +1030,15 @@ extension ChatControllerImpl {
                     
                     strongSelf.state.renderedPeer = renderedPeer
                     strongSelf.state.adMessage = adMessage
+                    
+                    if let switchToBotForum {
+                        strongSelf.state.historyNodeData = HistoryNodeData(
+                            chatLocation: .peer(id: switchToBotForum),
+                            chatLocationContextHolder: Atomic(value: nil)
+                        )
+                    } else {
+                        strongSelf.state.historyNodeData = nil
+                    }
 
                     if case .standard(.default) = mode, let channel = renderedPeer?.chatMainPeer as? TelegramChannel, case .broadcast = channel.info {
                         var isRegularChat = false
@@ -2150,8 +2184,23 @@ extension ChatControllerImpl {
                     topPinnedMessage = ChatControllerImpl.topPinnedScrollMessage(context: context, chatLocation: chatLocation, historyNode: historyNode, scrolledToMessageId: self.scrolledToMessageId.get())
                 }
                 
+                let cachedData: Signal<(CachedPeerData?, [MessageId: Message]), NoError>
+                if let peerId = chatLocation.peerId {
+                    cachedData = context.account.postbox.combinedView(keys: [
+                        .cachedPeerDataWithMessages(peerId: peerId)
+                    ]) |> map { views -> (CachedPeerData?, [MessageId: Message]) in
+                        guard let view = views.views[.cachedPeerDataWithMessages(peerId: peerId)] as? CachedPeerDataView else {
+                            return (nil, [:])
+                        }
+                        return (view.cachedPeerData, view.associatedMessages)
+                    }
+                } else {
+                    cachedData = .single((nil, [:]))
+                }
+                
                 self.cachedDataDisposable?.dispose()
-                self.cachedDataDisposable = combineLatest(queue: .mainQueue(), historyNode.cachedPeerDataAndMessages,
+                self.cachedDataDisposable = combineLatest(queue: .mainQueue(),
+                    cachedData,
                     hasPendingMessages,
                     isTopReplyThreadMessageShown,
                     topPinnedMessage,
@@ -2237,7 +2286,7 @@ extension ChatControllerImpl {
                                 pinnedMessageId = replyThreadMessage.effectiveTopId
                             }
                             if let pinnedMessageId = pinnedMessageId {
-                                if let message = messages?[pinnedMessageId] {
+                                if let message = messages[pinnedMessageId] {
                                     pinnedMessage = ChatPinnedMessage(message: message, index: 0, totalCount: 1, topMessageId: message.id)
                                 }
                             }

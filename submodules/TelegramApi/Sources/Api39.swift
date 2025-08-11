@@ -9901,6 +9901,21 @@ public extension Api.functions.payments {
                 }
 }
 public extension Api.functions.payments {
+                static func getUniqueStarGiftValueInfo(slug: String) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.payments.UniqueStarGiftValueInfo>) {
+                    let buffer = Buffer()
+                    buffer.appendInt32(1130737515)
+                    serializeString(slug, buffer: buffer, boxed: false)
+                    return (FunctionDescription(name: "payments.getUniqueStarGiftValueInfo", parameters: [("slug", String(describing: slug))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.payments.UniqueStarGiftValueInfo? in
+                        let reader = BufferReader(buffer)
+                        var result: Api.payments.UniqueStarGiftValueInfo?
+                        if let signature = reader.readInt32() {
+                            result = Api.parse(reader, signature: signature) as? Api.payments.UniqueStarGiftValueInfo
+                        }
+                        return result
+                    })
+                }
+}
+public extension Api.functions.payments {
                 static func launchPrepaidGiveaway(peer: Api.InputPeer, giveawayId: Int64, purpose: Api.InputStorePaymentPurpose) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Updates>) {
                     let buffer = Buffer()
                     buffer.appendInt32(1609928480)
