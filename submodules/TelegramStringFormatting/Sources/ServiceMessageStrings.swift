@@ -1134,7 +1134,7 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                 attributedString = mutableString
             case .prizeStars:
                 attributedString = NSAttributedString(string: strings.Notification_StarsPrize, font: titleFont, textColor: primaryTextColor)
-            case let .starGift(gift, _, text, entities, _, _, _, _, _, upgradeStars, _, isPrepaidUpgrade, _, peerId, senderId, _, _):
+            case let .starGift(gift, _, text, entities, _, _, _, _, _, upgradeStars, _, isPrepaidUpgrade, _, peerId, senderId, _, _, _):
                 if !forAdditionalServiceMessage {
                     if let text {
                         let mutableAttributedString = NSMutableAttributedString(attributedString: stringWithAppliedEntities(text, entities: entities ?? [], baseColor: primaryTextColor, linkColor: primaryTextColor, baseFont: titleFont, linkFont: titleBoldFont, boldFont: titleBoldFont, italicFont: titleFont, boldItalicFont: titleBoldFont, fixedFont: titleFont, blockQuoteFont: titleFont, underlineLinks: false, message: message._asMessage()))
@@ -1190,20 +1190,28 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                             attributedString = addAttributesToStringWithRanges(strings.Notification_StarsGift_SentYou(starsPrice)._tuple, body: bodyAttributes, argumentAttributes: [0: boldAttributes])
                         }
                     } else if let peerId {
-                        peerIds = [(1, peerId)]
-                        var peerName = ""
-                        if let name = message.peers[peerId].flatMap(EnginePeer.init)?.compactDisplayTitle {
-                            peerName = name
-                        }
-                        if let senderId {
-                            peerIds.insert((0, senderId), at: 0)
-                            if let name = message.peers[senderId].flatMap(EnginePeer.init)?.compactDisplayTitle {
-                                authorName = name
+                        if isPrepaidUpgrade {
+                            peerIds = [(1, peerId)]
+                            let starsPrice = strings.Notification_StarsGift_Stars(Int32(clamping: upgradeStars ?? 0))
+                            var attributes = peerMentionsAttributes(primaryTextColor: primaryTextColor, peerIds: peerIds)
+                            attributes[0] = boldAttributes
+                            attributedString = addAttributesToStringWithRanges(strings.Notification_StarsGift_SentUpgrade(authorName, starsPrice)._tuple, body: bodyAttributes, argumentAttributes: attributes)
+                        } else {
+                            peerIds = [(1, peerId)]
+                            var peerName = ""
+                            if let name = message.peers[peerId].flatMap(EnginePeer.init)?.compactDisplayTitle {
+                                peerName = name
                             }
+                            if let senderId {
+                                peerIds.insert((0, senderId), at: 0)
+                                if let name = message.peers[senderId].flatMap(EnginePeer.init)?.compactDisplayTitle {
+                                    authorName = name
+                                }
+                            }
+                            var attributes = peerMentionsAttributes(primaryTextColor: primaryTextColor, peerIds: peerIds)
+                            attributes[2] = boldAttributes
+                            attributedString = addAttributesToStringWithRanges(strings.Notification_StarsGift_Channel_Sent(authorName, peerName, starsPrice)._tuple, body: bodyAttributes, argumentAttributes: attributes)
                         }
-                        var attributes = peerMentionsAttributes(primaryTextColor: primaryTextColor, peerIds: peerIds)
-                        attributes[2] = boldAttributes
-                        attributedString = addAttributesToStringWithRanges(strings.Notification_StarsGift_Channel_Sent(authorName, peerName, starsPrice)._tuple, body: bodyAttributes, argumentAttributes: attributes)
                     } else {
                         var attributes = peerMentionsAttributes(primaryTextColor: primaryTextColor, peerIds: peerIds)
                         attributes[1] = boldAttributes
