@@ -134,6 +134,7 @@ public final class GiftItemComponent: Component {
         case preview
         case grid
         case select
+        case buttonIcon
     }
     
     let context: AccountContext
@@ -375,6 +376,10 @@ public final class GiftItemComponent: Component {
                 size = availableSize
                 iconSize = CGSize(width: floor(size.width * 0.6), height: floor(size.width * 0.6))
                 cornerRadius = 4.0
+            case .buttonIcon:
+                size = CGSize(width: 26.0, height: 26.0)
+                iconSize = size
+                cornerRadius = 0.0
             }
             var backgroundSize = size
             if case .grid = component.mode {
@@ -464,7 +469,7 @@ public final class GiftItemComponent: Component {
                         break
                     }
                 }
-                
+                                
                 if let animationFile {
                     emoji = ChatTextInputTextCustomEmojiAttribute(
                         interactivelySelectedFromPackId: nil,
@@ -474,6 +479,13 @@ public final class GiftItemComponent: Component {
                 } else {
                     emoji = nil
                 }
+            }
+            
+            if case .buttonIcon = component.mode {
+                backgroundColor = nil
+                secondBackgroundColor = nil
+                patternColor = nil
+                placeholderColor = component.theme.list.mediaPlaceholderColor
             }
             
             var animationTransition = transition
