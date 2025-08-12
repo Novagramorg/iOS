@@ -53,6 +53,7 @@ public extension Api {
         case sendMessageRecordAudioAction
         case sendMessageRecordRoundAction
         case sendMessageRecordVideoAction
+        case sendMessageTextDraftAction(randomId: Int64, text: Api.TextWithEntities)
         case sendMessageTypingAction
         case sendMessageUploadAudioAction(progress: Int32)
         case sendMessageUploadDocumentAction(progress: Int32)
@@ -131,6 +132,13 @@ public extension Api {
                     }
                     
                     break
+                case .sendMessageTextDraftAction(let randomId, let text):
+                    if boxed {
+                        buffer.appendInt32(929929052)
+                    }
+                    serializeInt64(randomId, buffer: buffer, boxed: false)
+                    text.serialize(buffer, true)
+                    break
                 case .sendMessageTypingAction:
                     if boxed {
                         buffer.appendInt32(381645902)
@@ -200,6 +208,8 @@ public extension Api {
                 return ("sendMessageRecordRoundAction", [])
                 case .sendMessageRecordVideoAction:
                 return ("sendMessageRecordVideoAction", [])
+                case .sendMessageTextDraftAction(let randomId, let text):
+                return ("sendMessageTextDraftAction", [("randomId", randomId as Any), ("text", text as Any)])
                 case .sendMessageTypingAction:
                 return ("sendMessageTypingAction", [])
                 case .sendMessageUploadAudioAction(let progress):
@@ -281,6 +291,22 @@ public extension Api {
         }
         public static func parse_sendMessageRecordVideoAction(_ reader: BufferReader) -> SendMessageAction? {
             return Api.SendMessageAction.sendMessageRecordVideoAction
+        }
+        public static func parse_sendMessageTextDraftAction(_ reader: BufferReader) -> SendMessageAction? {
+            var _1: Int64?
+            _1 = reader.readInt64()
+            var _2: Api.TextWithEntities?
+            if let signature = reader.readInt32() {
+                _2 = Api.parse(reader, signature: signature) as? Api.TextWithEntities
+            }
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            if _c1 && _c2 {
+                return Api.SendMessageAction.sendMessageTextDraftAction(randomId: _1!, text: _2!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_sendMessageTypingAction(_ reader: BufferReader) -> SendMessageAction? {
             return Api.SendMessageAction.sendMessageTypingAction
@@ -1030,82 +1056,6 @@ public extension Api {
             let _c2 = _2 != nil
             if _c1 && _c2 {
                 return Api.StarGiftAttributeCounter.starGiftAttributeCounter(attribute: _1!, count: _2!)
-            }
-            else {
-                return nil
-            }
-        }
-    
-    }
-}
-public extension Api {
-    enum StarGiftAttributeId: TypeConstructorDescription {
-        case starGiftAttributeIdBackdrop(backdropId: Int32)
-        case starGiftAttributeIdModel(documentId: Int64)
-        case starGiftAttributeIdPattern(documentId: Int64)
-    
-    public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-    switch self {
-                case .starGiftAttributeIdBackdrop(let backdropId):
-                    if boxed {
-                        buffer.appendInt32(520210263)
-                    }
-                    serializeInt32(backdropId, buffer: buffer, boxed: false)
-                    break
-                case .starGiftAttributeIdModel(let documentId):
-                    if boxed {
-                        buffer.appendInt32(1219145276)
-                    }
-                    serializeInt64(documentId, buffer: buffer, boxed: false)
-                    break
-                case .starGiftAttributeIdPattern(let documentId):
-                    if boxed {
-                        buffer.appendInt32(1242965043)
-                    }
-                    serializeInt64(documentId, buffer: buffer, boxed: false)
-                    break
-    }
-    }
-    
-    public func descriptionFields() -> (String, [(String, Any)]) {
-        switch self {
-                case .starGiftAttributeIdBackdrop(let backdropId):
-                return ("starGiftAttributeIdBackdrop", [("backdropId", backdropId as Any)])
-                case .starGiftAttributeIdModel(let documentId):
-                return ("starGiftAttributeIdModel", [("documentId", documentId as Any)])
-                case .starGiftAttributeIdPattern(let documentId):
-                return ("starGiftAttributeIdPattern", [("documentId", documentId as Any)])
-    }
-    }
-    
-        public static func parse_starGiftAttributeIdBackdrop(_ reader: BufferReader) -> StarGiftAttributeId? {
-            var _1: Int32?
-            _1 = reader.readInt32()
-            let _c1 = _1 != nil
-            if _c1 {
-                return Api.StarGiftAttributeId.starGiftAttributeIdBackdrop(backdropId: _1!)
-            }
-            else {
-                return nil
-            }
-        }
-        public static func parse_starGiftAttributeIdModel(_ reader: BufferReader) -> StarGiftAttributeId? {
-            var _1: Int64?
-            _1 = reader.readInt64()
-            let _c1 = _1 != nil
-            if _c1 {
-                return Api.StarGiftAttributeId.starGiftAttributeIdModel(documentId: _1!)
-            }
-            else {
-                return nil
-            }
-        }
-        public static func parse_starGiftAttributeIdPattern(_ reader: BufferReader) -> StarGiftAttributeId? {
-            var _1: Int64?
-            _1 = reader.readInt64()
-            let _c1 = _1 != nil
-            if _c1 {
-                return Api.StarGiftAttributeId.starGiftAttributeIdPattern(documentId: _1!)
             }
             else {
                 return nil
