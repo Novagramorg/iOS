@@ -907,6 +907,18 @@ public extension TelegramEngine {
                 return transaction.getChatListPeers(groupId: .root, filterPredicate: filterPredicate, additionalFilter: nil).map(EnginePeer.init)
             }
         }
+        
+        public func reorderProfileTabs(peerId: EnginePeer.Id, order: [TelegramProfileTab]) -> Signal<Never, NoError> {
+            return _internal_reorderProfileTabs(account: self.account, peerId: peerId, order: order)
+        }
+        
+        public func addSavedMusic(file: TelegramMediaFile) -> Signal<Never, AddSavedMusicError> {
+            return _internal_addSavedMusic(account: self.account, file: file)
+        }
+        
+        public func removeSavedMusic(file: TelegramMediaFile) -> Signal<Never, NoError> {
+            return _internal_removeSavedMusic(account: self.account, file: file)
+        }
 
         public func getNextUnreadChannel(peerId: PeerId, chatListFilterId: Int32?, getFilterPredicate: @escaping (ChatListFilterData) -> ChatListFilterPredicate) -> Signal<(peer: EnginePeer, unreadCount: Int, location: NextUnreadChannelLocation)?, NoError> {
             let startTime = CFAbsoluteTimeGetCurrent()

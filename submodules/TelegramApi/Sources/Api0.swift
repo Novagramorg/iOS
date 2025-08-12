@@ -204,7 +204,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[1605510357] = { return Api.ChatAdminRights.parse_chatAdminRights($0) }
     dict[-219353309] = { return Api.ChatAdminWithInvites.parse_chatAdminWithInvites($0) }
     dict[-1626209256] = { return Api.ChatBannedRights.parse_chatBannedRights($0) }
-    dict[-529258018] = { return Api.ChatFull.parse_channelFull($0) }
+    dict[-1705864337] = { return Api.ChatFull.parse_channelFull($0) }
     dict[640893467] = { return Api.ChatFull.parse_chatFull($0) }
     dict[1553807106] = { return Api.ChatInvite.parse_chatInvite($0) }
     dict[1516793212] = { return Api.ChatInvite.parse_chatInviteAlready($0) }
@@ -816,6 +816,8 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[1103656293] = { return Api.PrivacyRule.parse_privacyValueDisallowChatParticipants($0) }
     dict[-125240806] = { return Api.PrivacyRule.parse_privacyValueDisallowContacts($0) }
     dict[-463335103] = { return Api.PrivacyRule.parse_privacyValueDisallowUsers($0) }
+    dict[1296815210] = { return Api.ProfileTab.parse_profileTabGifts($0) }
+    dict[-1181952362] = { return Api.ProfileTab.parse_profileTabPosts($0) }
     dict[32685898] = { return Api.PublicForward.parse_publicForwardMessage($0) }
     dict[-302797360] = { return Api.PublicForward.parse_publicForwardStory($0) }
     dict[110563371] = { return Api.QuickReply.parse_quickReply($0) }
@@ -933,6 +935,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[-718310409] = { return Api.SendMessageAction.parse_sendMessageRecordAudioAction($0) }
     dict[-1997373508] = { return Api.SendMessageAction.parse_sendMessageRecordRoundAction($0) }
     dict[-1584933265] = { return Api.SendMessageAction.parse_sendMessageRecordVideoAction($0) }
+    dict[929929052] = { return Api.SendMessageAction.parse_sendMessageTextDraftAction($0) }
     dict[381645902] = { return Api.SendMessageAction.parse_sendMessageTypingAction($0) }
     dict[-212740181] = { return Api.SendMessageAction.parse_sendMessageUploadAudioAction($0) }
     dict[-1441998364] = { return Api.SendMessageAction.parse_sendMessageUploadDocumentAction($0) }
@@ -1182,7 +1185,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[-1831650802] = { return Api.UrlAuthResult.parse_urlAuthResultRequest($0) }
     dict[34280482] = { return Api.User.parse_user($0) }
     dict[-742634630] = { return Api.User.parse_userEmpty($0) }
-    dict[-510712709] = { return Api.UserFull.parse_userFull($0) }
+    dict[-116852838] = { return Api.UserFull.parse_userFull($0) }
     dict[-2100168954] = { return Api.UserProfilePhoto.parse_userProfilePhoto($0) }
     dict[1326562017] = { return Api.UserProfilePhoto.parse_userProfilePhotoEmpty($0) }
     dict[164646985] = { return Api.UserStatus.parse_userStatusEmpty($0) }
@@ -1505,6 +1508,8 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[157948117] = { return Api.upload.File.parse_file($0) }
     dict[-242427324] = { return Api.upload.File.parse_fileCdnRedirect($0) }
     dict[568808380] = { return Api.upload.WebFile.parse_webFile($0) }
+    dict[883094167] = { return Api.users.SavedMusic.parse_savedMusic($0) }
+    dict[-477656412] = { return Api.users.SavedMusic.parse_savedMusicNotModified($0) }
     dict[997004590] = { return Api.users.UserFull.parse_userFull($0) }
     dict[1658259128] = { return Api.users.Users.parse_users($0) }
     dict[828000628] = { return Api.users.Users.parse_usersSlice($0) }
@@ -2060,6 +2065,8 @@ public extension Api {
             case let _1 as Api.PrivacyKey:
                 _1.serialize(buffer, boxed)
             case let _1 as Api.PrivacyRule:
+                _1.serialize(buffer, boxed)
+            case let _1 as Api.ProfileTab:
                 _1.serialize(buffer, boxed)
             case let _1 as Api.PublicForward:
                 _1.serialize(buffer, boxed)
@@ -2656,6 +2663,8 @@ public extension Api {
             case let _1 as Api.upload.File:
                 _1.serialize(buffer, boxed)
             case let _1 as Api.upload.WebFile:
+                _1.serialize(buffer, boxed)
+            case let _1 as Api.users.SavedMusic:
                 _1.serialize(buffer, boxed)
             case let _1 as Api.users.UserFull:
                 _1.serialize(buffer, boxed)

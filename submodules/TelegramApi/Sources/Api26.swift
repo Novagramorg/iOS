@@ -1,4 +1,126 @@
 public extension Api {
+    enum StatsPercentValue: TypeConstructorDescription {
+        case statsPercentValue(part: Double, total: Double)
+    
+    public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+    switch self {
+                case .statsPercentValue(let part, let total):
+                    if boxed {
+                        buffer.appendInt32(-875679776)
+                    }
+                    serializeDouble(part, buffer: buffer, boxed: false)
+                    serializeDouble(total, buffer: buffer, boxed: false)
+                    break
+    }
+    }
+    
+    public func descriptionFields() -> (String, [(String, Any)]) {
+        switch self {
+                case .statsPercentValue(let part, let total):
+                return ("statsPercentValue", [("part", part as Any), ("total", total as Any)])
+    }
+    }
+    
+        public static func parse_statsPercentValue(_ reader: BufferReader) -> StatsPercentValue? {
+            var _1: Double?
+            _1 = reader.readDouble()
+            var _2: Double?
+            _2 = reader.readDouble()
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            if _c1 && _c2 {
+                return Api.StatsPercentValue.statsPercentValue(part: _1!, total: _2!)
+            }
+            else {
+                return nil
+            }
+        }
+    
+    }
+}
+public extension Api {
+    enum StatsURL: TypeConstructorDescription {
+        case statsURL(url: String)
+    
+    public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+    switch self {
+                case .statsURL(let url):
+                    if boxed {
+                        buffer.appendInt32(1202287072)
+                    }
+                    serializeString(url, buffer: buffer, boxed: false)
+                    break
+    }
+    }
+    
+    public func descriptionFields() -> (String, [(String, Any)]) {
+        switch self {
+                case .statsURL(let url):
+                return ("statsURL", [("url", url as Any)])
+    }
+    }
+    
+        public static func parse_statsURL(_ reader: BufferReader) -> StatsURL? {
+            var _1: String?
+            _1 = parseString(reader)
+            let _c1 = _1 != nil
+            if _c1 {
+                return Api.StatsURL.statsURL(url: _1!)
+            }
+            else {
+                return nil
+            }
+        }
+    
+    }
+}
+public extension Api {
+    enum StickerKeyword: TypeConstructorDescription {
+        case stickerKeyword(documentId: Int64, keyword: [String])
+    
+    public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+    switch self {
+                case .stickerKeyword(let documentId, let keyword):
+                    if boxed {
+                        buffer.appendInt32(-50416996)
+                    }
+                    serializeInt64(documentId, buffer: buffer, boxed: false)
+                    buffer.appendInt32(481674261)
+                    buffer.appendInt32(Int32(keyword.count))
+                    for item in keyword {
+                        serializeString(item, buffer: buffer, boxed: false)
+                    }
+                    break
+    }
+    }
+    
+    public func descriptionFields() -> (String, [(String, Any)]) {
+        switch self {
+                case .stickerKeyword(let documentId, let keyword):
+                return ("stickerKeyword", [("documentId", documentId as Any), ("keyword", keyword as Any)])
+    }
+    }
+    
+        public static func parse_stickerKeyword(_ reader: BufferReader) -> StickerKeyword? {
+            var _1: Int64?
+            _1 = reader.readInt64()
+            var _2: [String]?
+            if let _ = reader.readInt32() {
+                _2 = Api.parseVector(reader, elementSignature: -1255641564, elementType: String.self)
+            }
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            if _c1 && _c2 {
+                return Api.StickerKeyword.stickerKeyword(documentId: _1!, keyword: _2!)
+            }
+            else {
+                return nil
+            }
+        }
+    
+    }
+}
+public extension Api {
     enum StickerPack: TypeConstructorDescription {
         case stickerPack(emoticon: String, documents: [Int64])
     
