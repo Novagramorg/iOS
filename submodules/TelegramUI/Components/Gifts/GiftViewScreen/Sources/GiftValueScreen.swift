@@ -69,7 +69,8 @@ private final class GiftValueSheetContent: CombinedComponent {
     }
     
     final class State: ComponentState {
-        let minimumPriceTag = GenericComponentViewTag()
+        let lastSalePriceTag = GenericComponentViewTag()
+        let floorPriceTag = GenericComponentViewTag()
         let averagePriceTag = GenericComponentViewTag()
         
         private let context: AccountContext
@@ -152,6 +153,14 @@ private final class GiftValueSheetContent: CombinedComponent {
             Queue.mainQueue().after(2.0, {
                 controller.dismiss(animated: false)
             })
+        }
+        
+        func openGiftFragmentResale(url: String) {
+            guard let controller = self.getController() as? GiftValueScreen, let navigationController = controller.navigationController as? NavigationController else {
+                return
+            }
+            let presentationData = self.context.sharedContext.currentPresentationData.with { $0 }
+            self.context.sharedContext.openExternalUrl(context: self.context, urlContext: .generic, url: url, forceExternal: true, presentationData: presentationData, navigationController: navigationController, dismissInput: {})
         }
         
         func dismiss(animated: Bool) {
@@ -425,7 +434,7 @@ private final class GiftValueSheetContent: CombinedComponent {
             
             if let lastSalePrice = component.valueInfo.lastSalePrice {
                 let lastSalePriceString = formatCurrencyAmount(lastSalePrice, currency: component.valueInfo.currency)
-                let tag = state.minimumPriceTag
+                let tag = state.lastSalePriceTag
                 var items: [AnyComponentWithIdentity<Empty>] = []
                 items.append(
                     AnyComponentWithIdentity(
@@ -436,13 +445,15 @@ private final class GiftValueSheetContent: CombinedComponent {
                     )
                 )
                 
-                let percentage = Double(lastSalePrice) / Double(component.valueInfo.initialSalePrice) * 100.0
+                let percentage = Int32(floor(Double(lastSalePrice) / Double(component.valueInfo.initialSalePrice) * 100.0 - 100.0))
+                let percentageString = percentage > 0 ? "+\(percentage)" : "\(percentage)"
+                
                 items.append(AnyComponentWithIdentity(
                     id: AnyHashable(1),
                     component: AnyComponent(Button(
                         content: AnyComponent(ButtonContentComponent(
                             context: component.context,
-                            text: "+\(Int32(percentage - 100))%",
+                            text: percentageString,
                             color: theme.list.itemAccentColor
                         )),
                         action: { [weak state] in
@@ -464,7 +475,7 @@ private final class GiftValueSheetContent: CombinedComponent {
             
             if let floorPrice = component.valueInfo.floorPrice {
                 let floorPriceString = formatCurrencyAmount(floorPrice, currency: component.valueInfo.currency)
-                let tag = state.minimumPriceTag
+                let tag = state.floorPriceTag
                 var items: [AnyComponentWithIdentity<Empty>] = []
                 items.append(
                     AnyComponentWithIdentity(
@@ -492,7 +503,7 @@ private final class GiftValueSheetContent: CombinedComponent {
                     HStack(items, spacing: 4.0)
                 )
                 tableItems.append(.init(
-                    id: "minimumPrice",
+                    id: "floorPrice",
                     title: "Minumum Price",
                     hasBackground: false,
                     component: itemComponent
@@ -501,7 +512,6 @@ private final class GiftValueSheetContent: CombinedComponent {
                         
             if let averagePrice = component.valueInfo.averagePrice {
                 let averagePriceString = formatCurrencyAmount(averagePrice, currency: component.valueInfo.currency)
-                
                 let tag = state.averagePriceTag
                 var items: [AnyComponentWithIdentity<Empty>] = []
                 items.append(
@@ -603,7 +613,7 @@ private final class GiftValueSheetContent: CombinedComponent {
                 originY += 12.0
             }
             
-            if let listedCount = component.valueInfo.fragmentListedCount, let giftIconSubject {
+            if let listedCount = component.valueInfo.fragmentListedCount, let fragmentListedUrl = component.valueInfo.fragmentListedUrl, let giftIconSubject {
                 if component.valueInfo.listedCount != nil {
                     originY += 18.0
                 }
@@ -636,8 +646,8 @@ private final class GiftValueSheetContent: CombinedComponent {
                                 ))
                             ], spacing: 0.0)
                         ),
-                        action: {
-                            
+                        action: { [weak state] in
+                            state?.openGiftFragmentResale(url: fragmentListedUrl)
                         },
                         animateScale: false
                     ),
