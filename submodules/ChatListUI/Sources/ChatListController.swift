@@ -1177,9 +1177,10 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                 ApplicationSpecificNotice.displayChatListArchiveTooltip(accountManager: self.context.sharedContext.accountManager),
                 self.context.engine.data.get(
                     TelegramEngine.EngineData.Item.Configuration.GlobalPrivacy()
-                )
+                ),
+                self.context.engine.messages.chatList(group: .archive, count: 20) |> take(1)
             )
-            |> deliverOnMainQueue).startStandalone(next: { [weak self] didDisplayTip, settings in
+            |> deliverOnMainQueue).startStandalone(next: { [weak self] didDisplayTip, settings, chatListHead in
                 guard let self else {
                     return
                 }
@@ -1192,7 +1193,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                     navigationController.pushViewController(chatListController)
                 }
                 
-                if !didDisplayTip {
+                if !didDisplayTip, chatListHead.items.count < 10 {
                     #if DEBUG
                     #else
                     let _ = ApplicationSpecificNotice.setDisplayChatListArchiveTooltip(accountManager: self.context.sharedContext.accountManager).startStandalone()
