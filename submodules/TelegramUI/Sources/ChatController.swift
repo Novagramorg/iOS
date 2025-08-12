@@ -8822,15 +8822,36 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             return
         }
         
-        let startingBot = self.startingBot
-        startingBot.set(true)
-        self.editMessageDisposable.set((self.context.engine.messages.requestStartBot(botPeerId: peerId, payload: payload) |> deliverOnMainQueue |> afterDisposed({
-            startingBot.set(false)
-        })).startStrict(completed: { [weak self] in
-            if let strongSelf = self {
-                strongSelf.updateChatPresentationInterfaceState(animated: true, interactive: true, { $0.updatedBotStartPayload(nil) })
+        Task { @MainActor [weak self] in
+            guard let self, let navigationController = self.navigationController as? NavigationController else {
+                return
             }
-        }))
+            
+            #if DEBUG
+            let botForumId = await self.context.engine.data.get(
+                TelegramEngine.EngineData.Item.Peer.LinkedBotForumPeerId(id: peerId)
+            ).get()
+            if case let .known(botForumIdValue) = botForumId, let botForumIdValue {
+                let botForum = await self.context.engine.data.get(
+                    TelegramEngine.EngineData.Item.Peer.Peer(id: botForumIdValue)
+                ).get()
+                
+                if let botForum {
+                    self.context.sharedContext.navigateToChatController(NavigateToChatControllerParams(navigationController: navigationController, context: self.context, chatLocation: .peer(botForum), keepStack: .always))
+                }
+            }
+            #endif
+            
+            let startingBot = self.startingBot
+            startingBot.set(true)
+            self.editMessageDisposable.set((self.context.engine.messages.requestStartBot(botPeerId: peerId, payload: payload) |> deliverOnMainQueue |> afterDisposed({
+                startingBot.set(false)
+            })).startStrict(completed: { [weak self] in
+                if let strongSelf = self {
+                    strongSelf.updateChatPresentationInterfaceState(animated: true, interactive: true, { $0.updatedBotStartPayload(nil) })
+                }
+            }))
+        }
     }
     
     func openResolved(result: ResolvedUrl, sourceMessageId: MessageId?, progress: Promise<Bool>? = nil, forceExternal: Bool = false, concealed: Bool = false, commit: @escaping () -> Void = {}) {
@@ -10062,6 +10083,35 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     private var updateChatLocationThreadDisposable: Disposable?
     private var isUpdatingChatLocationThread: Bool = false
     var currentChatSwitchDirection: ChatControllerAnimateInnerChatSwitchDirection?
+    
+    func updateChatLocationToOther(chatLocation: ChatLocation) {
+        if self.isUpdatingChatLocationThread {
+            return
+        }
+        
+        self.saveInterfaceState()
+        self.chatDisplayNode.dismissTextInput()
+        
+        let updatedChatLocation: ChatLocation = chatLocation
+        let chatLocationContextHolder = Atomic<ChatLocationContextHolder?>(value: nil)
+        let historyNode = self.chatDisplayNode.createHistoryNodeForChatLocation(chatLocation: updatedChatLocation, chatLocationContextHolder: chatLocationContextHolder)
+        self.isUpdatingChatLocationThread = true
+        self.reloadChatLocation(chatLocation: updatedChatLocation, chatLocationContextHolder: chatLocationContextHolder, historyNode: historyNode, apply: { [weak self, weak historyNode] apply in
+            guard let self, let historyNode else {
+                return
+            }
+            
+            self.currentChatSwitchDirection = nil
+            self.chatLocation = updatedChatLocation
+            historyNode.areContentAnimationsEnabled = true
+            self.chatDisplayNode.prepareSwitchToChatLocation(historyNode: historyNode, animationDirection: nil)
+            
+            apply(self.didAppear)
+            
+            self.currentChatSwitchDirection = nil
+            self.isUpdatingChatLocationThread = false
+        })
+    }
     
     public func updateChatLocationThread(threadId: Int64?, animationDirection: ChatControllerAnimateInnerChatSwitchDirection? = nil) {
         if self.isUpdatingChatLocationThread {

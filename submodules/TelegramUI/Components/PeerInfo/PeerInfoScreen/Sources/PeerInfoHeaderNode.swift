@@ -2090,7 +2090,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                     let subtitleBadgeFrame: CGRect
                     subtitleBadgeFrame = CGRect(origin: CGPoint(x: (-subtitleSize.width) * 0.5 - subtitleRatingSize.width + 1.0, y: subtitleOffset + floor((-subtitleRatingSize.height) * 0.5)), size: subtitleRatingSize)
                     transition.updateFrameAdditive(view: subtitleRatingView, frame: subtitleBadgeFrame)
-                    transition.updateAlpha(layer: subtitleRatingView.layer, alpha: subtitleAlpha)
+                    transition.updateAlpha(layer: subtitleRatingView.layer, alpha: subtitleAlpha * (1.0 - transitionFraction))
                 }
             } else {
                 let titleScale: CGFloat
