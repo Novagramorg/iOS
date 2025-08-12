@@ -9801,12 +9801,43 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         if let _ = self.presentationInterfaceState.inputTextPanelState.mediaRecordingState {
             alertAction?()
             Queue.mainQueue().after(delay ? 0.2 : 0.0) {
-                self.present(textAlertController(context: self.context, updatedPresentationData: self.updatedPresentationData, title: nil, text: self.presentationData.strings.Conversation_DiscardVoiceMessageDescription, actions: [TextAlertAction(type: .genericAction, title: self.presentationData.strings.Common_Cancel, action: {}), TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Conversation_DiscardVoiceMessageAction, action: { [weak self] in
-                    self?.stopMediaRecorder()
-                    Queue.mainQueue().after(0.1) {
-                        action()
-                    }
-                })]), in: .window(.root))
+                let alertController = textAlertController(
+                    context: self.context,
+                    updatedPresentationData: self.updatedPresentationData,
+                    title: nil,
+                    text: self.presentationData.strings.Conversation_StopVoiceMessageDescription,
+                    actions: [
+                        TextAlertAction(
+                            type: .defaultAction,
+                            title: self.presentationData.strings.Conversation_StopVoiceMessagePauseAction,
+                            action: { [weak self] in
+                                self?.stopMediaRecorder(pause: true)
+                                Queue.mainQueue().after(0.1) {
+                                    action()
+                                }
+                            }
+                        ),
+                        TextAlertAction(
+                            type: .destructiveAction,
+                            title: self.presentationData.strings.Conversation_StopVoiceMessageDiscardAction,
+                            action: { [weak self] in
+                                self?.stopMediaRecorder()
+                                Queue.mainQueue().after(0.1) {
+                                    action()
+                                }
+                            }
+                        ),
+                        TextAlertAction(
+                            type: .genericAction,
+                            title: self.presentationData.strings.Common_Cancel,
+                            action: {
+                            }
+                        ),
+                    ],
+                    actionLayout: .vertical
+                )
+                
+                self.present(alertController, in: .window(.root))
             }
             
             return true

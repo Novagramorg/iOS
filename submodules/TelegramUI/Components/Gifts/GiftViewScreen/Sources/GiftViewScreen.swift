@@ -3999,9 +3999,8 @@ public class GiftViewScreen: ViewControllerComponentContainer {
                         if let peerId, let savedId {
                             reference = .peer(peerId: peerId, id: savedId)
                         } else {
-                            reference = .message(messageId: message.id)
+                            reference = .message(messageId: giftMessageId.flatMap { EngineMessage.Id(peerId: message.id.peerId, namespace: message.id.namespace, id: $0) } ?? message.id)
                         }
-                        let _ = giftMessageId
                         return (message.id.peerId, senderId ?? message.author?.id, message.author?.compactDisplayTitle, message.id, reference, message.flags.contains(.Incoming), gift, message.timestamp, convertStars, text, entities, nameHidden, savedToProfile, nil, converted, upgraded, isRefunded, canUpgrade, upgradeStars, nil, nil, nil, upgradeMessageId, nil, nil, prepaidUpgradeHash)
                     case let .starGiftUnique(gift, isUpgrade, isTransferred, savedToProfile, canExportDate, transferStars, _, _, peerId, senderId, savedId, _, canTransferDate, canResaleDate):
                         var reference: StarGiftReference

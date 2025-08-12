@@ -14911,3 +14911,8 @@ Sorry for the inconvenience.";
 "Notification.StarsGift.UpgradePrepaid" = "%@ unpacked the gift that you helped upgrade";
 
 "Gift.View.Unknown.Title" = "Gift";
+
+"Conversation.StopVoiceMessageTitle" = "Audio Recording";
+"Conversation.StopVoiceMessageDescription" = "Are you sure you want to stop recording?";
+"Conversation.StopVoiceMessageDiscardAction" = "Discard";
+"Conversation.StopVoiceMessagePauseAction" = "Pause";

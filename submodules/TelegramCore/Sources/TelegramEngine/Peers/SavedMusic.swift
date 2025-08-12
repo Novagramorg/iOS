@@ -8,14 +8,34 @@ public enum AddSavedMusicError {
     case generic
 }
 
-func _internal_addSavedMusic(account: Account, file: TelegramMediaFile) -> Signal<Never, AddSavedMusicError> {
-    guard let resource = file.resource as? CloudDocumentMediaResource else {
-        return .complete()
+private func revalidatedMusic<T>(account: Account, file: FileMediaReference, signal: @escaping (CloudDocumentMediaResource) -> Signal<T, MTRpcError>) -> Signal<T, MTRpcError> {
+    guard let resource = file.media.resource as? CloudDocumentMediaResource else {
+        return .fail(MTRpcError(errorCode: 500, errorDescription: "Internal"))
     }
+    return signal(resource)
+    |> `catch` { error -> Signal<T, MTRpcError> in
+        if error.errorDescription == "FILE_REFERENCE_EXPIRED" {
+            return revalidateMediaResourceReference(accountPeerId: account.peerId, postbox: account.postbox, network: account.network, revalidationContext: account.mediaReferenceRevalidationContext, info: TelegramCloudMediaResourceFetchInfo(reference: file.resourceReference(resource), preferBackgroundReferenceRevalidation: false, continueInBackground: false), resource: resource)
+            |> mapError { _ -> MTRpcError in
+                return MTRpcError(errorCode: 500, errorDescription: "Internal")
+            }
+            |> mapToSignal { result -> Signal<T, MTRpcError> in
+                guard let resource = result.updatedResource as? CloudDocumentMediaResource else {
+                    return .fail(MTRpcError(errorCode: 500, errorDescription: "Internal"))
+                }
+                return signal(resource)
+            }
+        } else {
+            return .fail(error)
+        }
+    }
+}
+
+func _internal_addSavedMusic(account: Account, file: FileMediaReference) -> Signal<Never, AddSavedMusicError> {
     return account.postbox.transaction { transaction in
         if let cachedSavedMusic = transaction.retrieveItemCacheEntry(id: entryId(peerId: account.peerId))?.get(CachedProfileSavedMusic.self) {
             var updatedFiles = cachedSavedMusic.files
-            updatedFiles.insert(file, at: 0)
+            updatedFiles.insert(file.media, at: 0)
             let updatedCount = max(0, cachedSavedMusic.count + 1)
             if let entry = CodableEntry(CachedProfileSavedMusic(files: updatedFiles, count: updatedCount)) {
                 transaction.putItemCacheEntry(id: entryId(peerId: account.peerId), entry: entry)
@@ -24,14 +44,16 @@ func _internal_addSavedMusic(account: Account, file: TelegramMediaFile) -> Signa
             transaction.updatePeerCachedData(peerIds: Set([account.peerId]), update: { _, cachedData -> CachedPeerData? in
                 if let cachedData = cachedData as? CachedUserData {
                     var updatedData = cachedData
-                    updatedData = updatedData.withUpdatedSavedMusic(file)
+                    updatedData = updatedData.withUpdatedSavedMusic(file.media)
                     return updatedData
                 } else {
                     return cachedData
                 }
             })
         }
-        return account.network.request(Api.functions.account.saveMusic(flags: 0, id: .inputDocument(id: resource.fileId, accessHash: resource.accessHash, fileReference: Buffer(data: resource.fileReference)), afterId: nil))
+        return revalidatedMusic(account: account, file: file, signal: { resource in
+            return account.network.request(Api.functions.account.saveMusic(flags: 0, id: .inputDocument(id: resource.fileId, accessHash: resource.accessHash, fileReference: Buffer(data: resource.fileReference)), afterId: nil))
+        })
         |> mapError { _ -> AddSavedMusicError in
             return .generic
         }
@@ -43,13 +65,10 @@ func _internal_addSavedMusic(account: Account, file: TelegramMediaFile) -> Signa
     |> switchToLatest
 }
 
-func _internal_removeSavedMusic(account: Account, file: TelegramMediaFile) -> Signal<Never, NoError> {
-    guard let resource = file.resource as? CloudDocumentMediaResource else {
-        return .complete()
-    }
+func _internal_removeSavedMusic(account: Account, file: FileMediaReference) -> Signal<Never, NoError> {
     return account.postbox.transaction { transaction in
         if let cachedSavedMusic = transaction.retrieveItemCacheEntry(id: entryId(peerId: account.peerId))?.get(CachedProfileSavedMusic.self) {
-            let updatedFiles = cachedSavedMusic.files.filter { $0.fileId != file.id }
+            let updatedFiles = cachedSavedMusic.files.filter { $0.fileId != file.media.id }
             let updatedCount = max(0, cachedSavedMusic.count - 1)
             if let entry = CodableEntry(CachedProfileSavedMusic(files: updatedFiles, count: updatedCount)) {
                 transaction.putItemCacheEntry(id: entryId(peerId: account.peerId), entry: entry)
@@ -67,7 +86,9 @@ func _internal_removeSavedMusic(account: Account, file: TelegramMediaFile) -> Si
             }
         }
         let flags: Int32 = 1 << 0
-        return account.network.request(Api.functions.account.saveMusic(flags: flags, id: .inputDocument(id: resource.fileId, accessHash: resource.accessHash, fileReference: Buffer(data: resource.fileReference)), afterId: nil))
+        return revalidatedMusic(account: account, file: file, signal: { resource in
+            return account.network.request(Api.functions.account.saveMusic(flags: flags, id: .inputDocument(id: resource.fileId, accessHash: resource.accessHash, fileReference: Buffer(data: resource.fileReference)), afterId: nil))
+        })
         |> `catch` { _ -> Signal<Api.Bool, NoError> in
             return .complete()
         }
@@ -127,7 +148,7 @@ public final class ProfileSavedMusicContext {
     
     private let queue: Queue = .mainQueue()
     private let account: Account
-    private let peerId: EnginePeer.Id
+    public let peerId: EnginePeer.Id
     
     private let disposable = MetaDisposable()
     private let cacheDisposable = MetaDisposable()
@@ -229,17 +250,17 @@ public final class ProfileSavedMusicContext {
         }))
     }
     
-    public func reorderMusic(file: TelegramMediaFile, after: TelegramMediaFile?) -> Signal<Never, NoError> {
+    public func reorderMusic(file: FileMediaReference, file: FileMediaReference?) -> Signal<Never, NoError> {
         return .complete()
     }
     
-    public func addMusic(file: TelegramMediaFile) -> Signal<Never, AddSavedMusicError> {
+    public func addMusic(file: FileMediaReference) -> Signal<Never, AddSavedMusicError> {
         return _internal_addSavedMusic(account: self.account, file: file)
         |> afterCompleted { [weak self] in
             guard let self else {
                 return
             }
-            self.files.insert(file, at: 0)
+            self.files.insert(file.media, at: 0)
             if let count = self.count {
                 self.count = count + 1
             }
@@ -247,13 +268,13 @@ public final class ProfileSavedMusicContext {
         }
     }
     
-    public func deleteMusic(file: TelegramMediaFile) -> Signal<Never, NoError> {
+    public func deleteMusic(file: FileMediaReference) -> Signal<Never, NoError> {
         return _internal_removeSavedMusic(account: self.account, file: file)
         |> afterCompleted { [weak self] in
             guard let self else {
                 return
             }
-            self.files.removeAll(where: { $0.fileId == file.id })
+            self.files.removeAll(where: { $0.fileId == file.media.id })
             if let count = self.count {
                 self.count = max(0, count - 1)
             }

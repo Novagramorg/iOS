@@ -912,11 +912,11 @@ public extension TelegramEngine {
             return _internal_reorderProfileTabs(account: self.account, peerId: peerId, order: order)
         }
         
-        public func addSavedMusic(file: TelegramMediaFile) -> Signal<Never, AddSavedMusicError> {
+        public func addSavedMusic(file: FileMediaReference) -> Signal<Never, AddSavedMusicError> {
             return _internal_addSavedMusic(account: self.account, file: file)
         }
         
-        public func removeSavedMusic(file: TelegramMediaFile) -> Signal<Never, NoError> {
+        public func removeSavedMusic(file: FileMediaReference) -> Signal<Never, NoError> {
             return _internal_removeSavedMusic(account: self.account, file: file)
         }
 
