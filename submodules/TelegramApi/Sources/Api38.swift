@@ -249,6 +249,72 @@ public extension Api.upload {
     }
 }
 public extension Api.users {
+    enum SavedMusic: TypeConstructorDescription {
+        case savedMusic(count: Int32, documents: [Api.Document])
+        case savedMusicNotModified(count: Int32)
+    
+    public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+    switch self {
+                case .savedMusic(let count, let documents):
+                    if boxed {
+                        buffer.appendInt32(883094167)
+                    }
+                    serializeInt32(count, buffer: buffer, boxed: false)
+                    buffer.appendInt32(481674261)
+                    buffer.appendInt32(Int32(documents.count))
+                    for item in documents {
+                        item.serialize(buffer, true)
+                    }
+                    break
+                case .savedMusicNotModified(let count):
+                    if boxed {
+                        buffer.appendInt32(-477656412)
+                    }
+                    serializeInt32(count, buffer: buffer, boxed: false)
+                    break
+    }
+    }
+    
+    public func descriptionFields() -> (String, [(String, Any)]) {
+        switch self {
+                case .savedMusic(let count, let documents):
+                return ("savedMusic", [("count", count as Any), ("documents", documents as Any)])
+                case .savedMusicNotModified(let count):
+                return ("savedMusicNotModified", [("count", count as Any)])
+    }
+    }
+    
+        public static func parse_savedMusic(_ reader: BufferReader) -> SavedMusic? {
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: [Api.Document]?
+            if let _ = reader.readInt32() {
+                _2 = Api.parseVector(reader, elementSignature: 0, elementType: Api.Document.self)
+            }
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            if _c1 && _c2 {
+                return Api.users.SavedMusic.savedMusic(count: _1!, documents: _2!)
+            }
+            else {
+                return nil
+            }
+        }
+        public static func parse_savedMusicNotModified(_ reader: BufferReader) -> SavedMusic? {
+            var _1: Int32?
+            _1 = reader.readInt32()
+            let _c1 = _1 != nil
+            if _c1 {
+                return Api.users.SavedMusic.savedMusicNotModified(count: _1!)
+            }
+            else {
+                return nil
+            }
+        }
+    
+    }
+}
+public extension Api.users {
     enum UserFull: TypeConstructorDescription {
         case userFull(fullUser: Api.UserFull, chats: [Api.Chat], users: [Api.User])
     
