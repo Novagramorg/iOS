@@ -667,7 +667,7 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                                     authorName = item.message.author.flatMap { EnginePeer($0) }?.compactDisplayTitle ?? ""
                                 }
                                 if isSelfGift {
-                                    title = item.presentationData.strings.Notification_StarGift_Self_Title
+                                    title = isStoryEntity ? uniqueGift.title : item.presentationData.strings.Notification_StarGift_Self_Title
                                 } else if item.message.id.peerId.isTelegramNotifications {
                                     title = item.presentationData.strings.Notification_StarGift_TitleShort
                                 } else {
