@@ -250,7 +250,7 @@ public final class ProfileSavedMusicContext {
         }))
     }
     
-    public func reorderMusic(file: FileMediaReference, file: FileMediaReference?) -> Signal<Never, NoError> {
+    public func reorderMusic(file: FileMediaReference, afterFile: FileMediaReference?) -> Signal<Never, NoError> {
         return .complete()
     }
     
