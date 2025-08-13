@@ -2590,6 +2590,31 @@ public extension TelegramEngine.EngineData.Item {
             }
         }
         
+        public struct BotLinkedForum: TelegramEngineDataItem, PostboxViewDataItem {
+            public typealias Result = CachedUserData.LinkedBotChannelId?
+            
+            public let id: EnginePeer.Id
+            
+            public init(id: EnginePeer.Id) {
+                self.id = id
+            }
+            
+            var key: PostboxViewKey {
+                return .cachedPeerData(peerId: self.id)
+            }
+            
+            func extract(view: PostboxView) -> Result {
+                guard let view = view as? CachedPeerDataView else {
+                    preconditionFailure()
+                }
+                if let cachedData = view.cachedPeerData as? CachedUserData {
+                    return cachedData.linkedBotChannelId
+                } else {
+                    return nil
+                }
+            }
+        }
+        
         public struct AutoTranslateEnabled: TelegramEngineDataItem, TelegramEngineMapKeyDataItem, PostboxViewDataItem {
             public typealias Result = Bool
 
