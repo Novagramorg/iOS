@@ -1395,9 +1395,9 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                     }))
                 }
             }, actionInteraction: GalleryControllerActionInteraction(
-                openUrl: { [weak self] url, concealed in
+                openUrl: { [weak self] url, concealed, forceExternal in
                     if let self {
-                        self.openUrl(url, concealed: concealed, message: nil)
+                        self.openUrl(url, concealed: concealed, forceExternal: forceExternal, message: nil)
                     }
                 }, openUrlIn: { [weak self] url in
                     if let self {
