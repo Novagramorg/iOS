@@ -1,0 +1,293 @@
+import Foundation
+import Postbox
+import SwiftSignalKit
+import TelegramApi
+import MtProtoKit
+
+public enum AddSavedMusicError {
+    case generic
+}
+
+private func revalidatedMusic<T>(account: Account, file: FileMediaReference, signal: @escaping (CloudDocumentMediaResource) -> Signal<T, MTRpcError>) -> Signal<T, MTRpcError> {
+    guard let resource = file.media.resource as? CloudDocumentMediaResource else {
+        return .fail(MTRpcError(errorCode: 500, errorDescription: "Internal"))
+    }
+    return signal(resource)
+    |> `catch` { error -> Signal<T, MTRpcError> in
+        if error.errorDescription == "FILE_REFERENCE_EXPIRED" {
+            return revalidateMediaResourceReference(accountPeerId: account.peerId, postbox: account.postbox, network: account.network, revalidationContext: account.mediaReferenceRevalidationContext, info: TelegramCloudMediaResourceFetchInfo(reference: file.resourceReference(resource), preferBackgroundReferenceRevalidation: false, continueInBackground: false), resource: resource)
+            |> mapError { _ -> MTRpcError in
+                return MTRpcError(errorCode: 500, errorDescription: "Internal")
+            }
+            |> mapToSignal { result -> Signal<T, MTRpcError> in
+                guard let resource = result.updatedResource as? CloudDocumentMediaResource else {
+                    return .fail(MTRpcError(errorCode: 500, errorDescription: "Internal"))
+                }
+                return signal(resource)
+            }
+        } else {
+            return .fail(error)
+        }
+    }
+}
+
+func _internal_addSavedMusic(account: Account, file: FileMediaReference) -> Signal<Never, AddSavedMusicError> {
+    return account.postbox.transaction { transaction in
+        if let cachedSavedMusic = transaction.retrieveItemCacheEntry(id: entryId(peerId: account.peerId))?.get(CachedProfileSavedMusic.self) {
+            var updatedFiles = cachedSavedMusic.files
+            updatedFiles.insert(file.media, at: 0)
+            let updatedCount = max(0, cachedSavedMusic.count + 1)
+            if let entry = CodableEntry(CachedProfileSavedMusic(files: updatedFiles, count: updatedCount)) {
+                transaction.putItemCacheEntry(id: entryId(peerId: account.peerId), entry: entry)
+            }
+            
+            transaction.updatePeerCachedData(peerIds: Set([account.peerId]), update: { _, cachedData -> CachedPeerData? in
+                if let cachedData = cachedData as? CachedUserData {
+                    var updatedData = cachedData
+                    updatedData = updatedData.withUpdatedSavedMusic(file.media)
+                    return updatedData
+                } else {
+                    return cachedData
+                }
+            })
+        }
+        return revalidatedMusic(account: account, file: file, signal: { resource in
+            return account.network.request(Api.functions.account.saveMusic(flags: 0, id: .inputDocument(id: resource.fileId, accessHash: resource.accessHash, fileReference: Buffer(data: resource.fileReference)), afterId: nil))
+        })
+        |> mapError { _ -> AddSavedMusicError in
+            return .generic
+        }
+        |> mapToSignal { _ in
+            return .complete()
+        }
+    }
+    |> castError(AddSavedMusicError.self)
+    |> switchToLatest
+}
+
+func _internal_removeSavedMusic(account: Account, file: FileMediaReference) -> Signal<Never, NoError> {
+    return account.postbox.transaction { transaction in
+        if let cachedSavedMusic = transaction.retrieveItemCacheEntry(id: entryId(peerId: account.peerId))?.get(CachedProfileSavedMusic.self) {
+            let updatedFiles = cachedSavedMusic.files.filter { $0.fileId != file.media.id }
+            let updatedCount = max(0, cachedSavedMusic.count - 1)
+            if let entry = CodableEntry(CachedProfileSavedMusic(files: updatedFiles, count: updatedCount)) {
+                transaction.putItemCacheEntry(id: entryId(peerId: account.peerId), entry: entry)
+            }
+            if updatedCount == 0 {
+                transaction.updatePeerCachedData(peerIds: Set([account.peerId]), update: { _, cachedData -> CachedPeerData? in
+                    if let cachedData = cachedData as? CachedUserData {
+                        var updatedData = cachedData
+                        updatedData = updatedData.withUpdatedSavedMusic(nil)
+                        return updatedData
+                    } else {
+                        return cachedData
+                    }
+                })
+            }
+        }
+        let flags: Int32 = 1 << 0
+        return revalidatedMusic(account: account, file: file, signal: { resource in
+            return account.network.request(Api.functions.account.saveMusic(flags: flags, id: .inputDocument(id: resource.fileId, accessHash: resource.accessHash, fileReference: Buffer(data: resource.fileReference)), afterId: nil))
+        })
+        |> `catch` { _ -> Signal<Api.Bool, NoError> in
+            return .complete()
+        }
+        |> mapToSignal { _ in
+            return .complete()
+        }
+    }
+    |> switchToLatest
+}
+
+private final class CachedProfileSavedMusic: Codable {
+    enum CodingKeys: String, CodingKey {
+        case files
+        case count
+    }
+    
+    let files: [TelegramMediaFile]
+    let count: Int32
+    
+    init(files: [TelegramMediaFile], count: Int32) {
+        self.files = files
+        self.count = count
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+
+        self.files = try container.decode([TelegramMediaFile].self, forKey: .files)
+        self.count = try container.decode(Int32.self, forKey: .count)
+    }
+    
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+
+        try container.encode(self.files, forKey: .files)
+        try container.encode(self.count, forKey: .count)
+    }
+}
+
+private func entryId(peerId: EnginePeer.Id) -> ItemCacheEntryId {
+    let cacheKey = ValueBoxKey(length: 8)
+    cacheKey.setInt64(0, value: peerId.toInt64())
+    return ItemCacheEntryId(collectionId: Namespaces.CachedItemCollection.cachedProfileSavedMusic, key: cacheKey)
+}
+
+public final class ProfileSavedMusicContext {
+    public struct State: Equatable {
+        public enum DataState: Equatable {
+            case loading
+            case ready(canLoadMore: Bool)
+        }
+        
+        public var files: [TelegramMediaFile]
+        public var count: Int32?
+        public var dataState: DataState
+    }
+    
+    private let queue: Queue = .mainQueue()
+    private let account: Account
+    public let peerId: EnginePeer.Id
+    
+    private let disposable = MetaDisposable()
+    private let cacheDisposable = MetaDisposable()
+    
+    private var files: [TelegramMediaFile] = []
+    private var count: Int32?
+    private var dataState: ProfileSavedMusicContext.State.DataState = .ready(canLoadMore: true)
+    
+    private let stateValue = Promise<State>()
+    public var state: Signal<State, NoError> {
+        return self.stateValue.get()
+    }
+    
+    public init(account: Account, peerId: EnginePeer.Id) {
+        self.account = account
+        self.peerId = peerId
+                
+        self.reload()
+    }
+    
+    deinit {
+        self.disposable.dispose()
+        self.cacheDisposable.dispose()
+    }
+    
+    public func reload() {
+        self.files = []
+        self.dataState = .ready(canLoadMore: true)
+        self.loadMore(reload: true)
+    }
+    
+    public func loadMore(reload: Bool = false) {
+        let peerId = self.peerId
+        let network = self.account.network
+        let postbox = self.account.postbox
+        let dataState = self.dataState
+        let offset = Int32(self.files.count)
+        
+        guard case .ready(true) = dataState else {
+            return
+        }
+        if self.files.isEmpty, !reload {
+            self.cacheDisposable.set((postbox.transaction { transaction -> CachedProfileSavedMusic? in
+                return transaction.retrieveItemCacheEntry(id: entryId(peerId: peerId))?.get(CachedProfileSavedMusic.self)
+            } |> deliverOn(self.queue)).start(next: { [weak self] cachedSavedMusic in
+                guard let self, let cachedSavedMusic else {
+                    return
+                }
+                self.files = cachedSavedMusic.files
+                self.count = cachedSavedMusic.count
+                if case .loading = self.dataState {
+                    self.pushState()
+                }
+            }))
+        }
+        
+        self.dataState = .loading
+        if !reload {
+            self.pushState()
+        }
+        
+        let signal = postbox.loadedPeerWithId(peerId)
+        |> castError(MTRpcError.self)
+        |> mapToSignal { peer -> Signal<([TelegramMediaFile], Int32), MTRpcError> in
+            guard let inputUser = apiInputUser(peer) else {
+                return .complete()
+            }
+            return network.request(Api.functions.users.getSavedMusic(id: inputUser, offset: offset, limit: 32, hash: 0))
+            |> map { result -> ([TelegramMediaFile], Int32) in
+                switch result {
+                case let .savedMusic(count, documents):
+                    return (documents.compactMap { telegramMediaFileFromApiDocument($0, altDocuments: nil) }, count)
+                case let .savedMusicNotModified(count):
+                    return ([], count)
+                }
+            }
+        }
+        
+        self.disposable.set((signal
+        |> deliverOn(self.queue)).start(next: { [weak self] files, count in
+            guard let self else {
+                return
+            }
+            if offset == 0 || reload {
+                self.files = files
+                self.cacheDisposable.set(self.account.postbox.transaction { transaction in
+                    if let entry = CodableEntry(CachedProfileSavedMusic(files: files, count: count)) {
+                        transaction.putItemCacheEntry(id: entryId(peerId: peerId), entry: entry)
+                    }
+                }.start())
+            } else {
+                self.files.append(contentsOf: files)
+            }
+            
+            let updatedCount = max(Int32(self.files.count), count)
+            self.count = updatedCount
+            self.dataState = .ready(canLoadMore: count != 0 && updatedCount > self.files.count)
+            self.pushState()
+        }))
+    }
+    
+    public func reorderMusic(file: FileMediaReference, afterFile: FileMediaReference?) -> Signal<Never, NoError> {
+        return .complete()
+    }
+    
+    public func addMusic(file: FileMediaReference) -> Signal<Never, AddSavedMusicError> {
+        return _internal_addSavedMusic(account: self.account, file: file)
+        |> afterCompleted { [weak self] in
+            guard let self else {
+                return
+            }
+            self.files.insert(file.media, at: 0)
+            if let count = self.count {
+                self.count = count + 1
+            }
+            self.pushState()
+        }
+    }
+    
+    public func deleteMusic(file: FileMediaReference) -> Signal<Never, NoError> {
+        return _internal_removeSavedMusic(account: self.account, file: file)
+        |> afterCompleted { [weak self] in
+            guard let self else {
+                return
+            }
+            self.files.removeAll(where: { $0.fileId == file.media.id })
+            if let count = self.count {
+                self.count = max(0, count - 1)
+            }
+            self.pushState()
+        }
+    }
+    
+    private func pushState() {
+        let state = State(
+            files: self.files,
+            count: self.count,
+            dataState: self.dataState
+        )
+        self.stateValue.set(.single(state))
+    }
+}

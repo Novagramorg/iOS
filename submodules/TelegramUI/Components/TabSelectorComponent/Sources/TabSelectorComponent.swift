@@ -611,7 +611,7 @@ public final class TabSelectorComponent: Component {
                 }
                 
                 let itemSize = itemView.title.update(
-                    transition: .immediate,
+                    transition: itemTransition,
                     component: AnyComponent(ItemComponent(
                         context: component.context,
                         content: item.content,
@@ -736,7 +736,7 @@ public final class TabSelectorComponent: Component {
                     }
                     
                     var mappedSelectionFrame = effectiveBackgroundRect.insetBy(dx: innerInset, dy: 0.0)
-                    mappedSelectionFrame.origin.y = mappedSelectionFrame.maxY + 6.0
+                    mappedSelectionFrame.origin.y = mappedSelectionFrame.maxY + 7.0
                     mappedSelectionFrame.size.height = 3.0
                     transition.setPosition(view: self.selectionView, position: mappedSelectionFrame.center)
                     transition.setBounds(view: self.selectionView, bounds: CGRect(origin: CGPoint(), size: mappedSelectionFrame.size))
