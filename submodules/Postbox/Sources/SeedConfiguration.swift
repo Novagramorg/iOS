@@ -77,11 +77,11 @@ public final class SeedConfiguration {
     public let decodeMessageThreadInfo: (CodableEntry) -> Message.AssociatedThreadInfo?
     public let decodeAutoremoveTimeout: (CachedPeerData) -> Int32?
     public let decodeDisplayPeerAsRegularChat: (CachedPeerData) -> Bool
+    public let decodeAssociatedChatListPeerId: (CachedPeerData) -> PeerId?
     public let isPeerUpgradeMessage: (Message) -> Bool
     public let automaticThreadIndexInfo: (PeerId, Int64) -> StoredMessageHistoryThreadInfo?
     public let customTagsFromAttributes: ([MessageAttribute]) -> [MemoryBuffer]
     public let displaySavedMessagesAsTopicListPreferencesKey: ValueBoxKey
-    public let chatListPeerMergeIntoTargetId: (Peer) -> PeerId?
     
     public init(
         globalMessageIdsPeerIdNamespaces: Set<GlobalMessageIdsNamespace>,
@@ -109,11 +109,11 @@ public final class SeedConfiguration {
         decodeMessageThreadInfo: @escaping (CodableEntry) -> Message.AssociatedThreadInfo?,
         decodeAutoremoveTimeout: @escaping (CachedPeerData) -> Int32?,
         decodeDisplayPeerAsRegularChat: @escaping (CachedPeerData) -> Bool,
+        decodeAssociatedChatListPeerId: @escaping (CachedPeerData) -> PeerId?,
         isPeerUpgradeMessage: @escaping (Message) -> Bool,
         automaticThreadIndexInfo: @escaping (PeerId, Int64) -> StoredMessageHistoryThreadInfo?,
         customTagsFromAttributes: @escaping ([MessageAttribute]) -> [MemoryBuffer],
-        displaySavedMessagesAsTopicListPreferencesKey: ValueBoxKey,
-        chatListPeerMergeIntoTargetId: @escaping (Peer) -> PeerId?
+        displaySavedMessagesAsTopicListPreferencesKey: ValueBoxKey
     ) {
         self.globalMessageIdsPeerIdNamespaces = globalMessageIdsPeerIdNamespaces
         self.initializeChatListWithHole = initializeChatListWithHole
@@ -136,10 +136,10 @@ public final class SeedConfiguration {
         self.decodeMessageThreadInfo = decodeMessageThreadInfo
         self.decodeAutoremoveTimeout = decodeAutoremoveTimeout
         self.decodeDisplayPeerAsRegularChat = decodeDisplayPeerAsRegularChat
+        self.decodeAssociatedChatListPeerId = decodeAssociatedChatListPeerId
         self.isPeerUpgradeMessage = isPeerUpgradeMessage
         self.automaticThreadIndexInfo = automaticThreadIndexInfo
         self.customTagsFromAttributes = customTagsFromAttributes
         self.displaySavedMessagesAsTopicListPreferencesKey = displaySavedMessagesAsTopicListPreferencesKey
-        self.chatListPeerMergeIntoTargetId = chatListPeerMergeIntoTargetId
     }
 }

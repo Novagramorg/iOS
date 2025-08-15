@@ -1043,15 +1043,17 @@ public final class ChatListView {
         
         //TODO:release
         var linkedEntries: [PeerId: [MutableChatListEntry.MessageEntryData]] = [:]
-        for entry in mutableView.sampledState.entries {
-            guard case let .MessageEntry(entryData) = entry else {
-                continue
-            }
-            if let peer = entryData.renderedPeer.peer, peer.id.namespace._internalGetInt32Value() == 2, let associatedPeerId = peer.associatedPeerId, associatedPeerId.namespace._internalGetInt32Value() == 0 {
-                if linkedEntries[associatedPeerId] == nil {
-                    linkedEntries[associatedPeerId] = []
+        if "".isEmpty {
+            for entry in mutableView.sampledState.entries {
+                guard case let .MessageEntry(entryData) = entry else {
+                    continue
                 }
-                linkedEntries[associatedPeerId]?.append(entryData)
+                if let peer = entryData.renderedPeer.peer, peer.id.namespace._internalGetInt32Value() == 2, let associatedPeerId = peer.associatedPeerId, associatedPeerId.namespace._internalGetInt32Value() == 0 {
+                    if linkedEntries[associatedPeerId] == nil {
+                        linkedEntries[associatedPeerId] = []
+                    }
+                    linkedEntries[associatedPeerId]?.append(entryData)
+                }
             }
         }
         
@@ -1069,7 +1071,7 @@ public final class ChatListView {
                 var forumTopicData = entryData.displayAsRegularChat ? nil : entryData.forumTopicData
                 if let linkedEntries = linkedEntries[entryData.index.messageIndex.id.peerId] {
                     for entry in linkedEntries {
-                        if entry.index > index {
+                        if entry.index.messageIndex.timestamp >= index.messageIndex.timestamp {
                             index = ChatListIndex(pinningIndex: index.pinningIndex, messageIndex: MessageIndex(id: index.messageIndex.id, timestamp: entry.index.messageIndex.timestamp))
                             messages = entry.messages
                             forumTopicData = entry.forumTopicData

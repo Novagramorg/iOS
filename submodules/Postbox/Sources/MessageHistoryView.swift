@@ -452,14 +452,14 @@ final class MutableMessageHistoryView: MutablePostboxView {
         switch self.peerIds {
         case let .single(peerId, threadId):
             if threadId == nil {
-                if let updatedData = transaction.currentUpdatedCachedPeerData[peerId] {
+                if let updatedData = transaction.currentUpdatedCachedPeerData[peerId]?.updated {
                     if updatedData.associatedHistoryMessageId != nil {
                         self.peerIds = .associated(peerId, updatedData.associatedHistoryMessageId)
                     }
                 }
             }
         case let .associated(peerId, associatedId):
-            if let updatedData = transaction.currentUpdatedCachedPeerData[peerId] {
+            if let updatedData = transaction.currentUpdatedCachedPeerData[peerId]?.updated {
                 if updatedData.associatedHistoryMessageId != associatedId {
                     self.peerIds = .associated(peerId, updatedData.associatedHistoryMessageId)
                 }
@@ -844,7 +844,7 @@ final class MutableMessageHistoryView: MutablePostboxView {
             switch additionalDatas[i] {
             case let .cachedPeerData(peerId, currentData):
                 currentCachedPeerData = currentData
-                if let updatedData = transaction.currentUpdatedCachedPeerData[peerId] {
+                if let updatedData = transaction.currentUpdatedCachedPeerData[peerId]?.updated {
                     if currentData?.messageIds != updatedData.messageIds {
                         updatedCachedPeerDataMessages = true
                     }

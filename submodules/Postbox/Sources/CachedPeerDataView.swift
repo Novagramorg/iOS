@@ -20,7 +20,7 @@ final class MutableCachedPeerDataView: MutablePostboxView {
     }
     
     func replay(postbox: PostboxImpl, transaction: PostboxTransaction) -> Bool {
-        if let cachedPeerData = transaction.currentUpdatedCachedPeerData[self.peerId] {
+        if let cachedPeerData = transaction.currentUpdatedCachedPeerData[self.peerId]?.updated {
             self.cachedPeerData = cachedPeerData
             if self.trackAssociatedMessages {
                 self.associatedMessages.removeAll()
