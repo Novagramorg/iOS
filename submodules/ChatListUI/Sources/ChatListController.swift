@@ -1027,144 +1027,169 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
         }
         
         self.chatListDisplayNode.mainContainerNode.peerSelected = { [weak self] peer, threadId, animated, activateInput, promoInfo in
-            guard let self else {
-                return
-            }
-            
-            var forumSourcePeer: Signal<EnginePeer?, NoError> = .single(nil)
-            if case let .savedMessagesChats(peerId) = self.location, peerId != self.context.account.peerId {
-                forumSourcePeer = self.context.engine.data.get(
-                    TelegramEngine.EngineData.Item.Peer.Peer(id: peerId)
-                )
-            }
-            
-            let _ = (combineLatest(queue: .mainQueue(),
-                self.context.account.postbox.combinedView(keys: [.cachedPeerData(peerId: peer.id)])
-                |> take(1),
-                forumSourcePeer
-            )
-            |> deliverOnMainQueue).start(next: { [weak self] combinedView, forumSourcePeer in
-                guard let self, let cachedDataView = combinedView.views[.cachedPeerData(peerId: peer.id)] as? CachedPeerDataView else {
-                    return
-                }
-                guard let navigationController = self.navigationController as? NavigationController else {
+            Task { @MainActor [weak self] in
+                guard let self else {
                     return
                 }
                 
-                var peer = peer
                 var threadId = threadId
-                if let forumSourcePeer {
-                    threadId = peer.id.toInt64()
-                    peer = forumSourcePeer
+                var subject: ChatControllerSubject?
+                if let threadIdValue = threadId, case let .user(user) = peer {
+                    threadId = nil
+                    
+                    if case let .known(linkedForumId) = await self.context.engine.data.get(
+                        TelegramEngine.EngineData.Item.Peer.LinkedBotForumPeerId(id: user.id)
+                    ).get(), let linkedForumId {
+                        subject = .botForumThread(forumId: linkedForumId, threadId: threadIdValue)
+                    }
+                    subject = nil
                 }
                 
-                var scrollToEndIfExists = false
-                if let layout = self.validLayout, case .regular = layout.metrics.widthClass {
-                    scrollToEndIfExists = true
+                var forumSourcePeer: Signal<EnginePeer?, NoError> = .single(nil)
+                if case let .savedMessagesChats(peerId) = self.location, peerId != self.context.account.peerId {
+                    forumSourcePeer = self.context.engine.data.get(
+                        TelegramEngine.EngineData.Item.Peer.Peer(id: peerId)
+                    )
                 }
                 
-                var openAsInlineForum = true
-                
-                if case let .channel(channel) = peer, channel.flags.contains(.isMonoforum) {
-                    openAsInlineForum = false
-                } else if case let .channel(channel) = peer, channel.flags.contains(.displayForumAsTabs) {
-                    openAsInlineForum = false
-                } else {
-                    if let cachedData = cachedDataView.cachedPeerData as? CachedChannelData, case let .known(viewForumAsMessages) = cachedData.viewForumAsMessages, viewForumAsMessages {
+                let _ = (combineLatest(queue: .mainQueue(),
+                    self.context.account.postbox.combinedView(keys: [.cachedPeerData(peerId: peer.id)])
+                    |> take(1),
+                    forumSourcePeer
+                )
+                |> deliverOnMainQueue).start(next: { [weak self] combinedView, forumSourcePeer in
+                    guard let self, let cachedDataView = combinedView.views[.cachedPeerData(peerId: peer.id)] as? CachedPeerDataView else {
+                        return
+                    }
+                    guard let navigationController = self.navigationController as? NavigationController else {
+                        return
+                    }
+                    
+                    var peer = peer
+                    var threadId = threadId
+                    if let forumSourcePeer {
+                        threadId = peer.id.toInt64()
+                        peer = forumSourcePeer
+                    }
+                    
+                    var scrollToEndIfExists = false
+                    if let layout = self.validLayout, case .regular = layout.metrics.widthClass {
+                        scrollToEndIfExists = true
+                    }
+                    
+                    var openAsInlineForum = true
+                    
+                    if case let .channel(channel) = peer, channel.flags.contains(.isMonoforum) {
                         openAsInlineForum = false
-                    }
-                }
-                
-                if openAsInlineForum, case let .channel(channel) = peer, channel.isForum, threadId == nil {
-                    self.chatListDisplayNode.clearHighlightAnimated(true)
-                    if self.chatListDisplayNode.inlineStackContainerNode?.location == .forum(peerId: channel.id) {
-                        self.setInlineChatList(location: nil)
+                    } else if case let .channel(channel) = peer, channel.flags.contains(.displayForumAsTabs) {
+                        openAsInlineForum = false
                     } else {
-                        self.setInlineChatList(location: .forum(peerId: channel.id))
-                    }
-                    return
-                }
-                
-                if case let .channel(channel) = peer, channel.isForumOrMonoForum, let threadId {
-                    self.context.sharedContext.navigateToChatController(NavigateToChatControllerParams(
-                        navigationController: navigationController,
-                        context: self.context,
-                        chatLocation: .replyThread(ChatReplyThreadMessage(
-                            peerId: peer.id,
-                            threadId: threadId,
-                            channelMessageId: nil,
-                            isChannelPost: false,
-                            isForumPost: true,
-                            isMonoforumPost: channel.isMonoForum,
-                            maxMessage: nil,
-                            maxReadIncomingMessageId: nil,
-                            maxReadOutgoingMessageId: nil,
-                            unreadCount: 0,
-                            initialFilledHoles: IndexSet(),
-                            initialAnchor: .automatic,
-                            isNotAvailable: false
-                        )),
-                        subject: nil,
-                        keepStack: .always
-                    ))
-                    
-                    self.chatListDisplayNode.clearHighlightAnimated(true)
-                } else {
-                    var navigationAnimationOptions: NavigationAnimationOptions = []
-                    var groupId: EngineChatList.Group = .root
-                    if case let .chatList(groupIdValue) = self.location {
-                        groupId = groupIdValue
-                        if case .root = groupIdValue {
-                            navigationAnimationOptions = .removeOnMasterDetails
+                        if let cachedData = cachedDataView.cachedPeerData as? CachedChannelData, case let .known(viewForumAsMessages) = cachedData.viewForumAsMessages, viewForumAsMessages {
+                            openAsInlineForum = false
                         }
                     }
                     
-                    let chatLocation: NavigateToChatControllerParams.Location
-                    chatLocation = .peer(peer)
-                    
-                    self.context.sharedContext.navigateToChatController(NavigateToChatControllerParams(navigationController: navigationController, context: self.context, chatLocation: chatLocation, activateInput: (activateInput && !peer.isDeleted) ? .text : nil, scrollToEndIfExists: scrollToEndIfExists, animated: !scrollToEndIfExists, options: navigationAnimationOptions, parentGroupId: groupId._asGroup(), chatListFilter: self.chatListDisplayNode.mainContainerNode.currentItemNode.chatListFilter?.id, completion: { [weak self] controller in
-                        guard let self else {
-                            return
+                    if openAsInlineForum, case let .channel(channel) = peer, channel.isForum, threadId == nil {
+                        self.chatListDisplayNode.clearHighlightAnimated(true)
+                        if self.chatListDisplayNode.inlineStackContainerNode?.location == .forum(peerId: channel.id) {
+                            self.setInlineChatList(location: nil)
+                        } else {
+                            self.setInlineChatList(location: .forum(peerId: channel.id))
                         }
-                        self.chatListDisplayNode.mainContainerNode.currentItemNode.clearHighlightAnimated(true)
+                        return
+                    }
+                    
+                    if case let .channel(channel) = peer, channel.isForumOrMonoForum, let threadId {
+                        self.context.sharedContext.navigateToChatController(NavigateToChatControllerParams(
+                            navigationController: navigationController,
+                            context: self.context,
+                            chatLocation: .replyThread(ChatReplyThreadMessage(
+                                peerId: peer.id,
+                                threadId: threadId,
+                                channelMessageId: nil,
+                                isChannelPost: false,
+                                isForumPost: true,
+                                isMonoforumPost: channel.isMonoForum,
+                                maxMessage: nil,
+                                maxReadIncomingMessageId: nil,
+                                maxReadOutgoingMessageId: nil,
+                                unreadCount: 0,
+                                initialFilledHoles: IndexSet(),
+                                initialAnchor: .automatic,
+                                isNotAvailable: false
+                            )),
+                            subject: subject,
+                            keepStack: .always
+                        ))
                         
-                        if let promoInfo = promoInfo {
-                            switch promoInfo {
-                            case .proxy:
-                                let _ = (ApplicationSpecificNotice.getProxyAdsAcknowledgment(accountManager: self.context.sharedContext.accountManager)
-                                |> deliverOnMainQueue).startStandalone(next: { [weak self] value in
-                                    guard let self else {
-                                        return
-                                    }
-                                    if !value {
-                                        controller.displayPromoAnnouncement(text: self.presentationData.strings.DialogList_AdNoticeAlert)
-                                        let _ = ApplicationSpecificNotice.setProxyAdsAcknowledgment(accountManager: self.context.sharedContext.accountManager).startStandalone()
-                                    }
-                                })
-                            case let .psa(type, _):
-                                let _ = (ApplicationSpecificNotice.getPsaAcknowledgment(accountManager: self.context.sharedContext.accountManager, peerId: peer.id)
-                                |> deliverOnMainQueue).startStandalone(next: { [weak self] value in
-                                    guard let self else {
-                                        return
-                                    }
-                                    if !value {
-                                        var text = self.presentationData.strings.ChatList_GenericPsaAlert
-                                        let key = "ChatList.PsaAlert.\(type)"
-                                        if let string = self.presentationData.strings.primaryComponent.dict[key] {
-                                            text = string
-                                        } else if let string = self.presentationData.strings.secondaryComponent?.dict[key] {
-                                            text = string
-                                        }
-                                        
-                                        controller.displayPromoAnnouncement(text: text)
-                                        let _ = ApplicationSpecificNotice.setPsaAcknowledgment(accountManager: self.context.sharedContext.accountManager, peerId: peer.id).startStandalone()
-                                    }
-                                })
+                        self.chatListDisplayNode.clearHighlightAnimated(true)
+                    } else {
+                        var navigationAnimationOptions: NavigationAnimationOptions = []
+                        var groupId: EngineChatList.Group = .root
+                        if case let .chatList(groupIdValue) = self.location {
+                            groupId = groupIdValue
+                            if case .root = groupIdValue {
+                                navigationAnimationOptions = .removeOnMasterDetails
                             }
                         }
-                    }))
-                }
-            })
+                        
+                        let chatLocation: NavigateToChatControllerParams.Location
+                        chatLocation = .peer(peer)
+                        
+                        self.context.sharedContext.navigateToChatController(NavigateToChatControllerParams(
+                            navigationController: navigationController,
+                            context: self.context,
+                            chatLocation: chatLocation,
+                            subject: subject,
+                            activateInput: (activateInput && !peer.isDeleted) ? .text : nil,
+                            scrollToEndIfExists: scrollToEndIfExists,
+                            animated: !scrollToEndIfExists,
+                            options: navigationAnimationOptions,
+                            parentGroupId: groupId._asGroup(),
+                            chatListFilter: self.chatListDisplayNode.mainContainerNode.currentItemNode.chatListFilter?.id, completion: { [weak self] controller in
+                                guard let self else {
+                                    return
+                                }
+                                self.chatListDisplayNode.mainContainerNode.currentItemNode.clearHighlightAnimated(true)
+                                
+                                if let promoInfo = promoInfo {
+                                    switch promoInfo {
+                                    case .proxy:
+                                        let _ = (ApplicationSpecificNotice.getProxyAdsAcknowledgment(accountManager: self.context.sharedContext.accountManager)
+                                                 |> deliverOnMainQueue).startStandalone(next: { [weak self] value in
+                                            guard let self else {
+                                                return
+                                            }
+                                            if !value {
+                                                controller.displayPromoAnnouncement(text: self.presentationData.strings.DialogList_AdNoticeAlert)
+                                                let _ = ApplicationSpecificNotice.setProxyAdsAcknowledgment(accountManager: self.context.sharedContext.accountManager).startStandalone()
+                                            }
+                                        })
+                                    case let .psa(type, _):
+                                        let _ = (ApplicationSpecificNotice.getPsaAcknowledgment(accountManager: self.context.sharedContext.accountManager, peerId: peer.id)
+                                                 |> deliverOnMainQueue).startStandalone(next: { [weak self] value in
+                                            guard let self else {
+                                                return
+                                            }
+                                            if !value {
+                                                var text = self.presentationData.strings.ChatList_GenericPsaAlert
+                                                let key = "ChatList.PsaAlert.\(type)"
+                                                if let string = self.presentationData.strings.primaryComponent.dict[key] {
+                                                    text = string
+                                                } else if let string = self.presentationData.strings.secondaryComponent?.dict[key] {
+                                                    text = string
+                                                }
+                                                
+                                                controller.displayPromoAnnouncement(text: text)
+                                                let _ = ApplicationSpecificNotice.setPsaAcknowledgment(accountManager: self.context.sharedContext.accountManager, peerId: peer.id).startStandalone()
+                                            }
+                                        })
+                                    }
+                                }
+                            }))
+                    }
+                })
+            }
         }
         
         self.chatListDisplayNode.mainContainerNode.groupSelected = { [weak self] groupId in

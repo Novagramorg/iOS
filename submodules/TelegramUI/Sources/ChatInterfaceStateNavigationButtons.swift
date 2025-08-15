@@ -132,6 +132,13 @@ func rightNavigationButtonForChatInterfaceState(context: AccountContext, present
         }
     }
     
+    if let user = presentationInterfaceState.renderedPeer?.peer as? TelegramUser, let botInfo = user.botInfo, botInfo.flags.contains(.hasForum), let moreInfoNavigationButton = moreInfoNavigationButton {
+        if case .pinnedMessages = presentationInterfaceState.subject {
+        } else {
+            return moreInfoNavigationButton
+        }
+    }
+    
     if case .messageOptions = presentationInterfaceState.subject {
         return nil
     }
