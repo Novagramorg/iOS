@@ -166,6 +166,10 @@ extension ChatControllerImpl {
             if let historyNodeData = contentData.state.historyNodeData {
                 self.updateChatLocationToOther(chatLocation: historyNodeData.chatLocation)
                 return
+            } else if case let .botForumThread(_, threadId) = self.subject {
+                self.subject = nil
+                self.updateChatLocationThread(threadId: threadId)
+                return
             }
             
             apply({ [weak self, weak contentData] forceAnimation in

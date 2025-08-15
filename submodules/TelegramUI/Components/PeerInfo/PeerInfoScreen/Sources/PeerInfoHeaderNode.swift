@@ -1263,15 +1263,18 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                 subtitleColor = UIColor.white
                 
                 let statusText: String
-                statusText = peer.debugDisplayTitle
+                if let channel = peer as? TelegramChannel, channel.linkedBotId != nil {
+                    statusText = " "
+                } else {
+                    statusText = peer.debugDisplayTitle
+                    subtitleIsButton = true
+                }
                 
                 subtitleStringText = statusText
                 subtitleAttributes = MultiScaleTextState.Attributes(font: Font.semibold(16.0), color: subtitleColor)
                 smallSubtitleAttributes = MultiScaleTextState.Attributes(font: Font.regular(16.0), color: .white, shadowColor: titleShadowColor)
                 
                 usernameString = ("", MultiScaleTextState.Attributes(font: Font.regular(16.0), color: .white))
-                
-                subtitleIsButton = true
 
                 let (maybePanelStatusData, _, _) = panelStatusData
                 if let panelStatusData = maybePanelStatusData {
@@ -1979,7 +1982,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             self.currentPendingStarRating = nil
         }
         
-        #if DEBUG
+        #if DEBUG && false
         if "".isEmpty {
             let starRating: TelegramStarRating
             
