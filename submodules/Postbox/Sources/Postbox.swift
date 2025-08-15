@@ -1615,7 +1615,7 @@ final class PostboxImpl {
     private var currentUpdatedPeers: [PeerId: Peer] = [:]
     private var currentUpdatedPeerNotificationSettings: [PeerId: (PeerNotificationSettings?, PeerNotificationSettings)] = [:]
     private var currentUpdatedPeerNotificationBehaviorTimestamps: [PeerId: PeerNotificationSettingsBehaviorTimestamp] = [:]
-    private var currentUpdatedCachedPeerData: [PeerId: CachedPeerData] = [:]
+    private var currentUpdatedCachedPeerData: [PeerId: (previous: CachedPeerData?, updated: CachedPeerData)] = [:]
     private var currentUpdatedPeerPresences: [PeerId: PeerPresence] = [:]
     private var currentUpdatedPeerChatListEmbeddedStates = Set<PeerId>()
     private var currentUpdatedTotalUnreadStates: [PeerGroupId: ChatListTotalUnreadState] = [:]
@@ -2597,7 +2597,7 @@ final class PostboxImpl {
     }
     
     private func beforeCommit(currentTransaction: Transaction) -> (updatedTransactionStateVersion: Int64?, updatedMasterClientId: Int64?) {
-        self.chatListTable.replay(postbox: self, historyOperationsByPeerId: self.currentOperationsByPeerId, updatedPeerChatListEmbeddedStates: self.currentUpdatedPeerChatListEmbeddedStates, updatedPeers: self.currentUpdatedPeers, updatedChatListInclusions: self.currentUpdatedChatListInclusions, messageHistoryTable: self.messageHistoryTable, peerChatInterfaceStateTable: self.peerChatInterfaceStateTable, operations: &self.currentChatListOperations)
+        self.chatListTable.replay(postbox: self, historyOperationsByPeerId: self.currentOperationsByPeerId, updatedPeerChatListEmbeddedStates: self.currentUpdatedPeerChatListEmbeddedStates, updatedPeerCachedData: self.currentUpdatedCachedPeerData, updatedChatListInclusions: self.currentUpdatedChatListInclusions, messageHistoryTable: self.messageHistoryTable, peerChatInterfaceStateTable: self.peerChatInterfaceStateTable, operations: &self.currentChatListOperations)
         
         self.peerChatTopTaggedMessageIdsTable.replay(historyOperationsByPeerId: self.currentOperationsByPeerId)
         
@@ -2936,7 +2936,7 @@ final class PostboxImpl {
             let currentData = self.cachedPeerDataTable.get(peerId)
             if let updatedData = update(peerId, currentData) {
                 self.cachedPeerDataTable.set(id: peerId, data: updatedData)
-                self.currentUpdatedCachedPeerData[peerId] = updatedData
+                self.currentUpdatedCachedPeerData[peerId] = (currentData, updatedData)
             }
         }
     }

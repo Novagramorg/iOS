@@ -187,6 +187,14 @@ public let telegramPostboxSeedConfiguration: SeedConfiguration = {
             }
             return false
         },
+        decodeAssociatedChatListPeerId: { cachedData in
+            if let cachedData = cachedData as? CachedUserData {
+                if case let .known(value) = cachedData.linkedBotChannelId {
+                    return value
+                }
+            }
+            return nil
+        },
         isPeerUpgradeMessage: { message in
             for media in message.media {
                 if let action = media as? TelegramMediaAction {
@@ -245,13 +253,7 @@ public let telegramPostboxSeedConfiguration: SeedConfiguration = {
             
             return result
         },
-        displaySavedMessagesAsTopicListPreferencesKey: PreferencesKeys.displaySavedChatsAsTopics(),
-        chatListPeerMergeIntoTargetId: { peer in
-            if let peer = peer as? TelegramChannel, let linkedBotId = peer.linkedBotId {
-                return linkedBotId
-            }
-            return nil
-        }
+        displaySavedMessagesAsTopicListPreferencesKey: PreferencesKeys.displaySavedChatsAsTopics()
     )
 }()
 

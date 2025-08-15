@@ -9,7 +9,7 @@ final class PostboxTransaction {
     let currentUpdatedPeers: [PeerId: Peer]
     let currentUpdatedPeerNotificationSettings: [PeerId: (PeerNotificationSettings?, PeerNotificationSettings)]
     let currentUpdatedPeerNotificationBehaviorTimestamps: [PeerId: PeerNotificationSettingsBehaviorTimestamp]
-    let currentUpdatedCachedPeerData: [PeerId: CachedPeerData]
+    let currentUpdatedCachedPeerData: [PeerId: (previous: CachedPeerData?, updated: CachedPeerData)]
     let currentUpdatedPeerPresences: [PeerId: PeerPresence]
     let currentUpdatedPeerChatListEmbeddedStates: Set<PeerId>
     let currentUpdatedTotalUnreadStates: [PeerGroupId: ChatListTotalUnreadState]
@@ -240,7 +240,7 @@ final class PostboxTransaction {
         currentUpdatedPeerNotificationSettings: [PeerId: (PeerNotificationSettings?,
         PeerNotificationSettings)],
         currentUpdatedPeerNotificationBehaviorTimestamps: [PeerId: PeerNotificationSettingsBehaviorTimestamp],
-        currentUpdatedCachedPeerData: [PeerId: CachedPeerData],
+        currentUpdatedCachedPeerData: [PeerId: (previous: CachedPeerData?, updated: CachedPeerData)],
         currentUpdatedPeerPresences: [PeerId: PeerPresence],
         currentUpdatedPeerChatListEmbeddedStates: Set<PeerId>,
         currentUpdatedTotalUnreadStates: [PeerGroupId: ChatListTotalUnreadState],
