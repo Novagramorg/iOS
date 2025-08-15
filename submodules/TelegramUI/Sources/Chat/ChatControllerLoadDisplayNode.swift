@@ -130,6 +130,9 @@ extension ChatControllerImpl {
         
         self.contentDataDisposable?.dispose()
         
+        self.newTopicEventsDisposable?.dispose()
+        self.newTopicEventsDisposable = nil
+        
         let configuration: Signal<ChatControllerImpl.ContentData.Configuration, NoError> = self.presentationInterfaceStatePromise.get()
         |> map { presentationInterfaceState -> ChatControllerImpl.ContentData.Configuration in
             return ChatControllerImpl.ContentData.Configuration(
@@ -166,9 +169,9 @@ extension ChatControllerImpl {
             if let historyNodeData = contentData.state.historyNodeData {
                 self.updateChatLocationToOther(chatLocation: historyNodeData.chatLocation)
                 return
-            } else if case let .botForumThread(_, threadId) = self.subject {
+            } else if case let .botForumThread(linkedForumId, threadId) = self.subject {
                 self.subject = nil
-                self.updateChatLocationThread(threadId: threadId)
+                self.updateInitialChatBotForumLocationThread(linkedForumId: linkedForumId, threadId: threadId)
                 return
             }
             
@@ -206,6 +209,25 @@ extension ChatControllerImpl {
                     self.contentDataUpdated(synchronous: false, forceAnimation: false, previousState: previousState)
                 }
             })
+            
+            if self.newTopicEventsDisposable == nil, let peerId = chatLocation.peerId, chatLocation.threadId == EngineMessage.newTopicThreadId {
+                self.newTopicEventsDisposable = (self.context.account.pendingMessageManager.newTopicEvents(peerId: peerId)
+                |> mapToSignal { event -> Signal<Int64, NoError> in
+                    if case let .didMove(fromThreadId, toThreadId) = event {
+                        if fromThreadId == EngineMessage.newTopicThreadId {
+                            return .single(toThreadId)
+                        }
+                    }
+                    return .never()
+                }
+                |> take(1)
+                |> deliverOnMainQueue).startStrict(next: { [weak self] threadId in
+                    guard let self else {
+                        return
+                    }
+                    self.updateInitialChatBotForumLocationThread(linkedForumId: peerId, threadId: threadId)
+                })
+            }
         })
     }
     
