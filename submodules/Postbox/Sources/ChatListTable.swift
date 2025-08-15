@@ -373,7 +373,7 @@ final class ChatListTable: Table {
         return result
     }
     
-    func replay(historyOperationsByPeerId: [PeerId: [MessageHistoryOperation]], updatedPeerChatListEmbeddedStates: Set<PeerId>, updatedChatListInclusions: [PeerId: PeerChatListInclusion], messageHistoryTable: MessageHistoryTable, peerChatInterfaceStateTable: PeerChatInterfaceStateTable, operations: inout [PeerGroupId: [ChatListOperation]]) {
+    func replay(postbox: PostboxImpl, historyOperationsByPeerId: [PeerId: [MessageHistoryOperation]], updatedPeerChatListEmbeddedStates: Set<PeerId>, updatedPeers: [PeerId: Peer], updatedChatListInclusions: [PeerId: PeerChatListInclusion], messageHistoryTable: MessageHistoryTable, peerChatInterfaceStateTable: PeerChatInterfaceStateTable, operations: inout [PeerGroupId: [ChatListOperation]]) {
         var changedPeerIds = Set<PeerId>()
         for peerId in historyOperationsByPeerId.keys {
             changedPeerIds.insert(peerId)
@@ -384,6 +384,12 @@ final class ChatListTable: Table {
         for peerId in updatedChatListInclusions.keys {
             changedPeerIds.insert(peerId)
         }
+        /*for peerId in updatedPeers.keys {
+            changedPeerIds.insert(peerId)
+            if let peer = postbox.peerTable.get(peerId), let targetPeerId = self.seedConfiguration.chatListPeerMergeIntoTargetId(peer) {
+                changedPeerIds.insert(targetPeerId)
+            }
+        }*/
         
         self.ensureInitialized(groupId: .root)
         
@@ -396,8 +402,8 @@ final class ChatListTable: Table {
             let topMessage = messageHistoryTable.topIndex(peerId: peerId)
             let embeddedChatStateOverrideTimestamp = peerChatInterfaceStateTable.get(peerId)?.overrideChatTimestamp
             
-            let rawTopMessageIndex: MessageIndex?
-            let topMessageIndex: MessageIndex?
+            var rawTopMessageIndex: MessageIndex?
+            var topMessageIndex: MessageIndex?
             if let topMessage = topMessage {
                 var updatedTimestamp = topMessage.timestamp
                 rawTopMessageIndex = MessageIndex(id: topMessage.id, timestamp: topMessage.timestamp)
@@ -412,6 +418,22 @@ final class ChatListTable: Table {
                 topMessageIndex = nil
                 rawTopMessageIndex = nil
             }
+            
+            /*for associatedId in postbox.reverseAssociatedPeerTable.get(peerId: peerId) {
+                if let peer = postbox.peerTable.get(associatedId), let targetPeerId = self.seedConfiguration.chatListPeerMergeIntoTargetId(peer), targetPeerId == peerId {
+                    if let associatedTopMessage = messageHistoryTable.topIndex(peerId: associatedId) {
+                        if let currentTopMessageIndex = topMessage {
+                            if associatedTopMessage > currentTopMessageIndex {
+                                topMessageIndex = associatedTopMessage
+                                rawTopMessageIndex = associatedTopMessage
+                            }
+                        } else {
+                            topMessageIndex = associatedTopMessage
+                            rawTopMessageIndex = associatedTopMessage
+                        }
+                    }
+                }
+            }*/
             
             var updatedIndex = self.indexTable.setTopMessageIndex(peerId: peerId, index: topMessageIndex)
             if let updatedInclusion = updatedChatListInclusions[peerId] {

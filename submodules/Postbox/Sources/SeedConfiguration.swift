@@ -81,6 +81,7 @@ public final class SeedConfiguration {
     public let automaticThreadIndexInfo: (PeerId, Int64) -> StoredMessageHistoryThreadInfo?
     public let customTagsFromAttributes: ([MessageAttribute]) -> [MemoryBuffer]
     public let displaySavedMessagesAsTopicListPreferencesKey: ValueBoxKey
+    public let chatListPeerMergeIntoTargetId: (Peer) -> PeerId?
     
     public init(
         globalMessageIdsPeerIdNamespaces: Set<GlobalMessageIdsNamespace>,
@@ -111,7 +112,8 @@ public final class SeedConfiguration {
         isPeerUpgradeMessage: @escaping (Message) -> Bool,
         automaticThreadIndexInfo: @escaping (PeerId, Int64) -> StoredMessageHistoryThreadInfo?,
         customTagsFromAttributes: @escaping ([MessageAttribute]) -> [MemoryBuffer],
-        displaySavedMessagesAsTopicListPreferencesKey: ValueBoxKey
+        displaySavedMessagesAsTopicListPreferencesKey: ValueBoxKey,
+        chatListPeerMergeIntoTargetId: @escaping (Peer) -> PeerId?
     ) {
         self.globalMessageIdsPeerIdNamespaces = globalMessageIdsPeerIdNamespaces
         self.initializeChatListWithHole = initializeChatListWithHole
@@ -138,5 +140,6 @@ public final class SeedConfiguration {
         self.automaticThreadIndexInfo = automaticThreadIndexInfo
         self.customTagsFromAttributes = customTagsFromAttributes
         self.displaySavedMessagesAsTopicListPreferencesKey = displaySavedMessagesAsTopicListPreferencesKey
+        self.chatListPeerMergeIntoTargetId = chatListPeerMergeIntoTargetId
     }
 }
