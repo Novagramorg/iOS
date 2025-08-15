@@ -60,7 +60,7 @@ public final class SeedConfiguration {
     public let initializeChatListWithHole: (topLevel: ChatListHole?, groups: ChatListHole?)
     public let messageHoles: [PeerId.Namespace: [MessageId.Namespace: Set<MessageTags>]]
     public let upgradedMessageHoles: [PeerId.Namespace: [MessageId.Namespace: Set<MessageTags>]]
-    public let messageThreadHoles: [PeerId.Namespace: [MessageId.Namespace]]
+    public let messageThreadHoles: (PeerId.Namespace, Int64?) -> [MessageId.Namespace]?
     public let messageTagsWithSummary: MessageTags
     public let messageTagsWithThreadSummary: MessageTags
     public let existingGlobalMessageTags: GlobalMessageTags
@@ -91,7 +91,7 @@ public final class SeedConfiguration {
         ),
         messageHoles: [PeerId.Namespace: [MessageId.Namespace: Set<MessageTags>]],
         upgradedMessageHoles: [PeerId.Namespace: [MessageId.Namespace: Set<MessageTags>]],
-        messageThreadHoles: [PeerId.Namespace: [MessageId.Namespace]],
+        messageThreadHoles: @escaping (PeerId.Namespace, Int64?) -> [MessageId.Namespace]?,
         existingMessageTags: MessageTags,
         messageTagsWithSummary: MessageTags,
         messageTagsWithThreadSummary: MessageTags,

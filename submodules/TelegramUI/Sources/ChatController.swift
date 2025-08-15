@@ -258,6 +258,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     var contentData: ChatControllerImpl.ContentData?
     let contentDataReady = ValuePromise<Bool>(false, ignoreRepeated: true)
     var contentDataDisposable: Disposable?
+    var newTopicEventsDisposable: Disposable?
     var didHandlePerformDismissAction: Bool = false
     var didInitializePersistentPeerInterfaceData: Bool = false
     
@@ -702,6 +703,11 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         self.automaticMediaDownloadSettings = context.sharedContext.currentAutomaticMediaDownloadSettings
         
         self.stickerSettings = ChatInterfaceStickerSettings()
+        
+        var subject = subject
+        if case .botForumThread = subject {
+            subject = nil
+        }
         
         self.presentationInterfaceState = ChatPresentationInterfaceState(chatWallpaper: self.presentationData.chatWallpaper, theme: self.presentationData.theme, strings: self.presentationData.strings, dateTimeFormat: self.presentationData.dateTimeFormat, nameDisplayOrder: self.presentationData.nameDisplayOrder, limitsConfiguration: context.currentLimitsConfiguration.with { $0 }, fontSize: self.presentationData.chatFontSize, bubbleCorners: self.presentationData.chatBubbleCorners, accountPeerId: context.account.peerId, mode: mode, chatLocation: chatLocation, subject: subject, peerNearbyData: peerNearbyData, greetingData: context.prefetchManager?.preloadedGreetingSticker, pendingUnpinnedAllMessages: false, activeGroupCallInfo: nil, hasActiveGroupCall: false, importState: nil, threadData: nil, isGeneralThreadClosed: nil, replyMessage: nil, accountPeerColor: nil, businessIntro: nil)
         
@@ -6181,6 +6187,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         self.updateChatLocationThreadDisposable?.dispose()
         self.accountPeerDisposable?.dispose()
         self.contentDataDisposable?.dispose()
+        self.newTopicEventsDisposable?.dispose()
         self.updateMessageTodoDisposables?.dispose()
         self.preloadNextChatPeerIdDisposable.dispose()
     }
@@ -10140,6 +10147,52 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             self.chatDisplayNode.prepareSwitchToChatLocation(historyNode: historyNode, animationDirection: nil)
             
             apply(self.didAppear)
+            
+            self.currentChatSwitchDirection = nil
+            self.isUpdatingChatLocationThread = false
+        })
+    }
+    
+    func updateInitialChatBotForumLocationThread(linkedForumId: EnginePeer.Id, threadId: Int64) {
+        if self.isUpdatingChatLocationThread {
+            assertionFailure()
+            return
+        }
+        
+        self.saveInterfaceState()
+        
+        self.chatDisplayNode.dismissTextInput()
+        
+        let updatedChatLocation: ChatLocation = .replyThread(message: ChatReplyThreadMessage(
+            peerId: linkedForumId,
+            threadId: threadId,
+            channelMessageId: nil,
+            isChannelPost: false,
+            isForumPost: true,
+            isMonoforumPost: false,
+            maxMessage: nil,
+            maxReadIncomingMessageId: nil,
+            maxReadOutgoingMessageId: nil,
+            unreadCount: 0,
+            initialFilledHoles: IndexSet(),
+            initialAnchor: .automatic,
+            isNotAvailable: false
+        ))
+        
+        let chatLocationContextHolder = Atomic<ChatLocationContextHolder?>(value: nil)
+        let historyNode = self.chatDisplayNode.createHistoryNodeForChatLocation(chatLocation: updatedChatLocation, chatLocationContextHolder: chatLocationContextHolder)
+        self.isUpdatingChatLocationThread = true
+        self.reloadChatLocation(chatLocation: updatedChatLocation, chatLocationContextHolder: chatLocationContextHolder, historyNode: historyNode, apply: { [weak self, weak historyNode] apply in
+            guard let self, let historyNode else {
+                return
+            }
+            
+            self.currentChatSwitchDirection = nil
+            self.chatLocation = updatedChatLocation
+            historyNode.areContentAnimationsEnabled = true
+            self.chatDisplayNode.prepareSwitchToChatLocation(historyNode: historyNode, animationDirection: nil)
+            
+            apply(true)
             
             self.currentChatSwitchDirection = nil
             self.isUpdatingChatLocationThread = false

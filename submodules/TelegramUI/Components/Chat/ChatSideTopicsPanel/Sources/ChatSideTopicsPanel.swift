@@ -392,6 +392,8 @@ public final class ChatSideTopicsPanel: Component {
                         } else {
                             avatarIconContent = .topic(title: String(threadData.info.title.prefix(1)), color: threadData.info.iconColor, size: iconSize)
                         }
+                    } else if topicId == EngineMessage.newTopicThreadId {
+                        avatarIconContent = .image(image: PresentationResourcesChatList.newTopicTemplateIcon(component.theme), tintColor: component.isSelected ? component.theme.rootController.navigationBar.accentTextColor : component.theme.rootController.navigationBar.controlColor)
                     } else {
                         avatarIconContent = .image(image: PresentationResourcesChatList.generalTopicTemplateIcon(component.theme), tintColor: component.isSelected ? component.theme.rootController.navigationBar.accentTextColor : component.theme.rootController.navigationBar.controlColor)
                     }
@@ -435,6 +437,9 @@ public final class ChatSideTopicsPanel: Component {
                     let _ = topicId
                     if let threadData = component.item.item.threadData {
                         titleText = threadData.info.title
+                    }  else if topicId == EngineMessage.newTopicThreadId {
+                        //TODO:localize
+                        titleText = "New Chat"
                     } else {
                         titleText = " "
                     }
@@ -830,6 +835,8 @@ public final class ChatSideTopicsPanel: Component {
                         } else {
                             avatarIconContent = .topic(title: String(threadData.info.title.prefix(1)), color: threadData.info.iconColor, size: iconSize)
                         }
+                    } else if topicId == EngineMessage.newTopicThreadId {
+                        avatarIconContent = .image(image: PresentationResourcesChatList.newTopicTemplateIcon(component.theme), tintColor: component.isSelected ? component.theme.rootController.navigationBar.accentTextColor : component.theme.rootController.navigationBar.controlColor)
                     } else {
                         avatarIconContent = .image(image: PresentationResourcesChatList.generalTopicTemplateIcon(component.theme), tintColor: component.isSelected ? component.theme.rootController.navigationBar.accentTextColor : component.theme.rootController.navigationBar.controlColor)
                     }
@@ -867,6 +874,9 @@ public final class ChatSideTopicsPanel: Component {
                     let _ = topicId
                     if let threadData = component.item.item.threadData {
                         titleText = threadData.info.title
+                    } else if topicId == EngineMessage.newTopicThreadId {
+                        //TODO:localize
+                        titleText = "New Chat"
                     } else {
                         titleText = " "
                     }
@@ -1736,9 +1746,43 @@ public final class ChatSideTopicsPanel: Component {
                     self.rawItems.removeAll()
                     for item in chatList.items.reversed() {
                         if case .botForum = component.kind, case let .forum(topicId) = item.id, topicId == 1 {
+                            #if DEBUG
+                            #else
                             continue
+                            #endif
                         }
                         self.rawItems.append(Item(item: item))
+                    }
+                    
+                    if case .botForum = component.kind, !self.rawItems.contains(where: { item in
+                        if case let .forum(topicId) = item.id {
+                            return topicId == EngineMessage.newTopicThreadId
+                        } else {
+                            return false
+                        }
+                    }) {
+                        self.rawItems.insert(Item(item: EngineChatList.Item(
+                            id: .forum(EngineMessage.newTopicThreadId),
+                            index: EngineChatList.Item.Index.forum(pinnedIndex: .none, timestamp: Int32.max - 1, threadId: EngineMessage.newTopicThreadId, namespace: Namespaces.Message.Local, id: 1),
+                            messages: [],
+                            readCounters: nil,
+                            isMuted: false,
+                            draft: nil,
+                            threadData: nil,
+                            renderedPeer: EngineRenderedPeer(peerId: peerId, peers: [:], associatedMedia: [:]),
+                            presence: nil,
+                            hasUnseenMentions: false,
+                            hasUnseenReactions: false,
+                            forumTopicData: nil,
+                            topForumTopicItems: [],
+                            hasFailed: false,
+                            isContact: false,
+                            autoremoveTimeout: nil,
+                            storyStats: nil,
+                            displayAsTopicList: false,
+                            isPremiumRequiredToMessage: false,
+                            mediaDraftContentType: nil
+                        )), at: 0)
                     }
                     
                     if self.reorderingItems != nil {
