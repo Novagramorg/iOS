@@ -7,7 +7,7 @@ import MtProtoKit
 
 func _internal_requestStartBot(account: Account, botPeerId: PeerId, payload: String?) -> Signal<Void, NoError> {
     #if DEBUG
-    if "".isEmpty {
+    if !"".isEmpty {
         return account.postbox.loadedPeerWithId(botPeerId)
         |> mapToSignal { botPeer -> Signal<Void, NoError> in
             guard let inputUser = apiInputUser(botPeer), let botPeer = botPeer as? TelegramUser, let botInfo = botPeer.botInfo else {
@@ -38,6 +38,25 @@ func _internal_requestStartBot(account: Account, botPeerId: PeerId, payload: Str
                 }
                 |> `catch` { _ -> Signal<Void, NoError> in
                     return .complete()
+                }
+            }
+            
+            if let payload = payload, !payload.isEmpty {
+                return account.postbox.loadedPeerWithId(botPeerId)
+                |> mapToSignal { botPeer -> Signal<Void, NoError> in
+                    if let inputUser = apiInputUser(botPeer) {
+                        return account.network.request(Api.functions.messages.startBot(bot: inputUser, peer: .inputPeerEmpty, randomId: Int64.random(in: Int64.min ... Int64.max), startParam: payload))
+                        |> mapToSignal { result -> Signal<Void, MTRpcError> in
+                            account.stateManager.addUpdates(result)
+                            return .complete()
+                        }
+                        |> `catch` { _ -> Signal<Void, MTRpcError> in
+                            return .complete()
+                        }
+                        |> retryRequest
+                    } else {
+                        return .complete()
+                    }
                 }
             } else {
                 return enqueueMessages(account: account, peerId: botPeerId, messages: [.message(text: "/start", attributes: [], inlineStickers: [:], mediaReference: nil, threadId: nil, replyToMessageId: nil, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: [])]) |> mapToSignal { _ -> Signal<Void, NoError> in
