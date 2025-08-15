@@ -56,6 +56,7 @@ final class PostboxTransaction {
     let storyItemsEvents: [StoryItemsTable.Event]
     let currentStoryTopItemEvents: [StoryTopItemsTable.Event]
     let storyEvents: [StoryTable.Event]
+    let updatedTypingDrafts: [PeerAndThreadId: PostboxImpl.TypingDraftUpdate]
     
     var isEmpty: Bool {
         if currentUpdatedState != nil {
@@ -223,6 +224,9 @@ final class PostboxTransaction {
         if !self.storyEvents.isEmpty {
             return false
         }
+        if !self.updatedTypingDrafts.isEmpty {
+            return false
+        }
         return true
     }
     
@@ -281,7 +285,8 @@ final class PostboxTransaction {
         storySubscriptionsEvents: [StorySubscriptionsTable.Event],
         storyItemsEvents: [StoryItemsTable.Event],
         currentStoryTopItemEvents: [StoryTopItemsTable.Event],
-        storyEvents: [StoryTable.Event]
+        storyEvents: [StoryTable.Event],
+        updatedTypingDrafts: [PeerAndThreadId: PostboxImpl.TypingDraftUpdate]
     ) {
         self.currentUpdatedState = currentUpdatedState
         self.currentPeerHoleOperations = currentPeerHoleOperations
@@ -337,5 +342,6 @@ final class PostboxTransaction {
         self.storyItemsEvents = storyItemsEvents
         self.currentStoryTopItemEvents = currentStoryTopItemEvents
         self.storyEvents = storyEvents
+        self.updatedTypingDrafts = updatedTypingDrafts
     }
 }
