@@ -1569,6 +1569,10 @@ extension ChatControllerImpl {
                                 infoContextActionIsEnabled = true
                             }
                             strongSelf.state.infoAvatar = .emojiStatus(content: avatarContent, contextActionIsEnabled: infoContextActionIsEnabled)
+                        } else if chatLocation.threadId == EngineMessage.newTopicThreadId {
+                            //TODO:localize
+                            strongSelf.state.chatTitleContent = .custom("New Chat", nil, false)
+                            strongSelf.state.infoAvatar = nil
                         } else {
                             strongSelf.state.chatTitleContent = .replyThread(type: replyThreadType, count: count)
                         }

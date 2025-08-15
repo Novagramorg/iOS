@@ -651,6 +651,8 @@ public struct MessageGroupInfo: Equatable {
 }
 
 public final class Message {
+    public static let newTopicThreadId: Int64 = Int64(Int32.max - 1)
+    
     public final class AssociatedThreadInfo: Equatable {
         public let title: String
         public let icon: Int64?
