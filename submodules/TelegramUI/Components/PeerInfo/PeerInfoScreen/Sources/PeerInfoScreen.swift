@@ -5599,9 +5599,9 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
         }, callPeer: { peerId, isVideo in
         }, openConferenceCall: { _ in
         }, enqueueMessage: { _ in
-        }, sendSticker: nil, sendEmoji: nil, setupTemporaryHiddenMedia: { _, _, _ in }, chatAvatarHiddenMedia: { _, _ in }, actionInteraction: GalleryControllerActionInteraction(openUrl: { [weak self] url, concealed in
+        }, sendSticker: nil, sendEmoji: nil, setupTemporaryHiddenMedia: { _, _, _ in }, chatAvatarHiddenMedia: { _, _ in }, actionInteraction: GalleryControllerActionInteraction(openUrl: { [weak self] url, concealed, forceExternal in
             if let strongSelf = self {
-                strongSelf.openUrl(url: url, concealed: false, external: false)
+                strongSelf.openUrl(url: url, concealed: false, external: forceExternal)
             }
         }, openUrlIn: { [weak self] url in
             if let strongSelf = self {
