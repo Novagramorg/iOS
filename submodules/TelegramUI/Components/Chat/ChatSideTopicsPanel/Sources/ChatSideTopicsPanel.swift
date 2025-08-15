@@ -1746,7 +1746,7 @@ public final class ChatSideTopicsPanel: Component {
                     self.rawItems.removeAll()
                     for item in chatList.items.reversed() {
                         if case .botForum = component.kind, case let .forum(topicId) = item.id, topicId == 1 {
-                            #if DEBUG
+                            #if DEBUG && false
                             #else
                             continue
                             #endif
