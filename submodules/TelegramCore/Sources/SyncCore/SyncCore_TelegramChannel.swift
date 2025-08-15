@@ -219,6 +219,8 @@ public final class TelegramChannel: Peer, Equatable {
     public var associatedPeerId: PeerId? {
         if self.flags.contains(.isMonoforum) {
             return self.linkedMonoforumId
+        } else if let linkedBotId = self.linkedBotId {
+            return linkedBotId
         } else {
             return nil
         }
@@ -259,7 +261,21 @@ public final class TelegramChannel: Peer, Equatable {
         return mediaIds
     }
     
-    public let notificationSettingsPeerId: PeerId? = nil
+    public var notificationSettingsPeerId: PeerId? {
+        if let linkedBotId = self.linkedBotId {
+            return linkedBotId
+        } else {
+            return nil
+        }
+    }
+    
+    public var associatedPeerOverridesIdentity: Bool {
+        if self.linkedBotId != nil {
+            return true
+        } else {
+            return false
+        }
+    }
     
     public var timeoutAttribute: UInt32? {
         if let emojiStatus = self.emojiStatus {
