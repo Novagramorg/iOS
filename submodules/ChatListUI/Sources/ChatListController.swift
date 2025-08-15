@@ -1042,7 +1042,12 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                     ).get(), let linkedForumId {
                         subject = .botForumThread(forumId: linkedForumId, threadId: threadIdValue)
                     }
-                    subject = nil
+                } else if case let .user(user) = peer {
+                    if case let .known(linkedForumId) = await self.context.engine.data.get(
+                        TelegramEngine.EngineData.Item.Peer.LinkedBotForumPeerId(id: user.id)
+                    ).get(), let linkedForumId {
+                        subject = .botForumThread(forumId: linkedForumId, threadId: EngineMessage.newTopicThreadId)
+                    }
                 }
                 
                 var forumSourcePeer: Signal<EnginePeer?, NoError> = .single(nil)

@@ -1381,7 +1381,7 @@ public final class ChatHistoryListNodeImpl: ListView, ChatHistoryNode, ChatHisto
 
         let currentViewVersion = self.currentViewVersion
         
-        let historyViewUpdate: Signal<(ChatHistoryViewUpdate, Int, ChatHistoryLocationInput?, ClosedRange<Int32>?, Set<MessageId>), NoError>
+        var historyViewUpdate: Signal<(ChatHistoryViewUpdate, Int, ChatHistoryLocationInput?, ClosedRange<Int32>?, Set<MessageId>), NoError>
         var isFirstTime = true
         var updateAllOnEachVersion = false
         if case let .custom(messages, at, quote, _) = self.source {
@@ -1745,6 +1745,33 @@ public final class ChatHistoryListNodeImpl: ListView, ChatHistoryNode, ChatHisto
             return setting && isPremium
         }
         |> distinctUntilChanged
+        
+        let stopHistoryViewUpdates: Signal<Bool, NoError>
+        if let peerId = chatLocation.peerId, chatLocation.threadId == EngineMessage.newTopicThreadId {
+            stopHistoryViewUpdates = Signal<Bool, NoError>.single(false)
+            |> then(
+                self.context.account.pendingMessageManager.newTopicEvents(peerId: peerId)
+                |> mapToSignal { event -> Signal<Bool, NoError> in
+                    if case .willMove(EngineMessage.newTopicThreadId, _) = event {
+                        return .single(true)
+                    } else {
+                        return .never()
+                    }
+                }
+                |> take(1)
+            )
+        } else {
+            stopHistoryViewUpdates = .single(false)
+        }
+        
+        let historyViewUpdateValue = historyViewUpdate
+        historyViewUpdate = stopHistoryViewUpdates |> mapToSignal { value in
+            if value {
+                return .never()
+            } else {
+                return historyViewUpdateValue
+            }
+        }
         
         let startTime = CFAbsoluteTimeGetCurrent()
         var measure_isFirstTime = true
