@@ -8,7 +8,7 @@ public enum AddSavedMusicError {
     case generic
 }
 
-private func revalidatedMusic<T>(account: Account, file: FileMediaReference, signal: @escaping (CloudDocumentMediaResource) -> Signal<T, MTRpcError>) -> Signal<T, MTRpcError> {
+func revalidatedMusic<T>(account: Account, file: FileMediaReference, signal: @escaping (CloudDocumentMediaResource) -> Signal<T, MTRpcError>) -> Signal<T, MTRpcError> {
     guard let resource = file.media.resource as? CloudDocumentMediaResource else {
         return .fail(MTRpcError(errorCode: 500, errorDescription: "Internal"))
     }
@@ -31,6 +31,73 @@ private func revalidatedMusic<T>(account: Account, file: FileMediaReference, sig
     }
 }
 
+public final class SavedMusicIdsList: Codable, Equatable {
+    public let items: [Int64]
+
+    public init(items: [Int64]) {
+        self.items = items
+    }
+
+    public static func ==(lhs: SavedMusicIdsList, rhs: SavedMusicIdsList) -> Bool {
+        if lhs === rhs {
+            return true
+        }
+        if lhs.items != rhs.items {
+            return false
+        }
+        return true
+    }
+}
+
+func _internal_savedMusicIds(postbox: Postbox) -> Signal<Set<Int64>?, NoError> {
+    let viewKey: PostboxViewKey = .preferences(keys: Set([PreferencesKeys.savedMusicIds()]))
+    return postbox.combinedView(keys: [viewKey])
+    |> map { views -> Set<Int64>? in
+        guard let view = views.views[viewKey] as? PreferencesView else {
+            return nil
+        }
+        guard let value = view.values[PreferencesKeys.savedMusicIds()]?.get(SavedMusicIdsList.self) else {
+            return nil
+        }
+        return Set(value.items)
+    }
+}
+
+func _internal_keepSavedMusicIdsUpdated(postbox: Postbox, network: Network, accountPeerId: EnginePeer.Id) -> Signal<Never, NoError> {
+    let updateSignal = _internal_savedMusicIds(postbox: postbox)
+    |> take(1)
+    |> mapToSignal { list -> Signal<Never, NoError> in
+        //TODO:release
+        return network.request(Api.functions.account.getSavedMusicIds(hash: 0))
+        |> map(Optional.init)
+        |> `catch` { _ -> Signal<Api.account.SavedMusicIds?, NoError> in
+            return .single(nil)
+        }
+        |> mapToSignal { result -> Signal<Never, NoError> in
+            guard let result else {
+                return .complete()
+            }
+            return postbox.transaction { transaction in
+                switch result {
+                case let .savedMusicIds(ids):
+                    let savedMusicIdsList = SavedMusicIdsList(items: ids)
+                    transaction.setPreferencesEntry(key: PreferencesKeys.savedMusicIds(), value: PreferencesEntry(savedMusicIdsList))
+                case .savedMusicIdsNotModified:
+                    break
+                }
+            }
+            |> ignoreValues
+        }
+    }
+    
+    return updateSignal
+}
+
+func managedSavedMusicIdsUpdates(postbox: Postbox, network: Network, accountPeerId: EnginePeer.Id) -> Signal<Never, NoError> {
+    let poll = _internal_keepSavedMusicIdsUpdated(postbox: postbox, network: network, accountPeerId: accountPeerId)
+    return (poll |> then(.complete() |> suspendAwareDelay(0.5 * 60.0 * 60.0, queue: Queue.concurrentDefaultQueue()))) |> restart
+}
+
 func _internal_addSavedMusic(account: Account, file: FileMediaReference) -> Signal<Never, AddSavedMusicError> {
     return account.postbox.transaction { transaction in
         if let cachedSavedMusic = transaction.retrieveItemCacheEntry(id: entryId(peerId: account.peerId))?.get(CachedProfileSavedMusic.self) {
@@ -39,6 +106,13 @@ func _internal_addSavedMusic(account: Account, file: FileMediaReference) -> Sign
             let updatedCount = max(0, cachedSavedMusic.count + 1)
             if let entry = CodableEntry(CachedProfileSavedMusic(files: updatedFiles, count: updatedCount)) {
                 transaction.putItemCacheEntry(id: entryId(peerId: account.peerId), entry: entry)
+            }
+            
+            if let entry = transaction.getPreferencesEntry(key: PreferencesKeys.savedMusicIds())?.get(SavedMusicIdsList.self) {
+                var ids = Set(entry.items)
+                ids.insert(file.media.fileId.id)
+                let savedMusicIdsList = SavedMusicIdsList(items: Array(ids))
+                transaction.setPreferencesEntry(key: PreferencesKeys.savedMusicIds(), value: PreferencesEntry(savedMusicIdsList))
             }
             
             transaction.updatePeerCachedData(peerIds: Set([account.peerId]), update: { _, cachedData -> CachedPeerData? in
@@ -73,6 +147,14 @@ func _internal_removeSavedMusic(account: Account, file: FileMediaReference) -> S
             if let entry = CodableEntry(CachedProfileSavedMusic(files: updatedFiles, count: updatedCount)) {
                 transaction.putItemCacheEntry(id: entryId(peerId: account.peerId), entry: entry)
             }
+            
+            if let entry = transaction.getPreferencesEntry(key: PreferencesKeys.savedMusicIds())?.get(SavedMusicIdsList.self) {
+                var ids = Set(entry.items)
+                ids.remove(file.media.fileId.id)
+                let savedMusicIdsList = SavedMusicIdsList(items: Array(ids))
+                transaction.setPreferencesEntry(key: PreferencesKeys.savedMusicIds(), value: PreferencesEntry(savedMusicIdsList))
+            }
+            
             if updatedCount == 0 {
                 transaction.updatePeerCachedData(peerIds: Set([account.peerId]), update: { _, cachedData -> CachedPeerData? in
                     if let cachedData = cachedData as? CachedUserData {
@@ -268,7 +350,7 @@ public final class ProfileSavedMusicContext {
         }
     }
     
-    public func deleteMusic(file: FileMediaReference) -> Signal<Never, NoError> {
+    public func removeMusic(file: FileMediaReference) -> Signal<Never, NoError> {
         return _internal_removeSavedMusic(account: self.account, file: file)
         |> afterCompleted { [weak self] in
             guard let self else {
