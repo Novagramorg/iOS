@@ -247,7 +247,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     
     let context: AccountContext
     public internal(set) var chatLocation: ChatLocation
-    public let subject: ChatControllerSubject?
+    public internal(set) var subject: ChatControllerSubject?
     
     var botStart: ChatControllerInitialBotStart?
     var attachBotStart: ChatControllerInitialAttachBotStart?
@@ -258,6 +258,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     var contentData: ChatControllerImpl.ContentData?
     let contentDataReady = ValuePromise<Bool>(false, ignoreRepeated: true)
     var contentDataDisposable: Disposable?
+    var newTopicEventsDisposable: Disposable?
     var didHandlePerformDismissAction: Bool = false
     var didInitializePersistentPeerInterfaceData: Bool = false
     
@@ -702,6 +703,11 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         self.automaticMediaDownloadSettings = context.sharedContext.currentAutomaticMediaDownloadSettings
         
         self.stickerSettings = ChatInterfaceStickerSettings()
+        
+        var subject = subject
+        if case .botForumThread = subject {
+            subject = nil
+        }
         
         self.presentationInterfaceState = ChatPresentationInterfaceState(chatWallpaper: self.presentationData.chatWallpaper, theme: self.presentationData.theme, strings: self.presentationData.strings, dateTimeFormat: self.presentationData.dateTimeFormat, nameDisplayOrder: self.presentationData.nameDisplayOrder, limitsConfiguration: context.currentLimitsConfiguration.with { $0 }, fontSize: self.presentationData.chatFontSize, bubbleCorners: self.presentationData.chatBubbleCorners, accountPeerId: context.account.peerId, mode: mode, chatLocation: chatLocation, subject: subject, peerNearbyData: peerNearbyData, greetingData: context.prefetchManager?.preloadedGreetingSticker, pendingUnpinnedAllMessages: false, activeGroupCallInfo: nil, hasActiveGroupCall: false, importState: nil, threadData: nil, isGeneralThreadClosed: nil, replyMessage: nil, accountPeerColor: nil, businessIntro: nil)
         
@@ -5528,6 +5534,8 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             
             if peerId == self.context.account.peerId {
                 PeerInfoScreenImpl.openSavedMessagesMoreMenu(context: self.context, sourceController: self, isViewingAsTopics: false, sourceView: sourceNode.view, gesture: gesture)
+            } else if peerId.namespace == Namespaces.Peer.CloudUser {
+                self.openBotForumMoreMenu(sourceView: sourceNode.view, gesture: gesture)
             } else {
                 ChatListControllerImpl.openMoreMenu(context: self.context, peerId: peerId, sourceController: self, isViewingAsTopics: false, sourceView: sourceNode.view, gesture: gesture)
             }
@@ -6179,6 +6187,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         self.updateChatLocationThreadDisposable?.dispose()
         self.accountPeerDisposable?.dispose()
         self.contentDataDisposable?.dispose()
+        self.newTopicEventsDisposable?.dispose()
         self.updateMessageTodoDisposables?.dispose()
         self.preloadNextChatPeerIdDisposable.dispose()
     }
@@ -8827,7 +8836,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                 return
             }
             
-            #if DEBUG
+            #if DEBUG && false
             let botForumId = await self.context.engine.data.get(
                 TelegramEngine.EngineData.Item.Peer.LinkedBotForumPeerId(id: peerId)
             ).get()
@@ -10144,17 +10153,9 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         })
     }
     
-    public func updateChatLocationThread(threadId: Int64?, animationDirection: ChatControllerAnimateInnerChatSwitchDirection? = nil) {
+    func updateInitialChatBotForumLocationThread(linkedForumId: EnginePeer.Id, threadId: Int64) {
         if self.isUpdatingChatLocationThread {
-            return
-        }
-        guard let peerId = self.chatLocation.peerId else {
-            return
-        }
-        if self.chatLocation.threadId == threadId {
-            return
-        }
-        guard let peer = self.presentationInterfaceState.renderedPeer?.chatMainPeer else {
+            assertionFailure()
             return
         }
         
@@ -10162,34 +10163,21 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         
         self.chatDisplayNode.dismissTextInput()
         
-        let updatedChatLocation: ChatLocation
-        if let threadId {
-            var isMonoforum = false
-            if let channel = peer as? TelegramChannel, channel.flags.contains(.isMonoforum) {
-                isMonoforum = true
-            }
-            
-            updatedChatLocation = .replyThread(message: ChatReplyThreadMessage(
-                peerId: peerId,
-                threadId: threadId,
-                channelMessageId: nil,
-                isChannelPost: false,
-                isForumPost: true,
-                isMonoforumPost: isMonoforum,
-                maxMessage: nil,
-                maxReadIncomingMessageId: nil,
-                maxReadOutgoingMessageId: nil,
-                unreadCount: 0,
-                initialFilledHoles: IndexSet(),
-                initialAnchor: .automatic,
-                isNotAvailable: false
-            ))
-        } else {
-            updatedChatLocation = .peer(id: peerId)
-        }
-        
-        let navigationSnapshot = self.chatTitleView?.prepareSnapshotState()
-        let avatarSnapshot = self.chatInfoNavigationButton?.buttonItem.customDisplayNode?.view.window != nil ? (self.chatInfoNavigationButton?.buttonItem.customDisplayNode as? ChatAvatarNavigationNode)?.prepareSnapshotState() : nil
+        let updatedChatLocation: ChatLocation = .replyThread(message: ChatReplyThreadMessage(
+            peerId: linkedForumId,
+            threadId: threadId,
+            channelMessageId: nil,
+            isChannelPost: false,
+            isForumPost: true,
+            isMonoforumPost: false,
+            maxMessage: nil,
+            maxReadIncomingMessageId: nil,
+            maxReadOutgoingMessageId: nil,
+            unreadCount: 0,
+            initialFilledHoles: IndexSet(),
+            initialAnchor: .automatic,
+            isNotAvailable: false
+        ))
         
         let chatLocationContextHolder = Atomic<ChatLocationContextHolder?>(value: nil)
         let historyNode = self.chatDisplayNode.createHistoryNodeForChatLocation(chatLocation: updatedChatLocation, chatLocationContextHolder: chatLocationContextHolder)
@@ -10199,36 +10187,137 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                 return
             }
             
-            self.currentChatSwitchDirection = animationDirection
+            self.currentChatSwitchDirection = nil
             self.chatLocation = updatedChatLocation
             historyNode.areContentAnimationsEnabled = true
-            self.chatDisplayNode.prepareSwitchToChatLocation(historyNode: historyNode, animationDirection: animationDirection)
+            self.chatDisplayNode.prepareSwitchToChatLocation(historyNode: historyNode, animationDirection: nil)
             
             apply(true)
-            
-            if let navigationSnapshot, let animationDirection {
-                let mappedAnimationDirection: ChatTitleView.AnimateFromSnapshotDirection
-                switch animationDirection {
-                case .up:
-                    mappedAnimationDirection = .up
-                case .down:
-                    mappedAnimationDirection = .down
-                case .left:
-                    mappedAnimationDirection = .left
-                case .right:
-                    mappedAnimationDirection = .right
-                }
-                
-                self.chatTitleView?.animateFromSnapshot(navigationSnapshot, direction: mappedAnimationDirection)
-            }
-            
-            if let avatarSnapshot, self.chatInfoNavigationButton?.buttonItem.customDisplayNode?.view.window != nil {
-                (self.chatInfoNavigationButton?.buttonItem.customDisplayNode as? ChatAvatarNavigationNode)?.animateFromSnapshot(avatarSnapshot)
-            }
             
             self.currentChatSwitchDirection = nil
             self.isUpdatingChatLocationThread = false
         })
+    }
+    
+    public func updateChatLocationThread(threadId: Int64?, animationDirection: ChatControllerAnimateInnerChatSwitchDirection? = nil) {
+        Task { @MainActor [weak self] in
+            guard let self else {
+                return
+            }
+            
+            if self.isUpdatingChatLocationThread {
+                return
+            }
+            guard let peerId = self.chatLocation.peerId else {
+                return
+            }
+            if self.chatLocation.threadId == threadId {
+                return
+            }
+            guard let peer = self.presentationInterfaceState.renderedPeer?.chatMainPeer else {
+                return
+            }
+            
+            self.saveInterfaceState()
+            
+            self.chatDisplayNode.dismissTextInput()
+            
+            let updatedChatLocation: ChatLocation
+            if let threadId {
+                if let user = peer as? TelegramUser, let botInfo = user.botInfo, botInfo.flags.contains(.hasForum) {
+                    guard case let .known(linkedForumId) = await self.context.engine.data.get(
+                        TelegramEngine.EngineData.Item.Peer.LinkedBotForumPeerId(id: user.id)
+                    ).get(), let linkedForumId else {
+                        return
+                    }
+                        
+                    updatedChatLocation = .replyThread(message: ChatReplyThreadMessage(
+                        peerId: linkedForumId,
+                        threadId: threadId,
+                        channelMessageId: nil,
+                        isChannelPost: false,
+                        isForumPost: true,
+                        isMonoforumPost: false,
+                        maxMessage: nil,
+                        maxReadIncomingMessageId: nil,
+                        maxReadOutgoingMessageId: nil,
+                        unreadCount: 0,
+                        initialFilledHoles: IndexSet(),
+                        initialAnchor: .automatic,
+                        isNotAvailable: false
+                    ))
+                } else {
+                    var isMonoforum = false
+                    if let channel = peer as? TelegramChannel, channel.flags.contains(.isMonoforum) {
+                        isMonoforum = true
+                    }
+                    
+                    updatedChatLocation = .replyThread(message: ChatReplyThreadMessage(
+                        peerId: peerId,
+                        threadId: threadId,
+                        channelMessageId: nil,
+                        isChannelPost: false,
+                        isForumPost: true,
+                        isMonoforumPost: isMonoforum,
+                        maxMessage: nil,
+                        maxReadIncomingMessageId: nil,
+                        maxReadOutgoingMessageId: nil,
+                        unreadCount: 0,
+                        initialFilledHoles: IndexSet(),
+                        initialAnchor: .automatic,
+                        isNotAvailable: false
+                    ))
+                }
+            } else {
+                if let channel = peer as? TelegramChannel, let linkedBotId = channel.linkedBotId {
+                    updatedChatLocation = .peer(id: linkedBotId)
+                } else {
+                    updatedChatLocation = .peer(id: peerId)
+                }
+            }
+            
+            let navigationSnapshot = self.chatTitleView?.prepareSnapshotState()
+            let avatarSnapshot = self.chatInfoNavigationButton?.buttonItem.customDisplayNode?.view.window != nil ? (self.chatInfoNavigationButton?.buttonItem.customDisplayNode as? ChatAvatarNavigationNode)?.prepareSnapshotState() : nil
+            
+            let chatLocationContextHolder = Atomic<ChatLocationContextHolder?>(value: nil)
+            let historyNode = self.chatDisplayNode.createHistoryNodeForChatLocation(chatLocation: updatedChatLocation, chatLocationContextHolder: chatLocationContextHolder)
+            self.isUpdatingChatLocationThread = true
+            self.reloadChatLocation(chatLocation: updatedChatLocation, chatLocationContextHolder: chatLocationContextHolder, historyNode: historyNode, apply: { [weak self, weak historyNode] apply in
+                guard let self, let historyNode else {
+                    return
+                }
+                
+                self.currentChatSwitchDirection = animationDirection
+                self.chatLocation = updatedChatLocation
+                historyNode.areContentAnimationsEnabled = true
+                self.chatDisplayNode.prepareSwitchToChatLocation(historyNode: historyNode, animationDirection: animationDirection)
+                
+                apply(true)
+                
+                if let navigationSnapshot, let animationDirection {
+                    let mappedAnimationDirection: ChatTitleView.AnimateFromSnapshotDirection
+                    switch animationDirection {
+                    case .up:
+                        mappedAnimationDirection = .up
+                    case .down:
+                        mappedAnimationDirection = .down
+                    case .left:
+                        mappedAnimationDirection = .left
+                    case .right:
+                        mappedAnimationDirection = .right
+                    }
+                    
+                    self.chatTitleView?.animateFromSnapshot(navigationSnapshot, direction: mappedAnimationDirection)
+                }
+                
+                if let avatarSnapshot, self.chatInfoNavigationButton?.buttonItem.customDisplayNode?.view.window != nil {
+                    (self.chatInfoNavigationButton?.buttonItem.customDisplayNode as? ChatAvatarNavigationNode)?.animateFromSnapshot(avatarSnapshot)
+                }
+                
+                self.currentChatSwitchDirection = nil
+                self.isUpdatingChatLocationThread = false
+            })
+        }
     }
     
     public var contentContainerNode: ASDisplayNode {
