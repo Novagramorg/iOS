@@ -1037,6 +1037,35 @@ func openExternalUrlImpl(context: AccountContext, urlContext: OpenURLContext, ur
                             }
                         }
                     }
+                } else if parsedUrl.host == "send_gift" {
+                    var recipient: String?
+                    if let components = URLComponents(string: "/?" + query) {
+                        if let queryItems = components.queryItems {
+                            for queryItem in queryItems {
+                                if let value = queryItem.value {
+                                    if queryItem.name == "to" {
+                                        recipient = value
+                                        break
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if let recipient {
+                        if let id = Int64(recipient) {
+                            handleResolvedUrl(.sendGift(peerId: PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(id))))
+                        } else {
+                            let _ = (context.engine.peers.resolvePeerByName(name: recipient, referrer: nil)
+                            |> deliverOnMainQueue).start(next: { result in
+                                guard case let .result(peer) = result, let peer else {
+                                    return
+                                }
+                                handleResolvedUrl(.sendGift(peerId: peer.id))
+                            })
+                        }
+                    } else {
+                        handleResolvedUrl(.sendGift(peerId: nil))
+                    }
                 }
             } else {
                 if parsedUrl.host == "stars" {
@@ -1087,6 +1116,8 @@ func openExternalUrlImpl(context: AccountContext, urlContext: OpenURLContext, ur
                             context.sharedContext.presentGlobalController(alertController, nil)
                         }
                     })
+                } else if parsedUrl.host == "send_gift" {
+                    handleResolvedUrl(.sendGift(peerId: nil))
                 }
             }
             

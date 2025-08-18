@@ -333,6 +333,7 @@ public enum ResolvedUrl {
     case shareStory(Int64)
     case storyFolder(peerId: PeerId, id: Int64)
     case giftCollection(peerId: PeerId, id: Int64)
+    case sendGift(peerId: PeerId?)
 }
 
 public enum ResolveUrlResult {

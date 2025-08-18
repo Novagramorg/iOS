@@ -676,8 +676,8 @@ public final class ListMessageFileItemNode: ListMessageNode {
                                     }
                                     if descriptionString.isEmpty {
                                         descriptionString = authorString.first ?? ""
-                                    } else {
-                                        descriptionString = "\(descriptionString) • \(authorString.first ?? "")"
+                                    } else if let authorStringFirst = authorString.first {
+                                        descriptionString = "\(descriptionString) • \(authorStringFirst)"
                                     }
                                 }
                                 
