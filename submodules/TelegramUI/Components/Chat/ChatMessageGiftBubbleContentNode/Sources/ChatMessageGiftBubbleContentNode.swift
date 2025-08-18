@@ -666,14 +666,15 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                                 } else {
                                     authorName = item.message.author.flatMap { EnginePeer($0) }?.compactDisplayTitle ?? ""
                                 }
-                                if isSelfGift {
-                                    title = isStoryEntity ? uniqueGift.title : item.presentationData.strings.Notification_StarGift_Self_Title
+                                if isStoryEntity {
+                                    title = uniqueGift.title
+                                } else if isSelfGift {
+                                    title = item.presentationData.strings.Notification_StarGift_Self_Title
                                 } else if item.message.id.peerId.isTelegramNotifications {
                                     title = item.presentationData.strings.Notification_StarGift_TitleShort
                                 } else {
-                                    title = isStoryEntity ? uniqueGift.title : item.presentationData.strings.Notification_StarGift_Title(authorName).string
-                                }
-                                
+                                    title = item.presentationData.strings.Notification_StarGift_Title(authorName).string
+                                }    
                                 text = isStoryEntity ? "**\(item.presentationData.strings.Notification_StarGift_Collectible) #\(formatCollectibleNumber(uniqueGift.number, dateTimeFormat: item.presentationData.dateTimeFormat))**" : "**\(uniqueGift.title) #\(formatCollectibleNumber(uniqueGift.number, dateTimeFormat: item.presentationData.dateTimeFormat))**"
                                 ribbonTitle = isStoryEntity ? "" : item.presentationData.strings.Notification_StarGift_Gift
                                 buttonTitle = isStoryEntity ? "" : item.presentationData.strings.Notification_StarGift_View

@@ -849,7 +849,7 @@ final class OverlayPlayerControlsNode: ASDisplayNode {
         
         let albumArtSize = CGSize(width: 48.0, height: 48.0)
         let makeAlbumArtLayout = self.albumArtNode.asyncLayout()
-        let applyAlbumArt = makeAlbumArtLayout(TransformImageArguments(corners: ImageCorners(radius: 4.0), imageSize: albumArtSize, boundingSize: albumArtSize, intrinsicInsets: UIEdgeInsets()))
+        let applyAlbumArt = makeAlbumArtLayout(TransformImageArguments(corners: ImageCorners(radius: 10.0), imageSize: albumArtSize, boundingSize: albumArtSize, intrinsicInsets: UIEdgeInsets()))
         applyAlbumArt()
         let albumArtFrame = CGRect(origin: CGPoint(x: leftInset + sideInset, y: infoVerticalOrigin - 1.0), size: albumArtSize)
         let previousAlbumArtNodeFrame = self.albumArtNode.frame
