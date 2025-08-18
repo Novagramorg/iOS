@@ -811,7 +811,6 @@ extension ChatControllerImpl {
                     var sendPaidMessageStars: StarsAmount?
                     var alwaysShowGiftButton = false
                     var disallowedGifts: TelegramDisallowedGifts?
-                    var switchToBotForum: EnginePeer.Id?
                     if let peer = peerView.peers[peerView.peerId] {
                         if let cachedData = peerView.cachedData as? CachedUserData {
                             contactStatus = ChatContactStatus(canAddContact: !peerView.peerIsContact, peerStatusSettings: cachedData.peerStatusSettings, invitedBy: nil, managingBot: managingBot)
@@ -825,11 +824,6 @@ extension ChatControllerImpl {
                                     alwaysShowGiftButton = globalPrivacySettings.displayGiftButton || cachedData.flags.contains(.displayGiftButton)
                                 }
                                 disallowedGifts = cachedData.disallowedGifts
-                            }
-                            if case let .known(value) = cachedData.linkedBotChannelId {
-                                if let value {
-                                    switchToBotForum = value
-                                }
                             }
                         } else if let cachedData = peerView.cachedData as? CachedGroupData {
                             var invitedBy: Peer?
@@ -1030,15 +1024,6 @@ extension ChatControllerImpl {
                     
                     strongSelf.state.renderedPeer = renderedPeer
                     strongSelf.state.adMessage = adMessage
-                    
-                    if let switchToBotForum {
-                        strongSelf.state.historyNodeData = HistoryNodeData(
-                            chatLocation: .peer(id: switchToBotForum),
-                            chatLocationContextHolder: Atomic(value: nil)
-                        )
-                    } else {
-                        strongSelf.state.historyNodeData = nil
-                    }
 
                     if case .standard(.default) = mode, let channel = renderedPeer?.chatMainPeer as? TelegramChannel, case .broadcast = channel.info {
                         var isRegularChat = false
@@ -1459,12 +1444,19 @@ extension ChatControllerImpl {
                         )
                         
                         var customMessageCount: Int?
-                        if let peer = peerView.peers[peerView.peerId] as? TelegramChannel, peer.isMonoForum {
+                        var customSubtitle: String?
+                        if let peer = peerView.peers[peerView.peerId] as? TelegramChannel {
+                            if peer.isMonoForum {
+                            } else if peer.linkedBotId != nil {
+                                customSubtitle = strongSelf.presentationData.strings.Bot_GenericBotStatus
+                            } else {
+                                customMessageCount = savedMessagesPeer?.messageCount ?? 0
+                            }
                         } else {
                             customMessageCount = savedMessagesPeer?.messageCount ?? 0
                         }
                         
-                        strongSelf.state.chatTitleContent = .peer(peerView: mappedPeerData, customTitle: nil, customSubtitle: nil, onlineMemberCount: (nil, nil), isScheduledMessages: false, isMuted: false, customMessageCount: customMessageCount, isEnabled: true)
+                        strongSelf.state.chatTitleContent = .peer(peerView: mappedPeerData, customTitle: nil, customSubtitle: customSubtitle, onlineMemberCount: (nil, nil), isScheduledMessages: false, isMuted: false, customMessageCount: customMessageCount, isEnabled: true)
                         
                         strongSelf.state.peerView = peerView
                         
@@ -1551,7 +1543,15 @@ extension ChatControllerImpl {
                         }
                         
                         if let threadInfo = messageAndTopic.threadData?.info {
-                            strongSelf.state.chatTitleContent = .peer(peerView: ChatTitleContent.PeerData(peerView: peerView), customTitle: threadInfo.title, customSubtitle: nil, onlineMemberCount: onlineMemberCount, isScheduledMessages: false, isMuted: peerIsMuted, customMessageCount: messageAndTopic.messageCount == 0 ? nil : messageAndTopic.messageCount, isEnabled: true)
+                            var customSubtitle: String?
+                            if messageAndTopic.messageCount == 0, let peer = peerView.peers[peerView.peerId] as? TelegramChannel {
+                                if peer.linkedBotId != nil {
+                                    //TODO:localize
+                                    customSubtitle = "topic"
+                                }
+                            }
+                            
+                            strongSelf.state.chatTitleContent = .peer(peerView: ChatTitleContent.PeerData(peerView: peerView), customTitle: threadInfo.title, customSubtitle: customSubtitle, onlineMemberCount: onlineMemberCount, isScheduledMessages: false, isMuted: peerIsMuted, customMessageCount: messageAndTopic.messageCount == 0 ? nil : messageAndTopic.messageCount, isEnabled: true)
                             
                             let avatarContent: EmojiStatusComponent.Content
                             if chatLocation.threadId == 1 {
@@ -1569,6 +1569,10 @@ extension ChatControllerImpl {
                                 infoContextActionIsEnabled = true
                             }
                             strongSelf.state.infoAvatar = .emojiStatus(content: avatarContent, contextActionIsEnabled: infoContextActionIsEnabled)
+                        } else if chatLocation.threadId == EngineMessage.newTopicThreadId {
+                            //TODO:localize
+                            strongSelf.state.chatTitleContent = .custom("New Chat", nil, false)
+                            strongSelf.state.infoAvatar = nil
                         } else {
                             strongSelf.state.chatTitleContent = .replyThread(type: replyThreadType, count: count)
                         }
