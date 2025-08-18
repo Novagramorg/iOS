@@ -633,8 +633,7 @@ public final class TabSelectorComponent: Component {
             
             let estimatedContentWidth = 2.0 * spacing + innerContentWidth + (CGFloat(component.items.count - 1) * (spacing + innerInset))
             if component.customLayout?.fillWidth == true && estimatedContentWidth < availableSize.width {
-                spacing = (availableSize.width - innerContentWidth) / CGFloat(component.items.count + 1)
-                innerInset = 0.0
+                spacing = (availableSize.width - innerContentWidth) / CGFloat(component.items.count + 1) - innerInset * 2.0
             } else if estimatedContentWidth > availableSize.width && !allowScroll {
                 spacing = (availableSize.width - innerContentWidth) / CGFloat(component.items.count + 1)
                 innerInset = 0.0
