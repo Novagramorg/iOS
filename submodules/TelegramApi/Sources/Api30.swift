@@ -1,4 +1,44 @@
 public extension Api.account {
+    enum SentEmailCode: TypeConstructorDescription {
+        case sentEmailCode(emailPattern: String, length: Int32)
+    
+    public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+    switch self {
+                case .sentEmailCode(let emailPattern, let length):
+                    if boxed {
+                        buffer.appendInt32(-2128640689)
+                    }
+                    serializeString(emailPattern, buffer: buffer, boxed: false)
+                    serializeInt32(length, buffer: buffer, boxed: false)
+                    break
+    }
+    }
+    
+    public func descriptionFields() -> (String, [(String, Any)]) {
+        switch self {
+                case .sentEmailCode(let emailPattern, let length):
+                return ("sentEmailCode", [("emailPattern", emailPattern as Any), ("length", length as Any)])
+    }
+    }
+    
+        public static func parse_sentEmailCode(_ reader: BufferReader) -> SentEmailCode? {
+            var _1: String?
+            _1 = parseString(reader)
+            var _2: Int32?
+            _2 = reader.readInt32()
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            if _c1 && _c2 {
+                return Api.account.SentEmailCode.sentEmailCode(emailPattern: _1!, length: _2!)
+            }
+            else {
+                return nil
+            }
+        }
+    
+    }
+}
+public extension Api.account {
     enum Takeout: TypeConstructorDescription {
         case takeout(id: Int64)
     

@@ -908,8 +908,12 @@ public extension TelegramEngine {
             }
         }
         
-        public func reorderProfileTabs(peerId: EnginePeer.Id, order: [TelegramProfileTab]) -> Signal<Never, NoError> {
-            return _internal_reorderProfileTabs(account: self.account, peerId: peerId, order: order)
+        public func setMainProfileTab(peerId: EnginePeer.Id, tab: TelegramProfileTab) -> Signal<Never, NoError> {
+            return _internal_setMainProfileTab(account: self.account, peerId: peerId, tab: tab)
+        }
+        
+        public func savedMusicIds() -> Signal<Set<Int64>?, NoError> {
+            return _internal_savedMusicIds(postbox: self.account.postbox)
         }
         
         public func addSavedMusic(file: FileMediaReference) -> Signal<Never, AddSavedMusicError> {
