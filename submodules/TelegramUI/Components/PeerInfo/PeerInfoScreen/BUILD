@@ -161,6 +161,9 @@ swift_library(
         "//submodules/Components/HierarchyTrackingLayer",
         "//submodules/TelegramUI/Components/PeerInfo/PeerInfoRatingComponent",
         "//submodules/TelegramUI/Components/PeerInfo/ProfileLevelInfoScreen",
+        "//submodules/TelegramUI/Components/TabSelectorComponent",
+        "//submodules/TelegramUI/Components/BottomButtonPanelComponent",
+        "//submodules/TelegramUI/Components/MarqueeComponent",
     ],
     visibility = [
         "//visibility:public",

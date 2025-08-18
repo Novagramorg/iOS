@@ -392,8 +392,7 @@ final class GiftOptionsScreenComponent: Component {
                                     color: .blue
                                 )
                             }
-                            
-                            if gift.flags.contains(.requiresPremium) {
+                            if !isSoldOut && gift.flags.contains(.requiresPremium) {
                                 ribbon = GiftItemComponent.Ribbon(
                                     text: environment.strings.Gift_Options_Gift_Premium,
                                     color: .orange

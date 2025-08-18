@@ -36,14 +36,14 @@ private final class GiftValueSheetContent: CombinedComponent {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
     
     let context: AccountContext
-    let gift: ProfileGiftsContext.State.StarGift
+    let gift: StarGift
     let valueInfo: StarGift.UniqueGift.ValueInfo
     let animateOut: ActionSlot<Action<()>>
     let getController: () -> ViewController?
     
     init(
         context: AccountContext,
-        gift: ProfileGiftsContext.State.StarGift,
+        gift: StarGift,
         valueInfo: StarGift.UniqueGift.ValueInfo,
         animateOut: ActionSlot<Action<()>>,
         getController: @escaping () -> ViewController?
@@ -219,7 +219,7 @@ private final class GiftValueSheetContent: CombinedComponent {
             var giftIconSubject: GiftItemComponent.Subject?
             var genericGift: StarGift.Gift?
             
-            switch component.gift.gift {
+            switch component.gift {
             case let .generic(gift):
                 animationFile = gift.file
                 giftIconSubject = .starGift(gift: gift, price: "")
@@ -676,12 +676,12 @@ final class GiftValueSheetComponent: CombinedComponent {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
     
     let context: AccountContext
-    let gift: ProfileGiftsContext.State.StarGift
+    let gift: StarGift
     let valueInfo: StarGift.UniqueGift.ValueInfo
     
     init(
         context: AccountContext,
-        gift: ProfileGiftsContext.State.StarGift,
+        gift: StarGift,
         valueInfo: StarGift.UniqueGift.ValueInfo
     ) {
         self.context = context
@@ -796,12 +796,12 @@ final class GiftValueSheetComponent: CombinedComponent {
 
 final class GiftValueScreen: ViewControllerComponentContainer {
     private let context: AccountContext
-    private let gift: ProfileGiftsContext.State.StarGift
+    private let gift: StarGift
     private let valueInfo: StarGift.UniqueGift.ValueInfo
     
     public init(
         context: AccountContext,
-        gift: ProfileGiftsContext.State.StarGift,
+        gift: StarGift,
         valueInfo: StarGift.UniqueGift.ValueInfo
     ) {
         self.context = context
