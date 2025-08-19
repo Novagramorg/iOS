@@ -664,7 +664,11 @@ extension ChatControllerImpl {
             if let channel = self.presentationInterfaceState.renderedPeer?.peer as? TelegramChannel, channel.isForumOrMonoForum, self.presentationInterfaceState.persistentData.topicListPanelLocation == true, self.presentationInterfaceState.chatLocation.threadId != nil {
                 self.updateChatLocationThread(threadId: nil, animationDirection: .left)
             } else {
-                self.dismiss()
+                if self.attemptNavigation({ [weak self] in
+                    self?.dismiss()
+                }) {
+                    self.dismiss()
+                }
             }
         }
         
