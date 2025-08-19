@@ -167,6 +167,7 @@ extension ChatControllerImpl {
             }
             
             if let historyNodeData = contentData.state.historyNodeData {
+                self.subject = nil
                 self.updateChatLocationToOther(chatLocation: historyNodeData.chatLocation)
                 return
             } else if case let .botForumThread(linkedForumId, threadId) = self.subject {
@@ -210,7 +211,7 @@ extension ChatControllerImpl {
                 }
             })
             
-            if self.newTopicEventsDisposable == nil, let peerId = chatLocation.peerId, chatLocation.threadId == EngineMessage.newTopicThreadId {
+            if self.newTopicEventsDisposable == nil, let peerId = chatLocation.peerId, (chatLocation.threadId == EngineMessage.newTopicThreadId || chatLocation.threadId == nil) {
                 self.newTopicEventsDisposable = (self.context.account.pendingMessageManager.newTopicEvents(peerId: peerId)
                 |> mapToSignal { event -> Signal<Int64, NoError> in
                     if case let .didMove(fromThreadId, toThreadId) = event {
@@ -225,7 +226,11 @@ extension ChatControllerImpl {
                     guard let self else {
                         return
                     }
-                    self.updateInitialChatBotForumLocationThread(linkedForumId: peerId, threadId: threadId)
+                    if chatLocation.peerId != peerId {
+                        self.updateInitialChatBotForumLocationThread(linkedForumId: peerId, threadId: threadId)
+                    } else {
+                        self.updateChatLocationThread(threadId: threadId, animationDirection: .right)
+                    }
                 })
             }
         })
@@ -845,21 +850,6 @@ extension ChatControllerImpl {
         }
         
         self.reloadCachedData()
-        
-        self.historyStateDisposable = self.chatDisplayNode.historyNode.historyState.get().startStrict(next: { [weak self] state in
-            if let strongSelf = self {
-                strongSelf.updateChatPresentationInterfaceState(animated: true, interactive: strongSelf.isViewLoaded && strongSelf.view.window != nil, {
-                    $0.updatedChatHistoryState(state)
-                })
-                
-                if let botStart = strongSelf.botStart, case let .loaded(isEmpty, _) = state {
-                    strongSelf.botStart = nil
-                    if !isEmpty {
-                        strongSelf.startBot(botStart.payload)
-                    }
-                }
-            }
-        })
         
         if self.context.sharedContext.immediateExperimentalUISettings.crashOnLongQueries {
             let _ = (self.ready.get()
@@ -4570,6 +4560,22 @@ extension ChatControllerImpl {
     }
     
     func setupChatHistoryNode(historyNode: ChatHistoryListNodeImpl) {
+        self.historyStateDisposable?.dispose()
+        self.historyStateDisposable = historyNode.historyState.get().startStrict(next: { [weak self] state in
+            if let strongSelf = self {
+                strongSelf.updateChatPresentationInterfaceState(animated: true, interactive: strongSelf.isViewLoaded && strongSelf.view.window != nil, {
+                    $0.updatedChatHistoryState(state)
+                })
+                
+                if let botStart = strongSelf.botStart, case let .loaded(isEmpty, _) = state {
+                    strongSelf.botStart = nil
+                    if !isEmpty {
+                        strongSelf.startBot(botStart.payload)
+                    }
+                }
+            }
+        })
+        
         do {
             let peerId = self.chatLocation.peerId
             if let subject = self.subject, case .scheduledMessages = subject {

@@ -1069,23 +1069,30 @@ final class MutableMessageHistoryView: MutablePostboxView {
             self.typingDraft = nil
             return
         }
-        guard let typingDraft = postbox.currentTypingDrafts[PeerAndThreadId(peerId: peerId, threadId: threadId)] else {
+        if let typingDraft = postbox.currentTypingDrafts[PeerAndThreadId(peerId: peerId, threadId: threadId)] {
+            self.typingDraft = self.renderTypingDraft(postbox: postbox, typingDraft: typingDraft)
+        } else {
             self.typingDraft = nil
-            return
         }
-        self.typingDraft = self.renderTypingDraft(postbox: postbox, typingDraft: typingDraft)
     }
     
     private func renderTypingDraft(postbox: PostboxImpl, typingDraft: PostboxImpl.TypingDraft) -> Message? {
-        guard case let .single(peerId, threadId) = self.peerIds else {
+        guard case let .single(peerId, _) = self.peerIds else {
             return nil
         }
         guard let peer = postbox.peerTable.get(peerId), let author = postbox.peerTable.get(typingDraft.authorId) else {
             return nil
         }
+        
         var peers = SimpleDictionary<PeerId, Peer>()
         peers[peer.id] = peer
         peers[author.id] = author
+        
+        var associatedThreadInfo: Message.AssociatedThreadInfo?
+        if let threadId = typingDraft.threadId, let data = postbox.messageHistoryThreadIndexTable.get(peerId: peerId, threadId: threadId) {
+            associatedThreadInfo = postbox.seedConfiguration.decodeMessageThreadInfo(data.data)
+        }
+        
         return Message(
             stableId: typingDraft.stableId,
             stableVersion: typingDraft.stableVersion,
@@ -1096,7 +1103,7 @@ final class MutableMessageHistoryView: MutablePostboxView {
             globallyUniqueId: nil,
             groupingKey: nil,
             groupInfo: nil,
-            threadId: threadId,
+            threadId: typingDraft.threadId,
             timestamp: typingDraft.timestamp,
             flags: [.Incoming],
             tags: [],
@@ -1112,7 +1119,7 @@ final class MutableMessageHistoryView: MutablePostboxView {
             associatedMessages: SimpleDictionary(),
             associatedMessageIds: [],
             associatedMedia: [:],
-            associatedThreadInfo: nil,
+            associatedThreadInfo: associatedThreadInfo,
             associatedStories: [:]
         )
     }

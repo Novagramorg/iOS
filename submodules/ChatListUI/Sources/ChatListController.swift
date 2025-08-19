@@ -1049,6 +1049,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                         subject = .botForumThread(forumId: linkedForumId, threadId: EngineMessage.newTopicThreadId)
                     }
                 }
+                subject = nil
                 
                 var forumSourcePeer: Signal<EnginePeer?, NoError> = .single(nil)
                 if case let .savedMessagesChats(peerId) = self.location, peerId != self.context.account.peerId {
