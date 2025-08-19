@@ -98,11 +98,15 @@ func managedSavedMusicIdsUpdates(postbox: Postbox, network: Network, accountPeer
     return (poll |> then(.complete() |> suspendAwareDelay(0.5 * 60.0 * 60.0, queue: Queue.concurrentDefaultQueue()))) |> restart
 }
 
-func _internal_addSavedMusic(account: Account, file: FileMediaReference) -> Signal<Never, AddSavedMusicError> {
+func _internal_addSavedMusic(account: Account, file: FileMediaReference, afterFile: FileMediaReference?) -> Signal<Never, AddSavedMusicError> {
     return account.postbox.transaction { transaction in
         if let cachedSavedMusic = transaction.retrieveItemCacheEntry(id: entryId(peerId: account.peerId))?.get(CachedProfileSavedMusic.self) {
             var updatedFiles = cachedSavedMusic.files
-            updatedFiles.insert(file.media, at: 0)
+            if let afterFile, let index = updatedFiles.firstIndex(where: { $0.fileId == afterFile.media.fileId }) {
+                updatedFiles.insert(file.media, at: index + 1)
+            } else {
+                updatedFiles.insert(file.media, at: 0)
+            }
             let updatedCount = max(0, cachedSavedMusic.count + 1)
             if let entry = CodableEntry(CachedProfileSavedMusic(files: updatedFiles, count: updatedCount)) {
                 transaction.putItemCacheEntry(id: entryId(peerId: account.peerId), entry: entry)
@@ -126,7 +130,13 @@ func _internal_addSavedMusic(account: Account, file: FileMediaReference) -> Sign
             })
         }
         return revalidatedMusic(account: account, file: file, signal: { resource in
-            return account.network.request(Api.functions.account.saveMusic(flags: 0, id: .inputDocument(id: resource.fileId, accessHash: resource.accessHash, fileReference: Buffer(data: resource.fileReference)), afterId: nil))
+            var flags: Int32 = 0
+            var afterId: Api.InputDocument?
+            if let afterFile, let resource = afterFile.media.resource as? CloudDocumentMediaResource {
+                flags = 1 << 1
+                afterId = .inputDocument(id: resource.fileId, accessHash: resource.accessHash, fileReference: Buffer(data: resource.fileReference))
+            }
+            return account.network.request(Api.functions.account.saveMusic(flags: flags, id: .inputDocument(id: resource.fileId, accessHash: resource.accessHash, fileReference: Buffer(data: resource.fileReference)), afterId: afterId))
         })
         |> mapError { _ -> AddSavedMusicError in
             return .generic
@@ -331,18 +341,18 @@ public final class ProfileSavedMusicContext {
             self.pushState()
         }))
     }
-    
-    public func reorderMusic(file: FileMediaReference, afterFile: FileMediaReference?) -> Signal<Never, NoError> {
-        return .complete()
-    }
-    
-    public func addMusic(file: FileMediaReference) -> Signal<Never, AddSavedMusicError> {
-        return _internal_addSavedMusic(account: self.account, file: file)
+        
+    public func addMusic(file: FileMediaReference, afterFile: FileMediaReference? = nil) -> Signal<Never, AddSavedMusicError> {
+        return _internal_addSavedMusic(account: self.account, file: file, afterFile: nil)
         |> afterCompleted { [weak self] in
             guard let self else {
                 return
             }
-            self.files.insert(file.media, at: 0)
+            if let afterFile, let index = self.files.firstIndex(where: { $0.fileId == afterFile.media.fileId }) {
+                self.files.insert(file.media, at: index + 1)
+            } else {
+                self.files.insert(file.media, at: 0)
+            }
             if let count = self.count {
                 self.count = count + 1
             }

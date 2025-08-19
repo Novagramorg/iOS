@@ -916,8 +916,8 @@ public extension TelegramEngine {
             return _internal_savedMusicIds(postbox: self.account.postbox)
         }
         
-        public func addSavedMusic(file: FileMediaReference) -> Signal<Never, AddSavedMusicError> {
-            return _internal_addSavedMusic(account: self.account, file: file)
+        public func addSavedMusic(file: FileMediaReference, afterFile: FileMediaReference? = nil) -> Signal<Never, AddSavedMusicError> {
+            return _internal_addSavedMusic(account: self.account, file: file, afterFile: afterFile)
         }
         
         public func removeSavedMusic(file: FileMediaReference) -> Signal<Never, NoError> {
