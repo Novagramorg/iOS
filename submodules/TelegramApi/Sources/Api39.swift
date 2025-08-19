@@ -742,6 +742,21 @@ public extension Api.functions.account {
                 }
 }
 public extension Api.functions.account {
+                static func getSavedMusicIds(hash: Int64) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.account.SavedMusicIds>) {
+                    let buffer = Buffer()
+                    buffer.appendInt32(-526557265)
+                    serializeInt64(hash, buffer: buffer, boxed: false)
+                    return (FunctionDescription(name: "account.getSavedMusicIds", parameters: [("hash", String(describing: hash))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.account.SavedMusicIds? in
+                        let reader = BufferReader(buffer)
+                        var result: Api.account.SavedMusicIds?
+                        if let signature = reader.readInt32() {
+                            result = Api.parse(reader, signature: signature) as? Api.account.SavedMusicIds
+                        }
+                        return result
+                    })
+                }
+}
+public extension Api.functions.account {
                 static func getSavedRingtones(hash: Int64) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.account.SavedRingtones>) {
                     let buffer = Buffer()
                     buffer.appendInt32(-510647672)
@@ -952,25 +967,6 @@ public extension Api.functions.account {
                         serializeInt64(item, buffer: buffer, boxed: false)
                     }
                     return (FunctionDescription(name: "account.registerDevice", parameters: [("flags", String(describing: flags)), ("tokenType", String(describing: tokenType)), ("token", String(describing: token)), ("appSandbox", String(describing: appSandbox)), ("secret", String(describing: secret)), ("otherUids", String(describing: otherUids))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.Bool? in
-                        let reader = BufferReader(buffer)
-                        var result: Api.Bool?
-                        if let signature = reader.readInt32() {
-                            result = Api.parse(reader, signature: signature) as? Api.Bool
-                        }
-                        return result
-                    })
-                }
-}
-public extension Api.functions.account {
-                static func reorderProfileTabs(order: [Api.ProfileTab]) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Bool>) {
-                    let buffer = Buffer()
-                    buffer.appendInt32(-1056282459)
-                    buffer.appendInt32(481674261)
-                    buffer.appendInt32(Int32(order.count))
-                    for item in order {
-                        item.serialize(buffer, true)
-                    }
-                    return (FunctionDescription(name: "account.reorderProfileTabs", parameters: [("order", String(describing: order))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.Bool? in
                         let reader = BufferReader(buffer)
                         var result: Api.Bool?
                         if let signature = reader.readInt32() {
@@ -1403,6 +1399,21 @@ public extension Api.functions.account {
                         var result: Api.GlobalPrivacySettings?
                         if let signature = reader.readInt32() {
                             result = Api.parse(reader, signature: signature) as? Api.GlobalPrivacySettings
+                        }
+                        return result
+                    })
+                }
+}
+public extension Api.functions.account {
+                static func setMainProfileTab(tab: Api.ProfileTab) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Bool>) {
+                    let buffer = Buffer()
+                    buffer.appendInt32(1575909552)
+                    tab.serialize(buffer, true)
+                    return (FunctionDescription(name: "account.setMainProfileTab", parameters: [("tab", String(describing: tab))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.Bool? in
+                        let reader = BufferReader(buffer)
+                        var result: Api.Bool?
+                        if let signature = reader.readInt32() {
+                            result = Api.parse(reader, signature: signature) as? Api.Bool
                         }
                         return result
                     })
@@ -3505,26 +3516,6 @@ public extension Api.functions.channels {
                 }
 }
 public extension Api.functions.channels {
-                static func reorderProfileTabs(channel: Api.InputChannel, order: [Api.ProfileTab]) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Bool>) {
-                    let buffer = Buffer()
-                    buffer.appendInt32(-1631808998)
-                    channel.serialize(buffer, true)
-                    buffer.appendInt32(481674261)
-                    buffer.appendInt32(Int32(order.count))
-                    for item in order {
-                        item.serialize(buffer, true)
-                    }
-                    return (FunctionDescription(name: "channels.reorderProfileTabs", parameters: [("channel", String(describing: channel)), ("order", String(describing: order))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.Bool? in
-                        let reader = BufferReader(buffer)
-                        var result: Api.Bool?
-                        if let signature = reader.readInt32() {
-                            result = Api.parse(reader, signature: signature) as? Api.Bool
-                        }
-                        return result
-                    })
-                }
-}
-public extension Api.functions.channels {
                 static func reorderUsernames(channel: Api.InputChannel, order: [String]) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Bool>) {
                     let buffer = Buffer()
                     buffer.appendInt32(-1268978403)
@@ -3658,6 +3649,22 @@ public extension Api.functions.channels {
                     channel.serialize(buffer, true)
                     stickerset.serialize(buffer, true)
                     return (FunctionDescription(name: "channels.setEmojiStickers", parameters: [("channel", String(describing: channel)), ("stickerset", String(describing: stickerset))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.Bool? in
+                        let reader = BufferReader(buffer)
+                        var result: Api.Bool?
+                        if let signature = reader.readInt32() {
+                            result = Api.parse(reader, signature: signature) as? Api.Bool
+                        }
+                        return result
+                    })
+                }
+}
+public extension Api.functions.channels {
+                static func setMainProfileTab(channel: Api.InputChannel, tab: Api.ProfileTab) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Bool>) {
+                    let buffer = Buffer()
+                    buffer.appendInt32(897842353)
+                    channel.serialize(buffer, true)
+                    tab.serialize(buffer, true)
+                    return (FunctionDescription(name: "channels.setMainProfileTab", parameters: [("channel", String(describing: channel)), ("tab", String(describing: tab))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.Bool? in
                         let reader = BufferReader(buffer)
                         var result: Api.Bool?
                         if let signature = reader.readInt32() {
