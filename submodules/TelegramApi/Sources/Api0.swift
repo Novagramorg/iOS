@@ -204,7 +204,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[1605510357] = { return Api.ChatAdminRights.parse_chatAdminRights($0) }
     dict[-219353309] = { return Api.ChatAdminWithInvites.parse_chatAdminWithInvites($0) }
     dict[-1626209256] = { return Api.ChatBannedRights.parse_chatBannedRights($0) }
-    dict[-1705864337] = { return Api.ChatFull.parse_channelFull($0) }
+    dict[-455036259] = { return Api.ChatFull.parse_channelFull($0) }
     dict[640893467] = { return Api.ChatFull.parse_chatFull($0) }
     dict[1553807106] = { return Api.ChatInvite.parse_chatInvite($0) }
     dict[1516793212] = { return Api.ChatInvite.parse_chatInviteAlready($0) }
@@ -816,8 +816,14 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[1103656293] = { return Api.PrivacyRule.parse_privacyValueDisallowChatParticipants($0) }
     dict[-125240806] = { return Api.PrivacyRule.parse_privacyValueDisallowContacts($0) }
     dict[-463335103] = { return Api.PrivacyRule.parse_privacyValueDisallowUsers($0) }
+    dict[-1422681088] = { return Api.ProfileTab.parse_profileTabFiles($0) }
+    dict[-1564412267] = { return Api.ProfileTab.parse_profileTabGifs($0) }
     dict[1296815210] = { return Api.ProfileTab.parse_profileTabGifts($0) }
+    dict[-748329831] = { return Api.ProfileTab.parse_profileTabLinks($0) }
+    dict[1925597525] = { return Api.ProfileTab.parse_profileTabMedia($0) }
+    dict[-1624780178] = { return Api.ProfileTab.parse_profileTabMusic($0) }
     dict[-1181952362] = { return Api.ProfileTab.parse_profileTabPosts($0) }
+    dict[-461960914] = { return Api.ProfileTab.parse_profileTabVoice($0) }
     dict[32685898] = { return Api.PublicForward.parse_publicForwardMessage($0) }
     dict[-302797360] = { return Api.PublicForward.parse_publicForwardStory($0) }
     dict[110563371] = { return Api.QuickReply.parse_quickReply($0) }
@@ -1185,7 +1191,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[-1831650802] = { return Api.UrlAuthResult.parse_urlAuthResultRequest($0) }
     dict[34280482] = { return Api.User.parse_user($0) }
     dict[-742634630] = { return Api.User.parse_userEmpty($0) }
-    dict[-116852838] = { return Api.UserFull.parse_userFull($0) }
+    dict[-962665488] = { return Api.UserFull.parse_userFull($0) }
     dict[-2100168954] = { return Api.UserProfilePhoto.parse_userProfilePhoto($0) }
     dict[1326562017] = { return Api.UserProfilePhoto.parse_userProfilePhotoEmpty($0) }
     dict[164646985] = { return Api.UserStatus.parse_userStatusEmpty($0) }
@@ -1235,6 +1241,8 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[-383330754] = { return Api.account.ResetPasswordResult.parse_resetPasswordOk($0) }
     dict[-370148227] = { return Api.account.ResetPasswordResult.parse_resetPasswordRequestedWait($0) }
     dict[-1708937439] = { return Api.account.ResolvedBusinessChatLinks.parse_resolvedBusinessChatLinks($0) }
+    dict[-1718786506] = { return Api.account.SavedMusicIds.parse_savedMusicIds($0) }
+    dict[1338514798] = { return Api.account.SavedMusicIds.parse_savedMusicIdsNotModified($0) }
     dict[-1222230163] = { return Api.account.SavedRingtone.parse_savedRingtone($0) }
     dict[523271863] = { return Api.account.SavedRingtone.parse_savedRingtoneConverted($0) }
     dict[-1041683259] = { return Api.account.SavedRingtones.parse_savedRingtones($0) }
@@ -2311,6 +2319,8 @@ public extension Api {
             case let _1 as Api.account.ResetPasswordResult:
                 _1.serialize(buffer, boxed)
             case let _1 as Api.account.ResolvedBusinessChatLinks:
+                _1.serialize(buffer, boxed)
+            case let _1 as Api.account.SavedMusicIds:
                 _1.serialize(buffer, boxed)
             case let _1 as Api.account.SavedRingtone:
                 _1.serialize(buffer, boxed)

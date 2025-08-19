@@ -216,14 +216,50 @@ public extension Api {
 }
 public extension Api {
     enum ProfileTab: TypeConstructorDescription {
+        case profileTabFiles
+        case profileTabGifs
         case profileTabGifts
+        case profileTabLinks
+        case profileTabMedia
+        case profileTabMusic
         case profileTabPosts
+        case profileTabVoice
     
     public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
     switch self {
+                case .profileTabFiles:
+                    if boxed {
+                        buffer.appendInt32(-1422681088)
+                    }
+                    
+                    break
+                case .profileTabGifs:
+                    if boxed {
+                        buffer.appendInt32(-1564412267)
+                    }
+                    
+                    break
                 case .profileTabGifts:
                     if boxed {
                         buffer.appendInt32(1296815210)
+                    }
+                    
+                    break
+                case .profileTabLinks:
+                    if boxed {
+                        buffer.appendInt32(-748329831)
+                    }
+                    
+                    break
+                case .profileTabMedia:
+                    if boxed {
+                        buffer.appendInt32(1925597525)
+                    }
+                    
+                    break
+                case .profileTabMusic:
+                    if boxed {
+                        buffer.appendInt32(-1624780178)
                     }
                     
                     break
@@ -233,23 +269,59 @@ public extension Api {
                     }
                     
                     break
+                case .profileTabVoice:
+                    if boxed {
+                        buffer.appendInt32(-461960914)
+                    }
+                    
+                    break
     }
     }
     
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
+                case .profileTabFiles:
+                return ("profileTabFiles", [])
+                case .profileTabGifs:
+                return ("profileTabGifs", [])
                 case .profileTabGifts:
                 return ("profileTabGifts", [])
+                case .profileTabLinks:
+                return ("profileTabLinks", [])
+                case .profileTabMedia:
+                return ("profileTabMedia", [])
+                case .profileTabMusic:
+                return ("profileTabMusic", [])
                 case .profileTabPosts:
                 return ("profileTabPosts", [])
+                case .profileTabVoice:
+                return ("profileTabVoice", [])
     }
     }
     
+        public static func parse_profileTabFiles(_ reader: BufferReader) -> ProfileTab? {
+            return Api.ProfileTab.profileTabFiles
+        }
+        public static func parse_profileTabGifs(_ reader: BufferReader) -> ProfileTab? {
+            return Api.ProfileTab.profileTabGifs
+        }
         public static func parse_profileTabGifts(_ reader: BufferReader) -> ProfileTab? {
             return Api.ProfileTab.profileTabGifts
         }
+        public static func parse_profileTabLinks(_ reader: BufferReader) -> ProfileTab? {
+            return Api.ProfileTab.profileTabLinks
+        }
+        public static func parse_profileTabMedia(_ reader: BufferReader) -> ProfileTab? {
+            return Api.ProfileTab.profileTabMedia
+        }
+        public static func parse_profileTabMusic(_ reader: BufferReader) -> ProfileTab? {
+            return Api.ProfileTab.profileTabMusic
+        }
         public static func parse_profileTabPosts(_ reader: BufferReader) -> ProfileTab? {
             return Api.ProfileTab.profileTabPosts
+        }
+        public static func parse_profileTabVoice(_ reader: BufferReader) -> ProfileTab? {
+            return Api.ProfileTab.profileTabVoice
         }
     
     }
@@ -630,182 +702,6 @@ public extension Api {
             let _c2 = _2 != nil
             if _c1 && _c2 {
                 return Api.ReadParticipantDate.readParticipantDate(userId: _1!, date: _2!)
-            }
-            else {
-                return nil
-            }
-        }
-    
-    }
-}
-public extension Api {
-    enum ReceivedNotifyMessage: TypeConstructorDescription {
-        case receivedNotifyMessage(id: Int32, flags: Int32)
-    
-    public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-    switch self {
-                case .receivedNotifyMessage(let id, let flags):
-                    if boxed {
-                        buffer.appendInt32(-1551583367)
-                    }
-                    serializeInt32(id, buffer: buffer, boxed: false)
-                    serializeInt32(flags, buffer: buffer, boxed: false)
-                    break
-    }
-    }
-    
-    public func descriptionFields() -> (String, [(String, Any)]) {
-        switch self {
-                case .receivedNotifyMessage(let id, let flags):
-                return ("receivedNotifyMessage", [("id", id as Any), ("flags", flags as Any)])
-    }
-    }
-    
-        public static func parse_receivedNotifyMessage(_ reader: BufferReader) -> ReceivedNotifyMessage? {
-            var _1: Int32?
-            _1 = reader.readInt32()
-            var _2: Int32?
-            _2 = reader.readInt32()
-            let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            if _c1 && _c2 {
-                return Api.ReceivedNotifyMessage.receivedNotifyMessage(id: _1!, flags: _2!)
-            }
-            else {
-                return nil
-            }
-        }
-    
-    }
-}
-public extension Api {
-    indirect enum RecentMeUrl: TypeConstructorDescription {
-        case recentMeUrlChat(url: String, chatId: Int64)
-        case recentMeUrlChatInvite(url: String, chatInvite: Api.ChatInvite)
-        case recentMeUrlStickerSet(url: String, set: Api.StickerSetCovered)
-        case recentMeUrlUnknown(url: String)
-        case recentMeUrlUser(url: String, userId: Int64)
-    
-    public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-    switch self {
-                case .recentMeUrlChat(let url, let chatId):
-                    if boxed {
-                        buffer.appendInt32(-1294306862)
-                    }
-                    serializeString(url, buffer: buffer, boxed: false)
-                    serializeInt64(chatId, buffer: buffer, boxed: false)
-                    break
-                case .recentMeUrlChatInvite(let url, let chatInvite):
-                    if boxed {
-                        buffer.appendInt32(-347535331)
-                    }
-                    serializeString(url, buffer: buffer, boxed: false)
-                    chatInvite.serialize(buffer, true)
-                    break
-                case .recentMeUrlStickerSet(let url, let set):
-                    if boxed {
-                        buffer.appendInt32(-1140172836)
-                    }
-                    serializeString(url, buffer: buffer, boxed: false)
-                    set.serialize(buffer, true)
-                    break
-                case .recentMeUrlUnknown(let url):
-                    if boxed {
-                        buffer.appendInt32(1189204285)
-                    }
-                    serializeString(url, buffer: buffer, boxed: false)
-                    break
-                case .recentMeUrlUser(let url, let userId):
-                    if boxed {
-                        buffer.appendInt32(-1188296222)
-                    }
-                    serializeString(url, buffer: buffer, boxed: false)
-                    serializeInt64(userId, buffer: buffer, boxed: false)
-                    break
-    }
-    }
-    
-    public func descriptionFields() -> (String, [(String, Any)]) {
-        switch self {
-                case .recentMeUrlChat(let url, let chatId):
-                return ("recentMeUrlChat", [("url", url as Any), ("chatId", chatId as Any)])
-                case .recentMeUrlChatInvite(let url, let chatInvite):
-                return ("recentMeUrlChatInvite", [("url", url as Any), ("chatInvite", chatInvite as Any)])
-                case .recentMeUrlStickerSet(let url, let set):
-                return ("recentMeUrlStickerSet", [("url", url as Any), ("set", set as Any)])
-                case .recentMeUrlUnknown(let url):
-                return ("recentMeUrlUnknown", [("url", url as Any)])
-                case .recentMeUrlUser(let url, let userId):
-                return ("recentMeUrlUser", [("url", url as Any), ("userId", userId as Any)])
-    }
-    }
-    
-        public static func parse_recentMeUrlChat(_ reader: BufferReader) -> RecentMeUrl? {
-            var _1: String?
-            _1 = parseString(reader)
-            var _2: Int64?
-            _2 = reader.readInt64()
-            let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            if _c1 && _c2 {
-                return Api.RecentMeUrl.recentMeUrlChat(url: _1!, chatId: _2!)
-            }
-            else {
-                return nil
-            }
-        }
-        public static func parse_recentMeUrlChatInvite(_ reader: BufferReader) -> RecentMeUrl? {
-            var _1: String?
-            _1 = parseString(reader)
-            var _2: Api.ChatInvite?
-            if let signature = reader.readInt32() {
-                _2 = Api.parse(reader, signature: signature) as? Api.ChatInvite
-            }
-            let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            if _c1 && _c2 {
-                return Api.RecentMeUrl.recentMeUrlChatInvite(url: _1!, chatInvite: _2!)
-            }
-            else {
-                return nil
-            }
-        }
-        public static func parse_recentMeUrlStickerSet(_ reader: BufferReader) -> RecentMeUrl? {
-            var _1: String?
-            _1 = parseString(reader)
-            var _2: Api.StickerSetCovered?
-            if let signature = reader.readInt32() {
-                _2 = Api.parse(reader, signature: signature) as? Api.StickerSetCovered
-            }
-            let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            if _c1 && _c2 {
-                return Api.RecentMeUrl.recentMeUrlStickerSet(url: _1!, set: _2!)
-            }
-            else {
-                return nil
-            }
-        }
-        public static func parse_recentMeUrlUnknown(_ reader: BufferReader) -> RecentMeUrl? {
-            var _1: String?
-            _1 = parseString(reader)
-            let _c1 = _1 != nil
-            if _c1 {
-                return Api.RecentMeUrl.recentMeUrlUnknown(url: _1!)
-            }
-            else {
-                return nil
-            }
-        }
-        public static func parse_recentMeUrlUser(_ reader: BufferReader) -> RecentMeUrl? {
-            var _1: String?
-            _1 = parseString(reader)
-            var _2: Int64?
-            _2 = reader.readInt64()
-            let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            if _c1 && _c2 {
-                return Api.RecentMeUrl.recentMeUrlUser(url: _1!, userId: _2!)
             }
             else {
                 return nil

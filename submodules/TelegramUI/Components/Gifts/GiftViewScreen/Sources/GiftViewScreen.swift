@@ -633,7 +633,7 @@ private final class GiftViewSheetContent: CombinedComponent {
         }
         
         func openValue() {
-            guard let controller = self.getController(), case let .profileGift(_, gift) = self.subject, case let .unique(uniqueGift) = gift.gift else {
+            guard let controller = self.getController(), let gift = self.subject.arguments?.gift, case let .unique(uniqueGift) = gift else {
                 return
             }
             let _ = (self.context.engine.payments.getUniqueStarGiftValueInfo(slug: uniqueGift.slug)

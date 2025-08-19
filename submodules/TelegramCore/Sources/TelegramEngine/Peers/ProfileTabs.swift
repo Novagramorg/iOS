@@ -4,21 +4,21 @@ import SwiftSignalKit
 import TelegramApi
 import MtProtoKit
 
-func _internal_reorderProfileTabs(account: Account, peerId: PeerId, order: [TelegramProfileTab]) -> Signal<Never, NoError> {
+func _internal_setMainProfileTab(account: Account, peerId: PeerId, tab: TelegramProfileTab) -> Signal<Never, NoError> {
     return account.postbox.loadedPeerWithId(peerId)
     |> mapToSignal { peer in
         return account.postbox.transaction { transaction -> Signal<Never, NoError> in
             transaction.updatePeerCachedData(peerIds: Set([peerId]), update: { _, current in
                 if let current = current as? CachedUserData {
-                    return current.withUpdatedProfileTabsOrder(order)
+                    return current.withUpdatedMainProfileTab(tab)
                 } else if let current = current as? CachedChannelData {
-                    return current.withUpdatedProfileTabsOrder(order)
+                    return current.withUpdatedMainProfileTab(tab)
                 } else {
                     return current
                 }
             })
             if let inputChannel = apiInputChannel(peer) {
-                return account.network.request(Api.functions.channels.reorderProfileTabs(channel: inputChannel, order: order.map { $0.apiTab }))
+                return account.network.request(Api.functions.channels.setMainProfileTab(channel: inputChannel, tab: tab.apiTab))
                 |> `catch` { error in
                     return .complete()
                 }
@@ -26,7 +26,7 @@ func _internal_reorderProfileTabs(account: Account, peerId: PeerId, order: [Tele
                     return .complete()
                 }
             } else {
-                return account.network.request(Api.functions.account.reorderProfileTabs(order: order.map { $0.apiTab }))
+                return account.network.request(Api.functions.account.setMainProfileTab(tab: tab.apiTab))
                 |> `catch` { error in
                     return .complete()
                 }

@@ -1320,9 +1320,14 @@ func peerInfoScreenData(context: AccountContext, peerId: PeerId, strings: Presen
                 hasSavedMessageTags = .single(false)
             }
             
-            let starsRevenueContextAndState = context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: peerId))
-            |> mapToSignal { peer -> Signal<(StarsRevenueStatsContext?, StarsRevenueStats?), NoError> in
-                var canViewStarsRevenue = false
+            let starsRevenueContextAndState = combineLatest(
+                context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: peerId))
+                |> distinctUntilChanged,
+                context.engine.data.subscribe(TelegramEngine.EngineData.Item.Peer.CanViewRevenue(id: peerId))
+                |> distinctUntilChanged
+            )
+            |> mapToSignal { peer, canViewRevenue -> Signal<(StarsRevenueStatsContext?, StarsRevenueStats?), NoError> in
+                var canViewStarsRevenue = canViewRevenue
                 if let peer, case let .user(user) = peer, let botInfo = user.botInfo, botInfo.flags.contains(.canEdit) || context.sharedContext.applicationBindings.appBuildType == .internal || context.sharedContext.immediateExperimentalUISettings.devRequests {
                     canViewStarsRevenue = true
                 }
@@ -1399,13 +1404,13 @@ func peerInfoScreenData(context: AccountContext, peerId: PeerId, strings: Presen
                 var availablePanes = availablePanes
                 if isMyProfile {
                     availablePanes?.insert(.stories, at: 0)
-                    if let hasStoryArchive, hasStoryArchive {
-                        availablePanes?.insert(.storyArchive, at: 1)
-                    }
                     if availablePanes != nil, profileGiftsContext != nil, let cachedData = peerView.cachedData as? CachedUserData {
                         if let starGiftsCount = cachedData.starGiftsCount, starGiftsCount > 0 {
-                            availablePanes?.insert(.gifts, at: hasStoryArchive == true ? 2 : 1)
+                            availablePanes?.insert(.gifts, at: 1)
                         }
+                    }
+                    if let hasStoryArchive, hasStoryArchive {
+                        availablePanes?.append(.storyArchive)
                     }
                 } else if let hasStories {
                     if hasStories, peerView.peers[peerView.peerId] is TelegramUser, peerView.peerId != context.account.peerId {
@@ -1452,6 +1457,15 @@ func peerInfoScreenData(context: AccountContext, peerId: PeerId, strings: Presen
                     }
                 } else {
                     availablePanes = nil
+                }
+                
+                if var currentAvailablePanes = availablePanes, let cachedData = peerView.cachedData as? CachedUserData, let mainProfileTab = cachedData.mainProfileTab {
+                    let mainTabKey = PeerInfoPaneKey(tab: mainProfileTab)
+                    if currentAvailablePanes.contains(mainTabKey) && currentAvailablePanes.first != mainTabKey {
+                        currentAvailablePanes = currentAvailablePanes.filter { $0 != mainTabKey }
+                        currentAvailablePanes.insert(mainTabKey, at: 0)
+                        availablePanes = currentAvailablePanes
+                    }
                 }
                 
                 let peer = peerView.peers[userPeerId]
@@ -1684,6 +1698,15 @@ func peerInfoScreenData(context: AccountContext, peerId: PeerId, strings: Presen
                     }
                 } else {
                     availablePanes = nil
+                }
+                
+                if var currentAvailablePanes = availablePanes, let cachedData = peerView.cachedData as? CachedChannelData, let mainProfileTab = cachedData.mainProfileTab {
+                    let mainTabKey = PeerInfoPaneKey(tab: mainProfileTab)
+                    if currentAvailablePanes.contains(mainTabKey) && currentAvailablePanes.first != mainTabKey {
+                        currentAvailablePanes = currentAvailablePanes.filter { $0 != mainTabKey }
+                        currentAvailablePanes.insert(mainTabKey, at: 0)
+                        availablePanes = currentAvailablePanes
+                    }
                 }
                 
                 var discussionPeer: Peer?

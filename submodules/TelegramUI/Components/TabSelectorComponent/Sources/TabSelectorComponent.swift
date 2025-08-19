@@ -53,14 +53,16 @@ public final class TabSelectorComponent: Component {
         public var font: UIFont
         public var spacing: CGFloat
         public var innerSpacing: CGFloat?
+        public var fillWidth: Bool
         public var lineSelection: Bool
         public var verticalInset: CGFloat
         public var allowScroll: Bool
         
-        public init(font: UIFont, spacing: CGFloat, innerSpacing: CGFloat? = nil, lineSelection: Bool = false, verticalInset: CGFloat = 0.0, allowScroll: Bool = true) {
+        public init(font: UIFont, spacing: CGFloat, innerSpacing: CGFloat? = nil, fillWidth: Bool = false, lineSelection: Bool = false, verticalInset: CGFloat = 0.0, allowScroll: Bool = true) {
             self.font = font
             self.spacing = spacing
             self.innerSpacing = innerSpacing
+            self.fillWidth = fillWidth
             self.lineSelection = lineSelection
             self.verticalInset = verticalInset
             self.allowScroll = allowScroll
@@ -630,7 +632,9 @@ public final class TabSelectorComponent: Component {
             }
             
             let estimatedContentWidth = 2.0 * spacing + innerContentWidth + (CGFloat(component.items.count - 1) * (spacing + innerInset))
-            if estimatedContentWidth > availableSize.width && !allowScroll {
+            if component.customLayout?.fillWidth == true && estimatedContentWidth < availableSize.width {
+                spacing = (availableSize.width - innerContentWidth) / CGFloat(component.items.count + 1) - innerInset * 2.0
+            } else if estimatedContentWidth > availableSize.width && !allowScroll {
                 spacing = (availableSize.width - innerContentWidth) / CGFloat(component.items.count + 1)
                 innerInset = 0.0
             }
