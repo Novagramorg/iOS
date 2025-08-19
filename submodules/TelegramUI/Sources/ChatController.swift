@@ -2516,6 +2516,22 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                 }
                 
                 return
+            } else if !message.attributes.contains(where: { attribute in
+                if let attribute = attribute as? ReplyMarkupMessageAttribute, !attribute.rows.isEmpty {
+                    return true
+                } else {
+                    return false
+                }
+            }), let data = data?.makeData(), data.count == 1 {
+                let buttonType = data.withUnsafeBytes { buffer -> UInt8 in
+                    return buffer.baseAddress!.assumingMemoryBound(to: UInt8.self).pointee
+                }
+                if buttonType == 3 {
+                    if let threadId = message.threadId {
+                        strongSelf.updateChatLocationThread(threadId: threadId, animationDirection: .right)
+                        return
+                    }
+                }
             }
             
             let _ = (strongSelf.context.engine.data.get(TelegramEngine.EngineData.Item.Messages.Message(id: messageId))
@@ -8099,10 +8115,13 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     }
     
     func transformEnqueueMessages(_ messages: [EnqueueMessage], silentPosting: Bool, scheduleTime: Int32? = nil, postpone: Bool = false) -> [EnqueueMessage] {
+        var defaultThreadId: Int64?
         var defaultReplyMessageSubject: EngineMessageReplySubject?
         switch self.chatLocation {
         case .peer:
-            break
+            if let channel = self.presentationInterfaceState.renderedPeer?.peer as? TelegramChannel, channel.linkedBotId != nil {
+                defaultThreadId = EngineMessage.newTopicThreadId
+            }
         case let .replyThread(replyThreadMessage):
             if let effectiveMessageId = replyThreadMessage.effectiveMessageId {
                 defaultReplyMessageSubject = EngineMessageReplySubject(messageId: effectiveMessageId, quote: nil, todoItemId: nil)
@@ -8125,6 +8144,22 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                     }
                 case .forward:
                     break
+                }
+            }
+            if let defaultThreadId {
+                var updateThread = false
+                switch message {
+                case let .message(_, _, _, _, threadId, replyToMessageId, _, _, _, _):
+                    if threadId == nil && replyToMessageId == nil {
+                        updateThread = true
+                    }
+                case let .forward(_, threadId, _, _, _):
+                    if threadId == nil {
+                        updateThread = true
+                    }
+                }
+                if updateThread {
+                    message = message.withUpdatedThreadId(defaultThreadId)
                 }
             }
             
@@ -10125,10 +10160,6 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     var currentChatSwitchDirection: ChatControllerAnimateInnerChatSwitchDirection?
     
     func updateChatLocationToOther(chatLocation: ChatLocation) {
-        if self.isUpdatingChatLocationThread {
-            return
-        }
-        
         self.saveInterfaceState()
         self.chatDisplayNode.dismissTextInput()
         
@@ -10269,11 +10300,11 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                     ))
                 }
             } else {
-                if let channel = peer as? TelegramChannel, let linkedBotId = channel.linkedBotId {
+                /*if let channel = peer as? TelegramChannel, let linkedBotId = channel.linkedBotId {
                     updatedChatLocation = .peer(id: linkedBotId)
-                } else {
+                } else {*/
                     updatedChatLocation = .peer(id: peerId)
-                }
+                //}
             }
             
             let navigationSnapshot = self.chatTitleView?.prepareSnapshotState()

@@ -37,6 +37,7 @@ import ChatControllerInteraction
 import DustEffect
 import UrlHandling
 import TextFormat
+import ChatNewThreadInfoItem
 
 struct ChatTopVisibleMessageRange: Equatable {
     var lowerBound: MessageIndex
@@ -262,6 +263,8 @@ private func mappedInsertEntries(context: AccountContext, chatLocation: ChatLoca
                     item = ChatBotInfoItem(title: title, text: text, photo: photo, video: video, controllerInteraction: controllerInteraction, presentationData: presentationData, context: context)
                 case let .userInfo(peer, verification, registrationDate, phoneCountry, groupsInCommonCount):
                     item = ChatUserInfoItem(peer: peer, verification: verification, registrationDate: registrationDate, phoneCountry: phoneCountry, groupsInCommonCount: groupsInCommonCount, controllerInteraction: controllerInteraction, presentationData: presentationData, context: context)
+                case .newThreadInfo:
+                    item = ChatNewThreadInfoItem(controllerInteraction: controllerInteraction, presentationData: presentationData, context: context)
                 }
                 return ListViewInsertItem(index: entry.index, previousIndex: entry.previousIndex, item: item, directionHint: entry.directionHint)
             case let .SearchEntry(theme, strings):
@@ -319,6 +322,8 @@ private func mappedUpdateEntries(context: AccountContext, chatLocation: ChatLoca
                     item = ChatBotInfoItem(title: title, text: text, photo: photo, video: video, controllerInteraction: controllerInteraction, presentationData: presentationData, context: context)
                 case let .userInfo(peer, verification, registrationDate, phoneCountry, groupsInCommonCount):
                     item = ChatUserInfoItem(peer: peer, verification: verification, registrationDate: registrationDate, phoneCountry: phoneCountry, groupsInCommonCount: groupsInCommonCount, controllerInteraction: controllerInteraction, presentationData: presentationData, context: context)
+                case .newThreadInfo:
+                    item = ChatNewThreadInfoItem(controllerInteraction: controllerInteraction, presentationData: presentationData, context: context)
                 }
                 return ListViewUpdateItem(index: entry.index, previousIndex: entry.previousIndex, item: item, directionHint: entry.directionHint)
             case let .SearchEntry(theme, strings):
@@ -1747,12 +1752,12 @@ public final class ChatHistoryListNodeImpl: ListView, ChatHistoryNode, ChatHisto
         |> distinctUntilChanged
         
         let stopHistoryViewUpdates: Signal<Bool, NoError>
-        if let peerId = chatLocation.peerId, chatLocation.threadId == EngineMessage.newTopicThreadId {
+        if let peerId = chatLocation.peerId, (chatLocation.threadId == EngineMessage.newTopicThreadId || chatLocation.threadId == nil) {
             stopHistoryViewUpdates = Signal<Bool, NoError>.single(false)
             |> then(
                 self.context.account.pendingMessageManager.newTopicEvents(peerId: peerId)
                 |> mapToSignal { event -> Signal<Bool, NoError> in
-                    if case .willMove(EngineMessage.newTopicThreadId, _) = event {
+                    if case .willMove = event {
                         return .single(true)
                     } else {
                         return .never()
@@ -4477,6 +4482,8 @@ public final class ChatHistoryListNodeImpl: ListView, ChatHistoryNode, ChatHisto
                             if index != 0 || historyView.originalView.laterId != nil {
                                 currentMessage = messages.first?.0
                             }
+                            break loop
+                        } else if case .ChatInfoEntry = entry {
                             break loop
                         }
                     }

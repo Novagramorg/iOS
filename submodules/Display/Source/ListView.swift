@@ -2474,14 +2474,14 @@ open class ListView: ASDisplayNode, ASScrollViewDelegate, ASGestureRecognizerDel
                         takenAnimation = true
                         
                         if abs(layout.size.height - previousApparentHeight) > CGFloat.ulpOfOne {
-                            node.addApparentHeightAnimation(layout.size.height, duration: insertionAnimationDuration * UIView.animationDurationFactor(), beginAt: timestamp, invertOffsetDirection: invertOffsetDirection, update: { [weak node] progress, currentValue in
+                            node.addApparentHeightAnimation(layout.size.height, duration: (node.updateAnimationDuration() ?? insertionAnimationDuration) * UIView.animationDurationFactor(), beginAt: timestamp, invertOffsetDirection: invertOffsetDirection, update: { [weak node] progress, currentValue in
                                 if let node = node {
                                     node.animateFrameTransition(progress, currentValue)
                                 }
                             })
                             if node.rotated {
                                 node.transitionOffset += previousApparentHeight - layout.size.height
-                                node.addTransitionOffsetAnimation(0.0, duration: insertionAnimationDuration * UIView.animationDurationFactor(), beginAt: timestamp)
+                                node.addTransitionOffsetAnimation(0.0, duration: (node.updateAnimationDuration() ?? insertionAnimationDuration) * UIView.animationDurationFactor(), beginAt: timestamp)
                             }
                         }
                     }
@@ -2523,16 +2523,16 @@ open class ListView: ASDisplayNode, ASScrollViewDelegate, ASGestureRecognizerDel
                     } else {
                         node.transitionOffset += transitionOffsetDelta
                     }
-                    node.addTransitionOffsetAnimation(0.0, duration: insertionAnimationDuration * UIView.animationDurationFactor(), beginAt: timestamp)
+                    node.addTransitionOffsetAnimation(0.0, duration: (node.updateAnimationDuration() ?? insertionAnimationDuration) * UIView.animationDurationFactor(), beginAt: timestamp)
                     if previousInsets != layout.insets {
                         node.insets = previousInsets
-                        node.addInsetsAnimationToValue(layout.insets, duration: insertionAnimationDuration * UIView.animationDurationFactor(), beginAt: timestamp)
+                        node.addInsetsAnimationToValue(layout.insets, duration: (node.updateAnimationDuration() ?? insertionAnimationDuration) * UIView.animationDurationFactor(), beginAt: timestamp)
                     }
                 }
             } else {
                 if !nodeFrame.size.height.isEqual(to: node.apparentHeight) {
                     let addAnimation = previousFrame?.height != nodeFrame.size.height
-                    node.addApparentHeightAnimation(nodeFrame.size.height, duration: insertionAnimationDuration * UIView.animationDurationFactor(), beginAt: timestamp, invertOffsetDirection: invertOffsetDirection, update: { [weak node] progress, currentValue in
+                    node.addApparentHeightAnimation(nodeFrame.size.height, duration: (node.updateAnimationDuration() ?? insertionAnimationDuration) * UIView.animationDurationFactor(), beginAt: timestamp, invertOffsetDirection: invertOffsetDirection, update: { [weak node] progress, currentValue in
                         if let node = node, addAnimation {
                             node.animateFrameTransition(progress, currentValue)
                         }
@@ -2550,10 +2550,10 @@ open class ListView: ASDisplayNode, ASScrollViewDelegate, ASGestureRecognizerDel
                     } else {
                         node.transitionOffset += transitionOffsetDelta
                     }
-                    node.addTransitionOffsetAnimation(0.0, duration: insertionAnimationDuration * UIView.animationDurationFactor(), beginAt: timestamp)
+                    node.addTransitionOffsetAnimation(0.0, duration: (node.updateAnimationDuration() ?? insertionAnimationDuration) * UIView.animationDurationFactor(), beginAt: timestamp)
                     if previousInsets != layout.insets {
                         node.insets = previousInsets
-                        node.addInsetsAnimationToValue(layout.insets, duration: insertionAnimationDuration * UIView.animationDurationFactor(), beginAt: timestamp)
+                        node.addInsetsAnimationToValue(layout.insets, duration: (node.updateAnimationDuration() ?? insertionAnimationDuration) * UIView.animationDurationFactor(), beginAt: timestamp)
                     }
                 } else {
                     if self.debugInfo {
@@ -2562,21 +2562,21 @@ open class ListView: ASDisplayNode, ASScrollViewDelegate, ASGestureRecognizerDel
                     if !node.rotated {
                         if !node.insets.top.isZero {
                             node.transitionOffset += node.insets.top
-                            node.addTransitionOffsetAnimation(0.0, duration: insertionAnimationDuration * UIView.animationDurationFactor(), beginAt: timestamp)
+                            node.addTransitionOffsetAnimation(0.0, duration: (node.updateAnimationDuration() ?? insertionAnimationDuration) * UIView.animationDurationFactor(), beginAt: timestamp)
                         }
                     }
-                    node.animateInsertion(timestamp, duration: insertionAnimationDuration * UIView.animationDurationFactor(), options: ListViewItemAnimationOptions(short: invertOffsetDirection))
+                    node.animateInsertion(timestamp, duration: (node.updateAnimationDuration() ?? insertionAnimationDuration) * UIView.animationDurationFactor(), options: ListViewItemAnimationOptions(short: invertOffsetDirection))
                 }
             }
         } else if animateAlpha {
             if previousFrame == nil {
                 if forceAnimateInsertion {
-                    node.animateInsertion(timestamp, duration: insertionAnimationDuration * UIView.animationDurationFactor(), options: ListViewItemAnimationOptions(short: true))
+                    node.animateInsertion(timestamp, duration: (node.insertionAnimationDuration() ?? insertionAnimationDuration) * UIView.animationDurationFactor(), options: ListViewItemAnimationOptions(short: true))
                 } else if animateFullTransition {
                     node.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.1)
                     node.layer.animateScale(from: 0.7, to: 1.0, duration: 0.3, timingFunction: kCAMediaTimingFunctionSpring)
                 } else {
-                    node.animateAdded(timestamp, duration: insertionAnimationDuration * UIView.animationDurationFactor())
+                    node.animateAdded(timestamp, duration: (node.insertionAnimationDuration() ?? insertionAnimationDuration) * UIView.animationDurationFactor())
                 }
             }
         }

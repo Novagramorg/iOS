@@ -353,6 +353,7 @@ swift_library(
         "//submodules/TelegramUI/Components/AudioWaveformNode",
         "//submodules/TelegramUI/Components/Chat/ChatBotInfoItem",
         "//submodules/TelegramUI/Components/Chat/ChatUserInfoItem",
+        "//submodules/TelegramUI/Components/Chat/ChatNewThreadInfoItem",
         "//submodules/TelegramUI/Components/Chat/ChatInputPanelNode",
         "//submodules/TelegramUI/Components/Chat/ChatBotStartInputPanelNode",
         "//submodules/TelegramUI/Components/Chat/ChatButtonKeyboardInputNode",
