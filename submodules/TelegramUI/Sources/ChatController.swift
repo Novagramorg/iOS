@@ -9862,16 +9862,6 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                             }
                         ),
                         TextAlertAction(
-                            type: .destructiveAction,
-                            title: self.presentationData.strings.Conversation_StopVoiceMessageDiscardAction,
-                            action: { [weak self] in
-                                self?.stopMediaRecorder()
-                                Queue.mainQueue().after(0.1) {
-                                    action()
-                                }
-                            }
-                        ),
-                        TextAlertAction(
                             type: .genericAction,
                             title: self.presentationData.strings.Common_Cancel,
                             action: {
