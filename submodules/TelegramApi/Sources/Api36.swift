@@ -718,15 +718,20 @@ public extension Api.payments {
 }
 public extension Api.payments {
     enum UniqueStarGift: TypeConstructorDescription {
-        case uniqueStarGift(gift: Api.StarGift, users: [Api.User])
+        case uniqueStarGift(gift: Api.StarGift, chats: [Api.Chat], users: [Api.User])
     
     public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
     switch self {
-                case .uniqueStarGift(let gift, let users):
+                case .uniqueStarGift(let gift, let chats, let users):
                     if boxed {
-                        buffer.appendInt32(-895289845)
+                        buffer.appendInt32(1097619176)
                     }
                     gift.serialize(buffer, true)
+                    buffer.appendInt32(481674261)
+                    buffer.appendInt32(Int32(chats.count))
+                    for item in chats {
+                        item.serialize(buffer, true)
+                    }
                     buffer.appendInt32(481674261)
                     buffer.appendInt32(Int32(users.count))
                     for item in users {
@@ -738,8 +743,8 @@ public extension Api.payments {
     
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
-                case .uniqueStarGift(let gift, let users):
-                return ("uniqueStarGift", [("gift", gift as Any), ("users", users as Any)])
+                case .uniqueStarGift(let gift, let chats, let users):
+                return ("uniqueStarGift", [("gift", gift as Any), ("chats", chats as Any), ("users", users as Any)])
     }
     }
     
@@ -748,14 +753,19 @@ public extension Api.payments {
             if let signature = reader.readInt32() {
                 _1 = Api.parse(reader, signature: signature) as? Api.StarGift
             }
-            var _2: [Api.User]?
+            var _2: [Api.Chat]?
             if let _ = reader.readInt32() {
-                _2 = Api.parseVector(reader, elementSignature: 0, elementType: Api.User.self)
+                _2 = Api.parseVector(reader, elementSignature: 0, elementType: Api.Chat.self)
+            }
+            var _3: [Api.User]?
+            if let _ = reader.readInt32() {
+                _3 = Api.parseVector(reader, elementSignature: 0, elementType: Api.User.self)
             }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if _c1 && _c2 {
-                return Api.payments.UniqueStarGift.uniqueStarGift(gift: _1!, users: _2!)
+            let _c3 = _3 != nil
+            if _c1 && _c2 && _c3 {
+                return Api.payments.UniqueStarGift.uniqueStarGift(gift: _1!, chats: _2!, users: _3!)
             }
             else {
                 return nil

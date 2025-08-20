@@ -12324,6 +12324,26 @@ public extension Api.functions.users {
                 }
 }
 public extension Api.functions.users {
+                static func getSavedMusicByID(id: Api.InputUser, documents: [Api.InputDocument]) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.users.SavedMusic>) {
+                    let buffer = Buffer()
+                    buffer.appendInt32(1970513129)
+                    id.serialize(buffer, true)
+                    buffer.appendInt32(481674261)
+                    buffer.appendInt32(Int32(documents.count))
+                    for item in documents {
+                        item.serialize(buffer, true)
+                    }
+                    return (FunctionDescription(name: "users.getSavedMusicByID", parameters: [("id", String(describing: id)), ("documents", String(describing: documents))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.users.SavedMusic? in
+                        let reader = BufferReader(buffer)
+                        var result: Api.users.SavedMusic?
+                        if let signature = reader.readInt32() {
+                            result = Api.parse(reader, signature: signature) as? Api.users.SavedMusic
+                        }
+                        return result
+                    })
+                }
+}
+public extension Api.functions.users {
                 static func getUsers(id: [Api.InputUser]) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<[Api.User]>) {
                     let buffer = Buffer()
                     buffer.appendInt32(227648840)
