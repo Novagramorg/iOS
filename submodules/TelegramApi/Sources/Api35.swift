@@ -812,15 +812,20 @@ public extension Api.messages {
 }
 public extension Api.messages {
     indirect enum WebPagePreview: TypeConstructorDescription {
-        case webPagePreview(media: Api.MessageMedia, users: [Api.User])
+        case webPagePreview(media: Api.MessageMedia, chats: [Api.Chat], users: [Api.User])
     
     public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
     switch self {
-                case .webPagePreview(let media, let users):
+                case .webPagePreview(let media, let chats, let users):
                     if boxed {
-                        buffer.appendInt32(-1254192351)
+                        buffer.appendInt32(-1936029524)
                     }
                     media.serialize(buffer, true)
+                    buffer.appendInt32(481674261)
+                    buffer.appendInt32(Int32(chats.count))
+                    for item in chats {
+                        item.serialize(buffer, true)
+                    }
                     buffer.appendInt32(481674261)
                     buffer.appendInt32(Int32(users.count))
                     for item in users {
@@ -832,8 +837,8 @@ public extension Api.messages {
     
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
-                case .webPagePreview(let media, let users):
-                return ("webPagePreview", [("media", media as Any), ("users", users as Any)])
+                case .webPagePreview(let media, let chats, let users):
+                return ("webPagePreview", [("media", media as Any), ("chats", chats as Any), ("users", users as Any)])
     }
     }
     
@@ -842,14 +847,19 @@ public extension Api.messages {
             if let signature = reader.readInt32() {
                 _1 = Api.parse(reader, signature: signature) as? Api.MessageMedia
             }
-            var _2: [Api.User]?
+            var _2: [Api.Chat]?
             if let _ = reader.readInt32() {
-                _2 = Api.parseVector(reader, elementSignature: 0, elementType: Api.User.self)
+                _2 = Api.parseVector(reader, elementSignature: 0, elementType: Api.Chat.self)
+            }
+            var _3: [Api.User]?
+            if let _ = reader.readInt32() {
+                _3 = Api.parseVector(reader, elementSignature: 0, elementType: Api.User.self)
             }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if _c1 && _c2 {
-                return Api.messages.WebPagePreview.webPagePreview(media: _1!, users: _2!)
+            let _c3 = _3 != nil
+            if _c1 && _c2 && _c3 {
+                return Api.messages.WebPagePreview.webPagePreview(media: _1!, chats: _2!, users: _3!)
             }
             else {
                 return nil

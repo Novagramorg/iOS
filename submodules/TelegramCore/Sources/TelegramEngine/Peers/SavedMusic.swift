@@ -49,6 +49,31 @@ public final class SavedMusicIdsList: Codable, Equatable {
     }
 }
 
+func _internal_getSavedMusicById(postbox: Postbox, network: Network, peer: PeerReference, file: TelegramMediaFile) -> Signal<TelegramMediaFile?, NoError> {
+    let inputUser = peer.inputUser
+    guard let inputUser, let resource = file.resource as? CloudDocumentMediaResource else {
+        return .single(nil)
+    }
+    return network.request(Api.functions.users.getSavedMusicByID(id: inputUser, documents: [.inputDocument(id: resource.fileId, accessHash: resource.accessHash, fileReference: Buffer(data: resource.fileReference))]))
+    |> map(Optional.init)
+    |> `catch` { _ -> Signal<Api.users.SavedMusic?, NoError> in
+        return .single(nil)
+    }
+    |> map { result -> TelegramMediaFile? in
+        if let result {
+            switch result {
+            case let .savedMusic(_, documents):
+                if let file = documents.first.flatMap({ telegramMediaFileFromApiDocument($0, altDocuments: nil) }) {
+                    return file
+                }
+            default:
+                break
+            }
+        }
+        return nil
+    }
+}
+
 func _internal_savedMusicIds(postbox: Postbox) -> Signal<Set<Int64>?, NoError> {
     let viewKey: PostboxViewKey = .preferences(keys: Set([PreferencesKeys.savedMusicIds()]))
     return postbox.combinedView(keys: [viewKey])
