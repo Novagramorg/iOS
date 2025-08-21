@@ -1089,6 +1089,15 @@ public final class CachedUserData: CachedPeerData {
     public enum LinkedBotChannelId: Equatable {
         case unknown
         case known(PeerId?)
+        
+        public var value: PeerId? {
+            switch self {
+            case .unknown:
+                return nil
+            case let .known(peerId):
+                return peerId
+            }
+        }
     }
     
     public let about: String?
