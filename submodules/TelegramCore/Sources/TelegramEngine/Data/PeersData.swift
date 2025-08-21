@@ -2410,8 +2410,8 @@ public extension TelegramEngine.EngineData.Item {
             }
         }
         
-        public struct ProfileTabsOrder: TelegramEngineDataItem, TelegramEngineMapKeyDataItem, PostboxViewDataItem {
-            public typealias Result = Optional<[TelegramProfileTab]>
+        public struct ProfileMainTab: TelegramEngineDataItem, TelegramEngineMapKeyDataItem, PostboxViewDataItem {
+            public typealias Result = Optional<TelegramProfileTab>
             
             fileprivate var id: EnginePeer.Id
             public var mapKey: EnginePeer.Id {
@@ -2431,7 +2431,9 @@ public extension TelegramEngine.EngineData.Item {
                     preconditionFailure()
                 }
                 if let cachedData = view.cachedPeerData as? CachedUserData {
-                    return cachedData.profileTabsOrder
+                    return cachedData.mainProfileTab
+                } else if let cachedData = view.cachedPeerData as? CachedChannelData {
+                    return cachedData.mainProfileTab
                 } else {
                     return nil
                 }
