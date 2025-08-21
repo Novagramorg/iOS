@@ -578,6 +578,16 @@ extension ChatControllerImpl {
                             } else {
                                 strongSelf.state.chatTitleContent = .custom(channel.debugDisplayTitle, nil, true)
                             }
+                        } else if let channel = peer as? TelegramChannel, let linkedBotId = channel.linkedBotId, let mainPeer = peerView.peers[linkedBotId] {
+                            strongSelf.state.chatTitleContent = .peer(peerView: ChatTitleContent.PeerData(
+                                peerId: mainPeer.id,
+                                peer: mainPeer,
+                                isContact: false,
+                                isSavedMessages: false,
+                                notificationSettings: nil,
+                                peerPresences: [:],
+                                cachedData: nil
+                            ), customTitle: nil, customSubtitle: nil, onlineMemberCount: (nil, nil), isScheduledMessages: false, isMuted: nil, customMessageCount: nil, isEnabled: true)
                         } else {
                             strongSelf.state.chatTitleContent = .peer(peerView: ChatTitleContent.PeerData(peerView: peerView), customTitle: nil, customSubtitle: nil, onlineMemberCount: onlineMemberCount, isScheduledMessages: isScheduledMessages, isMuted: nil, customMessageCount: nil, isEnabled: hasPeerInfo)
                             
@@ -824,6 +834,13 @@ extension ChatControllerImpl {
                                     alwaysShowGiftButton = globalPrivacySettings.displayGiftButton || cachedData.flags.contains(.displayGiftButton)
                                 }
                                 disallowedGifts = cachedData.disallowedGifts
+                            }
+                            
+                            if chatLocation.threadId == nil, case let .known(value) = cachedData.linkedBotChannelId, let value, chatLocation.peerId != value {
+                                strongSelf.state.historyNodeData = HistoryNodeData(
+                                    chatLocation: .peer(id: value),
+                                    chatLocationContextHolder: Atomic(value: nil)
+                                )
                             }
                         } else if let cachedData = peerView.cachedData as? CachedGroupData {
                             var invitedBy: Peer?
