@@ -3778,13 +3778,15 @@ func replayFinalState(
     enum LiveTypingDraftUpdate {
         struct Update {
             var id: Int64
+            var threadId: Int64?
             var authorId: PeerId
             var timestamp: Int32
             var text: String
             var entities: [MessageTextEntity]
             
-            init(id: Int64, authorId: PeerId, timestamp: Int32, text: String, entities: [MessageTextEntity]) {
+            init(id: Int64, threadId: Int64?, authorId: PeerId, timestamp: Int32, text: String, entities: [MessageTextEntity]) {
                 self.id = id
+                self.threadId = threadId
                 self.authorId = authorId
                 self.timestamp = timestamp
                 self.text = text
@@ -4003,11 +4005,14 @@ func replayFinalState(
                         let message = messages[i]
                         let chatPeerId = message.id.peerId
                         let key = PeerAndThreadId(peerId: chatPeerId, threadId: message.threadId)
+                        let allKey = PeerAndThreadId(peerId: chatPeerId, threadId: nil)
                         
                         if liveTypingDraftUpdates[key] != nil {
                             liveTypingDraftUpdates[key] = .cancel
+                            liveTypingDraftUpdates[allKey] = .cancel
                         } else if let currentDraft = transaction.getCurrentTypingDraft(location: key) {
                             liveTypingDraftUpdates[key] = .cancel
+                            liveTypingDraftUpdates[allKey] = .cancel
                             messages[i] = messages[i].withUpdatedCustomStableId(currentDraft.stableId)
                         }
                     }
@@ -4674,11 +4679,22 @@ func replayFinalState(
             case let .AddPeerLiveTypingDraftUpdate(peerAndThreadId, id, timestamp, authorId, text, entities):
                 liveTypingDraftUpdates[peerAndThreadId] = .update(LiveTypingDraftUpdate.Update(
                     id: id,
+                    threadId: peerAndThreadId.threadId,
                     authorId: authorId,
                     timestamp: timestamp,
                     text: text,
                     entities: entities
                 ))
+                if peerAndThreadId.threadId != nil {
+                    liveTypingDraftUpdates[PeerAndThreadId(peerId: peerAndThreadId.peerId, threadId: nil)] = .update(LiveTypingDraftUpdate.Update(
+                        id: id,
+                        threadId: peerAndThreadId.threadId,
+                        authorId: authorId,
+                        timestamp: timestamp,
+                        text: text,
+                        entities: entities
+                    ))
+                }
             case let .UpdatePinnedItemIds(groupId, pinnedOperation):
                 switch pinnedOperation {
                     case let .pin(itemId):
@@ -5758,10 +5774,14 @@ func replayFinalState(
             case let .update(update):
                 return (
                     update.id,
+                    update.threadId,
                     update.authorId,
                     update.timestamp,
                     update.text,
-                    [TextEntitiesMessageAttribute(entities: update.entities)]
+                    [
+                        TypingDraftMessageAttribute(),
+                        TextEntitiesMessageAttribute(entities: update.entities)
+                    ]
                 )
             case .cancel:
                 return nil

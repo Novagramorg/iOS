@@ -11,18 +11,23 @@ import AccountContext
 import DirectionalPanGesture
 import ChatPresentationInterfaceState
 import ChatControllerInteraction
+import ContextUI
+import UndoUI
+import ChatHistoryEntry
 
 final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestureRecognizerDelegate {
     let ready = Promise<Bool>()
     
     private let context: AccountContext
     
+    private let source: ChatHistoryListSource
     private let chatLocation: ChatLocation
     private var presentationData: PresentationData
     private let type: MediaManagerPlayerType
     private let requestDismiss: () -> Void
     private let requestShare: (MessageId) -> Void
     private let requestSearchByArtist: (String) -> Void
+    private let updateMusicSaved: (FileMediaReference, Bool) -> Void
     private let playlistLocation: SharedMediaPlaylistLocation?
     private let isGlobalSearch: Bool
     
@@ -40,18 +45,32 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
     private var replacementHistoryNode: ChatHistoryListNodeImpl?
     private var replacementHistoryNodeFloatingOffset: CGFloat?
     
+    private var saveMediaDisposable: MetaDisposable?
+    
     private var validLayout: ContainerViewLayout?
     
     private var presentationDataDisposable: Disposable?
     private let replacementHistoryNodeReadyDisposable = MetaDisposable()
     
-    var getParentController: () -> ViewController? = { return nil } {
-        didSet {
-            self.controlsNode.getParentController = self.getParentController
-        }
-    }
+    private let getParentController: () -> ViewController?
+        
+    private var savedIdsDisposable: Disposable?
+    private var savedIdsPromise = Promise<Set<Int64>?>()
+    private var savedIds: Set<Int64>?
     
-    init(context: AccountContext, chatLocation: ChatLocation, type: MediaManagerPlayerType, initialMessageId: MessageId, initialOrder: MusicPlaybackSettingsOrder, playlistLocation: SharedMediaPlaylistLocation?, requestDismiss: @escaping () -> Void, requestShare: @escaping (MessageId) -> Void, requestSearchByArtist: @escaping (String) -> Void) {
+    init(
+        context: AccountContext,
+        chatLocation: ChatLocation,
+        type: MediaManagerPlayerType,
+        initialMessageId: MessageId,
+        initialOrder: MusicPlaybackSettingsOrder,
+        playlistLocation: SharedMediaPlaylistLocation?,
+        requestDismiss: @escaping () -> Void,
+        requestShare: @escaping (MessageId) -> Void,
+        requestSearchByArtist: @escaping (String) -> Void,
+        updateMusicSaved: @escaping (FileMediaReference, Bool) -> Void,
+        getParentController: @escaping () -> ViewController?
+    ) {
         self.context = context
         self.chatLocation = chatLocation
         self.presentationData = context.sharedContext.currentPresentationData.with { $0 }
@@ -60,6 +79,16 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
         self.requestShare = requestShare
         self.requestSearchByArtist = requestSearchByArtist
         self.playlistLocation = playlistLocation
+        self.updateMusicSaved = updateMusicSaved
+        self.getParentController = getParentController
+        
+        if let playlistLocation = playlistLocation as? PeerMessagesPlaylistLocation, case let .custom(messages, canReorder, at, loadMore) = playlistLocation {
+            self.source = .custom(messages: messages, messageId: at, quote: nil, updateAll: false, canReorder: canReorder, loadMore: loadMore)
+            self.isGlobalSearch = false
+        } else {
+            self.source = .default
+            self.isGlobalSearch = false
+        }
         
         if case .regular = initialOrder {
             self.currentIsReversed = false
@@ -68,6 +97,7 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
         }
         
         var openMessageImpl: ((MessageId) -> Bool)?
+        var openMessageContextMenuImpl: ((Message, ASDisplayNode, CGRect, Any?) -> Void)?
         self.controllerInteraction = ChatControllerInteraction(openMessage: { message, _ in
             if let openMessageImpl = openMessageImpl {
                 return openMessageImpl(message.id)
@@ -76,7 +106,8 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
             }
         }, openPeer: { _, _, _, _ in
         }, openPeerMention: { _, _ in
-        }, openMessageContextMenu: { _, _, _, _, _, _ in
+        }, openMessageContextMenu: { message, _, node, rect, gesture, _ in
+            openMessageContextMenuImpl?(message, node, rect, gesture)
         }, openMessageReactionContextMenu: { _, _, _, _ in
         }, updateMessageReaction: { _, _, _, _ in
         }, activateMessagePinch: { _ in
@@ -205,7 +236,8 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
         
         self.contentNode = ASDisplayNode()
         
-        self.controlsNode = OverlayPlayerControlsNode(account: context.account, engine: context.engine, accountManager: context.sharedContext.accountManager, presentationData: self.presentationData, status: context.sharedContext.mediaManager.musicMediaPlayerState)
+        self.controlsNode = OverlayPlayerControlsNode(account: context.account, engine: context.engine, accountManager: context.sharedContext.accountManager, presentationData: self.presentationData, status: context.sharedContext.mediaManager.musicMediaPlayerState, chatLocation: self.chatLocation, source: self.source)
+        self.controlsNode.getParentController = getParentController
         
         self.historyBackgroundNode = ASDisplayNode()
         self.historyBackgroundNode.isLayerBacked = true
@@ -228,17 +260,9 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
         
         let chatLocationContextHolder = Atomic<ChatLocationContextHolder?>(value: nil)
         
-        let source: ChatHistoryListSource
-        if let playlistLocation = playlistLocation as? PeerMessagesPlaylistLocation, case let .custom(messages, at, loadMore) = playlistLocation {
-            source = .custom(messages: messages, messageId: at, quote: nil, loadMore: loadMore)
-            self.isGlobalSearch = true
-        } else {
-            source = .default
-            self.isGlobalSearch = false
-        }
-        
-        self.historyNode = ChatHistoryListNodeImpl(context: context, updatedPresentationData: (context.sharedContext.currentPresentationData.with({ $0 }), context.sharedContext.presentationData), chatLocation: chatLocation, chatLocationContextHolder: chatLocationContextHolder, adMessagesContext: nil, tag: .tag(tagMask), source: source, subject: .message(id: .id(initialMessageId), highlight: ChatControllerSubject.MessageHighlight(quote: nil), timecode: nil, setupReply: false), controllerInteraction: self.controllerInteraction, selectedMessages: .single(nil), mode: .list(search: false, reversed: self.currentIsReversed, reverseGroups: !self.currentIsReversed, displayHeaders: .none, hintLinks: false, isGlobalSearch: self.isGlobalSearch), isChatPreview: false, messageTransitionNode: { return nil })
+        self.historyNode = ChatHistoryListNodeImpl(context: context, updatedPresentationData: (context.sharedContext.currentPresentationData.with({ $0 }), context.sharedContext.presentationData), chatLocation: chatLocation, chatLocationContextHolder: chatLocationContextHolder, adMessagesContext: nil, tag: .tag(tagMask), source: self.source, subject: .message(id: .id(initialMessageId), highlight: ChatControllerSubject.MessageHighlight(quote: nil), timecode: nil, setupReply: false), controllerInteraction: self.controllerInteraction, selectedMessages: .single(nil), mode: .list(search: false, reversed: self.currentIsReversed, reverseGroups: !self.currentIsReversed, displayHeaders: .none, hintLinks: false, isGlobalSearch: self.isGlobalSearch), isChatPreview: false, messageTransitionNode: { return nil })
         self.historyNode.clipsToBounds = true
+        //self.historyNode.areContentAnimationsEnabled = true
         
         super.init()
         
@@ -269,7 +293,7 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
         
         self.controlsNode.updateIsExpanded = { [weak self] in
             if let strongSelf = self, let validLayout = strongSelf.validLayout {
-                strongSelf.containerLayoutUpdated(validLayout, transition: .animated(duration: 0.3, curve: .spring))
+                strongSelf.containerLayoutUpdated(validLayout, transition: .animated(duration: 0.5, curve: .spring))
             }
         }
         
@@ -283,6 +307,12 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
         
         self.controlsNode.requestSearchByArtist = { [weak self] artist in
             self?.requestSearchByArtist(artist)
+        }
+        
+        self.controlsNode.requestLayout = { [weak self] transition in
+            if let self, let validLayout = self.validLayout {
+                self.containerLayoutUpdated(validLayout, transition: transition)
+            }
         }
         
         self.controlsNode.updateOrder = { [weak self] order in
@@ -308,6 +338,18 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
             }
         }
         
+        self.controlsNode.requestSaveToProfile = { [weak self] file in
+            if let self {
+                self.addToSavedMusic(file: file)
+            }
+        }
+        
+        self.controlsNode.requestRemoveFromProfile = { [weak self] file in
+            if let self {
+                self.removeFromSavedMusic(file: file)
+            }
+        }
+        
         self.addSubnode(self.dimNode)
         self.addSubnode(self.contentNode)
         self.contentNode.addSubnode(self.historyBackgroundNode)
@@ -321,13 +363,20 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
         openMessageImpl = { [weak self] id in
             if let strongSelf = self, strongSelf.isNodeLoaded, let message = strongSelf.historyNode.messageInCurrentHistoryView(id) {
                 var playlistLocation: PeerMessagesPlaylistLocation?
-                if let location = strongSelf.playlistLocation as? PeerMessagesPlaylistLocation, case let .custom(messages, _, loadMore) = location {
-                    playlistLocation = .custom(messages: messages, at: id, loadMore: loadMore)
+                if let location = strongSelf.playlistLocation as? PeerMessagesPlaylistLocation, case let .custom(messages, canReorder, _, loadMore) = location {
+                    playlistLocation = .custom(messages: messages, canReorder: canReorder, at: id, loadMore: loadMore)
                 }
                 return strongSelf.context.sharedContext.openChatMessage(OpenChatMessageParams(context: strongSelf.context, chatLocation: nil, chatFilterTag: nil, chatLocationContextHolder: nil, message: message, standalone: false, reverseMessageGalleryOrder: false, navigationController: nil, dismissInput: { }, present: { _, _, _ in }, transitionNode: { _, _, _ in return nil }, addToTransitionSurface: { _ in }, openUrl: { _ in }, openPeer: { _, _ in }, callPeer: { _, _ in }, openConferenceCall: { _ in
                 }, enqueueMessage: { _ in }, sendSticker: nil, sendEmoji: nil, setupTemporaryHiddenMedia: { _, _, _ in }, chatAvatarHiddenMedia: { _, _ in }, playlistLocation: playlistLocation))
             }
             return false
+        }
+        
+        openMessageContextMenuImpl = { [weak self] message, node, rect, gesture in
+            guard let self else {
+                return
+            }
+            self.openMessageContextMenu(message: message, node: node, frame: rect, gesture: gesture as? ContextGesture)
         }
         
         self.presentationDataDisposable = context.sharedContext.presentationData.startStrict(next: { [weak self] presentationData in
@@ -338,14 +387,45 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
             }
         })
         
-        self.ready.set(self.historyNode.historyState.get() |> map { _ -> Bool in
-            return true
-        } |> take(1))
+        self.savedIdsDisposable = (context.engine.peers.savedMusicIds()
+        |> deliverOnMainQueue).start(next: { [weak self] savedIds in
+            guard let self else {
+                return
+            }
+            let isFirstTime = self.savedIds == nil
+            self.savedIds = savedIds
+            self.savedIdsPromise.set(.single(savedIds))
+            
+            let transition: ContainedViewLayoutTransition = isFirstTime ? .immediate : .animated(duration: 0.5, curve: .spring)
+            self.updateFloatingHeaderOffset(offset: self.floatingHeaderOffset ?? 0.0, transition: transition)
+            if let validLayout = self.validLayout {
+                self.containerLayoutUpdated(validLayout, transition: transition)
+            }
+        })
+        
+        self.ready.set(
+            combineLatest(
+                self.historyNode.historyState.get()
+                |> take(1),
+                self.savedIdsPromise.get()
+                |> filter {
+                    $0 != nil
+                }
+                |> take(1)
+            )
+            |> map { _, _ -> Bool in
+                return true
+            }
+        )
+        
+        self.setupReordering()
     }
     
     deinit {
         self.presentationDataDisposable?.dispose()
         self.replacementHistoryNodeReadyDisposable.dispose()
+        self.savedIdsDisposable?.dispose()
+        self.saveMediaDisposable?.dispose()
     }
     
     override func didLoad() {
@@ -371,11 +451,176 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
         self.view.addGestureRecognizer(panRecognizer)
     }
     
+    private func setupReordering() {
+        guard let controller = self.getParentController() as? OverlayAudioPlayerControllerImpl, let reorderSavedMusic = controller.reorderSavedMusic, case let .peer(peerId) = self.chatLocation else {
+            return
+        }
+        let _ = (self.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: peerId))
+        |> deliverOnMainQueue).start(next: { [weak self] peer in
+            guard let self, let peer = peer.flatMap({ PeerReference($0._asPeer()) }) else {
+                return
+            }
+            self.historyNode.reorderItem = { fromIndex, toIndex, transactionOpaqueState -> Signal<Bool, NoError> in
+                guard let filteredEntries = (transactionOpaqueState as? ChatHistoryTransactionOpaqueState)?.historyView.filteredEntries else {
+                    return .single(false)
+                }
+                let fromEntry = filteredEntries[filteredEntries.count - 1 - fromIndex]
+                let toEntry: ChatHistoryEntry?
+                if toIndex == 0 {
+                    toEntry = nil
+                } else {
+                    toEntry = filteredEntries[filteredEntries.count - 1 - toIndex]
+                }
+                guard case let .MessageEntry(fromMessage, _, _, _, _, _) = fromEntry else {
+                    return .single(false)
+                }
+                                
+                guard let fromFile = fromMessage.media.first(where: { $0 is TelegramMediaFile }) as? TelegramMediaFile else {
+                    return .single(false)
+                }
+                
+                var toFile: TelegramMediaFile?
+                if let toEntry, case let .MessageEntry(toMessage, _, _, _, _, _) = toEntry, let file = toMessage.media.first(where: { $0 is TelegramMediaFile }) as? TelegramMediaFile {
+                    toFile = file
+                }
+                if fromFile.id == toFile?.id {
+                    return .single(false)
+                }
+                
+                reorderSavedMusic(.savedMusic(peer: peer, media: fromFile), toFile.flatMap { .savedMusic(peer: peer, media: $0) })
+                
+                return .single(true)
+            }
+        })
+    }
+    
     func updatePresentationData(_ presentationData: PresentationData) {
         self.presentationData = presentationData
         
         self.historyBackgroundContentNode.backgroundColor = self.presentationData.theme.list.plainBackgroundColor
         self.controlsNode.updatePresentationData(self.presentationData)
+    }
+    
+    private func dismissAllTooltips() {
+        guard let controller = self.getParentController() else {
+            return
+        }
+        controller.window?.forEachController({ controller in
+            if let controller = controller as? UndoOverlayController {
+                controller.dismissWithCommitAction()
+            }
+        })
+        controller.forEachController({ controller in
+            if let controller = controller as? UndoOverlayController {
+                controller.dismissWithCommitAction()
+            }
+            return true
+        })
+    }
+    
+    func forwardToSavedMessages(file: FileMediaReference) {
+        self.dismissAllTooltips()
+        
+        let _ = self.context.engine.messages.enqueueOutgoingMessage(to: self.context.account.peerId, replyTo: nil, content: .file(file)).start()
+        
+        let controller = UndoOverlayController(
+            presentationData: self.presentationData,
+            content: .forward(savedMessages: true, text: "Audio forwarded to Saved Messages."),
+            action: { _ in
+                return true
+            }
+        )
+        self.getParentController()?.present(controller, in: .window(.root))
+    }
+    
+    func addToSavedMusic(file: FileMediaReference) {
+        self.dismissAllTooltips()
+        
+        var actionText: String? = "View"
+        if let itemId = self.controlsNode.currentItemId as? PeerMessagesMediaPlaylistItemId, itemId.messageId.namespace == Namespaces.Message.Local && itemId.messageId.peerId == self.context.account.peerId {
+            actionText = nil
+        }
+        
+        //TODO:localize
+        let controller = UndoOverlayController(
+            presentationData: self.presentationData,
+            content: .universalImage(
+                image: generateTintedImage(image: UIImage(bundleImageName: "Peer Info/SavedMusic"), color: .white)!,
+                size: nil,
+                title: nil,
+                text: "Audio added to your profile.",
+                customUndoText: actionText,
+                timeout: 3.0
+            ),
+            action: { [weak self] action in
+                if let self, case .undo = action {
+                    let _ = (self.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: self.context.account.peerId))
+                    |> deliverOnMainQueue).start(next: { [weak self] peer in
+                        guard let self, let peer else {
+                            return
+                        }
+                        if let controller = self.context.sharedContext.makePeerInfoController(
+                            context: self.context,
+                            updatedPresentationData: nil,
+                            peer: peer._asPeer(),
+                            mode: .myProfile,
+                            avatarInitiallyExpanded: false,
+                            fromChat: false,
+                            requestsContext: nil
+                        ) {
+                            if let navigationController = (self.getParentController() as? OverlayAudioPlayerControllerImpl)?.parentNavigationController {
+                                self.requestDismiss()
+                                navigationController.pushViewController(controller)
+                            }
+                        }
+                    })
+                }
+                return true
+            }
+        )
+        self.getParentController()?.present(controller, in: .window(.root))
+        
+        self.updateMusicSaved(file, true)
+    }
+    
+    func removeFromSavedMusic(file: FileMediaReference) {
+        self.dismissAllTooltips()
+                        
+        //TODO:localize
+        let controller = UndoOverlayController(
+            presentationData: self.presentationData,
+            content: .universalImage(
+                image: generateTintedImage(image: UIImage(bundleImageName: "Peer Info/SavedMusic"), color: .white)!,
+                size: nil,
+                title: nil,
+                text: "Audio removed from your profile.",
+                customUndoText: nil,
+                timeout: 3.0
+            ),
+            action: { _ in
+                return true
+            }
+        )
+        
+        if self.historyNode.originalHistoryView?.entries.count == 1 {
+            if let navigationController = (self.getParentController() as? OverlayAudioPlayerControllerImpl)?.parentNavigationController {
+                self.requestDismiss()
+                navigationController.presentOverlay(controller: controller)
+                
+                self.context.sharedContext.mediaManager.setPlaylist(nil, type: self.type, control: .playback(.pause))
+            }
+        } else {
+            self.getParentController()?.present(controller, in: .window(.root))
+        }
+        
+        self.updateMusicSaved(file, false)
+    }
+    
+    private var isSaved: Bool? {
+        guard let fileReference = self.controlsNode.currentFileReference else {
+            return nil
+        }
+        return self.savedIds?.contains(fileReference.media.fileId.id)
     }
     
     func containerLayoutUpdated(_ layout: ContainerViewLayout, transition: ContainedViewLayoutTransition) {
@@ -397,7 +642,7 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
         
         let maxHeight = layout.size.height - layoutTopInset - floor(56.0 * 0.5)
         
-        let controlsHeight = OverlayPlayerControlsNode.heightForLayout(width: layout.size.width, leftInset: layout.safeInsets.left, rightInset: layout.safeInsets.right, maxHeight: maxHeight, isExpanded: self.controlsNode.isExpanded)
+        let controlsHeight = OverlayPlayerControlsNode.heightForLayout(width: layout.size.width, leftInset: layout.safeInsets.left, rightInset: layout.safeInsets.right, maxHeight: maxHeight, isExpanded: self.controlsNode.isExpanded, hasSectionHeader: true, savedMusic: self.isSaved)
         
         let listTopInset = layoutTopInset + controlsHeight
         
@@ -423,6 +668,8 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
     }
     
     func animateOut(completion: (() -> Void)?) {
+        self.dismissAllTooltips()
+        
         self.layer.animateBoundsOriginYAdditive(from: self.bounds.origin.y, to: -self.bounds.size.height, duration: 0.3, timingFunction: kCAMediaTimingFunctionSpring, removeOnCompletion: false, completion: { _ in
             completion?()
         })
@@ -479,7 +726,7 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
     @objc func panGesture(_ recognizer: UIPanGestureRecognizer) {
         switch recognizer.state {
             case .began:
-                break
+                self.dismissAllTooltips()
             case .changed:
                 let translation = recognizer.translation(in: self.contentNode.view)
                 var bounds = self.contentNode.bounds
@@ -533,7 +780,7 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
         
         let maxHeight = validLayout.size.height - layoutTopInset - floor(56.0 * 0.5)
         
-        let controlsHeight = self.controlsNode.updateLayout(width: validLayout.size.width, leftInset: validLayout.safeInsets.left, rightInset: validLayout.safeInsets.right, maxHeight: maxHeight, transition: transition)
+        let controlsHeight = self.controlsNode.updateLayout(width: validLayout.size.width, leftInset: validLayout.safeInsets.left, rightInset: validLayout.safeInsets.right, maxHeight: maxHeight, hasSectionHeader: true, savedMusic: self.isSaved, transition: transition)
         
         let listTopInset = layoutTopInset + controlsHeight
         
@@ -580,7 +827,7 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
         }
         
         let chatLocationContextHolder = Atomic<ChatLocationContextHolder?>(value: nil)
-        let historyNode = ChatHistoryListNodeImpl(context: self.context, updatedPresentationData: (self.context.sharedContext.currentPresentationData.with({ $0 }), self.context.sharedContext.presentationData), chatLocation: self.chatLocation, chatLocationContextHolder: chatLocationContextHolder, adMessagesContext: nil, tag: .tag(tagMask), source: .default, subject: .message(id: .id(messageId), highlight: ChatControllerSubject.MessageHighlight(quote: nil), timecode: nil, setupReply: false), controllerInteraction: self.controllerInteraction, selectedMessages: .single(nil), mode: .list(search: false, reversed: self.currentIsReversed, reverseGroups: !self.currentIsReversed, displayHeaders: .none, hintLinks: false, isGlobalSearch: self.isGlobalSearch), isChatPreview: false, messageTransitionNode: { return nil })
+        let historyNode = ChatHistoryListNodeImpl(context: self.context, updatedPresentationData: (self.context.sharedContext.currentPresentationData.with({ $0 }), self.context.sharedContext.presentationData), chatLocation: self.chatLocation, chatLocationContextHolder: chatLocationContextHolder, adMessagesContext: nil, tag: .tag(tagMask), source: self.source, subject: .message(id: .id(messageId), highlight: ChatControllerSubject.MessageHighlight(quote: nil), timecode: nil, setupReply: false), controllerInteraction: self.controllerInteraction, selectedMessages: .single(nil), mode: .list(search: false, reversed: self.currentIsReversed, reverseGroups: !self.currentIsReversed, displayHeaders: .none, hintLinks: false, isGlobalSearch: self.isGlobalSearch), isChatPreview: false, messageTransitionNode: { return nil })
         historyNode.clipsToBounds = true
         historyNode.preloadPages = true
         historyNode.stackFromBottom = true
@@ -598,7 +845,7 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
             
             let maxHeight = layout.size.height - layoutTopInset - floor(56.0 * 0.5)
             
-            let controlsHeight = OverlayPlayerControlsNode.heightForLayout(width: layout.size.width, leftInset: layout.safeInsets.left, rightInset: layout.safeInsets.right, maxHeight: maxHeight, isExpanded: self.controlsNode.isExpanded)
+            let controlsHeight = OverlayPlayerControlsNode.heightForLayout(width: layout.size.width, leftInset: layout.safeInsets.left, rightInset: layout.safeInsets.right, maxHeight: maxHeight, isExpanded: self.controlsNode.isExpanded, hasSectionHeader: true, savedMusic: self.isSaved)
             
             let listTopInset = layoutTopInset + controlsHeight
             
@@ -626,6 +873,7 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
             previousHistoryNode.disconnect()
             self.contentNode.insertSubnode(replacementHistoryNode, belowSubnode: self.historyNode)
             self.historyNode = replacementHistoryNode
+            self.setupReordering()
             
             if let validLayout = self.validLayout, let offset = self.replacementHistoryNodeFloatingOffset, let previousOffset = self.floatingHeaderOffset {
                 let offsetDelta = offset - previousOffset
@@ -634,7 +882,7 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
                 
                 let maxHeight = validLayout.size.height - layoutTopInset - floor(56.0 * 0.5)
                 
-                let controlsHeight = OverlayPlayerControlsNode.heightForLayout(width: validLayout.size.width, leftInset: validLayout.safeInsets.left, rightInset: validLayout.safeInsets.right, maxHeight: maxHeight, isExpanded: self.controlsNode.isExpanded)
+                let controlsHeight = OverlayPlayerControlsNode.heightForLayout(width: validLayout.size.width, leftInset: validLayout.safeInsets.left, rightInset: validLayout.safeInsets.right, maxHeight: maxHeight, isExpanded: self.controlsNode.isExpanded, hasSectionHeader: true, savedMusic: self.isSaved)
                 
                 let listTopInset = layoutTopInset + controlsHeight
                 
@@ -695,7 +943,7 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
                 
                 let maxHeight = layout.size.height - layoutTopInset - floor(56.0 * 0.5)
                 
-                let controlsHeight = OverlayPlayerControlsNode.heightForLayout(width: layout.size.width, leftInset: layout.safeInsets.left, rightInset: layout.safeInsets.right, maxHeight: maxHeight, isExpanded: self.controlsNode.isExpanded)
+                let controlsHeight = OverlayPlayerControlsNode.heightForLayout(width: layout.size.width, leftInset: layout.safeInsets.left, rightInset: layout.safeInsets.right, maxHeight: maxHeight, isExpanded: self.controlsNode.isExpanded, hasSectionHeader: true, savedMusic: self.isSaved)
                 
                 let listTopInset = layoutTopInset + controlsHeight
                 
@@ -711,5 +959,262 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
                 self.historyNode.recursivelyEnsureDisplaySynchronously(true)
             }
         }
+    }
+    
+    private func openMessageContextMenu(message: Message, node: ASDisplayNode, frame: CGRect, recognizer: TapLongTapOrDoubleTapGestureRecognizer? = nil, gesture: ContextGesture? = nil, location: CGPoint? = nil) {
+        guard let node = node as? ContextExtractedContentContainingNode, let peer = message.peers[message.id.peerId].flatMap({ PeerReference($0) }), let file = message.media.first(where: { $0 is TelegramMediaFile}) as? TelegramMediaFile else {
+            return
+        }
+        let context = self.context
+        let presentationData = self.presentationData
+        let source: ContextContentSource = .extracted(OverlayAudioPlayerContextExtractedContentSource(contentNode: node))
+        let fileReference: FileMediaReference = message.id.namespace == Namespaces.Message.Local ? .savedMusic(peer: peer, media: file) : .message(message: MessageReference(message), media: file)
+        
+        let canSaveToProfile = !(self.savedIds?.contains(file.fileId.id) == true)
+        let canSaveToSavedMessages = message.id.peerId != self.context.account.peerId
+        
+        let _ = (context.sharedContext.chatAvailableMessageActions(engine: context.engine, accountPeerId: context.account.peerId, messageIds: [message.id], keepUpdated: false)
+        |> deliverOnMainQueue).startStandalone(next: { [weak self] actions in
+            guard let self else {
+                return
+            }
+            
+            var items: [ContextMenuItem] = []
+            //TODO:localize
+            if canSaveToProfile || canSaveToSavedMessages {
+                items.append(
+                    .action(ContextMenuActionItem(text: "Save to...", icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/DownloadTone"), color: theme.contextMenu.primaryColor) }, action: { [weak self] c, _ in
+                        if let self {
+                            var subActions: [ContextMenuItem] = []
+                            subActions.append(
+                                .action(ContextMenuActionItem(text: presentationData.strings.Common_Back, icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Back"), color: theme.contextMenu.primaryColor) }, iconPosition: .left, action: { c, _ in
+                                    c?.popItems()
+                                }))
+                            )
+                            subActions.append(.separator)
+                            
+                            if canSaveToProfile {
+                                subActions.append(
+                                    .action(ContextMenuActionItem(text: "…Profile", icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/User"), color: theme.contextMenu.primaryColor) }, action: { [weak self] _, f in
+                                        f(.default)
+                                        
+                                        if let self {
+                                            self.addToSavedMusic(file: fileReference)
+                                        }
+                                    }))
+                                )
+                            }
+                            
+                            if canSaveToSavedMessages {
+                                subActions.append(
+                                    .action(ContextMenuActionItem(text: "…Saved Messages", icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Fave"), color: theme.contextMenu.primaryColor) }, action: { [weak self] _, f in
+                                        f(.default)
+                                        
+                                        if let self {
+                                            self.forwardToSavedMessages(file: fileReference)
+                                        }
+                                    }))
+                                )
+                            }
+                            
+                            subActions.append(
+                                .action(ContextMenuActionItem(text: "…Files", icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Save"), color: theme.contextMenu.primaryColor) }, action: { [weak self] _, f in
+                                    f(.default)
+                                    
+                                    if let self {
+                                        let disposable: MetaDisposable
+                                        if let current = self.saveMediaDisposable {
+                                            disposable = current
+                                        } else {
+                                            disposable = MetaDisposable()
+                                            self.saveMediaDisposable = disposable
+                                        }
+                                        disposable.set(
+                                            saveMediaToFiles(context: context, fileReference: fileReference, present: { [weak self] c, a in
+                                                if let self, let controller = (self.getParentController() as? OverlayAudioPlayerControllerImpl) {
+                                                    controller.present(c, in: .window(.root), with: a)
+                                                }
+                                            })
+                                        )
+                                    }
+                                }))
+                            )
+                            
+                            let noAction: ((ContextMenuActionItem.Action) -> Void)? = nil
+                            subActions.append(
+                                .action(ContextMenuActionItem(text: "Choose where you want this audio to be saved.", textLayout: .multiline, textFont: .small, icon: { _ in return nil }, action: noAction))
+                            )
+
+                            c?.pushItems(items: .single(ContextController.Items(content: .list(subActions))))
+                        }
+                    }))
+                )
+            } else {
+                items.append(.action(ContextMenuActionItem(text: "Save to Files", icon: { theme in
+                    return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Save"), color: theme.actionSheet.primaryTextColor)
+                }, action: { [weak self] _, f in
+                    f(.default)
+                    
+                    if let self {
+                        let disposable: MetaDisposable
+                        if let current = self.saveMediaDisposable {
+                            disposable = current
+                        } else {
+                            disposable = MetaDisposable()
+                            self.saveMediaDisposable = disposable
+                        }
+                        disposable.set(
+                            saveMediaToFiles(context: context, fileReference: fileReference, present: { [weak self] c, a in
+                                if let self, let controller = (self.getParentController() as? OverlayAudioPlayerControllerImpl) {
+                                    controller.present(c, in: .window(.root), with: a)
+                                }
+                            })
+                        )
+                    }
+                })))
+            }
+            
+            items.append(.separator)
+            
+            if message.id.namespace == Namespaces.Message.Cloud {
+                items.append(
+                    .action(ContextMenuActionItem(text: "Show in Chat", icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/GoToMessage"), color: theme.contextMenu.primaryColor) }, action: { [weak self] _, f in
+                        f(.dismissWithoutContent)
+                        
+                        guard let self else {
+                            return
+                        }
+                        context.sharedContext.navigateToChat(accountId: context.account.id, peerId: message.id.peerId, messageId: message.id)
+                        self.requestDismiss()
+                    }))
+                )
+            }
+            
+            //        items.append(
+            //            .action(ContextMenuActionItem(text: "Forward", icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Forward"), color: theme.contextMenu.primaryColor) }, action: { [weak self] _, f in
+            //                f(.default)
+            //
+            //                if let _ = self {
+            //
+            //                }
+            //            }))
+            //        )
+            
+            var canDelete = false
+            if message.id.namespace == Namespaces.Message.Local {
+                canDelete = true
+            } else if let peer = message.peers[message.id.peerId] {
+                if peer is TelegramUser || peer is TelegramSecretChat {
+                    canDelete = true
+                } else if let _ = peer as? TelegramGroup {
+                    canDelete = true
+                } else if let channel = peer as? TelegramChannel {
+                    if message.flags.contains(.Incoming) {
+                        canDelete = channel.hasPermission(.deleteAllMessages)
+                    } else {
+                        canDelete = true
+                    }
+                } else {
+                    canDelete = false
+                }
+            } else {
+                canDelete = false
+            }
+            
+            if canDelete {
+                var actionTitle = "Delete"
+                if case .custom = self.source {
+                    actionTitle = "Remove"
+                }
+                items.append(
+                    .action(ContextMenuActionItem(text: actionTitle, textColor: .destructive, icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Delete"), color: theme.contextMenu.destructiveColor) }, action: { [weak self] c, f in
+                        guard let self else {
+                            return
+                        }
+                        if message.id.namespace == Namespaces.Message.Local {
+                            f(.default)
+                            self.removeFromSavedMusic(file: fileReference)
+                        } else {
+                            c?.setItems(context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: message.id.peerId))
+                            |> map { peer -> ContextController.Items in
+                                var items: [ContextMenuItem] = []
+                                let messageIds = [message.id]
+                                
+                                if let peer {
+                                    var personalPeerName: String?
+                                    var isChannel = false
+                                    if case let .user(user) = peer {
+                                        personalPeerName = EnginePeer(user).compactDisplayTitle
+                                    } else if case let .channel(channel) = peer, case .broadcast = channel.info {
+                                        isChannel = true
+                                    }
+                                    
+                                    if actions.options.contains(.deleteGlobally) {
+                                        let globalTitle: String
+                                        if isChannel {
+                                            globalTitle = presentationData.strings.Conversation_DeleteMessagesForEveryone
+                                        } else if let personalPeerName = personalPeerName {
+                                            globalTitle = presentationData.strings.Conversation_DeleteMessagesFor(personalPeerName).string
+                                        } else {
+                                            globalTitle = presentationData.strings.Conversation_DeleteMessagesForEveryone
+                                        }
+                                        items.append(.action(ContextMenuActionItem(text: globalTitle, textColor: .destructive, icon: { _ in nil }, action: { c, f in
+                                            c?.dismiss(completion: {
+                                                let _ = context.engine.messages.deleteMessagesInteractively(messageIds: Array(messageIds), type: .forEveryone).startStandalone()
+                                            })
+                                        })))
+                                    }
+                                    
+                                    if actions.options.contains(.deleteLocally) {
+                                        var localOptionText = presentationData.strings.Conversation_DeleteMessagesForMe
+                                        if context.account.peerId == message.id.peerId {
+                                            if messageIds.count == 1 {
+                                                localOptionText = presentationData.strings.Conversation_Moderate_Delete
+                                            } else {
+                                                localOptionText = presentationData.strings.Conversation_DeleteManyMessages
+                                            }
+                                        }
+                                        items.append(.action(ContextMenuActionItem(text: localOptionText, textColor: .destructive, icon: { _ in nil }, action: { c, f in
+                                            c?.dismiss(completion: {
+                                                let _ = context.engine.messages.deleteMessagesInteractively(messageIds: Array(messageIds), type: .forLocalPeer).startStandalone()
+                                            })
+                                        })))
+                                    }
+                                }
+                                
+                                return ContextController.Items(content: .list(items))
+                            }, minHeight: nil, animated: true)
+                        }
+                    }))
+                )
+            }
+            
+            guard !items.isEmpty else {
+                return
+            }
+            
+            let contextController = ContextController(presentationData: presentationData, source: source, items: .single(ContextController.Items(content: .list(items))), recognizer: recognizer, gesture: gesture)
+            self.getParentController()?.presentInGlobalOverlay(contextController)
+        })
+    }
+}
+
+private final class OverlayAudioPlayerContextExtractedContentSource: ContextExtractedContentSource {
+    let keepInPlace: Bool = false
+    let ignoreContentTouches: Bool = false
+    let blurBackground: Bool = true
+    
+    private let contentNode: ContextExtractedContentContainingNode
+    
+    init(contentNode: ContextExtractedContentContainingNode) {
+        self.contentNode = contentNode
+    }
+    
+    func takeView() -> ContextControllerTakeViewInfo? {
+        return ContextControllerTakeViewInfo(containingItem: .node(self.contentNode), contentAreaInScreenSpace: UIScreen.main.bounds)
+    }
+    
+    func putBack() -> ContextControllerPutBackViewInfo? {
+        return ContextControllerPutBackViewInfo(contentAreaInScreenSpace: UIScreen.main.bounds)
     }
 }

@@ -1179,7 +1179,7 @@ public enum ChatHistoryListSource {
     }
     
     case `default`
-    case custom(messages: Signal<([Message], Int32, Bool), NoError>, messageId: MessageId?, quote: Quote?, loadMore: (() -> Void)?)
+    case custom(messages: Signal<([Message], Int32, Bool), NoError>, messageId: MessageId?, quote: Quote?, updateAll: Bool, canReorder: Bool, loadMore: (() -> Void)?)
     case customView(historyView: Signal<(MessageHistoryView, ViewUpdateType), NoError>)
 }
 

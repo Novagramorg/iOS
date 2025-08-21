@@ -14913,6 +14913,6 @@ Sorry for the inconvenience.";
 "Gift.View.Unknown.Title" = "Gift";
 
 "Conversation.StopVoiceMessageTitle" = "Audio Recording";
-"Conversation.StopVoiceMessageDescription" = "Are you sure you want to stop recording?";
+"Conversation.StopVoiceMessageDescription" = "Are you sure you want to pause recording?";
 "Conversation.StopVoiceMessageDiscardAction" = "Discard";
 "Conversation.StopVoiceMessagePauseAction" = "Pause";
