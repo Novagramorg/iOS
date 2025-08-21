@@ -553,7 +553,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                     
                     return (messages, Int32(messages.count), false)
                 }
-                source = .custom(messages: messages, messageId: MessageId(peerId: PeerId(0), namespace: 0, id: 0), quote: nil, loadMore: nil)
+                source = .custom(messages: messages, messageId: MessageId(peerId: PeerId(0), namespace: 0, id: 0), quote: nil, updateAll: true, canReorder: false, loadMore: nil)
             case let .reply(reply):
                 let messages = combineLatest(context.account.postbox.messagesAtIds(messageIds), context.account.postbox.loadedPeerWithId(context.account.peerId))
                 |> map { messages, accountPeer -> ([Message], Int32, Bool) in
@@ -567,7 +567,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                     
                     return (messages, Int32(messages.count), false)
                 }
-                source = .custom(messages: messages, messageId: messageIds.first ?? MessageId(peerId: PeerId(0), namespace: 0, id: 0), quote: reply.quote.flatMap { quote in ChatHistoryListSource.Quote(text: quote.text, offset: quote.offset) }, loadMore: nil)
+                source = .custom(messages: messages, messageId: messageIds.first ?? MessageId(peerId: PeerId(0), namespace: 0, id: 0), quote: reply.quote.flatMap { quote in ChatHistoryListSource.Quote(text: quote.text, offset: quote.offset) }, updateAll: true, canReorder: false, loadMore: nil)
             case let .link(link):
                 let messages = link.options
                 |> mapToSignal { options -> Signal<(ChatControllerSubject.LinkOptions, Peer, Message?, [StoryId: CodableEntry]), NoError> in
@@ -668,13 +668,13 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                     
                     return ([message], 1, false)
                 }
-                source = .custom(messages: messages, messageId: MessageId(peerId: PeerId(0), namespace: 0, id: 0), quote: nil, loadMore: nil)
+                source = .custom(messages: messages, messageId: MessageId(peerId: PeerId(0), namespace: 0, id: 0), quote: nil, updateAll: true, canReorder: false, loadMore: nil)
             }
         } else if case .customChatContents = chatLocation {
             if case let .customChatContents(customChatContents) = subject {
                 source = .customView(historyView: customChatContents.historyView)
             } else {
-                source = .custom(messages: .single(([], 0, false)), messageId: nil, quote: nil, loadMore: nil)
+                source = .custom(messages: .single(([], 0, false)), messageId: nil, quote: nil, updateAll: true, canReorder: false, loadMore: nil)
             }
         } else {
             source = .default

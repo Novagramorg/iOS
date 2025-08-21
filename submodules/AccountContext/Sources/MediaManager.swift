@@ -26,7 +26,7 @@ public enum PeerMessagesPlaylistLocation: Equatable, SharedMediaPlaylistLocation
     case messages(chatLocation: ChatLocation, tagMask: MessageTags, at: MessageId)
     case singleMessage(MessageId)
     case recentActions(Message)
-    case custom(messages: Signal<([Message], Int32, Bool), NoError>, at: MessageId, loadMore: (() -> Void)?)
+    case custom(messages: Signal<([Message], Int32, Bool), NoError>, canReorder: Bool, at: MessageId, loadMore: (() -> Void)?)
 
     public var playlistId: PeerMessagesMediaPlaylistId {
         switch self {
@@ -50,7 +50,7 @@ public enum PeerMessagesPlaylistLocation: Equatable, SharedMediaPlaylistLocation
     
     public var messageId: MessageId? {
         switch self {
-            case let .messages(_, _, messageId), let .singleMessage(messageId), let .custom(_, messageId, _):
+            case let .messages(_, _, messageId), let .singleMessage(messageId), let .custom(_, _, messageId, _):
                 return messageId
             default:
                 return nil
@@ -85,8 +85,8 @@ public enum PeerMessagesPlaylistLocation: Equatable, SharedMediaPlaylistLocation
                 } else {
                     return false
                 }
-            case let .custom(_, lhsAt, _):
-                if case let .custom(_, rhsAt, _) = rhs, lhsAt == rhsAt {
+            case let .custom(_, _, lhsAt, _):
+                if case let .custom(_, _, rhsAt, _) = rhs, lhsAt == rhsAt {
                     return true
                 } else {
                     return false

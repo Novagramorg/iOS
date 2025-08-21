@@ -2560,9 +2560,9 @@ func _internal_getUniqueStarGift(account: Account, slug: String) -> Signal<StarG
     |> mapToSignal { result -> Signal<StarGift.UniqueGift?, NoError> in
         if let result = result {
             switch result {
-            case let .uniqueStarGift(gift, users):
+            case let .uniqueStarGift(gift, chats, users):
                 return account.postbox.transaction { transaction in
-                    let parsedPeers = AccumulatedPeers(users: users)
+                    let parsedPeers = AccumulatedPeers(chats: chats, users: users)
                     updatePeers(transaction: transaction, accountPeerId: account.peerId, peers: parsedPeers)
                     guard case let .unique(uniqueGift) = StarGift(apiStarGift: gift) else {
                         return nil
