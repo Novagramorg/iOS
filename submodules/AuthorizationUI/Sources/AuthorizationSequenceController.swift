@@ -192,6 +192,7 @@ public final class AuthorizationSequenceController: NavigationController, ASAuth
                     return
                 }
                 strongSelf.account = updatedAccount
+                strongSelf.inAppPurchaseManager = InAppPurchaseManager(engine: .unauthorized(strongSelf.engine))
             }
             controller.loginWithNumber = { [weak self, weak controller] number, syncContacts in
                 guard let self else {
@@ -217,6 +218,7 @@ public final class AuthorizationSequenceController: NavigationController, ASAuth
                                 case let .sentCode(account):
                                     controller?.inProgress = false
                                     strongSelf.account = account
+                                    strongSelf.inAppPurchaseManager = InAppPurchaseManager(engine: .unauthorized(strongSelf.engine))
                                 case .loggedIn:
                                     break
                                 }
