@@ -22,6 +22,7 @@ import PremiumCoinComponent
 import Markdown
 import CountrySelectionUI
 import AccountContext
+import AlertUI
 
 final class AuthorizationSequencePaymentScreenComponent: Component {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
@@ -142,12 +143,9 @@ final class AuthorizationSequencePaymentScreenComponent: Component {
                         }
                         
                         if let errorText {
-                            //addAppLogEvent(postbox: component.engine.account.postbox, type: "premium_gift.promo_screen_fail")
-                            
-                            let _ = errorText
-                            let _ = controller
-                            //let alertController = textAlertController(context: component.context, title: nil, text: errorText, actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})])
-                            //controller.present(alertController, in: .window(.root))
+                            let theme = AlertControllerTheme(presentationData: presentationData)
+                            let alertController = textAlertController(alertContext: AlertControllerContext(theme: theme, themeSignal: .single(theme)), title: nil, text: errorText, actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})])
+                            controller.present(alertController, in: .window(.root))
                         }
                     }))
                 } else {
