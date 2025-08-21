@@ -955,6 +955,14 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         process(node: self)
     }
     
+    override public func insertionAnimationDuration() -> Double? {
+        return nil
+    }
+    
+    override public func updateAnimationDuration() -> Double? {
+        return nil
+    }
+    
     override public func animateInsertion(_ currentTimestamp: Double, duration: Double, options: ListViewItemAnimationOptions) {
         super.animateInsertion(currentTimestamp, duration: duration, options: options)
         
@@ -2867,6 +2875,37 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
             let (minWidth, buttonsLayout) = actionButtonsLayout(item.context, item.presentationData.theme, item.presentationData.chatBubbleCorners, item.presentationData.strings, item.controllerInteraction.presentationContext.backgroundNode, replyMarkup, [:], item.message, maximumNodeWidth)
             maxContentWidth = max(maxContentWidth, minWidth)
             actionButtonsFinalize = buttonsLayout
+        } else if item.content.firstMessageAttributes.displayContinueThreadFooter {
+            var buttonValue: UInt8 = 3
+            let button = MemoryBuffer(data: Data(bytes: &buttonValue, count: 1))
+            
+            let customInfos: [MemoryBuffer: ChatMessageActionButtonsNode.CustomInfo] = [
+                button: ChatMessageActionButtonsNode.CustomInfo(
+                    isEnabled: true,
+                    icon: .actionArrow
+                ),
+            ]
+            
+            //TODO:localize
+            let (minWidth, buttonsLayout) = actionButtonsLayout(
+                item.context,
+                item.presentationData.theme,
+                item.presentationData.chatBubbleCorners,
+                item.presentationData.strings,
+                item.controllerInteraction.presentationContext.backgroundNode,
+                ReplyMarkupMessageAttribute(
+                    rows: [
+                        ReplyMarkupRow(buttons: [
+                            ReplyMarkupButton(title: "Continue last thread", titleWhenForwarded: nil, action: .callback(requiresPassword: false, data: button))
+                        ])
+                    ],
+                    flags: [],
+                    placeholder: nil
+            ), customInfos, item.message, baseWidth)
+            maxContentWidth = max(maxContentWidth, minWidth)
+            actionButtonsFinalize = buttonsLayout
+            
+            lastNodeTopPosition = .None(.Both)
         }
         
         var reactionButtonsFinalize: ((CGFloat) -> (CGSize, (_ animation: ListViewItemUpdateAnimation) -> ChatMessageReactionButtonsNode))?
@@ -4461,6 +4500,13 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                         }
                         
                         strongSelf.internalUpdateLayout()
+                    }
+                    contentNode.requestFullUpdate = { [weak strongSelf] in
+                        guard let strongSelf, let item = strongSelf.item else {
+                            return
+                        }
+                        
+                        item.controllerInteraction.requestMessageUpdate(item.message.id, false)
                     }
                 }
             }
