@@ -427,7 +427,7 @@ final class PeerMessagesMediaPlaylist: SharedMediaPlaylist {
         self.messagesLocation = location
         
         switch self.messagesLocation {
-        case let .messages(_, _, messageId), let .singleMessage(messageId), let .custom(_, messageId, _):
+        case let .messages(_, _, messageId), let .singleMessage(messageId), let .custom(_, _, messageId, _):
             self.loadItem(anchor: .messageId(messageId), navigation: .later, reversed: self.order == .reversed)
         case let .recentActions(message):
             self.loadingItem = false
@@ -521,7 +521,8 @@ final class PeerMessagesMediaPlaylist: SharedMediaPlaylist {
             }
         }
         self.stateValue.set(.single(SharedMediaPlaylistState(loading: self.loadingItem, playedToEnd: self.playedToEnd, item: item, nextItem: nextItem, previousItem: previousItem, order: self.order, looping: self.looping)))
-        if item?.message.id != self.currentlyObservedMessageId {
+        if case .custom = self.messagesLocation {
+        } else if item?.message.id != self.currentlyObservedMessageId {
             self.currentlyObservedMessageId = item?.message.id
             if let id = item?.message.id {
                 self.currentlyObservedMessageDisposable.set((self.context.engine.data.subscribe(TelegramEngine.EngineData.Item.Messages.Message(id: id))
@@ -593,7 +594,7 @@ final class PeerMessagesMediaPlaylist: SharedMediaPlaylist {
                                 strongSelf.updateState()
                             }
                         }))
-                    case let .custom(messages, at, _):
+                    case let .custom(messages, _, at, _):
                         self.navigationDisposable.set((messages
                         |> take(1)
                         |> deliverOnMainQueue).startStrict(next: { [weak self] messages in
@@ -769,7 +770,7 @@ final class PeerMessagesMediaPlaylist: SharedMediaPlaylist {
                         self.loadingItem = false
                         self.currentItem = (message, [])
                         self.updateState()
-                    case let .custom(messages, _, loadMore):
+                    case let .custom(messages, _, _, loadMore):
                         let inputIndex: Signal<MessageIndex, NoError>
                         let looping = self.looping
                         switch self.order {

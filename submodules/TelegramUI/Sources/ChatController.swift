@@ -4414,28 +4414,14 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                     return
                 }
                 var file: TelegramMediaFile?
-                var title: String?
-                var performer: String?
                 for media in message.media {
                     if let mediaFile = media as? TelegramMediaFile, mediaFile.isMusic {
                         file = mediaFile
-                        for attribute in mediaFile.attributes {
-                            if case let .Audio(_, _, titleValue, performerValue, _) = attribute {
-                                if let titleValue, !titleValue.isEmpty {
-                                    title = titleValue
-                                }
-                                if let performerValue, !performerValue.isEmpty {
-                                    performer = performerValue
-                                }
-                            }
-                        }
                     }
                 }
                 guard let file else {
                     return
                 }
-                
-                var signal = fetchMediaData(context: context, postbox: context.account.postbox, userLocation: .other, mediaReference: .message(message: MessageReference(message._asMessage()), media: file))
                 
                 let disposable: MetaDisposable
                 if let current = self.saveMediaDisposable {
@@ -4444,108 +4430,18 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                     disposable = MetaDisposable()
                     self.saveMediaDisposable = disposable
                 }
-                
-                var cancelImpl: (() -> Void)?
-                let presentationData = self.context.sharedContext.currentPresentationData.with { $0 }
-                let progressSignal = Signal<Never, NoError> { [weak self] subscriber in
-                    guard let self else {
-                        return EmptyDisposable
-                    }
-                    let controller = OverlayStatusController(theme: presentationData.theme, type: .loading(cancelled: {
-                        cancelImpl?()
-                    }))
-                    self.present(controller, in: .window(.root), with: ViewControllerPresentationArguments(presentationAnimation: .modalSheet))
-                    return ActionDisposable { [weak controller] in
-                        Queue.mainQueue().async() {
-                            controller?.dismiss()
+                disposable.set(
+                    saveMediaToFiles(
+                        context: self.context,
+                        fileReference: .message(message: MessageReference(message._asMessage()), media: file),
+                        present: { [weak self] c, a in
+                            guard let self else {
+                                return
+                            }
+                            self.present(c, in: .window(.root), with: a)
                         }
-                    }
-                }
-                |> runOn(Queue.mainQueue())
-                |> delay(0.15, queue: Queue.mainQueue())
-                let progressDisposable = progressSignal.startStrict()
-                
-                signal = signal
-                |> afterDisposed {
-                    Queue.mainQueue().async {
-                        progressDisposable.dispose()
-                    }
-                }
-                cancelImpl = { [weak disposable] in
-                    disposable?.set(nil)
-                }
-                disposable.set((signal
-                |> deliverOnMainQueue).startStrict(next: { [weak self] state, _ in
-                    guard let self else {
-                        return
-                    }
-                    switch state {
-                    case .progress:
-                        break
-                    case let .data(data):
-                        if data.complete {
-                            var symlinkPath = data.path + ".mp3"
-                            if fileSize(symlinkPath) != nil {
-                                try? FileManager.default.removeItem(atPath: symlinkPath)
-                            }
-                            let _ = try? FileManager.default.linkItem(atPath: data.path, toPath: symlinkPath)
-                            
-                            let audioUrl = URL(fileURLWithPath: symlinkPath)
-                            let audioAsset = AVURLAsset(url: audioUrl)
-                            
-                            var fileExtension = "mp3"
-                            if let filename = file.fileName {
-                                if let dotIndex = filename.lastIndex(of: ".") {
-                                    fileExtension = String(filename[filename.index(after: dotIndex)...])
-                                }
-                            }
-                            
-                            var nameComponents: [String] = []
-                            if let title {
-                                if let performer {
-                                    nameComponents.append(performer)
-                                }
-                                nameComponents.append(title)
-                            } else {
-                                var artist: String?
-                                var title: String?
-                                for data in audioAsset.commonMetadata {
-                                    if data.commonKey == .commonKeyArtist {
-                                        artist = data.stringValue
-                                    }
-                                    if data.commonKey == .commonKeyTitle {
-                                        title = data.stringValue
-                                    }
-                                }
-                                if let artist, !artist.isEmpty {
-                                    nameComponents.append(artist)
-                                }
-                                if let title, !title.isEmpty {
-                                    nameComponents.append(title)
-                                }
-                                if nameComponents.isEmpty, var filename = file.fileName {
-                                    if let dotIndex = filename.lastIndex(of: ".") {
-                                        filename = String(filename[..<dotIndex])
-                                    }
-                                    nameComponents.append(filename)
-                                }
-                            }
-                            if !nameComponents.isEmpty {
-                                try? FileManager.default.removeItem(atPath: symlinkPath)
-                                
-                                let fileName = "\(nameComponents.joined(separator: " – ")).\(fileExtension)"
-                                symlinkPath = symlinkPath.replacingOccurrences(of: audioUrl.lastPathComponent, with: fileName)
-                                let _ = try? FileManager.default.linkItem(atPath: data.path, toPath: symlinkPath)
-                            }
-                            
-                            let url = URL(fileURLWithPath: symlinkPath)
-                            let controller = legacyICloudFilePicker(theme: self.presentationData.theme, mode: .export, url: url, documentTypes: [], forceDarkTheme: false, dismissed: {}, completion: { _ in
-                                
-                            })
-                            self.present(controller, in: .window(.root))
-                        }
-                    }
-                }))
+                    )
+                )
             })
         }, openNoAdsDemo: { [weak self] in
             guard let self else {
