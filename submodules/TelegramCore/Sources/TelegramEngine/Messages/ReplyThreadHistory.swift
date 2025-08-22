@@ -343,6 +343,8 @@ private class ReplyThreadHistoryContextImpl {
                 return (nil, nil, nil, nil)
             }
             
+            var markMainAsRead = false
+            
             if var data = transaction.getMessageHistoryThreadInfo(peerId: peerId, threadId: threadId)?.data.get(MessageHistoryThreadData.self) {
                 if messageIndex.id.id >= data.maxIncomingReadId {
                     if let count = transaction.getThreadMessageCount(peerId: peerId, threadId: threadId, namespace: Namespaces.Message.Cloud, fromIdExclusive: data.maxIncomingReadId, toIndex: messageIndex) {
@@ -365,7 +367,28 @@ private class ReplyThreadHistoryContextImpl {
                     if let entry = StoredMessageHistoryThreadInfo(data) {
                         transaction.setMessageHistoryThreadInfo(peerId: peerId, threadId: threadId, info: entry)
                     }
+                    
+                    if data.incomingUnreadCount == 0, let channel = peer as? TelegramChannel, channel.linkedBotId != nil {
+                        var hasOtherUnread = false
+                        for item in transaction.getMessageHistoryThreadIndex(peerId: peerId, limit: 20) {
+                            guard let data = transaction.getMessageHistoryThreadInfo(peerId: peerId, threadId: item.threadId)?.data.get(MessageHistoryThreadData.self) else {
+                                continue
+                            }
+                            if data.incomingUnreadCount != 0 {
+                                hasOtherUnread = true
+                                break
+                            }
+                        }
+                        
+                        if !hasOtherUnread {
+                            markMainAsRead = true
+                        }
+                    }
                 }
+            }
+            
+            if markMainAsRead {
+                _internal_applyMaxReadIndexInteractively(transaction: transaction, stateManager: account.stateManager, index: messageIndex)
             }
             
             var subPeerId: Api.InputPeer?

@@ -40,13 +40,13 @@ private extension PresentationGroupCallState {
     }
 }
 
-private enum CurrentImpl {
+enum CurrentImpl {
     case call(OngoingGroupCallContext)
     case mediaStream(WrappedMediaStreamingContext)
     case externalMediaStream(DirectMediaStreamingContext)
 }
 
-private extension CurrentImpl {
+extension CurrentImpl {
     var joinPayload: Signal<(String, UInt32), NoError> {
         switch self {
         case let .call(callContext):
@@ -555,7 +555,7 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
     private var currentLocalSsrc: UInt32?
     private var currentLocalEndpointId: String?
     
-    private var genericCallContext: CurrentImpl?
+    private(set) var genericCallContext: CurrentImpl?
     private var currentConnectionMode: OngoingGroupCallContext.ConnectionMode = .none
     private var didInitializeConnectionMode: Bool = false
     

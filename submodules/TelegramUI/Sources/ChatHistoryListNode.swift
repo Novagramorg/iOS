@@ -985,7 +985,6 @@ public final class ChatHistoryListNodeImpl: ListView, ChatHistoryNode, ChatHisto
         self.preloadPages = false
         
         self.beginChatHistoryTransitions(resetScrolling: false, switchedToAnotherSource: false)
-        
         self.beginReadHistoryManagement()
         
         if let subject = subject, case let .message(messageSubject, highlight, _, setupReply) = subject {
@@ -1230,6 +1229,16 @@ public final class ChatHistoryListNodeImpl: ListView, ChatHistoryNode, ChatHisto
         self.tag = tag
         
         self.beginChatHistoryTransitions(resetScrolling: true, switchedToAnotherSource: false)
+    }
+    
+    public func updateChatLocation(chatLocation: ChatLocation) {
+        if self.chatLocation == chatLocation {
+            return
+        }
+        self.chatLocation = chatLocation
+        
+        self.beginChatHistoryTransitions(resetScrolling: true, switchedToAnotherSource: false)
+        self.beginReadHistoryManagement()
     }
     
     private func beginAdMessageManagement(adMessages: Signal<(interPostInterval: Int32?, messages: [Message], startDelay: Int32?, betweenDelay: Int32?), NoError>) {
@@ -2336,6 +2345,10 @@ public final class ChatHistoryListNodeImpl: ListView, ChatHistoryNode, ChatHisto
         self.historyDisposable.set(historyViewTransitionDisposable.strict())
     }
     
+    func stopHistoryUpdates() {
+        self.historyDisposable.set(nil)
+    }
+    
     private func beginReadHistoryManagement() {
         let previousMaxIncomingMessageIndexByNamespace = Atomic<[MessageId.Namespace: MessageIndex]>(value: [:])
         let readHistory = combineLatest(self.maxVisibleIncomingMessageIndex.get(), self.canReadHistory.get())
@@ -2371,6 +2384,7 @@ public final class ChatHistoryListNodeImpl: ListView, ChatHistoryNode, ChatHisto
             }
         }).strict())
         
+        self.canReadHistoryDisposable?.dispose()
         self.canReadHistoryDisposable = (self.canReadHistory.get() |> deliverOnMainQueue).startStrict(next: { [weak self, weak context] value in
             if let strongSelf = self {
                 if strongSelf.canReadHistoryValue != value {
