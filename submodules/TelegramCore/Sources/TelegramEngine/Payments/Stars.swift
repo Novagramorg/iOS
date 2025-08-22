@@ -1654,7 +1654,8 @@ func _internal_sendStarsPaymentForm(account: Account, formId: Int64, source: Bot
                                             canTransferDate: canTransferDate,
                                             canResaleDate: canResaleDate,
                                             collectionIds: nil,
-                                            prepaidUpgradeHash: nil
+                                            prepaidUpgradeHash: nil,
+                                            upgradeSeparate: false
                                         )
                                     }
                                 }

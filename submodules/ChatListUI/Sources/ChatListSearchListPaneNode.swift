@@ -3529,7 +3529,7 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
             } else {
                 playlistLocation = .custom(messages: foundMessages |> map { message, a, b in
                     return (message.map { $0._asMessage() }, a, b)
-                }, at: message.id, loadMore: {
+                }, canReorder: false, at: message.id, loadMore: {
                     loadMore()
                 })
             }
@@ -4934,7 +4934,7 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
                                 } else {
                                     controllerContext = strongSelf.context.sharedContext.makeTempAccountContext(account: account)
                                 }
-                                let controller = strongSelf.context.sharedContext.makeOverlayAudioPlayerController(context: controllerContext, chatLocation: .peer(id: id.messageId.peerId), type: type, initialMessageId: id.messageId, initialOrder: order, playlistLocation: playlistLocation, parentNavigationController: navigationController)
+                                let controller = strongSelf.context.sharedContext.makeOverlayAudioPlayerController(context: controllerContext, chatLocation: .peer(id: id.messageId.peerId), type: type, initialMessageId: id.messageId, initialOrder: order, playlistLocation: playlistLocation, parentNavigationController: navigationController, updateMusicSaved: nil, reorderSavedMusic: nil)
                                 strongSelf.interaction.dismissInput()
                                 strongSelf.interaction.present(controller, nil)
                             } else if case let .messages(chatLocation, _, _) = playlistLocation {
@@ -4975,7 +4975,7 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
                                         } else {
                                             controllerContext = strongSelf.context.sharedContext.makeTempAccountContext(account: account)
                                         }
-                                        let controller = strongSelf.context.sharedContext.makeOverlayAudioPlayerController(context: controllerContext, chatLocation: chatLocation, type: type, initialMessageId: id.messageId, initialOrder: order, playlistLocation: nil, parentNavigationController: navigationController)
+                                        let controller = strongSelf.context.sharedContext.makeOverlayAudioPlayerController(context: controllerContext, chatLocation: chatLocation, type: type, initialMessageId: id.messageId, initialOrder: order, playlistLocation: nil, parentNavigationController: navigationController, updateMusicSaved: nil, reorderSavedMusic: nil)
                                         strongSelf.interaction.dismissInput()
                                         strongSelf.interaction.present(controller, nil)
                                     } else if index.1 {

@@ -17,7 +17,9 @@ final class OverlayAudioPlayerControllerImpl: ViewController, OverlayAudioPlayer
     let initialOrder: MusicPlaybackSettingsOrder
     let playlistLocation: SharedMediaPlaylistLocation?
     
-    private weak var parentNavigationController: NavigationController?
+    private(set) weak var parentNavigationController: NavigationController?
+    private let updateMusicSaved: ((FileMediaReference, Bool) -> Void)?
+    let reorderSavedMusic: ((FileMediaReference, FileMediaReference?) -> Void)?
     
     private var animatedIn = false
     
@@ -27,7 +29,17 @@ final class OverlayAudioPlayerControllerImpl: ViewController, OverlayAudioPlayer
     
     private var accountInUseDisposable: Disposable?
     
-    init(context: AccountContext, chatLocation: ChatLocation, type: MediaManagerPlayerType, initialMessageId: MessageId, initialOrder: MusicPlaybackSettingsOrder, playlistLocation: SharedMediaPlaylistLocation? = nil, parentNavigationController: NavigationController?) {
+    init(
+        context: AccountContext,
+        chatLocation: ChatLocation,
+        type: MediaManagerPlayerType,
+        initialMessageId: MessageId,
+        initialOrder: MusicPlaybackSettingsOrder,
+        playlistLocation: SharedMediaPlaylistLocation? = nil,
+        parentNavigationController: NavigationController?,
+        updateMusicSaved: ((FileMediaReference, Bool) -> Void)? = nil,
+        reorderSavedMusic: ((FileMediaReference, FileMediaReference?) -> Void)? = nil
+    ) {
         self.context = context
         self.chatLocation = chatLocation
         self.type = type
@@ -35,6 +47,8 @@ final class OverlayAudioPlayerControllerImpl: ViewController, OverlayAudioPlayer
         self.initialOrder = initialOrder
         self.playlistLocation = playlistLocation
         self.parentNavigationController = parentNavigationController
+        self.updateMusicSaved = updateMusicSaved
+        self.reorderSavedMusic = reorderSavedMusic
         
         super.init(navigationBarPresentationData: nil)
         
@@ -111,7 +125,7 @@ final class OverlayAudioPlayerControllerImpl: ViewController, OverlayAudioPlayer
                                                     guard let self, let peer else {
                                                         return
                                                     }
-                                                    guard let navigationController = self.navigationController as? NavigationController else {
+                                                    guard let navigationController = self.parentNavigationController else {
                                                         return
                                                     }
                                                     self.context.sharedContext.navigateToChatController(NavigateToChatControllerParams(navigationController: navigationController, context: self.context, chatLocation: .peer(peer), forceOpenChat: true))
@@ -133,10 +147,22 @@ final class OverlayAudioPlayerControllerImpl: ViewController, OverlayAudioPlayer
                 strongSelf.context.sharedContext.openSearch(filter: .music, query: artist)
                 strongSelf.dismiss()
             }
-        })
-        self.controllerNode.getParentController = { [weak self] in
+        }, updateMusicSaved: { [weak self] file, isSaved in
+            if let self {
+                if let updateMusicSaved = self.updateMusicSaved {
+                    updateMusicSaved(file, isSaved)
+                } else {
+                    if isSaved {
+                        let _ = self.context.engine.peers.addSavedMusic(file: file).start()
+                    } else {
+                        let _ = self.context.engine.peers.removeSavedMusic(file: file).start()
+                    }
+                }
+            }
+        },
+        getParentController: { [weak self] in
             return self
-        }
+        })
         
         self.ready.set(self.controllerNode.ready.get())
         
