@@ -496,6 +496,7 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
                 return .single(true)
             }
         })
+        self.historyNode.autoScrollWhenReordering = false
     }
     
     func updatePresentationData(_ presentationData: PresentationData) {
@@ -606,7 +607,7 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
             }
         )
         
-        if self.historyNode.originalHistoryView?.entries.count == 1 {
+        if let itemId = self.controlsNode.currentItemId as? PeerMessagesMediaPlaylistItemId, itemId.messageId.namespace == Namespaces.Message.Local && itemId.messageId.peerId == self.context.account.peerId, self.historyNode.originalHistoryView?.entries.count == 1 {
             if let navigationController = (self.getParentController() as? OverlayAudioPlayerControllerImpl)?.parentNavigationController {
                 self.requestDismiss()
                 navigationController.presentOverlay(controller: controller)
@@ -975,7 +976,7 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
         let fileReference: FileMediaReference = message.id.namespace == Namespaces.Message.Local ? .savedMusic(peer: peer, media: file) : .message(message: MessageReference(message), media: file)
         
         let canSaveToProfile = !(self.savedIds?.contains(file.fileId.id) == true)
-        let canSaveToSavedMessages = message.id.peerId != self.context.account.peerId
+        let canSaveToSavedMessages = message.id.peerId != self.context.account.peerId || message.id.namespace == Namespaces.Message.Local
         
         let _ = (context.sharedContext.chatAvailableMessageActions(engine: context.engine, accountPeerId: context.account.peerId, messageIds: [message.id], keepUpdated: false)
         |> deliverOnMainQueue).startStandalone(next: { [weak self] actions in
@@ -999,7 +1000,7 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
                             
                             if canSaveToProfile {
                                 subActions.append(
-                                    .action(ContextMenuActionItem(text: "…Profile", icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/User"), color: theme.contextMenu.primaryColor) }, action: { [weak self] _, f in
+                                    .action(ContextMenuActionItem(text: "Profile", icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/User"), color: theme.contextMenu.primaryColor) }, action: { [weak self] _, f in
                                         f(.default)
                                         
                                         if let self {
@@ -1011,7 +1012,7 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
                             
                             if canSaveToSavedMessages {
                                 subActions.append(
-                                    .action(ContextMenuActionItem(text: "…Saved Messages", icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Fave"), color: theme.contextMenu.primaryColor) }, action: { [weak self] _, f in
+                                    .action(ContextMenuActionItem(text: "Saved Messages", icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Fave"), color: theme.contextMenu.primaryColor) }, action: { [weak self] _, f in
                                         f(.default)
                                         
                                         if let self {
@@ -1022,7 +1023,7 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
                             }
                             
                             subActions.append(
-                                .action(ContextMenuActionItem(text: "…Files", icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Save"), color: theme.contextMenu.primaryColor) }, action: { [weak self] _, f in
+                                .action(ContextMenuActionItem(text: "Files", icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Save"), color: theme.contextMenu.primaryColor) }, action: { [weak self] _, f in
                                     f(.default)
                                     
                                     if let self {

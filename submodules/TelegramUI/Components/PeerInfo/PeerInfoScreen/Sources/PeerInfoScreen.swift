@@ -6009,12 +6009,19 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
         }
     }
     
+    var previousSavedMusicTimestamp: Double?
     private func displaySavedMusic() {
         guard let savedMusicContext = self.data?.savedMusicContext else {
             return
         }
+        
+        let currentTimestamp = CACurrentMediaTime()
+        if let previousTimestamp = self.previousSavedMusicTimestamp, currentTimestamp < previousTimestamp + 1.0 {
+            return
+        }
+        self.previousSavedMusicTimestamp = currentTimestamp
+        
         let peerId = self.peerId
-        //let peer = self.data?.peer
         let initialId: Int32
         if let initialFileId = self.data?.savedMusicState?.files.first?.fileId {
             initialId = Int32(clamping: initialFileId.id % Int64(Int32.max))
@@ -6023,7 +6030,6 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
         }
 
         let playlistLocation: PeerMessagesPlaylistLocation = .savedMusic(context: savedMusicContext, at: initialId, canReorder: peerId == self.context.account.peerId)
-        
         let _ = (self.context.sharedContext.mediaManager.globalMediaPlayerState
         |> take(1)
         |> deliverOnMainQueue).start(next: { [weak self] accountStateAndType in
@@ -6045,7 +6051,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                 initialOrder: .regular,
                 playlistLocation: playlistLocation,
                 parentNavigationController: self.controller?.navigationController as? NavigationController,
-                updateMusicSaved: { [weak savedMusicContext] file, isSaved in
+                updateMusicSaved: self.peerId == self.context.account.peerId ? { [weak savedMusicContext] file, isSaved in
                     guard let savedMusicContext else {
                         return
                     }
@@ -6054,7 +6060,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                     } else {
                         let _ = savedMusicContext.removeMusic(file: file).start()
                     }
-                },
+                } : nil,
                 reorderSavedMusic: { [weak savedMusicContext] file, afterFile in
                     guard let savedMusicContext else {
                         return
