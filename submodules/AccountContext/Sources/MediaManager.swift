@@ -72,7 +72,11 @@ public enum PeerMessagesPlaylistLocation: Equatable, SharedMediaPlaylistLocation
                         messages.append(Message(stableId: stableId, stableVersion: 0, id: MessageId(peerId: peerId, namespace: Namespaces.Message.Local, id: Int32(stableId)), globallyUniqueId: nil, groupingKey: nil, groupInfo: nil, threadId: nil, timestamp: 0, flags: [], tags: [.music], globalTags: [], localTags: [], customTags: [], forwardInfo: nil, author: nil, text: "", attributes: [], media: [file], peers: peers, associatedMessages: SimpleDictionary(), associatedMessageIds: [], associatedMedia: [:], associatedThreadInfo: nil, associatedStories: [:]))
                         
                     }
-                    return (messages, Int32(messages.count), true)
+                    var canLoadMore = false
+                    if case let .ready(canLoadMoreValue) = state.dataState {
+                        canLoadMore = canLoadMoreValue
+                    }
+                    return (messages, Int32(messages.count), canLoadMore)
                 },
                 canReorder: canReorder,
                 at: MessageId(peerId: peerId, namespace: Namespaces.Message.Local, id: at),

@@ -1029,10 +1029,7 @@ final class OverlayPlayerControlsNode: ASDisplayNode {
             //TODO:localize
             let sideInset: CGFloat = 16.0
             var sectionTitle = "AUDIO IN THIS CHAT"
-            if var peerName = self.peerName {
-                if peerName.count > 30 {
-                    peerName = "\(peerName.prefix(30))…"
-                }
+            if let peerName = self.peerName {
                 sectionTitle = "\(peerName.uppercased())'S PLAYLIST"
             } else if case .custom = self.source {
                 sectionTitle = "YOUR PLAYLIST"
@@ -1040,7 +1037,10 @@ final class OverlayPlayerControlsNode: ASDisplayNode {
             let sectionTitleSize = self.sectionTitle.update(
                 transition: .immediate,
                 component: AnyComponent(
-                    MultilineTextComponent(text: .plain(NSAttributedString(string: sectionTitle, font: Font.regular(13.0), textColor: self.presentationData.theme.chatList.sectionHeaderTextColor)))
+                    MultilineTextComponent(
+                        text: .plain(NSAttributedString(string: sectionTitle, font: Font.regular(13.0), textColor: self.presentationData.theme.chatList.sectionHeaderTextColor)),
+                        truncationType: .middle
+                    )
                 ),
                 environment: {},
                 containerSize: CGSize(width: width - leftInset - rightInset - sideInset * 2.0, height: OverlayPlayerControlsNode.sectionHeaderHeight)

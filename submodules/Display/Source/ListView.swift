@@ -352,6 +352,7 @@ open class ListView: ASDisplayNode, ASScrollViewDelegate, ASGestureRecognizerDel
     private var currentGeneralScrollDirection: GeneralScrollDirection?
     public final var generalScrollDirectionUpdated: (GeneralScrollDirection) -> Void = { _ in }
     
+    public var autoScrollWhenReordering = true
     public private(set) var isReordering = false
     public final var willBeginReorder: (CGPoint) -> Void = { _ in }
     public final var reorderBegan: () -> Void = { }
@@ -668,8 +669,12 @@ open class ListView: ASDisplayNode, ASScrollViewDelegate, ASGestureRecognizerDel
     
     private func updateReordering(offset: CGFloat) {
         if let reorderNode = self.reorderNode {
-            reorderNode.updateOffset(offset: offset)
-            self.checkItemReordering()
+            let updatedLocation = reorderNode.initialLocation.y + offset
+            if updatedLocation < self.insets.top {
+            } else {
+                reorderNode.updateOffset(offset: offset)
+                self.checkItemReordering()
+            }
         }
     }
     
@@ -4662,7 +4667,7 @@ open class ListView: ASDisplayNode, ASScrollViewDelegate, ASGestureRecognizerDel
         var offsetRanges = OffsetRanges()
         
         var scrollingForReorder = false
-        if let reorderOffset = self.reorderNode?.currentOffset(), !self.itemNodes.isEmpty {
+        if self.autoScrollWhenReordering, let reorderOffset = self.reorderNode?.currentOffset(), !self.itemNodes.isEmpty {
             let effectiveInsets = self.visualInsets ?? self.insets
             
             var offset: CGFloat = 6.0
