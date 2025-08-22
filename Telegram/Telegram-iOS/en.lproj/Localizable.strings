@@ -14916,3 +14916,5 @@ Sorry for the inconvenience.";
 "Conversation.StopVoiceMessageDescription" = "Are you sure you want to pause recording?";
 "Conversation.StopVoiceMessageDiscardAction" = "Discard";
 "Conversation.StopVoiceMessagePauseAction" = "Pause";
+
+"Gift.Options.GiftLocked.Title" = "Gift Locked";

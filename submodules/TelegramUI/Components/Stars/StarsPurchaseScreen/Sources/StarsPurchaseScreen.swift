@@ -676,7 +676,7 @@ private final class StarsPurchaseScreenComponent: CombinedComponent {
             case let .gift(peerId):
                 purpose = .starsGift(peerId: peerId, count: product.count, currency: currency, amount: amount)
             default:
-                purpose = .stars(count: product.count, currency: currency, amount: amount)
+                purpose = .stars(count: product.count, currency: currency, amount: amount, peerId: nil)
             }
             
             let _ = (self.context.engine.payments.canPurchasePremium(purpose: purpose)

@@ -2634,6 +2634,12 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                     return musicBackground
                 }()
                 musicTransition.updateFrame(view: musicBackground, frame: CGRect(origin: CGPoint(x: 0.0, y: backgroundHeight - musicHeight - buttonRightOrigin.y), size: CGSize(width: backgroundFrame.width, height: musicHeight)))
+                
+                if let _ = self.navigationTransition {
+                    transition.updateAlpha(layer: musicBackground.layer, alpha: 1.0 - transitionFraction)
+                } else {
+                    musicTransition.updateAlpha(layer: musicBackground.layer, alpha: 1.0)
+                }
             } else if let musicBackground = self.musicBackground {
                 self.musicBackground = nil
                 if transition.isAnimated {
@@ -2685,10 +2691,10 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                 environment: {},
                 containerSize: CGSize(width: backgroundFrame.width, height: musicHeight)
             )
-            let musicFrame = CGRect(origin: CGPoint(x: 0.0, y: backgroundHeight - musicHeight), size: musicSize)
+            let musicFrame = CGRect(origin: CGPoint(x: 0.0, y: (apparentBackgroundHeight - backgroundHeight) + backgroundHeight - musicHeight), size: musicSize)
             if let musicView = music.view {
                 if musicView.superview == nil {
-                    self.view.addSubview(musicView)
+                    self.regularContentNode.view.addSubview(musicView)
                     if transition.isAnimated {
                         musicView.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
                     }
@@ -2698,7 +2704,12 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                 } else {
                     musicTransition.updateFrame(view: musicView, frame: musicFrame)
                 }
-                musicTransition.updateAlpha(layer: musicView.layer, alpha: backgroundBannerAlpha)
+                
+                if let _ = self.navigationTransition {
+                    transition.updateAlpha(layer: musicView.layer, alpha: 1.0 - transitionFraction)
+                } else {
+                    musicTransition.updateAlpha(layer: musicView.layer, alpha: backgroundBannerAlpha)
+                }
             }
         } else {
             if let musicBackground = self.musicBackground {
@@ -2823,6 +2834,10 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         
         if let giftsCoverView = self.giftsCover.view, giftsCoverView.alpha > 0.0, giftsCoverView.point(inside: self.view.convert(point, to: giftsCoverView), with: event) {
             return giftsCoverView
+        }
+        
+        if let musicView = self.music?.view, let result = musicView.hitTest(self.view.convert(point, to: musicView), with: event) {
+            return result
         }
         
         if result == self.view || result == self.regularContentNode.view || result == self.editingContentNode.view {

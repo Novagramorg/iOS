@@ -282,6 +282,7 @@ final class GiftOptionsScreenComponent: Component {
                
             let availableWidth = self.scrollView.bounds.width
             let contentOffset = self.scrollView.contentOffset.y
+            let strings = environment.strings
                         
             let topPanelAlpha = min(20.0, max(0.0, contentOffset - 95.0)) / 20.0
             if let topPanelView = self.topPanel.view, let topSeparator = self.topSeparator.view {
@@ -414,6 +415,7 @@ final class GiftOptionsScreenComponent: Component {
                             )
                         }
                         
+                        var isDateLocked = false
                         let subject: GiftItemComponent.Subject
                         switch gift {
                         case let .generic(gift):
@@ -427,6 +429,7 @@ final class GiftOptionsScreenComponent: Component {
                             } else {
                                 subject = .starGift(gift: gift, price: "# \(presentationStringsFormattedNumber(Int32(gift.price), environment.dateTimeFormat.groupingSeparator))")
                             }
+                            isDateLocked = gift.lockedUntilDate != nil
                         case let .unique(gift):
                             subject = .uniqueGift(gift: gift, price: nil)
                         }
@@ -444,7 +447,8 @@ final class GiftOptionsScreenComponent: Component {
                                             subject: subject,
                                             ribbon: ribbon,
                                             outline: outline,
-                                            isSoldOut: isSoldOut
+                                            isSoldOut: isSoldOut,
+                                            isDateLocked: isDateLocked
                                         )
                                     ),
                                     effectAlignment: .center,
@@ -458,6 +462,31 @@ final class GiftOptionsScreenComponent: Component {
                                                     mainController = controller
                                                 }
                                                 if case let .generic(gift) = gift {
+                                                    if isDateLocked {
+                                                        let _ = (component.context.engine.payments.checkCanSendStarGift(giftId: gift.id)
+                                                        |> deliverOnMainQueue).start(next: { [weak controller] result in
+                                                            guard let controller else {
+                                                                return
+                                                            }
+                                                            if case let .unavailable(text, entities) = result {
+                                                                let theme = AlertControllerTheme(presentationData: component.context.sharedContext.currentPresentationData.with { $0 })
+                                                                let font = Font.regular(floor(theme.baseFontSize * 13.0 / 17.0))
+                                                                let boldFont = Font.semibold(floor(theme.baseFontSize * 13.0 / 17.0))
+                                                                let attributedText = stringWithAppliedEntities(text, entities: entities, baseColor: theme.primaryColor, linkColor: .black, baseFont: font, linkFont: font, boldFont: boldFont, italicFont: font, boldItalicFont: font, fixedFont: font, blockQuoteFont: font, message: nil, paragraphAlignment: .center)
+                                                                
+                                                                var dismissImpl: (() -> Void)?
+                                                                let alertController = textAlertController(theme: theme, title: NSAttributedString(string: strings.Gift_Options_GiftLocked_Title, font: Font.semibold(theme.baseFontSize), textColor: theme.primaryColor, paragraphAlignment: .center), text: attributedText, actions: [TextAlertAction(type: .defaultAction, title: strings.Common_OK, action: {
+                                                                    dismissImpl?()
+                                                                })], actionLayout: .horizontal, dismissOnOutsideTap: true)
+                                                                dismissImpl = { [weak alertController] in
+                                                                    alertController?.dismissAnimated()
+                                                                }
+                                                                controller.present(alertController, in: .window(.root))
+                                                            }
+                                                        })
+                                                        return
+                                                    }
+                                                    
                                                     if let perUserLimit = gift.perUserLimit, perUserLimit.remains == 0 {
                                                         let text = environment.strings.Gift_Options_Gift_BuyLimitReached(perUserLimit.total)
                                                         let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }

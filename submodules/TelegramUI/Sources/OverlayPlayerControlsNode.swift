@@ -198,7 +198,7 @@ final class OverlayPlayerControlsNode: ASDisplayNode {
     var updateIsExpanded: (() -> Void)?
     
     var requestCollapse: (() -> Void)?
-    var requestShare: ((MessageId) -> Void)?
+    var requestShare: ((ShareControllerSubject) -> Void)?
     var requestSearchByArtist: ((String) -> Void)?
     var requestSaveToProfile: ((FileMediaReference) -> Void)?
     var requestRemoveFromProfile: ((FileMediaReference) -> Void)?
@@ -1027,9 +1027,13 @@ final class OverlayPlayerControlsNode: ASDisplayNode {
         
         if hasSectionHeader {
             //TODO:localize
+            let sideInset: CGFloat = 16.0
             var sectionTitle = "AUDIO IN THIS CHAT"
-            if let peerName = self.peerName {
-                sectionTitle = "\(peerName)'S PLAYLIST"
+            if var peerName = self.peerName {
+                if peerName.count > 30 {
+                    peerName = "\(peerName.prefix(30))…"
+                }
+                sectionTitle = "\(peerName.uppercased())'S PLAYLIST"
             } else if case .custom = self.source {
                 sectionTitle = "YOUR PLAYLIST"
             }
@@ -1039,14 +1043,14 @@ final class OverlayPlayerControlsNode: ASDisplayNode {
                     MultilineTextComponent(text: .plain(NSAttributedString(string: sectionTitle, font: Font.regular(13.0), textColor: self.presentationData.theme.chatList.sectionHeaderTextColor)))
                 ),
                 environment: {},
-                containerSize: CGSize(width: width, height: OverlayPlayerControlsNode.sectionHeaderHeight)
+                containerSize: CGSize(width: width - leftInset - rightInset - sideInset * 2.0, height: OverlayPlayerControlsNode.sectionHeaderHeight)
             )
             if let sectionTitleView = self.sectionTitle.view {
                 if sectionTitleView.superview == nil {
                     self.view.addSubview(sectionTitleView)
                 }
                 sectionTitleView.bounds = CGRect(origin: .zero, size: sectionTitleSize)
-                sectionHeaderTransition.updateFrame(view: sectionTitleView, frame: CGRect(origin: CGPoint(x: leftInset + 16.0, y: finalPanelHeight - OverlayPlayerControlsNode.sectionHeaderHeight + 6.0 + UIScreenPixel), size: sectionTitleSize))
+                sectionHeaderTransition.updateFrame(view: sectionTitleView, frame: CGRect(origin: CGPoint(x: leftInset + sideInset, y: finalPanelHeight - OverlayPlayerControlsNode.sectionHeaderHeight + 6.0 + UIScreenPixel), size: sectionTitleSize))
             }
         } else if let sectionTitleView = self.sectionTitle.view, sectionTitleView.superview != nil {
             sectionTitleView.removeFromSuperview()
@@ -1184,7 +1188,17 @@ final class OverlayPlayerControlsNode: ASDisplayNode {
     
     @objc func sharePressed() {
         if let itemId = self.currentItemId as? PeerMessagesMediaPlaylistItemId {
-            self.requestShare?(itemId.messageId)
+            if itemId.messageId.namespace == Namespaces.Message.Cloud {
+                let _ = (self.engine.data.get(TelegramEngine.EngineData.Item.Messages.Message(id: itemId.messageId))
+                |> deliverOnMainQueue).startStandalone(next: { [weak self] message in
+                    guard let message else {
+                        return
+                    }
+                    self?.requestShare?(.messages([message._asMessage()]))
+                })
+            } else if let fileReference = self.currentFileReference {
+                self.requestShare?(.media(fileReference.abstract, nil))
+            }
         }
     }
     

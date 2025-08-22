@@ -164,6 +164,7 @@ swift_library(
         "//submodules/TelegramUI/Components/TabSelectorComponent",
         "//submodules/TelegramUI/Components/BottomButtonPanelComponent",
         "//submodules/TelegramUI/Components/MarqueeComponent",
+        "//submodules/TelegramUI/Components/MediaManager/PeerMessagesMediaPlaylist",
     ],
     visibility = [
         "//visibility:public",

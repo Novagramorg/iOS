@@ -276,7 +276,7 @@ private final class GiftValueSheetContent: CombinedComponent {
                         animationScale: nil,
                         displayAnimationStars: false,
                         externalState: giftCompositionExternalState,
-                        requestUpdate: { [weak state] in
+                        requestUpdate: { [weak state] _ in
                             state?.updated()
                         }
                     ),
