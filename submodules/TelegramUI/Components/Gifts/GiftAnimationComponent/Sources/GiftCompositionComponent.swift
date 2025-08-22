@@ -307,7 +307,6 @@ public final class GiftCompositionComponent: Component {
         ) {
             guard let geom = self.spinGeom, !tail.isEmpty else { return }
 
-            // Build container
             let visualSize = CGSize(width: iconSize.width * scale, height: iconSize.height * scale)
             let pitch = visualSize.width + self.spacingX
             let count = tail.count
@@ -318,18 +317,15 @@ public final class GiftCompositionComponent: Component {
             container.isUserInteractionEnabled = false
             container.clipsToBounds = false
 
-            // Y is fixed; we’ll animate X only
             let containerY = geom.centerY - containerHeight / 2.0
             container.frame.origin.y = containerY
             self.addSubview(container)
             self.decelContainer = container
             self.decelItemHosts.removeAll()
-
-            // Fill container with hosts at fixed pitch
+            
             for (i, attribute) in tail.reversed().enumerated() {
                 guard case let .model(_, file, _) = attribute else { continue }
 
-                // Node
                 let node = DefaultAnimatedStickerNodeImpl()
                 node.isUserInteractionEnabled = false
                 let pathPrefix = self.component!.context.account.postbox.mediaBox.shortLivedResourceCachePathPrefix(file.resource.id)
@@ -408,27 +404,22 @@ public final class GiftCompositionComponent: Component {
             let isFinalIndex = self.decelItemHosts.count - 1
             guard isFinalIndex >= 0, let finalHostView = self.decelItemHosts.last else { return }
 
-            // Prepare final node
             guard let node = self.animationNode as? DefaultAnimatedStickerNodeImpl else { return }
             node.playbackMode = .once
             node.visibility = true
 
-            // Convert final host center into self coords
             let finalCenterInSelf = container.convert(finalHostView.center, to: self)
 
-            // Place node directly in self, exactly where the final host is
             let host = node.view
             if host.superview !== self { self.addSubview(host) }
             node.updateLayout(size: iconSize)
             host.bounds = CGRect(origin: .zero, size: iconSize)
             host.layer.position = finalCenterInSelf
 
-            // Remove container
             container.removeFromSuperview()
             self.decelContainer = nil
             self.decelItemHosts.removeAll()
-
-            // Bounce scale (same values you already used)
+            
             let factors: [CGFloat] = [1.0, 1.3, 0.92, 1.18, 0.98, 1.0]
             let values = factors.map { NSNumber(value: Double($0)) }
             let scaleAnim = CAKeyframeAnimation(keyPath: "transform.scale")
@@ -445,7 +436,6 @@ public final class GiftCompositionComponent: Component {
             scaleAnim.isRemovedOnCompletion = true
             host.layer.add(scaleAnim, forKey: "bounce")
 
-            // Play the “once” sticker & finish
             node.playOnce()
             self.finishSettled()
         }
