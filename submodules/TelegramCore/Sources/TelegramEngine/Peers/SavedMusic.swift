@@ -49,6 +49,31 @@ public final class SavedMusicIdsList: Codable, Equatable {
     }
 }
 
+func _internal_getSavedMusicById(postbox: Postbox, network: Network, peer: PeerReference, file: TelegramMediaFile) -> Signal<TelegramMediaFile?, NoError> {
+    let inputUser = peer.inputUser
+    guard let inputUser, let resource = file.resource as? CloudDocumentMediaResource else {
+        return .single(nil)
+    }
+    return network.request(Api.functions.users.getSavedMusicByID(id: inputUser, documents: [.inputDocument(id: resource.fileId, accessHash: resource.accessHash, fileReference: Buffer(data: resource.fileReference))]))
+    |> map(Optional.init)
+    |> `catch` { _ -> Signal<Api.users.SavedMusic?, NoError> in
+        return .single(nil)
+    }
+    |> map { result -> TelegramMediaFile? in
+        if let result {
+            switch result {
+            case let .savedMusic(_, documents):
+                if let file = documents.first.flatMap({ telegramMediaFileFromApiDocument($0, altDocuments: nil) }) {
+                    return file
+                }
+            default:
+                break
+            }
+        }
+        return nil
+    }
+}
+
 func _internal_savedMusicIds(postbox: Postbox) -> Signal<Set<Int64>?, NoError> {
     let viewKey: PostboxViewKey = .preferences(keys: Set([PreferencesKeys.savedMusicIds()]))
     return postbox.combinedView(keys: [viewKey])
@@ -102,6 +127,7 @@ func _internal_addSavedMusic(account: Account, file: FileMediaReference, afterFi
     return account.postbox.transaction { transaction in
         if let cachedSavedMusic = transaction.retrieveItemCacheEntry(id: entryId(peerId: account.peerId))?.get(CachedProfileSavedMusic.self) {
             var updatedFiles = cachedSavedMusic.files
+            updatedFiles.removeAll(where: { $0.fileId == file.media.fileId })
             if let afterFile, let index = updatedFiles.firstIndex(where: { $0.fileId == afterFile.media.fileId }) {
                 updatedFiles.insert(file.media, at: index + 1)
             } else {
@@ -119,15 +145,17 @@ func _internal_addSavedMusic(account: Account, file: FileMediaReference, afterFi
                 transaction.setPreferencesEntry(key: PreferencesKeys.savedMusicIds(), value: PreferencesEntry(savedMusicIdsList))
             }
             
-            transaction.updatePeerCachedData(peerIds: Set([account.peerId]), update: { _, cachedData -> CachedPeerData? in
-                if let cachedData = cachedData as? CachedUserData {
-                    var updatedData = cachedData
-                    updatedData = updatedData.withUpdatedSavedMusic(file.media)
-                    return updatedData
-                } else {
-                    return cachedData
-                }
-            })
+            if afterFile == nil {
+                transaction.updatePeerCachedData(peerIds: Set([account.peerId]), update: { _, cachedData -> CachedPeerData? in
+                    if let cachedData = cachedData as? CachedUserData {
+                        var updatedData = cachedData
+                        updatedData = updatedData.withUpdatedSavedMusic(file.media)
+                        return updatedData
+                    } else {
+                        return cachedData
+                    }
+                })
+            }
         }
         return revalidatedMusic(account: account, file: file, signal: { resource in
             var flags: Int32 = 0
@@ -258,7 +286,7 @@ public final class ProfileSavedMusicContext {
         self.account = account
         self.peerId = peerId
                 
-        self.reload()
+        self.loadMore()
     }
     
     deinit {
@@ -342,36 +370,33 @@ public final class ProfileSavedMusicContext {
         }))
     }
         
-    public func addMusic(file: FileMediaReference, afterFile: FileMediaReference? = nil) -> Signal<Never, AddSavedMusicError> {
-        return _internal_addSavedMusic(account: self.account, file: file, afterFile: nil)
-        |> afterCompleted { [weak self] in
-            guard let self else {
-                return
-            }
-            if let afterFile, let index = self.files.firstIndex(where: { $0.fileId == afterFile.media.fileId }) {
-                self.files.insert(file.media, at: index + 1)
-            } else {
-                self.files.insert(file.media, at: 0)
-            }
-            if let count = self.count {
-                self.count = count + 1
-            }
-            self.pushState()
+    public func addMusic(file: FileMediaReference, afterFile: FileMediaReference? = nil, apply: Bool = true) -> Signal<Never, AddSavedMusicError> {
+        self.files.removeAll(where: { $0.fileId == file.media.fileId })
+        if let afterFile, let index = self.files.firstIndex(where: { $0.fileId == afterFile.media.fileId }) {
+            self.files.insert(file.media, at: index + 1)
+        } else {
+            self.files.insert(file.media, at: 0)
+        }
+        if let count = self.count {
+            self.count = count + 1
+        }
+        self.pushState()
+        
+        if apply {
+            return _internal_addSavedMusic(account: self.account, file: file, afterFile: afterFile)
+        } else {
+            return .complete()
         }
     }
     
     public func removeMusic(file: FileMediaReference) -> Signal<Never, NoError> {
-        return _internal_removeSavedMusic(account: self.account, file: file)
-        |> afterCompleted { [weak self] in
-            guard let self else {
-                return
-            }
-            self.files.removeAll(where: { $0.fileId == file.media.id })
-            if let count = self.count {
-                self.count = max(0, count - 1)
-            }
-            self.pushState()
+        self.files.removeAll(where: { $0.fileId == file.media.id })
+        if let count = self.count {
+            self.count = max(0, count - 1)
         }
+        self.pushState()
+        
+        return _internal_removeSavedMusic(account: self.account, file: file)
     }
     
     private func pushState() {

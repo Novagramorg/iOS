@@ -9363,6 +9363,21 @@ public extension Api.functions.payments {
                 }
 }
 public extension Api.functions.payments {
+                static func checkCanSendGift(giftId: Int64) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.payments.CheckCanSendGiftResult>) {
+                    let buffer = Buffer()
+                    buffer.appendInt32(-1060835895)
+                    serializeInt64(giftId, buffer: buffer, boxed: false)
+                    return (FunctionDescription(name: "payments.checkCanSendGift", parameters: [("giftId", String(describing: giftId))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.payments.CheckCanSendGiftResult? in
+                        let reader = BufferReader(buffer)
+                        var result: Api.payments.CheckCanSendGiftResult?
+                        if let signature = reader.readInt32() {
+                            result = Api.parse(reader, signature: signature) as? Api.payments.CheckCanSendGiftResult
+                        }
+                        return result
+                    })
+                }
+}
+public extension Api.functions.payments {
                 static func checkGiftCode(slug: String) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.payments.CheckedGiftCode>) {
                     let buffer = Buffer()
                     buffer.appendInt32(-1907247935)
@@ -12314,6 +12329,26 @@ public extension Api.functions.users {
                     serializeInt32(limit, buffer: buffer, boxed: false)
                     serializeInt64(hash, buffer: buffer, boxed: false)
                     return (FunctionDescription(name: "users.getSavedMusic", parameters: [("id", String(describing: id)), ("offset", String(describing: offset)), ("limit", String(describing: limit)), ("hash", String(describing: hash))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.users.SavedMusic? in
+                        let reader = BufferReader(buffer)
+                        var result: Api.users.SavedMusic?
+                        if let signature = reader.readInt32() {
+                            result = Api.parse(reader, signature: signature) as? Api.users.SavedMusic
+                        }
+                        return result
+                    })
+                }
+}
+public extension Api.functions.users {
+                static func getSavedMusicByID(id: Api.InputUser, documents: [Api.InputDocument]) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.users.SavedMusic>) {
+                    let buffer = Buffer()
+                    buffer.appendInt32(1970513129)
+                    id.serialize(buffer, true)
+                    buffer.appendInt32(481674261)
+                    buffer.appendInt32(Int32(documents.count))
+                    for item in documents {
+                        item.serialize(buffer, true)
+                    }
+                    return (FunctionDescription(name: "users.getSavedMusicByID", parameters: [("id", String(describing: id)), ("documents", String(describing: documents))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.users.SavedMusic? in
                         let reader = BufferReader(buffer)
                         var result: Api.users.SavedMusic?
                         if let signature = reader.readInt32() {
