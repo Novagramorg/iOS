@@ -388,8 +388,8 @@ public enum AnyMediaReference: Equatable {
                 return nil
             case .starsTransaction:
                 return nil
-            case .savedMusic:
-                return nil
+            case let .savedMusic(peer, _):
+                return .savedMusic(peer: peer)
         }
     }
     
@@ -526,6 +526,7 @@ public enum PartialMediaReference: Equatable {
         case savedGif
         case savedSticker
         case recentSticker
+        case savedMusic
     }
     
     case message(message: MessageReference)
@@ -534,6 +535,7 @@ public enum PartialMediaReference: Equatable {
     case savedGif
     case savedSticker
     case recentSticker
+    case savedMusic(peer: PeerReference)
     
     public init?(decoder: PostboxDecoder) {
         guard let caseIdValue = decoder.decodeOptionalInt32ForKey("_r"), let caseId = CodingCase(rawValue: caseIdValue) else {
@@ -555,6 +557,9 @@ public enum PartialMediaReference: Equatable {
                 self = .savedSticker
             case .recentSticker:
                 self = .recentSticker
+            case .savedMusic:
+                let peer = decoder.decodeObjectForKey("pg", decoder: { PeerReference(decoder: $0) }) as! PeerReference
+                self = .savedMusic(peer: peer)
         }
     }
     
@@ -575,6 +580,9 @@ public enum PartialMediaReference: Equatable {
                 encoder.encodeInt32(CodingCase.savedSticker.rawValue, forKey: "_r")
             case .recentSticker:
                 encoder.encodeInt32(CodingCase.recentSticker.rawValue, forKey: "_r")
+            case let .savedMusic(peer):
+                encoder.encodeInt32(CodingCase.savedMusic.rawValue, forKey: "_r")
+                encoder.encodeObject(peer, forKey: "pg")
         }
     }
     
@@ -592,6 +600,8 @@ public enum PartialMediaReference: Equatable {
                 return .savedSticker(media: media)
             case .recentSticker:
                 return .recentSticker(media: media)
+            case let .savedMusic(peer):
+                return .savedMusic(peer: peer, media: media)
         }
     }
 }

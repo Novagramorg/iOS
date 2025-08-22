@@ -1787,9 +1787,6 @@ public final class SharedAccountContextImpl: SharedAccountContext {
     }
     
     public func makeOverlayAudioPlayerController(context: AccountContext, chatLocation: ChatLocation, type: MediaManagerPlayerType, initialMessageId: MessageId, initialOrder: MusicPlaybackSettingsOrder, playlistLocation: SharedMediaPlaylistLocation?, parentNavigationController: NavigationController?, updateMusicSaved: ((FileMediaReference, Bool) -> Void)?, reorderSavedMusic: ((FileMediaReference, FileMediaReference?) -> Void)?) -> ViewController & OverlayAudioPlayerController {
-        if let playlistLocation = playlistLocation as? PeerMessagesPlaylistLocation, case .custom = playlistLocation {
-            context.sharedContext.mediaManager.setPlaylist((context, PeerMessagesMediaPlaylist(context: context, location: playlistLocation, chatLocationContextHolder: nil)), type: .music, control: .playback(.play))
-        }
         return OverlayAudioPlayerControllerImpl(context: context, chatLocation: chatLocation, type: type, initialMessageId: initialMessageId, initialOrder: initialOrder, playlistLocation: playlistLocation, parentNavigationController: parentNavigationController, updateMusicSaved: updateMusicSaved, reorderSavedMusic: reorderSavedMusic)
     }
     

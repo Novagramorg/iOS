@@ -112,6 +112,7 @@ import OldChannelsController
 import UrlHandling
 import VerifyAlertController
 import GiftViewScreen
+import PeerMessagesMediaPlaylist
 
 public enum PeerInfoAvatarEditingMode {
     case generic
@@ -6013,61 +6014,56 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
             return
         }
         let peerId = self.peerId
-        let peer = self.data?.peer
-        let initialMessageId: MessageId
+        //let peer = self.data?.peer
+        let initialId: Int32
         if let initialFileId = self.data?.savedMusicState?.files.first?.fileId {
-            initialMessageId = MessageId(peerId: peerId, namespace: Namespaces.Message.Local, id: Int32(clamping: initialFileId.id % Int64(Int32.max)))
+            initialId = Int32(clamping: initialFileId.id % Int64(Int32.max))
         } else {
-            initialMessageId = MessageId(peerId: peerId, namespace: Namespaces.Message.Local, id: 0)
+            initialId = 0
         }
+
+        let playlistLocation: PeerMessagesPlaylistLocation = .savedMusic(context: savedMusicContext, at: initialId, canReorder: peerId == self.context.account.peerId)
         
-        let musicController = self.context.sharedContext.makeOverlayAudioPlayerController(
-            context: self.context,
-            chatLocation: .peer(id: peerId),
-            type: .music,
-            initialMessageId: initialMessageId,
-            initialOrder: .regular,
-            playlistLocation: PeerMessagesPlaylistLocation.custom(
-                messages: savedMusicContext.state
-                |> map { state in
-                    var messages: [Message] = []
-                    var peers = SimpleDictionary<PeerId, Peer>()
-                    peers[peerId] = peer
-                    for file in state.files {
-                        let stableId = UInt32(clamping: file.fileId.id % Int64(Int32.max))
-                        messages.append(Message(stableId: stableId, stableVersion: 0, id: MessageId(peerId: peerId, namespace: Namespaces.Message.Local, id: Int32(stableId)), globallyUniqueId: nil, groupingKey: nil, groupInfo: nil, threadId: nil, timestamp: 0, flags: [], tags: [], globalTags: [], localTags: [], customTags: [], forwardInfo: nil, author: nil, text: "", attributes: [], media: [file], peers: peers, associatedMessages: SimpleDictionary(), associatedMessageIds: [], associatedMedia: [:], associatedThreadInfo: nil, associatedStories: [:]))
-                        
-                    }
-                    return (messages, Int32(messages.count), true)
-                },
-                canReorder: peerId == self.context.account.peerId,
-                at: initialMessageId,
-                loadMore: { [weak savedMusicContext] in
+        let _ = (self.context.sharedContext.mediaManager.globalMediaPlayerState
+        |> take(1)
+        |> deliverOnMainQueue).start(next: { [weak self] accountStateAndType in
+            guard let self else {
+                return
+            }
+            if let (account, stateOrLoading, _) = accountStateAndType, self.context.account.peerId == account.peerId, case let .state(state) = stateOrLoading, let location = state.playlistLocation as? PeerMessagesPlaylistLocation, case let .savedMusic(savedMusicContext, _, _) = location, savedMusicContext.peerId == peerId {
+            } else {
+                self.context.sharedContext.mediaManager.setPlaylist((self.context, PeerMessagesMediaPlaylist(context: self.context, location: playlistLocation, chatLocationContextHolder: nil)), type: .music, control: .playback(.play))
+            }
+        })
+        
+        Queue.mainQueue().after(0.1) {
+            let musicController = self.context.sharedContext.makeOverlayAudioPlayerController(
+                context: self.context,
+                chatLocation: .peer(id: peerId),
+                type: .music,
+                initialMessageId: MessageId(peerId: peerId, namespace: Namespaces.Message.Local, id: initialId),
+                initialOrder: .regular,
+                playlistLocation: playlistLocation,
+                parentNavigationController: self.controller?.navigationController as? NavigationController,
+                updateMusicSaved: { [weak savedMusicContext] file, isSaved in
                     guard let savedMusicContext else {
                         return
                     }
-                    savedMusicContext.loadMore()
+                    if isSaved {
+                        let _ = savedMusicContext.addMusic(file: file).start()
+                    } else {
+                        let _ = savedMusicContext.removeMusic(file: file).start()
+                    }
+                },
+                reorderSavedMusic: { [weak savedMusicContext] file, afterFile in
+                    guard let savedMusicContext else {
+                        return
+                    }
+                    let _ = savedMusicContext.addMusic(file: file, afterFile: afterFile, apply: true).start()
                 }
-            ),
-            parentNavigationController: self.controller?.navigationController as? NavigationController,
-            updateMusicSaved: { [weak savedMusicContext] file, isSaved in
-                guard let savedMusicContext else {
-                    return
-                }
-                if isSaved {
-                    let _ = savedMusicContext.addMusic(file: file).start()
-                } else {
-                    let _ = savedMusicContext.removeMusic(file: file).start()
-                }
-            },
-            reorderSavedMusic: { [weak savedMusicContext] file, afterFile in
-                guard let savedMusicContext else {
-                    return
-                }
-                let _ = savedMusicContext.addMusic(file: file, afterFile: afterFile, apply: true).start()
-            }
-        )
-        self.controller?.present(musicController, in: .window(.root))
+            )
+            self.controller?.present(musicController, in: .window(.root))
+        }
     }
     
     private func performButtonAction(key: PeerInfoHeaderButtonKey, gesture: ContextGesture?) {
