@@ -57,6 +57,7 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
             case upgradeStars
             case releasedBy
             case perUserLimit
+            case lockedUntilDate
         }
         
         public struct Availability: Equatable, Codable, PostboxCoding {
@@ -179,8 +180,9 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
         public let upgradeStars: Int64?
         public let releasedBy: EnginePeer.Id?
         public let perUserLimit: PerUserLimit?
+        public let lockedUntilDate: Int32?
         
-        public init(id: Int64, title: String?, file: TelegramMediaFile, price: Int64, convertStars: Int64, availability: Availability?, soldOut: SoldOut?, flags: Flags, upgradeStars: Int64?, releasedBy: EnginePeer.Id?, perUserLimit: PerUserLimit?) {
+        public init(id: Int64, title: String?, file: TelegramMediaFile, price: Int64, convertStars: Int64, availability: Availability?, soldOut: SoldOut?, flags: Flags, upgradeStars: Int64?, releasedBy: EnginePeer.Id?, perUserLimit: PerUserLimit?, lockedUntilDate: Int32?) {
             self.id = id
             self.title = title
             self.file = file
@@ -192,6 +194,7 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
             self.upgradeStars = upgradeStars
             self.releasedBy = releasedBy
             self.perUserLimit = perUserLimit
+            self.lockedUntilDate = lockedUntilDate
         }
         
         public init(from decoder: Decoder) throws {
@@ -213,6 +216,7 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
             self.upgradeStars = try container.decodeIfPresent(Int64.self, forKey: .upgradeStars)
             self.releasedBy = try container.decodeIfPresent(EnginePeer.Id.self, forKey: .releasedBy)
             self.perUserLimit = try container.decodeIfPresent(PerUserLimit.self, forKey: .perUserLimit)
+            self.lockedUntilDate = try container.decodeIfPresent(Int32.self, forKey: .lockedUntilDate)
         }
         
         public init(decoder: PostboxDecoder) {
@@ -227,6 +231,7 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
             self.upgradeStars = decoder.decodeOptionalInt64ForKey(CodingKeys.upgradeStars.rawValue)
             self.releasedBy = decoder.decodeOptionalInt64ForKey(CodingKeys.releasedBy.rawValue).flatMap { EnginePeer.Id($0) }
             self.perUserLimit = decoder.decodeObjectForKey(CodingKeys.perUserLimit.rawValue, decoder: { StarGift.Gift.PerUserLimit(decoder: $0) }) as? StarGift.Gift.PerUserLimit
+            self.lockedUntilDate = decoder.decodeOptionalInt32ForKey(CodingKeys.lockedUntilDate.rawValue)
         }
         
         public func encode(to encoder: Encoder) throws {
@@ -247,6 +252,7 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
             try container.encodeIfPresent(self.upgradeStars, forKey: .upgradeStars)
             try container.encodeIfPresent(self.releasedBy, forKey: .releasedBy)
             try container.encodeIfPresent(self.perUserLimit, forKey: .perUserLimit)
+            try container.encodeIfPresent(self.lockedUntilDate, forKey: .lockedUntilDate)
         }
         
         public func encode(_ encoder: PostboxEncoder) {
@@ -284,6 +290,11 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
                 encoder.encodeObject(perUserLimit, forKey: CodingKeys.perUserLimit.rawValue)
             } else {
                 encoder.encodeNil(forKey: CodingKeys.perUserLimit.rawValue)
+            }
+            if let lockedUntilDate = self.lockedUntilDate {
+                encoder.encodeInt32(lockedUntilDate, forKey: CodingKeys.lockedUntilDate.rawValue)
+            } else {
+                encoder.encodeNil(forKey: CodingKeys.lockedUntilDate.rawValue)
             }
         }
     }
@@ -843,7 +854,7 @@ public extension StarGift {
 extension StarGift {
     init?(apiStarGift: Api.StarGift) {
         switch apiStarGift {
-        case let .starGift(apiFlags, id, sticker, stars, availabilityRemains, availabilityTotal, availabilityResale, convertStars, firstSale, lastSale, upgradeStars, minResaleStars, title, releasedBy, perUserTotal, perUserRemains):
+        case let .starGift(apiFlags, id, sticker, stars, availabilityRemains, availabilityTotal, availabilityResale, convertStars, firstSale, lastSale, upgradeStars, minResaleStars, title, releasedBy, perUserTotal, perUserRemains, lockedUntilDate):
             var flags = StarGift.Gift.Flags()
             if (apiFlags & (1 << 2)) != 0 {
                 flags.insert(.isBirthdayGift)
@@ -872,7 +883,7 @@ extension StarGift {
             guard let file = telegramMediaFileFromApiDocument(sticker, altDocuments: nil) else {
                 return nil
             }
-            self = .generic(StarGift.Gift(id: id, title: title, file: file, price: stars, convertStars: convertStars, availability: availability, soldOut: soldOut, flags: flags, upgradeStars: upgradeStars, releasedBy: releasedBy?.peerId, perUserLimit: perUserLimit))
+            self = .generic(StarGift.Gift(id: id, title: title, file: file, price: stars, convertStars: convertStars, availability: availability, soldOut: soldOut, flags: flags, upgradeStars: upgradeStars, releasedBy: releasedBy?.peerId, perUserLimit: perUserLimit, lockedUntilDate: lockedUntilDate))
         case let .starGiftUnique(flags, id, giftId, title, slug, num, ownerPeerId, ownerName, ownerAddress, attributes, availabilityIssued, availabilityTotal, giftAddress, resellAmounts, releasedBy, valueAmount, valueCurrency):
             let owner: StarGift.UniqueGift.Owner
             if let ownerAddress {
@@ -1182,7 +1193,8 @@ func _internal_upgradeStarGift(account: Account, formId: Int64?, reference: Star
                                         canTransferDate: canTransferDate,
                                         canResaleDate: canResaleDate,
                                         collectionIds: nil,
-                                        prepaidUpgradeHash: nil
+                                        prepaidUpgradeHash: nil,
+                                        upgradeSeparate: false
                                     ))
                                 }
                             }
@@ -1210,6 +1222,34 @@ func _internal_starGiftUpgradePreview(account: Account, giftId: Int64) -> Signal
         switch result {
         case let .starGiftUpgradePreview(sampleAttributes):
             return sampleAttributes.compactMap { StarGift.UniqueGift.Attribute(apiAttribute: $0) }
+        }
+    }
+}
+
+public enum CanSendGiftResult {
+    case available
+    case unavailable(text: String, entities: [MessageTextEntity])
+    case failed
+}
+
+func _internal_checkCanSendStarGift(account: Account, giftId: Int64) -> Signal<CanSendGiftResult, NoError> {
+    return account.network.request(Api.functions.payments.checkCanSendGift(giftId: giftId))
+    |> map(Optional.init)
+    |> `catch` { _ -> Signal<Api.payments.CheckCanSendGiftResult?, NoError> in
+        return .single(nil)
+    }
+    |> map { result in
+        guard let result else {
+            return .unavailable(text: "", entities: [])
+        }
+        switch result {
+        case .checkCanSendGiftResultOk:
+            return .available
+        case let .checkCanSendGiftResultFail(reason):
+            switch reason {
+            case let .textWithEntities(text, entities):
+                return .unavailable(text: text, entities: messageTextEntitiesFromApiEntities(entities))
+            }
         }
     }
 }
@@ -2037,6 +2077,7 @@ public final class ProfileGiftsContext {
                 case canResaleDate
                 case collectionIds
                 case prepaidUpgradeHash
+                case upgradeSeparate
             }
             
             public let gift: TelegramCore.StarGift
@@ -2057,6 +2098,7 @@ public final class ProfileGiftsContext {
             public let canResaleDate: Int32?
             public let collectionIds: [Int32]?
             public let prepaidUpgradeHash: String?
+            public let upgradeSeparate: Bool
 
             fileprivate let _fromPeerId: EnginePeer.Id?
             
@@ -2082,7 +2124,8 @@ public final class ProfileGiftsContext {
                 canTransferDate: Int32?,
                 canResaleDate: Int32?,
                 collectionIds: [Int32]?,
-                prepaidUpgradeHash: String?
+                prepaidUpgradeHash: String?,
+                upgradeSeparate: Bool
             ) {
                 self.gift = gift
                 self.reference = reference
@@ -2103,6 +2146,7 @@ public final class ProfileGiftsContext {
                 self.canResaleDate = canResaleDate
                 self.collectionIds = collectionIds
                 self.prepaidUpgradeHash = prepaidUpgradeHash
+                self.upgradeSeparate = upgradeSeparate
             }
             
             public init(from decoder: Decoder) throws {
@@ -2133,6 +2177,7 @@ public final class ProfileGiftsContext {
                 self.canResaleDate = try container.decodeIfPresent(Int32.self, forKey: .canResaleDate)
                 self.collectionIds = try container.decodeIfPresent([Int32].self, forKey: .collectionIds)
                 self.prepaidUpgradeHash = try container.decodeIfPresent(String.self, forKey: .prepaidUpgradeHash)
+                self.upgradeSeparate = try container.decodeIfPresent(Bool.self, forKey: .upgradeSeparate) ?? false
             }
             
             public func encode(to encoder: Encoder) throws {
@@ -2156,6 +2201,7 @@ public final class ProfileGiftsContext {
                 try container.encodeIfPresent(self.canResaleDate, forKey: .canResaleDate)
                 try container.encodeIfPresent(self.collectionIds, forKey: .collectionIds)
                 try container.encodeIfPresent(self.prepaidUpgradeHash, forKey: .prepaidUpgradeHash)
+                try container.encode(self.upgradeSeparate, forKey: .upgradeSeparate)
             }
             
             public func withGift(_ gift: TelegramCore.StarGift) -> StarGift {
@@ -2177,7 +2223,8 @@ public final class ProfileGiftsContext {
                     canTransferDate: self.canTransferDate,
                     canResaleDate: self.canResaleDate,
                     collectionIds: self.collectionIds,
-                    prepaidUpgradeHash: self.prepaidUpgradeHash
+                    prepaidUpgradeHash: self.prepaidUpgradeHash,
+                    upgradeSeparate: self.upgradeSeparate
                 )
             }
             
@@ -2200,7 +2247,8 @@ public final class ProfileGiftsContext {
                     canTransferDate: self.canTransferDate,
                     canResaleDate: self.canResaleDate,
                     collectionIds: self.collectionIds,
-                    prepaidUpgradeHash: self.prepaidUpgradeHash
+                    prepaidUpgradeHash: self.prepaidUpgradeHash,
+                    upgradeSeparate: self.upgradeSeparate
                 )
             }
             
@@ -2223,7 +2271,8 @@ public final class ProfileGiftsContext {
                     canTransferDate: self.canTransferDate,
                     canResaleDate: self.canResaleDate,
                     collectionIds: self.collectionIds,
-                    prepaidUpgradeHash: self.prepaidUpgradeHash
+                    prepaidUpgradeHash: self.prepaidUpgradeHash,
+                    upgradeSeparate: self.upgradeSeparate
                 )
             }
             fileprivate func withFromPeer(_ fromPeer: EnginePeer?) -> StarGift {
@@ -2245,7 +2294,8 @@ public final class ProfileGiftsContext {
                     canTransferDate: self.canTransferDate,
                     canResaleDate: self.canResaleDate,
                     collectionIds: self.collectionIds,
-                    prepaidUpgradeHash: self.prepaidUpgradeHash
+                    prepaidUpgradeHash: self.prepaidUpgradeHash,
+                    upgradeSeparate: self.upgradeSeparate
                 )
             }
             
@@ -2268,7 +2318,8 @@ public final class ProfileGiftsContext {
                     canTransferDate: self.canTransferDate,
                     canResaleDate: self.canResaleDate,
                     collectionIds: collectionIds,
-                    prepaidUpgradeHash: self.prepaidUpgradeHash
+                    prepaidUpgradeHash: self.prepaidUpgradeHash,
+                    upgradeSeparate: self.upgradeSeparate
                 )
             }
         }
@@ -2519,6 +2570,7 @@ extension ProfileGiftsContext.State.StarGift {
             self.canResaleDate = canResaleAt
             self.collectionIds = collectionIds
             self.prepaidUpgradeHash = prepaidUpgradeHash
+            self.upgradeSeparate = (flags & (1 << 17)) != 0
         }
     }
 }

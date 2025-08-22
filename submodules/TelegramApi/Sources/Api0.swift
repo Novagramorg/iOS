@@ -496,7 +496,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[-1502273946] = { return Api.InputStorePaymentPurpose.parse_inputStorePaymentPremiumSubscription($0) }
     dict[494149367] = { return Api.InputStorePaymentPurpose.parse_inputStorePaymentStarsGift($0) }
     dict[1964968186] = { return Api.InputStorePaymentPurpose.parse_inputStorePaymentStarsGiveaway($0) }
-    dict[-572715178] = { return Api.InputStorePaymentPurpose.parse_inputStorePaymentStarsTopup($0) }
+    dict[-106780981] = { return Api.InputStorePaymentPurpose.parse_inputStorePaymentStarsTopup($0) }
     dict[1012306921] = { return Api.InputTheme.parse_inputTheme($0) }
     dict[-175567375] = { return Api.InputTheme.parse_inputThemeSlug($0) }
     dict[-1881255857] = { return Api.InputThemeSettings.parse_inputThemeSettings($0) }
@@ -954,7 +954,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[2109703795] = { return Api.SponsoredMessage.parse_sponsoredMessage($0) }
     dict[1124938064] = { return Api.SponsoredMessageReportOption.parse_sponsoredMessageReportOption($0) }
     dict[-963180333] = { return Api.SponsoredPeer.parse_sponsoredPeer($0) }
-    dict[12386139] = { return Api.StarGift.parse_starGift($0) }
+    dict[-2136190013] = { return Api.StarGift.parse_starGift($0) }
     dict[648369470] = { return Api.StarGift.parse_starGiftUnique($0) }
     dict[-650279524] = { return Api.StarGiftAttribute.parse_starGiftAttributeBackdrop($0) }
     dict[970559507] = { return Api.StarGiftAttribute.parse_starGiftAttributeModel($0) }
@@ -1432,6 +1432,8 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[-44166467] = { return Api.messages.WebPage.parse_webPage($0) }
     dict[-1936029524] = { return Api.messages.WebPagePreview.parse_webPagePreview($0) }
     dict[1042605427] = { return Api.payments.BankCardData.parse_bankCardData($0) }
+    dict[-706379148] = { return Api.payments.CheckCanSendGiftResult.parse_checkCanSendGiftResultFail($0) }
+    dict[927967149] = { return Api.payments.CheckCanSendGiftResult.parse_checkCanSendGiftResultOk($0) }
     dict[675942550] = { return Api.payments.CheckedGiftCode.parse_checkedGiftCode($0) }
     dict[-1730811363] = { return Api.payments.ConnectedStarRefBots.parse_connectedStarRefBots($0) }
     dict[-1362048039] = { return Api.payments.ExportedInvoice.parse_exportedInvoice($0) }
@@ -2557,6 +2559,8 @@ public extension Api {
             case let _1 as Api.messages.WebPagePreview:
                 _1.serialize(buffer, boxed)
             case let _1 as Api.payments.BankCardData:
+                _1.serialize(buffer, boxed)
+            case let _1 as Api.payments.CheckCanSendGiftResult:
                 _1.serialize(buffer, boxed)
             case let _1 as Api.payments.CheckedGiftCode:
                 _1.serialize(buffer, boxed)
