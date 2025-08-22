@@ -1040,7 +1040,7 @@ public final class InteractiveTextNodeLayout: NSObject {
             }
         }
         height += self.insets.top + self.insets.bottom + 2.0
-        return CGSize(width: self.size.width + self.insets.left + self.insets.right, height: ceil(height))
+        return CGSize(width: self.size.width, height: ceil(height))
     }
 }
 

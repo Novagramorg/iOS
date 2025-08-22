@@ -5613,7 +5613,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             })
         }
         
-        self.reloadChatLocation(chatLocation: self.chatLocation, chatLocationContextHolder: self.chatLocationContextHolder, historyNode: self.chatDisplayNode.historyNode, apply: { $0(false) })
+        self.reloadChatLocation(chatLocation: self.chatLocation, chatLocationContextHolder: self.chatLocationContextHolder, historyNode: self.chatDisplayNode.historyNode, apply: { $0(nil) })
         
         self.botCallbackAlertMessageDisposable = (self.botCallbackAlertMessage.get()
         |> deliverOnMainQueue).startStrict(next: { [weak self] message in
@@ -7330,9 +7330,6 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             interfaceState = interfaceState.withUpdatedHistoryScrollState(scrollState)
         }
         interfaceState = interfaceState.withUpdatedInputLanguage(self.chatDisplayNode.currentTextInputLanguage)
-        /*if case .peer = self.chatLocation, let channel = self.presentationInterfaceState.renderedPeer?.peer as? TelegramChannel, channel.isForumOrMonoForum {
-            interfaceState = interfaceState.withUpdatedComposeInputState(ChatTextInputState()).withUpdatedReplyMessageSubject(nil).withUpdatedSendMessageEffect(nil).withUpdatedPostSuggestionState(nil)
-        }*/
         let _ = ChatInterfaceState.update(engine: self.context.engine, peerId: peerId, threadId: threadId, { _ in
             return interfaceState
         }).startStandalone()
@@ -10165,9 +10162,9 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             self.currentChatSwitchDirection = nil
             self.chatLocation = updatedChatLocation
             historyNode.areContentAnimationsEnabled = true
-            self.chatDisplayNode.prepareSwitchToChatLocation(historyNode: historyNode, animationDirection: nil)
+            self.chatDisplayNode.prepareSwitchToChatLocation(chatLocation: chatLocation, historyNode: historyNode, animationDirection: nil)
             
-            apply(self.didAppear)
+            apply(self.didAppear ? .animated(duration: 0.4, curve: .spring) : .immediate)
             
             self.currentChatSwitchDirection = nil
             self.isUpdatingChatLocationThread = false
@@ -10211,37 +10208,76 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             self.currentChatSwitchDirection = nil
             self.chatLocation = updatedChatLocation
             historyNode.areContentAnimationsEnabled = true
-            self.chatDisplayNode.prepareSwitchToChatLocation(historyNode: historyNode, animationDirection: nil)
+            self.chatDisplayNode.prepareSwitchToChatLocation(chatLocation: updatedChatLocation, historyNode: historyNode, animationDirection: nil)
             
-            apply(true)
+            apply(.animated(duration: 0.4, curve: .spring))
             
             self.currentChatSwitchDirection = nil
             self.isUpdatingChatLocationThread = false
         })
     }
     
-    public func updateChatLocationThread(threadId: Int64?, animationDirection: ChatControllerAnimateInnerChatSwitchDirection? = nil) {
+    public func updateChatLocationThread(threadId: Int64?, animationDirection: ChatControllerAnimateInnerChatSwitchDirection? = nil, replaceInline: Bool = false, transferInputState: Bool = false, completion: (() -> Void)? = nil) {
         Task { @MainActor [weak self] in
             guard let self else {
+                completion?()
                 return
             }
-            
             if self.isUpdatingChatLocationThread {
+                completion?()
                 return
             }
             guard let peerId = self.chatLocation.peerId else {
+                completion?()
                 return
             }
             if self.chatLocation.threadId == threadId {
+                completion?()
                 return
             }
             guard let peer = self.presentationInterfaceState.renderedPeer?.chatMainPeer else {
+                completion?()
                 return
             }
             
-            self.saveInterfaceState()
-            
-            self.chatDisplayNode.dismissTextInput()
+            var clearInputState = false
+            if transferInputState {
+                var peerId: PeerId
+                var currentThreadId: Int64?
+                switch self.chatLocation {
+                case let .peer(peerIdValue):
+                    peerId = peerIdValue
+                case let .replyThread(replyThreadMessage):
+                    peerId = replyThreadMessage.peerId
+                    currentThreadId = replyThreadMessage.threadId
+                case .customChatContents:
+                    return
+                }
+                
+                let timestamp = Int32(Date().timeIntervalSince1970)
+                var interfaceState = self.presentationInterfaceState.interfaceState.withUpdatedTimestamp(timestamp)
+                let composeInputState = interfaceState.composeInputState
+                interfaceState = interfaceState.withUpdatedComposeInputState(ChatTextInputState())
+                interfaceState = interfaceState.withUpdatedReplyMessageSubject(nil)
+                interfaceState = interfaceState.withUpdatedInputLanguage(self.chatDisplayNode.currentTextInputLanguage)
+                let _ = ChatInterfaceState.update(engine: self.context.engine, peerId: peerId, threadId: currentThreadId, { _ in
+                    return interfaceState
+                }).startStandalone()
+                let _ = ChatInterfaceState.update(engine: self.context.engine, peerId: peerId, threadId: threadId, { current in
+                    if currentThreadId != EngineMessage.newTopicThreadId {
+                        return current.withUpdatedComposeInputState(composeInputState)
+                    } else {
+                        return current.withUpdatedComposeInputState(ChatTextInputState())
+                    }
+                }).startStandalone()
+                
+                if currentThreadId == EngineMessage.newTopicThreadId {
+                    clearInputState = true
+                }
+            } else {
+                self.saveInterfaceState()
+                self.chatDisplayNode.dismissTextInput()
+            }
             
             let updatedChatLocation: ChatLocation
             if let threadId {
@@ -10301,7 +10337,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             let avatarSnapshot = self.chatInfoNavigationButton?.buttonItem.customDisplayNode?.view.window != nil ? (self.chatInfoNavigationButton?.buttonItem.customDisplayNode as? ChatAvatarNavigationNode)?.prepareSnapshotState() : nil
             
             let chatLocationContextHolder = Atomic<ChatLocationContextHolder?>(value: nil)
-            let historyNode = self.chatDisplayNode.createHistoryNodeForChatLocation(chatLocation: updatedChatLocation, chatLocationContextHolder: chatLocationContextHolder)
+            let historyNode = replaceInline ? self.chatDisplayNode.historyNode : self.chatDisplayNode.createHistoryNodeForChatLocation(chatLocation: updatedChatLocation, chatLocationContextHolder: chatLocationContextHolder)
             self.isUpdatingChatLocationThread = true
             self.reloadChatLocation(chatLocation: updatedChatLocation, chatLocationContextHolder: chatLocationContextHolder, historyNode: historyNode, apply: { [weak self, weak historyNode] apply in
                 guard let self, let historyNode else {
@@ -10311,9 +10347,9 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                 self.currentChatSwitchDirection = animationDirection
                 self.chatLocation = updatedChatLocation
                 historyNode.areContentAnimationsEnabled = true
-                self.chatDisplayNode.prepareSwitchToChatLocation(historyNode: historyNode, animationDirection: animationDirection)
+                self.chatDisplayNode.prepareSwitchToChatLocation(chatLocation: updatedChatLocation, historyNode: historyNode, animationDirection: animationDirection)
                 
-                apply(true)
+                apply(.animated(duration: transferInputState ? 0.3 : 0.4, curve: .spring))
                 
                 if let navigationSnapshot, let animationDirection {
                     let mappedAnimationDirection: ChatTitleView.AnimateFromSnapshotDirection
@@ -10337,6 +10373,17 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                 
                 self.currentChatSwitchDirection = nil
                 self.isUpdatingChatLocationThread = false
+                
+                if clearInputState {
+                    //DispatchQueue.main.async { [weak self] in
+                    //    guard let self else {
+                    //        return
+                    //    }
+                        self.updateChatPresentationInterfaceState(animated: false, interactive: false, { $0.updatedInterfaceState { $0.withUpdatedComposeInputState(ChatTextInputState()) } })
+                    //}
+                }
+                
+                completion?()
             })
         }
     }

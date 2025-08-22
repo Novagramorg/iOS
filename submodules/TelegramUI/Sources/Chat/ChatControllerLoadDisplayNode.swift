@@ -125,7 +125,7 @@ import PostSuggestionsSettingsScreen
 import ChatSendStarsScreen
 
 extension ChatControllerImpl {
-    func reloadChatLocation(chatLocation: ChatLocation, chatLocationContextHolder: Atomic<ChatLocationContextHolder?>, historyNode: ChatHistoryListNodeImpl, apply: @escaping ((Bool) -> Void) -> Void) {
+    func reloadChatLocation(chatLocation: ChatLocation, chatLocationContextHolder: Atomic<ChatLocationContextHolder?>, historyNode: ChatHistoryListNodeImpl, apply: @escaping ((ContainedViewLayoutTransition?) -> Void) -> Void) {
         self.contentDataReady.set(false)
         
         self.contentDataDisposable?.dispose()
@@ -176,7 +176,7 @@ extension ChatControllerImpl {
                 return
             }
             
-            apply({ [weak self, weak contentData] forceAnimation in
+            apply({ [weak self, weak contentData] forceAnimationTransition in
                 guard let self, let contentData, self.pendingContentData?.contentData === contentData else {
                     return
                 }
@@ -184,7 +184,7 @@ extension ChatControllerImpl {
                 self.contentData = contentData
                 self.pendingContentData = nil
                 
-                self.contentDataUpdated(synchronous: true, forceAnimation: forceAnimation, previousState: contentData.state)
+                self.contentDataUpdated(synchronous: true, forceAnimationTransition: forceAnimationTransition, previousState: contentData.state)
                 
                 self.chatThemeEmoticonPromise.set(contentData.chatThemeEmoticonPromise.get())
                 self.chatWallpaperPromise.set(contentData.chatWallpaperPromise.get())
@@ -207,11 +207,11 @@ extension ChatControllerImpl {
                         return
                     }
                     
-                    self.contentDataUpdated(synchronous: false, forceAnimation: false, previousState: previousState)
+                    self.contentDataUpdated(synchronous: false, forceAnimationTransition: nil, previousState: previousState)
                 }
             })
             
-            if self.newTopicEventsDisposable == nil, let peerId = chatLocation.peerId, (chatLocation.threadId == EngineMessage.newTopicThreadId || chatLocation.threadId == nil) {
+            if self.newTopicEventsDisposable == nil, let peerId = chatLocation.peerId, chatLocation.threadId == EngineMessage.newTopicThreadId {
                 self.newTopicEventsDisposable = (self.context.account.pendingMessageManager.newTopicEvents(peerId: peerId)
                 |> mapToSignal { event -> Signal<Int64, NoError> in
                     if case let .didMove(fromThreadId, toThreadId) = event {
@@ -229,14 +229,14 @@ extension ChatControllerImpl {
                     if chatLocation.peerId != peerId {
                         self.updateInitialChatBotForumLocationThread(linkedForumId: peerId, threadId: threadId)
                     } else {
-                        self.updateChatLocationThread(threadId: threadId, animationDirection: .right)
+                        self.updateChatLocationThread(threadId: threadId, animationDirection: nil, replaceInline: true, transferInputState: true)
                     }
                 })
             }
         })
     }
     
-    func contentDataUpdated(synchronous: Bool, forceAnimation: Bool, previousState: ContentData.State) {
+    func contentDataUpdated(synchronous: Bool, forceAnimationTransition: ContainedViewLayoutTransition?, previousState: ContentData.State) {
         guard let contentData = self.contentData else {
             return
         }
@@ -394,11 +394,15 @@ extension ChatControllerImpl {
         if previousState.pinnedMessage != contentData.state.pinnedMessage {
             animated = true
         }
-        if forceAnimation {
-            animated = true
+        var transition: ContainedViewLayoutTransition = animated ? .animated(duration: 0.4, curve: .spring) : .immediate
+        if let forceAnimationTransition {
+            transition = forceAnimationTransition
+        }
+        if !self.willAppear {
+            transition = .immediate
         }
         
-        self.updateChatPresentationInterfaceState(animated: animated && self.willAppear, interactive: false, { presentationInterfaceState in
+        self.updateChatPresentationInterfaceState(transition: transition, interactive: false, { presentationInterfaceState in
             var presentationInterfaceState = presentationInterfaceState
             presentationInterfaceState = presentationInterfaceState.updatedPeer({ _ in
                 return contentData.state.renderedPeer
