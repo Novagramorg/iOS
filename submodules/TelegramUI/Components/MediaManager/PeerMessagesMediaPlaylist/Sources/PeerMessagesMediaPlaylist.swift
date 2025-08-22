@@ -840,6 +840,16 @@ public final class PeerMessagesMediaPlaylist: SharedMediaPlaylist {
                                 }
                                 
                                 if case .all = looping {
+                                    if let first = messages.first {
+                                        if let (message, aroundMessages, _) = navigatedMessageFromMessages(messages, anchorIndex: first.index, position: .exact) {
+                                            switch navigation {
+                                                case .random:
+                                                    return .single(((message, []), messages.count, false))
+                                                default:
+                                                    return .single(((message, aroundMessages), messages.count, false))
+                                            }
+                                        }
+                                    }
                                     return .single((nil, messages.count, false))
                                 } else {
                                     if hasMore {
