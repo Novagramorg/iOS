@@ -434,6 +434,7 @@ final class GiftOptionsScreenComponent: Component {
                             subject = .uniqueGift(gift: gift, price: nil)
                         }
                         
+                        let context = component.context
                         let _ = visibleItem.update(
                             transition: itemTransition,
                             component: AnyComponent(
@@ -472,12 +473,19 @@ final class GiftOptionsScreenComponent: Component {
                                                                 let theme = AlertControllerTheme(presentationData: component.context.sharedContext.currentPresentationData.with { $0 })
                                                                 let font = Font.regular(floor(theme.baseFontSize * 13.0 / 17.0))
                                                                 let boldFont = Font.semibold(floor(theme.baseFontSize * 13.0 / 17.0))
-                                                                let attributedText = stringWithAppliedEntities(text, entities: entities, baseColor: theme.primaryColor, linkColor: .black, baseFont: font, linkFont: font, boldFont: boldFont, italicFont: font, boldItalicFont: font, fixedFont: font, blockQuoteFont: font, message: nil, paragraphAlignment: .center)
+                                                                let attributedText = stringWithAppliedEntities(text, entities: entities, baseColor: theme.primaryColor, linkColor: theme.accentColor, baseFont: font, linkFont: font, boldFont: boldFont, italicFont: font, boldItalicFont: font, fixedFont: font, blockQuoteFont: font, message: nil, paragraphAlignment: .center)
                                                                 
                                                                 var dismissImpl: (() -> Void)?
                                                                 let alertController = textAlertController(theme: theme, title: NSAttributedString(string: strings.Gift_Options_GiftLocked_Title, font: Font.semibold(theme.baseFontSize), textColor: theme.primaryColor, paragraphAlignment: .center), text: attributedText, actions: [TextAlertAction(type: .defaultAction, title: strings.Common_OK, action: {
                                                                     dismissImpl?()
-                                                                })], actionLayout: .horizontal, dismissOnOutsideTap: true)
+                                                                })], actionLayout: .horizontal, dismissOnOutsideTap: true, linkAction: { [weak controller] attributes, _ in
+                                                                    if let value = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.URL)] as? String {
+                                                                        dismissImpl?()
+                                                                        if let navigationController = controller?.navigationController as? NavigationController {
+                                                                            context.sharedContext.openExternalUrl(context: context, urlContext: .generic, url: value, forceExternal: false, presentationData: context.sharedContext.currentPresentationData.with { $0 }, navigationController: navigationController, dismissInput: {})
+                                                                        }
+                                                                    }
+                                                                })
                                                                 dismissImpl = { [weak alertController] in
                                                                     alertController?.dismissAnimated()
                                                                 }

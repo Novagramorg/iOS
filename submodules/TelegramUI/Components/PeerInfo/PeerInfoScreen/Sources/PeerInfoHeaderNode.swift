@@ -1453,7 +1453,15 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         
         if let previousPanelStatusData = previousPanelStatusData, let currentPanelStatusData = panelStatusData.0, let previousPanelStatusDataKey = previousPanelStatusData.key, let currentPanelStatusDataKey = currentPanelStatusData.key, previousPanelStatusDataKey != currentPanelStatusDataKey {
             if let snapshotView = self.panelSubtitleNode.view.snapshotContentTree() {
-                let direction: CGFloat = previousPanelStatusDataKey.rawValue > currentPanelStatusDataKey.rawValue ? 1.0 : -1.0
+                let previousIndex = screenData?.availablePanes.firstIndex(of: previousPanelStatusDataKey)
+                let currentIndex = screenData?.availablePanes.firstIndex(of: currentPanelStatusDataKey)
+                
+                let direction: CGFloat
+                if let previousIndex, let currentIndex {
+                    direction = previousIndex > currentIndex ? 1.0 : -1.0
+                } else {
+                    direction = previousPanelStatusDataKey.rawValue > currentPanelStatusDataKey.rawValue ? 1.0 : -1.0
+                }
                 
                 self.panelSubtitleNode.view.superview?.addSubview(snapshotView)
                 snapshotView.frame = self.panelSubtitleNode.frame
