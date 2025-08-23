@@ -18,8 +18,6 @@ final class OverlayAudioPlayerControllerImpl: ViewController, OverlayAudioPlayer
     let playlistLocation: SharedMediaPlaylistLocation?
     
     private(set) weak var parentNavigationController: NavigationController?
-    private let updateMusicSaved: ((FileMediaReference, Bool) -> Void)?
-    let reorderSavedMusic: ((FileMediaReference, FileMediaReference?) -> Void)?
     
     private var animatedIn = false
     
@@ -36,9 +34,7 @@ final class OverlayAudioPlayerControllerImpl: ViewController, OverlayAudioPlayer
         initialMessageId: MessageId,
         initialOrder: MusicPlaybackSettingsOrder,
         playlistLocation: SharedMediaPlaylistLocation? = nil,
-        parentNavigationController: NavigationController?,
-        updateMusicSaved: ((FileMediaReference, Bool) -> Void)? = nil,
-        reorderSavedMusic: ((FileMediaReference, FileMediaReference?) -> Void)? = nil
+        parentNavigationController: NavigationController?
     ) {
         self.context = context
         self.chatLocation = chatLocation
@@ -47,8 +43,6 @@ final class OverlayAudioPlayerControllerImpl: ViewController, OverlayAudioPlayer
         self.initialOrder = initialOrder
         self.playlistLocation = playlistLocation
         self.parentNavigationController = parentNavigationController
-        self.updateMusicSaved = updateMusicSaved
-        self.reorderSavedMusic = reorderSavedMusic
         
         super.init(navigationBarPresentationData: nil)
         
@@ -145,18 +139,6 @@ final class OverlayAudioPlayerControllerImpl: ViewController, OverlayAudioPlayer
             if let strongSelf = self {
                 strongSelf.context.sharedContext.openSearch(filter: .music, query: artist)
                 strongSelf.dismiss()
-            }
-        }, updateMusicSaved: { [weak self] file, isSaved in
-            if let self {
-                if let updateMusicSaved = self.updateMusicSaved {
-                    updateMusicSaved(file, isSaved)
-                } else {
-                    if isSaved {
-                        let _ = self.context.engine.peers.addSavedMusic(file: file).start()
-                    } else {
-                        let _ = self.context.engine.peers.removeSavedMusic(file: file).start()
-                    }
-                }
             }
         },
         getParentController: { [weak self] in
