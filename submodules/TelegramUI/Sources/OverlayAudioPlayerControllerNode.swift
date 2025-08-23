@@ -536,10 +536,7 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
     }
     
     private func updateMusicSaved(file: FileMediaReference, isSaved: Bool) {
-        guard let playlistLocation = self.playlistLocation as? PeerMessagesPlaylistLocation, case let .savedMusic(savedMusicContext, _, _) = playlistLocation else {
-            return
-        }
-        if savedMusicContext.peerId == self.context.account.peerId {
+        if let playlistLocation = self.playlistLocation as? PeerMessagesPlaylistLocation, case let .savedMusic(savedMusicContext, _, _) = playlistLocation, savedMusicContext.peerId == self.context.account.peerId {
             if isSaved {
                 let _ = savedMusicContext.addMusic(file: file).start()
             } else {
@@ -1226,6 +1223,7 @@ private final class OverlayAudioPlayerContextExtractedContentSource: ContextExtr
     let keepInPlace: Bool = false
     let ignoreContentTouches: Bool = false
     let blurBackground: Bool = true
+    let additionalInsets = UIEdgeInsets(top: 0.0, left: 0.0, bottom: 80.0, right: 0.0)
     
     private let contentNode: ContextExtractedContentContainingNode
     
