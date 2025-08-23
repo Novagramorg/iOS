@@ -1206,7 +1206,7 @@ private final class GiftViewSheetContent: CombinedComponent {
             self.inUpgradePreview = true
             self.updated(transition: .spring(duration: 0.4))
             
-            if let controller = self.getController() as? GiftViewScreen {
+            if let controller = self.getController() as? GiftViewScreen, self.upgradeForm != nil {
                 controller.showBalance = true
             }
         }
@@ -1625,6 +1625,38 @@ private final class GiftViewSheetContent: CombinedComponent {
                     }
                      
                     self.justUpgraded = true
+                    self.revealedNumberDigits = -1
+                    
+                    if case let .unique(uniqueGift) = result.gift {
+                        for i in 0 ..< "\(uniqueGift.number)".count {
+                            Queue.mainQueue().after(0.2 + Double(i) * 0.3) {
+                                self.revealedNumberDigits += 1
+                                self.updated(transition: .immediate)
+                            }
+                        }
+                    }
+                    
+                    Queue.mainQueue().after(1.2) {
+                        self.revealedAttributes.insert(.backdrop)
+                        self.updated(transition: .immediate)
+                        
+                        Queue.mainQueue().after(0.7) {
+                            self.revealedAttributes.insert(.pattern)
+                            self.updated(transition: .immediate)
+                            
+                            Queue.mainQueue().after(0.7) {
+                                self.revealedAttributes.insert(.model)
+                                self.updated(transition: .immediate)
+                                
+                                Queue.mainQueue().after(0.6) {
+                                    if let controller = self.getController() as? GiftViewScreen {
+                                        controller.animateSuccess()
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
                     self.subject = .profileGift(peerId, result)
                     controller.animateSuccess()
                     self.updated(transition: .spring(duration: 0.4))
@@ -1714,7 +1746,6 @@ private final class GiftViewSheetContent: CombinedComponent {
                     guard let self else {
                         return
                     }
-                    self.dismiss(animated: true)
                     Queue.mainQueue().after(0.5) {
                         starsContext?.load(force: true)
                     }
@@ -4433,8 +4464,14 @@ public class GiftViewScreen: ViewControllerComponentContainer {
     }
     
     fileprivate func switchToNextUpgradable() {
-        guard let upgradableGifts = self.upgradableGifts, case let .profileGift(peerId, _) = self.subject else {
+        guard let upgradableGifts = self.upgradableGifts else {
             return
+        }
+        let peerId: EnginePeer.Id
+        if case let .profileGift(peerIdValue, _) = self.subject {
+            peerId = peerIdValue
+        } else {
+            peerId = self.context.account.peerId
         }
         var effectiveUpgradableGifts: [ProfileGiftsContext.State.StarGift] = []
         for gift in upgradableGifts {
@@ -4613,7 +4650,7 @@ public class GiftViewScreen: ViewControllerComponentContainer {
 }
 
 func formatPercentage(_ value: Float) -> String {
-    return String(format: "%0.1f%%", value).replacingOccurrences(of: ".0%", with: "%").replacingOccurrences(of: ",0%", with: "%")
+    return String(format: "%0.1f", value).replacingOccurrences(of: ".0", with: "").replacingOccurrences(of: ",0", with: "") + "%%"
 }
 
 private final class PeerCellComponent: Component {

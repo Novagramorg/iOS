@@ -861,7 +861,7 @@ open class TelegramBaseController: ViewController, KeyShortcutResponder {
                                 } else {
                                     controllerContext = strongSelf.context.sharedContext.makeTempAccountContext(account: account)
                                 }
-                                let controller = strongSelf.context.sharedContext.makeOverlayAudioPlayerController(context: controllerContext, chatLocation: .peer(id: id.messageId.peerId), type: type, initialMessageId: id.messageId, initialOrder: order, playlistLocation: playlistLocation, parentNavigationController: strongSelf.navigationController as? NavigationController, updateMusicSaved: nil, reorderSavedMusic: nil)
+                                let controller = strongSelf.context.sharedContext.makeOverlayAudioPlayerController(context: controllerContext, chatLocation: .peer(id: id.messageId.peerId), type: type, initialMessageId: id.messageId, initialOrder: order, playlistLocation: playlistLocation, parentNavigationController: strongSelf.navigationController as? NavigationController)
                                 strongSelf.displayNode.view.window?.endEditing(true)
                                 strongSelf.present(controller, in: .window(.root))
                             case let .messages(chatLocation, _, _):
@@ -902,7 +902,7 @@ open class TelegramBaseController: ViewController, KeyShortcutResponder {
                                         } else {
                                             controllerContext = strongSelf.context.sharedContext.makeTempAccountContext(account: account)
                                         }
-                                        let controller = strongSelf.context.sharedContext.makeOverlayAudioPlayerController(context: controllerContext, chatLocation: chatLocation, type: type, initialMessageId: id.messageId, initialOrder: order, playlistLocation: nil, parentNavigationController: strongSelf.navigationController as? NavigationController, updateMusicSaved: nil, reorderSavedMusic: nil)
+                                        let controller = strongSelf.context.sharedContext.makeOverlayAudioPlayerController(context: controllerContext, chatLocation: chatLocation, type: type, initialMessageId: id.messageId, initialOrder: order, playlistLocation: nil, parentNavigationController: strongSelf.navigationController as? NavigationController)
                                         strongSelf.displayNode.view.window?.endEditing(true)
                                         strongSelf.present(controller, in: .window(.root))
                                     } else if index.1 {

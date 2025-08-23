@@ -557,6 +557,36 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             }
         }
         
+        let actionButtonKeys: [PeerInfoHeaderButtonKey] = (self.isSettings || self.isMyProfile) ? [] : peerInfoHeaderActionButtons(peer: peer, isSecretChat: isSecretChat, isContact: isContact)
+        let buttonKeys: [PeerInfoHeaderButtonKey] = (self.isSettings || self.isMyProfile) ? [] : peerInfoHeaderButtons(peer: peer, cachedData: cachedData, isOpenedFromChat: self.isOpenedFromChat, isExpanded: true, videoCallsEnabled: width > 320.0 && self.videoCallsEnabled, isSecretChat: isSecretChat, isContact: isContact, threadInfo: threadData?.info)
+        
+        let backgroundCoverSubject: PeerInfoCoverComponent.Subject?
+        var backgroundCoverAnimateIn = false
+        var backgroundDefaultHeight: CGFloat = 254.0
+        var hasBackground = false
+        if let status = peer?.emojiStatus, case .starGift = status.content {
+            backgroundCoverSubject = .status(status)
+            if !self.didSetupBackgroundCover {
+                if !self.isSettings {
+                    backgroundCoverAnimateIn = true
+                }
+                self.didSetupBackgroundCover = true
+            }
+            if !buttonKeys.isEmpty {
+                backgroundDefaultHeight = 327.0
+                if metrics.isTablet {
+                    backgroundDefaultHeight += 60.0
+                }
+            }
+            hasBackground = true
+        } else if let peer {
+            backgroundCoverSubject = .peer(EnginePeer(peer))
+            if peer.profileColor != nil {
+                hasBackground = true
+            }
+        } else {
+            backgroundCoverSubject = nil
+        }
         
         var currentSavedMusic: TelegramMediaFile?
         if !self.isSettings, let screenData {
@@ -566,8 +596,8 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                 currentSavedMusic = cachedUserData.savedMusic
             }
         }
-        let musicHeight: CGFloat = 24.0
-        let bottomInset: CGFloat = currentSavedMusic != nil ? 24.0 : 0.0
+        let musicHeight: CGFloat = hasBackground ? 24.0 : 16.0
+        let bottomInset: CGFloat = currentSavedMusic != nil ? musicHeight : 0.0
         
         let isLandscape = containerInset > 16.0
         
@@ -1187,10 +1217,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         }
         
         let expandedAvatarListSize = CGSize(width: width, height: expandedAvatarListHeight)
-        
-        let actionButtonKeys: [PeerInfoHeaderButtonKey] = (self.isSettings || self.isMyProfile) ? [] : peerInfoHeaderActionButtons(peer: peer, isSecretChat: isSecretChat, isContact: isContact)
-        let buttonKeys: [PeerInfoHeaderButtonKey] = (self.isSettings || self.isMyProfile) ? [] : peerInfoHeaderButtons(peer: peer, cachedData: cachedData, isOpenedFromChat: self.isOpenedFromChat, isExpanded: true, videoCallsEnabled: width > 320.0 && self.videoCallsEnabled, isSecretChat: isSecretChat, isContact: isContact, threadInfo: threadData?.info)
-        
+                
         var isPremium = false
         var isVerified = false
         var isFake = false
@@ -2459,35 +2486,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         } else {
             transition.updateFrame(view: self.backgroundBannerView, frame: bannerFrame)
         }
-        
-        let backgroundCoverSubject: PeerInfoCoverComponent.Subject?
-        var backgroundCoverAnimateIn = false
-        var backgroundDefaultHeight: CGFloat = 254.0
-        var hasBackground = false
-        if let status = peer?.emojiStatus, case .starGift = status.content {
-            backgroundCoverSubject = .status(status)
-            if !self.didSetupBackgroundCover {
-                if !self.isSettings {
-                    backgroundCoverAnimateIn = true
-                }
-                self.didSetupBackgroundCover = true
-            }
-            if !buttonKeys.isEmpty {
-                backgroundDefaultHeight = 327.0
-                if metrics.isTablet {
-                    backgroundDefaultHeight += 60.0
-                }
-            }
-            hasBackground = true
-        } else if let peer {
-            backgroundCoverSubject = .peer(EnginePeer(peer))
-            if peer.profileColor != nil {
-                hasBackground = true
-            }
-        } else {
-            backgroundCoverSubject = nil
-        }
-                
+                        
         let backgroundCoverSize = self.backgroundCover.update(
             transition: ComponentTransition(transition),
             component: AnyComponent(PeerInfoCoverComponent(
@@ -2699,7 +2698,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                 environment: {},
                 containerSize: CGSize(width: backgroundFrame.width, height: musicHeight)
             )
-            let musicFrame = CGRect(origin: CGPoint(x: 0.0, y: (apparentBackgroundHeight - backgroundHeight) + backgroundHeight - musicHeight), size: musicSize)
+            let musicFrame = CGRect(origin: CGPoint(x: 0.0, y: (apparentBackgroundHeight - backgroundHeight) + backgroundHeight - musicHeight - (hasBackground ? 0.0 : 4.0)), size: musicSize)
             if let musicView = music.view {
                 if musicView.superview == nil {
                     self.regularContentNode.view.addSubview(musicView)

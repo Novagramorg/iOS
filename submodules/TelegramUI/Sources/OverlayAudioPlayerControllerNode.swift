@@ -27,7 +27,6 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
     private let requestDismiss: () -> Void
     private let requestShare: (ShareControllerSubject) -> Void
     private let requestSearchByArtist: (String) -> Void
-    private let updateMusicSaved: (FileMediaReference, Bool) -> Void
     private let playlistLocation: SharedMediaPlaylistLocation?
     private let isGlobalSearch: Bool
     
@@ -68,7 +67,6 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
         requestDismiss: @escaping () -> Void,
         requestShare: @escaping (ShareControllerSubject) -> Void,
         requestSearchByArtist: @escaping (String) -> Void,
-        updateMusicSaved: @escaping (FileMediaReference, Bool) -> Void,
         getParentController: @escaping () -> ViewController?
     ) {
         self.context = context
@@ -79,7 +77,6 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
         self.requestShare = requestShare
         self.requestSearchByArtist = requestSearchByArtist
         self.playlistLocation = playlistLocation
-        self.updateMusicSaved = updateMusicSaved
         self.getParentController = getParentController
         
         if let playlistLocation = playlistLocation as? PeerMessagesPlaylistLocation, case let .custom(messages, canReorder, at, loadMore) = playlistLocation.effectiveLocation(context: context) {
@@ -456,10 +453,10 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
     }
     
     private func setupReordering() {
-        guard let controller = self.getParentController() as? OverlayAudioPlayerControllerImpl, let reorderSavedMusic = controller.reorderSavedMusic, case let .peer(peerId) = self.chatLocation else {
+        guard let playlistLocation = self.playlistLocation as? PeerMessagesPlaylistLocation, case let .savedMusic(savedMusicContext, _, canReorder) = playlistLocation, canReorder else {
             return
         }
-        let _ = (self.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: peerId))
+        let _ = (self.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: savedMusicContext.peerId))
         |> deliverOnMainQueue).start(next: { [weak self] peer in
             guard let self, let peer = peer.flatMap({ PeerReference($0._asPeer()) }) else {
                 return
@@ -491,7 +488,7 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
                     return .single(false)
                 }
                 
-                reorderSavedMusic(.savedMusic(peer: peer, media: fromFile), toFile.flatMap { .savedMusic(peer: peer, media: $0) })
+                let _ = savedMusicContext.addMusic(file: .savedMusic(peer: peer, media: fromFile), afterFile: toFile.flatMap { .savedMusic(peer: peer, media: $0) }).start()
                 
                 return .single(true)
             }
@@ -536,6 +533,25 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
             }
         )
         self.getParentController()?.present(controller, in: .window(.root))
+    }
+    
+    private func updateMusicSaved(file: FileMediaReference, isSaved: Bool) {
+        guard let playlistLocation = self.playlistLocation as? PeerMessagesPlaylistLocation, case let .savedMusic(savedMusicContext, _, _) = playlistLocation else {
+            return
+        }
+        if savedMusicContext.peerId == self.context.account.peerId {
+            if isSaved {
+                let _ = savedMusicContext.addMusic(file: file).start()
+            } else {
+                let _ = savedMusicContext.removeMusic(file: file).start()
+            }
+        } else {
+            if isSaved {
+                let _ = self.context.engine.peers.addSavedMusic(file: file).start()
+            } else {
+                let _ = self.context.engine.peers.removeSavedMusic(file: file).start()
+            }
+        }
     }
     
     func addToSavedMusic(file: FileMediaReference) {
@@ -585,7 +601,7 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
         )
         self.getParentController()?.present(controller, in: .window(.root))
         
-        self.updateMusicSaved(file, true)
+        self.updateMusicSaved(file: file, isSaved: true)
     }
     
     func removeFromSavedMusic(file: FileMediaReference) {
@@ -618,7 +634,7 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
             self.getParentController()?.present(controller, in: .window(.root))
         }
         
-        self.updateMusicSaved(file, false)
+        self.updateMusicSaved(file: file, isSaved: false)
     }
     
     private var isSaved: Bool? {
@@ -1106,8 +1122,10 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
             //        )
             
             var canDelete = false
-            if case let .custom(_, _, _, _, canReorder, _) = self.source, canReorder {
-                canDelete = true
+            if case .custom = self.source {
+                if self.savedIds?.contains(file.fileId.id) == true {
+                    canDelete = true
+                }
             } else if let peer = message.peers[message.id.peerId] {
                 if peer is TelegramUser || peer is TelegramSecretChat {
                     canDelete = true

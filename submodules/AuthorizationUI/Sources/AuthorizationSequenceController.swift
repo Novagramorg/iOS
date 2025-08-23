@@ -1305,7 +1305,7 @@ public final class AuthorizationSequenceController: NavigationController, ASAuth
                     }
                     controllers.append(self.signUpController(firstName: firstName, lastName: lastName, termsOfService: termsOfService, displayCancel: displayCancel))
                     self.setViewControllers(controllers, animated: !self.viewControllers.isEmpty)
-                case let .payment(number, codeHash, storeProduct, _):
+                case let .payment(number, codeHash, storeProduct, _, _, _):
                     var controllers: [ViewController] = []
                     if !self.otherAccountPhoneNumbers.1.isEmpty {
                         controllers.append(self.splashController())

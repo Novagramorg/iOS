@@ -6050,23 +6050,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                 initialMessageId: MessageId(peerId: peerId, namespace: Namespaces.Message.Local, id: initialId),
                 initialOrder: .regular,
                 playlistLocation: playlistLocation,
-                parentNavigationController: self.controller?.navigationController as? NavigationController,
-                updateMusicSaved: self.peerId == self.context.account.peerId ? { [weak savedMusicContext] file, isSaved in
-                    guard let savedMusicContext else {
-                        return
-                    }
-                    if isSaved {
-                        let _ = savedMusicContext.addMusic(file: file).start()
-                    } else {
-                        let _ = savedMusicContext.removeMusic(file: file).start()
-                    }
-                } : nil,
-                reorderSavedMusic: { [weak savedMusicContext] file, afterFile in
-                    guard let savedMusicContext else {
-                        return
-                    }
-                    let _ = savedMusicContext.addMusic(file: file, afterFile: afterFile, apply: true).start()
-                }
+                parentNavigationController: self.controller?.navigationController as? NavigationController
             )
             self.controller?.present(musicController, in: .window(.root))
         }
