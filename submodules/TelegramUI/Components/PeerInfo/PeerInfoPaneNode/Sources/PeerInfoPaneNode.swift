@@ -10,7 +10,6 @@ public enum PeerInfoPaneKey: Int32 {
     case botPreview
     case members
     case stories
-    case storyArchive
     case gifts
     case media
     case savedMessagesChats
@@ -23,6 +22,7 @@ public enum PeerInfoPaneKey: Int32 {
     case groupsInCommon
     case similarChannels
     case similarBots
+    case storyArchive
     
     public init(tab: TelegramProfileTab) {
         switch tab {
