@@ -433,8 +433,7 @@ public final class ProfileSavedMusicContext {
                 self.count = count + 1
             }
         }
-        self.files = updatedFiles
-        
+        self.files = updatedFiles        
         self.pushState()
         
         if apply {

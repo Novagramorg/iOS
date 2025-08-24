@@ -1097,9 +1097,13 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
                 })))
             }
             
-            items.append(.separator)
+            var addedSeparator = false
             
             if message.id.namespace == Namespaces.Message.Cloud {
+                if !addedSeparator {
+                    items.append(.separator)
+                    addedSeparator = true
+                }
                 items.append(
                     .action(ContextMenuActionItem(text: "Show in Chat", icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/GoToMessage"), color: theme.contextMenu.primaryColor) }, action: { [weak self] _, f in
                         f(.dismissWithoutContent)
@@ -1147,6 +1151,10 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
             }
             
             if canDelete {
+                if !addedSeparator {
+                    items.append(.separator)
+                    addedSeparator = true
+                }
                 var actionTitle = "Delete"
                 if case .custom = self.source {
                     actionTitle = "Remove"

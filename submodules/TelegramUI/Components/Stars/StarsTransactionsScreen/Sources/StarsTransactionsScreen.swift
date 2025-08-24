@@ -1286,11 +1286,24 @@ public final class StarsTransactionsScreen: ViewControllerComponentContainer {
                 }
                 if subscription.untilDate > Int32(CFAbsoluteTimeGetCurrent() + kCFAbsoluteTimeIntervalSince1970) {
                     var updated = false
-                    if let channel = subscription.peer._asPeer() as? TelegramChannel, channel.participationStatus == .left && !subscription.flags.contains(.isCancelled) {
+                    
+                    var hasLeft = false
+                    var isKicked = false
+                    if let channel = subscription.peer._asPeer() as? TelegramChannel {
+                        switch channel.participationStatus {
+                        case .left:
+                            hasLeft = true
+                        case .kicked:
+                            isKicked = true
+                        default:
+                            break
+                        }
+                    }
+                    
+                    if hasLeft && !subscription.flags.contains(.isCancelled) {
                         let _ = self.context.engine.payments.fulfillStarsSubscription(peerId: context.account.peerId, subscriptionId: subscription.id).startStandalone()
                         updated = true
-                    }
-                    if let _ = subscription.inviteHash, !subscription.flags.contains(.isCancelledByBot) {
+                    } else if let _ = subscription.inviteHash, hasLeft && !isKicked && !subscription.flags.contains(.isCancelledByBot) {
                         let _ = self.context.engine.payments.fulfillStarsSubscription(peerId: context.account.peerId, subscriptionId: subscription.id).startStandalone()
                         updated = true
                     }

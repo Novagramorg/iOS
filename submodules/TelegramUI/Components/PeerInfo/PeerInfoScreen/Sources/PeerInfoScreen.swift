@@ -6021,39 +6021,45 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
         }
         self.previousSavedMusicTimestamp = currentTimestamp
         
-        let peerId = self.peerId
-        let initialId: Int32
-        if let initialFileId = self.data?.savedMusicState?.files.first?.fileId {
-            initialId = Int32(clamping: initialFileId.id % Int64(Int32.max))
-        } else {
-            initialId = 0
-        }
-
-        let playlistLocation: PeerMessagesPlaylistLocation = .savedMusic(context: savedMusicContext, at: initialId, canReorder: peerId == self.context.account.peerId)
         let _ = (self.context.sharedContext.mediaManager.globalMediaPlayerState
         |> take(1)
         |> deliverOnMainQueue).start(next: { [weak self] accountStateAndType in
             guard let self else {
                 return
             }
+            let peerId = self.peerId
+            var initialId: Int32
+            if let initialFileId = self.data?.savedMusicState?.files.first?.fileId {
+                initialId = Int32(clamping: initialFileId.id % Int64(Int32.max))
+            } else {
+                initialId = 0
+            }
+
+            let canReorder = peerId == self.context.account.peerId
+            var playlistLocation: PeerMessagesPlaylistLocation = .savedMusic(context: savedMusicContext, at: initialId, canReorder: canReorder)
+            
             if let (account, stateOrLoading, _) = accountStateAndType, self.context.account.peerId == account.peerId, case let .state(state) = stateOrLoading, let location = state.playlistLocation as? PeerMessagesPlaylistLocation, case let .savedMusic(savedMusicContext, _, _) = location, savedMusicContext.peerId == peerId {
+                if let itemId = state.item.id as? PeerMessagesMediaPlaylistItemId {
+                    initialId = itemId.messageId.id
+                }
+                playlistLocation = .savedMusic(context: savedMusicContext, at: initialId, canReorder: canReorder)
             } else {
                 self.context.sharedContext.mediaManager.setPlaylist((self.context, PeerMessagesMediaPlaylist(context: self.context, location: playlistLocation, chatLocationContextHolder: nil)), type: .music, control: .playback(.play))
             }
+            
+            Queue.mainQueue().after(0.1) {
+                let musicController = self.context.sharedContext.makeOverlayAudioPlayerController(
+                    context: self.context,
+                    chatLocation: .peer(id: peerId),
+                    type: .music,
+                    initialMessageId: MessageId(peerId: peerId, namespace: Namespaces.Message.Local, id: initialId),
+                    initialOrder: .regular,
+                    playlistLocation: playlistLocation,
+                    parentNavigationController: self.controller?.navigationController as? NavigationController
+                )
+                self.controller?.present(musicController, in: .window(.root))
+            }
         })
-        
-        Queue.mainQueue().after(0.1) {
-            let musicController = self.context.sharedContext.makeOverlayAudioPlayerController(
-                context: self.context,
-                chatLocation: .peer(id: peerId),
-                type: .music,
-                initialMessageId: MessageId(peerId: peerId, namespace: Namespaces.Message.Local, id: initialId),
-                initialOrder: .regular,
-                playlistLocation: playlistLocation,
-                parentNavigationController: self.controller?.navigationController as? NavigationController
-            )
-            self.controller?.present(musicController, in: .window(.root))
-        }
     }
     
     private func performButtonAction(key: PeerInfoHeaderButtonKey, gesture: ContextGesture?) {
