@@ -669,12 +669,14 @@ open class ListView: ASDisplayNode, ASScrollViewDelegate, ASGestureRecognizerDel
     
     private func updateReordering(offset: CGFloat) {
         if let reorderNode = self.reorderNode {
-            let updatedLocation = reorderNode.initialLocation.y + offset
-            if updatedLocation < self.insets.top {
-            } else {
-                reorderNode.updateOffset(offset: offset)
-                self.checkItemReordering()
+            if !self.autoScrollWhenReordering, case let .known(contentOffset) = self.visibleContentOffset() {
+                let updatedLocation = reorderNode.initialLocation.y + offset
+                if updatedLocation < self.insets.top - contentOffset {
+                    return
+                }
             }
+            reorderNode.updateOffset(offset: offset)
+            self.checkItemReordering()
         }
     }
     
@@ -1525,10 +1527,14 @@ open class ListView: ASDisplayNode, ASScrollViewDelegate, ASGestureRecognizerDel
             topItemFound = true
         }
         
+        if !topItemFound, self.stackFromBottom && !self.autoScrollWhenReordering, let itemNode = self.itemNodes.first, itemNode.apparentFrame.minY > 0.0 {
+            topItemFound = true
+        }
+        
         var topOffset: CGFloat
         
         if topItemFound {
-            let realTopItemEdge = itemNodes.first!.apparentFrame.origin.y
+            let realTopItemEdge = self.itemNodes.first!.apparentFrame.origin.y
             let realTopItemEdgeOffset = max(0.0, realTopItemEdge)
 
             topOffset = realTopItemEdgeOffset

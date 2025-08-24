@@ -818,7 +818,7 @@ struct ListViewState {
             }
             operations.append(.Remove(index: index, offsetDirection: offsetDirection))
             
-            if let referenceNode = referenceNode , animated {
+            if let referenceNode = referenceNode, animated {
                 self.nodes.insert(.Placeholder(frame: nodeFrame), at: index)
                 operations.append(.InsertDisappearingPlaceholder(index: index, referenceNode: referenceNode, offsetDirection: offsetDirection.inverted()))
             } else {

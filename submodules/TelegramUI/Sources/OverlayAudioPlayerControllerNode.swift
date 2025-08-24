@@ -268,6 +268,7 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
         
         self.historyNode.preloadPages = true
         self.historyNode.stackFromBottom = true
+        self.historyNode.areContentAnimationsEnabled = true
         self.historyNode.updateFloatingHeaderOffset = { [weak self] offset, transition in
             if let strongSelf = self {
                 strongSelf.updateFloatingHeaderOffset(offset: offset, transition: transition)
@@ -461,40 +462,43 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
             guard let self, let peer = peer.flatMap({ PeerReference($0._asPeer()) }) else {
                 return
             }
+
             self.historyNode.reorderItem = { fromIndex, toIndex, transactionOpaqueState -> Signal<Bool, NoError> in
-                guard let filteredEntries = (transactionOpaqueState as? ChatHistoryTransactionOpaqueState)?.historyView.filteredEntries else {
+                guard let filteredEntries = (transactionOpaqueState as? ChatHistoryTransactionOpaqueState)?.historyView.filteredEntries, !filteredEntries.isEmpty else {
                     return .single(false)
                 }
-                let fromEntry = filteredEntries[filteredEntries.count - 1 - fromIndex]
-                let toEntry: ChatHistoryEntry?
-                if toIndex == 0 {
-                    toEntry = nil
+                
+                func mapIndex(_ uiIndex: Int) -> Int {
+                    return filteredEntries.count - 1 - uiIndex
+                }
+
+                let mappedFromIndex = mapIndex(fromIndex)
+                guard filteredEntries.indices.contains(mappedFromIndex), case let .MessageEntry(fromMessage, _, _, _, _, _) = filteredEntries[mappedFromIndex], let fromFile = fromMessage.media.first(where: { $0 is TelegramMediaFile }) as? TelegramMediaFile else {
+                    return .single(false)
+                }
+
+                var afterFile: TelegramMediaFile?
+                if toIndex > 0 {
+                    let afterMappedIndex = mapIndex(toIndex - 1)
+                    if filteredEntries.indices.contains(afterMappedIndex), case let .MessageEntry(afterMessage, _, _, _, _, _) = filteredEntries[afterMappedIndex], let file = afterMessage.media.first(where: { $0 is TelegramMediaFile }) as? TelegramMediaFile {
+                        afterFile = file
+                    }
                 } else {
-                    toEntry = filteredEntries[filteredEntries.count - 1 - toIndex]
-                }
-                guard case let .MessageEntry(fromMessage, _, _, _, _, _) = fromEntry else {
-                    return .single(false)
-                }
-                                
-                guard let fromFile = fromMessage.media.first(where: { $0 is TelegramMediaFile }) as? TelegramMediaFile else {
-                    return .single(false)
+                    afterFile = nil
                 }
                 
-                var toFile: TelegramMediaFile?
-                if let toEntry, case let .MessageEntry(toMessage, _, _, _, _, _) = toEntry, let file = toMessage.media.first(where: { $0 is TelegramMediaFile }) as? TelegramMediaFile {
-                    toFile = file
-                }
-                if fromFile.id == toFile?.id {
-                    return .single(false)
-                }
-                
-                let _ = savedMusicContext.addMusic(file: .savedMusic(peer: peer, media: fromFile), afterFile: toFile.flatMap { .savedMusic(peer: peer, media: $0) }).start()
-                
+                let _ = savedMusicContext.addMusic(
+                    file: .savedMusic(peer: peer, media: fromFile),
+                    afterFile: afterFile.flatMap { .savedMusic(peer: peer, media: $0) }
+                ).start()
+
                 return .single(true)
             }
         })
+        self.historyNode.useMainQueueTransactions = true
         self.historyNode.autoScrollWhenReordering = false
     }
+
     
     func updatePresentationData(_ presentationData: PresentationData) {
         self.presentationData = presentationData
@@ -849,6 +853,7 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
         historyNode.clipsToBounds = true
         historyNode.preloadPages = true
         historyNode.stackFromBottom = true
+        historyNode.areContentAnimationsEnabled = true
         historyNode.updateFloatingHeaderOffset = { [weak self] offset, _ in
             self?.replacementHistoryNodeFloatingOffset = offset
         }
