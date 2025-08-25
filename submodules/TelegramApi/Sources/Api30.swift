@@ -1,4 +1,62 @@
 public extension Api.account {
+    enum SavedRingtones: TypeConstructorDescription {
+        case savedRingtones(hash: Int64, ringtones: [Api.Document])
+        case savedRingtonesNotModified
+    
+    public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+    switch self {
+                case .savedRingtones(let hash, let ringtones):
+                    if boxed {
+                        buffer.appendInt32(-1041683259)
+                    }
+                    serializeInt64(hash, buffer: buffer, boxed: false)
+                    buffer.appendInt32(481674261)
+                    buffer.appendInt32(Int32(ringtones.count))
+                    for item in ringtones {
+                        item.serialize(buffer, true)
+                    }
+                    break
+                case .savedRingtonesNotModified:
+                    if boxed {
+                        buffer.appendInt32(-67704655)
+                    }
+                    
+                    break
+    }
+    }
+    
+    public func descriptionFields() -> (String, [(String, Any)]) {
+        switch self {
+                case .savedRingtones(let hash, let ringtones):
+                return ("savedRingtones", [("hash", hash as Any), ("ringtones", ringtones as Any)])
+                case .savedRingtonesNotModified:
+                return ("savedRingtonesNotModified", [])
+    }
+    }
+    
+        public static func parse_savedRingtones(_ reader: BufferReader) -> SavedRingtones? {
+            var _1: Int64?
+            _1 = reader.readInt64()
+            var _2: [Api.Document]?
+            if let _ = reader.readInt32() {
+                _2 = Api.parseVector(reader, elementSignature: 0, elementType: Api.Document.self)
+            }
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            if _c1 && _c2 {
+                return Api.account.SavedRingtones.savedRingtones(hash: _1!, ringtones: _2!)
+            }
+            else {
+                return nil
+            }
+        }
+        public static func parse_savedRingtonesNotModified(_ reader: BufferReader) -> SavedRingtones? {
+            return Api.account.SavedRingtones.savedRingtonesNotModified
+        }
+    
+    }
+}
+public extension Api.account {
     enum SentEmailCode: TypeConstructorDescription {
         case sentEmailCode(emailPattern: String, length: Int32)
     

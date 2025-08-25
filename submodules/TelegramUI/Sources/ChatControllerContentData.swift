@@ -218,7 +218,7 @@ extension ChatControllerImpl {
         
         var historyNavigationStack = ChatHistoryNavigationStack()
         
-        let chatThemeEmoticonPromise = Promise<String?>()
+        let chatThemePromise = Promise<ChatTheme?>()
         let chatWallpaperPromise = Promise<TelegramWallpaper?>()
         
         private(set) var inviteRequestsContext: PeerInvitationImportersContext?
@@ -2240,19 +2240,19 @@ extension ChatControllerImpl {
                     let (cachedData, messages) = cachedDataAndMessages
                     
                     if cachedData != nil {
-                        var themeEmoticon: String? = nil
+                        var chatTheme: ChatTheme? = nil
                         var chatWallpaper: TelegramWallpaper?
                         if let cachedData = cachedData as? CachedUserData {
-                            themeEmoticon = cachedData.themeEmoticon
+                            chatTheme = cachedData.chatTheme
                             chatWallpaper = cachedData.wallpaper
                         } else if let cachedData = cachedData as? CachedGroupData {
-                            themeEmoticon = cachedData.themeEmoticon
+                            chatTheme = cachedData.chatTheme
                         } else if let cachedData = cachedData as? CachedChannelData {
-                            themeEmoticon = cachedData.themeEmoticon
+                            chatTheme = cachedData.chatTheme
                             chatWallpaper = cachedData.wallpaper
                         }
                         
-                        strongSelf.chatThemeEmoticonPromise.set(.single(themeEmoticon))
+                        strongSelf.chatThemePromise.set(.single(chatTheme))
                         strongSelf.chatWallpaperPromise.set(.single(chatWallpaper))
                     }
                     

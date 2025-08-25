@@ -13552,27 +13552,39 @@ public final class PeerInfoScreenImpl: ViewController, PeerInfoScreen, KeyShortc
         if let updatedPresentationData = updatedPresentationData {
             presentationDataSignal = updatedPresentationData.signal
         } else if self.peerId != self.context.account.peerId {
-            let themeEmoticon: Signal<String?, NoError> = self.cachedDataPromise.get()
-            |> map { cachedData -> String? in
+            let chatTheme: Signal<ChatTheme?, NoError> = self.cachedDataPromise.get()
+            |> map { cachedData -> ChatTheme? in
                 if let cachedData = cachedData as? CachedUserData {
-                    return cachedData.themeEmoticon
+                    return cachedData.chatTheme
                 } else if let cachedData = cachedData as? CachedGroupData {
-                    return cachedData.themeEmoticon
+                    return cachedData.chatTheme
                 } else if let cachedData = cachedData as? CachedChannelData {
-                    return cachedData.themeEmoticon
+                    return cachedData.chatTheme
                 } else {
                     return nil
                 }
             }
             |> distinctUntilChanged
             
-            presentationDataSignal = combineLatest(queue: Queue.mainQueue(), context.sharedContext.presentationData, context.engine.themes.getChatThemes(accountManager: context.sharedContext.accountManager, onlyCached: false), themeEmoticon)
-            |> map { presentationData, chatThemes, themeEmoticon -> PresentationData in
+            presentationDataSignal = combineLatest(
+                queue: Queue.mainQueue(),
+                context.sharedContext.presentationData,
+                context.engine.themes.getChatThemes(accountManager: context.sharedContext.accountManager, onlyCached: false),
+                chatTheme
+            )
+            |> map { presentationData, chatThemes, chatTheme -> PresentationData in
                 var presentationData = presentationData
-                if let themeEmoticon = themeEmoticon, let theme = chatThemes.first(where: { $0.emoticon == themeEmoticon }) {
-                    if let theme = makePresentationTheme(cloudTheme: theme, dark: presentationData.theme.overallDarkAppearance) {
-                        presentationData = presentationData.withUpdated(theme: theme)
-                        presentationData = presentationData.withUpdated(chatWallpaper: theme.chat.defaultWallpaper)
+                if let chatTheme {
+                    switch chatTheme {
+                    case let .emoticon(emoticon):
+                        if let theme = chatThemes.first(where: { $0.emoticon == emoticon }) {
+                            if let theme = makePresentationTheme(cloudTheme: theme, dark: presentationData.theme.overallDarkAppearance) {
+                                presentationData = presentationData.withUpdated(theme: theme)
+                                presentationData = presentationData.withUpdated(chatWallpaper: theme.chat.defaultWallpaper)
+                            }
+                        }
+                    case .gift:
+                        break
                     }
                 }
                 return presentationData

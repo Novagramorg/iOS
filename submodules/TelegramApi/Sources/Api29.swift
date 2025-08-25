@@ -569,6 +569,64 @@ public extension Api.account {
     }
 }
 public extension Api.account {
+    enum ChatThemes: TypeConstructorDescription {
+        case chatThemes(hash: Int64, themes: [Api.ChatTheme])
+        case chatThemesNotModified
+    
+    public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+    switch self {
+                case .chatThemes(let hash, let themes):
+                    if boxed {
+                        buffer.appendInt32(-1642883515)
+                    }
+                    serializeInt64(hash, buffer: buffer, boxed: false)
+                    buffer.appendInt32(481674261)
+                    buffer.appendInt32(Int32(themes.count))
+                    for item in themes {
+                        item.serialize(buffer, true)
+                    }
+                    break
+                case .chatThemesNotModified:
+                    if boxed {
+                        buffer.appendInt32(-535699004)
+                    }
+                    
+                    break
+    }
+    }
+    
+    public func descriptionFields() -> (String, [(String, Any)]) {
+        switch self {
+                case .chatThemes(let hash, let themes):
+                return ("chatThemes", [("hash", hash as Any), ("themes", themes as Any)])
+                case .chatThemesNotModified:
+                return ("chatThemesNotModified", [])
+    }
+    }
+    
+        public static func parse_chatThemes(_ reader: BufferReader) -> ChatThemes? {
+            var _1: Int64?
+            _1 = reader.readInt64()
+            var _2: [Api.ChatTheme]?
+            if let _ = reader.readInt32() {
+                _2 = Api.parseVector(reader, elementSignature: 0, elementType: Api.ChatTheme.self)
+            }
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            if _c1 && _c2 {
+                return Api.account.ChatThemes.chatThemes(hash: _1!, themes: _2!)
+            }
+            else {
+                return nil
+            }
+        }
+        public static func parse_chatThemesNotModified(_ reader: BufferReader) -> ChatThemes? {
+            return Api.account.ChatThemes.chatThemesNotModified
+        }
+    
+    }
+}
+public extension Api.account {
     enum ConnectedBots: TypeConstructorDescription {
         case connectedBots(connectedBots: [Api.ConnectedBot], users: [Api.User])
     
@@ -1306,64 +1364,6 @@ public extension Api.account {
             else {
                 return nil
             }
-        }
-    
-    }
-}
-public extension Api.account {
-    enum SavedRingtones: TypeConstructorDescription {
-        case savedRingtones(hash: Int64, ringtones: [Api.Document])
-        case savedRingtonesNotModified
-    
-    public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-    switch self {
-                case .savedRingtones(let hash, let ringtones):
-                    if boxed {
-                        buffer.appendInt32(-1041683259)
-                    }
-                    serializeInt64(hash, buffer: buffer, boxed: false)
-                    buffer.appendInt32(481674261)
-                    buffer.appendInt32(Int32(ringtones.count))
-                    for item in ringtones {
-                        item.serialize(buffer, true)
-                    }
-                    break
-                case .savedRingtonesNotModified:
-                    if boxed {
-                        buffer.appendInt32(-67704655)
-                    }
-                    
-                    break
-    }
-    }
-    
-    public func descriptionFields() -> (String, [(String, Any)]) {
-        switch self {
-                case .savedRingtones(let hash, let ringtones):
-                return ("savedRingtones", [("hash", hash as Any), ("ringtones", ringtones as Any)])
-                case .savedRingtonesNotModified:
-                return ("savedRingtonesNotModified", [])
-    }
-    }
-    
-        public static func parse_savedRingtones(_ reader: BufferReader) -> SavedRingtones? {
-            var _1: Int64?
-            _1 = reader.readInt64()
-            var _2: [Api.Document]?
-            if let _ = reader.readInt32() {
-                _2 = Api.parseVector(reader, elementSignature: 0, elementType: Api.Document.self)
-            }
-            let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            if _c1 && _c2 {
-                return Api.account.SavedRingtones.savedRingtones(hash: _1!, ringtones: _2!)
-            }
-            else {
-                return nil
-            }
-        }
-        public static func parse_savedRingtonesNotModified(_ reader: BufferReader) -> SavedRingtones? {
-            return Api.account.SavedRingtones.savedRingtonesNotModified
         }
     
     }

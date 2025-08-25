@@ -4062,7 +4062,7 @@ func replayFinalState(
                                         })
                                     }
                                     switch action.action {
-                                    case let .setChatTheme(emoticon):
+                                    case let .setChatTheme(chatTheme):
                                         transaction.updatePeerCachedData(peerIds: [message.id.peerId], update: { peerId, current in
                                             var current = current
                                             if current == nil {
@@ -4075,11 +4075,11 @@ func replayFinalState(
                                                 }
                                             }
                                             if let cachedData = current as? CachedUserData {
-                                                return cachedData.withUpdatedThemeEmoticon(!emoticon.isEmpty ? emoticon : nil)
+                                                return cachedData.withUpdatedChatTheme(!chatTheme.isEmpty ? chatTheme : nil)
                                             } else if let cachedData = current as? CachedGroupData {
-                                                return cachedData.withUpdatedThemeEmoticon(!emoticon.isEmpty ? emoticon : nil)
+                                                return cachedData.withUpdatedChatTheme(!chatTheme.isEmpty ? chatTheme : nil)
                                             } else if let cachedData = current as? CachedChannelData {
-                                                return cachedData.withUpdatedThemeEmoticon(!emoticon.isEmpty ? emoticon : nil)
+                                                return cachedData.withUpdatedChatTheme(!chatTheme.isEmpty ? chatTheme : nil)
                                             } else {
                                                 return current
                                             }

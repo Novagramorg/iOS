@@ -31,6 +31,110 @@ public final class ChatThemes: Codable, Equatable {
     }
 }
 
+public enum ChatTheme: Codable, Equatable {
+    case emoticon(String)
+    case gift(StarGift, TelegramMediaFile)
+    
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: StringCodingKey.self)
+
+        let type = try container.decode(Int32.self, forKey: "_r")
+        switch type {
+        case 0:
+            self = .emoticon(try container.decode(String.self, forKey: "e"))
+        case 1:
+            self = .gift(try container.decode(StarGift.self, forKey: "g"), try container.decode(TelegramMediaFile.self, forKey: "w"))
+        default:
+            assertionFailure()
+            self = .emoticon("")
+        }
+    }
+    
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: StringCodingKey.self)
+        
+        switch self {
+        case let .emoticon(emoticon):
+            try container.encode(0, forKey: "_r")
+            try container.encode(emoticon, forKey: "e")
+        case let .gift(gift, wallpaperFile):
+            try container.encode(1, forKey: "_r")
+            try container.encode(gift, forKey: "g")
+            try container.encode(wallpaperFile, forKey: "w")
+        }
+    }
+    
+    public static func ==(lhs: ChatTheme, rhs: ChatTheme) -> Bool {
+        switch lhs {
+        case let .emoticon(emoticon):
+            if case .emoticon(emoticon) = rhs {
+                return true
+            } else {
+                return false
+            }
+        case let .gift(lhsGift, lhsWallpaperFile):
+            if case let .gift(rhsGift, rhsWallpaperFile) = rhs {
+                return lhsGift == rhsGift && lhsWallpaperFile.fileId == rhsWallpaperFile.fileId
+            } else {
+                return false
+            }
+        }
+    }
+    
+    public var isEmpty: Bool {
+        if case .emoticon("") = self {
+            return true
+        } else {
+            return false
+        }
+    }
+    
+    public var id: String {
+        switch self {
+        case let .emoticon(emoticon):
+            return emoticon.strippedEmoji
+        case let .gift(gift, _):
+            if case let .unique(uniqueGift) = gift {
+                return uniqueGift.slug
+            } else {
+                fatalError()
+            }
+        }
+    }
+}
+
+extension ChatTheme {
+    init?(apiChatTheme: Api.ChatTheme) {
+        switch apiChatTheme {
+        case let .chatTheme(emoticon):
+            self = .emoticon(emoticon)
+        case let .chatThemeUniqueGift(gift, wallpaperDocument):
+            guard let gift = StarGift(apiStarGift: gift), let wallpaperFile = telegramMediaFileFromApiDocument(wallpaperDocument, altDocuments: nil) else {
+                return nil
+            }
+            self = .gift(gift, wallpaperFile)
+        }
+    }
+    
+    var apiChatTheme: Api.InputChatTheme {
+        switch self {
+        case let .emoticon(emoticon):
+            return .inputChatTheme(emoticon: emoticon)
+        case let .gift(gift, _):
+            switch gift {
+            case let .unique(uniqueGift):
+                return .inputChatThemeUniqueGift(slug: uniqueGift.slug)
+            default:
+                fatalError()
+            }
+        }
+    }
+}
+
+//func _internal_getChatGiftThemes(accountManager: AccountManager<TelegramAccountManagerTypes>, network: Network, forceUpdate: Bool = false, onlyCached: Bool = false) -> Signal<[TelegramTheme], NoError> {
+//    
+//}
+
 func _internal_getChatThemes(accountManager: AccountManager<TelegramAccountManagerTypes>, network: Network, forceUpdate: Bool = false, onlyCached: Bool = false) -> Signal<[TelegramTheme], NoError> {
     let fetch: ([TelegramTheme]?, Int64?) -> Signal<[TelegramTheme], NoError> = { current, hash in
         return network.request(Api.functions.account.getChatThemes(hash: hash ?? 0))
@@ -81,27 +185,31 @@ func _internal_getChatThemes(accountManager: AccountManager<TelegramAccountManag
     }
 }
 
-func _internal_setChatTheme(account: Account, peerId: PeerId, emoticon: String?) -> Signal<Void, NoError> {
+func _internal_setChatTheme(account: Account, peerId: PeerId, chatTheme: ChatTheme?) -> Signal<Void, NoError> {
     return account.postbox.loadedPeerWithId(peerId)
     |> mapToSignal { peer in
         guard let inputPeer = apiInputPeer(peer) else {
             return .complete()
         }
-        
         return account.postbox.transaction { transaction -> Signal<Void, NoError> in
             transaction.updatePeerCachedData(peerIds: Set([peerId]), update: { _, current in
                 if let current = current as? CachedUserData {
-                    return current.withUpdatedThemeEmoticon(emoticon)
+                    return current.withUpdatedChatTheme(chatTheme)
                 } else if let current = current as? CachedGroupData {
-                    return current.withUpdatedThemeEmoticon(emoticon)
+                    return current.withUpdatedChatTheme(chatTheme)
                 } else if let current = current as? CachedChannelData {
-                    return current.withUpdatedThemeEmoticon(emoticon)
+                    return current.withUpdatedChatTheme(chatTheme)
                 } else {
                     return current
                 }
             })
-            
-            return account.network.request(Api.functions.messages.setChatTheme(peer: inputPeer, emoticon: emoticon ?? ""))
+            let inputTheme: Api.InputChatTheme
+            if let chatTheme {
+                inputTheme = chatTheme.apiChatTheme
+            } else {
+                inputTheme = .inputChatThemeEmpty
+            }
+            return account.network.request(Api.functions.messages.setChatTheme(peer: inputPeer, theme: inputTheme))
             |> `catch` { error in
                 return .complete()
             }
