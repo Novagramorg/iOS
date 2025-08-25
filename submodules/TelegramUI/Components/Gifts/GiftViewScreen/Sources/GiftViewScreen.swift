@@ -662,15 +662,18 @@ private final class GiftViewSheetContent: CombinedComponent {
             controller.push(introController)
         }
         
+        private var isOpeningValue = false
         func openValue() {
-            guard let controller = self.getController(), let gift = self.subject.arguments?.gift, case let .unique(uniqueGift) = gift else {
+            guard let controller = self.getController(), let gift = self.subject.arguments?.gift, case let .unique(uniqueGift) = gift, !self.isOpeningValue else {
                 return
             }
+            self.isOpeningValue = true
             let _ = (self.context.engine.payments.getUniqueStarGiftValueInfo(slug: uniqueGift.slug)
             |> deliverOnMainQueue).start(next: { [weak self] valueInfo in
                 guard let self, let valueInfo else {
                     return
                 }
+                self.isOpeningValue = false
                 let valueController = GiftValueScreen(context: self.context, gift: gift, valueInfo: valueInfo)
                 controller.push(valueController)
             })
@@ -2621,8 +2624,8 @@ private final class GiftViewSheetContent: CombinedComponent {
                             textColor = vibrantColor.mixedWith(UIColor.white, alpha: 0.4)
                         } else {
                             textColor = vibrantColor
+                            useDescriptionTint = true
                         }
-                        useDescriptionTint = true
                     } else {
                         textFont = soldOut ? Font.medium(15.0) : Font.regular(15.0)
                         textColor = soldOut ? theme.list.itemDestructiveColor : theme.list.itemPrimaryTextColor
