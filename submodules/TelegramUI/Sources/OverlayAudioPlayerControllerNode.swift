@@ -494,7 +494,7 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
                 return .single(true)
             }
         })
-        self.historyNode.useMainQueueTransactions = true
+        self.historyNode.useMainQueueTransactions = false
         self.historyNode.autoScrollWhenReordering = false
     }
 
@@ -671,10 +671,18 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
         
         insets.top = max(0.0, listNodeSize.height - floor(56.0 * 3.5))
         
+        var itemOffsetInsets = insets
+        
+        if let playlistLocation = self.playlistLocation as? PeerMessagesPlaylistLocation, case let .savedMusic(_, _, canReorder) = playlistLocation, canReorder {
+            itemOffsetInsets.top = 0.0
+            itemOffsetInsets.bottom = 0.0
+            insets = itemOffsetInsets
+        }
+        
         transition.updateFrame(node: self.historyNode, frame: CGRect(origin: CGPoint(x: 0.0, y: listTopInset), size: listNodeSize))
         
         let (duration, curve) = listViewAnimationDurationAndCurve(transition: transition)
-        let updateSizeAndInsets = ListViewUpdateSizeAndInsets(size: listNodeSize, insets: insets, duration: duration, curve: curve)
+        let updateSizeAndInsets = ListViewUpdateSizeAndInsets(size: listNodeSize, insets: insets, itemOffsetInsets: itemOffsetInsets, duration: duration, curve: curve)
         self.historyNode.updateLayout(transition: transition, updateSizeAndInsets: updateSizeAndInsets)
         if let replacementHistoryNode = self.replacementHistoryNode {
             let updateSizeAndInsets = ListViewUpdateSizeAndInsets(size: listNodeSize, insets: insets, duration: 0.0, curve: .Default(duration: nil))

@@ -194,6 +194,7 @@ open class ListView: ASDisplayNode, ASScrollViewDelegate, ASGestureRecognizerDel
     public private(set) final var visibleSize: CGSize = CGSize()
     public private(set) final var insets = UIEdgeInsets()
     public final var visualInsets: UIEdgeInsets?
+    private var itemOffsetInsets: UIEdgeInsets?
     public final var dynamicVisualInsets: (() -> UIEdgeInsets)?
     public private(set) final var headerInsets = UIEdgeInsets()
     public private(set) final var scrollIndicatorInsets = UIEdgeInsets()
@@ -1859,7 +1860,7 @@ open class ListView: ASDisplayNode, ASScrollViewDelegate, ASGestureRecognizerDel
                 nodes.append(.Placeholder(frame: node.apparentFrame))
             }
         }
-        return ListViewState(insets: self.insets, visibleSize: self.visibleSize, invisibleInset: self.invisibleInset, nodes: nodes, scrollPosition: nil, stationaryOffset: nil, stackFromBottom: self.stackFromBottom)
+        return ListViewState(insets: self.insets, itemOffsetInsets: self.itemOffsetInsets ?? self.insets, visibleSize: self.visibleSize, invisibleInset: self.invisibleInset, nodes: nodes, scrollPosition: nil, stationaryOffset: nil, stackFromBottom: self.stackFromBottom)
     }
     
     public func addAfterTransactionsCompleted(_ f: @escaping () -> Void) {
@@ -1897,6 +1898,7 @@ open class ListView: ASDisplayNode, ASScrollViewDelegate, ASGestureRecognizerDel
                 self.insets = updateSizeAndInsets.insets
                 self.headerInsets = updateSizeAndInsets.headerInsets ?? self.insets
                 self.scrollIndicatorInsets = updateSizeAndInsets.scrollIndicatorInsets ?? self.insets
+                self.itemOffsetInsets = updateSizeAndInsets.itemOffsetInsets
                 self.ensureTopInsetForOverlayHighlightedItems = updateSizeAndInsets.ensureTopInsetForOverlayHighlightedItems
                 
                 let wasIgnoringScrollingEvents = self.ignoreScrollingEvents
@@ -3197,6 +3199,7 @@ open class ListView: ASDisplayNode, ASScrollViewDelegate, ASGestureRecognizerDel
                 self.insets = updateSizeAndInsets.insets
                 self.headerInsets = updateSizeAndInsets.headerInsets ?? self.insets
                 self.scrollIndicatorInsets = updateSizeAndInsets.scrollIndicatorInsets ?? self.insets
+                self.itemOffsetInsets = updateSizeAndInsets.itemOffsetInsets
                 self.ensureTopInsetForOverlayHighlightedItems = updateSizeAndInsets.ensureTopInsetForOverlayHighlightedItems
                 self.visibleSize = updateSizeAndInsets.size
                 
