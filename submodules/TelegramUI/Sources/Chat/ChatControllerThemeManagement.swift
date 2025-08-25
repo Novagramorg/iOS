@@ -176,14 +176,13 @@ extension ChatControllerImpl {
                 context: context,
                 updatedPresentationData: strongSelf.updatedPresentationData,
                 animatedEmojiStickers: animatedEmojiStickers,
-                initiallySelectedEmoticon: chatTheme?.id,
+                initiallySelectedTheme: chatTheme,
                 peerName: strongSelf.presentationInterfaceState.renderedPeer?.chatMainPeer.flatMap(EnginePeer.init)?.compactDisplayTitle ?? "",
                 canResetWallpaper: canResetWallpaper,
-                previewTheme: { [weak self] emoticon, dark in
+                previewTheme: { [weak self] chatTheme, dark in
                     if let strongSelf = self {
                         strongSelf.presentCrossfadeSnapshot()
-                        //TODO:release
-                        strongSelf.chatThemeAndDarkAppearancePreviewPromise.set(.single((emoticon.flatMap { .emoticon($0) } ?? .emoticon(""), dark)))
+                        strongSelf.chatThemeAndDarkAppearancePreviewPromise.set(.single((chatTheme ?? .emoticon(""), dark)))
                     }
                 },
                 changeWallpaper: { [weak self] in
@@ -259,15 +258,15 @@ extension ChatControllerImpl {
                     }
                     let _ = strongSelf.context.engine.themes.setChatWallpaper(peerId: peerId, wallpaper: nil, forBoth: false).startStandalone()
                 },
-                completion: { [weak self] emoticon in
+                completion: { [weak self] chatTheme in
                     guard let strongSelf = self, let peerId else {
                         return
                     }
-                    if canResetWallpaper && emoticon != nil {
+                    if canResetWallpaper && chatTheme != nil {
                         let _ = context.engine.themes.setChatWallpaper(peerId: peerId, wallpaper: nil, forBoth: false).startStandalone()
                     }
-                    strongSelf.chatThemeAndDarkAppearancePreviewPromise.set(.single((emoticon.flatMap { .emoticon($0) } ?? .emoticon(""), nil)))
-                    let _ = context.engine.themes.setChatTheme(peerId: peerId, chatTheme: emoticon.flatMap { .emoticon($0) } ?? .emoticon("")).startStandalone(completed: { [weak self] in
+                    strongSelf.chatThemeAndDarkAppearancePreviewPromise.set(.single((chatTheme ?? .emoticon(""), nil)))
+                    let _ = context.engine.themes.setChatTheme(peerId: peerId, chatTheme: chatTheme ?? .emoticon("")).startStandalone(completed: { [weak self] in
                         if let strongSelf = self {
                             strongSelf.chatThemeAndDarkAppearancePreviewPromise.set(.single((nil, nil)))
                         }

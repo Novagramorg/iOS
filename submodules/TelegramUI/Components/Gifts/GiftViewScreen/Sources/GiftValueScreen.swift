@@ -446,7 +446,7 @@ private final class GiftValueSheetContent: CombinedComponent {
                 )
                 
                 let percentage = Int32(floor(Double(lastSalePrice) / Double(component.valueInfo.initialSalePrice) * 100.0 - 100.0))
-                let percentageString = (percentage > 0 ? "+\(percentage)" : "\(percentage)") + "%%"
+                let percentageString = (percentage > 0 ? "+\(percentage)" : "\(percentage)") + "%"
                 
                 items.append(AnyComponentWithIdentity(
                     id: AnyHashable(1),

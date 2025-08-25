@@ -1707,9 +1707,9 @@ private final class GiftViewSheetContent: CombinedComponent {
                 }
             }
             
-            if let controller = self.getController() as? GiftViewScreen {
-                controller.showBalance = true
-            }
+//            if let controller = self.getController() as? GiftViewScreen {
+//                controller.showBalance = true
+//            }
         }
         
         func commitPrepaidUpgrade() {
@@ -2673,10 +2673,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                                 if s == "\u{00A0}" {
                                     items.append(AnyComponentWithIdentity(id: "c\(i)", component: AnyComponent(Text(text: s, font: textFont, color: .white, tintColor: textColor)))
                                     )
-                                } else if [".", ","].contains(s) {
-                                    items.append(AnyComponentWithIdentity(id: "c\(i)", component: AnyComponent(Text(text: s, font: numberFont, color: .white, tintColor: textColor)))
-                                    )
-                                } else {
+                                } else if ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"].contains(s) {
                                     items.append(AnyComponentWithIdentity(id: "c\(i)", component: AnyComponent(SlotsComponent(
                                         item: AnyComponent(Text(text: String(c), font: numberFont, color: .white)),
                                         items: spinningItems,
@@ -2687,6 +2684,9 @@ private final class GiftViewSheetContent: CombinedComponent {
                                         size: CGSize(width: 8.0, height: 14.0))))
                                     )
                                     index += 1
+                                } else {
+                                    items.append(AnyComponentWithIdentity(id: "c\(i)", component: AnyComponent(Text(text: s, font: numberFont, color: .white, tintColor: textColor)))
+                                    )
                                 }
                                 i += 1
                             }
@@ -4662,7 +4662,7 @@ public class GiftViewScreen: ViewControllerComponentContainer {
 }
 
 func formatPercentage(_ value: Float) -> String {
-    return String(format: "%0.1f", value).replacingOccurrences(of: ".0", with: "").replacingOccurrences(of: ",0", with: "") + "%%"
+    return String(format: "%0.1f", value).replacingOccurrences(of: ".0", with: "").replacingOccurrences(of: ",0", with: "") + "%"
 }
 
 private final class PeerCellComponent: Component {
