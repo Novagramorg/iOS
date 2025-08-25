@@ -14916,3 +14916,11 @@ Sorry for the inconvenience.";
 "Conversation.StopVoiceMessageDescription" = "Are you sure you want to pause recording?";
 "Conversation.StopVoiceMessageDiscardAction" = "Discard";
 "Conversation.StopVoiceMessagePauseAction" = "Pause";
+
+"Gift.Options.GiftLocked.Title" = "Gift Locked";
+
+"Gift.Unique.Value" = "Value";
+"Gift.Unique.LearnMore" = "learn more";
+
+"Gift.Upgrade.GiftUpgrade" = "Pay %@ for Upgrade";
+"Gift.View.GiftUpgrade" = "Gift an Upgrade";

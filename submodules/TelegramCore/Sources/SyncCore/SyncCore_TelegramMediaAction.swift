@@ -224,7 +224,7 @@ public enum TelegramMediaActionType: PostboxCoding, Equatable {
     case geoProximityReached(from: PeerId, to: PeerId, distance: Int32)
     case groupPhoneCall(callId: Int64, accessHash: Int64, scheduleDate: Int32?, duration: Int32?)
     case inviteToGroupPhoneCall(callId: Int64, accessHash: Int64, peerIds: [PeerId])
-    case setChatTheme(emoji: String)
+    case setChatTheme(chatTheme: ChatTheme)
     case joinedByRequest
     case webViewData(String)
     case giftPremium(currency: String, amount: Int64, months: Int32, cryptoCurrency: String?, cryptoAmount: Int64?, text: String?, entities: [MessageTextEntity]?)
@@ -317,7 +317,13 @@ public enum TelegramMediaActionType: PostboxCoding, Equatable {
             }
             self = .inviteToGroupPhoneCall(callId: decoder.decodeInt64ForKey("callId", orElse: 0), accessHash: decoder.decodeInt64ForKey("accessHash", orElse: 0), peerIds: peerIds)
         case 24:
-            self = .setChatTheme(emoji: decoder.decodeStringForKey("emoji", orElse: ""))
+            if let chatTheme = decoder.decodeCodable(ChatTheme.self, forKey: "chatTheme") {
+                self = .setChatTheme(chatTheme: chatTheme)
+            } else if let emoji = decoder.decodeOptionalStringForKey("emoji"), !emoji.isEmpty {
+                self = .setChatTheme(chatTheme: .emoticon(emoji))
+            } else {
+                self = .setChatTheme(chatTheme: .emoticon(""))
+            }
         case 25:
             self = .joinedByRequest
         case 26:
@@ -534,9 +540,9 @@ public enum TelegramMediaActionType: PostboxCoding, Equatable {
             encoder.encodeInt64(callId, forKey: "callId")
             encoder.encodeInt64(accessHash, forKey: "accessHash")
             encoder.encodeInt64Array(peerIds.map { $0.toInt64() }, forKey: "peerIds")
-        case let .setChatTheme(emoji):
+        case let .setChatTheme(chatTheme):
             encoder.encodeInt32(24, forKey: "_rawValue")
-            encoder.encodeString(emoji, forKey: "emoji")
+            encoder.encodeCodable(chatTheme, forKey: "chatTheme")
         case .joinedByRequest:
             encoder.encodeInt32(25, forKey: "_rawValue")
         case let .webViewData(text):

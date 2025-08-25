@@ -127,13 +127,39 @@ func _internal_addSavedMusic(account: Account, file: FileMediaReference, afterFi
     return account.postbox.transaction { transaction in
         if let cachedSavedMusic = transaction.retrieveItemCacheEntry(id: entryId(peerId: account.peerId))?.get(CachedProfileSavedMusic.self) {
             var updatedFiles = cachedSavedMusic.files
-            updatedFiles.removeAll(where: { $0.fileId == file.media.fileId })
-            if let afterFile, let index = updatedFiles.firstIndex(where: { $0.fileId == afterFile.media.fileId }) {
-                updatedFiles.insert(file.media, at: index + 1)
+            var updatedCount = cachedSavedMusic.count
+            
+            if let fromIndex = updatedFiles.firstIndex(where: { $0.fileId == file.media.fileId }) {
+                let anchorIdxOpt: Int? = afterFile.flatMap { af in
+                    updatedFiles.firstIndex(where: { $0.fileId == af.media.fileId })
+                }
+                updatedFiles.remove(at: fromIndex)
+                let insertIndex: Int
+                if let anchorIndex = anchorIdxOpt {
+                    if anchorIndex == fromIndex {
+                        insertIndex = min(fromIndex + 1, updatedFiles.count)
+                    } else {
+                        let adjustedAnchor = anchorIndex > fromIndex ? (anchorIndex - 1) : anchorIndex
+                        insertIndex = updatedFiles.index(after: adjustedAnchor)
+                    }
+                } else if afterFile != nil {
+                    insertIndex = 0
+                } else {
+                    insertIndex = 0
+                }
+                
+                updatedFiles.insert(file.media, at: insertIndex)
             } else {
-                updatedFiles.insert(file.media, at: 0)
+                if let afterFile, let anchor = updatedFiles.firstIndex(where: { $0.fileId == afterFile.media.fileId }) {
+                    updatedFiles.insert(file.media, at: updatedFiles.index(after: anchor))
+                } else if afterFile != nil {
+                    updatedFiles.append(file.media)
+                } else {
+                    updatedFiles.insert(file.media, at: 0)
+                }
+                updatedCount = updatedCount + 1
             }
-            let updatedCount = max(0, cachedSavedMusic.count + 1)
+            
             if let entry = CodableEntry(CachedProfileSavedMusic(files: updatedFiles, count: updatedCount)) {
                 transaction.putItemCacheEntry(id: entryId(peerId: account.peerId), entry: entry)
             }
@@ -371,15 +397,43 @@ public final class ProfileSavedMusicContext {
     }
         
     public func addMusic(file: FileMediaReference, afterFile: FileMediaReference? = nil, apply: Bool = true) -> Signal<Never, AddSavedMusicError> {
-        self.files.removeAll(where: { $0.fileId == file.media.fileId })
-        if let afterFile, let index = self.files.firstIndex(where: { $0.fileId == afterFile.media.fileId }) {
-            self.files.insert(file.media, at: index + 1)
+        var updatedFiles = self.files
+    
+        let fromIdx = updatedFiles.firstIndex { $0.fileId == file.media.fileId }
+        let anchorIdxOpt = afterFile.flatMap { af in
+            updatedFiles.firstIndex { $0.fileId == af.media.fileId }
+        }
+        
+        if let fromIdx = fromIdx {
+            updatedFiles.remove(at: fromIdx)
+            
+            let insertIdx: Int
+            if let anchorIdx = anchorIdxOpt {
+                if anchorIdx == fromIdx {
+                    insertIdx = min(fromIdx + 1, updatedFiles.count)
+                } else {
+                    let adjustedAnchor = anchorIdx > fromIdx ? (anchorIdx - 1) : anchorIdx
+                    insertIdx = updatedFiles.index(after: adjustedAnchor)
+                }
+            } else if afterFile != nil {
+                insertIdx = updatedFiles.count
+            } else {
+                insertIdx = 0
+            }
+            updatedFiles.insert(file.media, at: insertIdx)
         } else {
-            self.files.insert(file.media, at: 0)
+            if let anchorIdx = anchorIdxOpt {
+                updatedFiles.insert(file.media, at: updatedFiles.index(after: anchorIdx))
+            } else if afterFile != nil {
+                updatedFiles.append(file.media)
+            } else {
+                updatedFiles.insert(file.media, at: 0)
+            }
+            if let count = self.count {
+                self.count = count + 1
+            }
         }
-        if let count = self.count {
-            self.count = count + 1
-        }
+        self.files = updatedFiles        
         self.pushState()
         
         if apply {

@@ -120,7 +120,7 @@ private func generatePeerMediaMessage(network: Network, accountPeerId: EnginePee
     flags.insert(.Sending)
     
     var attributes: [MessageAttribute] = []
-    attributes.append(OutgoingMessageInfoAttribute(uniqueId: randomId, flags: [], acknowledged: false, correlationId: nil, bubbleUpEmojiOrStickersets: []))
+    attributes.append(OutgoingMessageInfoAttribute(uniqueId: randomId, flags: [], acknowledged: false, correlationId: nil, bubbleUpEmojiOrStickersets: [], partialReference: nil))
     
     var media: [Media] = []
     switch content {

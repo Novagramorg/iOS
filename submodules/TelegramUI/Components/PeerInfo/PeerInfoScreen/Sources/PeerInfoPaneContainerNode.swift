@@ -1639,7 +1639,7 @@ final class PeerInfoPaneContainerNode: ASDisplayNode, ASGestureRecognizerDelegat
             environment: {},
             containerSize: tabsContainerSize
         )
-        let tabContainerFrameOriginX = floorToScreenPixels((size.width - tabsContainerEffectiveSize.width) / 2.0)
+        let tabContainerFrameOriginX = items.count == 1 ? sideInset : floorToScreenPixels((size.width - tabsContainerEffectiveSize.width) / 2.0)
         let tabContainerFrame = CGRect(origin: CGPoint(x: tabContainerFrameOriginX, y: 10.0 - tabsOffset), size: tabsContainerSize)
         if let tabsContainerView = self.tabsContainer.view {
             if tabsContainerView.superview == nil {
