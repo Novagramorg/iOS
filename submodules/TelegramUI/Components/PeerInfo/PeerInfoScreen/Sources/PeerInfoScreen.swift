@@ -112,6 +112,7 @@ import OldChannelsController
 import UrlHandling
 import VerifyAlertController
 import GiftViewScreen
+import PeerMessagesMediaPlaylist
 
 public enum PeerInfoAvatarEditingMode {
     case generic
@@ -6008,66 +6009,57 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
         }
     }
     
+    var previousSavedMusicTimestamp: Double?
     private func displaySavedMusic() {
         guard let savedMusicContext = self.data?.savedMusicContext else {
             return
         }
-        let peerId = self.peerId
-        let peer = self.data?.peer
-        let initialMessageId: MessageId
-        if let initialFileId = self.data?.savedMusicState?.files.first?.fileId {
-            initialMessageId = MessageId(peerId: peerId, namespace: Namespaces.Message.Local, id: Int32(clamping: initialFileId.id % Int64(Int32.max)))
-        } else {
-            initialMessageId = MessageId(peerId: peerId, namespace: Namespaces.Message.Local, id: 0)
-        }
         
-        let musicController = self.context.sharedContext.makeOverlayAudioPlayerController(
-            context: self.context,
-            chatLocation: .peer(id: peerId),
-            type: .music,
-            initialMessageId: initialMessageId,
-            initialOrder: .regular,
-            playlistLocation: PeerMessagesPlaylistLocation.custom(
-                messages: savedMusicContext.state
-                |> map { state in
-                    var messages: [Message] = []
-                    var peers = SimpleDictionary<PeerId, Peer>()
-                    peers[peerId] = peer
-                    for file in state.files {
-                        let stableId = UInt32(clamping: file.fileId.id % Int64(Int32.max))
-                        messages.append(Message(stableId: stableId, stableVersion: 0, id: MessageId(peerId: peerId, namespace: Namespaces.Message.Local, id: Int32(stableId)), globallyUniqueId: nil, groupingKey: nil, groupInfo: nil, threadId: nil, timestamp: 0, flags: [], tags: [], globalTags: [], localTags: [], customTags: [], forwardInfo: nil, author: nil, text: "", attributes: [], media: [file], peers: peers, associatedMessages: SimpleDictionary(), associatedMessageIds: [], associatedMedia: [:], associatedThreadInfo: nil, associatedStories: [:]))
-                        
-                    }
-                    return (messages, Int32(messages.count), true)
-                },
-                canReorder: peerId == self.context.account.peerId,
-                at: initialMessageId,
-                loadMore: { [weak savedMusicContext] in
-                    guard let savedMusicContext else {
-                        return
-                    }
-                    savedMusicContext.loadMore()
-                }
-            ),
-            parentNavigationController: self.controller?.navigationController as? NavigationController,
-            updateMusicSaved: { [weak savedMusicContext] file, isSaved in
-                guard let savedMusicContext else {
-                    return
-                }
-                if isSaved {
-                    let _ = savedMusicContext.addMusic(file: file).start()
-                } else {
-                    let _ = savedMusicContext.removeMusic(file: file).start()
-                }
-            },
-            reorderSavedMusic: { [weak savedMusicContext] file, afterFile in
-                guard let savedMusicContext else {
-                    return
-                }
-                let _ = savedMusicContext.addMusic(file: file, afterFile: afterFile, apply: true).start()
+        let currentTimestamp = CACurrentMediaTime()
+        if let previousTimestamp = self.previousSavedMusicTimestamp, currentTimestamp < previousTimestamp + 1.0 {
+            return
+        }
+        self.previousSavedMusicTimestamp = currentTimestamp
+        
+        let _ = (self.context.sharedContext.mediaManager.globalMediaPlayerState
+        |> take(1)
+        |> deliverOnMainQueue).start(next: { [weak self] accountStateAndType in
+            guard let self else {
+                return
             }
-        )
-        self.controller?.present(musicController, in: .window(.root))
+            let peerId = self.peerId
+            var initialId: Int32
+            if let initialFileId = self.data?.savedMusicState?.files.first?.fileId {
+                initialId = Int32(clamping: initialFileId.id % Int64(Int32.max))
+            } else {
+                initialId = 0
+            }
+
+            let canReorder = peerId == self.context.account.peerId
+            var playlistLocation: PeerMessagesPlaylistLocation = .savedMusic(context: savedMusicContext, at: initialId, canReorder: canReorder)
+            
+            if let (account, stateOrLoading, _) = accountStateAndType, self.context.account.peerId == account.peerId, case let .state(state) = stateOrLoading, let location = state.playlistLocation as? PeerMessagesPlaylistLocation, case let .savedMusic(savedMusicContext, _, _) = location, savedMusicContext.peerId == peerId {
+                if let itemId = state.item.id as? PeerMessagesMediaPlaylistItemId {
+                    initialId = itemId.messageId.id
+                }
+                playlistLocation = .savedMusic(context: savedMusicContext, at: initialId, canReorder: canReorder)
+            } else {
+                self.context.sharedContext.mediaManager.setPlaylist((self.context, PeerMessagesMediaPlaylist(context: self.context, location: playlistLocation, chatLocationContextHolder: nil)), type: .music, control: .playback(.play))
+            }
+            
+            Queue.mainQueue().after(0.1) {
+                let musicController = self.context.sharedContext.makeOverlayAudioPlayerController(
+                    context: self.context,
+                    chatLocation: .peer(id: peerId),
+                    type: .music,
+                    initialMessageId: MessageId(peerId: peerId, namespace: Namespaces.Message.Local, id: initialId),
+                    initialOrder: .regular,
+                    playlistLocation: playlistLocation,
+                    parentNavigationController: self.controller?.navigationController as? NavigationController
+                )
+                self.controller?.present(musicController, in: .window(.root))
+            }
+        })
     }
     
     private func performButtonAction(key: PeerInfoHeaderButtonKey, gesture: ContextGesture?) {
@@ -13560,27 +13552,39 @@ public final class PeerInfoScreenImpl: ViewController, PeerInfoScreen, KeyShortc
         if let updatedPresentationData = updatedPresentationData {
             presentationDataSignal = updatedPresentationData.signal
         } else if self.peerId != self.context.account.peerId {
-            let themeEmoticon: Signal<String?, NoError> = self.cachedDataPromise.get()
-            |> map { cachedData -> String? in
+            let chatTheme: Signal<ChatTheme?, NoError> = self.cachedDataPromise.get()
+            |> map { cachedData -> ChatTheme? in
                 if let cachedData = cachedData as? CachedUserData {
-                    return cachedData.themeEmoticon
+                    return cachedData.chatTheme
                 } else if let cachedData = cachedData as? CachedGroupData {
-                    return cachedData.themeEmoticon
+                    return cachedData.chatTheme
                 } else if let cachedData = cachedData as? CachedChannelData {
-                    return cachedData.themeEmoticon
+                    return cachedData.chatTheme
                 } else {
                     return nil
                 }
             }
             |> distinctUntilChanged
             
-            presentationDataSignal = combineLatest(queue: Queue.mainQueue(), context.sharedContext.presentationData, context.engine.themes.getChatThemes(accountManager: context.sharedContext.accountManager, onlyCached: false), themeEmoticon)
-            |> map { presentationData, chatThemes, themeEmoticon -> PresentationData in
+            presentationDataSignal = combineLatest(
+                queue: Queue.mainQueue(),
+                context.sharedContext.presentationData,
+                context.engine.themes.getChatThemes(accountManager: context.sharedContext.accountManager, onlyCached: false),
+                chatTheme
+            )
+            |> map { presentationData, chatThemes, chatTheme -> PresentationData in
                 var presentationData = presentationData
-                if let themeEmoticon = themeEmoticon, let theme = chatThemes.first(where: { $0.emoticon == themeEmoticon }) {
-                    if let theme = makePresentationTheme(cloudTheme: theme, dark: presentationData.theme.overallDarkAppearance) {
-                        presentationData = presentationData.withUpdated(theme: theme)
-                        presentationData = presentationData.withUpdated(chatWallpaper: theme.chat.defaultWallpaper)
+                if let chatTheme {
+                    switch chatTheme {
+                    case let .emoticon(emoticon):
+                        if let theme = chatThemes.first(where: { $0.emoticon == emoticon }) {
+                            if let theme = makePresentationTheme(cloudTheme: theme, dark: presentationData.theme.overallDarkAppearance) {
+                                presentationData = presentationData.withUpdated(theme: theme)
+                                presentationData = presentationData.withUpdated(chatWallpaper: theme.chat.defaultWallpaper)
+                            }
+                        }
+                    case .gift:
+                        break
                     }
                 }
                 return presentationData

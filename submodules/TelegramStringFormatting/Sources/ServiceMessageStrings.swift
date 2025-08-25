@@ -767,8 +767,8 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                 }
                 
                 attributedString = addAttributesToStringWithRanges(resultTitleString._tuple, body: bodyAttributes, argumentAttributes: peerMentionsAttributes(primaryTextColor: primaryTextColor, peerIds: attributePeerIds))
-            case let .setChatTheme(emoji):
-                if emoji.isEmpty {
+            case let .setChatTheme(chatTheme):
+                if chatTheme.isEmpty {
                     if message.author?.id.namespace == Namespaces.Peer.CloudChannel {
                         attributedString = NSAttributedString(string: strings.Notification_ChannelDisabledTheme, font: titleFont, textColor: primaryTextColor)
                     } else if message.author?.id == accountPeerId {
@@ -779,13 +779,34 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                         attributedString = addAttributesToStringWithRanges(resultTitleString._tuple, body: bodyAttributes, argumentAttributes: peerMentionsAttributes(primaryTextColor: primaryTextColor, peerIds: attributePeerIds))
                     }
                 } else {
+                    var emoji = ""
+                    var additionalAttributes: [String: Any] = [:]
+                    switch chatTheme {
+                    case let .emoticon(emoticon):
+                        emoji = emoticon
+                    case let .gift(starGift, _):
+                        var file: TelegramMediaFile?
+                        if case let .unique(uniqueGift) = starGift {
+                            for attribute in uniqueGift.attributes {
+                                if case let .model(_, fileValue, _) = attribute {
+                                    file = fileValue
+                                    break
+                                }
+                            }
+                        }
+                        if let file {
+                            additionalAttributes[ChatTextInputAttributes.customEmoji.rawValue] = ChatTextInputTextCustomEmojiAttribute(interactivelySelectedFromPackId: nil, fileId: file.fileId.id, file: file, custom: nil)
+                        }
+                    }
+                    let emojiAttributes = MarkdownAttributeSet(font: titleFont, textColor: primaryTextColor, additionalAttributes: additionalAttributes)
                     if message.author?.id.namespace == Namespaces.Peer.CloudChannel {
                         attributedString = NSAttributedString(string: strings.Notification_ChannelChangedTheme(emoji).string, font: titleFont, textColor: primaryTextColor)
                     } else if message.author?.id == accountPeerId {
-                        attributedString = NSAttributedString(string: strings.Notification_YouChangedTheme(emoji).string, font: titleFont, textColor: primaryTextColor)
+                        let resultTitleString = strings.Notification_YouChangedTheme(emoji)
+                        attributedString = addAttributesToStringWithRanges(resultTitleString._tuple, body: bodyAttributes, argumentAttributes: [0: emojiAttributes])
                     } else {
                         let resultTitleString = strings.Notification_ChangedTheme(compactAuthorName, emoji)
-                        attributedString = addAttributesToStringWithRanges(resultTitleString._tuple, body: bodyAttributes, argumentAttributes: [0: boldAttributes])
+                        attributedString = addAttributesToStringWithRanges(resultTitleString._tuple, body: bodyAttributes, argumentAttributes: [0: boldAttributes, 1: emojiAttributes])
                     }
                 }
             case let .webViewData(text):
@@ -1134,7 +1155,7 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                 attributedString = mutableString
             case .prizeStars:
                 attributedString = NSAttributedString(string: strings.Notification_StarsPrize, font: titleFont, textColor: primaryTextColor)
-            case let .starGift(gift, _, text, entities, _, _, _, _, _, upgradeStars, _, isPrepaidUpgrade, _, peerId, senderId, _, _, _):
+            case let .starGift(gift, _, text, entities, _, _, _, _, _, upgradeStars, _, isPrepaidUpgrade, _, peerId, senderId, _, _, _, _):
                 if !forAdditionalServiceMessage {
                     if let text {
                         let mutableAttributedString = NSMutableAttributedString(attributedString: stringWithAppliedEntities(text, entities: entities ?? [], baseColor: primaryTextColor, linkColor: primaryTextColor, baseFont: titleFont, linkFont: titleBoldFont, boldFont: titleBoldFont, italicFont: titleFont, boldItalicFont: titleBoldFont, fixedFont: titleFont, blockQuoteFont: titleFont, underlineLinks: false, message: message._asMessage()))

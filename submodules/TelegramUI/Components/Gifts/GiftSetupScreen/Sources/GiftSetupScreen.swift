@@ -752,6 +752,10 @@ final class GiftSetupScreenComponent: Component {
             } else if isChannelGift {
                 navigationTitleString = environment.strings.Gift_SendChannel_Title
             } else {
+                var peerName = peerName
+                if peerName.count > 22 {
+                    peerName = "\(peerName.prefix(22))…"
+                }
                 navigationTitleString = environment.strings.Gift_Send_TitleTo(peerName).string
             }
             let navigationTitleSize = self.navigationTitle.update(
