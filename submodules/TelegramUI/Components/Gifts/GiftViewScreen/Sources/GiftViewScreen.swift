@@ -2648,7 +2648,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                     var descriptionSize = CGSize()
                     if state.justUpgraded {
                         var items: [AnyComponentWithIdentity<Empty>] = [
-                            AnyComponentWithIdentity(id: "label", component: AnyComponent(Text(text: "Collectible #", font: textFont, color: .white, tintColor: textColor)))
+                            AnyComponentWithIdentity(id: "label", component: AnyComponent(Text(text: "\(strings.Gift_Unique_Collectible) #", font: textFont, color: .white, tintColor: textColor)))
                         ]
                         
                         let numberFont = Font.with(size: 13.0, traits: .monospacedNumbers)
@@ -3413,11 +3413,10 @@ private final class GiftViewSheetContent: CombinedComponent {
                         )
                     ), at: hasOriginalInfo ? tableItems.count - 1 : tableItems.count)
                     
-                    //TODO:localize
                     if let valueAmount = uniqueGift.valueAmount, let valueCurrency = uniqueGift.valueCurrency {
                         tableItems.insert(.init(
                             id: "fiatValue",
-                            title: "Value",
+                            title: strings.Gift_Unique_Value,
                             component: AnyComponent(
                                 HStack([
                                     AnyComponentWithIdentity(
@@ -3429,7 +3428,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                                         component: AnyComponent(Button(
                                             content: AnyComponent(ButtonContentComponent(
                                                 context: component.context,
-                                                text: "learn more",
+                                                text: strings.Gift_Unique_LearnMore,
                                                 color: theme.list.itemAccentColor
                                             )),
                                             action: { [weak state] in
@@ -3889,9 +3888,8 @@ private final class GiftViewSheetContent: CombinedComponent {
                 }
                 var upgradeString = strings.Gift_Upgrade_Upgrade
                 if !incoming {
-                    //TODO:localize
                     if let gift = state.starGiftsMap[giftId], let upgradeStars = gift.upgradeStars {
-                        upgradeString = "Pay  # \(upgradeStars) for Upgrade"
+                        upgradeString = strings.Gift_Upgrade_GiftUpgrade(" # \(upgradeStars)").string
                     }
                 } else if let upgradeForm = state.upgradeForm, let price = upgradeForm.invoice.prices.first?.amount {
                     upgradeString += "  # \(presentationStringsFormattedNumber(Int32(price), environment.dateTimeFormat.groupingSeparator))"
@@ -3945,8 +3943,7 @@ private final class GiftViewSheetContent: CombinedComponent {
             } else if (incoming && !converted && !upgraded && canUpgrade) || canGiftUpgrade {
                 let buttonTitle: String
                 if canGiftUpgrade {
-                    //TODO:localize
-                    buttonTitle = "Gift an Upgrade"
+                    buttonTitle = strings.Gift_View_GiftUpgrade
                 } else if let upgradeStars, upgradeStars > 0 {
                     buttonTitle = strings.Gift_View_UpgradeForFree
                 } else {

@@ -839,11 +839,13 @@ public extension Api.functions.account {
                 }
 }
 public extension Api.functions.account {
-                static func getUniqueGiftChatThemes(hash: Int64) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.account.ChatThemes>) {
+                static func getUniqueGiftChatThemes(offset: Int32, limit: Int32, hash: Int64) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.account.ChatThemes>) {
                     let buffer = Buffer()
-                    buffer.appendInt32(1036953191)
+                    buffer.appendInt32(-25890913)
+                    serializeInt32(offset, buffer: buffer, boxed: false)
+                    serializeInt32(limit, buffer: buffer, boxed: false)
                     serializeInt64(hash, buffer: buffer, boxed: false)
-                    return (FunctionDescription(name: "account.getUniqueGiftChatThemes", parameters: [("hash", String(describing: hash))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.account.ChatThemes? in
+                    return (FunctionDescription(name: "account.getUniqueGiftChatThemes", parameters: [("offset", String(describing: offset)), ("limit", String(describing: limit)), ("hash", String(describing: hash))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.account.ChatThemes? in
                         let reader = BufferReader(buffer)
                         var result: Api.account.ChatThemes?
                         if let signature = reader.readInt32() {
