@@ -1470,12 +1470,12 @@ private func finalStateWithUpdatesAndServerTime(accountPeerId: PeerId, postbox: 
                     let channelPeerId = PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(channelId))
                     let threadId = topMsgId.flatMap { Int64($0) }
                     
-                    if case let .sendMessageTextDraftAction(randomId, text) = type {
+                    /*if case let .sendMessageTextDraftAction(randomId, text) = type {
                         switch text {
                         case let .textWithEntities(text, entities):
                             updatedState.addPeerLiveTypingDraftUpdate(peerAndThreadId: PeerAndThreadId(peerId: channelPeerId, threadId: threadId), id: randomId, timestamp: date, peerId: userId.peerId, text: text, entities: messageTextEntitiesFromApiEntities(entities))
                         }
-                    } else {
+                    } else*/ do {
                         let activity = PeerInputActivity(apiType: type, peerId: nil, timestamp: date)
                         var category: PeerActivitySpace.Category = .global
                         if case .speakingInGroupCall = activity {

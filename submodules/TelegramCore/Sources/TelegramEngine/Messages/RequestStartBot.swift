@@ -6,7 +6,7 @@ import MtProtoKit
 
 
 func _internal_requestStartBot(account: Account, botPeerId: PeerId, payload: String?) -> Signal<Void, NoError> {
-    if "".isEmpty {
+    /*if "".isEmpty {
         return account.postbox.loadedPeerWithId(botPeerId)
         |> mapToSignal { botPeer -> Signal<Void, NoError> in
             guard let inputUser = apiInputUser(botPeer), let botPeer = botPeer as? TelegramUser, let botInfo = botPeer.botInfo else {
@@ -86,7 +86,7 @@ func _internal_requestStartBot(account: Account, botPeerId: PeerId, payload: Str
                 }
             }
         }
-    }
+    }*/
     
     if let payload = payload, !payload.isEmpty {
         return account.postbox.loadedPeerWithId(botPeerId)
