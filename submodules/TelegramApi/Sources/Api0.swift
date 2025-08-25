@@ -221,6 +221,8 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[1385335754] = { return Api.ChatReactions.parse_chatReactionsAll($0) }
     dict[-352570692] = { return Api.ChatReactions.parse_chatReactionsNone($0) }
     dict[1713193015] = { return Api.ChatReactions.parse_chatReactionsSome($0) }
+    dict[-1008731132] = { return Api.ChatTheme.parse_chatTheme($0) }
+    dict[388142507] = { return Api.ChatTheme.parse_chatThemeUniqueGift($0) }
     dict[-1390068360] = { return Api.CodeSettings.parse_codeSettings($0) }
     dict[-870702050] = { return Api.Config.parse_config($0) }
     dict[-849058964] = { return Api.ConnectedBot.parse_connectedBot($0) }
@@ -344,6 +346,9 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[-1991004873] = { return Api.InputChatPhoto.parse_inputChatPhoto($0) }
     dict[480546647] = { return Api.InputChatPhoto.parse_inputChatPhotoEmpty($0) }
     dict[-1110593856] = { return Api.InputChatPhoto.parse_inputChatUploadedPhoto($0) }
+    dict[-918689444] = { return Api.InputChatTheme.parse_inputChatTheme($0) }
+    dict[-2094627709] = { return Api.InputChatTheme.parse_inputChatThemeEmpty($0) }
+    dict[-2014978076] = { return Api.InputChatTheme.parse_inputChatThemeUniqueGift($0) }
     dict[-203367885] = { return Api.InputChatlist.parse_inputChatlistDialogFilter($0) }
     dict[-1736378792] = { return Api.InputCheckPasswordSRP.parse_inputCheckPasswordEmpty($0) }
     dict[-763367294] = { return Api.InputCheckPasswordSRP.parse_inputCheckPasswordSRP($0) }
@@ -600,7 +605,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[1200788123] = { return Api.MessageAction.parse_messageActionScreenshotTaken($0) }
     dict[-648257196] = { return Api.MessageAction.parse_messageActionSecureValuesSent($0) }
     dict[455635795] = { return Api.MessageAction.parse_messageActionSecureValuesSentMe($0) }
-    dict[-1434950843] = { return Api.MessageAction.parse_messageActionSetChatTheme($0) }
+    dict[-1189364422] = { return Api.MessageAction.parse_messageActionSetChatTheme($0) }
     dict[1348510708] = { return Api.MessageAction.parse_messageActionSetChatWallPaper($0) }
     dict[1007897979] = { return Api.MessageAction.parse_messageActionSetMessagesTTL($0) }
     dict[-229775366] = { return Api.MessageAction.parse_messageActionStarGift($0) }
@@ -1191,7 +1196,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[-1831650802] = { return Api.UrlAuthResult.parse_urlAuthResultRequest($0) }
     dict[34280482] = { return Api.User.parse_user($0) }
     dict[-742634630] = { return Api.User.parse_userEmpty($0) }
-    dict[-962665488] = { return Api.UserFull.parse_userFull($0) }
+    dict[-156655069] = { return Api.UserFull.parse_userFull($0) }
     dict[-2100168954] = { return Api.UserProfilePhoto.parse_userProfilePhoto($0) }
     dict[1326562017] = { return Api.UserProfilePhoto.parse_userProfilePhotoEmpty($0) }
     dict[164646985] = { return Api.UserStatus.parse_userStatusEmpty($0) }
@@ -1226,6 +1231,8 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[1674235686] = { return Api.account.AutoDownloadSettings.parse_autoDownloadSettings($0) }
     dict[1279133341] = { return Api.account.AutoSaveSettings.parse_autoSaveSettings($0) }
     dict[-331111727] = { return Api.account.BusinessChatLinks.parse_businessChatLinks($0) }
+    dict[-1642883515] = { return Api.account.ChatThemes.parse_chatThemes($0) }
+    dict[-535699004] = { return Api.account.ChatThemes.parse_chatThemesNotModified($0) }
     dict[400029819] = { return Api.account.ConnectedBots.parse_connectedBots($0) }
     dict[1474462241] = { return Api.account.ContentSettings.parse_contentSettings($0) }
     dict[731303195] = { return Api.account.EmailVerified.parse_emailVerified($0) }
@@ -1706,6 +1713,8 @@ public extension Api {
                 _1.serialize(buffer, boxed)
             case let _1 as Api.ChatReactions:
                 _1.serialize(buffer, boxed)
+            case let _1 as Api.ChatTheme:
+                _1.serialize(buffer, boxed)
             case let _1 as Api.CodeSettings:
                 _1.serialize(buffer, boxed)
             case let _1 as Api.Config:
@@ -1841,6 +1850,8 @@ public extension Api {
             case let _1 as Api.InputChannel:
                 _1.serialize(buffer, boxed)
             case let _1 as Api.InputChatPhoto:
+                _1.serialize(buffer, boxed)
+            case let _1 as Api.InputChatTheme:
                 _1.serialize(buffer, boxed)
             case let _1 as Api.InputChatlist:
                 _1.serialize(buffer, boxed)
@@ -2299,6 +2310,8 @@ public extension Api {
             case let _1 as Api.account.AutoSaveSettings:
                 _1.serialize(buffer, boxed)
             case let _1 as Api.account.BusinessChatLinks:
+                _1.serialize(buffer, boxed)
+            case let _1 as Api.account.ChatThemes:
                 _1.serialize(buffer, boxed)
             case let _1 as Api.account.ConnectedBots:
                 _1.serialize(buffer, boxed)

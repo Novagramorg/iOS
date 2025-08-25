@@ -530,8 +530,8 @@ public extension TelegramEngine.EngineData.Item {
             }
         }
         
-        public struct ThemeEmoticon: TelegramEngineDataItem, TelegramEngineMapKeyDataItem, PostboxViewDataItem {
-            public typealias Result = Optional<String>
+        public struct ChatTheme: TelegramEngineDataItem, TelegramEngineMapKeyDataItem, PostboxViewDataItem {
+            public typealias Result = Optional<TelegramCore.ChatTheme>
 
             fileprivate var id: EnginePeer.Id
             public var mapKey: EnginePeer.Id {
@@ -554,11 +554,11 @@ public extension TelegramEngine.EngineData.Item {
                     return nil
                 }
                 if let cachedData = cachedPeerData as? CachedUserData {
-                    return cachedData.themeEmoticon
+                    return cachedData.chatTheme
                 } else if let cachedData = cachedPeerData as? CachedGroupData {
-                    return cachedData.themeEmoticon
+                    return cachedData.chatTheme
                 } else if let cachedData = cachedPeerData as? CachedChannelData {
-                    return cachedData.themeEmoticon
+                    return cachedData.chatTheme
                 } else {
                     return nil
                 }

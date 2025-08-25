@@ -277,7 +277,7 @@ func _internal_fetchAndUpdateCachedPeerData(accountPeerId: PeerId, peerId rawPee
                                     previous = CachedUserData()
                                 }
                                 switch fullUser {
-                                    case let .userFull(userFullFlags, userFullFlags2, _, userFullAbout, userFullSettings, personalPhoto, profilePhoto, fallbackPhoto, _, userFullBotInfo, userFullPinnedMsgId, userFullCommonChatsCount, _, userFullTtlPeriod, userFullThemeEmoticon, _, groupAdminRights, channelAdminRights, userWallpaper, _, businessWorkHours, businessLocation, greetingMessage, awayMessage, businessIntro, birthday, personalChannelId, personalChannelMessage, starGiftsCount, starRefProgram, verification, sendPaidMessageStars, disallowedStarGifts, starsRating, starsMyPendingRating, starsMyPendingRatingDate, linkedBotChannelId, mainTab, savedMusic):
+                                    case let .userFull(userFullFlags, userFullFlags2, _, userFullAbout, userFullSettings, personalPhoto, profilePhoto, fallbackPhoto, _, userFullBotInfo, userFullPinnedMsgId, userFullCommonChatsCount, _, userFullTtlPeriod, userFullChatTheme, _, groupAdminRights, channelAdminRights, userWallpaper, _, businessWorkHours, businessLocation, greetingMessage, awayMessage, businessIntro, birthday, personalChannelId, personalChannelMessage, starGiftsCount, starRefProgram, verification, sendPaidMessageStars, disallowedStarGifts, starsRating, starsMyPendingRating, starsMyPendingRatingDate, linkedBotChannelId, mainTab, savedMusic):
                                         let botInfo = userFullBotInfo.flatMap(BotInfo.init(apiBotInfo:))
                                         let isBlocked = (userFullFlags & (1 << 0)) != 0
                                         let voiceCallsAvailable = (userFullFlags & (1 << 4)) != 0
@@ -436,6 +436,8 @@ func _internal_fetchAndUpdateCachedPeerData(accountPeerId: PeerId, peerId rawPee
                                         let mappedMainProfileTab = mainTab.flatMap { TelegramProfileTab(apiTab: $0) }
                                         let mappedSavedMusic = savedMusic.flatMap { telegramMediaFileFromApiDocument($0, altDocuments: nil) }
                                     
+                                        let mappedChatTheme: ChatTheme? = userFullChatTheme.flatMap { ChatTheme(apiChatTheme: $0) }
+                                    
                                         return previous.withUpdatedAbout(userFullAbout)
                                             .withUpdatedBotInfo(botInfo)
                                             .withUpdatedEditableBotInfo(editableBotInfo)
@@ -449,7 +451,7 @@ func _internal_fetchAndUpdateCachedPeerData(accountPeerId: PeerId, peerId rawPee
                                             .withUpdatedPinnedMessageId(pinnedMessageId)
                                             .withUpdatedHasScheduledMessages(hasScheduledMessages)
                                             .withUpdatedAutoremoveTimeout(autoremoveTimeout)
-                                            .withUpdatedThemeEmoticon(userFullThemeEmoticon)
+                                            .withUpdatedChatTheme(mappedChatTheme)
                                             .withUpdatedPhoto(.known(photo))
                                             .withUpdatedPersonalPhoto(.known(personalPhoto))
                                             .withUpdatedFallbackPhoto(.known(fallbackPhoto))
@@ -583,6 +585,8 @@ func _internal_fetchAndUpdateCachedPeerData(accountPeerId: PeerId, peerId rawPee
                                     
                                     let mappedReactionSettings = PeerReactionSettings(allowedReactions: mappedAllowedReactions, maxReactionCount: reactionsLimit, starsAllowed: nil)
                                     
+                                    let mappedChatTheme: ChatTheme? = chatFullThemeEmoticon.flatMap { .emoticon($0) }
+                                    
                                     return previous.withUpdatedParticipants(participants)
                                         .withUpdatedExportedInvitation(exportedInvitation)
                                         .withUpdatedBotInfos(botInfos)
@@ -594,7 +598,7 @@ func _internal_fetchAndUpdateCachedPeerData(accountPeerId: PeerId, peerId rawPee
                                         .withUpdatedPhoto(photo)
                                         .withUpdatedActiveCall(updatedActiveCall)
                                         .withUpdatedCallJoinPeerId(groupCallDefaultJoinAs?.peerId)
-                                        .withUpdatedThemeEmoticon(chatFullThemeEmoticon)
+                                        .withUpdatedChatTheme(mappedChatTheme)
                                         .withUpdatedInviteRequestsPending(chatFullRequestsPending)
                                         .withUpdatedAutoremoveTimeout(autoremoveTimeout)
                                         .withUpdatedReactionSettings(.known(mappedReactionSettings))
@@ -856,6 +860,8 @@ func _internal_fetchAndUpdateCachedPeerData(accountPeerId: PeerId, peerId rawPee
                                                                
                                                 let mappedMainProfileTab = mainTab.flatMap { TelegramProfileTab(apiTab: $0) }
                                                 
+                                                let mappedChatTheme: ChatTheme? = themeEmoticon.flatMap { .emoticon($0) }
+                                                
                                                 return previous.withUpdatedFlags(channelFlags)
                                                     .withUpdatedAbout(about)
                                                     .withUpdatedParticipantsSummary(CachedChannelParticipantsSummary(memberCount: participantsCount, adminCount: adminsCount, bannedCount: bannedCount, kickedCount: kickedCount))
@@ -878,7 +884,7 @@ func _internal_fetchAndUpdateCachedPeerData(accountPeerId: PeerId, peerId rawPee
                                                     .withUpdatedCallJoinPeerId(groupcallDefaultJoinAs?.peerId)
                                                     .withUpdatedAutoremoveTimeout(autoremoveTimeout)
                                                     .withUpdatedPendingSuggestions(pendingSuggestions ?? [])
-                                                    .withUpdatedThemeEmoticon(themeEmoticon)
+                                                    .withUpdatedChatTheme(mappedChatTheme)
                                                     .withUpdatedInviteRequestsPending(requestsPending)
                                                     .withUpdatedSendAsPeerId(sendAsPeerId)
                                                     .withUpdatedReactionSettings(.known(mappedReactionSettings))

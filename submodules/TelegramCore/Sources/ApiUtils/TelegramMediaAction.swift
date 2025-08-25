@@ -101,8 +101,12 @@ func telegramMediaActionFromApiAction(_ action: Api.MessageAction) -> TelegramMe
         case .inputGroupCallSlug, .inputGroupCallInviteMessage:
             return nil
         }
-    case let .messageActionSetChatTheme(emoji):
-        return TelegramMediaAction(action: .setChatTheme(emoji: emoji))
+    case let .messageActionSetChatTheme(chatTheme):
+        if let chatTheme = ChatTheme(apiChatTheme: chatTheme) {
+            return TelegramMediaAction(action: .setChatTheme(chatTheme: chatTheme))
+        } else {
+            return nil
+        }
     case .messageActionChatJoinedByRequest:
         return TelegramMediaAction(action: .joinedByRequest)
     case let .messageActionWebViewDataSentMe(text, _), let .messageActionWebViewDataSent(text):

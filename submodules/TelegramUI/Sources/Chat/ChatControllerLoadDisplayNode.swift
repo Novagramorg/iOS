@@ -186,7 +186,7 @@ extension ChatControllerImpl {
                 
                 self.contentDataUpdated(synchronous: true, forceAnimation: forceAnimation, previousState: contentData.state)
                 
-                self.chatThemeEmoticonPromise.set(contentData.chatThemeEmoticonPromise.get())
+                self.chatThemePromise.set(contentData.chatThemePromise.get())
                 self.chatWallpaperPromise.set(contentData.chatWallpaperPromise.get())
                 
                 if let historyNode {
@@ -844,12 +844,12 @@ extension ChatControllerImpl {
         }
         
         if let peerId = self.chatLocation.peerId {
-            self.chatThemeEmoticonPromise.set(self.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.ThemeEmoticon(id: peerId)))
+            self.chatThemePromise.set(self.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.ChatTheme(id: peerId)))
             let chatWallpaper = self.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Wallpaper(id: peerId))
             |> take(1)
             self.chatWallpaperPromise.set(chatWallpaper)
         } else {
-            self.chatThemeEmoticonPromise.set(.single(nil))
+            self.chatThemePromise.set(.single(nil))
             self.chatWallpaperPromise.set(.single(nil))
         }
         
