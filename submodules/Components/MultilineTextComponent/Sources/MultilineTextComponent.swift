@@ -176,6 +176,8 @@ public final class MultilineTextComponent: Component {
                  
             if let tintColor = component.tintColor {
                 transition.setTintColor(layer: self.layer, color: tintColor)
+            } else {
+                self.layer.layerTintColor = nil
             }
             
             return size
