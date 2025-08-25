@@ -382,9 +382,10 @@ public final class GiftCompositionComponent: Component {
             container.frame.origin.x = floor((availableSize.width - visualSize.width) / 2.0)
 
             container.layer.animatePosition(
-                from: CGPoint(x: -containerWidth - visualSize.width * 0.5 + containerWidth / 2.0 - self.spacingX - 70.0, y: container.frame.center.y),
+                from: CGPoint(x: -containerWidth - visualSize.width * 0.5 + containerWidth / 2.0 - self.spacingX - 120.0, y: container.frame.center.y),
                 to: CGPoint(x: container.frame.center.x, y: container.frame.center.y),
                 duration: self.maxAnimDuration,
+                delay: 0.05,
                 timingFunction: kCAMediaTimingFunctionSpring,
                 completion: { [weak self] _ in
                     guard let self, let container = self.decelContainer else {
@@ -396,8 +397,7 @@ public final class GiftCompositionComponent: Component {
             )
 
             self.spinState = .decelerating
-            self.spinLink?.invalidate()
-            self.spinLink = nil
+            self.ensureDisplayLink()
         }
 
         private func handleDecelArrived(container: UIView, iconSize: CGSize, visualSize: CGSize) {
@@ -506,14 +506,91 @@ public final class GiftCompositionComponent: Component {
                     self.componentState?.updated(transition: .easeInOut(duration: 0.25))
                     self.component?.requestUpdate(.easeInOut(duration: 0.25))
                 }
+                self.applyEdge3DHorizontal()
             case .decelerating:
-                break
+                self.applyEdge3DHorizontal()
             case .idle, .settled:
                 self.spinLink?.invalidate()
                 self.spinLink = nil
             }
         }
         
+        private let minScaleAtEdgeX: CGFloat = 0.7
+        private let yawAtEdgeDegrees: CGFloat = 25.0
+        private let edgeFalloffX: CGFloat = 0.25
+
+        @inline(__always)
+        private func smoothstep01(_ x: CGFloat) -> CGFloat {
+            let t = max(0.0, min(1.0, x))
+            return t * t * (3.0 - 2.0 * t)
+        }
+
+        @inline(__always)
+        private func liveMidX(in container: UIView, of view: UIView) -> CGFloat {
+            if let pres = view.layer.presentation() {
+                let p = container.layer.convert(pres.position, from: view.layer.superlayer)
+                return p.x
+            }
+            return view.center.x
+        }
+        
+        @inline(__always)
+        private func midXInsideAnimatedContainer(in selfView: UIView, container: UIView, hostView: UIView) -> CGFloat {
+            let contPres = container.layer.presentation() ?? container.layer
+            let hostPres = hostView.layer.presentation() ?? hostView.layer
+            
+            let hostOffsetFromContainerCenter = hostPres.position.x - container.bounds.midX
+            return contPres.position.x + hostOffsetFromContainerCenter
+        }
+
+        private func edge3DTransformFor(midX: CGFloat, containerWidth: CGFloat, baseScale: CGFloat = 1.0) -> CATransform3D {
+            guard containerWidth > 0 else {
+                return CATransform3DMakeScale(baseScale, baseScale, 1.0)
+            }
+            let d = abs((midX - containerWidth * 0.5) / (containerWidth * 0.5))
+            
+            let uRaw = (d - edgeFalloffX) / (1.0 - edgeFalloffX)
+            let u = smoothstep01(max(0.0, min(1.0, uRaw)))
+        
+            let scale = (1.0 - u) * baseScale + (minScaleAtEdgeX * baseScale) * u
+            let yawSign: CGFloat = (midX < containerWidth * 0.5) ? 1.0 : -1.0
+            let yawRadians = (yawAtEdgeDegrees * .pi / 180.0) * u * yawSign
+            
+            var t = CATransform3DIdentity
+            t = CATransform3DRotate(t, yawRadians, 0.0, 1.0, 0.0)
+            t = CATransform3DScale(t, scale, scale, 1.0)
+            return t
+        }
+        
+        private func applyEdge3DHorizontal() {
+            let containerWidth = self.bounds.width
+            guard containerWidth > 0.0 else { return }
+
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+
+            for w in self.activeWrappers {
+                guard w.superview === self else { continue }
+                let midX = liveMidX(in: self, of: w)
+                if let host = w.subviews.first {
+                    let baseScale = max(0.01, w.bounds.width / max(host.bounds.width, 0.01))
+                    host.layer.transform = edge3DTransformFor(midX: midX, containerWidth: containerWidth, baseScale: baseScale)
+                }
+            }
+
+            for hostView in self.decelItemHosts {
+                guard let container = self.decelContainer, hostView.superview === container && hostView !== self.decelItemHosts.first else {
+                    continue
+                }
+                let midX = midXInsideAnimatedContainer(in: self, container: container, hostView: hostView)
+                if let host = hostView.subviews.first {
+                    let baseScale = max(0.01, hostView.bounds.width / max(host.bounds.width, 0.01))
+                    host.layer.transform = edge3DTransformFor(midX: midX, containerWidth: containerWidth, baseScale: baseScale)
+                }
+            }
+
+            CATransaction.commit()
+        }
         
         public func update(component: GiftCompositionComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
             let previousComponent = self.component

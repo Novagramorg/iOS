@@ -1549,15 +1549,15 @@ private final class GiftViewSheetContent: CombinedComponent {
                     }
                     self.updated(transition: .spring(duration: 0.4))
                     
-                    Queue.mainQueue().after(1.5) {
+                    Queue.mainQueue().after(1.2) {
                         self.revealedAttributes.insert(.backdrop)
                         self.updated(transition: .immediate)
                         
-                        Queue.mainQueue().after(1.0) {
+                        Queue.mainQueue().after(0.7) {
                             self.revealedAttributes.insert(.pattern)
                             self.updated(transition: .immediate)
                             
-                            Queue.mainQueue().after(1.0) {
+                            Queue.mainQueue().after(0.7) {
                                 self.revealedAttributes.insert(.model)
                                 self.updated(transition: .immediate)
                                 
@@ -2648,31 +2648,43 @@ private final class GiftViewSheetContent: CombinedComponent {
                             AnyComponentWithIdentity(id: "label", component: AnyComponent(Text(text: "Collectible #", font: textFont, color: .white, tintColor: textColor)))
                         ]
                         
+                        let numberFont = Font.with(size: 13.0, traits: .monospacedNumbers)
                         let spinningItems: [AnyComponentWithIdentity<Empty>] = [
-                            AnyComponentWithIdentity(id: "0", component: AnyComponent(Text(text: "0", font: textFont, color: textColor))),
-                            AnyComponentWithIdentity(id: "1", component: AnyComponent(Text(text: "1", font: textFont, color: textColor))),
-                            AnyComponentWithIdentity(id: "2", component: AnyComponent(Text(text: "2", font: textFont, color: textColor))),
-                            AnyComponentWithIdentity(id: "3", component: AnyComponent(Text(text: "3", font: textFont, color: textColor))),
-                            AnyComponentWithIdentity(id: "4", component: AnyComponent(Text(text: "4", font: textFont, color: textColor))),
-                            AnyComponentWithIdentity(id: "5", component: AnyComponent(Text(text: "5", font: textFont, color: textColor))),
-                            AnyComponentWithIdentity(id: "6", component: AnyComponent(Text(text: "6", font: textFont, color: textColor))),
-                            AnyComponentWithIdentity(id: "7", component: AnyComponent(Text(text: "7", font: textFont, color: textColor))),
-                            AnyComponentWithIdentity(id: "8", component: AnyComponent(Text(text: "8", font: textFont, color: textColor))),
-                            AnyComponentWithIdentity(id: "9", component: AnyComponent(Text(text: "9", font: textFont, color: textColor)))
+                            AnyComponentWithIdentity(id: "0", component: AnyComponent(Text(text: "0", font: numberFont, color: textColor))),
+                            AnyComponentWithIdentity(id: "1", component: AnyComponent(Text(text: "1", font: numberFont, color: textColor))),
+                            AnyComponentWithIdentity(id: "2", component: AnyComponent(Text(text: "2", font: numberFont, color: textColor))),
+                            AnyComponentWithIdentity(id: "3", component: AnyComponent(Text(text: "3", font: numberFont, color: textColor))),
+                            AnyComponentWithIdentity(id: "4", component: AnyComponent(Text(text: "4", font: numberFont, color: textColor))),
+                            AnyComponentWithIdentity(id: "5", component: AnyComponent(Text(text: "5", font: numberFont, color: textColor))),
+                            AnyComponentWithIdentity(id: "6", component: AnyComponent(Text(text: "6", font: numberFont, color: textColor))),
+                            AnyComponentWithIdentity(id: "7", component: AnyComponent(Text(text: "7", font: numberFont, color: textColor))),
+                            AnyComponentWithIdentity(id: "8", component: AnyComponent(Text(text: "8", font: numberFont, color: textColor))),
+                            AnyComponentWithIdentity(id: "9", component: AnyComponent(Text(text: "9", font: numberFont, color: textColor)))
                         ]
                         if let numberValue = uniqueGift?.number {
-                            let numberString = "\(numberValue)"
+                            let numberString = formatCollectibleNumber(numberValue, dateTimeFormat: environment.dateTimeFormat)
                             var i = 0
+                            var index = 0
                             for c in numberString {
-                                items.append(AnyComponentWithIdentity(id: "c\(i)", component: AnyComponent(SlotsComponent(
-                                    item: AnyComponent(Text(text: String(c), font: textFont, color: .white)),
-                                    items: spinningItems,
-                                    isAnimating: i > state.revealedNumberDigits,
-                                    tintColor: textColor,
-                                    verticalOffset: -1.0 - UIScreenPixel,
-                                    motionBlur: false,
-                                    size: CGSize(width: 8.0, height: 14.0))))
-                                )
+                                let s = String(c)
+                                if s == "\u{00A0}" {
+                                    items.append(AnyComponentWithIdentity(id: "c\(i)", component: AnyComponent(Text(text: s, font: textFont, color: .white, tintColor: textColor)))
+                                    )
+                                } else if [".", ","].contains(s) {
+                                    items.append(AnyComponentWithIdentity(id: "c\(i)", component: AnyComponent(Text(text: s, font: numberFont, color: .white, tintColor: textColor)))
+                                    )
+                                } else {
+                                    items.append(AnyComponentWithIdentity(id: "c\(i)", component: AnyComponent(SlotsComponent(
+                                        item: AnyComponent(Text(text: String(c), font: numberFont, color: .white)),
+                                        items: spinningItems,
+                                        isAnimating: index > state.revealedNumberDigits,
+                                        tintColor: textColor,
+                                        verticalOffset: -1.0 - UIScreenPixel,
+                                        motionBlur: false,
+                                        size: CGSize(width: 8.0, height: 14.0))))
+                                    )
+                                    index += 1
+                                }
                                 i += 1
                             }
                         }

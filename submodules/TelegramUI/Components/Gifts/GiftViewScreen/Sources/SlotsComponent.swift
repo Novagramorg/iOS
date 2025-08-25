@@ -340,9 +340,7 @@ final class SlotsComponent<ChildEnvironment: Equatable>: Component {
                     self.spawnRandomSlot(availableSize: availableSize)
                 }
             case .decelerating:
-                let t = clamp01(self.decelTotalSteps > 1
-                                ? Double(self.decelStepIndex) / Double(self.decelTotalSteps - 1)
-                                : 1.0)
+                let t = clamp01(self.decelTotalSteps > 1 ? Double(self.decelStepIndex) / Double(self.decelTotalSteps - 1) : 1.0)
                                 
                 if let last = self.lastSpawnTime, now - last >= self.currentInterval {
                     if !self.decelQueue.isEmpty {
