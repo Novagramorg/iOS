@@ -57,6 +57,8 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
     private var savedIdsPromise = Promise<Set<Int64>?>()
     private var savedIds: Set<Int64>?
     
+    private var copyProtectionEnabled = false
+    
     init(
         context: AccountContext,
         chatLocation: ChatLocation,
@@ -388,14 +390,25 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
             }
         })
         
-        self.savedIdsDisposable = (context.engine.peers.savedMusicIds()
-        |> deliverOnMainQueue).start(next: { [weak self] savedIds in
+        let copyProtectionEnabled: Signal<Bool, NoError>
+        if case let .peer(peerId) = self.chatLocation {
+            copyProtectionEnabled = context.engine.data.subscribe(TelegramEngine.EngineData.Item.Peer.CopyProtectionEnabled(id: peerId))
+        } else {
+            copyProtectionEnabled = .single(false)
+        }
+        
+        self.savedIdsDisposable = combineLatest(
+            queue: Queue.mainQueue(),
+            context.engine.peers.savedMusicIds(),
+            copyProtectionEnabled
+        ).start(next: { [weak self] savedIds, copyProtectionEnabled in
             guard let self else {
                 return
             }
             let isFirstTime = self.savedIds == nil
             self.savedIds = savedIds
             self.savedIdsPromise.set(.single(savedIds))
+            self.copyProtectionEnabled = copyProtectionEnabled
             
             let transition: ContainedViewLayoutTransition = isFirstTime ? .immediate : .animated(duration: 0.5, curve: .spring)
             self.updateFloatingHeaderOffset(offset: self.floatingHeaderOffset ?? 0.0, transition: transition)
@@ -638,6 +651,12 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
     }
     
     private var isSaved: Bool? {
+        if self .copyProtectionEnabled {
+            return nil
+        }
+        if case let .peer(peerId) = self.chatLocation, peerId.namespace == Namespaces.Peer.SecretChat {
+            return nil
+        }
         guard let fileReference = self.controlsNode.currentFileReference else {
             return nil
         }

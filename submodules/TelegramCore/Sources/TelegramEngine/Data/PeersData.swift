@@ -2303,6 +2303,39 @@ public extension TelegramEngine.EngineData.Item {
             }
         }
         
+        public struct CopyProtectionEnabled: TelegramEngineDataItem, TelegramEngineMapKeyDataItem, PostboxViewDataItem {
+            public typealias Result = Bool
+
+            fileprivate var id: EnginePeer.Id
+            public var mapKey: EnginePeer.Id {
+                return self.id
+            }
+
+            public init(id: EnginePeer.Id) {
+                self.id = id
+            }
+
+            var key: PostboxViewKey {
+                return .basicPeer(self.id)
+            }
+
+            func extract(view: PostboxView) -> Result {
+                guard let view = view as? BasicPeerView else {
+                    preconditionFailure()
+                }
+                guard let peer = view.peer else {
+                    return false
+                }
+                if let group = peer as? TelegramGroup {
+                    return group.flags.contains(.copyProtectionEnabled)
+                } else if let channel = peer as? TelegramChannel {
+                    return channel.flags.contains(.copyProtectionEnabled)
+                } else {
+                    return false
+                }
+            }
+        }
+        
         public struct BotPreview: TelegramEngineDataItem, TelegramEngineMapKeyDataItem, PostboxViewDataItem {
             public typealias Result = CachedUserData.BotPreview?
 
