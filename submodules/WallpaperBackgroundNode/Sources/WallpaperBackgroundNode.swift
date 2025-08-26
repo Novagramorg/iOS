@@ -1382,8 +1382,11 @@ public final class WallpaperBackgroundNodeImpl: ASDisplayNode, WallpaperBackgrou
                 }
             }
         }
-        if let validPatternImage = self.validPatternImage, !validPatternImage.rects.isEmpty, let modelRectIndex = self.modelRectIndex, let modelFile {
-            let rect = validPatternImage.rects[Int(modelRectIndex) % validPatternImage.rects.count]
+        if let validPatternImage = self.validPatternImage, !validPatternImage.rects.isEmpty, var modelRectIndex = self.modelRectIndex, let modelFile {
+            let filteredRects = validPatternImage.rects.filter { $0.center.y > 240.0 }
+            modelRectIndex = modelRectIndex % Int32(filteredRects.count);
+            
+            let rect = filteredRects[Int(modelRectIndex)]
             
             let modelStickerNode: DefaultAnimatedStickerNodeImpl
             if let current = self.modelStickerNode {
