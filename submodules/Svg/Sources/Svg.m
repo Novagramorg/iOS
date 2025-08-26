@@ -18,12 +18,12 @@ static inline CGSize aspectFitSize(CGSize size, CGSize bounds) {
 
 static inline CGFloat deg2rad(CGFloat deg) { return (deg * (CGFloat)M_PI) / 180.0; }
 
-static CGAffineTransform SVGParseOneTransform(NSString *one) {
+static CGSize SVGParseOneTransform(NSString *one, NSString *requiredName) {
     NSString *s = [one stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
-    if (s.length == 0) return CGAffineTransformIdentity;
+    if (s.length == 0) return CGSizeZero;
 
     NSRange paren = [s rangeOfString:@"("];
-    if (paren.location == NSNotFound) return CGAffineTransformIdentity;
+    if (paren.location == NSNotFound) return CGSizeZero;
 
     NSString *name = [[s substringToIndex:paren.location] lowercaseString];
     NSString *argsStr = [s substringWithRange:NSMakeRange(paren.location + 1, s.length - paren.location - 2)];
@@ -41,38 +41,24 @@ static CGAffineTransform SVGParseOneTransform(NSString *one) {
         }
     }
 
-    if ([name isEqualToString:@"translate"]) {
+    if ([name isEqualToString:@"translate"] && [name isEqualToString:requiredName]) {
         CGFloat tx = nums.count > 0 ? nums[0].doubleValue : 0;
         CGFloat ty = nums.count > 1 ? nums[1].doubleValue : 0;
-        return CGAffineTransformMakeTranslation(tx, ty);
-    } else if ([name isEqualToString:@"scale"]) {
+        return CGSizeMake(tx, ty);
+    } else if ([name isEqualToString:@"scale"] && [name isEqualToString:requiredName]) {
         CGFloat sx = nums.count > 0 ? nums[0].doubleValue : 1;
         CGFloat sy = nums.count > 1 ? nums[1].doubleValue : sx;
-        return CGAffineTransformMakeScale(sx, sy);
-    } else if ([name isEqualToString:@"rotate"]) {
+        return CGSizeMake(sx, sy);
+    } else if ([name isEqualToString:@"rotate"] && [name isEqualToString:requiredName]) {
         CGFloat a = nums.count > 0 ? deg2rad(nums[0].doubleValue) : 0;
-        if (nums.count >= 3) {
-            CGFloat cx = nums[1].doubleValue, cy = nums[2].doubleValue;
-            CGAffineTransform t = CGAffineTransformIdentity;
-            t = CGAffineTransformTranslate(t, cx, cy);
-            t = CGAffineTransformRotate(t, a);
-            t = CGAffineTransformTranslate(t, -cx, -cy);
-            return t;
-        } else {
-            return CGAffineTransformMakeRotation(a);
-        }
-    } else if ([name isEqualToString:@"matrix"] && nums.count >= 6) {
-        CGFloat a = nums[0].doubleValue, b = nums[1].doubleValue;
-        CGFloat c = nums[2].doubleValue, d = nums[3].doubleValue;
-        CGFloat e = nums[4].doubleValue, f = nums[5].doubleValue;
-        return CGAffineTransformMake(a, b, c, d, e, f);
+        return CGSizeMake(a, a);
     }
-    return CGAffineTransformIdentity;
+    return CGSizeZero;
 }
 
 static CGAffineTransform SVGParseTransformList(NSString *list) {
     if (list.length == 0) {
-        return CGAffineTransformIdentity;
+        return CGAffineTransformMake(0.0, 1.0, 1.0, 0.0, 0.0, 0.0);
     }
 
     NSMutableArray<NSString *> *chunks = [NSMutableArray array];
@@ -92,23 +78,19 @@ static CGAffineTransform SVGParseTransformList(NSString *list) {
             }
         }
     }
-    CGAffineTransform t = CGAffineTransformIdentity;
+    CGFloat rotation = 0.0;
+    CGSize scale = CGSizeMake(1.0, 1.0);
     for (NSString *part in chunks) {
-        t = CGAffineTransformConcat(t, SVGParseOneTransform(part));
+        CGSize rotationValue = SVGParseOneTransform(part, @"rotate");
+        if (ABS(rotationValue.width) > 0.001) {
+            rotation = rotationValue.width;
+        }
+        CGSize scaleValue = SVGParseOneTransform(part, @"scale");
+        if (ABS(scaleValue.width) > 0.001 && (ABS(scaleValue.width - 1.0) > 0.001 || ABS(scaleValue.height - 1.0) > 0.001)) {
+            scale = scaleValue;
+        }
     }
-    return t;
-}
-
-static inline CGPoint CGPointApplyAffineToPoint(CGPoint p, CGAffineTransform t) {
-    return CGPointMake(p.x * t.a + p.y * t.c + t.tx,
-                       p.x * t.b + p.y * t.d + t.ty);
-}
-
-static inline void DecomposeScaleRotation(CGAffineTransform t, CGFloat *outScale, CGFloat *outRotation) {
-    CGFloat scaleX = hypot(t.a, t.b);
-    CGFloat scaleY = hypot(t.c, t.d);
-    if (outScale) *outScale = (scaleX + scaleY) * 0.5;
-    if (outRotation) *outRotation = atan2(t.b, t.a);
+    return CGAffineTransformMake(rotation, scale.width, scale.height, 0.0, 0.0, 0.0);
 }
 
 @implementation GiftPatternData
@@ -130,7 +112,6 @@ static inline void DecomposeScaleRotation(CGAffineTransform t, CGFloat *outScale
     NSMutableString *_currentStyleString;
     
     bool _inGiftPatterns;
-    CGAffineTransform _giftGroupTransform;
 }
 
 - (instancetype)init {
@@ -139,7 +120,6 @@ static inline void DecomposeScaleRotation(CGAffineTransform t, CGFloat *outScale
         _styles = [[NSMutableDictionary alloc] init];
         _currentStyleString = [[NSMutableString alloc] init];
         _giftRects = [NSMutableArray array];
-        _giftGroupTransform = CGAffineTransformIdentity;
         _inGiftPatterns = false;
     }
     return self;
@@ -152,8 +132,6 @@ static inline void DecomposeScaleRotation(CGAffineTransform t, CGFloat *outScale
         NSString *gid = attributeDict[@"id"];
         if ([[gid lowercaseString] isEqualToString:@"giftpatterns"]) {
             _inGiftPatterns = true;
-            NSString *t = attributeDict[@"transform"];
-            _giftGroupTransform = t.length ? SVGParseTransformList(t) : CGAffineTransformIdentity;
         }
     } else if (_inGiftPatterns && [_elementName isEqualToString:@"rect"]) {
         CGFloat x = attributeDict[@"x"] ? attributeDict[@"x"].doubleValue : 0;
@@ -161,27 +139,21 @@ static inline void DecomposeScaleRotation(CGAffineTransform t, CGFloat *outScale
         CGFloat w = attributeDict[@"width"]  ? attributeDict[@"width"].doubleValue  : 0;
         CGFloat h = attributeDict[@"height"] ? attributeDict[@"height"].doubleValue : 0;
         
-        CGFloat side = w > 0 ? w : h;
+        CGFloat side = MAX(w, h);
         
-        CGAffineTransform rectT = CGAffineTransformIdentity;
+        CGAffineTransform fakeTransform = CGAffineTransformMake(0.0, 1.0, 1.0, 0.0, 0.0, 0.0);
         NSString *rt = attributeDict[@"transform"];
         if (rt.length) {
-            rectT = SVGParseTransformList(rt);
+            fakeTransform = SVGParseTransformList(rt);
         }
-
-        CGAffineTransform total = CGAffineTransformConcat(_giftGroupTransform, rectT);
         
-        CGPoint localCenter = CGPointMake(x + w * 0.5, y + h * 0.5);
-        CGPoint center = CGPointApplyAffineToPoint(localCenter, total);
-        
-        CGFloat scale = 1.0, rotation = 0.0;
-        DecomposeScaleRotation(total, &scale, &rotation);
-        
-        GiftPatternRect *rec = [[GiftPatternRect alloc] init];
-        rec.center = center;
+        CGPoint rectCenter = CGPointMake(x + w * 0.5, y + h * 0.5);
+            
+        GiftPatternRect *rec = [GiftPatternRect new];
+        rec.center = rectCenter;
         rec.side = side;
-        rec.scale = scale;
-        rec.rotation = rotation;
+        rec.rotation = fakeTransform.a;
+        rec.scale = fakeTransform.b;
         [_giftRects addObject:rec];
     }
 }
@@ -193,7 +165,6 @@ static inline void DecomposeScaleRotation(CGAffineTransform t, CGFloat *outScale
     }
     if ([_elementName isEqualToString:@"g"] && _inGiftPatterns) {
         _inGiftPatterns = false;
-        _giftGroupTransform = CGAffineTransformIdentity;
     }
     _elementName = nil;
 }
@@ -529,11 +500,7 @@ typedef NS_ENUM(uint8_t, SvgRenderCommand) {
         [_data appendBytes:&item length:sizeof(item)];
         
         float payload[5] = {
-            (float)rect.center.x,
-            (float)rect.center.y,
-            (float)rect.side,
-            (float)rect.scale,
-            (float)rect.rotation
+            (float)rect.center.x, (float)rect.center.y, (float)rect.side, (float)rect.rotation, (float)rect.scale
         };
         [_data appendBytes:payload length:sizeof(payload)];
     }
@@ -720,14 +687,12 @@ GiftPatternData *getGiftPatternData(NSData * _Nonnull data) {
                 [data getBytes:payload range:NSMakeRange(ptr, sizeof(payload))];
                 ptr += sizeof(payload);
                 
-                if (rects) {
-                    GiftPatternRect *rect = [GiftPatternRect new];
-                    rect.center = CGPointMake(payload[0], payload[1]);
-                    rect.side = payload[2];
-                    rect.scale = payload[3];
-                    rect.rotation = payload[4];
-                    [rects addObject:rect];
-                }
+                GiftPatternRect *rect = [[GiftPatternRect alloc] init];
+                rect.center = CGPointMake(payload[0], payload[1]);
+                rect.side = payload[2];
+                rect.rotation = payload[3];
+                rect.scale = payload[4];
+                [rects addObject:rect];
             }
             continue;
         }
@@ -821,11 +786,11 @@ UIImage * _Nullable renderPreparedImageWithSymbol(NSData * _Nonnull data, CGSize
                 ptr += sizeof(payload);
                 
                 if (rects) {
-                    GiftPatternRect *rect = [GiftPatternRect new];
+                    GiftPatternRect *rect = [[GiftPatternRect alloc] init];
                     rect.center = CGPointMake(payload[0], payload[1]);
                     rect.side = payload[2];
-                    rect.scale = payload[3];
-                    rect.rotation = payload[4];
+                    rect.rotation = payload[3];
+                    rect.scale = payload[4];
                     [rects addObject:rect];
                 }
             }
@@ -838,28 +803,35 @@ UIImage * _Nullable renderPreparedImageWithSymbol(NSData * _Nonnull data, CGSize
     }
     
     if (symbolImage && rects.count > 0) {
-        CGFloat symbolWidth = symbolImage.size.width;
-        CGFloat symbolHeight = symbolImage.size.height;
-        CGFloat symbolAspectRatio = (symbolHeight > 0.0 ? (symbolWidth / symbolHeight) : 1.0);
-        
         int32_t index = 0;
+        
+        NSMutableArray<GiftPatternRect *> *filteredRects = [[NSMutableArray alloc] init];
         for (GiftPatternRect *rect in rects) {
-            if (index == modelRectIndex) {
-            } else {
+            if (rect.center.y > 240.0) {
+                [filteredRects addObject:rect];
+            }
+        }
+        modelRectIndex = modelRectIndex % (int32_t)filteredRects.count;
+        
+        for (GiftPatternRect *rect in filteredRects) {
+            if (index != modelRectIndex) {
                 CGContextSaveGState(context);
+                                
                 CGContextTranslateCTM(context, rect.center.x, rect.center.y);
                 CGContextRotateCTM(context, rect.rotation);
                 
-                CGFloat side = rect.side * rect.scale;
-                CGFloat dw = side, dh = side;
+                CGFloat symbolAspectRatio = (symbolImage.size.height > 0.0) ? (symbolImage.size.width / symbolImage.size.height) : 1.0;
+                CGFloat drawWidth = rect.side;
+                CGFloat drawHeight = rect.side;
+                
                 if (symbolAspectRatio > 1.0) {
-                    dh = dw / symbolAspectRatio;
+                    drawHeight = drawWidth / symbolAspectRatio;
                 } else {
-                    dw = dh * symbolAspectRatio;
+                    drawWidth = drawHeight * symbolAspectRatio;
                 }
                 
-                CGRect dst = CGRectMake(-dw * 0.5, -dh * 0.5, dw, dh);
-                [symbolImage drawInRect:dst blendMode:kCGBlendModeNormal alpha:1.0];
+                CGRect symbolRect = CGRectMake(-drawWidth * 0.5, -drawHeight * 0.5, drawWidth, drawHeight);
+                [symbolImage drawInRect:symbolRect blendMode:kCGBlendModeNormal alpha:1.0];
                 
                 CGContextRestoreGState(context);
             }
@@ -898,9 +870,7 @@ void processShape(NSVGshape *shape, CGContextCoder *context, bool template) {
             
             for (int i = 0; i < path->npts - 1; i += 3) {
                 float *p = &path->pts[i * 2];
-                [context addCurveToPoint:CGPointMake(p[2], p[3])
-                                      p2:CGPointMake(p[4], p[5])
-                                      p3:CGPointMake(p[6], p[7])];
+                [context addCurveToPoint:CGPointMake(p[2], p[3]) p2:CGPointMake(p[4], p[5]) p3:CGPointMake(p[6], p[7])];
             }
             
             if (path->closed && hasStartPoint) {

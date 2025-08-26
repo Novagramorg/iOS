@@ -8,8 +8,8 @@
 
 @property (nonatomic) CGPoint center;
 @property (nonatomic) CGFloat side;
-@property (nonatomic) CGFloat scale;
 @property (nonatomic) CGFloat rotation;
+@property (nonatomic) CGFloat scale;
 
 @end
 

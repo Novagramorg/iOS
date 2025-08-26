@@ -493,18 +493,18 @@ public struct WallpaperGiftPatternRect: Equatable {
     }
 }
 
-public func patternWallpaperImage(account: Account, accountManager: AccountManager<TelegramAccountManagerTypes>, representations: [ImageRepresentationWithReference], mode: PatternWallpaperDrawMode, autoFetchFullSize: Bool = false) -> Signal<(generator: (TransformImageArguments) -> DrawingContext?, rects: [WallpaperGiftPatternRect])?, NoError> {
+public func patternWallpaperImage(account: Account, accountManager: AccountManager<TelegramAccountManagerTypes>, representations: [ImageRepresentationWithReference], mode: PatternWallpaperDrawMode, autoFetchFullSize: Bool = false, forcePrepared: Bool = false) -> Signal<(generator: (TransformImageArguments) -> DrawingContext?, rects: [WallpaperGiftPatternRect])?, NoError> {
     return patternWallpaperDatas(account: account, accountManager: accountManager, representations: representations, mode: mode, autoFetchFullSize: autoFetchFullSize)
     |> mapToSignal { fullSizeData, fullSizeComplete in
         if !autoFetchFullSize || fullSizeComplete {
-            return patternWallpaperImageInternal(fullSizeData: fullSizeData, fullSizeComplete: fullSizeComplete, mode: mode)
+            return patternWallpaperImageInternal(fullSizeData: fullSizeData, fullSizeComplete: fullSizeComplete, mode: mode, forcePrepared: forcePrepared)
         } else {
             return .single(nil)
         }
     }
 }
 
-private func patternWallpaperImageInternal(fullSizeData: Data?, fullSizeComplete: Bool, mode: PatternWallpaperDrawMode) -> Signal<(generator: (TransformImageArguments) -> DrawingContext?, rects: [WallpaperGiftPatternRect])?, NoError> {
+private func patternWallpaperImageInternal(fullSizeData: Data?, fullSizeComplete: Bool, mode: PatternWallpaperDrawMode, forcePrepared: Bool = false) -> Signal<(generator: (TransformImageArguments) -> DrawingContext?, rects: [WallpaperGiftPatternRect])?, NoError> {
     var prominent = false
     if case .thumbnail = mode {
         prominent = true
@@ -1513,6 +1513,7 @@ public func themeIconImage(account: Account, accountManager: AccountManager<Tele
                             let convertedPreviewRepresentations : [ImageRepresentationWithReference] = file.file.previewRepresentations.map {
                                 ImageRepresentationWithReference(representation: $0, reference: .wallpaper(wallpaper: .slug(file.slug), resource: $0.resource))
                             }
+                            let useFallback = convertedPreviewRepresentations.isEmpty
                             
                             var convertedRepresentations: [ImageRepresentationWithReference] = []
                             convertedRepresentations.append(ImageRepresentationWithReference(representation: TelegramMediaImageRepresentation(dimensions: PixelDimensions(width: 100, height: 100), resource: file.file.resource, progressiveSizes: [], immediateThumbnailData: nil, hasVideo: false, isPersonal: false), reference: .wallpaper(wallpaper: .slug(file.slug), resource: file.file.resource)))
@@ -1545,12 +1546,7 @@ public func themeIconImage(account: Account, accountManager: AccountManager<Tele
                                         let isLight = UIColor.average(of: file.settings.colors.map(UIColor.init(rgb:))).hsb.b > 0.3
                                         arguments = PatternWallpaperArguments(colors: [.clear], rotation: nil, customPatternColor: isLight ? .black : .white)
                                     }
-                                    
-                                    if file.settings.intensity == 100 {
-                                        print()
-                                    }
-                                    
-                                    return patternWallpaperImage(account: account, accountManager: accountManager, representations: convertedPreviewRepresentations, mode: .thumbnail, autoFetchFullSize: true)
+                                    return patternWallpaperImage(account: account, accountManager: accountManager, representations: useFallback ? convertedRepresentations : convertedPreviewRepresentations, mode: useFallback ? .screen : .thumbnail, autoFetchFullSize: true)
                                     |> mapToSignal { generatorAndRects -> Signal<((UIColor, UIColor?, [UInt32]), [UIColor], [UIColor], UIImage?, Bool, Bool, CGFloat, Int32?), NoError> in
                                         let imageSize = CGSize(width: 148.0, height: 320.0)
                                         let imageArguments = TransformImageArguments(corners: ImageCorners(), imageSize: imageSize, boundingSize: imageSize, intrinsicInsets: UIEdgeInsets(), emptyColor: nil, custom: arguments)
