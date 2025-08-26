@@ -781,12 +781,15 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                 } else {
                     var emoji = ""
                     var additionalAttributes: [String: Any] = [:]
+                    var giftTitle: String?
                     switch chatTheme {
                     case let .emoticon(emoticon):
                         emoji = emoticon
                     case let .gift(starGift, _):
                         var file: TelegramMediaFile?
+                        
                         if case let .unique(uniqueGift) = starGift {
+                            giftTitle = "\(uniqueGift.title) #\(formatCollectibleNumber(uniqueGift.number, dateTimeFormat: dateTimeFormat))"
                             for attribute in uniqueGift.attributes {
                                 if case let .model(_, fileValue, _) = attribute {
                                     file = fileValue
@@ -802,11 +805,21 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                     if message.author?.id.namespace == Namespaces.Peer.CloudChannel {
                         attributedString = NSAttributedString(string: strings.Notification_ChannelChangedTheme(emoji).string, font: titleFont, textColor: primaryTextColor)
                     } else if message.author?.id == accountPeerId {
-                        let resultTitleString = strings.Notification_YouChangedTheme(emoji)
-                        attributedString = addAttributesToStringWithRanges(resultTitleString._tuple, body: bodyAttributes, argumentAttributes: [0: emojiAttributes])
+                        if let giftTitle {
+                            let resultTitleString = strings.Notification_YouChangedThemeGift(giftTitle)
+                            attributedString = addAttributesToStringWithRanges(resultTitleString._tuple, body: bodyAttributes, argumentAttributes: [:])
+                        } else {
+                            let resultTitleString = strings.Notification_YouChangedTheme(emoji)
+                            attributedString = addAttributesToStringWithRanges(resultTitleString._tuple, body: bodyAttributes, argumentAttributes: [0: emojiAttributes])
+                        }
                     } else {
-                        let resultTitleString = strings.Notification_ChangedTheme(compactAuthorName, emoji)
-                        attributedString = addAttributesToStringWithRanges(resultTitleString._tuple, body: bodyAttributes, argumentAttributes: [0: boldAttributes, 1: emojiAttributes])
+                        if let giftTitle {
+                            let resultTitleString = strings.Notification_ChangedThemeGift(compactAuthorName, giftTitle)
+                            attributedString = addAttributesToStringWithRanges(resultTitleString._tuple, body: bodyAttributes, argumentAttributes: [0: boldAttributes, 1: boldAttributes])
+                        } else {
+                            let resultTitleString = strings.Notification_ChangedTheme(compactAuthorName, emoji)
+                            attributedString = addAttributesToStringWithRanges(resultTitleString._tuple, body: bodyAttributes, argumentAttributes: [0: boldAttributes, 1: emojiAttributes])
+                        }
                     }
                 }
             case let .webViewData(text):

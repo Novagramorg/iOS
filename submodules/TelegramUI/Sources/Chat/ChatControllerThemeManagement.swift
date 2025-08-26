@@ -182,7 +182,7 @@ extension ChatControllerImpl {
                 previewTheme: { [weak self] chatTheme, dark in
                     if let strongSelf = self {
                         strongSelf.presentCrossfadeSnapshot()
-                        strongSelf.chatThemeAndDarkAppearancePreviewPromise.set(.single((chatTheme ?? .emoticon(""), dark)))
+                        strongSelf.chatThemeAndDarkAppearancePreviewPromise.set(.single((chatTheme, dark)))
                     }
                 },
                 changeWallpaper: { [weak self] in
