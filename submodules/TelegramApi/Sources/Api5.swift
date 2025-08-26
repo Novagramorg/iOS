@@ -395,7 +395,7 @@ public extension Api {
 public extension Api {
     enum ChatTheme: TypeConstructorDescription {
         case chatTheme(emoticon: String)
-        case chatThemeUniqueGift(gift: Api.StarGift, wallpaperDocument: Api.Document)
+        case chatThemeUniqueGift(gift: Api.StarGift, themeSettings: [Api.ThemeSettings])
     
     public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
     switch self {
@@ -405,12 +405,16 @@ public extension Api {
                     }
                     serializeString(emoticon, buffer: buffer, boxed: false)
                     break
-                case .chatThemeUniqueGift(let gift, let wallpaperDocument):
+                case .chatThemeUniqueGift(let gift, let themeSettings):
                     if boxed {
-                        buffer.appendInt32(388142507)
+                        buffer.appendInt32(878246344)
                     }
                     gift.serialize(buffer, true)
-                    wallpaperDocument.serialize(buffer, true)
+                    buffer.appendInt32(481674261)
+                    buffer.appendInt32(Int32(themeSettings.count))
+                    for item in themeSettings {
+                        item.serialize(buffer, true)
+                    }
                     break
     }
     }
@@ -419,8 +423,8 @@ public extension Api {
         switch self {
                 case .chatTheme(let emoticon):
                 return ("chatTheme", [("emoticon", emoticon as Any)])
-                case .chatThemeUniqueGift(let gift, let wallpaperDocument):
-                return ("chatThemeUniqueGift", [("gift", gift as Any), ("wallpaperDocument", wallpaperDocument as Any)])
+                case .chatThemeUniqueGift(let gift, let themeSettings):
+                return ("chatThemeUniqueGift", [("gift", gift as Any), ("themeSettings", themeSettings as Any)])
     }
     }
     
@@ -440,14 +444,14 @@ public extension Api {
             if let signature = reader.readInt32() {
                 _1 = Api.parse(reader, signature: signature) as? Api.StarGift
             }
-            var _2: Api.Document?
-            if let signature = reader.readInt32() {
-                _2 = Api.parse(reader, signature: signature) as? Api.Document
+            var _2: [Api.ThemeSettings]?
+            if let _ = reader.readInt32() {
+                _2 = Api.parseVector(reader, elementSignature: 0, elementType: Api.ThemeSettings.self)
             }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             if _c1 && _c2 {
-                return Api.ChatTheme.chatThemeUniqueGift(gift: _1!, wallpaperDocument: _2!)
+                return Api.ChatTheme.chatThemeUniqueGift(gift: _1!, themeSettings: _2!)
             }
             else {
                 return nil

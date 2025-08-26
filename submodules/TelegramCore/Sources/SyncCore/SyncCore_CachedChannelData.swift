@@ -654,7 +654,7 @@ public final class CachedChannelData: CachedPeerData {
         
         self.pendingSuggestions = decoder.decodeStringArrayForKey("sug")
         
-        if let chatTheme = decoder.decodeCodable(ChatTheme.self, forKey: "ct") {
+        if let chatThemeData = decoder.decodeDataForKey("ct"), let chatTheme = try? AdaptedPostboxDecoder().decode(ChatTheme.self, from: chatThemeData) {
             self.chatTheme = chatTheme
         } else if let themeEmoticon = decoder.decodeOptionalStringForKey("te") {
             self.chatTheme = .emoticon(themeEmoticon)
@@ -843,8 +843,8 @@ public final class CachedChannelData: CachedPeerData {
         
         encoder.encodeStringArray(self.pendingSuggestions, forKey: "sug")
         
-        if let chatTheme = self.chatTheme {
-            encoder.encodeCodable(chatTheme, forKey: "ct")
+        if let chatTheme = self.chatTheme, let chatThemeData = try? AdaptedPostboxEncoder().encode(chatTheme) {
+            encoder.encodeData(chatThemeData, forKey: "ct")
         } else {
             encoder.encodeNil(forKey: "ct")
         }
