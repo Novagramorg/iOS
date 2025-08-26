@@ -3658,7 +3658,12 @@ private final class GiftViewSheetContent: CombinedComponent {
                 }
             }
             
-            if ((incoming && !converted && !upgraded) || exported || selling) && (!showUpgradePreview && !showWearPreview) {
+            
+            var isChatTheme = false
+            if let controller = controller() as? GiftViewScreen, controller.openChatTheme != nil {
+                isChatTheme = true
+            }
+            if ((incoming && !converted && !upgraded) || exported || selling || isChatTheme) && (!showUpgradePreview && !showWearPreview) {
                 let textFont = Font.regular(13.0)
                 let textColor = theme.list.itemSecondaryTextColor
                 let linkColor = theme.actionSheet.controlAccentColor
@@ -3672,7 +3677,9 @@ private final class GiftViewSheetContent: CombinedComponent {
                 
                 var addressToOpen: String?
                 var descriptionText: String
-                if let uniqueGift, selling {
+                if isChatTheme {
+                    descriptionText = strings.Gift_View_OpenChatTheme
+                } else if let uniqueGift, selling {
                     let ownerName: String
                     if case let .peerId(peerId) = uniqueGift.owner {
                         ownerName = state.peerMap[peerId]?.compactDisplayTitle ?? ""
@@ -3731,7 +3738,10 @@ private final class GiftViewSheetContent: CombinedComponent {
                         },
                         tapAction: { [weak state] attributes, _ in
                             if let _ = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.URL)] as? String {
-                                if let addressToOpen {
+                                if isChatTheme, let controller = controller() as? GiftViewScreen {
+                                    state?.dismiss(animated: true)
+                                    controller.openChatTheme?()
+                                } else if let addressToOpen {
                                     state?.openAddress(addressToOpen)
                                 } else {
                                     state?.updateSavedToProfile(!savedToProfile)
@@ -4381,6 +4391,7 @@ public class GiftViewScreen: ViewControllerComponentContainer {
     fileprivate let updateResellStars: ((CurrencyAmount?) -> Signal<Never, UpdateStarGiftPriceError>)?
     fileprivate let togglePinnedToTop: ((Bool) -> Bool)?
     fileprivate let shareStory: ((StarGift.UniqueGift) -> Void)?
+    fileprivate let openChatTheme: (() -> Void)?
     
     public var disposed: () -> Void = {}
     
@@ -4397,7 +4408,8 @@ public class GiftViewScreen: ViewControllerComponentContainer {
         buyGift: ((String, EnginePeer.Id, CurrencyAmount?) -> Signal<Never, BuyStarGiftError>)? = nil,
         updateResellStars: ((CurrencyAmount?) -> Signal<Never, UpdateStarGiftPriceError>)? = nil,
         togglePinnedToTop: ((Bool) -> Bool)? = nil,
-        shareStory: ((StarGift.UniqueGift) -> Void)? = nil
+        shareStory: ((StarGift.UniqueGift) -> Void)? = nil,
+        openChatTheme: (() -> Void)? = nil
     ) {
         self.context = context
         self.subject = subject
@@ -4410,6 +4422,7 @@ public class GiftViewScreen: ViewControllerComponentContainer {
         self.updateResellStars = updateResellStars
         self.togglePinnedToTop = togglePinnedToTop
         self.shareStory = shareStory
+        self.openChatTheme = openChatTheme
         
         if case let .unique(gift) = subject.arguments?.gift, gift.resellForTonOnly {
             self.balanceCurrency = .ton

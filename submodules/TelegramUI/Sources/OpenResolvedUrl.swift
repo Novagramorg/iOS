@@ -1481,7 +1481,7 @@ func openResolvedUrlImpl(
                             navigationController?.pushViewController(controller)
                         }
                     }
-                }, dismissed: {
+                }, openChatTheme: nil, dismissed: {
                     dismissedImpl?()
                 })
                 navigationController?.pushViewController(controller)

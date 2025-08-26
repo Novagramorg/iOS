@@ -14924,3 +14924,11 @@ Sorry for the inconvenience.";
 
 "Gift.Upgrade.GiftUpgrade" = "Pay %@ for Upgrade";
 "Gift.View.GiftUpgrade" = "Gift an Upgrade";
+
+"Gift.View.OpenChatTheme" = "This gift is the chat's theme. [Change Theme >]()";
+
+"Notification.ChatTheme.Text" = "%1$@ set **%2$@** as a new theme for this chat.";
+"Notification.ChatTheme.TextYou" = "You set **%@** as a new theme for this chat.";
+
+"Notification.ChangedThemeGift" = "%1$@ changed chat theme to %2$@";
+"Notification.YouChangedThemeGift" = "You changed chat theme to %@";

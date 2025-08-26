@@ -1110,8 +1110,29 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                                 self.present(BotReceiptController(context: self.context, messageId: message.id), in: .window(.root), with: ViewControllerPresentationArguments(presentationAnimation: .modalSheet))
                             }
                             return true
-                        case .setChatTheme:
-                            self.presentThemeSelection()
+                        case let .setChatTheme(chatTheme):
+                            switch chatTheme {
+                            case .emoticon:
+                                self.presentThemeSelection()
+                            case let .gift(gift, _):
+                                if case let .unique(uniqueGift) = gift {
+                                    let controller = self.context.sharedContext.makeGiftViewScreen(context: self.context, gift: uniqueGift, shareStory: { [weak self] uniqueGift in
+                                        Queue.mainQueue().after(0.15) {
+                                            if let self {
+                                                let controller = self.context.sharedContext.makeStorySharingScreen(context: self.context, subject: .gift(uniqueGift), parentController: self)
+                                                self.push(controller)
+                                            }
+                                        }
+                                    }, openChatTheme: { [weak self] in
+                                        if let self {
+                                            Queue.mainQueue().after(0.15) {
+                                                self.presentThemeSelection()
+                                            }
+                                        }
+                                    }, dismissed: nil)
+                                    self.push(controller)
+                                }
+                            }
                             return true
                         case let .setChatWallpaper(wallpaper, _):
                             guard let peer = self.presentationInterfaceState.renderedPeer?.peer else {
@@ -5808,10 +5829,15 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                                     })
                                 }
                             }
-                        case let .gift(gift, wallpaper):
-                            let _ = gift
-                            let _ = wallpaper
-                            //TODO:release
+                        case .gift:
+                            if let theme = makePresentationTheme(chatTheme: chatTheme, dark: useDarkAppearance) {
+                                theme.forceSync = true
+                                presentationData = presentationData.withUpdated(theme: theme).withUpdated(chatWallpaper: theme.chat.defaultWallpaper)
+                                
+                                Queue.mainQueue().after(1.0, {
+                                    theme.forceSync = false
+                                })
+                            }
                         }
                     } else if let darkAppearancePreview = darkAppearancePreview {
                         useDarkAppearance = darkAppearancePreview
