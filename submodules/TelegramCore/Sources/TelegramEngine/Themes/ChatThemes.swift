@@ -31,36 +31,68 @@ public final class ChatThemes: Codable, Equatable {
     }
 }
 
-public enum ChatTheme: Codable, Equatable {
-    case emoticon(String)
-    case gift(StarGift, TelegramMediaFile)
+public enum ChatTheme: PostboxCoding, Codable, Equatable {
+    private enum CodingKeys: String, CodingKey {
+        case type
+        case emoticon
+        case gift
+        case themeSettings
+    }
     
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: StringCodingKey.self)
-
-        let type = try container.decode(Int32.self, forKey: "_r")
+    case emoticon(String)
+    case gift(StarGift, [TelegramThemeSettings])
+    
+    public init(decoder: PostboxDecoder) {
+        let type = decoder.decodeInt32ForKey(CodingKeys.type.rawValue, orElse: 0)
         switch type {
         case 0:
-            self = .emoticon(try container.decode(String.self, forKey: "e"))
+            self = .emoticon(decoder.decodeStringForKey(CodingKeys.emoticon.rawValue, orElse: ""))
         case 1:
-            self = .gift(try container.decode(StarGift.self, forKey: "g"), try container.decode(TelegramMediaFile.self, forKey: "w"))
+            self = .gift(decoder.decodeObjectForKey(CodingKeys.gift.rawValue, decoder: { StarGift(decoder: $0) }) as! StarGift, decoder.decodeCodable([TelegramThemeSettings].self, forKey: CodingKeys.themeSettings.rawValue) ?? [])
         default:
             assertionFailure()
             self = .emoticon("")
         }
     }
     
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+
+        let type = try container.decode(Int32.self, forKey: .type)
+        switch type {
+        case 0:
+            self = .emoticon(try container.decode(String.self, forKey: .emoticon))
+        case 1:
+            self = .gift(try container.decode(StarGift.self, forKey: .gift), try container.decode([TelegramThemeSettings].self, forKey: .themeSettings))
+        default:
+            assertionFailure()
+            self = .emoticon("")
+        }
+    }
+                                                    
+    public func encode(_ encoder: PostboxEncoder) {
+        switch self {
+        case let .emoticon(emoticon):
+            encoder.encodeInt32(0, forKey: CodingKeys.type.rawValue)
+            encoder.encodeString(emoticon, forKey: CodingKeys.emoticon.rawValue)
+        case let .gift(gift, themeSettings):
+            encoder.encodeInt32(1, forKey: CodingKeys.type.rawValue)
+            encoder.encodeObject(gift, forKey: CodingKeys.gift.rawValue)
+            encoder.encodeCodable(themeSettings, forKey: CodingKeys.themeSettings.rawValue)
+        }
+    }
+    
     public func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: StringCodingKey.self)
+        var container = encoder.container(keyedBy: CodingKeys.self)
         
         switch self {
         case let .emoticon(emoticon):
-            try container.encode(0, forKey: "_r")
-            try container.encode(emoticon, forKey: "e")
-        case let .gift(gift, wallpaperFile):
-            try container.encode(1, forKey: "_r")
-            try container.encode(gift, forKey: "g")
-            try container.encode(wallpaperFile, forKey: "w")
+            try container.encode(0 as Int32, forKey: .type)
+            try container.encode(emoticon, forKey: .emoticon)
+        case let .gift(gift, themeSettings):
+            try container.encode(1 as Int32, forKey: .type)
+            try container.encode(gift, forKey: .gift)
+            try container.encode(themeSettings, forKey: .themeSettings)
         }
     }
     
@@ -72,9 +104,9 @@ public enum ChatTheme: Codable, Equatable {
             } else {
                 return false
             }
-        case let .gift(lhsGift, lhsWallpaperFile):
-            if case let .gift(rhsGift, rhsWallpaperFile) = rhs {
-                return lhsGift == rhsGift && lhsWallpaperFile.fileId == rhsWallpaperFile.fileId
+        case let .gift(lhsGift, lhsThemeSettings):
+            if case let .gift(rhsGift, rhsThemeSettings) = rhs {
+                return lhsGift == rhsGift && lhsThemeSettings == rhsThemeSettings
             } else {
                 return false
             }
@@ -108,11 +140,11 @@ extension ChatTheme {
         switch apiChatTheme {
         case let .chatTheme(emoticon):
             self = .emoticon(emoticon)
-        case let .chatThemeUniqueGift(gift, wallpaperDocument):
-            guard let gift = StarGift(apiStarGift: gift), let wallpaperFile = telegramMediaFileFromApiDocument(wallpaperDocument, altDocuments: nil) else {
+        case let .chatThemeUniqueGift(gift, themeSettings):
+            guard let gift = StarGift(apiStarGift: gift) else {
                 return nil
             }
-            self = .gift(gift, wallpaperFile)
+            self = .gift(gift, themeSettings.compactMap { TelegramThemeSettings(apiThemeSettings: $0) })
         }
     }
     
@@ -370,9 +402,6 @@ func _internal_setExistingChatWallpaper(account: Account, messageId: MessageId, 
         }
     }
 }
-
-
-
 
 private final class CachedUniqueGiftChatThemes: Codable {
     enum CodingKeys: String, CodingKey {

@@ -1269,7 +1269,7 @@ public final class CachedUserData: CachedPeerData {
         self.hasScheduledMessages = decoder.decodeBoolForKey("hsm", orElse: false)
         self.autoremoveTimeout = decoder.decodeObjectForKey("artv", decoder: CachedPeerAutoremoveTimeout.init(decoder:)) as? CachedPeerAutoremoveTimeout ?? .unknown
         
-        if let chatTheme = decoder.decodeCodable(ChatTheme.self, forKey: "ct") {
+        if let chatThemeData = decoder.decodeDataForKey("ct"), let chatTheme = try? AdaptedPostboxDecoder().decode(ChatTheme.self, from: chatThemeData) {
             self.chatTheme = chatTheme
         } else if let chatTheme = decoder.decodeOptionalStringForKey("te") {
             self.chatTheme = .emoticon(chatTheme)
@@ -1380,8 +1380,8 @@ public final class CachedUserData: CachedPeerData {
         encoder.encodeBool(self.hasScheduledMessages, forKey: "hsm")
         encoder.encodeObject(self.autoremoveTimeout, forKey: "artv")
         
-        if let chatTheme = self.chatTheme {
-            encoder.encodeCodable(chatTheme, forKey: "ct")
+        if let chatTheme = self.chatTheme, let chatThemeData = try? AdaptedPostboxEncoder().encode(chatTheme) {
+            encoder.encodeData(chatThemeData, forKey: "ct")
         } else {
             encoder.encodeNil(forKey: "ct")
         }

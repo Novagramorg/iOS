@@ -317,7 +317,7 @@ public enum TelegramMediaActionType: PostboxCoding, Equatable {
             }
             self = .inviteToGroupPhoneCall(callId: decoder.decodeInt64ForKey("callId", orElse: 0), accessHash: decoder.decodeInt64ForKey("accessHash", orElse: 0), peerIds: peerIds)
         case 24:
-            if let chatTheme = decoder.decodeCodable(ChatTheme.self, forKey: "chatTheme") {
+            if let chatThemeData = decoder.decodeDataForKey("chatTheme"), let chatTheme = try? AdaptedPostboxDecoder().decode(ChatTheme.self, from: chatThemeData) {
                 self = .setChatTheme(chatTheme: chatTheme)
             } else if let emoji = decoder.decodeOptionalStringForKey("emoji"), !emoji.isEmpty {
                 self = .setChatTheme(chatTheme: .emoticon(emoji))
@@ -542,7 +542,9 @@ public enum TelegramMediaActionType: PostboxCoding, Equatable {
             encoder.encodeInt64Array(peerIds.map { $0.toInt64() }, forKey: "peerIds")
         case let .setChatTheme(chatTheme):
             encoder.encodeInt32(24, forKey: "_rawValue")
-            encoder.encodeCodable(chatTheme, forKey: "chatTheme")
+            if let chatThemeData = try? AdaptedPostboxEncoder().encode(chatTheme) {
+                encoder.encodeData(chatThemeData, forKey: "chatTheme")
+            }
         case .joinedByRequest:
             encoder.encodeInt32(25, forKey: "_rawValue")
         case let .webViewData(text):
