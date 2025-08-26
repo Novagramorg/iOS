@@ -495,6 +495,7 @@ public final class UniqueGiftChatThemesContext {
     public func loadMore(reload: Bool = false) {
         let network = self.account.network
         let postbox = self.account.postbox
+        let accountPeerId = self.account.peerId
         let dataState = self.dataState
         let offset = self.nextOffset
         
@@ -521,12 +522,23 @@ public final class UniqueGiftChatThemesContext {
         }
         
         let signal = network.request(Api.functions.account.getUniqueGiftChatThemes(offset: offset ?? 0, limit: 32, hash: 0))
-        |> map { result -> ([ChatTheme], Int32?) in
-            switch result {
-            case let .chatThemes(_, _, themes, nextOffset):
-                return (themes.compactMap { ChatTheme(apiChatTheme: $0) }, nextOffset)
-            case .chatThemesNotModified:
-                return ([], nil)
+        |> map(Optional.init)
+        |> `catch` { error in
+            return .single(nil)
+        }
+        |> mapToSignal { result -> Signal<([ChatTheme], Int32?), NoError> in
+            guard let result else {
+                return .single(([], nil))
+            }
+            return postbox.transaction { transaction -> ([ChatTheme], Int32?) in
+                switch result {
+                case let .chatThemes(_, _, themes, chats, users, nextOffset):
+                    let parsedPeers = AccumulatedPeers(transaction: transaction, chats: chats, users: users)
+                    updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: parsedPeers)
+                    return (themes.compactMap { ChatTheme(apiChatTheme: $0) }, nextOffset)
+                case .chatThemesNotModified:
+                    return ([], nil)
+                }
             }
         }
         
