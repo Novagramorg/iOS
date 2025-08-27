@@ -2640,7 +2640,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                     }
                     return musicBackground
                 }()
-                musicTransition.updateFrame(view: musicBackground, frame: CGRect(origin: CGPoint(x: 0.0, y: backgroundHeight - musicHeight - buttonRightOrigin.y), size: CGSize(width: backgroundFrame.width, height: musicHeight)))
+                musicTransition.updateFrame(view: musicBackground, frame: CGRect(origin: CGPoint(x: 0.0, y: backgroundHeight - 24.0 - buttonRightOrigin.y), size: CGSize(width: backgroundFrame.width, height: 24.0)))
                 
                 if let _ = self.navigationTransition {
                     transition.updateAlpha(layer: musicBackground.layer, alpha: 1.0 - transitionFraction)

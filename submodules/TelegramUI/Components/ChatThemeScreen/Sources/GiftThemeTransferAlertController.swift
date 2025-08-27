@@ -275,7 +275,7 @@ public func giftThemeTransferAlertController(
     var dismissImpl: ((Bool) -> Void)?
     let actions: [TextAlertAction] = [TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: {
         dismissImpl?(true)
-    }), TextAlertAction(type: .defaultAction, title: presentationData.strings.Conversation_Theme_GiftTransfer_Proceed, action: { [weak contentNode] in
+    }), TextAlertAction(type: .defaultAction, title: presentationData.strings.Conversation_Theme_GiftTransfer_Proceed, action: {
         dismissImpl?(true)
         commit()
     })]
