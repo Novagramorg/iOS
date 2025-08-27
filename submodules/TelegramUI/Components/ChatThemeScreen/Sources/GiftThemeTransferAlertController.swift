@@ -202,40 +202,39 @@ private final class GiftThemeTransferAlertContentNode: AlertContentNode {
         
         for actionNode in self.actionNodes {
             let actionTitleSize = actionNode.titleNode.updateLayout(CGSize(width: maxActionWidth, height: actionButtonHeight))
-            minActionsWidth = max(minActionsWidth, actionTitleSize.width + actionTitleInsets)
+            minActionsWidth += actionTitleSize.width + actionTitleInsets
         }
         
         let insets = UIEdgeInsets(top: 18.0, left: 18.0, bottom: 18.0, right: 18.0)
         
         let contentWidth = max(size.width, minActionsWidth)
                 
-        let actionsHeight = actionButtonHeight * CGFloat(self.actionNodes.count)
+        let actionsHeight = actionButtonHeight
         
         let resultSize = CGSize(width: contentWidth, height: avatarSize.height + titleSize.height + textSize.height + actionsHeight + 24.0 + insets.top + insets.bottom)
-        transition.updateFrame(node: self.actionNodesSeparator, frame: CGRect(origin: CGPoint(x: 0.0, y: resultSize.height - actionsHeight - UIScreenPixel), size: CGSize(width: resultSize.width, height: UIScreenPixel)))
+        self.actionNodesSeparator.frame = CGRect(origin: CGPoint(x: 0.0, y: resultSize.height - actionsHeight - UIScreenPixel), size: CGSize(width: resultSize.width, height: UIScreenPixel))
         
         var actionOffset: CGFloat = 0.0
+        let actionWidth: CGFloat = floor(resultSize.width / CGFloat(self.actionNodes.count))
         var separatorIndex = -1
         var nodeIndex = 0
         for actionNode in self.actionNodes {
             if separatorIndex >= 0 {
                 let separatorNode = self.actionVerticalSeparators[separatorIndex]
-                do {
-                    transition.updateFrame(node: separatorNode, frame: CGRect(origin: CGPoint(x: 0.0, y: resultSize.height - actionsHeight + actionOffset - UIScreenPixel), size: CGSize(width: resultSize.width, height: UIScreenPixel)))
-                }
+                transition.updateFrame(node: separatorNode, frame: CGRect(origin: CGPoint(x: actionOffset - UIScreenPixel, y: resultSize.height - actionsHeight), size: CGSize(width: UIScreenPixel, height: actionsHeight - UIScreenPixel)))
             }
             separatorIndex += 1
             
             let currentActionWidth: CGFloat
-            do {
-                currentActionWidth = resultSize.width
+            if nodeIndex == self.actionNodes.count - 1 {
+                currentActionWidth = resultSize.width - actionOffset
+            } else {
+                currentActionWidth = actionWidth
             }
             
             let actionNodeFrame: CGRect
-            do {
-                actionNodeFrame = CGRect(origin: CGPoint(x: 0.0, y: resultSize.height - actionsHeight + actionOffset), size: CGSize(width: currentActionWidth, height: actionButtonHeight))
-                actionOffset += actionButtonHeight
-            }
+            actionNodeFrame = CGRect(origin: CGPoint(x: actionOffset, y: resultSize.height - actionsHeight), size: CGSize(width: currentActionWidth, height: actionButtonHeight))
+            actionOffset += currentActionWidth
             
             transition.updateFrame(node: actionNode, frame: actionNodeFrame)
             
@@ -274,11 +273,11 @@ public func giftThemeTransferAlertController(
         
     var contentNode: GiftThemeTransferAlertContentNode?
     var dismissImpl: ((Bool) -> Void)?
-    let actions: [TextAlertAction] = [TextAlertAction(type: .defaultAction, title: presentationData.strings.Conversation_Theme_GiftTransfer_Proceed, action: { [weak contentNode] in
+    let actions: [TextAlertAction] = [TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: {
+        dismissImpl?(true)
+    }), TextAlertAction(type: .defaultAction, title: presentationData.strings.Conversation_Theme_GiftTransfer_Proceed, action: { [weak contentNode] in
         contentNode?.inProgress = true
         commit()
-    }), TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: {
-        dismissImpl?(true)
     })]
     
     let text = strings.Conversation_Theme_GiftTransfer_Text(previousPeer.compactDisplayTitle).string

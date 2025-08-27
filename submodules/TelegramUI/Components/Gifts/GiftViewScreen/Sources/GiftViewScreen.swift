@@ -2374,13 +2374,13 @@ private final class GiftViewSheetContent: CombinedComponent {
                     availableSize: CGSize(width: context.availableSize.width - perksSideInset * 2.0, height: 10000.0),
                     transition: context.transition
                 )
-                headerComponents.append({
-                    context.add(wearPerks
-                        .position(CGPoint(x: context.availableSize.width / 2.0, y: originY + wearPerks.size.height / 2.0))
-                        .appear(.default(alpha: true))
-                        .disappear(.default(alpha: true))
-                    )
-                })
+                
+                context.add(wearPerks
+                    .position(CGPoint(x: context.availableSize.width / 2.0, y: originY + wearPerks.size.height / 2.0))
+                    .appear(.default(alpha: true))
+                    .disappear(.default(alpha: true))
+                )
+            
                 originY += wearPerks.size.height
                 originY += 16.0
             } else if showUpgradePreview {
@@ -3736,7 +3736,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                 } else {
                     resellAmount = uniqueGift.resellAmounts?.first(where: { $0.currency == .stars })
                 }
-                if let resellAmount {
+                if let resellAmount, wearPeerNameChild == nil {
                     if incoming || ownerPeerId == component.context.account.peerId {
                         let priceButton = priceButton.update(
                             component: PlainButtonComponent(

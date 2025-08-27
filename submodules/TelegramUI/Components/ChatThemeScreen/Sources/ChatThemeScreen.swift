@@ -258,6 +258,7 @@ private final class ThemeSettingsThemeItemIconNode : ListViewItemNode {
     private let emojiImageNode: TransformImageNode
     private var animatedStickerNode: AnimatedStickerNode?
     private var placeholderNode: StickerShimmerEffectNode
+    private var avatarNode: AvatarNode?
     var snapshotView: UIView?
     
     var item: ThemeSettingsThemeIconItem?
@@ -506,6 +507,23 @@ private final class ThemeSettingsThemeItemIconNode : ListViewItemNode {
                     if let animatedStickerNode = strongSelf.animatedStickerNode {
                         animatedStickerNode.frame = emojiFrame
                         animatedStickerNode.updateLayout(size: emojiFrame.size)
+                    }
+                    
+                    if let peer = item.peer {
+                        let avatarNode: AvatarNode
+                        if let current = strongSelf.avatarNode {
+                            avatarNode = current
+                        } else {
+                            avatarNode = AvatarNode(font: avatarPlaceholderFont(size: 8.0))
+                            strongSelf.insertSubnode(avatarNode, belowSubnode: strongSelf.emojiContainerNode)
+                            strongSelf.avatarNode = avatarNode
+                            avatarNode.setPeer(context: item.context, theme: item.theme, peer: peer, displayDimensions: CGSize(width: 20.0, height: 20.0))
+                        }
+                        avatarNode.transform = CATransform3DMakeRotation(.pi / 2.0, 0.0, 0.0, 1.0)
+                        avatarNode.frame = CGRect(origin: CGPoint(x: 52.0, y: 14.0), size: CGSize(width: 20.0, height: 20.0))
+                    } else if let avatarNode = strongSelf.avatarNode {
+                        strongSelf.avatarNode = nil
+                        avatarNode.removeFromSupernode()
                     }
                 }
             })
@@ -896,7 +914,7 @@ private class ChatThemeScreenNode: ViewControllerTracingNode, ASScrollViewDelega
             if let strongSelf = self {
                 strongSelf.doneButton.isUserInteractionEnabled = false
                 if strongSelf.doneButton.font == .bold {
-                    strongSelf.completion?(strongSelf.selectedTheme)
+                    strongSelf.complete()
                 } else {
                     strongSelf.controller?.changeWallpaper()
                 }
@@ -907,14 +925,36 @@ private class ChatThemeScreenNode: ViewControllerTracingNode, ASScrollViewDelega
         self.disposable.set(combineLatest(
             queue: Queue.mainQueue(),
             self.context.engine.themes.getChatThemes(accountManager: self.context.sharedContext.accountManager),
-            self.uniqueGiftChatThemesContext.state,
+            self.uniqueGiftChatThemesContext.state
+            |> mapToSignal { state -> Signal<(UniqueGiftChatThemesContext.State, [EnginePeer.Id: EnginePeer]), NoError> in
+                var peerIds: [EnginePeer.Id] = []
+                for theme in state.themes {
+                    if case let .gift(gift, _) = theme, case let .unique(uniqueGift) = gift, let themePeerId = uniqueGift.themePeerId {
+                        peerIds.append(themePeerId)
+                    }
+                }
+                return combineLatest(
+                    .single(state),
+                    context.engine.data.get(
+                        EngineDataMap(peerIds.map(TelegramEngine.EngineData.Item.Peer.Peer.init))
+                    ) |> map { peers in
+                        var result: [EnginePeer.Id: EnginePeer] = [:]
+                        for peerId in peerIds {
+                            if let maybePeer = peers[peerId], let peer = maybePeer {
+                                result[peerId] = peer
+                            }
+                        }
+                        return result
+                    }
+                )
+            },
             self.selectedThemePromise.get(),
             self.isDarkAppearancePromise.get()
-        ).startStrict(next: { [weak self] themes, uniqueGiftChatThemesState, selectedTheme, isDarkAppearance in
+        ).startStrict(next: { [weak self] themes, uniqueGiftChatThemesStateAndPeers, selectedTheme, isDarkAppearance in
             guard let strongSelf = self else {
                 return
             }
-            
+            let (uniqueGiftChatThemesState, peers) = uniqueGiftChatThemesStateAndPeers
             strongSelf.currentUniqueGiftChatThemesState = uniqueGiftChatThemesState
                         
             let isFirstTime = strongSelf.entries == nil
@@ -949,11 +989,15 @@ private class ChatThemeScreenNode: ViewControllerTracingNode, ASScrollViewDelega
                     continue
                 }
                 var emojiFile: TelegramMediaFile?
+                var peer: EnginePeer?
                 if case let .unique(uniqueGift) = gift {
                     for attribute in uniqueGift.attributes {
                         if case let .model(_, file, _) = attribute {
                             emojiFile = file
                         }
+                    }
+                    if let themePeerId = uniqueGift.themePeerId {
+                        peer = peers[themePeerId]
                     }
                 }
                 let themeReference: PresentationThemeReference
@@ -970,7 +1014,7 @@ private class ChatThemeScreenNode: ViewControllerTracingNode, ASScrollViewDelega
                     chatTheme: theme,
                     emojiFile: emojiFile,
                     themeReference: themeReference,
-                    peer: nil,
+                    peer: peer,
                     nightMode: isDarkAppearance,
                     selected: selectedTheme?.id == theme.id,
                     theme: presentationData.theme,
@@ -1251,13 +1295,38 @@ private class ChatThemeScreenNode: ViewControllerTracingNode, ASScrollViewDelega
         }
     }
     
+    func complete() {
+        let proceed = {
+            self.completion?(self.selectedTheme)
+        }
+        if case let .gift(gift, _) = self.selectedTheme, case let .unique(uniqueGift) = gift, let themePeerId = uniqueGift.themePeerId {
+            let _ = (self.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: themePeerId))
+            |> deliverOnMainQueue).start(next: { [weak self] peer in
+                guard let self, let peer else {
+                    return
+                }
+                let controller = giftThemeTransferAlertController(
+                    context: self.context,
+                    gift: uniqueGift,
+                    previousPeer: peer,
+                    commit: {
+                        proceed()
+                    }
+                )
+                self.controller?.present(controller, in: .window(.root))
+            })
+        } else {
+            proceed()
+        }
+    }
+    
     func dimTapped() {
         if self.selectedTheme?.id == self.initiallySelectedTheme?.id {
             self.cancelButtonPressed()
         } else {
             let alertController = textAlertController(context: self.context, updatedPresentationData: (self.presentationData, .single(self.presentationData)), title: nil, text: self.presentationData.strings.Conversation_Theme_DismissAlert, actions: [TextAlertAction(type: .genericAction, title: self.presentationData.strings.Common_Cancel, action: {}), TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Conversation_Theme_DismissAlertApply, action: { [weak self] in
-                if let strongSelf = self {
-                    strongSelf.completion?(strongSelf.selectedTheme)
+                if let self {
+                    self.complete()
                 }
             })], actionLayout: .horizontal, dismissOnOutsideTap: true)
             self.present?(alertController)
