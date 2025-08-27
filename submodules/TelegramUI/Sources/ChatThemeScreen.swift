@@ -743,6 +743,7 @@ private class ChatThemeScreenNode: ViewControllerTracingNode, ASScrollViewDelega
     private var initialized = false
     
     private let uniqueGiftChatThemesContext: UniqueGiftChatThemesContext
+    private var currentUniqueGiftChatThemesState: UniqueGiftChatThemesContext.State?
     
     private let peerName: String
     
@@ -891,10 +892,12 @@ private class ChatThemeScreenNode: ViewControllerTracingNode, ASScrollViewDelega
             self.uniqueGiftChatThemesContext.state,
             self.selectedThemePromise.get(),
             self.isDarkAppearancePromise.get()
-        ).startStrict(next: { [weak self] themes, uniqueGiftChatThemes, selectedTheme, isDarkAppearance in
+        ).startStrict(next: { [weak self] themes, uniqueGiftChatThemesState, selectedTheme, isDarkAppearance in
             guard let strongSelf = self else {
                 return
             }
+            
+            strongSelf.currentUniqueGiftChatThemesState = uniqueGiftChatThemesState
                         
             let isFirstTime = strongSelf.entries == nil
             let presentationData = strongSelf.presentationData
@@ -927,8 +930,8 @@ private class ChatThemeScreenNode: ViewControllerTracingNode, ASScrollViewDelega
                     wallpaper: nil
                 ))
             }
-            for theme in uniqueGiftChatThemes.themes {
-                guard case let .gift(gift, wallpaperFile) = theme else {
+            for theme in uniqueGiftChatThemesState.themes {
+                guard case let .gift(gift, themeSettings) = theme else {
                     continue
                 }
                 var emojiFile: TelegramMediaFile?
@@ -939,16 +942,23 @@ private class ChatThemeScreenNode: ViewControllerTracingNode, ASScrollViewDelega
                         }
                     }
                 }
+                
+                var wallpaper: TelegramWallpaper?
+                if isDarkAppearance {
+                    wallpaper = themeSettings.first(where: { $0.baseTheme == .night || $0.baseTheme == .tinted })?.wallpaper
+                } else {
+                    wallpaper = themeSettings.first(where: { $0.baseTheme == .classic || $0.baseTheme == .day })?.wallpaper
+                }
                 entries.append(ThemeSettingsThemeEntry(
                     index: entries.count,
                     chatTheme: theme,
                     emojiFile: emojiFile,
-                    themeReference: nil,
+                    themeReference: .builtin(.dayClassic),
                     nightMode: isDarkAppearance,
                     selected: selectedTheme?.id == theme.id,
                     theme: presentationData.theme,
                     strings: presentationData.strings,
-                    wallpaper: .file(TelegramWallpaper.File(id: wallpaperFile.fileId.id, accessHash: 0, isCreator: false, isDefault: false, isPattern: true, isDark: false, slug: "", file: wallpaperFile, settings: WallpaperSettings(blur: false, motion: false, colors: [], intensity: 100, rotation: 0)))
+                    wallpaper: wallpaper
                 ))
             }
             
@@ -1005,6 +1015,15 @@ private class ChatThemeScreenNode: ViewControllerTracingNode, ASScrollViewDelega
                     strongSelf.animationContainerNode.alpha = 1.0
                     strongSelf.animationContainerNode.layer.animateAlpha(from: 0.4, to: 1.0, duration: 0.2)
                 }
+            }
+        }
+        
+        self.listNode.visibleBottomContentOffsetChanged = { [weak self] offset in
+            guard let self, let state = self.currentUniqueGiftChatThemesState, case .ready(true) = state.dataState else {
+                return
+            }
+            if case let .known(value) = offset, value < 100.0 {
+                self.uniqueGiftChatThemesContext.loadMore()
             }
         }
         

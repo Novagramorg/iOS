@@ -570,20 +570,30 @@ public extension Api.account {
 }
 public extension Api.account {
     enum ChatThemes: TypeConstructorDescription {
-        case chatThemes(flags: Int32, hash: Int64, themes: [Api.ChatTheme], nextOffset: Int32?)
+        case chatThemes(flags: Int32, hash: Int64, themes: [Api.ChatTheme], chats: [Api.Chat], users: [Api.User], nextOffset: Int32?)
         case chatThemesNotModified
     
     public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
     switch self {
-                case .chatThemes(let flags, let hash, let themes, let nextOffset):
+                case .chatThemes(let flags, let hash, let themes, let chats, let users, let nextOffset):
                     if boxed {
-                        buffer.appendInt32(1271855483)
+                        buffer.appendInt32(373835863)
                     }
                     serializeInt32(flags, buffer: buffer, boxed: false)
                     serializeInt64(hash, buffer: buffer, boxed: false)
                     buffer.appendInt32(481674261)
                     buffer.appendInt32(Int32(themes.count))
                     for item in themes {
+                        item.serialize(buffer, true)
+                    }
+                    buffer.appendInt32(481674261)
+                    buffer.appendInt32(Int32(chats.count))
+                    for item in chats {
+                        item.serialize(buffer, true)
+                    }
+                    buffer.appendInt32(481674261)
+                    buffer.appendInt32(Int32(users.count))
+                    for item in users {
                         item.serialize(buffer, true)
                     }
                     if Int(flags) & Int(1 << 0) != 0 {serializeInt32(nextOffset!, buffer: buffer, boxed: false)}
@@ -599,8 +609,8 @@ public extension Api.account {
     
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
-                case .chatThemes(let flags, let hash, let themes, let nextOffset):
-                return ("chatThemes", [("flags", flags as Any), ("hash", hash as Any), ("themes", themes as Any), ("nextOffset", nextOffset as Any)])
+                case .chatThemes(let flags, let hash, let themes, let chats, let users, let nextOffset):
+                return ("chatThemes", [("flags", flags as Any), ("hash", hash as Any), ("themes", themes as Any), ("chats", chats as Any), ("users", users as Any), ("nextOffset", nextOffset as Any)])
                 case .chatThemesNotModified:
                 return ("chatThemesNotModified", [])
     }
@@ -615,14 +625,24 @@ public extension Api.account {
             if let _ = reader.readInt32() {
                 _3 = Api.parseVector(reader, elementSignature: 0, elementType: Api.ChatTheme.self)
             }
-            var _4: Int32?
-            if Int(_1!) & Int(1 << 0) != 0 {_4 = reader.readInt32() }
+            var _4: [Api.Chat]?
+            if let _ = reader.readInt32() {
+                _4 = Api.parseVector(reader, elementSignature: 0, elementType: Api.Chat.self)
+            }
+            var _5: [Api.User]?
+            if let _ = reader.readInt32() {
+                _5 = Api.parseVector(reader, elementSignature: 0, elementType: Api.User.self)
+            }
+            var _6: Int32?
+            if Int(_1!) & Int(1 << 0) != 0 {_6 = reader.readInt32() }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            let _c4 = (Int(_1!) & Int(1 << 0) == 0) || _4 != nil
-            if _c1 && _c2 && _c3 && _c4 {
-                return Api.account.ChatThemes.chatThemes(flags: _1!, hash: _2!, themes: _3!, nextOffset: _4)
+            let _c4 = _4 != nil
+            let _c5 = _5 != nil
+            let _c6 = (Int(_1!) & Int(1 << 0) == 0) || _6 != nil
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 {
+                return Api.account.ChatThemes.chatThemes(flags: _1!, hash: _2!, themes: _3!, chats: _4!, users: _5!, nextOffset: _6)
             }
             else {
                 return nil
