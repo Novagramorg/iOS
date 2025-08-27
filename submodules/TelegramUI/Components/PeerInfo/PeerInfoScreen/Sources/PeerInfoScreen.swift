@@ -5012,8 +5012,8 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                                 }
                                 profileGifts.updateStarGiftAddedToProfile(reference: reference, added: added)
                             },
-                            convertToStars: { [weak profileGifts] in
-                                guard let profileGifts, let reference = gift.reference else {
+                            convertToStars: { [weak profileGifts] reference in
+                                guard let profileGifts else {
                                     return
                                 }
                                 profileGifts.convertStarGift(reference: reference)
@@ -5024,8 +5024,8 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                                 }
                                 return profileGifts.transferStarGift(prepaid: prepaid, reference: reference, peerId: peerId)
                             },
-                            upgradeGift: { [weak profileGifts] formId, keepOriginalInfo in
-                                guard let profileGifts, let reference = gift.reference else {
+                            upgradeGift: { [weak profileGifts] formId, reference, keepOriginalInfo in
+                                guard let profileGifts else {
                                     return .never()
                                 }
                                 return profileGifts.upgradeStarGift(formId: formId, reference: reference, keepOriginalInfo: keepOriginalInfo)

@@ -611,8 +611,8 @@ final class GiftsListView: UIView {
                                             }
                                             self.profileGifts.updateStarGiftAddedToProfile(reference: reference, added: added)
                                         },
-                                        convertToStars: { [weak self] in
-                                            guard let self, let reference = product.reference else {
+                                        convertToStars: { [weak self] reference in
+                                            guard let self else {
                                                 return
                                             }
                                             self.profileGifts.convertStarGift(reference: reference)
@@ -623,8 +623,8 @@ final class GiftsListView: UIView {
                                             }
                                             return self.profileGifts.transferStarGift(prepaid: prepaid, reference: reference, peerId: peerId)
                                         },
-                                        upgradeGift: { [weak self] formId, keepOriginalInfo in
-                                            guard let self, let reference = product.reference else {
+                                        upgradeGift: { [weak self] formId, reference, keepOriginalInfo in
+                                            guard let self else {
                                                 return .never()
                                             }
                                             return self.profileGifts.upgradeStarGift(formId: formId, reference: reference, keepOriginalInfo: keepOriginalInfo)
