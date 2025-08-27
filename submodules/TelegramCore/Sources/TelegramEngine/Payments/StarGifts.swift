@@ -1437,6 +1437,7 @@ private final class ProfileGiftsContextImpl {
         let postbox = self.account.postbox
         let filter = self.filter
         let sorting = self.sorting
+        let limit = self.limit
         
         let isFiltered = self.filter != .All || self.sorting != .date
         if !isFiltered {
@@ -1524,7 +1525,7 @@ private final class ProfileGiftsContextImpl {
             if !filter.contains(.unique) {
                 flags |= (1 << 4)
             }
-            return network.request(Api.functions.payments.getSavedStarGifts(flags: flags, peer: inputPeer, collectionId: collectionId, offset: initialNextOffset ?? "", limit: 36))
+            return network.request(Api.functions.payments.getSavedStarGifts(flags: flags, peer: inputPeer, collectionId: collectionId, offset: initialNextOffset ?? "", limit: limit))
             |> map(Optional.init)
             |> `catch` { _ -> Signal<Api.payments.SavedStarGifts?, NoError> in
                 return .single(nil)
@@ -3013,7 +3014,6 @@ private final class ResaleGiftsContextImpl {
         let network = self.account.network
         let postbox = self.account.postbox
         let sorting = self.sorting
-        let limit = self.limit
         let filterAttributes = self.filterAttributes
         let currentAttributesHash = self.attributesHash
         
@@ -3053,7 +3053,7 @@ private final class ResaleGiftsContextImpl {
             let attributesHash = currentAttributesHash ?? 0
             flags |= (1 << 0)
             
-            let signal = network.request(Api.functions.payments.getResaleStarGifts(flags: flags, attributesHash: attributesHash, giftId: giftId, attributes: apiAttributes, offset: initialNextOffset ?? "", limit: limit))
+            let signal = network.request(Api.functions.payments.getResaleStarGifts(flags: flags, attributesHash: attributesHash, giftId: giftId, attributes: apiAttributes, offset: initialNextOffset ?? "", limit: 36))
             |> map(Optional.init)
             |> `catch` { _ -> Signal<Api.payments.ResaleStarGifts?, NoError> in
                 return .single(nil)
