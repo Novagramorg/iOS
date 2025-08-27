@@ -127,7 +127,7 @@ private final class GiftThemeTransferAlertContentNode: AlertContentNode {
                 return ("URL", url)
             }
         ), textAlignment: .center)
-        self.arrowNode.image = generateTintedImage(image: UIImage(bundleImageName: "Peer Info/AlertArrow"), color: theme.secondaryColor)
+        self.arrowNode.image = generateTintedImage(image: UIImage(bundleImageName: "Media Editor/CutoutUndo"), color: theme.controlBorderColor)
         
         self.actionNodesSeparator.backgroundColor = theme.separatorColor
         for actionNode in self.actionNodes {
@@ -153,7 +153,7 @@ private final class GiftThemeTransferAlertContentNode: AlertContentNode {
         let avatarSize = CGSize(width: 60.0, height: 60.0)
         self.avatarNode.updateSize(size: avatarSize)
         
-        let giftFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((size.width - avatarSize.width) / 2.0) - 44.0, y: origin.y), size: avatarSize)
+        let giftFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((size.width - avatarSize.width) / 2.0) - 52.0, y: origin.y), size: avatarSize)
         
         let _ = self.giftView.update(
             transition: .immediate,
@@ -182,7 +182,7 @@ private final class GiftThemeTransferAlertContentNode: AlertContentNode {
             transition.updateFrame(node: self.arrowNode, frame: arrowFrame)
         }
         
-        let avatarFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((size.width - avatarSize.width) / 2.0) + 44.0, y: origin.y), size: avatarSize)
+        let avatarFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((size.width - avatarSize.width) / 2.0) + 52.0, y: origin.y), size: avatarSize)
         transition.updateFrame(node: self.avatarNode, frame: avatarFrame)
                 
         origin.y += avatarSize.height + 17.0
@@ -276,7 +276,7 @@ public func giftThemeTransferAlertController(
     let actions: [TextAlertAction] = [TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: {
         dismissImpl?(true)
     }), TextAlertAction(type: .defaultAction, title: presentationData.strings.Conversation_Theme_GiftTransfer_Proceed, action: { [weak contentNode] in
-        contentNode?.inProgress = true
+        dismissImpl?(true)
         commit()
     })]
     
