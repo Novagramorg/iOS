@@ -277,13 +277,17 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
         }
         
         self.historyNode.endedInteractiveDragging = { [weak self] _ in
-            guard let strongSelf = self else {
+            guard let self else {
                 return
             }
-            switch strongSelf.historyNode.visibleContentOffset() {
+            switch self.historyNode.visibleContentOffset() {
             case let .known(value):
-                if value <= -10.0 {
-                    strongSelf.requestDismiss()
+                if let playlistLocation = self.playlistLocation as? PeerMessagesPlaylistLocation, case let .savedMusic(_, _, canReorder) = playlistLocation, canReorder {
+                    
+                } else {
+                    if value <= -10.0 {
+                        self.requestDismiss()
+                    }
                 }
             default:
                 break
@@ -507,7 +511,6 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
                 return .single(true)
             }
         })
-        self.historyNode.useMainQueueTransactions = false
         self.historyNode.autoScrollWhenReordering = false
     }
 
@@ -689,7 +692,6 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
         insets.top = max(0.0, listNodeSize.height - floor(56.0 * 3.5))
         
         var itemOffsetInsets = insets
-        
         if let playlistLocation = self.playlistLocation as? PeerMessagesPlaylistLocation, case let .savedMusic(_, _, canReorder) = playlistLocation, canReorder {
             itemOffsetInsets.top = 0.0
             itemOffsetInsets.bottom = 0.0
@@ -998,9 +1000,16 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
                 
                 insets.top = max(0.0, listNodeSize.height - floor(56.0 * 3.5))
                 
+                var itemOffsetInsets = insets
+                if let playlistLocation = self.playlistLocation as? PeerMessagesPlaylistLocation, case let .savedMusic(_, _, canReorder) = playlistLocation, canReorder {
+                    itemOffsetInsets.top = 0.0
+                    itemOffsetInsets.bottom = 0.0
+                    insets = itemOffsetInsets
+                }
+                
                 self.historyNode.frame = CGRect(origin: CGPoint(x: 0.0, y: listTopInset), size: listNodeSize)
                 
-                let updateSizeAndInsets = ListViewUpdateSizeAndInsets(size: listNodeSize, insets: insets, duration: 0.0, curve: .Default(duration: nil))
+                let updateSizeAndInsets = ListViewUpdateSizeAndInsets(size: listNodeSize, insets: insets, itemOffsetInsets: itemOffsetInsets, duration: 0.0, curve: .Default(duration: nil))
                 self.historyNode.updateLayout(transition: .immediate, updateSizeAndInsets: updateSizeAndInsets)
                 
                 self.historyNode.recursivelyEnsureDisplaySynchronously(true)
