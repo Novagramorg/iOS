@@ -117,7 +117,7 @@ public enum ChatTheme: PostboxCoding, Codable, Equatable {
                 case .unique(let lhsUnique):
                     switch rhsGift {
                     case .unique(let rhsUnique):
-                        return lhsUnique.id == rhsUnique.id
+                        return lhsUnique.slug == rhsUnique.slug
                     default:
                         return false
                     }
@@ -592,6 +592,7 @@ public final class UniqueGiftChatThemesContext {
                 self.nextOffset = nextOffset
             }
             self.dataState = .ready(canLoadMore: nextOffset != nil)
+            self.nextOffset = nextOffset
             self.pushState()
         }))
     }
