@@ -676,7 +676,9 @@ private final class GiftViewSheetContent: CombinedComponent {
                 guard let self else {
                     return
                 }
-                self.isOpeningValue = false
+                Queue.mainQueue().after(0.2) {
+                    self.isOpeningValue = false
+                }
                 if let valueInfo {
                     let valueController = GiftValueScreen(context: self.context, gift: gift, valueInfo: valueInfo)
                     controller.push(valueController)
@@ -4545,8 +4547,8 @@ public class GiftViewScreen: ViewControllerComponentContainer {
         self.navigationPresentation = .flatModal
         self.automaticallyControlPresentationContextLayout = false
         
-        if "".isEmpty {
-            let upgradableGiftsContext = ProfileGiftsContext(account: context.account, peerId: context.account.peerId, collectionId: nil, sorting: .date, filter: [.displayed, .hidden, .limitedUpgradable])
+        if let gift = subject.arguments?.gift, case .generic = gift {
+            let upgradableGiftsContext = ProfileGiftsContext(account: context.account, peerId: context.account.peerId, collectionId: nil, sorting: .date, filter: [.displayed, .hidden, .limitedUpgradable], limit: 50)
             self.upgradableDisposable = (upgradableGiftsContext.state
             |> deliverOnMainQueue).start(next: { [weak self] state in
                 guard let self else {
