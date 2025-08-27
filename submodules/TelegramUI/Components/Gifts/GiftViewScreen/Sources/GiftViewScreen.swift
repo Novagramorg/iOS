@@ -596,7 +596,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                             }
                             
                             if let convertToStars = controller?.convertToStars {
-                                convertToStars()
+                                convertToStars(reference)
                             } else {
                                 let _ = (self.context.engine.payments.convertStarGift(reference: reference)
                                 |> deliverOnMainQueue).startStandalone()
@@ -1641,8 +1641,11 @@ private final class GiftViewSheetContent: CombinedComponent {
                 let context = self.context
                 let upgradeGiftImpl: ((Int64?, Bool) -> Signal<ProfileGiftsContext.State.StarGift, UpgradeStarGiftError>)
                 if let upgradeGift = controller.upgradeGift {
+                    guard let reference = arguments.reference else {
+                        return
+                    }
                     upgradeGiftImpl = { formId, keepOriginalInfo in
-                        return upgradeGift(formId, keepOriginalInfo)
+                        return upgradeGift(formId, reference, keepOriginalInfo)
                         |> afterCompleted {
                             if formId != nil {
                                 context.starsContext?.load(force: true)
@@ -1690,7 +1693,8 @@ private final class GiftViewSheetContent: CombinedComponent {
                             }
                         }
                     }
-                                        
+                    self.updated(transition: .spring(duration: 0.4))
+                    
                     Queue.mainQueue().after(firstDuration) {
                         self.revealedAttributes.insert(.backdrop)
                         self.updated(transition: .immediate)
@@ -4461,9 +4465,9 @@ public class GiftViewScreen: ViewControllerComponentContainer {
     fileprivate let balanceOverlay = ComponentView<Empty>()
     
     fileprivate let updateSavedToProfile: ((StarGiftReference, Bool) -> Void)?
-    fileprivate let convertToStars: (() -> Void)?
+    fileprivate let convertToStars: ((StarGiftReference) -> Void)?
     fileprivate let transferGift: ((Bool, EnginePeer.Id) -> Signal<Never, TransferStarGiftError>)?
-    fileprivate let upgradeGift: ((Int64?, Bool) -> Signal<ProfileGiftsContext.State.StarGift, UpgradeStarGiftError>)?
+    fileprivate let upgradeGift: ((Int64?, StarGiftReference, Bool) -> Signal<ProfileGiftsContext.State.StarGift, UpgradeStarGiftError>)?
     fileprivate let buyGift: ((String, EnginePeer.Id, CurrencyAmount?) -> Signal<Never, BuyStarGiftError>)?
     fileprivate let updateResellStars: ((CurrencyAmount?) -> Signal<Never, UpdateStarGiftPriceError>)?
     fileprivate let togglePinnedToTop: ((Bool) -> Bool)?
@@ -4479,9 +4483,9 @@ public class GiftViewScreen: ViewControllerComponentContainer {
         index: Int? = nil,
         forceDark: Bool = false,
         updateSavedToProfile: ((StarGiftReference, Bool) -> Void)? = nil,
-        convertToStars: (() -> Void)? = nil,
+        convertToStars: ((StarGiftReference) -> Void)? = nil,
         transferGift: ((Bool, EnginePeer.Id) -> Signal<Never, TransferStarGiftError>)? = nil,
-        upgradeGift: ((Int64?, Bool) -> Signal<ProfileGiftsContext.State.StarGift, UpgradeStarGiftError>)? = nil,
+        upgradeGift: ((Int64?, StarGiftReference, Bool) -> Signal<ProfileGiftsContext.State.StarGift, UpgradeStarGiftError>)? = nil,
         buyGift: ((String, EnginePeer.Id, CurrencyAmount?) -> Signal<Never, BuyStarGiftError>)? = nil,
         updateResellStars: ((CurrencyAmount?) -> Signal<Never, UpdateStarGiftPriceError>)? = nil,
         togglePinnedToTop: ((Bool) -> Bool)? = nil,
