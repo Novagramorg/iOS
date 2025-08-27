@@ -559,6 +559,7 @@ public final class UniqueGiftChatThemesContext {
             }
             
             self.dataState = .ready(canLoadMore: nextOffset != nil)
+            self.nextOffset = nextOffset
             self.pushState()
         }))
     }
