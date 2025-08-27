@@ -21,12 +21,14 @@ import AnimatedStickerNode
 import TelegramAnimatedStickerNode
 import ShimmerEffect
 import AttachmentUI
+import AvatarNode
 
 private struct ThemeSettingsThemeEntry: Comparable, Identifiable {
     let index: Int
     let chatTheme: ChatTheme?
     let emojiFile: TelegramMediaFile?
     let themeReference: PresentationThemeReference?
+    let peer: EnginePeer?
     let nightMode: Bool
     var selected: Bool
     let theme: PresentationTheme
@@ -45,6 +47,9 @@ private struct ThemeSettingsThemeEntry: Comparable, Identifiable {
             return false
         }
         if lhs.themeReference?.index != rhs.themeReference?.index {
+            return false
+        }
+        if lhs.peer != rhs.peer {
             return false
         }
         if lhs.nightMode != rhs.nightMode {
@@ -70,16 +75,16 @@ private struct ThemeSettingsThemeEntry: Comparable, Identifiable {
     }
     
     func item(context: AccountContext, action: @escaping (ChatTheme?) -> Void) -> ListViewItem {
-        return ThemeSettingsThemeIconItem(context: context, chatTheme: self.chatTheme, emojiFile: self.emojiFile, themeReference: self.themeReference, nightMode: self.nightMode, selected: self.selected, theme: self.theme, strings: self.strings, wallpaper: self.wallpaper, action: action)
+        return ThemeSettingsThemeIconItem(context: context, chatTheme: self.chatTheme, emojiFile: self.emojiFile, themeReference: self.themeReference, peer: self.peer, nightMode: self.nightMode, selected: self.selected, theme: self.theme, strings: self.strings, wallpaper: self.wallpaper, action: action)
     }
 }
-
 
 private class ThemeSettingsThemeIconItem: ListViewItem {
     let context: AccountContext
     let chatTheme: ChatTheme?
     let emojiFile: TelegramMediaFile?
     let themeReference: PresentationThemeReference?
+    let peer: EnginePeer?
     let nightMode: Bool
     let selected: Bool
     let theme: PresentationTheme
@@ -87,11 +92,24 @@ private class ThemeSettingsThemeIconItem: ListViewItem {
     let wallpaper: TelegramWallpaper?
     let action: (ChatTheme?) -> Void
     
-    public init(context: AccountContext, chatTheme: ChatTheme?, emojiFile: TelegramMediaFile?, themeReference: PresentationThemeReference?, nightMode: Bool, selected: Bool, theme: PresentationTheme, strings: PresentationStrings, wallpaper: TelegramWallpaper?, action: @escaping (ChatTheme?) -> Void) {
+    public init(
+        context: AccountContext,
+        chatTheme: ChatTheme?,
+        emojiFile: TelegramMediaFile?,
+        themeReference: PresentationThemeReference?,
+        peer: EnginePeer?,
+        nightMode: Bool,
+        selected: Bool,
+        theme: PresentationTheme,
+        strings: PresentationStrings,
+        wallpaper: TelegramWallpaper?,
+        action: @escaping (ChatTheme?) -> Void
+    ) {
         self.context = context
         self.chatTheme = chatTheme
         self.emojiFile = emojiFile
         self.themeReference = themeReference
+        self.peer = peer
         self.nightMode = nightMode
         self.selected = selected
         self.theme = theme
@@ -525,9 +543,9 @@ private final class ThemeSettingsThemeItemIconNode : ListViewItemNode {
     }
 }
 
-final class ChatThemeScreen: ViewController {
-    static let themeCrossfadeDuration: Double = 0.3
-    static let themeCrossfadeDelay: Double = 0.25
+public final class ChatThemeScreen: ViewController {
+    public static let themeCrossfadeDuration: Double = 0.3
+    public static let themeCrossfadeDelay: Double = 0.25
     
     private var controllerNode: ChatThemeScreenNode {
         return self.displayNode as! ChatThemeScreenNode
@@ -539,7 +557,7 @@ final class ChatThemeScreen: ViewController {
     private let animatedEmojiStickers: [String: [StickerPackItem]]
     private let initiallySelectedTheme: ChatTheme?
     private let peerName: String
-    let canResetWallpaper: Bool
+    fileprivate let canResetWallpaper: Bool
     private let previewTheme: (ChatTheme?, Bool?) -> Void
     fileprivate let changeWallpaper: () -> Void
     fileprivate let resetWallpaper: () -> Void
@@ -548,9 +566,9 @@ final class ChatThemeScreen: ViewController {
     private var presentationData: PresentationData
     private var presentationDataDisposable: Disposable?
     
-    var dismissed: (() -> Void)?
+    public var dismissed: (() -> Void)?
     
-    var passthroughHitTestImpl: ((CGPoint) -> UIView?)? {
+    public var passthroughHitTestImpl: ((CGPoint) -> UIView?)? {
         didSet {
             if self.isNodeLoaded {
                 self.controllerNode.passthroughHitTestImpl = self.passthroughHitTestImpl
@@ -558,7 +576,7 @@ final class ChatThemeScreen: ViewController {
         }
     }
     
-    init(
+    public init(
         context: AccountContext,
         updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>),
         animatedEmojiStickers: [String: [StickerPackItem]],
@@ -657,7 +675,7 @@ final class ChatThemeScreen: ViewController {
         }
     }
     
-    override func dismiss(animated flag: Bool, completion: (() -> Void)? = nil) {
+    override public func dismiss(animated flag: Bool, completion: (() -> Void)? = nil) {
         self.forEachController({ controller in
             if let controller = controller as? TooltipScreen {
                 controller.dismiss()
@@ -683,7 +701,7 @@ final class ChatThemeScreen: ViewController {
         self.controllerNode.containerLayoutUpdated(layout, navigationBarHeight: self.navigationLayout(layout: layout).navigationFrame.maxY, transition: transition)
     }
     
-    func dimTapped() {
+    public func dimTapped() {
         self.controllerNode.dimTapped()
     }
 }
@@ -908,28 +926,13 @@ private class ChatThemeScreenNode: ViewControllerTracingNode, ASScrollViewDelega
                 chatTheme: nil,
                 emojiFile: nil,
                 themeReference: nil,
+                peer: nil,
                 nightMode: false,
                 selected: selectedTheme == nil,
                 theme: presentationData.theme,
                 strings: presentationData.strings,
                 wallpaper: nil
             ))
-            for theme in themes {
-                guard let emoticon = theme.emoticon else {
-                    continue
-                }
-                entries.append(ThemeSettingsThemeEntry(
-                    index: entries.count,
-                    chatTheme: .emoticon(emoticon),
-                    emojiFile: animatedEmojiStickers[emoticon]?.first?.file._parse(),
-                    themeReference: .cloud(PresentationCloudTheme(theme: theme, resolvedWallpaper: nil, creatorAccountId: nil)),
-                    nightMode: isDarkAppearance,
-                    selected: selectedTheme?.id == ChatTheme.emoticon(emoticon).id,
-                    theme: presentationData.theme,
-                    strings: presentationData.strings,
-                    wallpaper: nil
-                ))
-            }
             for theme in uniqueGiftChatThemesState.themes {
                 guard case let .gift(gift, themeSettings) = theme else {
                     continue
@@ -954,6 +957,7 @@ private class ChatThemeScreenNode: ViewControllerTracingNode, ASScrollViewDelega
                     chatTheme: theme,
                     emojiFile: emojiFile,
                     themeReference: .builtin(.dayClassic),
+                    peer: nil,
                     nightMode: isDarkAppearance,
                     selected: selectedTheme?.id == theme.id,
                     theme: presentationData.theme,
@@ -961,6 +965,24 @@ private class ChatThemeScreenNode: ViewControllerTracingNode, ASScrollViewDelega
                     wallpaper: wallpaper
                 ))
             }
+            for theme in themes {
+                guard let emoticon = theme.emoticon else {
+                    continue
+                }
+                entries.append(ThemeSettingsThemeEntry(
+                    index: entries.count,
+                    chatTheme: .emoticon(emoticon),
+                    emojiFile: animatedEmojiStickers[emoticon]?.first?.file._parse(),
+                    themeReference: .cloud(PresentationCloudTheme(theme: theme, resolvedWallpaper: nil, creatorAccountId: nil)),
+                    peer: nil,
+                    nightMode: isDarkAppearance,
+                    selected: selectedTheme?.id == ChatTheme.emoticon(emoticon).id,
+                    theme: presentationData.theme,
+                    strings: presentationData.strings,
+                    wallpaper: nil
+                ))
+            }
+           
             
             let action: (ChatTheme?) -> Void = { [weak self] chatTheme in
                 if let self, self.selectedTheme != chatTheme {

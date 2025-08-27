@@ -141,6 +141,7 @@ import SuggestedPostApproveAlert
 import AVFoundation
 import BalanceNeededScreen
 import FaceScanScreen
+import ChatThemeScreen
 
 public final class ChatControllerOverlayPresentationData {
     public let expandData: (ASDisplayNode?, () -> Void)

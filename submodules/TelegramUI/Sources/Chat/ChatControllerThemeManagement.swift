@@ -123,6 +123,7 @@ import ChatEmptyNode
 import ChatMediaInputStickerGridItem
 import AdsInfoScreen
 import Photos
+import ChatThemeScreen
 
 extension ChatControllerImpl {
     public func presentThemeSelection() {
@@ -186,11 +187,11 @@ extension ChatControllerImpl {
                     }
                 },
                 changeWallpaper: { [weak self] in
-                    guard let strongSelf = self, let peerId else {
+                    guard let self, let peerId else {
                         return
                     }
-                    if let themeController = strongSelf.themeScreen {
-                        strongSelf.themeScreen = nil
+                    if let themeController = self.themeScreen {
+                        self.themeScreen = nil
                         themeController.dimTapped()
                     }                    
                     let dismissControllers = { [weak self] in
@@ -206,60 +207,58 @@ extension ChatControllerImpl {
                     }
                     var openWallpaperPickerImpl: ((Bool) -> Void)?
                     let openWallpaperPicker = { [weak self] animateAppearance in
-                        guard let strongSelf = self else {
+                        guard let self else {
                             return
                         }
                         let controller = wallpaperMediaPickerController(
-                            context: strongSelf.context,
-                            updatedPresentationData: strongSelf.updatedPresentationData,
+                            context: context,
+                            updatedPresentationData: self.updatedPresentationData,
                             peer: EnginePeer(peer),
                             animateAppearance: animateAppearance,
                             completion: { [weak self] _, result in
-                                guard let strongSelf = self, let asset = result as? PHAsset else {
+                                guard let self, let asset = result as? PHAsset else {
                                     return
                                 }
-                                let controller = WallpaperGalleryController(context: strongSelf.context, source: .asset(asset), mode: .peer(EnginePeer(peer), false))
+                                let controller = WallpaperGalleryController(context: context, source: .asset(asset), mode: .peer(EnginePeer(peer), false))
                                 controller.navigationPresentation = .modal
-                                controller.apply = { [weak self] wallpaper, options, editedImage, cropRect, brightness, forBoth in
-                                    if let strongSelf = self {
-                                        uploadCustomPeerWallpaper(context: strongSelf.context, wallpaper: wallpaper, mode: options, editedImage: editedImage, cropRect: cropRect, brightness: brightness, peerId: peerId, forBoth: forBoth, completion: {
-                                            Queue.mainQueue().after(0.3, {
-                                                dismissControllers()
-                                            })
+                                controller.apply = { wallpaper, options, editedImage, cropRect, brightness, forBoth in
+                                    uploadCustomPeerWallpaper(context: context, wallpaper: wallpaper, mode: options, editedImage: editedImage, cropRect: cropRect, brightness: brightness, peerId: peerId, forBoth: forBoth, completion: {
+                                        Queue.mainQueue().after(0.3, {
+                                            dismissControllers()
                                         })
-                                    }
+                                    })
                                 }
-                                strongSelf.push(controller)
+                                self.push(controller)
                             },
                             openColors: { [weak self] in
-                                guard let strongSelf = self else {
+                                guard let self else {
                                     return
                                 }
-                                let controller = standaloneColorPickerController(context: strongSelf.context, peer: EnginePeer(peer), push: { [weak self] controller in
-                                    if let strongSelf = self {
-                                        strongSelf.push(controller)
+                                let controller = standaloneColorPickerController(context: context, peer: EnginePeer(peer), push: { [weak self] controller in
+                                    if let self {
+                                        self.push(controller)
                                     }
                                 }, openGallery: {
                                     openWallpaperPickerImpl?(false)
                                 })
                                 controller.navigationPresentation = .flatModal
-                                strongSelf.push(controller)
+                                self.push(controller)
                             }
                         )
                         controller.navigationPresentation = .flatModal
-                        strongSelf.push(controller)
+                        self.push(controller)
                     }
                     openWallpaperPickerImpl = openWallpaperPicker
                     openWallpaperPicker(true)
                 },
                 resetWallpaper: { [weak self] in
-                    guard let strongSelf = self, let peerId else {
+                    guard let self, let peerId else {
                         return
                     }
-                    let _ = strongSelf.context.engine.themes.setChatWallpaper(peerId: peerId, wallpaper: nil, forBoth: false).startStandalone()
+                    let _ = self.context.engine.themes.setChatWallpaper(peerId: peerId, wallpaper: nil, forBoth: false).startStandalone()
                 },
                 completion: { [weak self] chatTheme in
-                    guard let strongSelf = self, let peerId else {
+                    guard let self, let peerId else {
                         return
                     }
                     if canResetWallpaper && chatTheme != nil {
@@ -267,8 +266,8 @@ extension ChatControllerImpl {
                     }
                     strongSelf.chatThemeAndDarkAppearancePreviewPromise.set(.single((chatTheme ?? .emoticon(""), nil)))
                     let _ = context.engine.themes.setChatTheme(peerId: peerId, chatTheme: chatTheme ?? .emoticon("")).startStandalone(completed: { [weak self] in
-                        if let strongSelf = self {
-                            strongSelf.chatThemeAndDarkAppearancePreviewPromise.set(.single((nil, nil)))
+                        if let self {
+                            self.chatThemeAndDarkAppearancePreviewPromise.set(.single((nil, nil)))
                         }
                     })
                 }

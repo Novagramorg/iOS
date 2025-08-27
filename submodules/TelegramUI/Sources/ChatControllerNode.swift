@@ -46,6 +46,7 @@ import ComponentFlow
 import ChatEmptyNode
 import SpaceWarpView
 import ChatSideTopicsPanel
+import ChatThemeScreen
 
 final class VideoNavigationControllerDropContentItem: NavigationControllerDropContentItem {
     let itemNode: OverlayMediaItemNode
