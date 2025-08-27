@@ -552,7 +552,7 @@ public final class UniqueGiftChatThemesContext {
             self.pushState()
         }
         
-        let signal = network.request(Api.functions.account.getUniqueGiftChatThemes(offset: offset, limit: 32, hash: 0))
+        let signal = network.request(Api.functions.account.getUniqueGiftChatThemes(offset: offset, limit: 50, hash: 0))
         |> map(Optional.init)
         |> `catch` { error in
             return .single(nil)
