@@ -570,19 +570,18 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
     func addToSavedMusic(file: FileMediaReference) {
         self.dismissAllTooltips()
         
-        var actionText: String? = "View"
+        var actionText: String? = self.presentationData.strings.MediaPlayer_SavedMusic_AddedToProfile_View
         if let itemId = self.controlsNode.currentItemId as? PeerMessagesMediaPlaylistItemId, itemId.messageId.namespace == Namespaces.Message.Local && itemId.messageId.peerId == self.context.account.peerId {
             actionText = nil
         }
         
-        //TODO:localize
         let controller = UndoOverlayController(
             presentationData: self.presentationData,
             content: .universalImage(
                 image: generateTintedImage(image: UIImage(bundleImageName: "Peer Info/SavedMusic"), color: .white)!,
                 size: nil,
                 title: nil,
-                text: "Audio added to your profile.",
+                text: self.presentationData.strings.MediaPlayer_SavedMusic_AddedToProfile,
                 customUndoText: actionText,
                 timeout: 3.0
             ),
@@ -620,14 +619,13 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
     func removeFromSavedMusic(file: FileMediaReference) {
         self.dismissAllTooltips()
                         
-        //TODO:localize
         let controller = UndoOverlayController(
             presentationData: self.presentationData,
             content: .universalImage(
                 image: generateTintedImage(image: UIImage(bundleImageName: "Peer Info/SavedMusic"), color: .white)!,
                 size: nil,
                 title: nil,
-                text: "Audio removed from your profile.",
+                text: self.presentationData.strings.MediaPlayer_SavedMusic_RemovedFromProfile,
                 customUndoText: nil,
                 timeout: 3.0
             ),
@@ -1029,10 +1027,9 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
             }
             
             var items: [ContextMenuItem] = []
-            //TODO:localize
             if canSaveToProfile || canSaveToSavedMessages {
                 items.append(
-                    .action(ContextMenuActionItem(text: "Save to...", icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/DownloadTone"), color: theme.contextMenu.primaryColor) }, action: { [weak self] c, _ in
+                    .action(ContextMenuActionItem(text: presentationData.strings.MediaPlayer_ContextMenu_SaveTo, icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/DownloadTone"), color: theme.contextMenu.primaryColor) }, action: { [weak self] c, _ in
                         if let self {
                             var subActions: [ContextMenuItem] = []
                             subActions.append(
@@ -1044,7 +1041,7 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
                             
                             if canSaveToProfile {
                                 subActions.append(
-                                    .action(ContextMenuActionItem(text: "Profile", icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/User"), color: theme.contextMenu.primaryColor) }, action: { [weak self] _, f in
+                                    .action(ContextMenuActionItem(text: presentationData.strings.MediaPlayer_ContextMenu_SaveTo_Profile, icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/User"), color: theme.contextMenu.primaryColor) }, action: { [weak self] _, f in
                                         f(.default)
                                         
                                         if let self {
@@ -1056,7 +1053,7 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
                             
                             if canSaveToSavedMessages {
                                 subActions.append(
-                                    .action(ContextMenuActionItem(text: "Saved Messages", icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Fave"), color: theme.contextMenu.primaryColor) }, action: { [weak self] _, f in
+                                    .action(ContextMenuActionItem(text: presentationData.strings.MediaPlayer_ContextMenu_SaveTo_SavedMessages, icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Fave"), color: theme.contextMenu.primaryColor) }, action: { [weak self] _, f in
                                         f(.default)
                                         
                                         if let self {
@@ -1067,7 +1064,7 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
                             }
                             
                             subActions.append(
-                                .action(ContextMenuActionItem(text: "Files", icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Save"), color: theme.contextMenu.primaryColor) }, action: { [weak self] _, f in
+                                .action(ContextMenuActionItem(text: presentationData.strings.MediaPlayer_ContextMenu_SaveTo_Files, icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Save"), color: theme.contextMenu.primaryColor) }, action: { [weak self] _, f in
                                     f(.default)
                                     
                                     if let self {
@@ -1091,7 +1088,7 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
                             
                             let noAction: ((ContextMenuActionItem.Action) -> Void)? = nil
                             subActions.append(
-                                .action(ContextMenuActionItem(text: "Choose where you want this audio to be saved.", textLayout: .multiline, textFont: .small, icon: { _ in return nil }, action: noAction))
+                                .action(ContextMenuActionItem(text: presentationData.strings.MediaPlayer_ContextMenu_SaveTo_Info, textLayout: .multiline, textFont: .small, icon: { _ in return nil }, action: noAction))
                             )
 
                             c?.pushItems(items: .single(ContextController.Items(content: .list(subActions))))
@@ -1099,7 +1096,7 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
                     }))
                 )
             } else {
-                items.append(.action(ContextMenuActionItem(text: "Save to Files", icon: { theme in
+                items.append(.action(ContextMenuActionItem(text: presentationData.strings.MediaPlayer_ContextMenu_SaveToFiles, icon: { theme in
                     return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Save"), color: theme.actionSheet.primaryTextColor)
                 }, action: { [weak self] _, f in
                     f(.default)
@@ -1131,7 +1128,7 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
                     addedSeparator = true
                 }
                 items.append(
-                    .action(ContextMenuActionItem(text: "Show in Chat", icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/GoToMessage"), color: theme.contextMenu.primaryColor) }, action: { [weak self] _, f in
+                    .action(ContextMenuActionItem(text: presentationData.strings.MediaPlayer_ContextMenu_ShowInChat, icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/GoToMessage"), color: theme.contextMenu.primaryColor) }, action: { [weak self] _, f in
                         f(.dismissWithoutContent)
                         
                         guard let self else {
@@ -1144,7 +1141,7 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
             }
             
             //        items.append(
-            //            .action(ContextMenuActionItem(text: "Forward", icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Forward"), color: theme.contextMenu.primaryColor) }, action: { [weak self] _, f in
+            //            .action(ContextMenuActionItem(text: presentationData.strings.MediaPlayer_ContextMenu_Forward, icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Forward"), color: theme.contextMenu.primaryColor) }, action: { [weak self] _, f in
             //                f(.default)
             //
             //                if let _ = self {
@@ -1181,9 +1178,9 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
                     items.append(.separator)
                     addedSeparator = true
                 }
-                var actionTitle = "Delete"
+                var actionTitle = presentationData.strings.MediaPlayer_ContextMenu_Delete
                 if case .custom = self.source {
-                    actionTitle = "Remove"
+                    actionTitle = presentationData.strings.MediaPlayer_ContextMenu_Remove
                 }
                 items.append(
                     .action(ContextMenuActionItem(text: actionTitle, textColor: .destructive, icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Delete"), color: theme.contextMenu.destructiveColor) }, action: { [weak self] c, f in

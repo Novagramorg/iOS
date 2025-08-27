@@ -680,7 +680,7 @@ final class StarsTransactionsScreenComponent: Component {
                         theme: environment.theme,
                         header: AnyComponent(MultilineTextComponent(
                             text: .plain(NSAttributedString(
-                                string: "Proceeds Overview".uppercased(),
+                                string: environment.strings.Ton_ProceedsOverview.uppercased(),
                                 font: Font.regular(presentationData.listsFontSize.itemListBaseHeaderFontSize),
                                 textColor: environment.theme.list.freeTextColor
                             )),
@@ -691,14 +691,14 @@ final class StarsTransactionsScreenComponent: Component {
                             AnyComponentWithIdentity(id: 0, component: AnyComponent(StarsOverviewItemComponent(
                                 theme: environment.theme,
                                 dateTimeFormat: environment.dateTimeFormat,
-                                title: "Balance Available to Withdraw",
+                                title: environment.strings.Ton_AvailableBalance,
                                 value: self.revenueState?.balances.availableBalance ?? CurrencyAmount(amount: .zero, currency: .ton),
                                 rate: self.revenueState?.usdRate ?? 0.0
                             ))),
                             AnyComponentWithIdentity(id: 1, component: AnyComponent(StarsOverviewItemComponent(
                                 theme: environment.theme,
                                 dateTimeFormat: environment.dateTimeFormat,
-                                title: "Total Lifetime Proceeds",
+                                title: environment.strings.Ton_LifetimeProceeds,
                                 value: self.revenueState?.balances.overallRevenue ?? CurrencyAmount(amount: .zero, currency: .ton),
                                 rate: self.revenueState?.usdRate ?? 0.0
                             )))
@@ -725,7 +725,7 @@ final class StarsTransactionsScreenComponent: Component {
                 return (TelegramTextAttributes.URL, contents)
             })
             
-            let balanceInfoRawString = "Collect your TON using Fragment. [Learn More >]()"
+            let balanceInfoRawString = environment.strings.Ton_WithdrawViaFragment_Info
             let balanceInfoString = NSMutableAttributedString(attributedString: parseMarkdownIntoAttributedString(balanceInfoRawString, attributes: termsMarkdownAttributes, textAlignment: .natural))
             if self.cachedChevronImage == nil || self.cachedChevronImage?.1 !== environment.theme {
                 self.cachedChevronImage = (generateTintedImage(image: UIImage(bundleImageName: "Contact List/SubtitleArrow"), color: environment.theme.list.itemAccentColor)!, environment.theme)
@@ -754,7 +754,7 @@ final class StarsTransactionsScreenComponent: Component {
                         },
                         tapAction: { [weak self] attributes, _ in
                             if let controller = self?.controller?() as? StarsTransactionsScreen, let navigationController = controller.navigationController as? NavigationController {
-                                component.context.sharedContext.openExternalUrl(context: component.context, urlContext: .generic, url: environment.strings.Stars_BotRevenue_Withdraw_Info_URL, forceExternal: false, presentationData: presentationData, navigationController: navigationController, dismissInput: {})
+                                component.context.sharedContext.openExternalUrl(context: component.context, urlContext: .generic, url: component.starsContext.ton ? environment.strings.Ton_WithdrawViaFragment_Info_URL : environment.strings.Stars_BotRevenue_Withdraw_Info_URL, forceExternal: false, presentationData: presentationData, navigationController: navigationController, dismissInput: {})
                             }
                         }
                     )) : nil,
@@ -766,7 +766,7 @@ final class StarsTransactionsScreenComponent: Component {
                             count: self.starsState?.balance ?? StarsAmount.zero,
                             currency: component.starsContext.ton ? .ton : .stars,
                             rate: nil,
-                            actionTitle: component.starsContext.ton ? "Withdraw via Fragment" : (withdrawAvailable ? environment.strings.Stars_Intro_BuyShort : environment.strings.Stars_Intro_Buy),
+                            actionTitle: component.starsContext.ton ? environment.strings.Ton_WithdrawViaFragment : (withdrawAvailable ? environment.strings.Stars_Intro_BuyShort : environment.strings.Stars_Intro_Buy),
                             actionAvailable: (!premiumConfiguration.areStarsDisabled && !premiumConfiguration.isPremiumDisabled),
                             actionIsEnabled: true,
                             actionIcon: component.starsContext.ton ? nil : PresentationResourcesItemList.itemListRoundTopupIcon(environment.theme),

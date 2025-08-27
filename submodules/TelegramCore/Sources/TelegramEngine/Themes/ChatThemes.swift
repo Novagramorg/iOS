@@ -148,6 +148,20 @@ public enum ChatTheme: PostboxCoding, Codable, Equatable {
             }
         }
     }
+    
+    public func withThemePeerId(_ themePeerId: EnginePeer.Id?) -> ChatTheme {
+        switch self {
+        case .emoticon:
+            return self
+        case let .gift(gift, themeSettings):
+            switch gift {
+            case let .unique(uniqueGift):
+                return .gift(.unique(uniqueGift.withThemePeerId(themePeerId)), themeSettings)
+            case .generic:
+                return self
+            }
+        }
+    }
 }
 
 extension ChatTheme {
@@ -235,6 +249,22 @@ func _internal_setChatTheme(account: Account, peerId: PeerId, chatTheme: ChatThe
             return .complete()
         }
         return account.postbox.transaction { transaction -> Signal<Void, NoError> in
+            var chatTheme = chatTheme
+            if case let .gift(gift, _) = chatTheme, case let .unique(uniqueGift) = gift, let previousThemePeerId = uniqueGift.themePeerId {
+                transaction.updatePeerCachedData(peerIds: Set([previousThemePeerId]), update: { _, current in
+                    if let current = current as? CachedUserData {
+                        return current.withUpdatedChatTheme(nil)
+                    } else if let current = current as? CachedGroupData {
+                        return current.withUpdatedChatTheme(nil)
+                    } else if let current = current as? CachedChannelData {
+                        return current.withUpdatedChatTheme(nil)
+                    } else {
+                        return current
+                    }
+                })
+            }
+            chatTheme = chatTheme?.withThemePeerId(peerId)
+            
             transaction.updatePeerCachedData(peerIds: Set([peerId]), update: { _, current in
                 if let current = current as? CachedUserData {
                     return current.withUpdatedChatTheme(chatTheme)
@@ -246,6 +276,7 @@ func _internal_setChatTheme(account: Account, peerId: PeerId, chatTheme: ChatThe
                     return current
                 }
             })
+            
             let inputTheme: Api.InputChatTheme
             if let chatTheme {
                 inputTheme = chatTheme.apiChatTheme
@@ -466,7 +497,7 @@ public final class UniqueGiftChatThemesContext {
     private let cacheDisposable = MetaDisposable()
     
     private var themes: [ChatTheme] = []
-    private var nextOffset: Int32?
+    private var nextOffset: Int32 = 0
     private var dataState: UniqueGiftChatThemesContext.State.DataState = .ready(canLoadMore: true)
     
     private let stateValue = Promise<State>()
@@ -487,7 +518,7 @@ public final class UniqueGiftChatThemesContext {
     
     public func reload() {
         self.themes = []
-        self.nextOffset = nil
+        self.nextOffset = 0
         self.dataState = .ready(canLoadMore: true)
         self.loadMore(reload: true)
     }
@@ -521,7 +552,7 @@ public final class UniqueGiftChatThemesContext {
             self.pushState()
         }
         
-        let signal = network.request(Api.functions.account.getUniqueGiftChatThemes(offset: offset ?? 0, limit: 32, hash: 0))
+        let signal = network.request(Api.functions.account.getUniqueGiftChatThemes(offset: offset, limit: 32, hash: 0))
         |> map(Optional.init)
         |> `catch` { error in
             return .single(nil)
@@ -557,7 +588,9 @@ public final class UniqueGiftChatThemesContext {
             } else {
                 self.themes.append(contentsOf: themes)
             }
-            
+            if let nextOffset {
+                self.nextOffset = nextOffset
+            }
             self.dataState = .ready(canLoadMore: nextOffset != nil)
             self.pushState()
         }))

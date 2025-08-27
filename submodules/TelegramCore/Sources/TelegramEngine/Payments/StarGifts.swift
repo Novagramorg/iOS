@@ -809,6 +809,27 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
                 themePeerId: self.themePeerId
             )
         }
+        
+        public func withThemePeerId(_ themePeerId: EnginePeer.Id?) -> UniqueGift {
+            return UniqueGift(
+                id: self.id,
+                giftId: self.giftId,
+                title: self.title,
+                number: self.number,
+                slug: self.slug,
+                owner: self.owner,
+                attributes: self.attributes,
+                availability: self.availability,
+                giftAddress: self.giftAddress,
+                resellAmounts: self.resellAmounts,
+                resellForTonOnly: self.resellForTonOnly,
+                releasedBy: self.releasedBy,
+                valueAmount: self.valueAmount,
+                valueCurrency: self.valueCurrency,
+                flags: self.flags,
+                themePeerId: themePeerId
+            )
+        }
     }
     
     public enum DecodingError: Error {

@@ -14932,3 +14932,44 @@ Sorry for the inconvenience.";
 
 "Notification.ChangedThemeGift" = "%1$@ changed chat theme to %2$@";
 "Notification.YouChangedThemeGift" = "You changed chat theme to %@";
+
+"Conversation.Theme.GiftTransfer.Text" = "This gift is already your theme in the chat with **%@**. Remove it there and use it here instead?";
+"Conversation.Theme.GiftTransfer.Proceed" = "Yes";
+
+"PeerInfo.Tabs.SetMainTab" = "Set as Main Tab";
+"PeerInfo.Tabs.SetMainTab.Succeed" = "Tab order changed.";
+
+"MediaPlayer.SavedMusic.AddToProfile" = "Add to Profile";
+"MediaPlayer.SavedMusic.RemoveFromProfile" = "This audio is visible on your profile. [Remove >]()";
+
+"MediaPlayer.SavedMusic.AddedToProfile.View" = "View";
+"MediaPlayer.SavedMusic.AddedToProfile" = "Audio added to your profile.";
+"MediaPlayer.SavedMusic.RemovedFromProfile" = "Audio removed from your profile.";
+
+"MediaPlayer.ContextMenu.SaveToFiles" = "Save to Files";
+"MediaPlayer.ContextMenu.SaveTo" = "Save to...";
+"MediaPlayer.ContextMenu.SaveTo.Profile" = "Profile";
+"MediaPlayer.ContextMenu.SaveTo.SavedMessages" = "Saved Messages";
+"MediaPlayer.ContextMenu.SaveTo.Files" = "Files";
+"MediaPlayer.ContextMenu.SaveTo.Info" = "Save to Files";
+"MediaPlayer.ContextMenu.ShowInChat" = "Show in Chat";
+"MediaPlayer.ContextMenu.Forward" = "Forward";
+"MediaPlayer.ContextMenu.Delete" = "Delete";
+"MediaPlayer.ContextMenu.Remove" = "Remove";
+
+"MediaPlayer.Playlist.ThisChat" = "AUDIO IN THIS CHAT";
+"MediaPlayer.Playlist.SavedMusic" = "%@'S PLAYLIST";
+"MediaPlayer.Playlist.SavedMusicYou" = "YOUR PLAYLIST";
+
+"Notification.PremiumGift.Stars_1" = "%@ Star";
+"Notification.PremiumGift.Stars_any" = "%@ Stars";
+
+"Ton.ProceedsOverview" = "PROCEEDS OVERVIEW";
+"Ton.AvailableBalance" = "Balance Available to Withdraw";
+"Ton.LifetimeProceeds" = "Total Lifetime Proceeds";
+
+"Ton.WithdrawViaFragment" = "Withdraw via Fragment";
+"Ton.WithdrawViaFragment.Info" = "Collect your TON using Fragment. [Learn More >]()";
+"Ton.WithdrawViaFragment.Info_URL" = "https://telegram.org/tos/bot-developers#6-2-2-tpa-balance";
+
+"MESSAGE_GIFT_THEME" = "%1$@ changed theme to %2$@";

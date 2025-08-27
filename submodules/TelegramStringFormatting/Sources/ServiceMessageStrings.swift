@@ -830,8 +830,7 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                 } else {
                     let price: String
                     if currency == "XTR" {
-                        //TODO:localize
-                        price = "\(amount) Stars"
+                        price = strings.Notification_PremiumGift_Stars(Int32(clamping: amount))
                     } else {
                         price = formatCurrencyAmount(amount, currency: currency)
                     }
