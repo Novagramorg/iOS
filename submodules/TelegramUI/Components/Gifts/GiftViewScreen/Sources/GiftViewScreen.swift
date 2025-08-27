@@ -1581,11 +1581,10 @@ private final class GiftViewSheetContent: CombinedComponent {
                     self.canSkip = true
                     self.updated(transition: .immediate)
                     
-                    self.inUpgradePreview = false
                     self.inProgress = false
+                    self.inUpgradePreview = false
                     
                     self.justUpgraded = true
-                    
                     self.revealedNumberDigits = -1
                     
                     for i in 0 ..< "\(uniqueGift.number)".count {
@@ -1594,7 +1593,6 @@ private final class GiftViewSheetContent: CombinedComponent {
                             self.updated(transition: .immediate)
                         }
                     }
-                    self.updated(transition: .spring(duration: 0.4))
                     
                     Queue.mainQueue().after(firstDuration) {
                         self.revealedAttributes.insert(.backdrop)
@@ -1621,6 +1619,8 @@ private final class GiftViewSheetContent: CombinedComponent {
                             }
                         }
                     }
+                    
+                    self.updated(transition: .spring(duration: 0.4))
                 })
                 return
             }
@@ -1693,7 +1693,6 @@ private final class GiftViewSheetContent: CombinedComponent {
                             }
                         }
                     }
-                    self.updated(transition: .spring(duration: 0.4))
                     
                     Queue.mainQueue().after(firstDuration) {
                         self.revealedAttributes.insert(.backdrop)
@@ -1722,7 +1721,6 @@ private final class GiftViewSheetContent: CombinedComponent {
                     }
                     
                     self.subject = .profileGift(peerId, result)
-                    controller.animateSuccess()
                     self.updated(transition: .spring(duration: 0.4))
                     
                     Queue.mainQueue().after(0.5) {
