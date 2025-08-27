@@ -933,8 +933,19 @@ private class ChatThemeScreenNode: ViewControllerTracingNode, ASScrollViewDelega
                 strings: presentationData.strings,
                 wallpaper: nil
             ))
-            for theme in uniqueGiftChatThemesState.themes {
-                guard case let .gift(gift, themeSettings) = theme else {
+                        
+            var giftThemes = uniqueGiftChatThemesState.themes
+            var existingIds = Set<String>()
+            if let initiallySelectedTheme, case .gift = initiallySelectedTheme {
+                let initialThemeIndex = giftThemes.firstIndex(where: { $0.id == initiallySelectedTheme.id })
+                if initialThemeIndex == nil || initialThemeIndex! > 50 {
+                    giftThemes.insert(initiallySelectedTheme, at: 0)
+                    existingIds.insert(initiallySelectedTheme.id)
+                }
+            }
+            
+            for theme in giftThemes {
+                guard case let .gift(gift, themeSettings) = theme, !existingIds.contains(theme.id) else {
                     continue
                 }
                 var emojiFile: TelegramMediaFile?
@@ -945,18 +956,20 @@ private class ChatThemeScreenNode: ViewControllerTracingNode, ASScrollViewDelega
                         }
                     }
                 }
-                
-                var wallpaper: TelegramWallpaper?
+                let themeReference: PresentationThemeReference
+                let wallpaper: TelegramWallpaper?
                 if isDarkAppearance {
                     wallpaper = themeSettings.first(where: { $0.baseTheme == .night || $0.baseTheme == .tinted })?.wallpaper
+                    themeReference = .builtin(.night)
                 } else {
                     wallpaper = themeSettings.first(where: { $0.baseTheme == .classic || $0.baseTheme == .day })?.wallpaper
+                    themeReference = .builtin(.dayClassic)
                 }
                 entries.append(ThemeSettingsThemeEntry(
                     index: entries.count,
                     chatTheme: theme,
                     emojiFile: emojiFile,
-                    themeReference: .builtin(.dayClassic),
+                    themeReference: themeReference,
                     peer: nil,
                     nightMode: isDarkAppearance,
                     selected: selectedTheme?.id == theme.id,
@@ -965,33 +978,35 @@ private class ChatThemeScreenNode: ViewControllerTracingNode, ASScrollViewDelega
                     wallpaper: wallpaper
                 ))
             }
-            for theme in themes {
-                guard let emoticon = theme.emoticon else {
-                    continue
+            
+            if uniqueGiftChatThemesState.themes.count == 0 || uniqueGiftChatThemesState.dataState == .ready(canLoadMore: false) {
+                for theme in themes {
+                    guard let emoticon = theme.emoticon else {
+                        continue
+                    }
+                    entries.append(ThemeSettingsThemeEntry(
+                        index: entries.count,
+                        chatTheme: .emoticon(emoticon),
+                        emojiFile: animatedEmojiStickers[emoticon]?.first?.file._parse(),
+                        themeReference: .cloud(PresentationCloudTheme(theme: theme, resolvedWallpaper: nil, creatorAccountId: nil)),
+                        peer: nil,
+                        nightMode: isDarkAppearance,
+                        selected: selectedTheme?.id == ChatTheme.emoticon(emoticon).id,
+                        theme: presentationData.theme,
+                        strings: presentationData.strings,
+                        wallpaper: nil
+                    ))
                 }
-                entries.append(ThemeSettingsThemeEntry(
-                    index: entries.count,
-                    chatTheme: .emoticon(emoticon),
-                    emojiFile: animatedEmojiStickers[emoticon]?.first?.file._parse(),
-                    themeReference: .cloud(PresentationCloudTheme(theme: theme, resolvedWallpaper: nil, creatorAccountId: nil)),
-                    peer: nil,
-                    nightMode: isDarkAppearance,
-                    selected: selectedTheme?.id == ChatTheme.emoticon(emoticon).id,
-                    theme: presentationData.theme,
-                    strings: presentationData.strings,
-                    wallpaper: nil
-                ))
             }
            
-            
             let action: (ChatTheme?) -> Void = { [weak self] chatTheme in
                 if let self, self.selectedTheme != chatTheme {
                     self.setChatTheme(chatTheme)
                 }
             }
             let previousEntries = strongSelf.entries ?? []
-            let crossfade = previousEntries.count != entries.count
-            let transition = preparedTransition(context: strongSelf.context, action: action, from: previousEntries, to: entries, crossfade: crossfade)
+            //let crossfade = previousEntries.count != entries.count
+            let transition = preparedTransition(context: strongSelf.context, action: action, from: previousEntries, to: entries, crossfade: false)
             strongSelf.enqueueTransition(transition)
             
             strongSelf.entries = entries

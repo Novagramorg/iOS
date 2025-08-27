@@ -803,6 +803,42 @@ private final class GiftViewSheetContent: CombinedComponent {
             controller.present(shareController, in: .window(.root))
         }
         
+        func setAsGiftTheme() {
+            guard let arguments = self.subject.arguments, let controller = self.getController() as? GiftViewScreen, let navigationController = controller.navigationController as? NavigationController, case let .unique(gift) = arguments.gift else {
+                return
+            }
+            
+            let context = self.context
+            let peerController = self.context.sharedContext.makePeerSelectionController(PeerSelectionControllerParams(context: self.context, filter: [.excludeRecent, .doNotSearchMessages], requestPeerType: [.user(.init(isBot: false, isPremium: false))], hasContactSelector: false, hasCreation: false))
+            peerController.peerSelected = { [weak peerController, weak navigationController] peer, _ in
+                let _ = context.engine.themes.setChatTheme(peerId: peer.id, chatTheme: .gift(.unique(gift), [])).start()
+                peerController?.dismiss()
+                
+                if let navigationController {
+                    context.sharedContext.navigateToChatController(NavigateToChatControllerParams(
+                        navigationController: navigationController,
+                        chatController: nil,
+                        context: context,
+                        chatLocation: .peer(peer),
+                        subject: nil,
+                        botStart: nil,
+                        updateTextInputState: nil,
+                        keepStack: .always,
+                        useExisting: true,
+                        purposefulAction: nil,
+                        scrollToEndIfExists: false,
+                        activateMessageSearch: nil,
+                        animated: true
+                    ))
+                }
+            }
+            self.dismiss(animated: true)
+                
+            Queue.mainQueue().after(0.4) {
+                navigationController.pushViewController(peerController)
+            }
+        }
+        
         func transferGift() {
             guard let arguments = self.subject.arguments, let controller = self.getController() as? GiftViewScreen, case let .unique(gift) = arguments.gift, let reference = arguments.reference, let transferStars = arguments.transferStars else {
                 return
@@ -1134,6 +1170,16 @@ private final class GiftViewSheetContent: CombinedComponent {
                     
                     self?.shareGift()
                 })))
+                
+                if gift.flags.contains(.isThemeAvailable) {
+                    items.append(.action(ContextMenuActionItem(text: presentationData.strings.Gift_View_Context_SetAsTheme, icon: { theme in
+                        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/ApplyTheme"), color: theme.contextMenu.primaryColor)
+                    }, action: { [weak self] c, _ in
+                        c?.dismiss(completion: nil)
+                        
+                        self?.setAsGiftTheme()
+                    })))
+                }
                 
                 if let _ = arguments.transferStars {
                     if case let .channel(channel) = peer, !channel.flags.contains(.isCreator) {

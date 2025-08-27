@@ -14994,3 +14994,5 @@ Sorry for the inconvenience.";
 "Gift.Value.AveragePrice" = "Average Price";
 "Gift.Value.ForSaleOnTelegram" = "for sale on Telegram";
 "Gift.Value.ForSaleOnFragment" = "for sale on Fragment";
+
+"Gift.View.Context.SetAsTheme" = "Set as Theme in...";
