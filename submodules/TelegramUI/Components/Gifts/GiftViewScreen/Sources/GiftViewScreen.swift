@@ -104,6 +104,7 @@ private final class GiftViewSheetContent: CombinedComponent {
         var cachedHiddenImage: (UIImage, PresentationTheme)?
         
         var inProgress = false
+        var canSkip = false
         
         var testUpgradeAnimation = !"".isEmpty
         
@@ -668,14 +669,32 @@ private final class GiftViewSheetContent: CombinedComponent {
                 return
             }
             self.isOpeningValue = true
+            
+            let presentationData = self.context.sharedContext.currentPresentationData.with { $0 }
             let _ = (self.context.engine.payments.getUniqueStarGiftValueInfo(slug: uniqueGift.slug)
             |> deliverOnMainQueue).start(next: { [weak self] valueInfo in
-                guard let self, let valueInfo else {
+                guard let self else {
                     return
                 }
                 self.isOpeningValue = false
-                let valueController = GiftValueScreen(context: self.context, gift: gift, valueInfo: valueInfo)
-                controller.push(valueController)
+                if let valueInfo {
+                    let valueController = GiftValueScreen(context: self.context, gift: gift, valueInfo: valueInfo)
+                    controller.push(valueController)
+                } else {
+                    guard let controller = self.getController() as? GiftViewScreen else {
+                        return
+                    }
+                    let alertController = textAlertController(
+                        context: self.context,
+                        title: nil,
+                        text: presentationData.strings.Login_UnknownError,
+                        actions: [
+                            TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})
+                        ],
+                        parseMarkdown: true
+                    )
+                    controller.present(alertController, in: .window(.root))
+                }
             })
         }
         
@@ -1528,7 +1547,28 @@ private final class GiftViewSheetContent: CombinedComponent {
             }
         }
         
+        func skipAnimation() {
+            guard let arguments = self.subject.arguments, case let .unique(uniqueGift) = arguments.gift else {
+                return
+            }
+            self.canSkip = false
+            self.revealedNumberDigits = "\(uniqueGift.number)".count
+            self.revealedAttributes.insert(.backdrop)
+            self.revealedAttributes.insert(.pattern)
+            self.revealedAttributes.insert(.model)
+            
+            self.updated(transition: .easeInOut(duration: 0.2))
+        }
+        
         func commitUpgrade() {
+            let duration = Double.random(in: 0.85 ..< 2.25)
+            let firstFraction = Double.random(in: 0.2 ..< 0.4)
+            let secondFraction = Double.random(in: 0.2 ..< 0.4)
+            let thirdFraction = 1.0 - firstFraction - secondFraction
+            let firstDuration = duration * firstFraction
+            let secondDuration = duration * secondFraction
+            let thirdDuration = duration * thirdFraction
+            
             if self.testUpgradeAnimation, let arguments = self.subject.arguments, case let .unique(uniqueGift) = arguments.gift {
                 self.inProgress = true
                 self.updated()
@@ -1538,10 +1578,14 @@ private final class GiftViewSheetContent: CombinedComponent {
                 }
                 
                 Queue.mainQueue().after(0.5, {
+                    self.canSkip = true
+                    self.updated(transition: .immediate)
+                    
                     self.inUpgradePreview = false
                     self.inProgress = false
                     
                     self.justUpgraded = true
+                    
                     self.revealedNumberDigits = -1
                     
                     for i in 0 ..< "\(uniqueGift.number)".count {
@@ -1552,17 +1596,22 @@ private final class GiftViewSheetContent: CombinedComponent {
                     }
                     self.updated(transition: .spring(duration: 0.4))
                     
-                    Queue.mainQueue().after(1.2) {
+                    Queue.mainQueue().after(firstDuration) {
                         self.revealedAttributes.insert(.backdrop)
                         self.updated(transition: .immediate)
                         
-                        Queue.mainQueue().after(0.7) {
+                        Queue.mainQueue().after(secondDuration) {
                             self.revealedAttributes.insert(.pattern)
                             self.updated(transition: .immediate)
                             
-                            Queue.mainQueue().after(0.7) {
+                            Queue.mainQueue().after(thirdDuration) {
                                 self.revealedAttributes.insert(.model)
                                 self.updated(transition: .immediate)
+
+                                Queue.mainQueue().after(0.55) {
+                                    self.canSkip = false
+                                    self.updated(transition: .easeInOut(duration: 0.2))
+                                }
                                 
                                 Queue.mainQueue().after(0.6) {
                                     if let controller = self.getController() as? GiftViewScreen {
@@ -1619,6 +1668,9 @@ private final class GiftViewSheetContent: CombinedComponent {
                     guard let self, let controller = self.getController() as? GiftViewScreen else {
                         return
                     }
+                    self.canSkip = true
+                    self.updated(transition: .immediate)
+                    
                     self.inProgress = false
                     self.inUpgradePreview = false
                     
@@ -1638,18 +1690,23 @@ private final class GiftViewSheetContent: CombinedComponent {
                             }
                         }
                     }
-                    
-                    Queue.mainQueue().after(1.2) {
+                                        
+                    Queue.mainQueue().after(firstDuration) {
                         self.revealedAttributes.insert(.backdrop)
                         self.updated(transition: .immediate)
                         
-                        Queue.mainQueue().after(0.7) {
+                        Queue.mainQueue().after(secondDuration) {
                             self.revealedAttributes.insert(.pattern)
                             self.updated(transition: .immediate)
                             
-                            Queue.mainQueue().after(0.7) {
+                            Queue.mainQueue().after(thirdDuration) {
                                 self.revealedAttributes.insert(.model)
                                 self.updated(transition: .immediate)
+
+                                Queue.mainQueue().after(0.55) {
+                                    self.canSkip = false
+                                    self.updated(transition: .easeInOut(duration: 0.2))
+                                }
                                 
                                 Queue.mainQueue().after(0.6) {
                                     if let controller = self.getController() as? GiftViewScreen {
@@ -3771,7 +3828,25 @@ private final class GiftViewSheetContent: CombinedComponent {
                 pressedColor: theme.list.itemCheckColors.fillColor.withMultipliedAlpha(0.9)
             )
             let buttonChild: _UpdatedChildComponent
-            if showWearPreview, let uniqueGift {
+            if state.canSkip {
+                buttonChild = button.update(
+                    component: ButtonComponent(
+                        background: buttonBackground,
+                        content: AnyComponentWithIdentity(
+                            id: AnyHashable("skip"),
+                            component: AnyComponent(MultilineTextComponent(text: .plain(NSAttributedString(string: strings.Gift_Upgrade_Skip, font: Font.semibold(17.0), textColor: theme.list.itemCheckColors.foregroundColor, paragraphAlignment: .center))))
+                        ),
+                        isEnabled: true,
+                        displaysProgress: state.inProgress,
+                        action: { [weak state] in
+                            if let state {
+                                state.skipAnimation()
+                            }
+                        }),
+                    availableSize: buttonSize,
+                    transition: context.transition
+                )
+            } else if showWearPreview, let uniqueGift {
                 let buttonContent: AnyComponentWithIdentity<Empty>
                 
                 let premiumConfiguration = PremiumConfiguration.with(appConfiguration: component.context.currentAppConfiguration.with { $0 })
@@ -4091,7 +4166,9 @@ private final class GiftViewSheetContent: CombinedComponent {
                         isEnabled: true,
                         displaysProgress: state.inProgress,
                         action: { [weak state] in
-                            state?.dismiss(animated: true)
+                            if let state {
+                                state.dismiss(animated: true)
+                            }
                         }),
                     availableSize: buttonSize,
                     transition: context.transition
@@ -4100,7 +4177,7 @@ private final class GiftViewSheetContent: CombinedComponent {
             let buttonFrame = CGRect(origin: CGPoint(x: sideInset, y: originY), size: buttonChild.size)
             
             var buttonAlpha: CGFloat = 1.0
-            if let nextGiftToUpgrade = state.nextGiftToUpgrade, case let .generic(gift) = nextGiftToUpgrade.gift {
+            if let nextGiftToUpgrade = state.nextGiftToUpgrade, case let .generic(gift) = nextGiftToUpgrade.gift, !state.canSkip {
                 buttonAlpha = 0.0
                 
                 let upgradeNextButton = upgradeNextButton.update(
@@ -4108,7 +4185,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                         content: AnyComponent(
                             HStack([
                                 AnyComponentWithIdentity(id: "label", component: AnyComponent(
-                                    MultilineTextComponent(text: .plain(NSAttributedString(string: "Upgrade Next Gift", font: Font.regular(17.0), textColor: theme.actionSheet.controlAccentColor)))
+                                    MultilineTextComponent(text: .plain(NSAttributedString(string: strings.Gift_Upgrade_UpgradeNext, font: Font.regular(17.0), textColor: theme.actionSheet.controlAccentColor)))
                                 )),
                                 AnyComponentWithIdentity(id: "icon", component: AnyComponent(
                                     GiftItemComponent(

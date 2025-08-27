@@ -205,8 +205,6 @@ private final class GiftValueSheetContent: CombinedComponent {
             let theme = environment.theme
             let strings = environment.strings
             let dateTimeFormat = environment.dateTimeFormat
-            //let nameDisplayOrder = component.context.sharedContext.currentPresentationData.with { $0 }.nameDisplayOrder
-            //let controller = environment.controller
             
             let state = context.state
             
@@ -319,12 +317,12 @@ private final class GiftValueSheetContent: CombinedComponent {
                        
             var descriptionText: String
             if component.valueInfo.valueIsAverage {
-                descriptionText = "This is the average sale price of **\(giftCollectionTitle)** on Telegram and Fragment over the past month."
+                descriptionText = strings.Gift_Value_DescriptionAveragePrice(giftCollectionTitle).string
             } else {
                 if component.valueInfo.isLastSaleOnFragment {
-                    descriptionText = "This is the last price at which **\(giftTitle)** was last sold on Fragment."
+                    descriptionText = strings.Gift_Value_DescriptionLastPriceFragment(giftTitle).string
                 } else {
-                    descriptionText = "This is the last price at which **\(giftTitle)** was last sold on Telegram."
+                    descriptionText = strings.Gift_Value_DescriptionLastPriceTelegram(giftTitle).string
                 }
             }
             if !descriptionText.isEmpty {
@@ -394,7 +392,7 @@ private final class GiftValueSheetContent: CombinedComponent {
             
             tableItems.append(.init(
                 id: "initialDate",
-                title: "Initial Sale",
+                title: strings.Gift_Value_InitialSale,
                 component: AnyComponent(
                     MultilineTextComponent(text: .plain(NSAttributedString(string: stringForMediumDate(timestamp: component.valueInfo.initialSaleDate, strings: strings, dateTimeFormat: dateTimeFormat), font: tableFont, textColor: tableTextColor)))
                 )
@@ -410,7 +408,7 @@ private final class GiftValueSheetContent: CombinedComponent {
             
             tableItems.append(.init(
                 id: "initialPrice",
-                title: "Initial Price",
+                title: strings.Gift_Value_InitialPrice,
                 component: AnyComponent(MultilineTextWithEntitiesComponent(
                     context: component.context,
                     animationCache: component.context.animationCache,
@@ -425,7 +423,7 @@ private final class GiftValueSheetContent: CombinedComponent {
             if let lastSaleDate = component.valueInfo.lastSaleDate {
                 tableItems.append(.init(
                     id: "lastDate",
-                    title: "Last Sale",
+                    title: strings.Gift_Value_LastSale,
                     component: AnyComponent(
                         MultilineTextComponent(text: .plain(NSAttributedString(string: stringForMediumDate(timestamp: lastSaleDate, strings: strings, dateTimeFormat: dateTimeFormat), font: tableFont, textColor: tableTextColor)))
                     )
@@ -457,7 +455,7 @@ private final class GiftValueSheetContent: CombinedComponent {
                             color: theme.list.itemAccentColor
                         )),
                         action: { [weak state] in
-                            state?.showAttributeInfo(tag: tag, text: "**\(lastSalePriceString)** is the last price for \(giftCollectionTitle) gifts listed on Telegram and Fragment.")
+                            state?.showAttributeInfo(tag: tag, text: strings.Gift_Value_LastPriceInfo(lastSalePriceString, giftCollectionTitle).string)
                             
                         }
                     ).tagged(tag))
@@ -467,7 +465,7 @@ private final class GiftValueSheetContent: CombinedComponent {
                 )
                 tableItems.append(.init(
                     id: "lastPrice",
-                    title: "Last Price",
+                    title: strings.Gift_Value_LastPrice,
                     hasBackground: false,
                     component: itemComponent
                 ))
@@ -494,8 +492,7 @@ private final class GiftValueSheetContent: CombinedComponent {
                             color: theme.list.itemAccentColor
                         )),
                         action: { [weak state] in
-                            state?.showAttributeInfo(tag: tag, text: "**\(floorPriceString)** is the floor price for \(giftCollectionTitle) gifts listed on Telegram and Fragment.")
-                            
+                            state?.showAttributeInfo(tag: tag, text: strings.Gift_Value_MinimumPriceInfo(floorPriceString, giftCollectionTitle).string)
                         }
                     ).tagged(tag))
                 ))
@@ -504,7 +501,7 @@ private final class GiftValueSheetContent: CombinedComponent {
                 )
                 tableItems.append(.init(
                     id: "floorPrice",
-                    title: "Minumum Price",
+                    title: strings.Gift_Value_MinimumPrice,
                     hasBackground: false,
                     component: itemComponent
                 ))
@@ -531,7 +528,7 @@ private final class GiftValueSheetContent: CombinedComponent {
                             color: theme.list.itemAccentColor
                         )),
                         action: { [weak state] in
-                            state?.showAttributeInfo(tag: tag, text: "**\(averagePriceString)** is the average sale price of \(giftCollectionTitle) on Telegram and Fragment over the past month.")
+                            state?.showAttributeInfo(tag: tag, text: strings.Gift_Value_AveragePriceInfo(averagePriceString, giftCollectionTitle).string)
                         }
                     ).tagged(tag))
                 ))
@@ -540,7 +537,7 @@ private final class GiftValueSheetContent: CombinedComponent {
                 )
                 tableItems.append(.init(
                     id: "averagePrice",
-                    title: "Average Price",
+                    title: strings.Gift_Value_AveragePrice,
                     hasBackground: false,
                     component: itemComponent
                 ))
@@ -587,7 +584,7 @@ private final class GiftValueSheetContent: CombinedComponent {
                                     )
                                 )),
                                 AnyComponentWithIdentity(id: "label", component: AnyComponent(
-                                    MultilineTextComponent(text: .plain(NSAttributedString(string: "  for sale on Telegram", font: Font.regular(17.0), textColor: theme.actionSheet.controlAccentColor)))
+                                    MultilineTextComponent(text: .plain(NSAttributedString(string: "  \(strings.Gift_Value_ForSaleOnTelegram)", font: Font.regular(17.0), textColor: theme.actionSheet.controlAccentColor)))
                                 )),
                                 AnyComponentWithIdentity(id: "arrow", component: AnyComponent(
                                     BundleIconComponent(name: "Chat/Context Menu/Arrow", tintColor: theme.actionSheet.controlAccentColor)
@@ -639,7 +636,7 @@ private final class GiftValueSheetContent: CombinedComponent {
                                     )
                                 )),
                                 AnyComponentWithIdentity(id: "label", component: AnyComponent(
-                                    MultilineTextComponent(text: .plain(NSAttributedString(string: "  for sale on Fragment", font: Font.regular(17.0), textColor: theme.actionSheet.controlAccentColor)))
+                                    MultilineTextComponent(text: .plain(NSAttributedString(string: "  \(strings.Gift_Value_ForSaleOnFragment)", font: Font.regular(17.0), textColor: theme.actionSheet.controlAccentColor)))
                                 )),
                                 AnyComponentWithIdentity(id: "arrow", component: AnyComponent(
                                     BundleIconComponent(name: "Chat/Context Menu/Arrow", tintColor: theme.actionSheet.controlAccentColor)

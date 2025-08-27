@@ -14973,3 +14973,24 @@ Sorry for the inconvenience.";
 "Ton.WithdrawViaFragment.Info_URL" = "https://telegram.org/tos/bot-developers#6-2-2-tpa-balance";
 
 "MESSAGE_GIFT_THEME" = "%1$@ changed theme to %2$@";
+
+"Gift.Upgrade.Skip" = "Skip";
+"Gift.Upgrade.UpgradeNext" = "Upgrade Next Gift";
+
+"Gift.Value.DescriptionAveragePrice" = "This is the average sale price of **%@** on Telegram and Fragment over the past month.";
+"Gift.Value.DescriptionLastPriceFragment" = "This is the last price at which **%@** was last sold on Fragment.";
+"Gift.Value.DescriptionLastPriceTelegram" = "This is the last price at which **%@** was last sold on Telegram.";
+
+"Gift.Value.LastPriceInfo" = "**%1$@** is the last price for %2$@ gifts listed on Telegram and Fragment.";
+"Gift.Value.MinimumPriceInfo" = "**%1$@** is the floor price for %2$@ gifts listed on Telegram and Fragment.";
+"Gift.Value.AveragePriceInfo" = "**%1$@** is the average sale price for %2$@ gifts listed on Telegram and Fragment over the past month.";
+
+"Gift.Value.AveragePrice" = "Last Sale";
+"Gift.Value.InitialSale" = "Initial Sale";
+"Gift.Value.InitialPrice" = "Initial Price";
+"Gift.Value.LastSale" = "Last Sale";
+"Gift.Value.LastPrice" = "Last Price";
+"Gift.Value.MinimumPrice" = "Minimum Price";
+"Gift.Value.AveragePrice" = "Average Price";
+"Gift.Value.ForSaleOnTelegram" = "for sale on Telegram";
+"Gift.Value.ForSaleOnFragment" = "for sale on Fragment";
