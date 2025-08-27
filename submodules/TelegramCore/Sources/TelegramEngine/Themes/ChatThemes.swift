@@ -117,7 +117,7 @@ public enum ChatTheme: PostboxCoding, Codable, Equatable {
                 case .unique(let lhsUnique):
                     switch rhsGift {
                     case .unique(let rhsUnique):
-                        return lhsUnique.id == rhsUnique.id
+                        return lhsUnique.slug == rhsUnique.slug
                     default:
                         return false
                     }
