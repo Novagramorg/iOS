@@ -65,6 +65,7 @@ public final class SheetComponent<ChildEnvironmentType: Sendable & Equatable>: C
     public let clipsContent: Bool
     public let isScrollEnabled: Bool
     public let hasDimView: Bool
+    public let autoAnimateOut: Bool
     public let externalState: ExternalState?
     public let animateOut: ActionSlot<Action<()>>
     public let onPan: () -> Void
@@ -77,6 +78,7 @@ public final class SheetComponent<ChildEnvironmentType: Sendable & Equatable>: C
         clipsContent: Bool = false,
         isScrollEnabled: Bool = true,
         hasDimView: Bool = true,
+        autoAnimateOut: Bool = true,
         externalState: ExternalState? = nil,
         animateOut: ActionSlot<Action<()>>,
         onPan: @escaping () -> Void = {},
@@ -88,6 +90,7 @@ public final class SheetComponent<ChildEnvironmentType: Sendable & Equatable>: C
         self.clipsContent = clipsContent
         self.isScrollEnabled = isScrollEnabled
         self.hasDimView = hasDimView
+        self.autoAnimateOut = autoAnimateOut
         self.externalState = externalState
         self.animateOut = animateOut
         self.onPan = onPan
@@ -108,6 +111,9 @@ public final class SheetComponent<ChildEnvironmentType: Sendable & Equatable>: C
             return false
         }
         if lhs.hasDimView != rhs.hasDimView {
+            return false
+        }
+        if lhs.autoAnimateOut != rhs.autoAnimateOut {
             return false
         }
         if lhs.animateOut != rhs.animateOut {
@@ -430,9 +436,15 @@ public final class SheetComponent<ChildEnvironmentType: Sendable & Equatable>: C
             if environment[SheetComponentEnvironment.self].value.isDisplaying, !self.previousIsDisplaying, let _ = transition.userData(ViewControllerComponentContainer.AnimateInTransition.self) {
                 self.animateIn()
             } else if !environment[SheetComponentEnvironment.self].value.isDisplaying, self.previousIsDisplaying, let _ = transition.userData(ViewControllerComponentContainer.AnimateOutTransition.self) {
-                self.animateOut(completion: {})
+                if component.autoAnimateOut {
+                    self.animateOut(completion: {})
+                }
             }
-            self.previousIsDisplaying = sheetEnvironment.isDisplaying
+            if !sheetEnvironment.isDisplaying && !component.autoAnimateOut {
+                
+            } else {
+                self.previousIsDisplaying = sheetEnvironment.isDisplaying
+            }
             self.dismiss = sheetEnvironment.dismiss
             
             return availableSize

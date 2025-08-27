@@ -149,10 +149,6 @@ private final class GiftValueSheetContent: CombinedComponent {
                 gift: gift
             )
             controller.push(storeController)
-            
-            Queue.mainQueue().after(2.0, {
-                controller.dismiss(animated: false)
-            })
         }
         
         func openGiftFragmentResale(url: String) {
@@ -721,6 +717,7 @@ final class GiftValueSheetComponent: CombinedComponent {
                     backgroundColor: .color(environment.theme.actionSheet.opaqueItemBackgroundColor),
                     followContentSizeChanges: true,
                     clipsContent: true,
+                    autoAnimateOut: false,
                     externalState: sheetExternalState,
                     animateOut: animateOut,
                     onPan: {

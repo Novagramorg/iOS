@@ -1379,6 +1379,7 @@ private final class ProfileGiftsContextImpl {
     
     private var sorting: ProfileGiftsContext.Sorting
     private var filter: ProfileGiftsContext.Filters
+    private var limit: Int32
     
     private var gifts: [ProfileGiftsContext.State.StarGift] = []
     private var count: Int32?
@@ -1402,7 +1403,8 @@ private final class ProfileGiftsContextImpl {
         peerId: EnginePeer.Id,
         collectionId: Int32?,
         sorting: ProfileGiftsContext.Sorting,
-        filter: ProfileGiftsContext.Filters
+        filter: ProfileGiftsContext.Filters,
+        limit: Int32
     ) {
         self.queue = queue
         self.account = account
@@ -1410,6 +1412,7 @@ private final class ProfileGiftsContextImpl {
         self.collectionId = collectionId
         self.sorting = sorting
         self.filter = filter
+        self.limit = limit
         
         self.loadMore()
     }
@@ -2420,14 +2423,15 @@ public final class ProfileGiftsContext {
         peerId: EnginePeer.Id,
         collectionId: Int32? = nil,
         sorting: ProfileGiftsContext.Sorting = .date,
-        filter: ProfileGiftsContext.Filters = .All
+        filter: ProfileGiftsContext.Filters = .All,
+        limit: Int32 = 36
     ) {
         self.peerId = peerId
         self.collectionId = collectionId
         
         let queue = self.queue
         self.impl = QueueLocalObject(queue: queue, generate: {
-            return ProfileGiftsContextImpl(queue: queue, account: account, peerId: peerId, collectionId: collectionId, sorting: sorting, filter: filter)
+            return ProfileGiftsContextImpl(queue: queue, account: account, peerId: peerId, collectionId: collectionId, sorting: sorting, filter: filter, limit: limit)
         })
     }
     
@@ -3009,6 +3013,7 @@ private final class ResaleGiftsContextImpl {
         let network = self.account.network
         let postbox = self.account.postbox
         let sorting = self.sorting
+        let limit = self.limit
         let filterAttributes = self.filterAttributes
         let currentAttributesHash = self.attributesHash
         
@@ -3048,7 +3053,7 @@ private final class ResaleGiftsContextImpl {
             let attributesHash = currentAttributesHash ?? 0
             flags |= (1 << 0)
             
-            let signal = network.request(Api.functions.payments.getResaleStarGifts(flags: flags, attributesHash: attributesHash, giftId: giftId, attributes: apiAttributes, offset: initialNextOffset ?? "", limit: 36))
+            let signal = network.request(Api.functions.payments.getResaleStarGifts(flags: flags, attributesHash: attributesHash, giftId: giftId, attributes: apiAttributes, offset: initialNextOffset ?? "", limit: limit))
             |> map(Optional.init)
             |> `catch` { _ -> Signal<Api.payments.ResaleStarGifts?, NoError> in
                 return .single(nil)
