@@ -14951,7 +14951,7 @@ Sorry for the inconvenience.";
 "MediaPlayer.ContextMenu.SaveTo.Profile" = "Profile";
 "MediaPlayer.ContextMenu.SaveTo.SavedMessages" = "Saved Messages";
 "MediaPlayer.ContextMenu.SaveTo.Files" = "Files";
-"MediaPlayer.ContextMenu.SaveTo.Info" = "Save to Files";
+"MediaPlayer.ContextMenu.SaveTo.Info" = "Choose where you want this audio to be saved.";
 "MediaPlayer.ContextMenu.ShowInChat" = "Show in Chat";
 "MediaPlayer.ContextMenu.Forward" = "Forward";
 "MediaPlayer.ContextMenu.Delete" = "Delete";
