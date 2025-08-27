@@ -1496,8 +1496,6 @@ public func themeIconImage(account: Account, accountManager: AccountManager<Tele
                         backgroundColor = (theme.chatList.backgroundColor, nil, [])
                     }
                 
-                
-                
                     wallpaperSignal = cachedWallpaper(account: account, slug: file.slug, settings: file.settings)
                     |> mapToSignal { wallpaper in
                         if let wallpaper = wallpaper, case let .file(file) = wallpaper.wallpaper {
@@ -1805,7 +1803,7 @@ public func themeIconImage(account: Account, accountManager: AccountManager<Tele
                             
                             c.restoreGState()
                         } else {
-                            let rect = CGRect(x: 8.0, y: arguments.drawingSize.height - 24.0 - 9.0 - 3.0, width: arguments.drawingSize.width - 8.0 * 2.0, height: 24.0)
+                            let rect = CGRect(x: 8.0, y: arguments.drawingSize.height - 24.0 - 9.0 - 3.0, width: 48.0, height: 24.0)
                             c.addPath(UIBezierPath(roundedRect: rect, cornerRadius: 12.0).cgPath)
                             c.clip()
                             
