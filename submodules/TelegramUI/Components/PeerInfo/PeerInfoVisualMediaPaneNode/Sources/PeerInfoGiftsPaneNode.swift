@@ -90,7 +90,6 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
     private let tabSelector = ComponentView<Empty>()
     public private(set) var currentCollection: GiftCollection = .all
     
-    private var footerText: ComponentView<Empty>?
     private var panelBackground: NavigationBackgroundNode?
     private var panelSeparator: ASDisplayNode?
     private var panelButton: ComponentView<Empty>?

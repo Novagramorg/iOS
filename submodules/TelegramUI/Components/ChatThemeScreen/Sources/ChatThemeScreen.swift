@@ -35,8 +35,8 @@ private struct ThemeSettingsThemeEntry: Comparable, Identifiable {
     let strings: PresentationStrings
     let wallpaper: TelegramWallpaper?
     
-    var stableId: Int {
-        return index
+    var stableId: String {
+        return self.chatTheme?.id ?? "\(self.index)"
     }
     
     static func ==(lhs: ThemeSettingsThemeEntry, rhs: ThemeSettingsThemeEntry) -> Bool {
@@ -524,11 +524,13 @@ private final class ThemeSettingsThemeItemIconNode : ListViewItemNode {
                             if let theme = item.chatTheme, case let .gift(_, themeSettings) = theme {
                                 if item.nightMode {
                                     if let theme = themeSettings.first(where: { $0.baseTheme == .night || $0.baseTheme == .tinted }) {
-                                        bubbleColor = UIColor(rgb: UInt32(bitPattern: theme.accentColor))
+                                        let color = theme.wallpaper?.settings?.colors.first ?? theme.accentColor
+                                        bubbleColor = UIColor(rgb: UInt32(bitPattern: color))
                                     }
                                 } else {
                                     if let theme = themeSettings.first(where: { $0.baseTheme == .classic || $0.baseTheme == .day }) {
-                                        bubbleColor = UIColor(rgb: UInt32(bitPattern: theme.accentColor))
+                                        let color = theme.wallpaper?.settings?.colors.first ?? theme.accentColor
+                                        bubbleColor = UIColor(rgb: UInt32(bitPattern: color))
                                     }
                                 }
                             }
@@ -964,7 +966,6 @@ private class ChatThemeScreenNode: ViewControllerTracingNode, ASScrollViewDelega
         self.cancelButtonNode.buttonNode.addTarget(self, action: #selector(self.cancelButtonPressed), forControlEvents: .touchUpInside)
         self.doneButton.pressed = { [weak self] in
             if let strongSelf = self {
-                strongSelf.doneButton.isUserInteractionEnabled = false
                 if strongSelf.doneButton.font == .bold {
                     strongSelf.complete()
                 } else {
@@ -1349,6 +1350,7 @@ private class ChatThemeScreenNode: ViewControllerTracingNode, ASScrollViewDelega
     
     func complete() {
         let proceed = {
+            self.doneButton.isUserInteractionEnabled = false
             self.completion?(self.selectedTheme)
         }
         if case let .gift(gift, _) = self.selectedTheme, case let .unique(uniqueGift) = gift, let themePeerId = uniqueGift.themePeerId {
