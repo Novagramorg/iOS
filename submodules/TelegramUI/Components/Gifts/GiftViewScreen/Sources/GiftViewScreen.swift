@@ -1171,7 +1171,12 @@ private final class GiftViewSheetContent: CombinedComponent {
                     self?.shareGift()
                 })))
                 
-                if gift.flags.contains(.isThemeAvailable) {
+                var ignoreGiftThemes = false
+                if let data = self.context.currentAppConfiguration.with({ $0 }).data, let _ = data["ios_killswitch_disable_gift_themes"] {
+                    ignoreGiftThemes = true
+                }
+                
+                if gift.flags.contains(.isThemeAvailable) && !ignoreGiftThemes {
                     items.append(.action(ContextMenuActionItem(text: presentationData.strings.Gift_View_Context_SetAsTheme, icon: { theme in
                         return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/ApplyTheme"), color: theme.contextMenu.primaryColor)
                     }, action: { [weak self] c, _ in
