@@ -70,7 +70,7 @@ public func makePresentationTheme(chatTheme: ChatTheme, dark: Bool = false) -> P
         return nil
     }
     let defaultTheme = makeDefaultPresentationTheme(reference: PresentationBuiltinThemeReference(baseTheme: settings.baseTheme), serviceBackgroundColor: nil, preview: false)
-    let theme = customizePresentationTheme(defaultTheme, editing: true, accentColor: UIColor(rgb: settings.accentColor), outgoingAccentColor: settings.outgoingAccentColor.flatMap { UIColor(rgb: $0) }, backgroundColors: [], bubbleColors: settings.messageColors, animateBubbleColors: settings.animateMessageColors, wallpaper: settings.wallpaper)
+    let theme = customizePresentationTheme(defaultTheme, editing: false, accentColor: UIColor(rgb: settings.accentColor), outgoingAccentColor: settings.outgoingAccentColor.flatMap { UIColor(rgb: $0) }, backgroundColors: [], bubbleColors: settings.messageColors, animateBubbleColors: settings.animateMessageColors, wallpaper: settings.wallpaper)
     if case let .gift(starGiftValue, _) = chatTheme {
         theme.starGift = starGiftValue
     }

@@ -456,11 +456,11 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
         panRecognizer.delaysTouchesBegan = false
         panRecognizer.cancelsTouchesInView = true
         panRecognizer.shouldBegin = { [weak self] point in
-            guard let strongSelf = self else {
+            guard let self else {
                 return false
             }
-            if strongSelf.controlsNode.bounds.contains(strongSelf.view.convert(point, to: strongSelf.controlsNode.view)) {
-                if strongSelf.controlsNode.frame.maxY <= strongSelf.historyNode.frame.minY {
+            if self.controlsNode.bounds.contains(self.view.convert(point, to: self.controlsNode.view)) {
+                if self.controlsNode.frame.maxY <= self.historyNode.frame.minY {
                     return true
                 }
             }
@@ -512,6 +512,12 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
             }
         })
         self.historyNode.autoScrollWhenReordering = false
+        self.historyNode.didEndScrollingWithOverscroll = { [weak self] in
+            guard let self else {
+                return
+            }
+            self.requestDismiss()
+        }
     }
 
     
@@ -751,7 +757,7 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
             self.requestDismiss()
         }
     }
-    
+            
     override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
         if let recognizer = gestureRecognizer as? UIPanGestureRecognizer {
             let location = recognizer.location(in: self.view)
