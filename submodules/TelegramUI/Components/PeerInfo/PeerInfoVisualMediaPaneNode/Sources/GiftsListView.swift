@@ -996,7 +996,7 @@ final class GiftsListView: UIView {
         
         fadeTransition.setAlpha(view: self.emptyResultsClippingView, alpha: visibleHeight < 300.0 ? 0.0 : 1.0)
         
-        if self.peerId == self.context.account.peerId, !self.canSelect && !self.filteredResultsAreEmpty && self.profileGifts.collectionId == nil {
+        if self.peerId == self.context.account.peerId, !self.canSelect && !self.filteredResultsAreEmpty && self.profileGifts.collectionId == nil && self.emptyResultsClippingView.isHidden {
             let footerText: ComponentView<Empty>
             if let current = self.footerText {
                 footerText = current
@@ -1024,6 +1024,13 @@ final class GiftsListView: UIView {
                 transition.setFrame(view: view, frame: CGRect(origin: CGPoint(x: floor((size.width - footerTextSize.width) / 2.0), y: contentHeight), size: footerTextSize))
             }
             contentHeight += footerTextSize.height
+        } else if let footerText = self.footerText {
+            self.footerText = nil
+            if let view = footerText.view {
+                fadeTransition.setAlpha(view: view, alpha: 0.0, completion: { _ in
+                    view.removeFromSuperview()
+                })
+            }
         }
                         
         return contentHeight
