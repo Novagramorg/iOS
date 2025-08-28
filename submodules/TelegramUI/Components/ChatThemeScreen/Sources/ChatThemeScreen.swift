@@ -975,6 +975,11 @@ private class ChatThemeScreenNode: ViewControllerTracingNode, ASScrollViewDelega
         }
         self.otherButton.addTarget(self, action: #selector(self.otherButtonPressed), forControlEvents: .touchUpInside)
         
+        var ignoreGiftThemes = false
+        if let data = self.context.currentAppConfiguration.with({ $0 }).data, let _ = data["ios_killswitch_disable_gift_themes"] {
+            ignoreGiftThemes = true
+        }
+        
         self.disposable.set(combineLatest(
             queue: Queue.mainQueue(),
             self.context.engine.themes.getChatThemes(accountManager: self.context.sharedContext.accountManager),
@@ -1028,6 +1033,9 @@ private class ChatThemeScreenNode: ViewControllerTracingNode, ASScrollViewDelega
             ))
                         
             var giftThemes = uniqueGiftChatThemesState.themes
+            if ignoreGiftThemes {
+                giftThemes = []
+            }
             var existingIds = Set<String>()
             if let initiallySelectedTheme, case .gift = initiallySelectedTheme {
                 let initialThemeIndex = giftThemes.firstIndex(where: { $0.id == initiallySelectedTheme.id })

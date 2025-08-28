@@ -673,7 +673,6 @@ final class StarsTransactionsScreenComponent: Component {
             let withdrawAvailable = (self.revenueState?.balances.overallRevenue.amount.value ?? 0) > 0
              
             if component.starsContext.ton {
-                //TODO:localize
                 let proceedsSize = self.proceedsView.update(
                     transition: .immediate,
                     component: AnyComponent(ListSectionComponent(
