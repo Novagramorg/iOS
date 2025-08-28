@@ -127,7 +127,7 @@ private final class GiftThemeTransferAlertContentNode: AlertContentNode {
                 return ("URL", url)
             }
         ), textAlignment: .center)
-        self.arrowNode.image = generateTintedImage(image: UIImage(bundleImageName: "Media Editor/CutoutUndo"), color: theme.controlBorderColor)
+        self.arrowNode.image = generateTintedImage(image: UIImage(bundleImageName: "Media Editor/CutoutUndo"), color: theme.secondaryColor.withAlphaComponent(0.9))
         
         self.actionNodesSeparator.backgroundColor = theme.separatorColor
         for actionNode in self.actionNodes {

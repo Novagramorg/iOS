@@ -258,7 +258,9 @@ private final class ThemeSettingsThemeItemIconNode : ListViewItemNode {
     private let emojiImageNode: TransformImageNode
     private var animatedStickerNode: AnimatedStickerNode?
     private var placeholderNode: StickerShimmerEffectNode
+    private var bubbleNode: ASImageNode?
     private var avatarNode: AvatarNode?
+    private var replaceNode: ASImageNode?
     var snapshotView: UIView?
     
     var item: ThemeSettingsThemeIconItem?
@@ -509,6 +511,37 @@ private final class ThemeSettingsThemeItemIconNode : ListViewItemNode {
                         animatedStickerNode.updateLayout(size: emojiFrame.size)
                     }
                     
+                    if let _ = item.peer {
+                        let bubbleNode: ASImageNode
+                        if let current = strongSelf.bubbleNode {
+                            bubbleNode = current
+                        } else {
+                            bubbleNode = ASImageNode()
+                            strongSelf.insertSubnode(bubbleNode, belowSubnode: strongSelf.emojiContainerNode)
+                            strongSelf.bubbleNode = bubbleNode
+                            
+                            var bubbleColor: UIColor?
+                            if let theme = item.chatTheme, case let .gift(_, themeSettings) = theme {
+                                if item.nightMode {
+                                    if let theme = themeSettings.first(where: { $0.baseTheme == .night || $0.baseTheme == .tinted }) {
+                                        bubbleColor = UIColor(rgb: UInt32(bitPattern: theme.accentColor))
+                                    }
+                                } else {
+                                    if let theme = themeSettings.first(where: { $0.baseTheme == .classic || $0.baseTheme == .day }) {
+                                        bubbleColor = UIColor(rgb: UInt32(bitPattern: theme.accentColor))
+                                    }
+                                }
+                            }
+                            if let bubbleColor {
+                                bubbleNode.image = generateFilledRoundedRectImage(size: CGSize(width: 24.0, height: 48.0), cornerRadius: 12.0, color: bubbleColor)
+                            }
+                        }
+                        bubbleNode.frame = CGRect(origin: CGPoint(x: 50.0, y: 12.0), size: CGSize(width: 24.0, height: 48.0))
+                    } else if let bubbleNode = strongSelf.bubbleNode {
+                        strongSelf.bubbleNode = nil
+                        bubbleNode.removeFromSupernode()
+                    }
+                    
                     if let peer = item.peer {
                         let avatarNode: AvatarNode
                         if let current = strongSelf.avatarNode {
@@ -524,6 +557,25 @@ private final class ThemeSettingsThemeItemIconNode : ListViewItemNode {
                     } else if let avatarNode = strongSelf.avatarNode {
                         strongSelf.avatarNode = nil
                         avatarNode.removeFromSupernode()
+                    }
+                    
+                    if let _ = item.peer {
+                        let replaceNode: ASImageNode
+                        if let current = strongSelf.replaceNode {
+                            replaceNode = current
+                        } else {
+                            replaceNode = ASImageNode()
+                            strongSelf.insertSubnode(replaceNode, belowSubnode: strongSelf.emojiContainerNode)
+                            strongSelf.replaceNode = replaceNode
+                            replaceNode.image = generateTintedImage(image: UIImage(bundleImageName: "Settings/Refresh"), color: .white)
+                        }
+                        replaceNode.transform = CATransform3DMakeRotation(.pi / 2.0, 0.0, 0.0, 1.0)
+                        if let image = replaceNode.image {
+                            replaceNode.frame = CGRect(origin: CGPoint(x: 53.0, y: 37.0), size: image.size)
+                        }
+                    } else if let replaceNode = strongSelf.replaceNode {
+                        strongSelf.replaceNode = nil
+                        replaceNode.removeFromSupernode()
                     }
                 }
             })
@@ -996,7 +1048,7 @@ private class ChatThemeScreenNode: ViewControllerTracingNode, ASScrollViewDelega
                             emojiFile = file
                         }
                     }
-                    if let themePeerId = uniqueGift.themePeerId {
+                    if let themePeerId = uniqueGift.themePeerId, theme.id != initiallySelectedTheme?.id {
                         peer = peers[themePeerId]
                     }
                 }
