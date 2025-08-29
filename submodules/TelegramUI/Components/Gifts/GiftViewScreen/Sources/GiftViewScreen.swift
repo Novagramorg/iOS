@@ -36,6 +36,7 @@ import StarsBalanceOverlayComponent
 import BalanceNeededScreen
 import GiftItemComponent
 import GiftAnimationComponent
+import ChatThemeScreen
 
 private final class GiftViewSheetContent: CombinedComponent {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
@@ -809,27 +810,66 @@ private final class GiftViewSheetContent: CombinedComponent {
             }
             
             let context = self.context
-            let peerController = self.context.sharedContext.makePeerSelectionController(PeerSelectionControllerParams(context: self.context, filter: [.excludeRecent, .doNotSearchMessages], requestPeerType: [.user(.init(isBot: false, isPremium: false))], hasContactSelector: false, hasCreation: false))
+            
+            let themePeerId = Promise<EnginePeer.Id?>()
+            themePeerId.set(
+                .single(gift.themePeerId)
+                |> then(
+                    context.engine.payments.getUniqueStarGift(slug: gift.slug)
+                    |> map { gift in
+                        return gift?.themePeerId
+                    }
+                )
+            )
+            
+            let peerController = context.sharedContext.makePeerSelectionController(PeerSelectionControllerParams(context: context, filter: [.excludeRecent, .doNotSearchMessages], requestPeerType: [.user(.init(isBot: false, isPremium: nil))], hasContactSelector: false, hasCreation: false))
             peerController.peerSelected = { [weak peerController, weak navigationController] peer, _ in
-                let _ = context.engine.themes.setChatTheme(peerId: peer.id, chatTheme: .gift(.unique(gift), [])).start()
-                peerController?.dismiss()
-                
                 if let navigationController {
-                    context.sharedContext.navigateToChatController(NavigateToChatControllerParams(
-                        navigationController: navigationController,
-                        chatController: nil,
-                        context: context,
-                        chatLocation: .peer(peer),
-                        subject: nil,
-                        botStart: nil,
-                        updateTextInputState: nil,
-                        keepStack: .always,
-                        useExisting: true,
-                        purposefulAction: nil,
-                        scrollToEndIfExists: false,
-                        activateMessageSearch: nil,
-                        animated: true
-                    ))
+                    let proceed = {
+                        let _ = context.engine.themes.setChatTheme(peerId: peer.id, chatTheme: .gift(.unique(gift), [])).start()
+                        peerController?.dismiss()
+                        
+                        context.sharedContext.navigateToChatController(NavigateToChatControllerParams(
+                            navigationController: navigationController,
+                            chatController: nil,
+                            context: context,
+                            chatLocation: .peer(peer),
+                            subject: nil,
+                            botStart: nil,
+                            updateTextInputState: nil,
+                            keepStack: .always,
+                            useExisting: true,
+                            purposefulAction: nil,
+                            scrollToEndIfExists: false,
+                            activateMessageSearch: nil,
+                            animated: true
+                        ))
+                    }
+                    
+                    let _ = (themePeerId.get()
+                    |> deliverOnMainQueue
+                    |> take(1)).start(next: { [weak navigationController] themePeerId in
+                        if let themePeerId, themePeerId != peer.id {
+                            let _ = (context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: themePeerId))
+                            |> deliverOnMainQueue).start(next: { [weak navigationController] peer in
+                                guard let peer else {
+                                    proceed()
+                                    return
+                                }
+                                let controller = giftThemeTransferAlertController(
+                                    context: context,
+                                    gift: gift,
+                                    previousPeer: peer,
+                                    commit: {
+                                        proceed()
+                                    }
+                                )
+                                (navigationController?.viewControllers.last as? ViewController)?.present(controller, in: .window(.root))
+                            })
+                        } else {
+                            proceed()
+                        }
+                    })
                 }
             }
             self.dismiss(animated: true)
@@ -3278,8 +3318,8 @@ private final class GiftViewSheetContent: CombinedComponent {
                                 component: PlainButtonComponent(
                                     content: AnyComponent(
                                         HeaderButtonComponent(
-                                            title: uniqueGift.resellAmounts == nil ? strings.Gift_View_Sell : strings.Gift_View_Unlist,
-                                            iconName: uniqueGift.resellAmounts == nil ? "Premium/Collectible/Sell" : "Premium/Collectible/Unlist"
+                                            title: (uniqueGift.resellAmounts ?? []).isEmpty ? strings.Gift_View_Sell : strings.Gift_View_Unlist,
+                                            iconName: (uniqueGift.resellAmounts ?? []).isEmpty ? "Premium/Collectible/Sell" : "Premium/Collectible/Unlist"
                                         )
                                     ),
                                     effectAlignment: .center,
