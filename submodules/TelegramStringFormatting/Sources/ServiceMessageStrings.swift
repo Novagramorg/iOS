@@ -1173,7 +1173,12 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                         let mutableAttributedString = NSMutableAttributedString(attributedString: stringWithAppliedEntities(text, entities: entities ?? [], baseColor: primaryTextColor, linkColor: primaryTextColor, baseFont: titleFont, linkFont: titleBoldFont, boldFont: titleBoldFont, italicFont: titleFont, boldItalicFont: titleBoldFont, fixedFont: titleFont, blockQuoteFont: titleFont, underlineLinks: false, message: message._asMessage()))
                         attributedString = mutableAttributedString
                     } else {
-                        attributedString = NSAttributedString(string: strings.Notification_Gift, font: titleFont, textColor: primaryTextColor)
+                        if isPrepaidUpgrade {
+                            let starsPrice = strings.Notification_PrepaidGiftUpgrade_Stars(Int32(clamping: upgradeStars ?? 0))
+                            attributedString = NSAttributedString(string: strings.Notification_PrepaidGiftUpgrade(starsPrice).string, font: titleFont, textColor: primaryTextColor)
+                        } else {
+                            attributedString = NSAttributedString(string: strings.Notification_Gift, font: titleFont, textColor: primaryTextColor)
+                        }
                     }
                 } else if case let .generic(gift) = gift {
                     var finalPrice = gift.price
