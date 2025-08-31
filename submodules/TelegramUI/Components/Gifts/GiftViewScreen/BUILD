@@ -53,6 +53,8 @@ swift_library(
         "//submodules/ActivityIndicator",
         "//submodules/TelegramUI/Components/TabSelectorComponent",
         "//submodules/TelegramUI/Components/Stars/BalanceNeededScreen",
+        "//submodules/TelegramUI/Components/ChatThemeScreen",
+        "//submodules/ImageBlur",
     ],
     visibility = [
         "//visibility:public",
