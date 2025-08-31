@@ -1426,8 +1426,8 @@ private final class ChatSendStarsScreenComponent: Component {
                             self.environment?.controller()?.dismiss()
                             
                             let _ = (context.engine.payments.starsTopUpOptions()
-                                     |> take(1)
-                                     |> deliverOnMainQueue).startStandalone(next: { options in
+                            |> take(1)
+                            |> deliverOnMainQueue).startStandalone(next: { options in
                                 let controller = context.sharedContext.makeStarsPurchaseScreen(
                                     context: context,
                                     starsContext: starsContext,

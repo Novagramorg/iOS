@@ -390,7 +390,7 @@ private final class StarsTransactionSheetContent: CombinedComponent {
                         giftAnimationSubject = .generic(gift.file)
                         giftAvailability = gift.availability
                     case let .unique(gift):
-                        giftAnimationSubject = .unique(gift)
+                        giftAnimationSubject = .unique(nil, gift)
                     }
                     isGiftUpgrade = transaction.flags.contains(.isStarGiftUpgrade)
                 } else if let giveawayMessageIdValue = transaction.giveawayMessageId {
