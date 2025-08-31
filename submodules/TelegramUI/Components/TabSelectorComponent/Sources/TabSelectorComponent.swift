@@ -500,13 +500,6 @@ public final class TabSelectorComponent: Component {
         public func scrollToEnd() {
             self.setContentOffset(CGPoint(x: self.contentSize.width - self.bounds.width, y: 0.0), animated: true)
         }
-
-        public func frameForItem(_ id: AnyHashable) -> CGRect? {
-            if let item = self.visibleItems[id] {
-                return item.convert(item.bounds, to: self)
-            }
-            return nil
-        }
         
         public func frameForItem(_ id: AnyHashable) -> CGRect? {
             if let item = self.visibleItems[id] {
