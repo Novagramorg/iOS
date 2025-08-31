@@ -845,7 +845,8 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
             case let .giftStars(currency, amount, count, _, _, _):
                 let _ = count
                 if !forAdditionalServiceMessage {
-                    attributedString = NSAttributedString(string: strings.Notification_Gift, font: titleFont, textColor: primaryTextColor)
+                    let starsPrice = strings.Notification_GiftStars_Stars(Int32(clamping: count))
+                    attributedString = NSAttributedString(string: strings.Notification_GiftStars(starsPrice).string, font: titleFont, textColor: primaryTextColor)
                 } else {
                     let price = formatCurrencyAmount(amount, currency: currency)
                     if message.author?.id == accountPeerId {
@@ -1176,9 +1177,6 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                         if isPrepaidUpgrade {
                             let starsPrice = strings.Notification_PrepaidGiftUpgrade_Stars(Int32(clamping: upgradeStars ?? 0))
                             attributedString = NSAttributedString(string: strings.Notification_PrepaidGiftUpgrade(starsPrice).string, font: titleFont, textColor: primaryTextColor)
-                        } else if case let .generic(gift) = gift {
-                            let starsPrice = strings.Notification_GiftStars_Stars(Int32(clamping: gift.price))
-                            attributedString = NSAttributedString(string: strings.Notification_GiftStars(starsPrice).string, font: titleFont, textColor: primaryTextColor)
                         } else {
                             attributedString = NSAttributedString(string: strings.Notification_Gift, font: titleFont, textColor: primaryTextColor)
                         }
