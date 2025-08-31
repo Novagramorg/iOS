@@ -826,7 +826,9 @@ private final class GiftViewSheetContent: CombinedComponent {
             peerController.peerSelected = { [weak peerController, weak navigationController] peer, _ in
                 if let navigationController {
                     let proceed = {
-                        let _ = context.engine.themes.setChatTheme(peerId: peer.id, chatTheme: .gift(.unique(gift), [])).start()
+                        let _ = context.engine.themes.setChatWallpaper(peerId: peer.id, wallpaper: nil, forBoth: true).startStandalone()
+                        let _ = context.engine.themes.setChatTheme(peerId: peer.id, chatTheme: .gift(.unique(gift), [])).startStandalone()
+                        
                         peerController?.dismiss()
                         
                         context.sharedContext.navigateToChatController(NavigateToChatControllerParams(
@@ -1210,13 +1212,8 @@ private final class GiftViewSheetContent: CombinedComponent {
                     
                     self?.shareGift()
                 })))
-                
-                var ignoreGiftThemes = false
-                if let data = self.context.currentAppConfiguration.with({ $0 }).data, let _ = data["ios_killswitch_disable_gift_themes"] {
-                    ignoreGiftThemes = true
-                }
-                
-                if gift.flags.contains(.isThemeAvailable) && !ignoreGiftThemes {
+                                
+                if gift.flags.contains(.isThemeAvailable) {
                     items.append(.action(ContextMenuActionItem(text: presentationData.strings.Gift_View_Context_SetAsTheme, icon: { theme in
                         return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/ApplyTheme"), color: theme.contextMenu.primaryColor)
                     }, action: { [weak self] c, _ in
@@ -4714,7 +4711,7 @@ public class GiftViewScreen: ViewControllerComponentContainer {
         
         self.view.disablesInteractiveModalDismiss = true
                 
-        if let arguments = self.subject.arguments, let _ = self.subject.arguments?.resellAmounts {
+        if let arguments = self.subject.arguments, let resellAmounts = self.subject.arguments?.resellAmounts, !resellAmounts.isEmpty {
             if case let .unique(uniqueGift) = arguments.gift, case .peerId(self.context.account.peerId) = uniqueGift.owner {
             } else {
                 self.showBalance = true
