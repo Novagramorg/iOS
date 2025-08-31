@@ -477,7 +477,12 @@ final class GiftSetupScreenComponent: Component {
                     case .starGiftUserLimit:
                         if let perUserLimit, let giftFile {
                             let text = presentationData.strings.Gift_Options_Gift_BuyLimitReached(perUserLimit)
-                            let undoController = UndoOverlayController(presentationData: presentationData, content: .sticker(context: component.context, file: giftFile, loop: true, title: nil, text: text, undoText: nil, customAction: nil), action: { _ in return false })
+                            let undoController = UndoOverlayController(
+                                presentationData: presentationData,
+                                content: .sticker(context: component.context, file: giftFile, loop: true, title: nil, text: text, undoText: nil, customAction: nil),
+                                elevatedLayout: true,
+                                action: { _ in return false }
+                            )
                             controller.present(undoController, in: .current)
                             return
                         }
