@@ -14997,6 +14997,10 @@ Sorry for the inconvenience.";
 
 "Gift.View.Context.SetAsTheme" = "Set as Theme in...";
 
+"Notification.GiftStars" = "Gift for %@";
+"Notification.GiftStars.Stars_1" = "%@ Star";
+"Notification.GiftStars.Stars_any" = "%@ Stars";
+
 "Notification.PrepaidGiftUpgrade" = "Gift Upgrade for %@";
 "Notification.PrepaidGiftUpgrade.Stars_1" = "%@ Star";
 "Notification.PrepaidGiftUpgrade.Stars_any" = "%@ Stars";
