@@ -611,8 +611,8 @@ final class GiftsListView: UIView {
                                             }
                                             self.profileGifts.updateStarGiftAddedToProfile(reference: reference, added: added)
                                         },
-                                        convertToStars: { [weak self] in
-                                            guard let self, let reference = product.reference else {
+                                        convertToStars: { [weak self] reference in
+                                            guard let self else {
                                                 return
                                             }
                                             self.profileGifts.convertStarGift(reference: reference)
@@ -623,8 +623,8 @@ final class GiftsListView: UIView {
                                             }
                                             return self.profileGifts.transferStarGift(prepaid: prepaid, reference: reference, peerId: peerId)
                                         },
-                                        upgradeGift: { [weak self] formId, keepOriginalInfo in
-                                            guard let self, let reference = product.reference else {
+                                        upgradeGift: { [weak self] formId, reference, keepOriginalInfo in
+                                            guard let self else {
                                                 return .never()
                                             }
                                             return self.profileGifts.upgradeStarGift(formId: formId, reference: reference, keepOriginalInfo: keepOriginalInfo)
@@ -635,36 +635,34 @@ final class GiftsListView: UIView {
                                             }
                                             return self.profileGifts.buyStarGift(slug: slug, peerId: peerId, price: price)
                                         },
-                                        updateResellStars: { [weak self] price in
-                                            guard let self, let reference = product.reference else {
+                                        updateResellStars: { [weak self] reference, price in
+                                            guard let self else {
                                                 return .never()
                                             }
                                             return self.profileGifts.updateStarGiftResellPrice(reference: reference, price: price)
                                         },
-                                        togglePinnedToTop: { [weak self] pinnedToTop in
+                                        togglePinnedToTop: { [weak self] reference, pinnedToTop in
                                             guard let self else {
                                                 return false
                                             }
-                                            if let reference = product.reference {
-                                                if pinnedToTop && self.pinnedReferences.count >= self.maxPinnedCount {
-                                                    self.displayUnpinScreen?(product, {
-                                                        dismissImpl?()
-                                                    })
-                                                    return false
-                                                }
-                                                self.profileGifts.updateStarGiftPinnedToTop(reference: reference, pinnedToTop: pinnedToTop)
-                                                
-                                                var title = ""
-                                                if case let .unique(uniqueGift) = product.gift {
-                                                    title = "\(uniqueGift.title) #\(formatCollectibleNumber(uniqueGift.number, dateTimeFormat: params.presentationData.dateTimeFormat))"
-                                                }
-                                                
-                                                if pinnedToTop {
-                                                    Queue.mainQueue().after(0.35) {
-                                                        let toastTitle = params.presentationData.strings.PeerInfo_Gifts_ToastPinned_TitleNew(title).string
-                                                        let toastText = params.presentationData.strings.PeerInfo_Gifts_ToastPinned_Text
-                                                        self.parentController?.present(UndoOverlayController(presentationData: params.presentationData, content: .universal(animation: "anim_toastpin", scale: 0.06, colors: [:], title: toastTitle, text: toastText, customUndoText: nil, timeout: 5), elevatedLayout: true, animateInAsReplacement: false, action: { _ in return false }), in: .window(.root))
-                                                    }
+                                            if pinnedToTop && self.pinnedReferences.count >= self.maxPinnedCount {
+                                                self.displayUnpinScreen?(product, {
+                                                    dismissImpl?()
+                                                })
+                                                return false
+                                            }
+                                            self.profileGifts.updateStarGiftPinnedToTop(reference: reference, pinnedToTop: pinnedToTop)
+                                            
+                                            var title = ""
+                                            if case let .unique(uniqueGift) = product.gift {
+                                                title = "\(uniqueGift.title) #\(formatCollectibleNumber(uniqueGift.number, dateTimeFormat: params.presentationData.dateTimeFormat))"
+                                            }
+                                            
+                                            if pinnedToTop {
+                                                Queue.mainQueue().after(0.35) {
+                                                    let toastTitle = params.presentationData.strings.PeerInfo_Gifts_ToastPinned_TitleNew(title).string
+                                                    let toastText = params.presentationData.strings.PeerInfo_Gifts_ToastPinned_Text
+                                                    self.parentController?.present(UndoOverlayController(presentationData: params.presentationData, content: .universal(animation: "anim_toastpin", scale: 0.06, colors: [:], title: toastTitle, text: toastText, customUndoText: nil, timeout: 5), elevatedLayout: true, animateInAsReplacement: false, action: { _ in return false }), in: .window(.root))
                                                 }
                                             }
                                             return true
@@ -996,7 +994,7 @@ final class GiftsListView: UIView {
         
         fadeTransition.setAlpha(view: self.emptyResultsClippingView, alpha: visibleHeight < 300.0 ? 0.0 : 1.0)
         
-        if self.peerId == self.context.account.peerId, !self.canSelect && !self.filteredResultsAreEmpty && self.profileGifts.collectionId == nil {
+        if self.peerId == self.context.account.peerId, !self.canSelect && !self.filteredResultsAreEmpty && self.profileGifts.collectionId == nil && self.emptyResultsClippingView.isHidden {
             let footerText: ComponentView<Empty>
             if let current = self.footerText {
                 footerText = current
@@ -1024,6 +1022,13 @@ final class GiftsListView: UIView {
                 transition.setFrame(view: view, frame: CGRect(origin: CGPoint(x: floor((size.width - footerTextSize.width) / 2.0), y: contentHeight), size: footerTextSize))
             }
             contentHeight += footerTextSize.height
+        } else if let footerText = self.footerText {
+            self.footerText = nil
+            if let view = footerText.view {
+                fadeTransition.setAlpha(view: view, alpha: 0.0, completion: { _ in
+                    view.removeFromSuperview()
+                })
+            }
         }
                         
         return contentHeight

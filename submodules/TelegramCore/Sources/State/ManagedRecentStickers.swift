@@ -359,7 +359,9 @@ func managedUniqueStarGifts(accountPeerId: PeerId, postbox: Postbox, network: Ne
                                     resellForTonOnly: false,
                                     releasedBy: nil,
                                     valueAmount: nil,
-                                    valueCurrency: nil
+                                    valueCurrency: nil,
+                                    flags: [],
+                                    themePeerId: nil
                                 )
                                 if let entry = CodableEntry(RecentStarGiftItem(gift)) {
                                     items.append(OrderedItemListEntry(id: RecentStarGiftItemId(id).rawValue, contents: entry))

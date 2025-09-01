@@ -46,6 +46,7 @@ import ComponentFlow
 import ChatEmptyNode
 import SpaceWarpView
 import ChatSideTopicsPanel
+import ChatThemeScreen
 
 final class VideoNavigationControllerDropContentItem: NavigationControllerDropContentItem {
     let itemNode: OverlayMediaItemNode
@@ -3582,7 +3583,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             
             let themeUpdated = presentationReadyUpdated || (self.chatPresentationInterfaceState.theme !== chatPresentationInterfaceState.theme)
             
-            self.backgroundNode.update(wallpaper: chatPresentationInterfaceState.chatWallpaper, animated: true)
+            self.backgroundNode.update(wallpaper: chatPresentationInterfaceState.chatWallpaper, starGift: chatPresentationInterfaceState.theme.starGift, animated: true)
             
             self.historyNode.verticalScrollIndicatorColor = UIColor(white: 0.5, alpha: 0.8)
             if self.pendingSwitchToChatLocation == nil {

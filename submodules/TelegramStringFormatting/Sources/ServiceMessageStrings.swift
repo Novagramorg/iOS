@@ -781,12 +781,15 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                 } else {
                     var emoji = ""
                     var additionalAttributes: [String: Any] = [:]
+                    var giftTitle: String?
                     switch chatTheme {
                     case let .emoticon(emoticon):
                         emoji = emoticon
                     case let .gift(starGift, _):
                         var file: TelegramMediaFile?
+                        
                         if case let .unique(uniqueGift) = starGift {
+                            giftTitle = "\(uniqueGift.title) #\(formatCollectibleNumber(uniqueGift.number, dateTimeFormat: dateTimeFormat))"
                             for attribute in uniqueGift.attributes {
                                 if case let .model(_, fileValue, _) = attribute {
                                     file = fileValue
@@ -802,11 +805,21 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                     if message.author?.id.namespace == Namespaces.Peer.CloudChannel {
                         attributedString = NSAttributedString(string: strings.Notification_ChannelChangedTheme(emoji).string, font: titleFont, textColor: primaryTextColor)
                     } else if message.author?.id == accountPeerId {
-                        let resultTitleString = strings.Notification_YouChangedTheme(emoji)
-                        attributedString = addAttributesToStringWithRanges(resultTitleString._tuple, body: bodyAttributes, argumentAttributes: [0: emojiAttributes])
+                        if let giftTitle {
+                            let resultTitleString = strings.Notification_YouChangedThemeGift(giftTitle)
+                            attributedString = addAttributesToStringWithRanges(resultTitleString._tuple, body: bodyAttributes, argumentAttributes: [:])
+                        } else {
+                            let resultTitleString = strings.Notification_YouChangedTheme(emoji)
+                            attributedString = addAttributesToStringWithRanges(resultTitleString._tuple, body: bodyAttributes, argumentAttributes: [0: emojiAttributes])
+                        }
                     } else {
-                        let resultTitleString = strings.Notification_ChangedTheme(compactAuthorName, emoji)
-                        attributedString = addAttributesToStringWithRanges(resultTitleString._tuple, body: bodyAttributes, argumentAttributes: [0: boldAttributes, 1: emojiAttributes])
+                        if let giftTitle {
+                            let resultTitleString = strings.Notification_ChangedThemeGift(compactAuthorName, giftTitle)
+                            attributedString = addAttributesToStringWithRanges(resultTitleString._tuple, body: bodyAttributes, argumentAttributes: [0: boldAttributes, 1: boldAttributes])
+                        } else {
+                            let resultTitleString = strings.Notification_ChangedTheme(compactAuthorName, emoji)
+                            attributedString = addAttributesToStringWithRanges(resultTitleString._tuple, body: bodyAttributes, argumentAttributes: [0: boldAttributes, 1: emojiAttributes])
+                        }
                     }
                 }
             case let .webViewData(text):
@@ -817,8 +830,7 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                 } else {
                     let price: String
                     if currency == "XTR" {
-                        //TODO:localize
-                        price = "\(amount) Stars"
+                        price = strings.Notification_PremiumGift_Stars(Int32(clamping: amount))
                     } else {
                         price = formatCurrencyAmount(amount, currency: currency)
                     }
@@ -833,7 +845,8 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
             case let .giftStars(currency, amount, count, _, _, _):
                 let _ = count
                 if !forAdditionalServiceMessage {
-                    attributedString = NSAttributedString(string: strings.Notification_Gift, font: titleFont, textColor: primaryTextColor)
+                    let starsPrice = strings.Notification_GiftStars_Stars(Int32(clamping: count))
+                    attributedString = NSAttributedString(string: strings.Notification_GiftStars(starsPrice).string, font: titleFont, textColor: primaryTextColor)
                 } else {
                     let price = formatCurrencyAmount(amount, currency: currency)
                     if message.author?.id == accountPeerId {
@@ -1155,17 +1168,22 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                 attributedString = mutableString
             case .prizeStars:
                 attributedString = NSAttributedString(string: strings.Notification_StarsPrize, font: titleFont, textColor: primaryTextColor)
-            case let .starGift(gift, _, text, entities, _, _, _, _, _, upgradeStars, _, isPrepaidUpgrade, _, peerId, senderId, _, _, _, _):
+            case let .starGift(gift, _, text, entities, _, _, _, _, _, upgradeStars, _, isPrepaidUpgrade, _, peerId, senderId, _, _, _, upgradeSeparate):
                 if !forAdditionalServiceMessage {
                     if let text {
                         let mutableAttributedString = NSMutableAttributedString(attributedString: stringWithAppliedEntities(text, entities: entities ?? [], baseColor: primaryTextColor, linkColor: primaryTextColor, baseFont: titleFont, linkFont: titleBoldFont, boldFont: titleBoldFont, italicFont: titleFont, boldItalicFont: titleBoldFont, fixedFont: titleFont, blockQuoteFont: titleFont, underlineLinks: false, message: message._asMessage()))
                         attributedString = mutableAttributedString
                     } else {
-                        attributedString = NSAttributedString(string: strings.Notification_Gift, font: titleFont, textColor: primaryTextColor)
+                        if isPrepaidUpgrade {
+                            let starsPrice = strings.Notification_PrepaidGiftUpgrade_Stars(Int32(clamping: upgradeStars ?? 0))
+                            attributedString = NSAttributedString(string: strings.Notification_PrepaidGiftUpgrade(starsPrice).string, font: titleFont, textColor: primaryTextColor)
+                        } else {
+                            attributedString = NSAttributedString(string: strings.Notification_Gift, font: titleFont, textColor: primaryTextColor)
+                        }
                     }
                 } else if case let .generic(gift) = gift {
                     var finalPrice = gift.price
-                    if let upgradeStars {
+                    if let upgradeStars, !upgradeSeparate {
                         finalPrice += upgradeStars
                     }
                     let starsPrice = strings.Notification_StarsGift_Stars(Int32(clamping: finalPrice))

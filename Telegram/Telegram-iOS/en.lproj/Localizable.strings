@@ -14924,3 +14924,87 @@ Sorry for the inconvenience.";
 
 "Gift.Upgrade.GiftUpgrade" = "Pay %@ for Upgrade";
 "Gift.View.GiftUpgrade" = "Gift an Upgrade";
+
+"Gift.View.OpenChatTheme" = "This gift is the chat's theme. [Change Theme >]()";
+
+"Notification.ChatTheme.Text" = "%1$@ set **%2$@** as a new theme for this chat.";
+"Notification.ChatTheme.TextYou" = "You set **%@** as a new theme for this chat.";
+
+"Notification.ChangedThemeGift" = "%1$@ changed chat theme to %2$@";
+"Notification.YouChangedThemeGift" = "You changed chat theme to %@";
+
+"Conversation.Theme.GiftTransfer.Text" = "This gift is already your theme in the chat with **%@**. Remove it there and use it here instead?";
+"Conversation.Theme.GiftTransfer.Proceed" = "Yes";
+
+"PeerInfo.Tabs.SetMainTab" = "Set as Main Tab";
+"PeerInfo.Tabs.SetMainTab.Succeed" = "Tab order changed.";
+
+"MediaPlayer.SavedMusic.AddToProfile" = "Add to Profile";
+"MediaPlayer.SavedMusic.RemoveFromProfile" = "This audio is visible on your profile. [Remove >]()";
+
+"MediaPlayer.SavedMusic.AddedToProfile.View" = "View";
+"MediaPlayer.SavedMusic.AddedToProfile" = "Audio added to your profile.";
+"MediaPlayer.SavedMusic.RemovedFromProfile" = "Audio removed from your profile.";
+
+"MediaPlayer.ContextMenu.SaveToFiles" = "Save to Files";
+"MediaPlayer.ContextMenu.SaveTo" = "Save to...";
+"MediaPlayer.ContextMenu.SaveTo.Profile" = "Profile";
+"MediaPlayer.ContextMenu.SaveTo.SavedMessages" = "Saved Messages";
+"MediaPlayer.ContextMenu.SaveTo.Files" = "Files";
+"MediaPlayer.ContextMenu.SaveTo.Info" = "Choose where you want this audio to be saved.";
+"MediaPlayer.ContextMenu.ShowInChat" = "Show in Chat";
+"MediaPlayer.ContextMenu.Forward" = "Forward";
+"MediaPlayer.ContextMenu.Delete" = "Delete";
+"MediaPlayer.ContextMenu.Remove" = "Remove";
+
+"MediaPlayer.Playlist.ThisChat" = "AUDIO IN THIS CHAT";
+"MediaPlayer.Playlist.SavedMusic" = "%@'S PLAYLIST";
+"MediaPlayer.Playlist.SavedMusicYou" = "YOUR PLAYLIST";
+
+"Notification.PremiumGift.Stars_1" = "%@ Star";
+"Notification.PremiumGift.Stars_any" = "%@ Stars";
+
+"Ton.ProceedsOverview" = "PROCEEDS OVERVIEW";
+"Ton.AvailableBalance" = "Balance Available to Withdraw";
+"Ton.LifetimeProceeds" = "Total Lifetime Proceeds";
+
+"Ton.WithdrawViaFragment" = "Withdraw via Fragment";
+"Ton.WithdrawViaFragment.Info" = "Collect your TON using Fragment. [Learn More >]()";
+"Ton.WithdrawViaFragment.Info_URL" = "https://telegram.org/tos/bot-developers#6-2-2-tpa-balance";
+
+"MESSAGE_GIFT_THEME" = "%1$@ changed theme to %2$@";
+
+"Gift.Upgrade.Skip" = "Skip";
+"Gift.Upgrade.UpgradeNext" = "Upgrade Next Gift";
+
+"Gift.Value.DescriptionAveragePrice" = "This is the average sale price of **%@** on Telegram and Fragment over the past month.";
+"Gift.Value.DescriptionLastPriceFragment" = "This is the last price at which **%@** was last sold on Fragment.";
+"Gift.Value.DescriptionLastPriceTelegram" = "This is the last price at which **%@** was last sold on Telegram.";
+
+"Gift.Value.LastPriceInfo" = "**%1$@** is the last price for %2$@ gifts listed on Telegram and Fragment.";
+"Gift.Value.MinimumPriceInfo" = "**%1$@** is the floor price for %2$@ gifts listed on Telegram and Fragment.";
+"Gift.Value.AveragePriceInfo" = "**%1$@** is the average sale price for %2$@ gifts listed on Telegram and Fragment over the past month.";
+
+"Gift.Value.AveragePrice" = "Last Sale";
+"Gift.Value.InitialSale" = "Initial Sale";
+"Gift.Value.InitialPrice" = "Initial Price";
+"Gift.Value.LastSale" = "Last Sale";
+"Gift.Value.LastPrice" = "Last Price";
+"Gift.Value.MinimumPrice" = "Minimum Price";
+"Gift.Value.AveragePrice" = "Average Price";
+"Gift.Value.ForSaleOnTelegram" = "for sale on Telegram";
+"Gift.Value.ForSaleOnFragment" = "for sale on Fragment";
+
+"Gift.View.Context.SetAsTheme" = "Set as Theme in...";
+
+"Notification.GiftStars" = "Gift for %@";
+"Notification.GiftStars.Stars_1" = "%@ Star";
+"Notification.GiftStars.Stars_any" = "%@ Stars";
+
+"Notification.PrepaidGiftUpgrade" = "Gift Upgrade for %@";
+"Notification.PrepaidGiftUpgrade.Stars_1" = "%@ Star";
+"Notification.PrepaidGiftUpgrade.Stars_any" = "%@ Stars";
+
+"ProfileLevelInfo.RatingTitle" = "Rating";
+"ProfileLevelInfo.FutureRatingTitle" = "Future Rating";
+

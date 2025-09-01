@@ -1163,9 +1163,8 @@ final class PeerInfoPaneContainerNode: ASDisplayNode, ASGestureRecognizerDelegat
             return
         }
         
-        //TODO:localize
         var items: [ContextMenuItem] = []
-        items.append(.action(ContextMenuActionItem(text: "Set as Main Tab", icon: { theme in
+        items.append(.action(ContextMenuActionItem(text: params.presentationData.strings.PeerInfo_Tabs_SetMainTab, icon: { theme in
             return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/ReorderItems"), color: theme.actionSheet.primaryTextColor)
         }, action: { [weak self] _, f in
             guard let self else {
@@ -1183,7 +1182,7 @@ final class PeerInfoPaneContainerNode: ASDisplayNode, ASGestureRecognizerDelegat
                     guard let self else {
                         return
                     }
-                    let controller = UndoOverlayController(presentationData: params.presentationData, content: .actionSucceeded(title: nil, text: "Tab order changed.", cancel: nil, destructive: false), action: { _ in return true })
+                    let controller = UndoOverlayController(presentationData: params.presentationData, content: .actionSucceeded(title: nil, text: params.presentationData.strings.PeerInfo_Tabs_SetMainTab_Succeed, cancel: nil, destructive: false), action: { _ in return true })
                     self.parentController?.present(controller, in: .current)
                 })
             }
