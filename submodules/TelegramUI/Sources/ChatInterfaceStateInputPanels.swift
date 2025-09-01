@@ -8,6 +8,7 @@ import ChatInputPanelNode
 import ChatBotStartInputPanelNode
 import ChatChannelSubscriberInputPanelNode
 import ChatMessageSelectionInputPanelNode
+import ChatTextInputPanelNode
 
 func inputPanelForChatPresentationIntefaceState(_ chatPresentationInterfaceState: ChatPresentationInterfaceState, context: AccountContext, currentPanel: ChatInputPanelNode?, currentSecondaryPanel: ChatInputPanelNode?, textInputPanelNode: ChatTextInputPanelNode?, interfaceInteraction: ChatPanelInterfaceInteraction?) -> (primary: ChatInputPanelNode?, secondary: ChatInputPanelNode?) {
     if let renderedPeer = chatPresentationInterfaceState.renderedPeer, renderedPeer.peer?.restrictionText(platform: "ios", contentSettings: context.currentContentSettings.with { $0 }) != nil {
@@ -417,10 +418,10 @@ func inputPanelForChatPresentationIntefaceState(_ chatPresentationInterfaceState
             }
         } else {
             if let _ = chatPresentationInterfaceState.interfaceState.mediaDraftState {
-                if let currentPanel = (currentPanel as? ChatRecordingPreviewInputPanelNode) ?? (currentSecondaryPanel as? ChatRecordingPreviewInputPanelNode) {
+                if let currentPanel = (currentPanel as? ChatRecordingPreviewInputPanelNodeImpl) ?? (currentSecondaryPanel as? ChatRecordingPreviewInputPanelNodeImpl) {
                     return (currentPanel, nil)
                 } else {
-                    let panel = ChatRecordingPreviewInputPanelNode(theme: chatPresentationInterfaceState.theme)
+                    let panel = ChatRecordingPreviewInputPanelNodeImpl(theme: chatPresentationInterfaceState.theme)
                     panel.context = context
                     panel.interfaceInteraction = interfaceInteraction
                     return (panel, nil)

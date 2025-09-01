@@ -1096,6 +1096,8 @@ public protocol ChatController: ViewController {
     func playShakeAnimation()
     
     func removeAd(opaqueId: Data)
+    
+    func restrictedSendingContentsText() -> String
 }
 
 public protocol ChatMessagePreviewItemNode: AnyObject {

@@ -4340,6 +4340,16 @@ extension ChatControllerImpl {
                 return
             }
             self.openTodoEditing(messageId: messageId, itemId: itemId, append: append)
+        }, displayUndo: { [weak self] content in
+            guard let self else {
+                return
+            }
+            self.controllerInteraction?.displayUndo(content)
+        }, sendEmoji: { [weak self] text, attribute, immediately in
+            guard let self else {
+                return
+            }
+            self.controllerInteraction?.sendEmoji(text, attribute, immediately)
         }, updateHistoryFilter: { [weak self] update in
             guard let self else {
                 return
