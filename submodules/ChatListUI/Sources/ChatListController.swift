@@ -5365,12 +5365,12 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                         if case .broadcast = channel.info {
                             canClear = false
                             deleteTitle = strongSelf.presentationData.strings.Channel_LeaveChannel
-                            if channel.flags.contains(.isCreator) {
+                            if channel.addressName == nil && channel.flags.contains(.isCreator) {
                                 canRemoveGlobally = true
                             }
                         } else {
                             deleteTitle = strongSelf.presentationData.strings.Group_DeleteGroup
-                            if channel.flags.contains(.isCreator) {
+                            if channel.addressName == nil && channel.flags.contains(.isCreator) {
                                 canRemoveGlobally = true
                             }
                         }
