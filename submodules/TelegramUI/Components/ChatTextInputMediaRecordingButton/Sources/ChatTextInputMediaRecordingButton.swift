@@ -197,6 +197,13 @@ public final class ChatTextInputMediaRecordingButton: TGModernConversationInputM
     private var modeTimeoutTimer: SwiftSignalKit.Timer?
     
     private let animationView: ComponentView<Empty>
+    public var animationOutput: UIImageView? {
+        didSet {
+            if let view = self.animationView.view as? LottieComponent.View {
+                view.output = self.animationOutput
+            }
+        }
+    }
     
     private var recordingOverlay: ChatTextInputAudioRecordingOverlay?
     private var startTouchLocation: CGPoint?
@@ -415,7 +422,7 @@ public final class ChatTextInputMediaRecordingButton: TGModernConversationInputM
             transition: .immediate,
             component: AnyComponent(LottieComponent(
                 content: LottieComponent.AppBundleContent(name: animationName),
-                color: self.useDarkTheme ? .white : self.theme.chat.inputPanel.panelControlColor.blitOver(self.theme.chat.inputPanel.inputBackgroundColor, alpha: 1.0)
+                color: self.useDarkTheme ? .white : self.theme.chat.inputPanel.inputControlColor
             )),
             environment: {},
             containerSize: animationFrame.size
@@ -425,6 +432,7 @@ public final class ChatTextInputMediaRecordingButton: TGModernConversationInputM
             view.isUserInteractionEnabled = false
             if view.superview == nil {
                 self.insertSubview(view, at: 0)
+                view.output = self.animationOutput
                 self.updateShadow()
             }
             view.frame = animationFrame
@@ -432,6 +440,10 @@ public final class ChatTextInputMediaRecordingButton: TGModernConversationInputM
             if previousMode != mode {
                 view.playOnce()
             }
+        }
+        
+        if let animationOutput = self.animationOutput {
+            animationOutput.frame = animationFrame
         }
     }
     
@@ -553,6 +565,11 @@ public final class ChatTextInputMediaRecordingButton: TGModernConversationInputM
         if let layer = self.animationView.view?.layer {
             transition.updateAlpha(layer: layer, alpha: 0.0)
             transition.updateTransformScale(layer: layer, scale: 0.3)
+            
+            if let animationOutput = self.animationOutput {
+                transition.updateAlpha(layer: animationOutput.layer, alpha: 0.0)
+                transition.updateTransformScale(layer: animationOutput.layer, scale: 0.3)
+            }
         }
     }
 
@@ -569,6 +586,11 @@ public final class ChatTextInputMediaRecordingButton: TGModernConversationInputM
             if let layer = self.animationView.view?.layer {
                 transition.updateAlpha(layer: layer, alpha: 1.0)
                 transition.updateTransformScale(layer: layer, scale: 1.0)
+                
+                if let animationOutput = self.animationOutput {
+                    transition.updateAlpha(layer: animationOutput.layer, alpha: 1.0)
+                    transition.updateTransformScale(layer: animationOutput.layer, scale: 1.0)
+                }
             }
         }
     }
@@ -582,6 +604,11 @@ public final class ChatTextInputMediaRecordingButton: TGModernConversationInputM
                 let iconSize = view.bounds.size
                 view.bounds = CGRect(origin: .zero, size: iconSize)
                 view.center = CGPoint(x: size.width / 2.0, y: size.height / 2.0)
+                
+                if let animationOutput = self.animationOutput {
+                    animationOutput.bounds = view.bounds
+                    animationOutput.center = view.center
+                }
             }
         }
     }

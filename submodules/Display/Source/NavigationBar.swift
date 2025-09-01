@@ -146,6 +146,7 @@ public final class NavigationBackgroundNode: ASDisplayNode {
     
     private var enableBlur: Bool
     private var enableSaturation: Bool
+    private var customBlurRadius: CGFloat?
 
     public var effectView: UIVisualEffectView?
     private let backgroundNode: ASDisplayNode
@@ -164,10 +165,11 @@ public final class NavigationBackgroundNode: ASDisplayNode {
         }
     }
 
-    public init(color: UIColor, enableBlur: Bool = true, enableSaturation: Bool = true) {
+    public init(color: UIColor, enableBlur: Bool = true, enableSaturation: Bool = true, customBlurRadius: CGFloat? = nil) {
         self._color = .clear
         self.enableBlur = enableBlur
         self.enableSaturation = enableSaturation
+        self.customBlurRadius = customBlurRadius
 
         self.backgroundNode = ASDisplayNode()
 
@@ -221,6 +223,9 @@ public final class NavigationBackgroundNode: ASDisplayNode {
                         let filterName = String(describing: filter)
                         if !allowedKeys.contains(filterName) {
                             return false
+                        }
+                        if let customBlurRadius = self.customBlurRadius, filterName == "gaussianBlur" {
+                            filter.setValue(customBlurRadius as NSNumber, forKey: "inputRadius")
                         }
                         return true
                     }

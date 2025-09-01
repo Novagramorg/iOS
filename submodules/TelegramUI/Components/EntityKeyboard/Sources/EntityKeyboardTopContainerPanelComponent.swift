@@ -38,15 +38,18 @@ final class EntityKeyboardTopContainerPanelComponent: Component {
     
     let theme: PresentationTheme
     let overflowHeight: CGFloat
+    let topInset: CGFloat
     let displayBackground: EntityKeyboardComponent.DisplayTopPanelBackground
     
     init(
         theme: PresentationTheme,
         overflowHeight: CGFloat,
+        topInset: CGFloat,
         displayBackground: EntityKeyboardComponent.DisplayTopPanelBackground
     ) {
         self.theme = theme
         self.overflowHeight = overflowHeight
+        self.topInset = topInset
         self.displayBackground = displayBackground
     }
     
@@ -55,6 +58,9 @@ final class EntityKeyboardTopContainerPanelComponent: Component {
             return false
         }
         if lhs.overflowHeight != rhs.overflowHeight {
+            return false
+        }
+        if lhs.topInset != rhs.topInset {
             return false
         }
         if lhs.displayBackground != rhs.displayBackground {
@@ -95,7 +101,7 @@ final class EntityKeyboardTopContainerPanelComponent: Component {
         
         func update(component: EntityKeyboardTopContainerPanelComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<EnvironmentType>, transition: ComponentTransition) -> CGSize {
             let intrinsicHeight: CGFloat = 34.0
-            let height = intrinsicHeight
+            let height = intrinsicHeight + component.topInset
             
             let panelEnvironment = environment[PagerComponentPanelEnvironment.self].value
             
@@ -122,7 +128,7 @@ final class EntityKeyboardTopContainerPanelComponent: Component {
                     let panel = panelEnvironment.contentTopPanels[index]
                     let indexOffset = index - centralIndex
                     
-                    let panelFrame = CGRect(origin: CGPoint(x: CGFloat(indexOffset) * availableSize.width, y: -component.overflowHeight), size: CGSize(width: availableSize.width, height: intrinsicHeight + component.overflowHeight))
+                    let panelFrame = CGRect(origin: CGPoint(x: CGFloat(indexOffset) * availableSize.width, y: component.topInset - component.overflowHeight), size: CGSize(width: availableSize.width, height: intrinsicHeight + component.overflowHeight))
                     
                     let isInBounds = visibleBounds.intersects(panelFrame)
                     let isPartOfTransition: Bool
