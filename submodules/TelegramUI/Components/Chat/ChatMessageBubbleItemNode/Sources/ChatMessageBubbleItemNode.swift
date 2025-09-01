@@ -241,6 +241,8 @@ private func contentNodeMessagesAndClassesForItem(_ item: ChatMessageItem) -> ([
                 } else if case .joinedChannel = action.action {
                     result.append((message, ChatMessageJoinedChannelBubbleContentNode.self, itemAttributes, BubbleItemAttributes(isAttachment: false, neighborType: .text, neighborSpacing: .default)))
                     needReactions = false
+                } else if case let .setChatTheme(chatTheme) = action.action, case .gift = chatTheme {
+                    result.append((message, ChatMessageGiftBubbleContentNode.self, itemAttributes, BubbleItemAttributes(isAttachment: false, neighborType: .text, neighborSpacing: .default)))
                 } else {
                     if !canAddMessageReactions(message: message) {
                         needReactions = false

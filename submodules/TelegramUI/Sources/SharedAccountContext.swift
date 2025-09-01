@@ -3768,8 +3768,8 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         return GiftViewScreen(context: context, subject: .message(message), shareStory: shareStory)
     }
     
-    public func makeGiftViewScreen(context: AccountContext, gift: StarGift.UniqueGift, shareStory: ((StarGift.UniqueGift) -> Void)?, dismissed: (() -> Void)?) -> ViewController {
-        let controller = GiftViewScreen(context: context, subject: .uniqueGift(gift, nil), shareStory: shareStory)
+    public func makeGiftViewScreen(context: AccountContext, gift: StarGift.UniqueGift, shareStory: ((StarGift.UniqueGift) -> Void)?, openChatTheme: (() -> Void)?, dismissed: (() -> Void)?) -> ViewController {
+        let controller = GiftViewScreen(context: context, subject: .uniqueGift(gift, nil), shareStory: shareStory, openChatTheme: openChatTheme)
         controller.disposed = {
             dismissed?()
         }

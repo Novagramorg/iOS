@@ -24,6 +24,7 @@ import ChatMessageItemCommon
 import TextNodeWithEntities
 import InvisibleInkDustNode
 import PeerInfoCoverComponent
+import GiftItemComponent
 
 private func attributedServiceMessageString(theme: ChatPresentationThemeData, strings: PresentationStrings, nameDisplayOrder: PresentationPersonNameOrder, dateTimeFormat: PresentationDateTimeFormat, message: EngineMessage, accountPeerId: EnginePeer.Id) -> NSAttributedString? {
     return universalServiceMessageString(presentationData: (theme.theme, theme.wallpaper), strings: strings, nameDisplayOrder: nameDisplayOrder, dateTimeFormat: dateTimeFormat, message: message, accountPeerId: accountPeerId, forChatList: false, forForumOverview: false, forAdditionalServiceMessage: true)
@@ -45,6 +46,7 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
     private var dustNode: InvisibleInkDustNode?
     private let placeholderNode: StickerShimmerEffectNode
     private let animationNode: AnimatedStickerNode
+    private let giftIcon = ComponentView<Empty>()
     
     private let modelTitleTextNode: TextNode
     private let modelValueTextNode: TextNode
@@ -416,6 +418,7 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                 var months: Int32 = 3
                 var animationName: String = ""
                 var animationFile: TelegramMediaFile?
+                var uniqueGift: StarGift.UniqueGift?
                 var title = item.presentationData.strings.Notification_PremiumGift_Title
                 var text = ""
                 var subtitleColor = primaryTextColor
@@ -708,6 +711,20 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                                 text = item.presentationData.strings.Notification_StarGift_Subtitle_Refunded
                                 animationFile = gift.file
                             }
+                        case let .setChatTheme(chatTheme):
+                            title = ""
+                            var giftTitle = ""
+                            if case let .gift(gift, _) = chatTheme, case let .unique(uniqueGiftValue) = gift {
+                                giftTitle = "\(uniqueGiftValue.title) #\(formatCollectibleNumber(uniqueGiftValue.number, dateTimeFormat: item.presentationData.dateTimeFormat))"
+                                uniqueGift = uniqueGiftValue
+                            }
+                            if incoming {
+                                let authorName = item.message.author.flatMap { EnginePeer($0) }?.compactDisplayTitle ?? ""
+                                text = item.presentationData.strings.Notification_ChatTheme_Text(authorName, giftTitle).string
+                            } else {
+                                text = item.presentationData.strings.Notification_ChatTheme_TextYou(giftTitle).string
+                            }
+                            hasServiceMessage = false
                         default:
                             break
                         }
@@ -866,6 +883,10 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                     giftSize.height += 12.0
                 }
                 
+                if let _ = uniqueGift {
+                    giftSize.height -= 31.0
+                }
+                
                 var labelRects = labelLayout.linesRects()
                 if labelRects.count > 1 {
                     let sortedIndices = (0 ..< labelRects.count).sorted(by: { labelRects[$0].width > labelRects[$1].width })
@@ -944,7 +965,7 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                             strongSelf.creatorButtonNode.isUserInteractionEnabled = !item.presentationData.isPreview
                             strongSelf.creatorButtonTitleNode.isHidden = creatorButtonTitle.isEmpty
                                                     
-                            if strongSelf.item == nil && !isStoryEntity {
+                            if strongSelf.item == nil && !isStoryEntity && uniqueGift == nil {
                                 strongSelf.animationNode.started = { [weak self] in
                                     if let strongSelf = self {
                                         let current = CACurrentMediaTime()
@@ -1009,7 +1030,10 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                             let titleFrame = CGRect(origin: CGPoint(x: mediaBackgroundFrame.minX + floorToScreenPixels((mediaBackgroundFrame.width - titleLayout.size.width) / 2.0) , y: mediaBackgroundFrame.minY + 151.0), size: titleLayout.size)
                             strongSelf.titleNode.frame = titleFrame
                                                         
-                            let clippingTextFrame = CGRect(origin: CGPoint(x: mediaBackgroundFrame.minX + floorToScreenPixels((mediaBackgroundFrame.width - subtitleLayout.size.width) / 2.0), y: titleFrame.maxY + textSpacing), size: CGSize(width: subtitleLayout.size.width, height: clippedTextHeight))
+                            var clippingTextFrame = CGRect(origin: CGPoint(x: mediaBackgroundFrame.minX + floorToScreenPixels((mediaBackgroundFrame.width - subtitleLayout.size.width) / 2.0), y: titleFrame.maxY + textSpacing), size: CGSize(width: subtitleLayout.size.width, height: clippedTextHeight))
+                            if let _ = uniqueGift {
+                                clippingTextFrame.origin.y -= 23.0
+                            }
                             
                             var attributesOffsetY: CGFloat = 0.0
                             
@@ -1315,6 +1339,31 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                                 }
                             }
                             
+                            if let uniqueGift {
+                                let iconSize = CGSize(width: 94.0, height: 94.0)
+                                let _ = strongSelf.giftIcon.update(
+                                    transition: .immediate,
+                                    component: AnyComponent(GiftItemComponent(
+                                        context: item.context,
+                                        theme: item.presentationData.theme.theme,
+                                        strings: item.presentationData.strings,
+                                        peer: nil,
+                                        subject: .uniqueGift(gift: uniqueGift, price: nil),
+                                        mode: .thumbnail
+                                    )),
+                                    environment: {},
+                                    containerSize: iconSize
+                                )
+                                if let giftIconView = strongSelf.giftIcon.view {
+                                    if giftIconView.superview == nil {
+                                       // backgroundView.layer.cornerRadius = 20.0
+                                        //backgroundView.clipsToBounds = true
+                                        strongSelf.view.addSubview(giftIconView)
+                                    }
+                                    giftIconView.frame = CGRect(origin: CGPoint(x: mediaBackgroundFrame.minX + floorToScreenPixels((mediaBackgroundFrame.width - iconSize.width) / 2.0), y: mediaBackgroundFrame.minY + 17.0), size: iconSize)
+                                }
+                            }
+                            
                             let baseBackgroundFrame = labelFrame.offsetBy(dx: 0.0, dy: -11.0)
                             if let (offset, image) = backgroundMaskImage {
                                 if strongSelf.backgroundNode == nil {
@@ -1524,7 +1573,9 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
         if isPlaying {
             var alreadySeen = true
             
-            if item.message.flags.contains(.Incoming) {
+            if let action = item.message.media.first(where: { $0 is TelegramMediaAction }) as? TelegramMediaAction, case .setChatTheme = action.action {
+                
+            } else if item.message.flags.contains(.Incoming) {
                 if let unreadRange = item.controllerInteraction.unreadMessageRange[UnreadMessageRangeKey(peerId: item.message.id.peerId, namespace: item.message.id.namespace)] {
                     if unreadRange.contains(item.message.id.id) {
                         alreadySeen = false

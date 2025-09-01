@@ -589,14 +589,14 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         }
         
         var currentSavedMusic: TelegramMediaFile?
-        if !self.isSettings, let screenData {
+        if let peer, peer.id != self.context.account.peerId || self.isMyProfile, let screenData {
             if let savedMusicState = screenData.savedMusicState {
                 currentSavedMusic = savedMusicState.files.first
             } else if let cachedUserData = screenData.cachedData as? CachedUserData {
                 currentSavedMusic = cachedUserData.savedMusic
             }
         }
-        let musicHeight: CGFloat = hasBackground ? 24.0 : 16.0
+        let musicHeight: CGFloat = hasBackground || self.isAvatarExpanded ? 24.0 : 16.0
         let bottomInset: CGFloat = currentSavedMusic != nil ? musicHeight : 0.0
         
         let isLandscape = containerInset > 16.0
@@ -2640,7 +2640,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                     }
                     return musicBackground
                 }()
-                musicTransition.updateFrame(view: musicBackground, frame: CGRect(origin: CGPoint(x: 0.0, y: backgroundHeight - musicHeight - buttonRightOrigin.y), size: CGSize(width: backgroundFrame.width, height: musicHeight)))
+                musicTransition.updateFrame(view: musicBackground, frame: CGRect(origin: CGPoint(x: 0.0, y: backgroundHeight - 24.0 - buttonRightOrigin.y), size: CGSize(width: backgroundFrame.width, height: 24.0)))
                 
                 if let _ = self.navigationTransition {
                     transition.updateAlpha(layer: musicBackground.layer, alpha: 1.0 - transitionFraction)
@@ -2698,7 +2698,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                 environment: {},
                 containerSize: CGSize(width: backgroundFrame.width, height: musicHeight)
             )
-            let musicFrame = CGRect(origin: CGPoint(x: 0.0, y: (apparentBackgroundHeight - backgroundHeight) + backgroundHeight - musicHeight - (hasBackground ? 0.0 : 4.0)), size: musicSize)
+            let musicFrame = CGRect(origin: CGPoint(x: 0.0, y: (apparentBackgroundHeight - backgroundHeight) + backgroundHeight - musicHeight - (hasBackground || self.isAvatarExpanded ? 0.0 : 4.0)), size: musicSize)
             if let musicView = music.view {
                 if musicView.superview == nil {
                     self.regularContentNode.view.addSubview(musicView)
