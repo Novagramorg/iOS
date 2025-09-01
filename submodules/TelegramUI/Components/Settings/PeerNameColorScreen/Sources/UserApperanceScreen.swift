@@ -465,7 +465,9 @@ final class UserAppearanceScreenComponent: Component {
                                 resellForTonOnly: false,
                                 releasedBy: nil,
                                 valueAmount: nil,
-                                valueCurrency: nil
+                                valueCurrency: nil,
+                                flags: [],
+                                themePeerId: nil
                             )
                             signal = component.context.engine.accountData.setStarGiftStatus(starGift: gift, expirationDate: emojiStatus.expirationDate)
                         } else {

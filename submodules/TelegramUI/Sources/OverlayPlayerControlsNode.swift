@@ -1026,13 +1026,12 @@ final class OverlayPlayerControlsNode: ASDisplayNode {
         self.separatorNode.isHidden = hasSectionHeader
         
         if hasSectionHeader {
-            //TODO:localize
             let sideInset: CGFloat = 16.0
-            var sectionTitle = "AUDIO IN THIS CHAT"
+            var sectionTitle = self.presentationData.strings.MediaPlayer_Playlist_ThisChat
             if let peerName = self.peerName {
-                sectionTitle = "\(peerName.uppercased())'S PLAYLIST"
+                sectionTitle = self.presentationData.strings.MediaPlayer_Playlist_SavedMusic(peerName.uppercased()).string
             } else if case .custom = self.source {
-                sectionTitle = "YOUR PLAYLIST"
+                sectionTitle = self.presentationData.strings.MediaPlayer_Playlist_SavedMusicYou
             }
             let sectionTitleSize = self.sectionTitle.update(
                 transition: .immediate,
@@ -1096,7 +1095,7 @@ final class OverlayPlayerControlsNode: ASDisplayNode {
                     return (TelegramTextAttributes.URL, contents)
                 })
                 
-                let attributedString = parseMarkdownIntoAttributedString("This audio is visible on your profile. [Remove >]()", attributes: markdownAttributes, textAlignment: .center).mutableCopy() as! NSMutableAttributedString
+                let attributedString = parseMarkdownIntoAttributedString(self.presentationData.strings.MediaPlayer_SavedMusic_RemoveFromProfile, attributes: markdownAttributes, textAlignment: .center).mutableCopy() as! NSMutableAttributedString
                 if let range = attributedString.string.range(of: ">"), let chevronImage = self.cachedChevronImage?.0 {
                     attributedString.addAttribute(.attachment, value: chevronImage, range: NSRange(range, in: attributedString.string))
                     attributedString.addAttribute(.baselineOffset, value: 1.0, range: NSRange(range, in: attributedString.string))
@@ -1125,7 +1124,6 @@ final class OverlayPlayerControlsNode: ASDisplayNode {
                 ))
                 profileAudioOffset = 18.0
             } else {
-                //TODO:localize
                 profileAudioComponent = AnyComponent(ButtonComponent(
                     background: ButtonComponent.Background(
                         color: self.presentationData.theme.list.itemCheckColors.fillColor,
@@ -1139,7 +1137,7 @@ final class OverlayPlayerControlsNode: ASDisplayNode {
                                 BundleIconComponent(name: "Peer Info/SaveMusic", tintColor: self.presentationData.theme.list.itemCheckColors.foregroundColor)
                             )),
                             AnyComponentWithIdentity(id: "label", component: AnyComponent(
-                                MultilineTextComponent(text: .plain(NSAttributedString(string: "Add to Profile", font: Font.semibold(17.0), textColor: self.presentationData.theme.list.itemCheckColors.foregroundColor)))
+                                MultilineTextComponent(text: .plain(NSAttributedString(string: self.presentationData.strings.MediaPlayer_SavedMusic_AddToProfile, font: Font.semibold(17.0), textColor: self.presentationData.theme.list.itemCheckColors.foregroundColor)))
                             ))
                         ], spacing: 8.0)
                     )),
