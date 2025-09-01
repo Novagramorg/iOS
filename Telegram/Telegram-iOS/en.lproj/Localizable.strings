@@ -15004,3 +15004,7 @@ Sorry for the inconvenience.";
 "Notification.PrepaidGiftUpgrade" = "Gift Upgrade for %@";
 "Notification.PrepaidGiftUpgrade.Stars_1" = "%@ Star";
 "Notification.PrepaidGiftUpgrade.Stars_any" = "%@ Stars";
+
+"ProfileLevelInfo.RatingTitle" = "Rating";
+"ProfileLevelInfo.FutureRatingTitle" = "Future Rating";
+
