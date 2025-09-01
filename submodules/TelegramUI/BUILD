@@ -485,6 +485,7 @@ swift_library(
         "//submodules/TelegramUI/Components/Stars/BalanceNeededScreen",
         "//submodules/TelegramUI/Components/FaceScanScreen",
         "//submodules/TelegramUI/Components/MediaManager/PeerMessagesMediaPlaylist",
+        "//submodules/TelegramUI/Components/ChatThemeScreen",
         "//submodules/ContactsHelper",
         "//submodules/TelegramUI/Components/GlassBackgroundComponent",
         "//submodules/TelegramUI/Components/Chat/ChatInputAccessoryPanel",

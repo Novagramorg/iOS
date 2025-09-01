@@ -349,6 +349,8 @@ open class ListView: ASDisplayNode, ASScrollViewDelegate, ASGestureRecognizerDel
     public final var beganInteractiveDragging: (CGPoint) -> Void = { _ in }
     public final var endedInteractiveDragging: (CGPoint) -> Void = { _ in }
     public final var didEndScrolling: ((Bool) -> Void)?
+    public final var didEndScrollingWithOverscroll: (() -> Void)?
+    
     
     private var currentGeneralScrollDirection: GeneralScrollDirection?
     public final var generalScrollDirectionUpdated: (GeneralScrollDirection) -> Void = { _ in }
@@ -891,6 +893,10 @@ open class ListView: ASDisplayNode, ASScrollViewDelegate, ASGestureRecognizerDel
             self.resetScrollIndicatorFlashTimer(start: false)
             
             self.isAuxiliaryDisplayLinkEnabled = true
+            
+            if scrollView.contentOffset.y < -48.0 {
+                self.didEndScrollingWithOverscroll?()
+            }
         } else {
             self.isDeceleratingAfterTracking = false
             self.resetHeaderItemsFlashTimer(start: true)
