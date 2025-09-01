@@ -486,6 +486,9 @@ swift_library(
         "//submodules/TelegramUI/Components/FaceScanScreen",
         "//submodules/TelegramUI/Components/MediaManager/PeerMessagesMediaPlaylist",
         "//submodules/ContactsHelper",
+        "//submodules/TelegramUI/Components/GlassBackgroundComponent",
+        "//submodules/TelegramUI/Components/Chat/ChatInputAccessoryPanel",
+        "//submodules/TelegramUI/Components/Chat/ChatInputMessageAccessoryPanel",
     ] + select({
         "@build_bazel_rules_apple//apple:ios_arm64": appcenter_targets,
         "//build-system:ios_sim_arm64": [],

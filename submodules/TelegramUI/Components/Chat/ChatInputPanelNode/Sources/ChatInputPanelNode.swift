@@ -6,6 +6,7 @@ import Postbox
 import TelegramCore
 import AccountContext
 import ChatPresentationInterfaceState
+import ChatControllerInteraction
 
 public protocol ChatInputPanelViewForOverlayContent: UIView {
     func maybeDismissContent(point: CGPoint)
@@ -13,6 +14,7 @@ public protocol ChatInputPanelViewForOverlayContent: UIView {
 
 open class ChatInputPanelNode: ASDisplayNode {
     open var context: AccountContext?
+    open var chatControllerInteraction: ChatControllerInteraction?
     open var interfaceInteraction: ChatPanelInterfaceInteraction?
     open var prevInputPanelNode: ChatInputPanelNode?
     

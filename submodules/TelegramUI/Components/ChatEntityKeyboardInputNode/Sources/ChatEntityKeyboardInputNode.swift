@@ -407,7 +407,7 @@ public final class ChatEntityKeyboardInputNode: ChatInputNode {
         }
     }
     
-    fileprivate var clipContentToTopPanel: Bool = false
+    public var clipContentToTopPanel: Bool = false
     
     public var externalTopPanelContainerImpl: PagerExternalTopPanelContainer?
     public override var externalTopPanelContainer: UIView? {
