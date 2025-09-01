@@ -1033,7 +1033,6 @@ private class ChatThemeScreenNode: ViewControllerTracingNode, ASScrollViewDelega
                 let initialThemeIndex = giftThemes.firstIndex(where: { $0.id == initiallySelectedTheme.id })
                 if initialThemeIndex == nil || initialThemeIndex! > 50 {
                     giftThemes.insert(initiallySelectedTheme, at: 0)
-                    existingIds.insert(initiallySelectedTheme.id)
                 }
             }
             
@@ -1074,6 +1073,7 @@ private class ChatThemeScreenNode: ViewControllerTracingNode, ASScrollViewDelega
                     strings: presentationData.strings,
                     wallpaper: wallpaper
                 ))
+                existingIds.insert(theme.id)
             }
             
             if uniqueGiftChatThemesState.themes.count == 0 || uniqueGiftChatThemesState.dataState == .ready(canLoadMore: false) {
