@@ -387,12 +387,16 @@ public final class GlassBackgroundView: UIView {
         if let nativeView = self.nativeView {
             let previousFrame = nativeView.frame
             
-            transition.containedViewLayoutTransition.animateView {
+            if transition.animation.isImmediate {
                 nativeView.layer.cornerRadius = cornerRadius
                 nativeView.frame = CGRect(origin: CGPoint(), size: size)
+            } else {
+                transition.containedViewLayoutTransition.animateView {
+                    nativeView.layer.cornerRadius = cornerRadius
+                    nativeView.frame = CGRect(origin: CGPoint(), size: size)
+                }
+                nativeView.layer.animateFrame(from: previousFrame, to: CGRect(origin: CGPoint(), size: size), duration: 0.4, timingFunction: kCAMediaTimingFunctionSpring)
             }
-            
-            nativeView.layer.animateFrame(from: previousFrame, to: CGRect(origin: CGPoint(), size: size), duration: 0.4, timingFunction: kCAMediaTimingFunctionSpring)
         }
         if let backgroundNode = self.backgroundNode {
             backgroundNode.updateColor(color: .clear, forceKeepBlur: tintColor.alpha != 1.0, transition: transition.containedViewLayoutTransition)

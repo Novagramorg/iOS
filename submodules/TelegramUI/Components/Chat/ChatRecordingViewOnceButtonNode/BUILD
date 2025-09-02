@@ -1,8 +1,8 @@
 load("@build_bazel_rules_swift//swift:swift.bzl", "swift_library")
 
 swift_library(
-    name = "AudioBlob",
-    module_name = "AudioBlob",
+    name = "ChatRecordingViewOnceButtonNode",
+    module_name = "ChatRecordingViewOnceButtonNode",
     srcs = glob([
         "Sources/**/*.swift",
     ]),
@@ -12,9 +12,7 @@ swift_library(
     deps = [
         "//submodules/AsyncDisplayKit",
         "//submodules/Display",
-        "//submodules/LegacyComponents",
-        "//submodules/MetalEngine",
-        "//submodules/TelegramUI/Components/Calls/CallScreen",
+        "//submodules/TelegramPresentationData",
         "//submodules/TelegramUI/Components/GlassBackgroundComponent",
     ],
     visibility = [

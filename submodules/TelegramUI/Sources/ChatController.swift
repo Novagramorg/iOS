@@ -9961,7 +9961,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         transition.updateSublayerTransformScale(node: self.chatDisplayNode.historyNode, scale: scale)
     }
     
-    func restrictedSendingContentsText() -> String {
+    public func restrictedSendingContentsText() -> String {
         guard let peer = self.presentationInterfaceState.renderedPeer?.peer else {
             return self.presentationData.strings.Chat_SendNotAllowedText
         }

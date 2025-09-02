@@ -829,6 +829,8 @@ final class PeerSelectionControllerNode: ASDisplayNode {
         }, dismissUrlPreview: {
         }, dismissForwardMessages: {
         }, dismissSuggestPost: {
+        }, displayUndo: { _ in
+        }, sendEmoji: { _, _, _ in
         }, updateHistoryFilter: { _ in
         }, updateChatLocationThread: { _, _ in
         }, toggleChatSidebarMode: {

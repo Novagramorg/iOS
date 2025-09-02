@@ -3932,7 +3932,7 @@ extension ChatControllerImpl {
             
             strongSelf.chatDisplayNode.messageTransitionNode.dismissMessageReactionContexts()
             
-            let contextController = ContextController(presentationData: strongSelf.presentationData, source: .reference(ChatControllerContextReferenceContentSource(controller: strongSelf, sourceView: node.view, insets: UIEdgeInsets(top: 0.0, left: 0.0, bottom: bottomInset, right: 0.0))), items: .single(ContextController.Items(content: .list(items))), gesture: gesture, workaroundUseLegacyImplementation: true)
+            let contextController = ContextController(presentationData: strongSelf.presentationData, source: .reference(ChatControllerContextReferenceContentSource(controller: strongSelf, sourceView: node.view, insets: UIEdgeInsets(top: 0.0, left: 0.0, bottom: bottomInset, right: 0.0), contentInsets: UIEdgeInsets(top: 0.0, left: 0.0, bottom: 0.0, right: 0.0))), items: .single(ContextController.Items(content: .list(items))), gesture: gesture, workaroundUseLegacyImplementation: true)
             contextController.dismissed = { [weak self] in
                 if let strongSelf = self {
                     strongSelf.updateChatPresentationInterfaceState(interactive: true, {
@@ -4364,6 +4364,16 @@ extension ChatControllerImpl {
                 }
                 return state
             })
+        }, displayUndo: { [weak self] content in
+            guard let self else {
+                return
+            }
+            self.controllerInteraction?.displayUndo(content)
+        }, sendEmoji: { [weak self] text, attribute, immediately in
+            guard let self else {
+                return
+            }
+            self.controllerInteraction?.sendEmoji(text, attribute, immediately)
         }, updateHistoryFilter: { [weak self] update in
             guard let self else {
                 return

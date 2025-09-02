@@ -14,6 +14,8 @@ import ComponentFlow
 import LottieAnimationComponent
 import LottieComponent
 import LegacyInstantVideoController
+import GlassBackgroundComponent
+import ComponentDisplayAdapters
 
 private let offsetThreshold: CGFloat = 10.0
 private let dismissOffsetThreshold: CGFloat = 70.0
@@ -453,17 +455,23 @@ public final class ChatTextInputMediaRecordingButton: TGModernConversationInputM
         self.updateAnimation(previousMode: self.mode)
         
         self.pallete = legacyInputMicPalette(from: theme)
-        self.micDecorationValue?.setColor( self.theme.chat.inputPanel.actionControlFillColor)
+        self.micDecorationValue?.setColor(self.theme.chat.inputPanel.actionControlFillColor)
         (self.micLockValue as? LockView)?.updateTheme(theme)
     }
     
-    public override func createLockPanelView() -> UIView! {
+    public override func createLockPanelView() -> (UIView & TGModernConversationInputMicButtonLockPanelView)! {
+        let isDark: Bool
+        let tintColor: UIColor
         if self.hidesOnLock {
-            let view = WrapperBlurrredBackgroundView(frame: CGRect(origin: .zero, size: CGSize(width: 40.0, height: 72.0)))
-            return view
+            isDark = false
+            tintColor = UIColor(white: 0.0, alpha: 0.5)
         } else {
-            return super.createLockPanelView()
+            isDark = self.theme.overallDarkAppearance
+            tintColor = self.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.65)
         }
+        
+        let view = WrapperBlurrredBackgroundView(size: CGSize(width: 40.0, height: 72.0), isDark: isDark, tintColor: tintColor)
+        return view
     }
     
     public func cancelRecording() {
@@ -614,16 +622,22 @@ public final class ChatTextInputMediaRecordingButton: TGModernConversationInputM
     }
 }
 
-private class WrapperBlurrredBackgroundView: UIView {
-    let view: BlurredBackgroundView
+private class WrapperBlurrredBackgroundView: UIView, TGModernConversationInputMicButtonLockPanelView {
+    let isDark: Bool
+    let glassTintColor: UIColor
     
-    override init(frame: CGRect) {
-        let view = BlurredBackgroundView(color: UIColor(white: 0.0, alpha: 0.5), enableBlur: true)
-        view.frame = CGRect(origin: .zero, size: frame.size)
-        view.update(size: frame.size, cornerRadius: frame.width / 2.0, transition: .immediate)
+    let view: GlassBackgroundView
+    
+    init(size: CGSize, isDark: Bool, tintColor: UIColor) {
+        self.isDark = isDark
+        self.glassTintColor = tintColor
+        
+        let view = GlassBackgroundView()
+        view.frame = CGRect(origin: CGPoint(), size: size)
+        view.update(size: size, cornerRadius: min(size.width, size.height) * 0.5, isDark: self.isDark, tintColor: self.glassTintColor, transition: .immediate)
         self.view = view
 
-        super.init(frame: frame)
+        super.init(frame: CGRect(origin: CGPoint(), size: size))
         
         self.addSubview(view)
     }
@@ -637,7 +651,14 @@ private class WrapperBlurrredBackgroundView: UIView {
             return super.frame
         } set {
             super.frame = newValue
-            self.view.update(size: newValue.size, cornerRadius: newValue.width / 2.0, transition: .immediate)
+            self.view.frame = CGRect(origin: CGPoint(), size: newValue.size)
+            self.view.update(size: newValue.size, cornerRadius: min(newValue.width, newValue.height) * 0.5, isDark: self.isDark, tintColor: self.glassTintColor, transition: .immediate)
         }
+    }
+    
+    func update(_ size: CGSize) {
+        let transition = ContainedViewLayoutTransition.animated(duration: 0.2, curve: .easeInOut)
+        transition.updateFrame(view: self.view, frame: CGRect(origin: CGPoint(), size: size))
+        self.view.update(size: size, cornerRadius: min(size.width, size.height) * 0.5, isDark: self.isDark, tintColor: self.glassTintColor, transition: ComponentTransition(transition))
     }
 }

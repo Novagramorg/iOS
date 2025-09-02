@@ -48,6 +48,7 @@ import SpaceWarpView
 import ChatSideTopicsPanel
 import GlassBackgroundComponent
 import ChatThemeScreen
+import ChatTextInputPanelNode
 
 final class VideoNavigationControllerDropContentItem: NavigationControllerDropContentItem {
     let itemNode: OverlayMediaItemNode
@@ -235,6 +236,8 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
     
     private var leftPanelContainer: ChatControllerTitlePanelNodeContainer
     private(set) var leftPanel: (component: AnyComponentWithIdentity<ChatSidePanelEnvironment>, view: ComponentView<ChatSidePanelEnvironment>)?
+    
+    private var bottomBackgroundEdgeEffectNode: WallpaperEdgeEffectNode?
     
     private var inputPanelBackgroundBlurMask: UIImageView?
     private var inputPanelBackgroundBlurView: VariableBlurView?
@@ -855,6 +858,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         self.textInputPanelNode = ChatTextInputPanelNode(context: context, presentationInterfaceState: chatPresentationInterfaceState, presentationContext: ChatPresentationContext(context: context, backgroundNode: backgroundNode), presentController: { [weak self] controller in
             self?.interfaceInteraction?.presentController(controller, nil)
         })
+        self.textInputPanelNode?.textInputAccessoryPanel = textInputAccessoryPanel
         self.textInputPanelNode?.storedInputLanguage = chatPresentationInterfaceState.interfaceState.inputLanguage
         self.textInputPanelNode?.updateHeight = { [weak self] animated in
             if let strongSelf = self, let _ = strongSelf.inputPanelNode as? ChatTextInputPanelNode, !strongSelf.ignoreUpdateHeight {
@@ -2200,6 +2204,32 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         if case .standard(.embedded) = self.chatPresentationInterfaceState.mode {
             if self.inputPanelNode == nil {
                 inputBackgroundFrame.origin.y = layout.size.height
+            }
+        }
+        
+        if "".isEmpty {
+            var bottomBackgroundEdgeEffectNode: WallpaperEdgeEffectNode?
+            if let current = self.bottomBackgroundEdgeEffectNode {
+                bottomBackgroundEdgeEffectNode = current
+            } else {
+                if let value = self.backgroundNode.makeEdgeEffectNode() {
+                    bottomBackgroundEdgeEffectNode = value
+                    self.bottomBackgroundEdgeEffectNode = value
+                    self.historyNodeContainer.view.superview?.insertSubview(value.view, aboveSubview: self.historyNodeContainer.view)
+                }
+            }
+            
+            if let bottomBackgroundEdgeEffectNode {
+                var blurFrame = inputBackgroundFrame
+                blurFrame.origin.y -= 26.0
+                blurFrame.size.height += 100.0
+                transition.updateFrame(node: bottomBackgroundEdgeEffectNode, frame: blurFrame)
+                bottomBackgroundEdgeEffectNode.update(
+                    rect: blurFrame,
+                    edge: WallpaperEdgeEffectEdge(edge: .bottom, size: 80.0),
+                    containerSize: wallpaperBounds.size,
+                    transition: transition
+                )
             }
         }
         
@@ -3931,9 +3961,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
     }
     
     func sendButtonFrame() -> CGRect? {
-        if let mediaPreviewNode = self.inputPanelNode as? ChatRecordingPreviewInputPanelNode {
-            return mediaPreviewNode.convert(mediaPreviewNode.sendButton.frame, to: self)
-        } else if let frame = self.textInputPanelNode?.actionButtons.frame {
+        if let frame = self.textInputPanelNode?.actionButtons.frame {
             return self.textInputPanelNode?.convert(frame, to: self)
         } else {
             return nil
@@ -3973,10 +4001,6 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         if let textInputPanelNode = self.textInputPanelNode, self.inputPanelNode === textInputPanelNode {
             return textInputPanelNode.frameForInputActionButton().flatMap {
                 return $0.offsetBy(dx: textInputPanelNode.frame.minX, dy: textInputPanelNode.frame.minY)
-            }
-        } else if let recordingPreviewPanelNode = self.inputPanelNode as? ChatRecordingPreviewInputPanelNode {
-            return recordingPreviewPanelNode.frameForInputActionButton().flatMap {
-                return $0.offsetBy(dx: recordingPreviewPanelNode.frame.minX, dy: recordingPreviewPanelNode.frame.minY)
             }
         }
         return nil
@@ -4722,7 +4746,12 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                         }
                         if self.shouldAnimateMessageTransition, let inputPanelNode = self.inputPanelNode as? ChatTextInputPanelNode, let textInput = inputPanelNode.makeSnapshotForTransition() {
                             usedCorrelationId = correlationId
-                            let source: ChatMessageTransitionNodeImpl.Source = .textInput(textInput: textInput, replyPanel: replyPanel)
+                            let source: ChatMessageTransitionNodeImpl.Source = .textInput(textInput: ChatMessageTransitionNodeImpl.Source.TextInput(
+                                backgroundView: textInput.backgroundView,
+                                contentView: textInput.contentView,
+                                sourceRect: textInput.sourceRect,
+                                scrollOffset: textInput.scrollOffset
+                            ), replyPanel: replyPanel)
                             self.messageTransitionNode.add(correlationId: correlationId, source: source, initiated: {
                             })
                         }

@@ -81,6 +81,25 @@ public enum WallpaperDisplayMode {
     }
 }
 
+public struct WallpaperEdgeEffectEdge: Equatable {
+    public enum Edge {
+        case top
+        case bottom
+    }
+    
+    public var edge: Edge
+    public var size: CGFloat
+    
+    public init(edge: Edge, size: CGFloat) {
+        self.edge = edge
+        self.size = size
+    }
+}
+
+public protocol WallpaperEdgeEffectNode: ASDisplayNode {
+    func update(rect: CGRect, edge: WallpaperEdgeEffectEdge, containerSize: CGSize, transition: ContainedViewLayoutTransition)
+}
+
 public protocol WallpaperBackgroundNode: ASDisplayNode {
     var isReady: Signal<Bool, NoError> { get }
     var rotation: CGFloat { get set }
@@ -99,6 +118,8 @@ public protocol WallpaperBackgroundNode: ASDisplayNode {
     func hasExtraBubbleBackground() -> Bool
     
     func makeDimmedNode() -> ASDisplayNode?
+    
+    func makeEdgeEffectNode() -> WallpaperEdgeEffectNode?
 }
 
 private final class EffectImageLayer: SimpleLayer, GradientBackgroundPatternOverlayLayer {
@@ -493,7 +514,7 @@ public final class WallpaperBackgroundNodeImpl: ASDisplayNode, WallpaperBackgrou
 
                 if needsGradientBackground, let gradientBackgroundNode = gradientBackgroundSource {
                     if self.gradientWallpaperNode == nil {
-                        let gradientWallpaperNode = GradientBackgroundNode.CloneNode(parentNode: gradientBackgroundNode)
+                        let gradientWallpaperNode = GradientBackgroundNode.CloneNode(parentNode: gradientBackgroundNode, isDimmed: true)
                         gradientWallpaperNode.frame = self.bounds
                         self.gradientWallpaperNode = gradientWallpaperNode
                         self.insertSubnode(gradientWallpaperNode, at: 0)
@@ -764,6 +785,8 @@ public final class WallpaperBackgroundNodeImpl: ASDisplayNode, WallpaperBackgrou
     private var modelRectIndex: Int32?
     
     private var modelStickerNode: DefaultAnimatedStickerNodeImpl?
+    
+    fileprivate let edgeEffectNodes = SparseBag<Weak<WallpaperEdgeEffectNodeImpl>>()
     
     private var isSettingUpWallpaper: Bool = false
 
@@ -1188,6 +1211,12 @@ public final class WallpaperBackgroundNodeImpl: ASDisplayNode, WallpaperBackgrou
                 self.contentNode.alpha = 1.0
                 self.patternImageLayer.backgroundColor = nil
             }
+            
+            for edgeEffectNode in self.edgeEffectNodes {
+                if let edgeEffectNode = edgeEffectNode.value {
+                    edgeEffectNode.updatePattern(isInverted: invertPattern)
+                }
+            }
         default:
             self.patternImageDisposable.set(nil)
             self.symbolImageDisposable.set(nil)
@@ -1198,6 +1227,12 @@ public final class WallpaperBackgroundNodeImpl: ASDisplayNode, WallpaperBackgrou
             self.backgroundColor = nil
             self.gradientBackgroundNode?.contentView.alpha = 1.0
             self.contentNode.alpha = 1.0
+            
+            for edgeEffectNode in self.edgeEffectNodes {
+                if let edgeEffectNode = edgeEffectNode.value {
+                    edgeEffectNode.updatePattern(isInverted: false)
+                }
+            }
         }
     }
 
@@ -1670,9 +1705,147 @@ public final class WallpaperBackgroundNodeImpl: ASDisplayNode, WallpaperBackgrou
     
     public func makeDimmedNode() -> ASDisplayNode? {
         if let gradientBackgroundNode = self.gradientBackgroundNode {
-            return GradientBackgroundNode.CloneNode(parentNode: gradientBackgroundNode)
+            return GradientBackgroundNode.CloneNode(parentNode: gradientBackgroundNode, isDimmed: true)
         } else {
             return nil
+        }
+    }
+    
+    public func makeEdgeEffectNode() -> WallpaperEdgeEffectNode? {
+        if let gradientBackgroundNode = self.gradientBackgroundNode {
+            let node = WallpaperEdgeEffectNodeImpl(parentNode: self)
+            node.cloneNode = GradientBackgroundNode.CloneNode(parentNode: gradientBackgroundNode, isDimmed: false)
+            return node
+        } else {
+            return nil
+        }
+    }
+}
+
+private final class WallpaperEdgeEffectNodeImpl: ASDisplayNode, WallpaperEdgeEffectNode {
+    var cloneNode: GradientBackgroundNode.CloneNode? {
+        didSet {
+            if self.cloneNode !== oldValue {
+                if let cloneNode = self.cloneNode {
+                    self.containerNode.insertSubnode(cloneNode, at: 0)
+                    
+                    if let params = self.params {
+                        self.updateImpl(rect: params.rect, edge: params.edge, containerSize: params.containerSize, transition: .immediate)
+                    }
+                }
+            }
+        }
+    }
+    
+    private struct Params: Equatable {
+        let rect: CGRect
+        let edge: WallpaperEdgeEffectEdge
+        let containerSize: CGSize
+        
+        init(rect: CGRect, edge: WallpaperEdgeEffectEdge, containerSize: CGSize) {
+            self.rect = rect
+            self.edge = edge
+            self.containerSize = containerSize
+        }
+    }
+    
+    private let containerNode: ASDisplayNode
+    private let containerMaskingNode: ASDisplayNode
+    private let overlayNode: ASDisplayNode
+    private let maskView: UIImageView
+    
+    private weak var parentNode: WallpaperBackgroundNodeImpl?
+    private var index: Int?
+    private var params: Params?
+    
+    private var isInverted: Bool = false
+    
+    init(parentNode: WallpaperBackgroundNodeImpl) {
+        self.parentNode = parentNode
+        
+        self.containerNode = ASDisplayNode()
+        self.containerNode.anchorPoint = CGPoint()
+        self.containerNode.clipsToBounds = true
+        
+        self.containerMaskingNode = ASDisplayNode()
+        self.containerMaskingNode.addSubnode(self.containerNode)
+        
+        self.overlayNode = ASDisplayNode()
+        
+        self.maskView = UIImageView()
+        
+        super.init()
+        
+        self.addSubnode(self.containerMaskingNode)
+        self.containerMaskingNode.view.mask = self.maskView
+        
+        self.containerNode.addSubnode(self.overlayNode)
+        
+        self.index = parentNode.edgeEffectNodes.add(Weak(self))
+    }
+    
+    deinit {
+        if let index = self.index, let parentNode = self.parentNode {
+            parentNode.edgeEffectNodes.remove(index)
+        }
+    }
+    
+    func updatePattern(isInverted: Bool) {
+        if self.isInverted != isInverted {
+            self.isInverted = isInverted
+            
+            self.overlayNode.backgroundColor = isInverted ? .black : .clear
+        }
+    }
+    
+    func update(rect: CGRect, edge: WallpaperEdgeEffectEdge, containerSize: CGSize, transition: ContainedViewLayoutTransition) {
+        let params = Params(rect: rect, edge: edge, containerSize: containerSize)
+        if self.params != params {
+            self.params = params
+            self.updateImpl(rect: params.rect, edge: params.edge, containerSize: params.containerSize, transition: transition)
+        }
+    }
+    
+    private func updateImpl(rect: CGRect, edge: WallpaperEdgeEffectEdge, containerSize: CGSize, transition: ContainedViewLayoutTransition) {
+        transition.updateFrame(node: self.containerMaskingNode, frame: CGRect(origin: CGPoint(), size: rect.size))
+        transition.updateBounds(node: self.containerNode, bounds: CGRect(origin: CGPoint(x: rect.minX, y: rect.minY), size: rect.size))
+        
+        if self.maskView.image?.size.height != edge.size {
+            let baseGradientAlpha: CGFloat = 0.75
+            let numSteps = 8
+            let firstStep = 1
+            let firstLocation = 0.0
+            let colors: [UIColor] = (0 ..< numSteps).map { i in
+                if i < firstStep {
+                    return UIColor(white: 1.0, alpha: 1.0)
+                } else {
+                    let step: CGFloat = CGFloat(i - firstStep) / CGFloat(numSteps - firstStep - 1)
+                    let value: CGFloat = bezierPoint(0.42, 0.0, 0.58, 1.0, step)
+                    return UIColor(white: 1.0, alpha: baseGradientAlpha * value)
+                }
+            }
+            let locations: [CGFloat] = (0 ..< numSteps).map { i in
+                if i < firstStep {
+                    return 0.0
+                } else {
+                    let step: CGFloat = CGFloat(i - firstStep) / CGFloat(numSteps - firstStep - 1)
+                    return (firstLocation + (1.0 - firstLocation) * step)
+                }
+            }
+            
+            self.maskView.image = generateGradientImage(
+                size: CGSize(width: 8.0, height: edge.size),
+                colors: colors,
+                locations: locations
+            )?.stretchableImage(withLeftCapWidth: 0, topCapHeight: Int(edge.size))
+        }
+        
+        transition.updateFrame(view: self.maskView, frame: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: rect.size))
+        
+        transition.updateFrame(node: self.overlayNode, frame: CGRect(origin: CGPoint(), size: containerSize))
+        
+        if let cloneNode = self.cloneNode {
+            transition.updateFrame(node: cloneNode, frame: CGRect(origin: CGPoint(), size: containerSize))
         }
     }
 }
