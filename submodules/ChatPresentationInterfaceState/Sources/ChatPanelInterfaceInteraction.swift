@@ -8,6 +8,8 @@ import Display
 import AccountContext
 import ContextUI
 import TooltipUI
+import UndoUI
+import TextFormat
 
 public enum ChatLoadingMessageSubject {
     case generic
@@ -190,6 +192,8 @@ public final class ChatPanelInterfaceInteraction {
     public let dismissUrlPreview: () -> Void
     public let dismissForwardMessages: () -> Void
     public let dismissSuggestPost: () -> Void
+    public let displayUndo: (UndoOverlayContent) -> Void
+    public let sendEmoji: (String, ChatTextInputTextCustomEmojiAttribute, Bool) -> Void
     public let requestLayout: (ContainedViewLayoutTransition) -> Void
     public let chatController: () -> ViewController?
     public let statuses: ChatPanelInterfaceInteractionStatuses?
@@ -312,6 +316,8 @@ public final class ChatPanelInterfaceInteraction {
         dismissUrlPreview: @escaping () -> Void,
         dismissForwardMessages: @escaping () -> Void,
         dismissSuggestPost: @escaping () -> Void,
+        displayUndo: @escaping (UndoOverlayContent) -> Void,
+        sendEmoji: @escaping (String, ChatTextInputTextCustomEmojiAttribute, Bool) -> Void,
         updateHistoryFilter: @escaping ((ChatPresentationInterfaceState.HistoryFilter?) -> ChatPresentationInterfaceState.HistoryFilter?) -> Void,
         updateChatLocationThread: @escaping (Int64?, ChatControllerAnimateInnerChatSwitchDirection?) -> Void,
         toggleChatSidebarMode: @escaping () -> Void,
@@ -437,6 +443,8 @@ public final class ChatPanelInterfaceInteraction {
         self.dismissUrlPreview = dismissUrlPreview
         self.dismissForwardMessages = dismissForwardMessages
         self.dismissSuggestPost = dismissSuggestPost
+        self.displayUndo = displayUndo
+        self.sendEmoji = sendEmoji
         self.updateHistoryFilter = updateHistoryFilter
         self.updateChatLocationThread = updateChatLocationThread
         self.toggleChatSidebarMode = toggleChatSidebarMode
@@ -571,6 +579,8 @@ public final class ChatPanelInterfaceInteraction {
         }, dismissUrlPreview: {
         }, dismissForwardMessages: {
         }, dismissSuggestPost: {
+        }, displayUndo: { _ in
+        }, sendEmoji: { _, _, _ in
         }, updateHistoryFilter: { _ in
         }, updateChatLocationThread: { _, _ in
         }, toggleChatSidebarMode: {

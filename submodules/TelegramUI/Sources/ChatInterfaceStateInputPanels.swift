@@ -9,6 +9,7 @@ import ChatBotStartInputPanelNode
 import ChatChannelSubscriberInputPanelNode
 import ChatMessageSelectionInputPanelNode
 import ChatControllerInteraction
+import ChatTextInputPanelNode
 
 func inputPanelForChatPresentationIntefaceState(_ chatPresentationInterfaceState: ChatPresentationInterfaceState, context: AccountContext, currentPanel: ChatInputPanelNode?, currentSecondaryPanel: ChatInputPanelNode?, textInputPanelNode: ChatTextInputPanelNode?, chatControllerInteraction: ChatControllerInteraction?, interfaceInteraction: ChatPanelInterfaceInteraction?) -> (primary: ChatInputPanelNode?, secondary: ChatInputPanelNode?) {
     if let renderedPeer = chatPresentationInterfaceState.renderedPeer, renderedPeer.peer?.restrictionText(platform: "ios", contentSettings: context.currentContentSettings.with { $0 }) != nil {
@@ -418,12 +419,11 @@ func inputPanelForChatPresentationIntefaceState(_ chatPresentationInterfaceState
             }
         }
         
-        var displayBotStartPanel = false
-        
         var isScheduledMessages = false
         if case .scheduledMessages = chatPresentationInterfaceState.subject {
             isScheduledMessages = true
         }
+        var displayBotStartPanel = false
         
         if !isScheduledMessages {
             if let _ = chatPresentationInterfaceState.botStartPayload {
@@ -436,33 +436,9 @@ func inputPanelForChatPresentationIntefaceState(_ chatPresentationInterfaceState
                 }
             }
         }
+        let _ = displayBotStartPanel
         
-        if displayBotStartPanel, !"".isEmpty {
-            if let currentPanel = (currentPanel as? ChatBotStartInputPanelNode) ?? (currentSecondaryPanel as? ChatBotStartInputPanelNode) {
-                currentPanel.updateThemeAndStrings(theme: chatPresentationInterfaceState.theme, strings: chatPresentationInterfaceState.strings)
-                return (currentPanel, nil)
-            } else {
-                let panel = ChatBotStartInputPanelNode(theme: chatPresentationInterfaceState.theme, strings: chatPresentationInterfaceState.strings)
-                panel.context = context
-                panel.chatControllerInteraction = chatControllerInteraction
-                panel.interfaceInteraction = interfaceInteraction
-                return (panel, nil)
-            }
-        } else {
-            if let _ = chatPresentationInterfaceState.interfaceState.mediaDraftState {
-                if let currentPanel = (currentPanel as? ChatRecordingPreviewInputPanelNode) ?? (currentSecondaryPanel as? ChatRecordingPreviewInputPanelNode) {
-                    return (currentPanel, nil)
-                } else {
-                    let panel = ChatRecordingPreviewInputPanelNode(theme: chatPresentationInterfaceState.theme)
-                    panel.context = context
-                    panel.chatControllerInteraction = chatControllerInteraction
-                    panel.interfaceInteraction = interfaceInteraction
-                    return (panel, nil)
-                }
-            }
-            
-            displayInputTextPanel = true
-        }
+        displayInputTextPanel = true
     }
     
     if case let .customChatContents(customChatContents) = chatPresentationInterfaceState.subject {
@@ -504,7 +480,7 @@ func inputPanelForChatPresentationIntefaceState(_ chatPresentationInterfaceState
                 let panel = ChatTextInputPanelNode(context: context, presentationInterfaceState: chatPresentationInterfaceState, presentationContext: nil, presentController: { [weak interfaceInteraction] controller in
                     interfaceInteraction?.presentController(controller, nil)
                 })
-                
+                panel.textInputAccessoryPanel = textInputAccessoryPanel
                 panel.chatControllerInteraction = chatControllerInteraction
                 panel.interfaceInteraction = interfaceInteraction
                 panel.context = context

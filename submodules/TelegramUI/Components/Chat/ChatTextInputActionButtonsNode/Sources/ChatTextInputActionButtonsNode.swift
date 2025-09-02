@@ -128,33 +128,34 @@ private final class EffectBadgeView: UIView {
     }
 }
 
-final class ChatTextInputActionButtonsNode: ASDisplayNode, ChatSendMessageActionSheetControllerSourceSendButtonNode {
+public final class ChatTextInputActionButtonsNode: ASDisplayNode, ChatSendMessageActionSheetControllerSourceSendButtonNode {
     private let context: AccountContext
     private let presentationContext: ChatPresentationContext?
     private let strings: PresentationStrings
     
-    let micButtonBackgroundView: GlassBackgroundView
-    let micButtonTintMaskView: UIImageView
-    let micButton: ChatTextInputMediaRecordingButton
+    public let micButtonBackgroundView: GlassBackgroundView
+    public let micButtonTintMaskView: UIImageView
+    public let micButton: ChatTextInputMediaRecordingButton
     
-    let sendContainerNode: ASDisplayNode
-    let sendButtonBackgroundView: GlassBackgroundView
-    let sendButton: HighlightTrackingButtonNode
-    var sendButtonRadialStatusNode: ChatSendButtonRadialStatusNode?
-    var sendButtonHasApplyIcon = false
-    var animatingSendButton = false
+    public let sendContainerNode: ASDisplayNode
+    public let sendButtonBackgroundView: GlassBackgroundView
+    public let sendButton: HighlightTrackingButtonNode
+    public var sendButtonRadialStatusNode: ChatSendButtonRadialStatusNode?
+    public var sendButtonHasApplyIcon = false
+    public var animatingSendButton = false
     
-    let textNode: ImmediateAnimatedCountLabelNode
+    public let textNode: ImmediateAnimatedCountLabelNode
     
-    let expandMediaInputButton: HighlightTrackingButton
+    public let expandMediaInputButton: HighlightTrackingButton
     private let expandMediaInputButtonBackgroundView: GlassBackgroundView
     private let expandMediaInputButtonIcon: GlassBackgroundView.ContentImageView
+    
     private var effectBadgeView: EffectBadgeView?
     
-    var sendButtonLongPressed: ((ASDisplayNode, ContextGesture) -> Void)?
+    public var sendButtonLongPressed: ((ASDisplayNode, ContextGesture) -> Void)?
     
     private var gestureRecognizer: ContextGesture?
-    var sendButtonLongPressEnabled = false {
+    public var sendButtonLongPressEnabled = false {
         didSet {
             self.gestureRecognizer?.isEnabled = self.sendButtonLongPressEnabled
         }
@@ -165,7 +166,7 @@ final class ChatTextInputActionButtonsNode: ASDisplayNode, ChatSendMessageAction
     
     private var validLayout: CGSize?
     
-    init(context: AccountContext, presentationInterfaceState: ChatPresentationInterfaceState, presentationContext: ChatPresentationContext?, presentController: @escaping (ViewController) -> Void) {
+    public init(context: AccountContext, presentationInterfaceState: ChatPresentationInterfaceState, presentationContext: ChatPresentationContext?, presentController: @escaping (ViewController) -> Void) {
         self.context = context
         self.presentationContext = presentationContext
         let theme = presentationInterfaceState.theme
@@ -244,7 +245,7 @@ final class ChatTextInputActionButtonsNode: ASDisplayNode, ChatSendMessageAction
         }
     }
     
-    override func didLoad() {
+    override public func didLoad() {
         super.didLoad()
         
         let gestureRecognizer = ContextGesture(target: nil, action: nil)
@@ -261,13 +262,13 @@ final class ChatTextInputActionButtonsNode: ASDisplayNode, ChatSendMessageAction
         self.sendButtonPointerInteraction = PointerInteraction(view: self.sendButton.view, customInteractionView: self.sendButtonBackgroundView, style: .lift)
     }
     
-    func updateTheme(theme: PresentationTheme, wallpaper: TelegramWallpaper) {
+    public func updateTheme(theme: PresentationTheme, wallpaper: TelegramWallpaper) {
         self.micButton.updateTheme(theme: theme)
         self.expandMediaInputButtonIcon.tintColor = theme.chat.inputPanel.inputControlColor
     }
     
     private var absoluteRect: (CGRect, CGSize)?
-    func updateAbsoluteRect(_ rect: CGRect, within containerSize: CGSize, transition: ContainedViewLayoutTransition) {
+    public func updateAbsoluteRect(_ rect: CGRect, within containerSize: CGSize, transition: ContainedViewLayoutTransition) {
         let previousContaierSize = self.absoluteRect?.1
         self.absoluteRect = (rect, containerSize)
         
@@ -278,7 +279,7 @@ final class ChatTextInputActionButtonsNode: ASDisplayNode, ChatSendMessageAction
         }
     }
     
-    func updateLayout(size: CGSize, isMediaInputExpanded: Bool, showTitle: Bool, currentMessageEffectId: Int64?, transition: ContainedViewLayoutTransition, interfaceState: ChatPresentationInterfaceState) -> CGSize {
+    public func updateLayout(size: CGSize, isMediaInputExpanded: Bool, showTitle: Bool, currentMessageEffectId: Int64?, transition: ContainedViewLayoutTransition, interfaceState: ChatPresentationInterfaceState) -> CGSize {
         self.validLayout = size
         
         var innerSize = size
@@ -381,7 +382,7 @@ final class ChatTextInputActionButtonsNode: ASDisplayNode, ChatSendMessageAction
         return innerSize
     }
     
-    func updateAccessibility() {
+    public func updateAccessibility() {
         self.accessibilityTraits = .button
         if !self.micButton.alpha.isZero {
             switch self.micButton.mode {
@@ -398,7 +399,7 @@ final class ChatTextInputActionButtonsNode: ASDisplayNode, ChatSendMessageAction
         }
     }
     
-    func makeCustomContents() -> UIView? {
+    public func makeCustomContents() -> UIView? {
         if self.sendButtonHasApplyIcon || self.effectBadgeView != nil {
             let result = UIView()
             result.frame = self.bounds

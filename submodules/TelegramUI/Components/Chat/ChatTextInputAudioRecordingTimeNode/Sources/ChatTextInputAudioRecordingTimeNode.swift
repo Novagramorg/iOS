@@ -19,9 +19,9 @@ private final class ChatTextInputAudioRecordingTimeNodeParameters: NSObject {
     }
 }
 
-private let textFont = Font.regular(15.0)
+private let textFont = Font.with(size: 15.0, design: .camera)
 
-final class ChatTextInputAudioRecordingTimeNode: ASDisplayNode {
+public final class ChatTextInputAudioRecordingTimeNode: ASDisplayNode {
     private let textNode: TextNode
     
     private var timestamp: Double = 0.0 {
@@ -32,9 +32,9 @@ final class ChatTextInputAudioRecordingTimeNode: ASDisplayNode {
     private let stateDisposable = MetaDisposable()
     
     private var didStart = false
-    var started = {}
+    public var started = {}
     
-    var audioRecorder: ManagedAudioRecorder? {
+    public var audioRecorder: ManagedAudioRecorder? {
         didSet {
             if self.audioRecorder !== oldValue {
                 if let audioRecorder = self.audioRecorder {
@@ -65,7 +65,7 @@ final class ChatTextInputAudioRecordingTimeNode: ASDisplayNode {
     
     private var durationDisposable: MetaDisposable?
     
-    var videoRecordingStatus: InstantVideoControllerRecordingStatus? {
+    public var videoRecordingStatus: InstantVideoControllerRecordingStatus? {
         didSet {
             if self.videoRecordingStatus !== oldValue {
                 if self.durationDisposable == nil {
@@ -93,7 +93,7 @@ final class ChatTextInputAudioRecordingTimeNode: ASDisplayNode {
     
     private var theme: PresentationTheme
     
-    init(theme: PresentationTheme) {
+    public init(theme: PresentationTheme) {
         self.theme = theme
         
         self.textNode = TextNode()
@@ -106,13 +106,13 @@ final class ChatTextInputAudioRecordingTimeNode: ASDisplayNode {
         self.durationDisposable?.dispose()
     }
     
-    func updateTheme(theme: PresentationTheme) {
+    public func updateTheme(theme: PresentationTheme) {
         self.theme = theme
         
         self.setNeedsDisplay()
     }
     
-    override func calculateSizeThatFits(_ constrainedSize: CGSize) -> CGSize {
+    override public func calculateSizeThatFits(_ constrainedSize: CGSize) -> CGSize {
         let makeLayout = TextNode.asyncLayout(self.textNode)
         let (size, apply) = makeLayout(TextNodeLayoutArguments(attributedString: NSAttributedString(string: "0:00:00,00", font: Font.regular(15.0), textColor: theme.chat.inputPanel.primaryTextColor), backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .end, constrainedSize: CGSize(width: 200.0, height: 100.0), alignment: .natural, cutout: nil, insets: UIEdgeInsets()))
         let _ = apply()
@@ -120,7 +120,7 @@ final class ChatTextInputAudioRecordingTimeNode: ASDisplayNode {
         return size.size
     }
     
-    override func drawParameters(forAsyncLayer layer: _ASDisplayLayer) -> NSObjectProtocol? {
+    override public func drawParameters(forAsyncLayer layer: _ASDisplayLayer) -> NSObjectProtocol? {
         return ChatTextInputAudioRecordingTimeNodeParameters(timestamp: self.timestamp, theme: self.theme)
     }
     
