@@ -502,7 +502,7 @@ final class GiftsListView: UIView {
                     peer = nil
                     resellAmount = gift.resellAmounts?.first(where: { $0.currency == .stars })
                     
-                    if let _ = resellAmount {
+                    if !(gift.resellAmounts ?? []).isEmpty {
                         ribbonText = params.presentationData.strings.PeerInfo_Gifts_Sale
                         ribbonFont = .larger
                         ribbonColor = .green
