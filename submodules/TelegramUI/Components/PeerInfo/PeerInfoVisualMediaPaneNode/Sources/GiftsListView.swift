@@ -617,8 +617,8 @@ final class GiftsListView: UIView {
                                             }
                                             self.profileGifts.convertStarGift(reference: reference)
                                         },
-                                        transferGift: { [weak self] prepaid, peerId in
-                                            guard let self, let reference = product.reference else {
+                                        transferGift: { [weak self] prepaid, reference, peerId in
+                                            guard let self else {
                                                 return .complete()
                                             }
                                             return self.profileGifts.transferStarGift(prepaid: prepaid, reference: reference, peerId: peerId)
