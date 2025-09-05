@@ -137,7 +137,7 @@ public extension TelegramEngine {
             return _internal_upgradeStarGift(account: self.account, formId: formId, reference: reference, keepOriginalInfo: keepOriginalInfo)
         }
         
-        public func starGiftUpgradePreview(giftId: Int64) -> Signal<[StarGift.UniqueGift.Attribute], NoError> {
+        public func starGiftUpgradePreview(giftId: Int64) -> Signal<StarGiftUpgradePreview?, NoError> {
             return _internal_starGiftUpgradePreview(account: self.account, giftId: giftId)
         }
         

@@ -2941,19 +2941,27 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
     private func maybeCheckForUpdates() {
         #if targetEnvironment(simulator)
         #else
-        guard let buildConfig = self.buildConfig, let appCenterId = buildConfig.appCenterId, !appCenterId.isEmpty else {
+        guard let buildConfig = self.buildConfig, buildConfig.isInternalBuild else {
             return
         }
         let timestamp = CFAbsoluteTimeGetCurrent()
         if self.lastCheckForUpdatesTimestamp == nil || self.lastCheckForUpdatesTimestamp! < timestamp - 10.0 * 60.0 {
             self.lastCheckForUpdatesTimestamp = timestamp
             
-            if let url = URL(string: "https://api.appcenter.ms/v0.1/public/sdk/apps/\(appCenterId)/releases/latest") {
+            let _ = (self.sharedContextPromise.get()
+            |> take(1)
+            |> mapToSignal { sharedContext in
+                return sharedContext.sharedContext.accountManager.sharedData(keys: [ApplicationSpecificSharedDataKeys.updateSettings])
+                |> map { sharedData in
+                    return (sharedContext, sharedData.entries[ApplicationSpecificSharedDataKeys.updateSettings]?.get(UpdateSettings.self)?.url)
+                }
+            }
+            |> deliverOnMainQueue).start(next: { sharedContext, urlString in
+                guard let url = urlString.flatMap({ URL(string: $0) }) else {
+                    return
+                }
                 self.currentCheckForUpdatesDisposable.set((downloadHTTPData(url: url)
-                |> deliverOnMainQueue).start(next: { [weak self] data in
-                    guard let strongSelf = self else {
-                        return
-                    }
+                |> deliverOnMainQueue).start(next: { data in
                     guard let json = try? JSONSerialization.jsonObject(with: data, options: []) else {
                         return
                     }
@@ -2963,27 +2971,23 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
                     guard let versionString = dict["version"] as? String, let version = Int(versionString) else {
                         return
                     }
-                    guard let releaseNotesUrl = dict["release_notes_url"] as? String else {
+                    guard let releaseNotesUrl = dict["url"] as? String else {
                         return
                     }
                     guard let currentVersionString = Bundle.main.infoDictionary?["CFBundleVersion"] as? String, let currentVersion = Int(currentVersionString) else {
                         return
                     }
                     if currentVersion < version {
-                        let _ = (strongSelf.sharedContextPromise.get()
-                        |> take(1)
-                        |> deliverOnMainQueue).start(next: { sharedContext in
-                            let presentationData = sharedContext.sharedContext.currentPresentationData.with { $0 }
-                            sharedContext.sharedContext.mainWindow?.present(standardTextAlertController(theme: AlertControllerTheme(presentationData: presentationData), title: nil, text: "A new build is available", actions: [
-                                TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: {}),
-                                TextAlertAction(type: .defaultAction, title: "Show", action: {
-                                    sharedContext.sharedContext.applicationBindings.openUrl(releaseNotesUrl)
-                                })
-                            ]), on: .root, blockInteraction: false, completion: {})
-                        })
+                        let presentationData = sharedContext.sharedContext.currentPresentationData.with { $0 }
+                        sharedContext.sharedContext.mainWindow?.present(standardTextAlertController(theme: AlertControllerTheme(presentationData: presentationData), title: nil, text: "A new build is available", actions: [
+                            TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: {}),
+                            TextAlertAction(type: .defaultAction, title: "Show", action: {
+                                sharedContext.sharedContext.applicationBindings.openUrl(releaseNotesUrl)
+                            })
+                        ]), on: .root, blockInteraction: false, completion: {})
                     }
                 }))
-            }
+            })
         }
         #endif
     }
@@ -3192,4 +3196,16 @@ private func getMemoryConsumption() -> Int {
         return 0
     }
     return Int(info.phys_footprint)
+}
+
+final class UpdateSettings: Codable, Equatable {
+    let url: String?
+    
+    init(url: String?) {
+        self.url = url
+    }
+    
+    static func ==(lhs: UpdateSettings, rhs: UpdateSettings) -> Bool {
+        return lhs.url == rhs.url
+    }
 }
