@@ -518,7 +518,7 @@ public final class UniqueGiftChatThemesContext {
     
     public func reload() {
         self.themes = []
-        self.nextOffset = ""
+        self.nextOffset = nil
         self.dataState = .ready(canLoadMore: true)
         self.loadMore(reload: true)
     }
@@ -552,7 +552,7 @@ public final class UniqueGiftChatThemesContext {
             self.pushState()
         }
         
-        let signal: Signal<([ChatTheme], String?), NoError> = network.request(Api.functions.account.getUniqueGiftChatThemes(offset: offset ?? "", limit: 50, hash: 0))
+        let signal = network.request(Api.functions.account.getUniqueGiftChatThemes(offset: offset ?? "", limit: 50, hash: 0))
         |> map(Optional.init)
         |> `catch` { error in
             return .single(nil)
