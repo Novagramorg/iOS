@@ -577,13 +577,13 @@ private func synchronizeMessageHistoryTagSummary(accountPeerId: PeerId, postbox:
                             case let .channelMessages(_, _, count, _, messages, _, _, _):
                                 apiMessages = messages
                                 apiCount = count
-                            case let .messages(messages, _, _):
+                            case let .messages(messages, _, _, _):
                                 apiMessages = messages
                                 apiCount = Int32(messages.count)
                             case let .messagesNotModified(count):
                                 apiMessages = []
                                 apiCount = count
-                            case let .messagesSlice(_, count, _, _, _, messages, _, _):
+                            case let .messagesSlice(_, count, _, _, _, messages, _, _, _):
                                 apiMessages = messages
                                 apiCount = count
                             }

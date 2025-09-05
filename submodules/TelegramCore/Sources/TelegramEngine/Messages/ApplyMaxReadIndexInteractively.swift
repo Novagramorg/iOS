@@ -307,12 +307,6 @@ func _internal_togglePeerUnreadMarkInteractively(transaction: Transaction, netwo
             }
         }
     }
-    
-    if let user = peer as? TelegramUser, let botInfo = user.botInfo, botInfo.flags.contains(.hasForum) {
-        if let cachedData = transaction.getPeerCachedData(peerId: user.id) as? CachedUserData, case let .known(linkedBotChannelId) = cachedData.linkedBotChannelId, let linkedBotChannelId {
-            _internal_togglePeerUnreadMarkInteractively(transaction: transaction, network: network, viewTracker: viewTracker, peerId: linkedBotChannelId, setToValue: false)
-        }
-    }
 }
 
 public func clearPeerUnseenPersonalMessagesInteractively(account: Account, peerId: PeerId, threadId: Int64?) -> Signal<Never, NoError> {

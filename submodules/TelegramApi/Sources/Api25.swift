@@ -835,6 +835,46 @@ public extension Api {
     }
 }
 public extension Api {
+    enum StarGiftUpgradePrice: TypeConstructorDescription {
+        case starGiftUpgradePrice(date: Int32, upgradeStars: Int64)
+    
+    public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+    switch self {
+                case .starGiftUpgradePrice(let date, let upgradeStars):
+                    if boxed {
+                        buffer.appendInt32(-1712704739)
+                    }
+                    serializeInt32(date, buffer: buffer, boxed: false)
+                    serializeInt64(upgradeStars, buffer: buffer, boxed: false)
+                    break
+    }
+    }
+    
+    public func descriptionFields() -> (String, [(String, Any)]) {
+        switch self {
+                case .starGiftUpgradePrice(let date, let upgradeStars):
+                return ("starGiftUpgradePrice", [("date", date as Any), ("upgradeStars", upgradeStars as Any)])
+    }
+    }
+    
+        public static func parse_starGiftUpgradePrice(_ reader: BufferReader) -> StarGiftUpgradePrice? {
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: Int64?
+            _2 = reader.readInt64()
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            if _c1 && _c2 {
+                return Api.StarGiftUpgradePrice.starGiftUpgradePrice(date: _1!, upgradeStars: _2!)
+            }
+            else {
+                return nil
+            }
+        }
+    
+    }
+}
+public extension Api {
     enum StarRefProgram: TypeConstructorDescription {
         case starRefProgram(flags: Int32, botId: Int64, commissionPermille: Int32, durationMonths: Int32?, endDate: Int32?, dailyRevenuePerUser: Api.StarsAmount?)
     

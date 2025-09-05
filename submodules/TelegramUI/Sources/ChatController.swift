@@ -705,11 +705,6 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         
         self.stickerSettings = ChatInterfaceStickerSettings()
         
-        var subject = subject
-        if case .botForumThread = subject {
-            subject = nil
-        }
-        
         self.presentationInterfaceState = ChatPresentationInterfaceState(chatWallpaper: self.presentationData.chatWallpaper, theme: self.presentationData.theme, strings: self.presentationData.strings, dateTimeFormat: self.presentationData.dateTimeFormat, nameDisplayOrder: self.presentationData.nameDisplayOrder, limitsConfiguration: context.currentLimitsConfiguration.with { $0 }, fontSize: self.presentationData.chatFontSize, bubbleCorners: self.presentationData.chatBubbleCorners, accountPeerId: context.account.peerId, mode: mode, chatLocation: chatLocation, subject: subject, peerNearbyData: peerNearbyData, greetingData: context.prefetchManager?.preloadedGreetingSticker, pendingUnpinnedAllMessages: false, activeGroupCallInfo: nil, hasActiveGroupCall: false, importState: nil, threadData: nil, isGeneralThreadClosed: nil, replyMessage: nil, accountPeerColor: nil, businessIntro: nil)
         
         if case let .customChatContents(customChatContents) = subject {
@@ -5462,7 +5457,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             guard let self else {
                 return
             }
-            guard case let .peer(peerId) = self.chatLocation else {
+            guard let peerId = self.chatLocation.peerId else {
                 return
             }
             
@@ -8051,7 +8046,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         var defaultReplyMessageSubject: EngineMessageReplySubject?
         switch self.chatLocation {
         case .peer:
-            if let channel = self.presentationInterfaceState.renderedPeer?.peer as? TelegramChannel, channel.linkedBotId != nil {
+            if let user = self.presentationInterfaceState.renderedPeer?.peer as? TelegramUser, user.isForum {
                 defaultThreadId = EngineMessage.newTopicThreadId
             }
         case let .replyThread(replyThreadMessage):
@@ -8797,37 +8792,16 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         guard case let .peer(peerId) = self.chatLocation else {
             return
         }
-        
-        Task { @MainActor [weak self] in
-            guard let self, let navigationController = self.navigationController as? NavigationController else {
-                return
-            }
             
-            #if DEBUG && false
-            let botForumId = await self.context.engine.data.get(
-                TelegramEngine.EngineData.Item.Peer.LinkedBotForumPeerId(id: peerId)
-            ).get()
-            if case let .known(botForumIdValue) = botForumId, let botForumIdValue {
-                let botForum = await self.context.engine.data.get(
-                    TelegramEngine.EngineData.Item.Peer.Peer(id: botForumIdValue)
-                ).get()
-                
-                if let botForum {
-                    self.context.sharedContext.navigateToChatController(NavigateToChatControllerParams(navigationController: navigationController, context: self.context, chatLocation: .peer(botForum), keepStack: .always))
-                }
+        let startingBot = self.startingBot
+        startingBot.set(true)
+        self.editMessageDisposable.set((self.context.engine.messages.requestStartBot(botPeerId: peerId, payload: payload) |> deliverOnMainQueue |> afterDisposed({
+            startingBot.set(false)
+        })).startStrict(completed: { [weak self] in
+            if let strongSelf = self {
+                strongSelf.updateChatPresentationInterfaceState(animated: true, interactive: true, { $0.updatedBotStartPayload(nil) })
             }
-            #endif
-            
-            let startingBot = self.startingBot
-            startingBot.set(true)
-            self.editMessageDisposable.set((self.context.engine.messages.requestStartBot(botPeerId: peerId, payload: payload) |> deliverOnMainQueue |> afterDisposed({
-                startingBot.set(false)
-            })).startStrict(completed: { [weak self] in
-                if let strongSelf = self {
-                    strongSelf.updateChatPresentationInterfaceState(animated: true, interactive: true, { $0.updatedBotStartPayload(nil) })
-                }
-            }))
-        }
+        }))
     }
     
     func openResolved(result: ResolvedUrl, sourceMessageId: MessageId?, progress: Promise<Bool>? = nil, forceExternal: Bool = false, concealed: Bool = false, commit: @escaping () -> Void = {}) {
@@ -10216,56 +10190,25 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             
             let updatedChatLocation: ChatLocation
             if let threadId {
-                if let user = peer as? TelegramUser, let botInfo = user.botInfo, botInfo.flags.contains(.hasForum) {
-                    guard case let .known(linkedForumId) = await self.context.engine.data.get(
-                        TelegramEngine.EngineData.Item.Peer.LinkedBotForumPeerId(id: user.id)
-                    ).get(), let linkedForumId else {
-                        return
-                    }
-                        
-                    updatedChatLocation = .replyThread(message: ChatReplyThreadMessage(
-                        peerId: linkedForumId,
-                        threadId: threadId,
-                        channelMessageId: nil,
-                        isChannelPost: false,
-                        isForumPost: true,
-                        isMonoforumPost: false,
-                        maxMessage: nil,
-                        maxReadIncomingMessageId: nil,
-                        maxReadOutgoingMessageId: nil,
-                        unreadCount: 0,
-                        initialFilledHoles: IndexSet(),
-                        initialAnchor: .automatic,
-                        isNotAvailable: false
-                    ))
-                } else {
-                    var isMonoforum = false
-                    if let channel = peer as? TelegramChannel, channel.flags.contains(.isMonoforum) {
-                        isMonoforum = true
-                    }
-                    
-                    updatedChatLocation = .replyThread(message: ChatReplyThreadMessage(
-                        peerId: peerId,
-                        threadId: threadId,
-                        channelMessageId: nil,
-                        isChannelPost: false,
-                        isForumPost: true,
-                        isMonoforumPost: isMonoforum,
-                        maxMessage: nil,
-                        maxReadIncomingMessageId: nil,
-                        maxReadOutgoingMessageId: nil,
-                        unreadCount: 0,
-                        initialFilledHoles: IndexSet(),
-                        initialAnchor: .automatic,
-                        isNotAvailable: false
-                    ))
-                }
+                let isMonoforum = peer.isMonoForum
+                
+                updatedChatLocation = .replyThread(message: ChatReplyThreadMessage(
+                    peerId: peerId,
+                    threadId: threadId,
+                    channelMessageId: nil,
+                    isChannelPost: false,
+                    isForumPost: true,
+                    isMonoforumPost: isMonoforum,
+                    maxMessage: nil,
+                    maxReadIncomingMessageId: nil,
+                    maxReadOutgoingMessageId: nil,
+                    unreadCount: 0,
+                    initialFilledHoles: IndexSet(),
+                    initialAnchor: .automatic,
+                    isNotAvailable: false
+                ))
             } else {
-                /*if let channel = peer as? TelegramChannel, let linkedBotId = channel.linkedBotId {
-                    updatedChatLocation = .peer(id: linkedBotId)
-                } else {*/
-                    updatedChatLocation = .peer(id: peerId)
-                //}
+                updatedChatLocation = .peer(id: peerId)
             }
             
             let navigationSnapshot = self.chatTitleView?.prepareSnapshotState()
@@ -10274,6 +10217,9 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             let chatLocationContextHolder = Atomic<ChatLocationContextHolder?>(value: nil)
             let historyNode = replaceInline ? self.chatDisplayNode.historyNode : self.chatDisplayNode.createHistoryNodeForChatLocation(chatLocation: updatedChatLocation, chatLocationContextHolder: chatLocationContextHolder)
             self.isUpdatingChatLocationThread = true
+            if !replaceInline {
+                self.chatDisplayNode.historyNode.stopHistoryUpdates()
+            }
             self.reloadChatLocation(chatLocation: updatedChatLocation, chatLocationContextHolder: chatLocationContextHolder, historyNode: historyNode, apply: { [weak self, weak historyNode] apply in
                 guard let self, let historyNode else {
                     return
