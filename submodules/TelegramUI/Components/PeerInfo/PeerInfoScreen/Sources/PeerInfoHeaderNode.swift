@@ -1310,7 +1310,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                 subtitleColor = UIColor.white
                 
                 let statusText: String
-                if let channel = peer as? TelegramChannel, channel.linkedBotId != nil {
+                if let user = peer as? TelegramUser, user.isForum {
                     statusText = " "
                 } else {
                     statusText = peer.debugDisplayTitle
@@ -1893,20 +1893,14 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             apparentAvatarListFrame = apparentAvatarFrame
             controlsClippingFrame = apparentAvatarFrame
         }
-        
-        let avatarClipOffset: CGFloat = !self.isAvatarExpanded && deviceMetrics.hasDynamicIsland && statusBarHeight > 0.0 && self.avatarClippingNode.clipsToBounds && !isLandscape ? 47.0 : 0.0
-        let clippingNodeTransition = ContainedViewLayoutTransition.immediate
-        clippingNodeTransition.updateFrame(layer: self.avatarClippingNode.layer, frame: CGRect(origin: CGPoint(x: 0.0, y: avatarClipOffset), size: CGSize(width: width, height: 1000.0)))
-        clippingNodeTransition.updateSublayerTransformOffset(layer: self.avatarClippingNode.layer, offset: CGPoint(x: 0.0, y: -avatarClipOffset))
-        let clippingNodeRadiusTransition = ContainedViewLayoutTransition.animated(duration: 0.15, curve: .easeInOut)
-        clippingNodeRadiusTransition.updateCornerRadius(node: self.avatarClippingNode, cornerRadius: avatarClipOffset > 0.0 ? width / 2.5 : 0.0)
-        
+                
         let _ = apparentAvatarListFrame
         transition.updateFrameAdditive(node: self.avatarListNode, frame: CGRect(origin: apparentAvatarFrame.center, size: CGSize()))
         transition.updateFrameAdditive(node: self.avatarOverlayNode, frame: CGRect(origin: apparentAvatarFrame.center, size: CGSize()))
         
-        let avatarListContainerFrame: CGRect
+        var avatarListContainerFrame: CGRect
         let avatarListContainerScale: CGFloat
+        var avatarListVerticalOffset: CGFloat = 0.0
         if self.isAvatarExpanded {
             if let transitionSourceAvatarFrame = transitionSourceAvatarFrame {
                 let neutralAvatarListContainerSize = expandedAvatarListSize
@@ -1922,12 +1916,22 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                 avatarListContainerFrame = CGRect(origin: CGPoint(x: -expandedAvatarListSize.width / 2.0, y: -expandedAvatarListSize.width / 2.0), size: expandedAvatarListSize)
             }
             avatarListContainerScale = 1.0 + max(0.0, -contentOffset / avatarListContainerFrame.width)
+            let heightDelta = avatarListContainerFrame.height * avatarListContainerScale - avatarListContainerFrame.height
+            avatarListVerticalOffset = -heightDelta / 4.0
         } else {
             let expandHeightFraction = expandedAvatarListSize.height / expandedAvatarListSize.width
             avatarListContainerFrame = CGRect(origin: CGPoint(x: -apparentAvatarFrame.width / 2.0, y: -apparentAvatarFrame.width / 2.0 + expandHeightFraction * 0.0 * apparentAvatarFrame.width), size: apparentAvatarFrame.size)
             avatarListContainerScale = avatarScale
         }
         transition.updateFrame(node: self.avatarListNode.listContainerNode, frame: avatarListContainerFrame)
+        
+        let avatarClipOffset: CGFloat = !self.isAvatarExpanded && deviceMetrics.hasDynamicIsland && statusBarHeight > 0.0 && self.avatarClippingNode.clipsToBounds && !isLandscape ? 47.0 : 0.0
+        let clippingNodeTransition = ContainedViewLayoutTransition.immediate
+        clippingNodeTransition.updateFrame(layer: self.avatarClippingNode.layer, frame: CGRect(origin: CGPoint(x: 0.0, y: avatarClipOffset + avatarListVerticalOffset), size: CGSize(width: width, height: 1000.0)))
+        clippingNodeTransition.updateSublayerTransformOffset(layer: self.avatarClippingNode.layer, offset: CGPoint(x: 0.0, y: -avatarClipOffset))
+        let clippingNodeRadiusTransition = ContainedViewLayoutTransition.animated(duration: 0.15, curve: .easeInOut)
+        clippingNodeRadiusTransition.updateCornerRadius(node: self.avatarClippingNode, cornerRadius: avatarClipOffset > 0.0 ? width / 2.5 : 0.0)
+        
         let innerScale = avatarListContainerFrame.width / expandedAvatarListSize.width
         let innerDeltaX = (avatarListContainerFrame.width - expandedAvatarListSize.width) / 2.0
         var innerDeltaY = (avatarListContainerFrame.height - expandedAvatarListSize.height) / 2.0
@@ -2715,7 +2719,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                 if let _ = self.navigationTransition {
                     transition.updateAlpha(layer: musicView.layer, alpha: 1.0 - transitionFraction)
                 } else {
-                    musicTransition.updateAlpha(layer: musicView.layer, alpha: backgroundBannerAlpha)
+                    ContainedViewLayoutTransition.animated(duration: 0.2, curve: .easeInOut).updateAlpha(layer: musicView.layer, alpha: backgroundBannerAlpha)
                 }
             }
         } else {

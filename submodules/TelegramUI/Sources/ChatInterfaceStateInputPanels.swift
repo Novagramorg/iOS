@@ -5,7 +5,6 @@ import TelegramCore
 import AccountContext
 import ChatPresentationInterfaceState
 import ChatInputPanelNode
-import ChatBotStartInputPanelNode
 import ChatChannelSubscriberInputPanelNode
 import ChatMessageSelectionInputPanelNode
 import ChatControllerInteraction
@@ -436,7 +435,6 @@ func inputPanelForChatPresentationIntefaceState(_ chatPresentationInterfaceState
                 }
             }
         }
-        let _ = displayBotStartPanel
         
         displayInputTextPanel = true
     }

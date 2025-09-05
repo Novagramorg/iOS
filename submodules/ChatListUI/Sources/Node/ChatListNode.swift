@@ -2555,7 +2555,7 @@ public final class ChatListNode: ListView {
                                             }
                                         }
                                         if let isForum = groupType.isForum {
-                                            if isForum != channel.flags.contains(.isForum) {
+                                            if isForum != channel.isForum {
                                                 match = false
                                             }
                                         }

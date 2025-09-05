@@ -1350,10 +1350,9 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         
         var displayBotStartButton = false
         if case .scheduledMessages = interfaceState.subject {
-            
         } else {
             if let user = interfaceState.renderedPeer?.peer as? TelegramUser, user.botInfo != nil {
-                if let chatHistoryState = interfaceState.chatHistoryState, case .loaded(true, _) = chatHistoryState {
+                if let chatHistoryState = interfaceState.chatHistoryState, case .loaded(true, _) = chatHistoryState, interfaceState.chatLocation.threadId == nil {
                     displayBotStartButton = true
                 } else if interfaceState.peerIsBlocked {
                     displayBotStartButton = true
@@ -1666,8 +1665,6 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                             } else if let channel = peer as? TelegramChannel, channel.isForumOrMonoForum, let forumTopicData = interfaceState.forumTopicData {
                                 if let replyMessage = interfaceState.replyMessage, let threadInfo = replyMessage.associatedThreadInfo {
                                     placeholder = interfaceState.strings.Chat_InputPlaceholderReplyInTopic(threadInfo.title).string
-                                } else if let _ = channel.linkedBotId, interfaceState.chatLocation.threadId == nil {
-                                    placeholder = interfaceState.strings.Conversation_InputTextPlaceholder
                                 } else {
                                     placeholder = interfaceState.strings.Chat_InputPlaceholderMessageInTopic(forumTopicData.title).string
                                 }
