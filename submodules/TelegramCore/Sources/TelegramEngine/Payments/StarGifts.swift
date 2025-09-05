@@ -976,7 +976,7 @@ func _internal_keepCachedStarGiftsUpdated(postbox: Postbox, network: Network, ac
     let updateSignal = _internal_cachedStarGifts(postbox: postbox)
     |> take(1)
     |> mapToSignal { list -> Signal<Never, NoError> in
-        return network.request(Api.functions.payments.getStarGifts(hash: 0))
+        return network.request(Api.functions.payments.getStarGifts(hash: list?.hashValue ?? 0))
         |> map(Optional.init)
         |> `catch` { _ -> Signal<Api.payments.StarGifts?, NoError> in
             return .single(nil)
@@ -1266,7 +1266,17 @@ func _internal_upgradeStarGift(account: Account, formId: Int64?, reference: Star
     }
 }
 
-func _internal_starGiftUpgradePreview(account: Account, giftId: Int64) -> Signal<[StarGift.UniqueGift.Attribute], NoError> {
+public struct StarGiftUpgradePreview: Equatable {
+    public struct Price: Equatable {
+        public let stars: Int64
+        public let date: Int32
+    }
+    public let attributes: [StarGift.UniqueGift.Attribute]
+    public let prices: [Price]
+    public let nextPrices: [Price]
+}
+
+func _internal_starGiftUpgradePreview(account: Account, giftId: Int64) -> Signal<StarGiftUpgradePreview?, NoError> {
     return account.network.request(Api.functions.payments.getStarGiftUpgradePreview(giftId: giftId))
     |> map(Optional.init)
     |> `catch` { _ -> Signal<Api.payments.StarGiftUpgradePreview?, NoError> in
@@ -1274,11 +1284,26 @@ func _internal_starGiftUpgradePreview(account: Account, giftId: Int64) -> Signal
     }
     |> map { result in
         guard let result else {
-            return []
+            return nil
         }
         switch result {
-        case let .starGiftUpgradePreview(sampleAttributes):
-            return sampleAttributes.compactMap { StarGift.UniqueGift.Attribute(apiAttribute: $0) }
+        case let .starGiftUpgradePreview(apiSampleAttributes, apiPrices, apiNextPrices):
+            let attributes = apiSampleAttributes.compactMap { StarGift.UniqueGift.Attribute(apiAttribute: $0) }
+            var prices: [StarGiftUpgradePreview.Price] = []
+            var nextPrices: [StarGiftUpgradePreview.Price] = []
+            for price in apiPrices {
+                switch price {
+                case let .starGiftUpgradePrice(date, upgradeStars):
+                    prices.append(StarGiftUpgradePreview.Price(stars: upgradeStars, date: date))
+                }
+            }
+            for price in apiNextPrices {
+                switch price {
+                case let .starGiftUpgradePrice(date, upgradeStars):
+                    nextPrices.append(StarGiftUpgradePreview.Price(stars: upgradeStars, date: date))
+                }
+            }
+            return StarGiftUpgradePreview(attributes: attributes, prices: prices, nextPrices: nextPrices)
         }
     }
 }

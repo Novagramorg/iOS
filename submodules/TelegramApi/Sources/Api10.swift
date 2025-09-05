@@ -251,6 +251,7 @@ public extension Api {
         case inputInvoiceBusinessBotTransferStars(bot: Api.InputUser, stars: Int64)
         case inputInvoiceChatInviteSubscription(hash: String)
         case inputInvoiceMessage(peer: Api.InputPeer, msgId: Int32)
+        case inputInvoicePremiumAuthCode(purpose: Api.InputStorePaymentPurpose)
         case inputInvoicePremiumGiftCode(purpose: Api.InputStorePaymentPurpose, option: Api.PremiumGiftCodeOption)
         case inputInvoicePremiumGiftStars(flags: Int32, userId: Api.InputUser, months: Int32, message: Api.TextWithEntities?)
         case inputInvoiceSlug(slug: String)
@@ -282,6 +283,12 @@ public extension Api {
                     }
                     peer.serialize(buffer, true)
                     serializeInt32(msgId, buffer: buffer, boxed: false)
+                    break
+                case .inputInvoicePremiumAuthCode(let purpose):
+                    if boxed {
+                        buffer.appendInt32(1048049172)
+                    }
+                    purpose.serialize(buffer, true)
                     break
                 case .inputInvoicePremiumGiftCode(let purpose, let option):
                     if boxed {
@@ -360,6 +367,8 @@ public extension Api {
                 return ("inputInvoiceChatInviteSubscription", [("hash", hash as Any)])
                 case .inputInvoiceMessage(let peer, let msgId):
                 return ("inputInvoiceMessage", [("peer", peer as Any), ("msgId", msgId as Any)])
+                case .inputInvoicePremiumAuthCode(let purpose):
+                return ("inputInvoicePremiumAuthCode", [("purpose", purpose as Any)])
                 case .inputInvoicePremiumGiftCode(let purpose, let option):
                 return ("inputInvoicePremiumGiftCode", [("purpose", purpose as Any), ("option", option as Any)])
                 case .inputInvoicePremiumGiftStars(let flags, let userId, let months, let message):
@@ -419,6 +428,19 @@ public extension Api {
             let _c2 = _2 != nil
             if _c1 && _c2 {
                 return Api.InputInvoice.inputInvoiceMessage(peer: _1!, msgId: _2!)
+            }
+            else {
+                return nil
+            }
+        }
+        public static func parse_inputInvoicePremiumAuthCode(_ reader: BufferReader) -> InputInvoice? {
+            var _1: Api.InputStorePaymentPurpose?
+            if let signature = reader.readInt32() {
+                _1 = Api.parse(reader, signature: signature) as? Api.InputStorePaymentPurpose
+            }
+            let _c1 = _1 != nil
+            if _c1 {
+                return Api.InputInvoice.inputInvoicePremiumAuthCode(purpose: _1!)
             }
             else {
                 return nil

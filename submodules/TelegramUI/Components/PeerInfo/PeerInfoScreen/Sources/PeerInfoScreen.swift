@@ -5023,8 +5023,8 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                                 }
                                 profileGifts.convertStarGift(reference: reference)
                             },
-                            transferGift: { [weak profileGifts] prepaid, peerId in
-                                guard let profileGifts, let reference = gift.reference else {
+                            transferGift: { [weak profileGifts] prepaid, reference, peerId in
+                                guard let profileGifts else {
                                     return .complete()
                                 }
                                 return profileGifts.transferStarGift(prepaid: prepaid, reference: reference, peerId: peerId)
@@ -12743,7 +12743,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                 } else if peerInfoCanEdit(peer: self.data?.peer, chatLocation: self.chatLocation, threadData: self.data?.threadData, cachedData: self.data?.cachedData, isContact: self.data?.isContact) {
                     rightNavigationButtons.append(PeerInfoHeaderNavigationButtonSpec(key: .edit, isForExpandedView: false))
                 }
-                if let data = self.data, !data.isPremiumRequiredForStoryPosting || data.accountIsPremium, let channel = data.peer as? TelegramChannel, channel.hasPermission(.postStories), channel.linkedBotId == nil {
+                if let data = self.data, !data.isPremiumRequiredForStoryPosting || data.accountIsPremium, let channel = data.peer as? TelegramChannel, channel.hasPermission(.postStories) {
                     rightNavigationButtons.insert(PeerInfoHeaderNavigationButtonSpec(key: .postStory, isForExpandedView: false), at: 0)
                 } else if self.isMyProfile {
                     rightNavigationButtons.insert(PeerInfoHeaderNavigationButtonSpec(key: .postStory, isForExpandedView: false), at: 0)

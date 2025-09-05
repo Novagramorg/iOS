@@ -166,16 +166,6 @@ extension ChatControllerImpl {
                 return
             }
             
-            if let historyNodeData = contentData.state.historyNodeData {
-                self.subject = nil
-                self.updateChatLocationToOther(chatLocation: historyNodeData.chatLocation)
-                return
-            } else if case let .botForumThread(linkedForumId, threadId) = self.subject {
-                self.subject = nil
-                self.updateInitialChatBotForumLocationThread(linkedForumId: linkedForumId, threadId: threadId)
-                return
-            }
-            
             apply({ [weak self, weak contentData] forceAnimationTransition in
                 guard let self, let contentData, self.pendingContentData?.contentData === contentData else {
                     return
@@ -199,11 +189,6 @@ extension ChatControllerImpl {
                 
                 contentData.onUpdated = { [weak self, weak contentData] previousState in
                     guard let self, let contentData, self.contentData === contentData else {
-                        return
-                    }
-                    
-                    if let historyNodeData = contentData.state.historyNodeData {
-                        self.updateChatLocationToOther(chatLocation: historyNodeData.chatLocation)
                         return
                     }
                     

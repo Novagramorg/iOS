@@ -124,7 +124,6 @@ final class GiftSetupScreenComponent: Component {
         
         private var inProgress = false
         
-        
         private var previousHadInputHeight: Bool = false
         private var previousInputHeight: CGFloat?
         private var recenterOnTag: NSObject?
@@ -134,6 +133,8 @@ final class GiftSetupScreenComponent: Component {
         
         private var starImage: (UIImage, PresentationTheme)?
         
+        private var updateDisposable: Disposable?
+        
         private var optionsDisposable: Disposable?
         private(set) var options: [StarsTopUpOption] = [] {
             didSet {
@@ -141,7 +142,7 @@ final class GiftSetupScreenComponent: Component {
             }
         }
         private let optionsPromise = ValuePromise<[StarsTopUpOption]?>(nil)
-        private let previewPromise = Promise<[StarGift.UniqueGift.Attribute]?>(nil)
+        private let previewPromise = Promise<StarGiftUpgradePreview?>(nil)
         
         private var cachedChevronImage: (UIImage, PresentationTheme)?
         
@@ -173,6 +174,9 @@ final class GiftSetupScreenComponent: Component {
         }
         
         deinit {
+            self.inputMediaNodeDataDisposable?.dispose()
+            self.updateDisposable?.dispose()
+            self.optionsDisposable?.dispose()
         }
 
         func scrollToTop() {
@@ -732,9 +736,10 @@ final class GiftSetupScreenComponent: Component {
                     if let _ = gift.upgradeStars {
                         self.previewPromise.set(
                             component.context.engine.payments.starGiftUpgradePreview(giftId: gift.id)
-                            |> map(Optional.init)
                         )
                     }
+                    
+                    self.updateDisposable = component.context.engine.payments.keepStarGiftsUpdated().start()
                 }
             }
             
@@ -1223,13 +1228,13 @@ final class GiftSetupScreenComponent: Component {
                                     }
                                     let _ = (self.previewPromise.get()
                                     |> take(1)
-                                    |> deliverOnMainQueue).start(next: { [weak self] attributes in
-                                        guard let self, let component = self.component, let controller = self.environment?.controller(), let attributes else {
+                                    |> deliverOnMainQueue).start(next: { [weak self] upgradePreview in
+                                        guard let self, let component = self.component, let controller = self.environment?.controller(), let upgradePreview else {
                                             return
                                         }
                                         let previewController = GiftViewScreen(
                                             context: component.context,
-                                            subject: .upgradePreview(attributes, peerName)
+                                            subject: .upgradePreview(upgradePreview.attributes, peerName)
                                         )
                                         controller.push(previewController)
                                     })
