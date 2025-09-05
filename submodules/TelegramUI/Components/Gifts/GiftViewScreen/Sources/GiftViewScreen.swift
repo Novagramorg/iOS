@@ -664,6 +664,22 @@ private final class GiftViewSheetContent: CombinedComponent {
             controller.push(introController)
         }
         
+        func openRemoveInfo() {
+            guard let controller = self.getController(), let gift = self.subject.arguments?.gift, case let .unique(uniqueGift) = gift else {
+                return
+            }
+            //TODO:release
+            let removeInfoController = giftRemoveInfoAlertController(
+                context: self.context,
+                gift: uniqueGift,
+                peers: self.peerMap,
+                removeInfoStars: 1000,
+                navigationController: controller.navigationController as? NavigationController,
+                commit: {}
+            )
+            controller.present(removeInfoController, in: .window(.root))
+        }
+        
         private var isOpeningValue = false
         func openValue() {
             guard let controller = self.getController(), let gift = self.subject.arguments?.gift, case let .unique(uniqueGift) = gift, !self.isOpeningValue else {
@@ -3406,7 +3422,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                             case let .originalInfo(senderPeerId, recipientPeerId, date, text, entities):
                                 id = "originalInfo"
                                 title = nil
-                                hasBackground = true
+                                hasBackground = false
                                 
                                 let tableFont = Font.regular(13.0)
                                 let tableBoldFont = Font.semibold(13.0)
@@ -3469,7 +3485,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                                             animationRenderer: component.context.animationRenderer,
                                             placeholderColor: theme.list.mediaPlaceholderColor,
                                             text: .plain(value),
-                                            horizontalAlignment: .center,
+                                            horizontalAlignment: .left,
                                             maximumNumberOfLines: 0,
                                             insets: id == "originalInfo" ? UIEdgeInsets(top: 2.0, left: 0.0, bottom: 2.0, right: 0.0) : .zero,
                                             highlightColor: tableLinkColor.withAlphaComponent(0.1),
@@ -3508,8 +3524,25 @@ private final class GiftViewSheetContent: CombinedComponent {
                                     ).tagged(tag))
                                 ))
                             }
+                            
+                            var itemAlignment: HStackAlignment = .left
+                            var itemSpacing: CGFloat = 4.0
+                            if id == "originalInfo" {
+                                items.append(AnyComponentWithIdentity(
+                                    id: AnyHashable(1),
+                                    component: AnyComponent(Button(
+                                        content: AnyComponent(BundleIconComponent(name: "Chat/Context Menu/Delete", tintColor: tableLinkColor)),
+                                        action: { [weak state] in
+                                            state?.openRemoveInfo()
+                                        }
+                                    ))
+                                ))
+                                itemAlignment = .alternatingLeftRight
+                                itemSpacing = 16.0
+                            }
+                            
                             var itemComponent = AnyComponent(
-                                HStack(items, spacing: 4.0)
+                                HStack(items, spacing: itemSpacing, alignment: itemAlignment)
                             )
                             
                             if !otherValuesAndPercentages.isEmpty {
