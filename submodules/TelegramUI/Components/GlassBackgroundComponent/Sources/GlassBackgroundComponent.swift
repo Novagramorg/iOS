@@ -346,10 +346,10 @@ public final class GlassBackgroundView: UIView {
             glassEffect.isInteractive = false
             let nativeView = UIVisualEffectView(effect: glassEffect)
             self.nativeView = nativeView
-            //nativeView.overrideUserInterfaceStyle = .light
-            //nativeView.traitOverrides.userInterfaceStyle = .light
-            self.foregroundView = UIImageView()
-            //self.foregroundView = nil
+            nativeView.overrideUserInterfaceStyle = .light
+            nativeView.traitOverrides.userInterfaceStyle = .light
+            //self.foregroundView = UIImageView()
+            self.foregroundView = nil
         } else {
             self.backgroundNode = NavigationBackgroundNode(color: .black, enableBlur: true, customBlurRadius: 5.0)
             self.nativeView = nil
@@ -408,18 +408,18 @@ public final class GlassBackgroundView: UIView {
         if self.params != params {
             self.params = params
             
-            /*if let nativeView {
-                if #available(iOS 26.0, *) {
-                    let glassEffect = UIGlassEffect(style: .regular)
-                    glassEffect.tintColor = tintColor
-                    glassEffect.isInteractive = false
-                    
-                    nativeView.effect = glassEffect
-                }
-            }*/
-            
             if let foregroundView = self.foregroundView {
                 foregroundView.image = generateForegroundImage(size: CGSize(width: cornerRadius * 2.0, height: cornerRadius * 2.0), isDark: isDark, fillColor: tintColor)
+            } else {
+                if let nativeView {
+                    if #available(iOS 26.0, *) {
+                        let glassEffect = UIGlassEffect(style: .regular)
+                        //glassEffect.tintColor = tintColor.withMultipliedAlpha(0.1)
+                        glassEffect.isInteractive = false
+                        
+                        nativeView.effect = glassEffect
+                    }
+                }
             }
         }
         

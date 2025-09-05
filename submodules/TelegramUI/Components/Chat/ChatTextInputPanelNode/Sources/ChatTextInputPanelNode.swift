@@ -492,7 +492,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         
         self.textInputContainer = ASDisplayNode()
         self.textInputContainer.view.addSubview(self.textInputContainerBackgroundView)
-        self.textInputContainer.clipsToBounds = true
+        self.textInputContainer.clipsToBounds = false
         
         self.textInputNodeClippingContainer = ASDisplayNode()
         self.textInputNodeClippingContainer.clipsToBounds = true
