@@ -1145,7 +1145,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             navigationModalFrame.update(layout: layout, transition: transition)
             navigationModalFrame.updateDismissal(transition: transition, progress: 1.0 - self.inputPanelContainerNode.expansionFraction, additionalProgress: 0.0, completion: {})
             
-            self.inputPanelClippingNode.clipsToBounds = true
+            self.inputPanelClippingNode.clipsToBounds = false
             transition.updateCornerRadius(node: self.inputPanelClippingNode, cornerRadius: self.inputPanelContainerNode.expansionFraction * 10.0)
         } else {
             if let navigationModalFrame = self.navigationModalFrame {
@@ -1154,7 +1154,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                     navigationModalFrame?.removeFromSupernode()
                 })
             }
-            self.inputPanelClippingNode.clipsToBounds = true
+            self.inputPanelClippingNode.clipsToBounds = false
             transition.updateCornerRadius(node: self.inputPanelClippingNode, cornerRadius: 0.0, completion: { [weak self] completed in
                 guard let strongSelf = self, completed else {
                     return
