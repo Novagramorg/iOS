@@ -1277,7 +1277,7 @@ func _internal_starGiftUpgradePreview(account: Account, giftId: Int64) -> Signal
             return []
         }
         switch result {
-        case let .starGiftUpgradePreview(sampleAttributes):
+        case let .starGiftUpgradePreview(sampleAttributes, _, _):
             return sampleAttributes.compactMap { StarGift.UniqueGift.Attribute(apiAttribute: $0) }
         }
     }

@@ -1687,36 +1687,6 @@ public final class ChatSideTopicsPanel: Component {
                 let threadListSignal: Signal<(EnginePeer.Id, EngineChatList), NoError>
                 
                 switch component.kind {
-                case .botForum:
-                    let forumPeerId: Signal<EnginePeer.Id?, NoError>
-                    if component.peerId.namespace == Namespaces.Peer.CloudUser {
-                        forumPeerId = component.context.engine.data.subscribe(
-                            TelegramEngine.EngineData.Item.Peer.LinkedBotForumPeerId(id: component.peerId)
-                        )
-                        |> map { value -> EnginePeer.Id? in
-                            if case let .known(value) = value {
-                                return value
-                            } else {
-                                return nil
-                            }
-                        }
-                        |> distinctUntilChanged
-                    } else {
-                        forumPeerId = .single(component.peerId)
-                    }
-                    
-                    let defaultPeerId = component.peerId
-                    threadListSignal = forumPeerId
-                    |> mapToSignal { forumPeerId -> Signal<(EnginePeer.Id, EngineChatList), NoError> in
-                        if let forumPeerId {
-                            return component.context.sharedContext.subscribeChatListData(context: component.context, location: .forum(peerId: forumPeerId))
-                            |> map { value in
-                                return (forumPeerId, value)
-                            }
-                        } else {
-                            return .single((defaultPeerId, EngineChatList(items: [], groupItems: [], additionalItems: [], hasEarlier: false, hasLater: false, isLoading: false)))
-                        }
-                    }
                 default:
                     let defaultPeerId = component.peerId
                     threadListSignal = component.context.sharedContext.subscribeChatListData(context: component.context, location: component.kind == .monoforum ? .savedMessagesChats(peerId: component.peerId) : .forum(peerId: component.peerId))
