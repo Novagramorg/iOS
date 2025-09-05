@@ -125,8 +125,8 @@ private final class GiftViewSheetContent: CombinedComponent {
         var pendingWear = false
         var pendingTakeOff = false
         
-        var sampleGiftAttributes: [StarGift.UniqueGift.Attribute]?
-        let sampleDisposable = DisposableSet()
+        var upgradePreview: StarGiftUpgradePreview?
+        let upgradePreviewDisposable = DisposableSet()
         
         var keepOriginalInfo = false
                 
@@ -218,19 +218,19 @@ private final class GiftViewSheetContent: CombinedComponent {
                     
                     if self.testUpgradeAnimation {
                         if gift.giftId != 0 {
-                            self.sampleDisposable.add((context.engine.payments.starGiftUpgradePreview(giftId: gift.giftId)
-                            |> deliverOnMainQueue).start(next: { [weak self] attributes in
-                                guard let self else {
+                            self.upgradePreviewDisposable.add((context.engine.payments.starGiftUpgradePreview(giftId: gift.giftId)
+                            |> deliverOnMainQueue).start(next: { [weak self] upgradePreview in
+                                guard let self, let upgradePreview else {
                                     return
                                 }
-                                self.sampleGiftAttributes = attributes
+                                self.upgradePreview = upgradePreview
                                 
-                                for attribute in attributes {
+                                for attribute in upgradePreview.attributes {
                                     switch attribute {
                                     case let .model(_, file, _):
-                                        self.sampleDisposable.add(freeMediaFileResourceInteractiveFetched(account: self.context.account, userLocation: .other, fileReference: .standalone(media: file), resource: file.resource).start())
+                                        self.upgradePreviewDisposable.add(freeMediaFileResourceInteractiveFetched(account: self.context.account, userLocation: .other, fileReference: .standalone(media: file), resource: file.resource).start())
                                     case let .pattern(_, file, _):
-                                        self.sampleDisposable.add(freeMediaFileResourceInteractiveFetched(account: self.context.account, userLocation: .other, fileReference: .standalone(media: file), resource: file.resource).start())
+                                        self.upgradePreviewDisposable.add(freeMediaFileResourceInteractiveFetched(account: self.context.account, userLocation: .other, fileReference: .standalone(media: file), resource: file.resource).start())
                                     default:
                                         break
                                     }
@@ -245,19 +245,19 @@ private final class GiftViewSheetContent: CombinedComponent {
                         peerIds.append(releasedBy)
                     }
                     if arguments.canUpgrade || arguments.upgradeStars != nil || arguments.prepaidUpgradeHash != nil {
-                        self.sampleDisposable.add((context.engine.payments.starGiftUpgradePreview(giftId: gift.id)
-                        |> deliverOnMainQueue).start(next: { [weak self] attributes in
-                            guard let self else {
+                        self.upgradePreviewDisposable.add((context.engine.payments.starGiftUpgradePreview(giftId: gift.id)
+                        |> deliverOnMainQueue).start(next: { [weak self] upgradePreview in
+                            guard let self, let upgradePreview else {
                                 return
                             }
-                            self.sampleGiftAttributes = attributes
+                            self.upgradePreview = upgradePreview
                             
-                            for attribute in attributes {
+                            for attribute in upgradePreview.attributes {
                                 switch attribute {
                                 case let .model(_, file, _):
-                                    self.sampleDisposable.add(freeMediaFileResourceInteractiveFetched(account: self.context.account, userLocation: .other, fileReference: .standalone(media: file), resource: file.resource).start())
+                                    self.upgradePreviewDisposable.add(freeMediaFileResourceInteractiveFetched(account: self.context.account, userLocation: .other, fileReference: .standalone(media: file), resource: file.resource).start())
                                 case let .pattern(_, file, _):
-                                    self.sampleDisposable.add(freeMediaFileResourceInteractiveFetched(account: self.context.account, userLocation: .other, fileReference: .standalone(media: file), resource: file.resource).start())
+                                    self.upgradePreviewDisposable.add(freeMediaFileResourceInteractiveFetched(account: self.context.account, userLocation: .other, fileReference: .standalone(media: file), resource: file.resource).start())
                                 default:
                                     break
                                 }
@@ -348,7 +348,7 @@ private final class GiftViewSheetContent: CombinedComponent {
         
         deinit {
             self.disposable?.dispose()
-            self.sampleDisposable.dispose()
+            self.upgradePreviewDisposable.dispose()
             self.upgradeFormDisposable?.dispose()
             self.upgradeDisposable?.dispose()
             self.buyFormDisposable?.dispose()
@@ -973,7 +973,7 @@ private final class GiftViewSheetContent: CombinedComponent {
             
             if let resellStars = gift.resellAmounts?.first, resellStars.amount.value > 0, !update {
                 let alertController = textAlertController(
-                    context: context,
+                    context: self.context,
                     title: presentationData.strings.Gift_View_Resale_Unlist_Title,
                     text: presentationData.strings.Gift_View_Resale_Unlist_Text,
                     actions: [
@@ -1031,7 +1031,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                         return
                     }
                                     
-                    let _ = ((controller.updateResellStars?(reference, price) ?? context.engine.payments.updateStarGiftResalePrice(reference: reference, price: price))
+                    let _ = ((controller.updateResellStars?(reference, price) ?? self.context.engine.payments.updateStarGiftResalePrice(reference: reference, price: price))
                     |> deliverOnMainQueue).startStandalone(error: { [weak self, weak controller] error in
                         guard let self else {
                             return
@@ -2115,7 +2115,7 @@ private final class GiftViewSheetContent: CombinedComponent {
             }
                                     
             var showUpgradePreview = false
-            if state.inUpgradePreview, let _ = state.sampleGiftAttributes {
+            if state.inUpgradePreview, let _ = state.upgradePreview {
                 showUpgradePreview = true
             } else if case .upgradePreview = component.subject {
                 showUpgradePreview = true
@@ -2174,8 +2174,8 @@ private final class GiftViewSheetContent: CombinedComponent {
                 } else {
                     headerHeight = 240.0
                 }
-                headerSubject = .unique(state.justUpgraded ? state.sampleGiftAttributes : nil, uniqueGift)
-            } else if state.inUpgradePreview, let attributes = state.sampleGiftAttributes {
+                headerSubject = .unique(state.justUpgraded ? state.upgradePreview?.attributes : nil, uniqueGift)
+            } else if state.inUpgradePreview, let attributes = state.upgradePreview?.attributes {
                 headerHeight = 258.0
                 headerSubject = .preview(attributes)
             } else if case let .upgradePreview(attributes, _) = component.subject {
@@ -3368,7 +3368,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                                 percentage = Float(rarity) * 0.1
                                 tag = state.modelButtonTag
                                 
-                                if state.justUpgraded, let sampleAttributes = state.sampleGiftAttributes {
+                                if state.justUpgraded, let sampleAttributes = state.upgradePreview?.attributes {
                                     for sampleAttribute in sampleAttributes {
                                         if case let .model(name, _, rarity) = sampleAttribute {
                                             otherValuesAndPercentages.append((name, Float(rarity) * 0.1))
@@ -3382,7 +3382,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                                 percentage = Float(rarity) * 0.1
                                 tag = state.backdropButtonTag
                                 
-                                if state.justUpgraded, let sampleAttributes = state.sampleGiftAttributes {
+                                if state.justUpgraded, let sampleAttributes = state.upgradePreview?.attributes {
                                     for sampleAttribute in sampleAttributes {
                                         if case let .backdrop(name, _, _, _, _, _, rarity) = sampleAttribute {
                                             otherValuesAndPercentages.append((name, Float(rarity) * 0.1))
@@ -3396,7 +3396,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                                 percentage = Float(rarity) * 0.1
                                 tag = state.symbolButtonTag
                                 
-                                if state.justUpgraded, let sampleAttributes = state.sampleGiftAttributes {
+                                if state.justUpgraded, let sampleAttributes = state.upgradePreview?.attributes {
                                     for sampleAttribute in sampleAttributes {
                                         if case let .pattern(name, _, rarity) = sampleAttribute {
                                             otherValuesAndPercentages.append((name, Float(rarity) * 0.1))
