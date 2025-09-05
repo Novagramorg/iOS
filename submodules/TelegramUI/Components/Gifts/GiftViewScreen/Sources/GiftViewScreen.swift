@@ -4099,10 +4099,12 @@ private final class GiftViewSheetContent: CombinedComponent {
                 var upgradeString = strings.Gift_Upgrade_Upgrade
                 if !incoming {
                     if let gift = state.starGiftsMap[giftId], let upgradeStars = gift.upgradeStars {
-                        upgradeString = strings.Gift_Upgrade_GiftUpgrade(" # \(upgradeStars)").string
+                        let priceString = presentationStringsFormattedNumber(Int32(clamping: upgradeStars), environment.dateTimeFormat.groupingSeparator)
+                        upgradeString = strings.Gift_Upgrade_GiftUpgrade(" # \(priceString)").string
                     }
                 } else if let upgradeForm = state.upgradeForm, let price = upgradeForm.invoice.prices.first?.amount {
-                    upgradeString += "  # \(presentationStringsFormattedNumber(Int32(price), environment.dateTimeFormat.groupingSeparator))"
+                    let priceString = presentationStringsFormattedNumber(Int32(clamping: price), environment.dateTimeFormat.groupingSeparator)
+                    upgradeString = strings.Gift_Upgrade_UpgradeFor(" # \(priceString)").string
                 }
                 let buttonTitle = subject.arguments?.upgradeStars != nil ? strings.Gift_Upgrade_Confirm : upgradeString
                 let buttonAttributedString = NSMutableAttributedString(string: buttonTitle, font: Font.semibold(17.0), textColor: theme.list.itemCheckColors.foregroundColor, paragraphAlignment: .center)

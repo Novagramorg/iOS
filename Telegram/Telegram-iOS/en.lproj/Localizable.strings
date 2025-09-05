@@ -15011,3 +15011,5 @@ Sorry for the inconvenience.";
 "Gift.Options.Gift.Filter.Collectibles" = "Collectibles";
 
 "Gift.Options.Collectibles.Text" = "Collectible gifts are unique digital items you can exchange or sell.";
+
+"Gift.Upgrade.UpgradeFor" = "Upgrade for %@";

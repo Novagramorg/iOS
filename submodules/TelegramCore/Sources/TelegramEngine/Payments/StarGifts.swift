@@ -1268,8 +1268,8 @@ func _internal_upgradeStarGift(account: Account, formId: Int64?, reference: Star
 
 public struct StarGiftUpgradePreview: Equatable {
     public struct Price: Equatable {
-        let stars: Int64
-        let date: Int32
+        public let stars: Int64
+        public let date: Int32
     }
     public let attributes: [StarGift.UniqueGift.Attribute]
     public let prices: [Price]
