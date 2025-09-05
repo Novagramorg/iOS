@@ -448,16 +448,7 @@ private final class ProfileLevelInfoScreenComponent: Component {
             transition.setFrame(view: self.navigationBackgroundView, frame: navigationBackgroundFrame)
             self.navigationBackgroundView.update(size: navigationBackgroundFrame.size, cornerRadius: 10.0, maskedCorners: [.layerMinXMinYCorner, .layerMaxXMinYCorner], transition: transition.containedViewLayoutTransition)
             transition.setFrame(layer: self.navigationBarSeparator, frame: CGRect(origin: CGPoint(x: 0.0, y: 54.0), size: CGSize(width: availableSize.width, height: UIScreenPixel)))
-            
-            let gradientColors: [UIColor]
-            gradientColors = [
-                environment.theme.list.itemCheckColors.fillColor,
-                environment.theme.list.itemCheckColors.fillColor,
-                environment.theme.list.itemCheckColors.fillColor,
-                environment.theme.list.itemCheckColors.fillColor
-            ]
-            let _ = gradientColors
-            
+                        
             var levelFraction: CGFloat
             
             let badgeText: String
