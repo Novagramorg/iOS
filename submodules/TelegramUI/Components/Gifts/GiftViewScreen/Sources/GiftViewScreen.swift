@@ -1943,6 +1943,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                         starsContext: starsContext,
                         options: options ?? [],
                         purpose: .upgradeStarGift(requiredStars: price),
+                        targetPeerId: nil,
                         completion: { [weak self, weak starsContext] stars in
                             guard let self, let starsContext else {
                                 return
