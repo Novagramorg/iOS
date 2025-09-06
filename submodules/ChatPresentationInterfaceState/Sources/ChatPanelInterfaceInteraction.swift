@@ -8,6 +8,8 @@ import Display
 import AccountContext
 import ContextUI
 import TooltipUI
+import UndoUI
+import TextFormat
 
 public enum ChatLoadingMessageSubject {
     case generic
@@ -187,6 +189,8 @@ public final class ChatPanelInterfaceInteraction {
     public let updateRecordingTrimRange: (Double, Double, Bool, Bool) -> Void
     public let dismissAllTooltips: () -> Void
     public let editTodoMessage: (MessageId, Int32?, Bool) -> Void
+    public let displayUndo: (UndoOverlayContent) -> Void
+    public let sendEmoji: (String, ChatTextInputTextCustomEmojiAttribute, Bool) -> Void
     public let requestLayout: (ContainedViewLayoutTransition) -> Void
     public let chatController: () -> ViewController?
     public let statuses: ChatPanelInterfaceInteractionStatuses?
@@ -306,6 +310,8 @@ public final class ChatPanelInterfaceInteraction {
         updateRecordingTrimRange: @escaping (Double, Double, Bool, Bool) -> Void,
         dismissAllTooltips: @escaping () -> Void,
         editTodoMessage: @escaping (MessageId, Int32?, Bool) -> Void,
+        displayUndo: @escaping (UndoOverlayContent) -> Void,
+        sendEmoji: @escaping (String, ChatTextInputTextCustomEmojiAttribute, Bool) -> Void,
         updateHistoryFilter: @escaping ((ChatPresentationInterfaceState.HistoryFilter?) -> ChatPresentationInterfaceState.HistoryFilter?) -> Void,
         updateChatLocationThread: @escaping (Int64?, ChatControllerAnimateInnerChatSwitchDirection?) -> Void,
         toggleChatSidebarMode: @escaping () -> Void,
@@ -428,6 +434,8 @@ public final class ChatPanelInterfaceInteraction {
         self.updateRecordingTrimRange = updateRecordingTrimRange
         self.dismissAllTooltips = dismissAllTooltips
         self.editTodoMessage = editTodoMessage
+        self.displayUndo = displayUndo
+        self.sendEmoji = sendEmoji
         self.updateHistoryFilter = updateHistoryFilter
         self.updateChatLocationThread = updateChatLocationThread
         self.toggleChatSidebarMode = toggleChatSidebarMode
@@ -559,6 +567,8 @@ public final class ChatPanelInterfaceInteraction {
         }, updateRecordingTrimRange: { _, _, _, _ in
         }, dismissAllTooltips: {
         }, editTodoMessage: { _, _, _ in
+        }, displayUndo: { _ in
+        }, sendEmoji: { _, _, _ in
         }, updateHistoryFilter: { _ in
         }, updateChatLocationThread: { _, _ in
         }, toggleChatSidebarMode: {

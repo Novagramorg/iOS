@@ -1310,7 +1310,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                 subtitleColor = UIColor.white
                 
                 let statusText: String
-                if let channel = peer as? TelegramChannel, channel.linkedBotId != nil {
+                if let user = peer as? TelegramUser, user.isForum {
                     statusText = " "
                 } else {
                     statusText = peer.debugDisplayTitle

@@ -1032,24 +1032,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                     return
                 }
                 
-                var threadId = threadId
-                var subject: ChatControllerSubject?
-                if let threadIdValue = threadId, case let .user(user) = peer {
-                    threadId = nil
-                    
-                    if case let .known(linkedForumId) = await self.context.engine.data.get(
-                        TelegramEngine.EngineData.Item.Peer.LinkedBotForumPeerId(id: user.id)
-                    ).get(), let linkedForumId {
-                        subject = .botForumThread(forumId: linkedForumId, threadId: threadIdValue)
-                    }
-                } else if case let .user(user) = peer {
-                    if case let .known(linkedForumId) = await self.context.engine.data.get(
-                        TelegramEngine.EngineData.Item.Peer.LinkedBotForumPeerId(id: user.id)
-                    ).get(), let linkedForumId {
-                        subject = .botForumThread(forumId: linkedForumId, threadId: EngineMessage.newTopicThreadId)
-                    }
-                }
-                subject = nil
+                let subject: ChatControllerSubject? = nil
                 
                 var forumSourcePeer: Signal<EnginePeer?, NoError> = .single(nil)
                 if case let .savedMessagesChats(peerId) = self.location, peerId != self.context.account.peerId {
@@ -5365,12 +5348,12 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                         if case .broadcast = channel.info {
                             canClear = false
                             deleteTitle = strongSelf.presentationData.strings.Channel_LeaveChannel
-                            if channel.flags.contains(.isCreator) {
+                            if channel.addressName == nil && channel.flags.contains(.isCreator) {
                                 canRemoveGlobally = true
                             }
                         } else {
                             deleteTitle = strongSelf.presentationData.strings.Group_DeleteGroup
-                            if channel.flags.contains(.isCreator) {
+                            if channel.addressName == nil && channel.flags.contains(.isCreator) {
                                 canRemoveGlobally = true
                             }
                         }

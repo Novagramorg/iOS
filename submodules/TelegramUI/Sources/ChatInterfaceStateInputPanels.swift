@@ -5,9 +5,9 @@ import TelegramCore
 import AccountContext
 import ChatPresentationInterfaceState
 import ChatInputPanelNode
-import ChatBotStartInputPanelNode
 import ChatChannelSubscriberInputPanelNode
 import ChatMessageSelectionInputPanelNode
+import ChatTextInputPanelNode
 
 func inputPanelForChatPresentationIntefaceState(_ chatPresentationInterfaceState: ChatPresentationInterfaceState, context: AccountContext, currentPanel: ChatInputPanelNode?, currentSecondaryPanel: ChatInputPanelNode?, textInputPanelNode: ChatTextInputPanelNode?, interfaceInteraction: ChatPanelInterfaceInteraction?) -> (primary: ChatInputPanelNode?, secondary: ChatInputPanelNode?) {
     if let renderedPeer = chatPresentationInterfaceState.renderedPeer, renderedPeer.peer?.restrictionText(platform: "ios", contentSettings: context.currentContentSettings.with { $0 }) != nil {
@@ -386,49 +386,18 @@ func inputPanelForChatPresentationIntefaceState(_ chatPresentationInterfaceState
             }
         }
         
-        var displayBotStartPanel = false
-        
-        var isScheduledMessages = false
-        if case .scheduledMessages = chatPresentationInterfaceState.subject {
-            isScheduledMessages = true
-        }
-        
-        if !isScheduledMessages {
-            if let _ = chatPresentationInterfaceState.botStartPayload {
-                if let user = chatPresentationInterfaceState.renderedPeer?.peer as? TelegramUser, user.botInfo != nil {
-                    displayBotStartPanel = true
-                }
-            } else if let chatHistoryState = chatPresentationInterfaceState.chatHistoryState, case .loaded(true, _) = chatHistoryState {
-                if let user = chatPresentationInterfaceState.renderedPeer?.peer as? TelegramUser, user.botInfo != nil {
-                    displayBotStartPanel = true
-                }
-            }
-        }
-        
-        if displayBotStartPanel, !"".isEmpty {
-            if let currentPanel = (currentPanel as? ChatBotStartInputPanelNode) ?? (currentSecondaryPanel as? ChatBotStartInputPanelNode) {
-                currentPanel.updateThemeAndStrings(theme: chatPresentationInterfaceState.theme, strings: chatPresentationInterfaceState.strings)
+        if let _ = chatPresentationInterfaceState.interfaceState.mediaDraftState {
+            if let currentPanel = (currentPanel as? ChatRecordingPreviewInputPanelNodeImpl) ?? (currentSecondaryPanel as? ChatRecordingPreviewInputPanelNodeImpl) {
                 return (currentPanel, nil)
             } else {
-                let panel = ChatBotStartInputPanelNode(theme: chatPresentationInterfaceState.theme, strings: chatPresentationInterfaceState.strings)
+                let panel = ChatRecordingPreviewInputPanelNodeImpl(theme: chatPresentationInterfaceState.theme)
                 panel.context = context
                 panel.interfaceInteraction = interfaceInteraction
                 return (panel, nil)
             }
-        } else {
-            if let _ = chatPresentationInterfaceState.interfaceState.mediaDraftState {
-                if let currentPanel = (currentPanel as? ChatRecordingPreviewInputPanelNode) ?? (currentSecondaryPanel as? ChatRecordingPreviewInputPanelNode) {
-                    return (currentPanel, nil)
-                } else {
-                    let panel = ChatRecordingPreviewInputPanelNode(theme: chatPresentationInterfaceState.theme)
-                    panel.context = context
-                    panel.interfaceInteraction = interfaceInteraction
-                    return (panel, nil)
-                }
-            }
-            
-            displayInputTextPanel = true
         }
+        
+        displayInputTextPanel = true
     }
     
     if case let .customChatContents(customChatContents) = chatPresentationInterfaceState.subject {

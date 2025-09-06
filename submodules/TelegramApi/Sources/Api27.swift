@@ -653,7 +653,7 @@ public extension Api {
         case updateReadChannelOutbox(channelId: Int64, maxId: Int32)
         case updateReadFeaturedEmojiStickers
         case updateReadFeaturedStickers
-        case updateReadHistoryInbox(flags: Int32, folderId: Int32?, peer: Api.Peer, maxId: Int32, stillUnreadCount: Int32, pts: Int32, ptsCount: Int32)
+        case updateReadHistoryInbox(flags: Int32, folderId: Int32?, peer: Api.Peer, topMsgId: Int32?, maxId: Int32, stillUnreadCount: Int32, pts: Int32, ptsCount: Int32)
         case updateReadHistoryOutbox(peer: Api.Peer, maxId: Int32, pts: Int32, ptsCount: Int32)
         case updateReadMessagesContents(flags: Int32, messages: [Int32], pts: Int32, ptsCount: Int32, date: Int32?)
         case updateReadMonoForumInbox(channelId: Int64, savedPeerId: Api.Peer, readMaxId: Int32)
@@ -684,7 +684,7 @@ public extension Api {
         case updateUserName(userId: Int64, firstName: String, lastName: String, usernames: [Api.Username])
         case updateUserPhone(userId: Int64, phone: String)
         case updateUserStatus(userId: Int64, status: Api.UserStatus)
-        case updateUserTyping(userId: Int64, action: Api.SendMessageAction)
+        case updateUserTyping(flags: Int32, userId: Int64, topMsgId: Int32?, action: Api.SendMessageAction)
         case updateWebPage(webpage: Api.WebPage, pts: Int32, ptsCount: Int32)
         case updateWebViewResultSent(queryId: Int64)
     
@@ -1696,13 +1696,14 @@ public extension Api {
                     }
                     
                     break
-                case .updateReadHistoryInbox(let flags, let folderId, let peer, let maxId, let stillUnreadCount, let pts, let ptsCount):
+                case .updateReadHistoryInbox(let flags, let folderId, let peer, let topMsgId, let maxId, let stillUnreadCount, let pts, let ptsCount):
                     if boxed {
-                        buffer.appendInt32(-1667805217)
+                        buffer.appendInt32(-1635468135)
                     }
                     serializeInt32(flags, buffer: buffer, boxed: false)
                     if Int(flags) & Int(1 << 0) != 0 {serializeInt32(folderId!, buffer: buffer, boxed: false)}
                     peer.serialize(buffer, true)
+                    if Int(flags) & Int(1 << 1) != 0 {serializeInt32(topMsgId!, buffer: buffer, boxed: false)}
                     serializeInt32(maxId, buffer: buffer, boxed: false)
                     serializeInt32(stillUnreadCount, buffer: buffer, boxed: false)
                     serializeInt32(pts, buffer: buffer, boxed: false)
@@ -1938,11 +1939,13 @@ public extension Api {
                     serializeInt64(userId, buffer: buffer, boxed: false)
                     status.serialize(buffer, true)
                     break
-                case .updateUserTyping(let userId, let action):
+                case .updateUserTyping(let flags, let userId, let topMsgId, let action):
                     if boxed {
-                        buffer.appendInt32(-1071741569)
+                        buffer.appendInt32(706199388)
                     }
+                    serializeInt32(flags, buffer: buffer, boxed: false)
                     serializeInt64(userId, buffer: buffer, boxed: false)
+                    if Int(flags) & Int(1 << 0) != 0 {serializeInt32(topMsgId!, buffer: buffer, boxed: false)}
                     action.serialize(buffer, true)
                     break
                 case .updateWebPage(let webpage, let pts, let ptsCount):
@@ -2186,8 +2189,8 @@ public extension Api {
                 return ("updateReadFeaturedEmojiStickers", [])
                 case .updateReadFeaturedStickers:
                 return ("updateReadFeaturedStickers", [])
-                case .updateReadHistoryInbox(let flags, let folderId, let peer, let maxId, let stillUnreadCount, let pts, let ptsCount):
-                return ("updateReadHistoryInbox", [("flags", flags as Any), ("folderId", folderId as Any), ("peer", peer as Any), ("maxId", maxId as Any), ("stillUnreadCount", stillUnreadCount as Any), ("pts", pts as Any), ("ptsCount", ptsCount as Any)])
+                case .updateReadHistoryInbox(let flags, let folderId, let peer, let topMsgId, let maxId, let stillUnreadCount, let pts, let ptsCount):
+                return ("updateReadHistoryInbox", [("flags", flags as Any), ("folderId", folderId as Any), ("peer", peer as Any), ("topMsgId", topMsgId as Any), ("maxId", maxId as Any), ("stillUnreadCount", stillUnreadCount as Any), ("pts", pts as Any), ("ptsCount", ptsCount as Any)])
                 case .updateReadHistoryOutbox(let peer, let maxId, let pts, let ptsCount):
                 return ("updateReadHistoryOutbox", [("peer", peer as Any), ("maxId", maxId as Any), ("pts", pts as Any), ("ptsCount", ptsCount as Any)])
                 case .updateReadMessagesContents(let flags, let messages, let pts, let ptsCount, let date):
@@ -2248,8 +2251,8 @@ public extension Api {
                 return ("updateUserPhone", [("userId", userId as Any), ("phone", phone as Any)])
                 case .updateUserStatus(let userId, let status):
                 return ("updateUserStatus", [("userId", userId as Any), ("status", status as Any)])
-                case .updateUserTyping(let userId, let action):
-                return ("updateUserTyping", [("userId", userId as Any), ("action", action as Any)])
+                case .updateUserTyping(let flags, let userId, let topMsgId, let action):
+                return ("updateUserTyping", [("flags", flags as Any), ("userId", userId as Any), ("topMsgId", topMsgId as Any), ("action", action as Any)])
                 case .updateWebPage(let webpage, let pts, let ptsCount):
                 return ("updateWebPage", [("webpage", webpage as Any), ("pts", pts as Any), ("ptsCount", ptsCount as Any)])
                 case .updateWebViewResultSent(let queryId):
@@ -4342,22 +4345,25 @@ public extension Api {
                 _3 = Api.parse(reader, signature: signature) as? Api.Peer
             }
             var _4: Int32?
-            _4 = reader.readInt32()
+            if Int(_1!) & Int(1 << 1) != 0 {_4 = reader.readInt32() }
             var _5: Int32?
             _5 = reader.readInt32()
             var _6: Int32?
             _6 = reader.readInt32()
             var _7: Int32?
             _7 = reader.readInt32()
+            var _8: Int32?
+            _8 = reader.readInt32()
             let _c1 = _1 != nil
             let _c2 = (Int(_1!) & Int(1 << 0) == 0) || _2 != nil
             let _c3 = _3 != nil
-            let _c4 = _4 != nil
+            let _c4 = (Int(_1!) & Int(1 << 1) == 0) || _4 != nil
             let _c5 = _5 != nil
             let _c6 = _6 != nil
             let _c7 = _7 != nil
-            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 {
-                return Api.Update.updateReadHistoryInbox(flags: _1!, folderId: _2, peer: _3!, maxId: _4!, stillUnreadCount: _5!, pts: _6!, ptsCount: _7!)
+            let _c8 = _8 != nil
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 {
+                return Api.Update.updateReadHistoryInbox(flags: _1!, folderId: _2, peer: _3!, topMsgId: _4, maxId: _5!, stillUnreadCount: _6!, pts: _7!, ptsCount: _8!)
             }
             else {
                 return nil
@@ -4794,16 +4800,22 @@ public extension Api {
             }
         }
         public static func parse_updateUserTyping(_ reader: BufferReader) -> Update? {
-            var _1: Int64?
-            _1 = reader.readInt64()
-            var _2: Api.SendMessageAction?
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: Int64?
+            _2 = reader.readInt64()
+            var _3: Int32?
+            if Int(_1!) & Int(1 << 0) != 0 {_3 = reader.readInt32() }
+            var _4: Api.SendMessageAction?
             if let signature = reader.readInt32() {
-                _2 = Api.parse(reader, signature: signature) as? Api.SendMessageAction
+                _4 = Api.parse(reader, signature: signature) as? Api.SendMessageAction
             }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if _c1 && _c2 {
-                return Api.Update.updateUserTyping(userId: _1!, action: _2!)
+            let _c3 = (Int(_1!) & Int(1 << 0) == 0) || _3 != nil
+            let _c4 = _4 != nil
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.Update.updateUserTyping(flags: _1!, userId: _2!, topMsgId: _3, action: _4!)
             }
             else {
                 return nil

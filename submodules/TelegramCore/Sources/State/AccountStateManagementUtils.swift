@@ -129,7 +129,7 @@ private func peerIdsRequiringLocalChatStateFromUpdates(_ updates: [Api.Update]) 
                 }
             case let .updateReadChannelInbox(_, _, channelId, _, _, _):
                 peerIds.insert(PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(channelId)))
-            case let .updateReadHistoryInbox(_, _, peer, _, _, _, _):
+            case let .updateReadHistoryInbox(_, _, peer, _, _, _, _, _):
                 peerIds.insert(peer.peerId)
             case let .updateDraftMessage(_, peer, _, _, draft):
             switch draft {
@@ -1205,8 +1205,12 @@ private func finalStateWithUpdatesAndServerTime(accountPeerId: PeerId, postbox: 
                 updatedState.addExternallyUpdatedPeerId(PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(channelId)))
             case let .updateChat(chatId):
                 updatedState.addExternallyUpdatedPeerId(PeerId(namespace: Namespaces.Peer.CloudGroup, id: PeerId.Id._internalFromInt64Value(chatId)))
-            case let .updateReadHistoryInbox(_, folderId, peer, maxId, stillUnreadCount, pts, _):
-                updatedState.resetIncomingReadState(groupId: PeerGroupId(rawValue: folderId ?? 0), peerId: peer.peerId, namespace: Namespaces.Message.Cloud, maxIncomingReadId: maxId, count: stillUnreadCount, pts: pts)
+            case let .updateReadHistoryInbox(_, folderId, peer, topMsgId, maxId, stillUnreadCount, pts, _):
+                if let topMsgId {
+                    updatedState.readThread(peerId: peer.peerId, threadId: Int64(topMsgId), readMaxId: maxId, isIncoming: true, mainChannelMessage: nil)
+                } else {
+                    updatedState.resetIncomingReadState(groupId: PeerGroupId(rawValue: folderId ?? 0), peerId: peer.peerId, namespace: Namespaces.Message.Cloud, maxIncomingReadId: maxId, count: stillUnreadCount, pts: pts)
+                }
             case let .updateReadHistoryOutbox(peer, maxId, _, _):
                 updatedState.readOutbox(MessageId(peerId: peer.peerId, namespace: Namespaces.Message.Cloud, id: maxId), timestamp: updatesDate)
             case let .updateReadChannelDiscussionInbox(_, channelId, topMsgId, readMaxId, mainChannelId, mainChannelPost):
@@ -1445,15 +1449,24 @@ private func finalStateWithUpdatesAndServerTime(accountPeerId: PeerId, postbox: 
                 updatedState.addSecretMessages([message])
             case let .updateEncryptedMessagesRead(chatId, maxDate, date):
                 updatedState.readSecretOutbox(peerId: PeerId(namespace: Namespaces.Peer.SecretChat, id: PeerId.Id._internalFromInt64Value(Int64(chatId))), timestamp: maxDate, actionTimestamp: date)
-            case let .updateUserTyping(userId, type):
+            case let .updateUserTyping(_, userId, topMsgId, type):
+                let threadId = topMsgId.flatMap { Int64($0) }
+            
                 if let date = updatesDate, date + 60 > serverTime {
-                    let activity = PeerInputActivity(apiType: type, peerId: PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(userId)), timestamp: date)
-                    var category: PeerActivitySpace.Category = .global
-                    if case .speakingInGroupCall = activity {
-                        category = .voiceChat
+                    if case let .sendMessageTextDraftAction(randomId, text) = type {
+                        switch text {
+                        case let .textWithEntities(text, entities):
+                            updatedState.addPeerLiveTypingDraftUpdate(peerAndThreadId: PeerAndThreadId(peerId: PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(userId)), threadId: threadId), id: randomId, timestamp: date, peerId: PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(userId)), text: text, entities: messageTextEntitiesFromApiEntities(entities))
+                        }
+                    } else {
+                        let activity = PeerInputActivity(apiType: type, peerId: PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(userId)), timestamp: date)
+                        var category: PeerActivitySpace.Category = .global
+                        if case .speakingInGroupCall = activity {
+                            category = .voiceChat
+                        }
+                        
+                        updatedState.addPeerInputActivity(chatPeerId: PeerActivitySpace(peerId: PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(userId)), category: category), peerId: PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(userId)), activity: activity)
                     }
-                    
-                    updatedState.addPeerInputActivity(chatPeerId: PeerActivitySpace(peerId: PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(userId)), category: category), peerId: PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(userId)), activity: activity)
                 }
             case let .updateChatUserTyping(chatId, userId, type):
                 if let date = updatesDate, date + 60 > serverTime {
@@ -1470,12 +1483,12 @@ private func finalStateWithUpdatesAndServerTime(accountPeerId: PeerId, postbox: 
                     let channelPeerId = PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(channelId))
                     let threadId = topMsgId.flatMap { Int64($0) }
                     
-                    /*if case let .sendMessageTextDraftAction(randomId, text) = type {
+                    if case let .sendMessageTextDraftAction(randomId, text) = type {
                         switch text {
                         case let .textWithEntities(text, entities):
                             updatedState.addPeerLiveTypingDraftUpdate(peerAndThreadId: PeerAndThreadId(peerId: channelPeerId, threadId: threadId), id: randomId, timestamp: date, peerId: userId.peerId, text: text, entities: messageTextEntitiesFromApiEntities(entities))
                         }
-                    } else*/ do {
+                    } else {
                         let activity = PeerInputActivity(apiType: type, peerId: nil, timestamp: date)
                         var category: PeerActivitySpace.Category = .global
                         if case .speakingInGroupCall = activity {
@@ -2017,6 +2030,8 @@ func resolveForumThreads(accountPeerId: PeerId, postbox: Postbox, source: FetchM
                         if channel.flags.contains(.isForum) || channel.flags.contains(.isMonoforum) {
                             forumThreadIds.insert(PeerAndBoundThreadId(peerId: message.id.peerId, threadId: threadId))
                         }
+                    } else if let user = state.peers[message.id.peerId] as? TelegramUser, let botInfo = user.botInfo, botInfo.flags.contains(.hasForum) {
+                        forumThreadIds.insert(PeerAndBoundThreadId(peerId: message.id.peerId, threadId: threadId))
                     }
                 }
             }
@@ -2042,12 +2057,12 @@ func resolveForumThreads(accountPeerId: PeerId, postbox: Postbox, source: FetchM
             } else {
                 var signals: [Signal<(Peer, FetchedForumThreads)?, NoError>] = []
                 for (peerId, threadIds) in missingForumThreadIds {
-                    guard let peer = transaction.getPeer(peerId) as? TelegramChannel, let inputPeer = apiInputPeer(peer), let inputChannel = apiInputChannel(peer) else {
-                        Logger.shared.log("State", "can't fetch thread infos \(threadIds) for peer \(peerId): can't create inputChannel")
+                    guard let peer = transaction.getPeer(peerId), let inputPeer = apiInputPeer(peer) else {
+                        Logger.shared.log("State", "can't fetch thread infos \(threadIds) for peer \(peerId): can't create inputPeer")
                         continue
                     }
                     
-                    if peer.flags.contains(.isMonoforum) {
+                    if let peer = peer as? TelegramChannel, peer.flags.contains(.isMonoforum) {
                         let signal = source.request(Api.functions.messages.getSavedDialogsByID(flags: 1 << 1, parentPeer: inputPeer, ids: threadIds.compactMap { threadId in
                             let threadPeerId = PeerId(threadId)
                             if let threadPeer = state.peers[threadPeerId] {
@@ -2067,7 +2082,7 @@ func resolveForumThreads(accountPeerId: PeerId, postbox: Postbox, source: FetchM
                         }
                         signals.append(signal)
                     } else {
-                        let signal = source.request(Api.functions.channels.getForumTopicsByID(channel: inputChannel, topics: threadIds.map { Int32(clamping: $0) }))
+                        let signal = source.request(Api.functions.messages.getForumTopicsByID(peer: inputPeer, topics: threadIds.map { Int32(clamping: $0) }))
                         |> map { result -> (Peer, FetchedForumThreads)? in
                             return (peer, FetchedForumThreads(forumTopics: result))
                         }
@@ -2205,12 +2220,12 @@ func resolveForumThreads(accountPeerId: PeerId, postbox: Postbox, source: FetchM
             } else {
                 var signals: [Signal<(Peer, FetchedForumThreads)?, NoError>] = []
                 for (peerId, threadIds) in missingForumThreadIds {
-                    guard let peer = transaction.getPeer(peerId) as? TelegramChannel, let inputPeer = apiInputPeer(peer), let inputChannel = apiInputChannel(peer) else {
+                    guard let peer = transaction.getPeer(peerId), let inputPeer = apiInputPeer(peer) else {
                         Logger.shared.log("State", "can't fetch thread infos \(threadIds) for peer \(peerId): can't create inputChannel")
                         continue
                     }
                     
-                    if peer.flags.contains(.isMonoforum) {
+                    if let peer = peer as? TelegramChannel, peer.flags.contains(.isMonoforum) {
                         let signal = source.request(Api.functions.messages.getSavedDialogsByID(flags: 1 << 1, parentPeer: inputPeer, ids: threadIds.compactMap { threadId in
                             let threadPeerId = PeerId(threadId)
                             if let threadPeer = additionalPeers.get(threadPeerId) {
@@ -2230,7 +2245,7 @@ func resolveForumThreads(accountPeerId: PeerId, postbox: Postbox, source: FetchM
                         }
                         signals.append(signal)
                     } else {
-                        let signal = source.request(Api.functions.channels.getForumTopicsByID(channel: inputChannel, topics: threadIds.map { Int32(clamping: $0) }))
+                        let signal = source.request(Api.functions.messages.getForumTopicsByID(peer: inputPeer, topics: threadIds.map { Int32(clamping: $0) }))
                         |> map { result -> (Peer, FetchedForumThreads)? in
                             return (peer, FetchedForumThreads(forumTopics: result))
                         }
@@ -2352,6 +2367,8 @@ func resolveForumThreads(accountPeerId: PeerId, postbox: Postbox, source: FetchM
         if let threadId = message.threadId {
             if let channel = fetchedChatList.peers.peers.first(where: { $0.key == message.id.peerId })?.value as? TelegramChannel, case .group = channel.info, (channel.flags.contains(.isForum) || channel.flags.contains(.isMonoforum)) {
                 forumThreadIds.insert(PeerAndBoundThreadId(peerId: message.id.peerId, threadId: threadId))
+            } else if let user = fetchedChatList.peers.peers.first(where: { $0.key == message.id.peerId })?.value as? TelegramUser, let botInfo = user.botInfo, botInfo.flags.contains(.hasForum) {
+                forumThreadIds.insert(PeerAndBoundThreadId(peerId: message.id.peerId, threadId: threadId))
             }
         }
     }
@@ -2373,12 +2390,12 @@ func resolveForumThreads(accountPeerId: PeerId, postbox: Postbox, source: FetchM
             } else {
                 var signals: [Signal<(Peer, FetchedForumThreads)?, NoError>] = []
                 for (peerId, threadIds) in missingForumThreadIds {
-                    guard let peer = fetchedChatList.peers.get(peerId) as? TelegramChannel, let inputPeer = apiInputPeer(peer), let inputChannel = apiInputChannel(peer) else {
-                        Logger.shared.log("resolveForumThreads", "can't fetch thread infos \(threadIds) for peer \(peerId): can't create inputChannel")
+                    guard let peer = fetchedChatList.peers.get(peerId), let inputPeer = apiInputPeer(peer) else {
+                        Logger.shared.log("resolveForumThreads", "can't fetch thread infos \(threadIds) for peer \(peerId): can't create inputPeer")
                         continue
                     }
                     
-                    if peer.flags.contains(.isMonoforum) {
+                    if let peer = peer as? TelegramChannel, peer.flags.contains(.isMonoforum) {
                         let signal = source.request(Api.functions.messages.getSavedDialogsByID(flags: 1 << 1, parentPeer: inputPeer, ids: threadIds.compactMap { threadId in
                             let threadPeerId = PeerId(threadId)
                             if let threadPeer = fetchedChatList.peers.get(threadPeerId) {
@@ -2398,7 +2415,7 @@ func resolveForumThreads(accountPeerId: PeerId, postbox: Postbox, source: FetchM
                         }
                         signals.append(signal)
                     } else {
-                        let signal = source.request(Api.functions.channels.getForumTopicsByID(channel: inputChannel, topics: threadIds.map { Int32(clamping: $0) }))
+                        let signal = source.request(Api.functions.messages.getForumTopicsByID(peer: inputPeer, topics: threadIds.map { Int32(clamping: $0) }))
                         |> map { result -> (Peer, FetchedForumThreads)? in
                             return (peer, FetchedForumThreads(forumTopics: result))
                         }
@@ -2688,9 +2705,11 @@ private func resolveAssociatedMessages(accountPeerId: PeerId, postbox: Postbox, 
                 if let signal = signal {
                     signals.append(signal |> map { result in
                         switch result {
-                            case let .messages(messages, chats, users):
+                            case let .messages(messages, apiTopics, chats, users):
+                                let _ = apiTopics
                                 return (messages, chats, users)
-                            case let .messagesSlice(_, _, _, _, _, messages, chats, users):
+                            case let .messagesSlice(_, _, _, _, _, messages, apiTopics, chats, users):
+                                let _ = apiTopics
                                 return (messages, chats, users)
                             case let .channelMessages(_, _, _, _, messages, apiTopics, chats, users):
                                 let _ = apiTopics
@@ -2719,9 +2738,9 @@ private func resolveAssociatedMessages(accountPeerId: PeerId, postbox: Postbox, 
                 if let signal = signal {
                     signals.append(signal |> map { result in
                         switch result {
-                            case let .messages(messages, chats, users):
+                            case let .messages(messages, _, chats, users):
                                 return (messages, chats, users)
-                            case let .messagesSlice(_, _, _, _, _, messages, chats, users):
+                            case let .messagesSlice(_, _, _, _, _, messages, _, chats, users):
                                 return (messages, chats, users)
                             case let .channelMessages(_, _, _, _, messages, apiTopics, chats, users):
                                 let _ = apiTopics
@@ -2837,18 +2856,18 @@ private func resolveMissingPeerChatInfos(accountPeerId: PeerId, network: Network
                                                     isExcludedFromChatList = true
                                                 } else {
                                                     switch group.membership {
-                                                        case .Member:
-                                                            break
-                                                        default:
-                                                            isExcludedFromChatList = true
+                                                    case .Member:
+                                                        break
+                                                    default:
+                                                        isExcludedFromChatList = true
                                                     }
                                                 }
                                             } else if let channel = groupOrChannel as? TelegramChannel {
                                                 switch channel.participationStatus {
-                                                    case .member:
-                                                        break
-                                                    default:
-                                                        isExcludedFromChatList = true
+                                                case .member:
+                                                    break
+                                                default:
+                                                    isExcludedFromChatList = true
                                                 }
                                             }
                                         }
@@ -3293,6 +3312,8 @@ private func pollChannel(accountPeerId: PeerId, postbox: Postbox, network: Netwo
                             if let threadId = message.threadId {
                                 if let channel = updatedState.peers[message.id.peerId] as? TelegramChannel, case .group = channel.info, channel.flags.contains(.isForum) {
                                     forumThreadIds.insert(MessageId(peerId: message.id.peerId, namespace: message.id.namespace, id: Int32(clamping: threadId)))
+                                } else if let user = updatedState.peers[message.id.peerId] as? TelegramUser, let botInfo = user.botInfo, botInfo.flags.contains(.hasForum) {
+                                    forumThreadIds.insert(MessageId(peerId: message.id.peerId, namespace: message.id.namespace, id: Int32(clamping: threadId)))
                                 }
                             }
                         }
@@ -3326,6 +3347,8 @@ private func pollChannel(accountPeerId: PeerId, postbox: Postbox, network: Netwo
                             
                             if let threadId = message.threadId {
                                 if let channel = updatedState.peers[message.id.peerId] as? TelegramChannel, case .group = channel.info, channel.flags.contains(.isForum) {
+                                    forumThreadIds.insert(MessageId(peerId: message.id.peerId, namespace: message.id.namespace, id: Int32(clamping: threadId)))
+                                } else if let user = updatedState.peers[message.id.peerId] as? TelegramUser, let botInfo = user.botInfo, botInfo.flags.contains(.hasForum) {
                                     forumThreadIds.insert(MessageId(peerId: message.id.peerId, namespace: message.id.namespace, id: Int32(clamping: threadId)))
                                 }
                             }
@@ -4386,6 +4409,16 @@ func replayFinalState(
                         updatedOutgoingThreadReadStates[peerAndThreadId] = readMaxId
                     }
                     if let channel = transaction.getPeer(peerAndThreadId.peerId) as? TelegramChannel, case .group = channel.info, (channel.flags.contains(.isForum) || channel.flags.contains(.isMonoforum)) {
+                        if var data = transaction.getMessageHistoryThreadInfo(peerId: peerAndThreadId.peerId, threadId: peerAndThreadId.threadId)?.data.get(MessageHistoryThreadData.self) {
+                            if readMaxId >= data.maxOutgoingReadId {
+                                data.maxOutgoingReadId = readMaxId
+                                
+                                if let entry = StoredMessageHistoryThreadInfo(data) {
+                                    transaction.setMessageHistoryThreadInfo(peerId: peerAndThreadId.peerId, threadId: peerAndThreadId.threadId, info: entry)
+                                }
+                            }
+                        }
+                    } else if let user = transaction.getPeer(peerAndThreadId.peerId) as? TelegramUser, let botInfo = user.botInfo, botInfo.flags.contains(.hasForum) {
                         if var data = transaction.getMessageHistoryThreadInfo(peerId: peerAndThreadId.peerId, threadId: peerAndThreadId.threadId)?.data.get(MessageHistoryThreadData.self) {
                             if readMaxId >= data.maxOutgoingReadId {
                                 data.maxOutgoingReadId = readMaxId

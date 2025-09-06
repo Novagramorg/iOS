@@ -6,7 +6,7 @@ import TelegramPresentationData
 
 private let cancelFont = Font.regular(17.0)
 
-final class ChatTextInputAudioRecordingCancelIndicator: ASDisplayNode {
+public final class ChatTextInputAudioRecordingCancelIndicator: ASDisplayNode {
     private let cancel: () -> Void
     
     private let arrowNode: ASImageNode
@@ -14,9 +14,9 @@ final class ChatTextInputAudioRecordingCancelIndicator: ASDisplayNode {
     private let cancelButton: HighlightableButtonNode
     private let strings: PresentationStrings
     
-    private(set) var isDisplayingCancel = false
+    public private(set) var isDisplayingCancel = false
     
-    init(theme: PresentationTheme, strings: PresentationStrings, cancel: @escaping () -> Void) {
+    public init(theme: PresentationTheme, strings: PresentationStrings, cancel: @escaping () -> Void) {
         self.cancel = cancel
         
         self.arrowNode = ASImageNode()
@@ -59,7 +59,7 @@ final class ChatTextInputAudioRecordingCancelIndicator: ASDisplayNode {
         self.cancelButton.addTarget(self, action: #selector(self.cancelPressed), forControlEvents: .touchUpInside)
     }
     
-    func updateTheme(theme: PresentationTheme) {
+    public func updateTheme(theme: PresentationTheme) {
         self.arrowNode.image = PresentationResourcesChat.chatInputPanelMediaRecordingCancelArrowImage(theme)
         self.cancelButton.setTitle(self.strings.Common_Cancel, with: cancelFont, with: theme.chat.inputPanel.panelControlAccentColor, for: [])
                 let makeLayout = TextNode.asyncLayout(self.labelNode)
@@ -67,7 +67,7 @@ final class ChatTextInputAudioRecordingCancelIndicator: ASDisplayNode {
         let _ = labelApply()
     }
     
-    func updateIsDisplayingCancel(_ isDisplayingCancel: Bool, animated: Bool) {
+    public func updateIsDisplayingCancel(_ isDisplayingCancel: Bool, animated: Bool) {
         if self.isDisplayingCancel != isDisplayingCancel {
             self.isDisplayingCancel = isDisplayingCancel
             if isDisplayingCancel {
@@ -103,22 +103,20 @@ final class ChatTextInputAudioRecordingCancelIndicator: ASDisplayNode {
         }
     }
     
-    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+    override public func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         if !self.cancelButton.alpha.isZero, self.cancelButton.frame.insetBy(dx: -5.0, dy: -5.0).contains(point) {
             return self.cancelButton.view
         }
         return super.hitTest(point, with: event)
     }
     
-    @objc func cancelPressed() {
+    @objc private func cancelPressed() {
         self.cancel()
     }
     
-    func animateIn() {
-        
+    public func animateIn() {
     }
     
-    func animateOut() {
-        
+    public func animateOut() {
     }
 }

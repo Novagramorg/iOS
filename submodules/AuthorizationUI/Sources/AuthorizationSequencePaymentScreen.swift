@@ -178,7 +178,10 @@ final class AuthorizationSequencePaymentScreenComponent: Component {
                                         let mnc = carrier.mobileNetworkCode ?? "none"
                                         let errorString: String = "\(errorCode): \(errorText)"
                                         
-                                        AuthorizationSequenceController.presentEmailComposeController(address: component.supportEmailAddress, subject: component.supportEmailSubject, body: presentationData.strings.Login_PhoneGenericEmailBody(formattedNumber, errorString, appVersion, systemVersion, locale, mnc).string, from: controller, presentationData: presentationData)
+                                        var body = presentationData.strings.Login_PhoneGenericEmailBody(formattedNumber, errorString, appVersion, systemVersion, locale, mnc).string
+                                        body.append("\n#paidauth")
+                                        
+                                        AuthorizationSequenceController.presentEmailComposeController(address: component.supportEmailAddress, subject: component.supportEmailSubject, body: body, from: controller, presentationData: presentationData)
                                     })
                                 ]
                             )
