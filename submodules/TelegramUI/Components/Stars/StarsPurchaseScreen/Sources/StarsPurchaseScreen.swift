@@ -1010,6 +1010,7 @@ public final class StarsPurchaseScreen: ViewControllerComponentContainer {
         starsContext: StarsContext,
         options: [Any] = [],
         purpose: StarsPurchasePurpose,
+        targetPeerId: EnginePeer.Id?,
         completion: @escaping (Int64) -> Void = { _ in }
     ) {
         self.context = context

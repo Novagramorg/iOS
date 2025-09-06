@@ -278,7 +278,7 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                 switch action.action {
                 case let .starGift(gift, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _):
                     releasedBy = gift.releasedBy
-                case let .starGiftUnique(gift, _, _, _, _, _, _, _, _, _, _, _, _, _):
+                case let .starGiftUnique(gift, _, _, _, _, _, _, _, _, _, _, _, _, _, _):
                     releasedBy = gift.releasedBy
                 default:
                     break
@@ -650,7 +650,7 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                                     buttonTitle = item.presentationData.strings.Notification_StarGift_View
                                 }
                             }
-                        case let .starGiftUnique(gift, isUpgrade, _, _, _, _, isRefunded, _, _, _, _, _, _, _):
+                        case let .starGiftUnique(gift, isUpgrade, _, _, _, _, isRefunded, _, _, _, _, _, _, _, _):
                             if case let .unique(uniqueGift) = gift {
                                 isStarGift = true
                                 

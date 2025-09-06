@@ -837,6 +837,7 @@ final class GiftOptionsScreenComponent: Component {
                                     starsContext: starsContext,
                                     options: options ?? [],
                                     purpose: .transferStarGift(requiredStars: transferStars),
+                                    targetPeerId: nil,
                                     completion: { stars in
                                         starsContext.add(balance: StarsAmount(value: stars, nanos: 0))
                                         proceed(true)

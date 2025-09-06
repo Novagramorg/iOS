@@ -1811,7 +1811,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                                         return
                                     }
                                     
-                                    let purchaseScreen = strongSelf.context.sharedContext.makeStarsPurchaseScreen(context: strongSelf.context, starsContext: starsContext, options: options, purpose: .reactions(peerId: peerId, requiredStars: 1), completion: { result in
+                                    let purchaseScreen = strongSelf.context.sharedContext.makeStarsPurchaseScreen(context: strongSelf.context, starsContext: starsContext, options: options, purpose: .reactions(peerId: peerId, requiredStars: 1), targetPeerId: nil, completion: { result in
                                         let _ = result
                                     })
                                     strongSelf.push(purchaseScreen)
@@ -2441,7 +2441,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                                             guard let strongSelf else {
                                                 return
                                             }
-                                            let purchaseController = strongSelf.context.sharedContext.makeStarsPurchaseScreen(context: strongSelf.context, starsContext: starsContext, options: options, purpose: .generic, completion: { _ in
+                                            let purchaseController = strongSelf.context.sharedContext.makeStarsPurchaseScreen(context: strongSelf.context, starsContext: starsContext, options: options, purpose: .generic, targetPeerId: nil, completion: { _ in
                                             })
                                             strongSelf.push(purchaseController)
                                         })
