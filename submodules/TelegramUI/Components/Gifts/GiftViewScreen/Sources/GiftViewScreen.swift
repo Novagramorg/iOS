@@ -1558,6 +1558,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                                 starsContext: starsContext,
                                 options: options ?? [],
                                 purpose: .buyStarGift(requiredStars: resellAmount.amount.value),
+                                targetPeerId: nil,
                                 completion: { [weak self, weak starsContext] stars in
                                     guard let self, let starsContext else {
                                         return
@@ -1851,6 +1852,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                             starsContext: starsContext,
                             options: options ?? [],
                             purpose: .upgradeStarGift(requiredStars: price),
+                            targetPeerId: nil,
                             completion: { [weak self, weak starsContext] stars in
                                 guard let self, let starsContext else {
                                     return
@@ -3528,7 +3530,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                             
                             var itemAlignment: HStackAlignment = .left
                             var itemSpacing: CGFloat = 4.0
-                            if id == "originalInfo" {
+                            if !"".isEmpty && id == "originalInfo" {
                                 items.append(AnyComponentWithIdentity(
                                     id: AnyHashable(1),
                                     component: AnyComponent(Button(
@@ -3539,7 +3541,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                                     ))
                                 ))
                                 itemAlignment = .alternatingLeftRight
-                                itemSpacing = 16.0
+                                itemSpacing = 8.0
                             }
                             
                             var itemComponent = AnyComponent(
@@ -3655,7 +3657,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                     if let upgradeStars, upgradeStars > 0 {
                         finalStars += upgradeStars
                     }
-                    let valueString = "\(presentationStringsFormattedNumber(abs(Int32(finalStars)), dateTimeFormat.groupingSeparator))⭐️"
+                    let valueString = "\(presentationStringsFormattedNumber(abs(Int32(clamping: finalStars)), dateTimeFormat.groupingSeparator))⭐️"
                     let valueAttributedString = NSMutableAttributedString(string: valueString, font: tableFont, textColor: tableTextColor)
                     let range = (valueAttributedString.string as NSString).range(of: "⭐️")
                     if range.location != NSNotFound {
@@ -3781,7 +3783,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                 
                 let table = table.update(
                     component: TableComponent(
-                        theme: environment.theme,
+                        theme: theme,
                         items: tableItems
                     ),
                     availableSize: CGSize(width: context.availableSize.width - sideInset * 2.0, height: .greatestFiniteMagnitude),
