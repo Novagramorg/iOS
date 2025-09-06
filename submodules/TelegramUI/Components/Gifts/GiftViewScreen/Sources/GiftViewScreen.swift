@@ -4510,7 +4510,7 @@ public class GiftViewScreen: ViewControllerComponentContainer {
                             reference = .message(messageId: message.id)
                         }
                         return (message.id.peerId, senderId ?? message.author?.id, message.author?.compactDisplayTitle, message.id, reference, message.flags.contains(.Incoming), gift, message.timestamp, convertStars, text, entities, nameHidden, savedToProfile, nil, converted, upgraded, isRefunded, canUpgrade, upgradeStars, nil, nil, nil, upgradeMessageId, nil, nil, prepaidUpgradeHash, upgradeSeparate)
-                    case let .starGiftUnique(gift, isUpgrade, isTransferred, savedToProfile, canExportDate, transferStars, _, _, peerId, senderId, savedId, _, canTransferDate, canResaleDate):
+                    case let .starGiftUnique(gift, isUpgrade, isTransferred, savedToProfile, canExportDate, transferStars, _, _, peerId, senderId, savedId, _, canTransferDate, canResaleDate, _):
                         var reference: StarGiftReference
                         if let peerId, let savedId {
                             reference = .peer(peerId: peerId, id: savedId)
@@ -4842,6 +4842,7 @@ public class GiftViewScreen: ViewControllerComponentContainer {
                                         starsContext: starsContext,
                                         options: options,
                                         purpose: .generic,
+                                        targetPeerId: nil,
                                         completion: { _ in }
                                     )
                                     navigationController.pushViewController(controller)
