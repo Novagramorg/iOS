@@ -47,6 +47,7 @@ import ChatEmptyNode
 import SpaceWarpView
 import ChatSideTopicsPanel
 import ChatThemeScreen
+import ChatTextInputPanelNode
 
 final class VideoNavigationControllerDropContentItem: NavigationControllerDropContentItem {
     let itemNode: OverlayMediaItemNode
@@ -3974,7 +3975,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
     }
     
     func sendButtonFrame() -> CGRect? {
-        if let mediaPreviewNode = self.inputPanelNode as? ChatRecordingPreviewInputPanelNode {
+        if let mediaPreviewNode = self.inputPanelNode as? ChatRecordingPreviewInputPanelNodeImpl {
             return mediaPreviewNode.convert(mediaPreviewNode.sendButton.frame, to: self)
         } else if let frame = self.textInputPanelNode?.actionButtons.frame {
             return self.textInputPanelNode?.convert(frame, to: self)
@@ -4017,7 +4018,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             return textInputPanelNode.frameForInputActionButton().flatMap {
                 return $0.offsetBy(dx: textInputPanelNode.frame.minX, dy: textInputPanelNode.frame.minY)
             }
-        } else if let recordingPreviewPanelNode = self.inputPanelNode as? ChatRecordingPreviewInputPanelNode {
+        } else if let recordingPreviewPanelNode = self.inputPanelNode as? ChatRecordingPreviewInputPanelNodeImpl {
             return recordingPreviewPanelNode.frameForInputActionButton().flatMap {
                 return $0.offsetBy(dx: recordingPreviewPanelNode.frame.minX, dy: recordingPreviewPanelNode.frame.minY)
             }
@@ -4766,7 +4767,12 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                         }
                         if self.shouldAnimateMessageTransition, let inputPanelNode = self.inputPanelNode as? ChatTextInputPanelNode, let textInput = inputPanelNode.makeSnapshotForTransition() {
                             usedCorrelationId = correlationId
-                            let source: ChatMessageTransitionNodeImpl.Source = .textInput(textInput: textInput, replyPanel: replyPanel)
+                            let source: ChatMessageTransitionNodeImpl.Source = .textInput(textInput: ChatMessageTransitionNodeImpl.Source.TextInput(
+                                backgroundView: textInput.backgroundView,
+                                contentView: textInput.contentView,
+                                sourceRect: textInput.sourceRect,
+                                scrollOffset: textInput.scrollOffset
+                            ), replyPanel: replyPanel)
                             self.messageTransitionNode.add(correlationId: correlationId, source: source, initiated: {
                             })
                         }
@@ -4803,7 +4809,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                 }
                 
                 var targetThreadId: Int64?
-                if self.chatLocation.threadId == nil, let channel = self.chatPresentationInterfaceState.renderedPeer?.peer as? TelegramChannel, channel.linkedBotId != nil {
+                if self.chatLocation.threadId == nil, let user = self.chatPresentationInterfaceState.renderedPeer?.peer as? TelegramUser, user.isForum {
                     if let message = messages.first {
                         switch message {
                         case let .message(_, _, _, _, _, replyToMessageId, _, _, _, _):

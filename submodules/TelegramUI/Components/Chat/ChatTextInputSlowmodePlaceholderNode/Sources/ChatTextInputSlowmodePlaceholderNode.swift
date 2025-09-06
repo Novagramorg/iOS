@@ -8,7 +8,7 @@ import TelegramStringFormatting
 import AppBundle
 import ChatPresentationInterfaceState
 
-final class ChatTextInputSlowmodePlaceholderNode: ASDisplayNode {
+public final class ChatTextInputSlowmodePlaceholderNode: ASDisplayNode {
     private var theme: PresentationTheme
     private let iconNode: ASImageNode
     private let iconArrowContainerNode: ASDisplayNode
@@ -20,7 +20,7 @@ final class ChatTextInputSlowmodePlaceholderNode: ASDisplayNode {
     
     private var timer: SwiftSignalKit.Timer?
     
-    init(theme: PresentationTheme) {
+    public init(theme: PresentationTheme) {
         self.theme = theme
         self.textNode = ImmediateTextNode()
         self.textNode.displaysAsynchronously = false
@@ -52,7 +52,7 @@ final class ChatTextInputSlowmodePlaceholderNode: ASDisplayNode {
         self.timer?.invalidate()
     }
     
-    func updateState(_ slowmodeState: ChatSlowmodeState) {
+    public func updateState(_ slowmodeState: ChatSlowmodeState) {
         if self.slowmodeState != slowmodeState {
             self.slowmodeState = slowmodeState
             self.update()
@@ -97,7 +97,7 @@ final class ChatTextInputSlowmodePlaceholderNode: ASDisplayNode {
         }
     }
     
-    func updateLayout(size: CGSize) {
+    public func updateLayout(size: CGSize) {
         self.validLayout = size
         
         var leftInset: CGFloat = 0.0

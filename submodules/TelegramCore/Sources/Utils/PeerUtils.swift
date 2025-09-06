@@ -266,6 +266,8 @@ public extension Peer {
     var isForum: Bool {
         if let channel = self as? TelegramChannel {
             return channel.flags.contains(.isForum)
+        } else if let user = self as? TelegramUser, let botInfo = user.botInfo {
+            return botInfo.flags.contains(.hasForum)
         } else {
             return false
         }
@@ -282,6 +284,8 @@ public extension Peer {
     var displayForumAsTabs: Bool {
         if let channel = self as? TelegramChannel, isForum {
             return channel.flags.contains(.displayForumAsTabs)
+        } else if self is TelegramUser {
+            return true
         } else {
             return false
         }
@@ -290,6 +294,8 @@ public extension Peer {
     var isForumOrMonoForum: Bool {
         if let channel = self as? TelegramChannel {
             return channel.flags.contains(.isForum) || channel.flags.contains(.isMonoforum)
+        } else if let user = self as? TelegramUser, let botInfo = user.botInfo, botInfo.flags.contains(.hasForum) {
+            return true
         } else {
             return false
         }
@@ -467,8 +473,6 @@ public func peerViewMonoforumMainPeer(_ view: PeerView) -> Peer? {
     if let peer = peerViewMainPeer(view) {
         if let channel = peer as? TelegramChannel, channel.flags.contains(.isMonoforum), let linkedMonoforumId = channel.linkedMonoforumId {
             return view.peers[linkedMonoforumId]
-        } else if let channel = peer as? TelegramChannel, let linkedBotId = channel.linkedBotId {
-            return view.peers[linkedBotId]
         } else {
             return nil
         }
@@ -512,8 +516,6 @@ public extension RenderedPeer {
         if let channel = self.peer as? TelegramChannel {
             if channel.flags.contains(.isMonoforum), let linkedMonoforumId = channel.linkedMonoforumId {
                 return self.peers[linkedMonoforumId]
-            } else if let linkedBotId = channel.linkedBotId {
-                return self.peers[linkedBotId]
             } else {
                 return self.chatMainPeer
             }
