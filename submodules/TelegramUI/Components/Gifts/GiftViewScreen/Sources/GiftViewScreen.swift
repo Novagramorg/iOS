@@ -664,20 +664,96 @@ private final class GiftViewSheetContent: CombinedComponent {
             controller.push(introController)
         }
         
-        func openRemoveInfo() {
-            guard let controller = self.getController(), let gift = self.subject.arguments?.gift, case let .unique(uniqueGift) = gift else {
+        func openDropOriginalDetails() {
+            guard let controller = self.getController(), let gift = self.subject.arguments?.gift, case let .unique(uniqueGift) = gift, let price = self.subject.arguments?.dropOriginalDetailsStars else {
                 return
             }
-            //TODO:release
             let removeInfoController = giftRemoveInfoAlertController(
                 context: self.context,
                 gift: uniqueGift,
                 peers: self.peerMap,
-                removeInfoStars: 1000,
+                removeInfoStars: price,
                 navigationController: controller.navigationController as? NavigationController,
-                commit: {}
+                commit: { [weak self] in
+                    guard let self else {
+                        return
+                    }
+                    self.commitDropOriginalDetails()
+                }
             )
             controller.present(removeInfoController, in: .window(.root))
+        }
+        
+        func commitDropOriginalDetails() {
+            guard let arguments = self.subject.arguments, let controller = self.getController() as? GiftViewScreen, let gift = self.subject.arguments?.gift, case let .unique(uniqueGift) = gift, let starsContext = self.context.starsContext, let starsState = starsContext.currentState, let reference = arguments.reference, let price = self.subject.arguments?.dropOriginalDetailsStars else {
+                return
+            }
+            
+            let context = self.context
+            let proceed = {
+                let dropOriginalDetailsImpl = controller.dropOriginalDetails
+                
+                let signal: Signal<Never, DropStarGiftOriginalDetailsError>
+                if let dropOriginalDetailsImpl {
+                    signal = dropOriginalDetailsImpl(reference)
+                } else {
+                    signal = (context.engine.payments.dropStarGiftOriginalDetails(reference: reference)
+                    |> deliverOnMainQueue)
+                }
+                
+                self.upgradeDisposable = (signal
+                |> deliverOnMainQueue).start(error: { _ in
+                }, completed: { [weak self, weak starsContext] in
+                    guard let self else {
+                        return
+                    }
+                    Queue.mainQueue().after(0.5) {
+                        starsContext?.load(force: true)
+                    }
+                    switch self.subject {
+                    case let .profileGift(peerId, gift):
+                        let updatedAttributes = uniqueGift.attributes.filter { $0.attributeType != .originalInfo }
+                        self.subject = .profileGift(peerId, gift.withGift(.unique(uniqueGift.withAttributes(updatedAttributes))))
+                    default:
+                        break
+                    }
+                    self.updated(transition: .spring(duration: 0.3))
+                })
+            }
+            
+            if starsState.balance < StarsAmount(value: price, nanos: 0) {
+                let _ = (self.optionsPromise.get()
+                |> filter { $0 != nil }
+                |> take(1)
+                |> deliverOnMainQueue).startStandalone(next: { [weak self] options in
+                    guard let self, let controller = self.getController() else {
+                        return
+                    }
+                    let purchaseController = self.context.sharedContext.makeStarsPurchaseScreen(
+                        context: self.context,
+                        starsContext: starsContext,
+                        options: options ?? [],
+                        purpose: .removeOriginalDetailsStarGift(requiredStars: price),
+                        targetPeerId: nil,
+                        completion: { [weak self, weak starsContext] stars in
+                            guard let self, let starsContext else {
+                                return
+                            }
+                            self.inProgress = true
+                            self.updated()
+                            
+                            starsContext.add(balance: StarsAmount(value: stars, nanos: 0))
+                            let _ = (starsContext.onUpdate
+                            |> deliverOnMainQueue).start(next: {
+                                proceed()
+                            })
+                        }
+                    )
+                    controller.push(purchaseController)
+                })
+            } else {
+                proceed()
+            }
         }
         
         private var isOpeningValue = false
@@ -3493,6 +3569,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                                             insets: id == "originalInfo" ? UIEdgeInsets(top: 2.0, left: 0.0, bottom: 2.0, right: 0.0) : .zero,
                                             highlightColor: tableLinkColor.withAlphaComponent(0.1),
                                             handleSpoilers: true,
+                                            maxWidth: id == "originalInfo" ? context.availableSize.width - sideInset * 2.0 - 68.0 : nil,
                                             highlightAction: { attributes in
                                                 if let _ = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.PeerMention)] {
                                                     return NSAttributedString.Key(rawValue: TelegramTextAttributes.PeerMention)
@@ -3530,13 +3607,13 @@ private final class GiftViewSheetContent: CombinedComponent {
                             
                             var itemAlignment: HStackAlignment = .left
                             var itemSpacing: CGFloat = 4.0
-                            if !"".isEmpty && id == "originalInfo" {
+                            if id == "originalInfo", let _ = subject.arguments?.dropOriginalDetailsStars {
                                 items.append(AnyComponentWithIdentity(
                                     id: AnyHashable(1),
                                     component: AnyComponent(Button(
                                         content: AnyComponent(BundleIconComponent(name: "Chat/Context Menu/Delete", tintColor: tableLinkColor)),
                                         action: { [weak state] in
-                                            state?.openRemoveInfo()
+                                            state?.openDropOriginalDetails()
                                         }
                                     ))
                                 ))
@@ -4495,7 +4572,7 @@ public class GiftViewScreen: ViewControllerComponentContainer {
         case upgradePreview([StarGift.UniqueGift.Attribute], String)
         case wearPreview(StarGift.UniqueGift)
         
-        var arguments: (peerId: EnginePeer.Id?, fromPeerId: EnginePeer.Id?, fromPeerName: String?, messageId: EngineMessage.Id?, reference: StarGiftReference?, incoming: Bool, gift: StarGift, date: Int32, convertStars: Int64?, text: String?, entities: [MessageTextEntity]?, nameHidden: Bool, savedToProfile: Bool, pinnedToTop: Bool?, converted: Bool, upgraded: Bool, refunded: Bool, canUpgrade: Bool, upgradeStars: Int64?, transferStars: Int64?, resellAmounts: [CurrencyAmount]?, canExportDate: Int32?, upgradeMessageId: Int32?, canTransferDate: Int32?, canResaleDate: Int32?, prepaidUpgradeHash: String?, upgradeSeparate: Bool)? {
+        var arguments: (peerId: EnginePeer.Id?, fromPeerId: EnginePeer.Id?, fromPeerName: String?, messageId: EngineMessage.Id?, reference: StarGiftReference?, incoming: Bool, gift: StarGift, date: Int32, convertStars: Int64?, text: String?, entities: [MessageTextEntity]?, nameHidden: Bool, savedToProfile: Bool, pinnedToTop: Bool?, converted: Bool, upgraded: Bool, refunded: Bool, canUpgrade: Bool, upgradeStars: Int64?, transferStars: Int64?, resellAmounts: [CurrencyAmount]?, canExportDate: Int32?, upgradeMessageId: Int32?, canTransferDate: Int32?, canResaleDate: Int32?, prepaidUpgradeHash: String?, upgradeSeparate: Bool, dropOriginalDetailsStars: Int64?)? {
             switch self {
             case let .message(message):
                 if let action = message.media.first(where: { $0 is TelegramMediaAction }) as? TelegramMediaAction {
@@ -4509,8 +4586,8 @@ public class GiftViewScreen: ViewControllerComponentContainer {
                         } else {
                             reference = .message(messageId: message.id)
                         }
-                        return (message.id.peerId, senderId ?? message.author?.id, message.author?.compactDisplayTitle, message.id, reference, message.flags.contains(.Incoming), gift, message.timestamp, convertStars, text, entities, nameHidden, savedToProfile, nil, converted, upgraded, isRefunded, canUpgrade, upgradeStars, nil, nil, nil, upgradeMessageId, nil, nil, prepaidUpgradeHash, upgradeSeparate)
-                    case let .starGiftUnique(gift, isUpgrade, isTransferred, savedToProfile, canExportDate, transferStars, _, _, peerId, senderId, savedId, _, canTransferDate, canResaleDate, _):
+                        return (message.id.peerId, senderId ?? message.author?.id, message.author?.compactDisplayTitle, message.id, reference, message.flags.contains(.Incoming), gift, message.timestamp, convertStars, text, entities, nameHidden, savedToProfile, nil, converted, upgraded, isRefunded, canUpgrade, upgradeStars, nil, nil, nil, upgradeMessageId, nil, nil, prepaidUpgradeHash, upgradeSeparate, nil)
+                    case let .starGiftUnique(gift, isUpgrade, isTransferred, savedToProfile, canExportDate, transferStars, _, _, peerId, senderId, savedId, _, canTransferDate, canResaleDate, dropOriginalDetailsStars):
                         var reference: StarGiftReference
                         if let peerId, let savedId {
                             reference = .peer(peerId: peerId, id: savedId)
@@ -4534,13 +4611,13 @@ public class GiftViewScreen: ViewControllerComponentContainer {
                         if case let .unique(uniqueGift) = gift {
                             resellAmounts = uniqueGift.resellAmounts
                         }
-                        return (message.id.peerId, senderId ?? message.author?.id, message.author?.compactDisplayTitle, message.id, reference, incoming, gift, message.timestamp, nil, nil, nil, false, savedToProfile, nil, false, false, false, false, nil, transferStars, resellAmounts, canExportDate, nil, canTransferDate, canResaleDate, nil, false)
+                        return (message.id.peerId, senderId ?? message.author?.id, message.author?.compactDisplayTitle, message.id, reference, incoming, gift, message.timestamp, nil, nil, nil, false, savedToProfile, nil, false, false, false, false, nil, transferStars, resellAmounts, canExportDate, nil, canTransferDate, canResaleDate, nil, false, dropOriginalDetailsStars)
                     default:
                         return nil
                     }
                 }
             case let .uniqueGift(gift, _), let .wearPreview(gift):
-                return (nil, nil, nil, nil, nil, false, .unique(gift), 0, nil, nil, nil, false, false, nil, false, false, false, false, nil, nil, gift.resellAmounts, nil, nil, nil, nil, nil, false)
+                return (nil, nil, nil, nil, nil, false, .unique(gift), 0, nil, nil, nil, false, false, nil, false, false, false, false, nil, nil, gift.resellAmounts, nil, nil, nil, nil, nil, false, nil)
             case let .profileGift(peerId, gift):
                 var messageId: EngineMessage.Id?
                 if case let .message(messageIdValue) = gift.reference {
@@ -4550,7 +4627,7 @@ public class GiftViewScreen: ViewControllerComponentContainer {
                 if case let .unique(uniqueGift) = gift.gift {
                     resellAmounts = uniqueGift.resellAmounts
                 }
-                return (peerId, gift.fromPeer?.id, gift.fromPeer?.compactDisplayTitle, messageId, gift.reference, false, gift.gift, gift.date, gift.convertStars, gift.text, gift.entities, gift.nameHidden, gift.savedToProfile, gift.pinnedToTop, false, false, false, gift.canUpgrade, gift.upgradeStars, gift.transferStars, resellAmounts, gift.canExportDate, nil, gift.canTransferDate, gift.canResaleDate, gift.prepaidUpgradeHash, gift.upgradeSeparate)
+                return (peerId, gift.fromPeer?.id, gift.fromPeer?.compactDisplayTitle, messageId, gift.reference, false, gift.gift, gift.date, gift.convertStars, gift.text, gift.entities, gift.nameHidden, gift.savedToProfile, gift.pinnedToTop, false, false, false, gift.canUpgrade, gift.upgradeStars, gift.transferStars, resellAmounts, gift.canExportDate, nil, gift.canTransferDate, gift.canResaleDate, gift.prepaidUpgradeHash, gift.upgradeSeparate, gift.dropOriginalDetailsStars)
             case .soldOutGift:
                 return nil
             case .upgradePreview:
@@ -4592,6 +4669,7 @@ public class GiftViewScreen: ViewControllerComponentContainer {
     
     fileprivate let updateSavedToProfile: ((StarGiftReference, Bool) -> Void)?
     fileprivate let convertToStars: ((StarGiftReference) -> Void)?
+    fileprivate let dropOriginalDetails: ((StarGiftReference) -> Signal<Never, DropStarGiftOriginalDetailsError>)?
     fileprivate let transferGift: ((Bool, StarGiftReference, EnginePeer.Id) -> Signal<Never, TransferStarGiftError>)?
     fileprivate let upgradeGift: ((Int64?, StarGiftReference, Bool) -> Signal<ProfileGiftsContext.State.StarGift, UpgradeStarGiftError>)?
     fileprivate let buyGift: ((String, EnginePeer.Id, CurrencyAmount?) -> Signal<Never, BuyStarGiftError>)?
@@ -4610,6 +4688,7 @@ public class GiftViewScreen: ViewControllerComponentContainer {
         forceDark: Bool = false,
         updateSavedToProfile: ((StarGiftReference, Bool) -> Void)? = nil,
         convertToStars: ((StarGiftReference) -> Void)? = nil,
+        dropOriginalDetails: ((StarGiftReference) -> Signal<Never, DropStarGiftOriginalDetailsError>)? = nil,
         transferGift: ((Bool, StarGiftReference, EnginePeer.Id) -> Signal<Never, TransferStarGiftError>)? = nil,
         upgradeGift: ((Int64?, StarGiftReference, Bool) -> Signal<ProfileGiftsContext.State.StarGift, UpgradeStarGiftError>)? = nil,
         buyGift: ((String, EnginePeer.Id, CurrencyAmount?) -> Signal<Never, BuyStarGiftError>)? = nil,
@@ -4623,6 +4702,7 @@ public class GiftViewScreen: ViewControllerComponentContainer {
         
         self.updateSavedToProfile = updateSavedToProfile
         self.convertToStars = convertToStars
+        self.dropOriginalDetails = dropOriginalDetails
         self.transferGift = transferGift
         self.upgradeGift = upgradeGift
         self.buyGift = buyGift

@@ -830,6 +830,27 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
                 themePeerId: themePeerId
             )
         }
+        
+        public func withAttributes(_ attributes: [Attribute]) -> UniqueGift {
+            return UniqueGift(
+                id: self.id,
+                giftId: self.giftId,
+                title: self.title,
+                number: self.number,
+                slug: self.slug,
+                owner: self.owner,
+                attributes: attributes,
+                availability: self.availability,
+                giftAddress: self.giftAddress,
+                resellAmounts: self.resellAmounts,
+                resellForTonOnly: self.resellForTonOnly,
+                releasedBy: self.releasedBy,
+                valueAmount: self.valueAmount,
+                valueCurrency: self.valueCurrency,
+                flags: self.flags,
+                themePeerId: self.themePeerId
+            )
+        }
     }
     
     public enum DecodingError: Error {
@@ -1132,6 +1153,25 @@ func _internal_buyStarGift(account: Account, slug: String, peerId: EnginePeer.Id
         } else {
             return .fail(.generic)
         }
+    }
+}
+
+public enum DropStarGiftOriginalDetailsError {
+    case generic
+}
+
+func _internal_dropStarGiftOriginalDetails(account: Account, reference: StarGiftReference) -> Signal<Never, DropStarGiftOriginalDetailsError> {
+    let source: BotPaymentInvoiceSource = .starGiftDropOriginalDetails(reference: reference)
+    return _internal_fetchBotPaymentForm(accountPeerId: account.peerId, postbox: account.postbox, network: account.network, source: source, themeParams: nil)
+    |> `catch` { error -> Signal<BotPaymentForm, DropStarGiftOriginalDetailsError> in
+        return .fail(.generic)
+    }
+    |> mapToSignal { paymentForm in
+        return _internal_sendStarsPaymentForm(account: account, formId: paymentForm.id, source: source)
+        |> mapError { _ -> DropStarGiftOriginalDetailsError in
+            return .generic
+        }
+        |> ignoreValues
     }
 }
 
@@ -1790,6 +1830,21 @@ private final class ProfileGiftsContextImpl {
                 self?.reload()
             })
         )
+    }
+    
+    public func dropOriginalDetails(reference: StarGiftReference) -> Signal<Never, DropStarGiftOriginalDetailsError> {
+        if let index = self.gifts.firstIndex(where: { $0.reference == reference }), case let .unique(uniqueGift) = self.gifts[index].gift {
+            let updatedUniqueGift = uniqueGift.withAttributes(uniqueGift.attributes.filter { $0.attributeType != .originalInfo })
+            self.gifts[index] = self.gifts[index].withGift(.unique(updatedUniqueGift))
+        }
+        if let index = self.filteredGifts.firstIndex(where: { $0.reference == reference }), case let .unique(uniqueGift) = self.filteredGifts[index].gift {
+            let updatedUniqueGift = uniqueGift.withAttributes(uniqueGift.attributes.filter { $0.attributeType != .originalInfo })
+            self.filteredGifts[index] = self.filteredGifts[index].withGift(.unique(updatedUniqueGift))
+        }
+
+        self.pushState()
+        
+        return _internal_dropStarGiftOriginalDetails(account: self.account, reference: reference)
     }
         
     func convertStarGift(reference: StarGiftReference) {
@@ -2500,6 +2555,20 @@ public final class ProfileGiftsContext {
     public func updatePinnedToTopStarGifts(references: [StarGiftReference]) {
         self.impl.with { impl in
             impl.updatePinnedToTopStarGifts(references: references)
+        }
+    }
+    
+    public func dropOriginalDetails(reference: StarGiftReference) -> Signal<Never, DropStarGiftOriginalDetailsError> {
+        return Signal { subscriber in
+            let disposable = MetaDisposable()
+            self.impl.with { impl in
+                disposable.set(impl.dropOriginalDetails(reference: reference).start(error: { error in
+                    subscriber.putError(error)
+                }, completed: {
+                    subscriber.putCompletion()
+                }))
+            }
+            return disposable
         }
     }
     

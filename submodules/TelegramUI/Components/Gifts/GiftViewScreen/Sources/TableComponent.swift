@@ -7,15 +7,22 @@ import MultilineTextComponent
 
 final class TableComponent: CombinedComponent {
     class Item: Equatable {
+        enum TitleFont {
+            case regular
+            case bold
+        }
+        
         public let id: AnyHashable
         public let title: String?
+        public let titleFont: TitleFont
         public let hasBackground: Bool
         public let component: AnyComponent<Empty>
         public let insets: UIEdgeInsets?
 
-        public init<IdType: Hashable>(id: IdType, title: String?, hasBackground: Bool = false, component: AnyComponent<Empty>, insets: UIEdgeInsets? = nil) {
+        public init<IdType: Hashable>(id: IdType, title: String?, titleFont: TitleFont = .regular, hasBackground: Bool = false, component: AnyComponent<Empty>, insets: UIEdgeInsets? = nil) {
             self.id = AnyHashable(id)
             self.title = title
+            self.titleFont = titleFont
             self.hasBackground = hasBackground
             self.component = component
             self.insets = insets
@@ -26,6 +33,9 @@ final class TableComponent: CombinedComponent {
                 return false
             }
             if lhs.title != rhs.title {
+                return false
+            }
+            if lhs.titleFont != rhs.titleFont {
                 return false
             }
             if lhs.hasBackground != rhs.hasBackground {
@@ -99,7 +109,7 @@ final class TableComponent: CombinedComponent {
                 }
                 let titleChild = titleChildren[item.id].update(
                     component: AnyComponent(MultilineTextComponent(
-                        text: .plain(NSAttributedString(string: title, font: Font.regular(15.0), textColor: context.component.theme.list.itemPrimaryTextColor))
+                        text: .plain(NSAttributedString(string: title, font: item.titleFont == .bold ? Font.semibold(15.0) : Font.regular(15.0), textColor: context.component.theme.list.itemPrimaryTextColor))
                     )),
                     availableSize: context.availableSize,
                     transition: context.transition
@@ -259,12 +269,16 @@ final class TableComponent: CombinedComponent {
                 
                 context.add(valueChild
                     .position(valueFrame.center)
+                    .appear(.default(alpha: true))
+                    .disappear(.default(alpha: true))
                 )
                 
                 if i < updatedBorderChildren.count {
                     let borderChild = updatedBorderChildren[i]
                     context.add(borderChild
                         .position(CGPoint(x: context.availableSize.width / 2.0, y: originY + rowHeight - borderWidth / 2.0))
+                        .appear(.default(alpha: true))
+                        .disappear(.default(alpha: true))
                     )
                 }
                 
