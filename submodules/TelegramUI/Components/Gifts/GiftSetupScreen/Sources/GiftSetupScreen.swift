@@ -457,6 +457,35 @@ final class GiftSetupScreenComponent: Component {
                             controllers.append(chatController)
                         }
                         navigationController.setViewControllers(controllers, animated: true)
+                        
+                        
+                        if case let .starGift(starGift, _) = component.subject, let perUserLimit = starGift.perUserLimit {
+                            Queue.mainQueue().after(0.5) {
+                                //TODO:localize
+                                let remains = max(0, perUserLimit.remains - 1)
+                                let text: String
+                                if remains == 0 {
+                                    text = "You've reached your limit on this gift."
+                                } else {
+                                    text = "You can send **\(remains)** more."
+                                }
+                                let tooltipController = UndoOverlayController(
+                                    presentationData: presentationData,
+                                    content: .sticker(
+                                        context: context,
+                                        file: starGift.file,
+                                        loop: true,
+                                        title: "Gift Sent!",
+                                        text: text,
+                                        undoText: nil,
+                                        customAction: nil
+                                    ),
+                                    position: .top,
+                                    action: { _ in return true }
+                                )
+                                (navigationController.viewControllers.last as? ViewController)?.present(tooltipController, in: .current)
+                            }
+                        }
                     }
                     
                     if let completion {

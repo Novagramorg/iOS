@@ -3948,7 +3948,7 @@ private func peerInfoControllerImpl(context: AccountContext, updatedPresentation
             forumTopicThread = thread
         case .recommendedChannels:
             switchToRecommendedChannels = true
-        case .gifts:
+        case .gifts, .upgradableGifts:
             switchToGifts = true
         case .groupsInCommon:
             switchToGroupsInCommon = true
@@ -3986,7 +3986,7 @@ private func peerInfoControllerImpl(context: AccountContext, updatedPresentation
             forumTopicThread = thread
         case .myProfile:
             isMyProfile = true
-        case .gifts:
+        case .gifts, .upgradableGifts:
             switchToGifts = true
         case .myProfileGifts:
             isMyProfile = true

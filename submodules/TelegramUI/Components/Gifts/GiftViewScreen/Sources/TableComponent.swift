@@ -70,6 +70,7 @@ final class TableComponent: CombinedComponent {
     }
     
     final class State: ComponentState {
+        var cachedLeftColumnImage: (UIImage, PresentationTheme)?
         var cachedBorderImage: (UIImage, PresentationTheme)?
     }
     
@@ -78,7 +79,7 @@ final class TableComponent: CombinedComponent {
     }
 
     public static var body: Body {
-        let leftColumnBackground = Child(Rectangle.self)
+        let leftColumnBackground = Child(Image.self)
         let lastBackground = Child(Rectangle.self)
         let verticalBorder = Child(Rectangle.self)
         let titleChildren = ChildMap(environment: Empty.self, keyedBy: AnyHashable.self)
@@ -194,25 +195,39 @@ final class TableComponent: CombinedComponent {
                 )
             }
             
+            let borderRadius: CGFloat = 10.0
+            let leftColumnImage: UIImage
+            if let (currentImage, theme) = context.state.cachedLeftColumnImage, theme === context.component.theme {
+                leftColumnImage = currentImage
+            } else {
+                leftColumnImage = generateImage(CGSize(width: 24.0, height: 24.0), rotatedContext: { size, context in
+                    let bounds = CGRect(origin: .zero, size: CGSize(width: size.width + borderRadius, height: size.height))
+                    context.clear(bounds)
+                    
+                    let path = CGPath(roundedRect: bounds.insetBy(dx: borderWidth / 2.0, dy: borderWidth / 2.0), cornerWidth: borderRadius, cornerHeight: borderRadius, transform: nil)
+                    context.setFillColor(secondaryBackgroundColor.cgColor)
+                    context.addPath(path)
+                    context.fillPath()
+                })!.stretchableImage(withLeftCapWidth: 10, topCapHeight: 10)
+                context.state.cachedLeftColumnImage = (leftColumnImage, context.component.theme)
+            }
+            
             let leftColumnBackground = leftColumnBackground.update(
-                component: Rectangle(color: secondaryBackgroundColor),
+                component: Image(image: leftColumnImage),
                 availableSize: CGSize(width: leftColumnWidth, height: innerTotalHeight),
                 transition: context.transition
             )
-            context.add(
-                leftColumnBackground
-                    .position(CGPoint(x: leftColumnWidth / 2.0, y: innerTotalHeight / 2.0))
+            context.add(leftColumnBackground
+                .position(CGPoint(x: leftColumnWidth / 2.0, y: innerTotalHeight / 2.0))
             )
             
             let borderImage: UIImage
             if let (currentImage, theme) = context.state.cachedBorderImage, theme === context.component.theme {
                 borderImage = currentImage
             } else {
-                let borderRadius: CGFloat = 10.0
                 borderImage = generateImage(CGSize(width: 24.0, height: 24.0), rotatedContext: { size, context in
                     let bounds = CGRect(origin: .zero, size: size)
-                    context.setFillColor(backgroundColor.cgColor)
-                    context.fill(bounds)
+                    context.clear(bounds)
                     
                     let path = CGPath(roundedRect: bounds.insetBy(dx: borderWidth / 2.0, dy: borderWidth / 2.0), cornerWidth: borderRadius, cornerHeight: borderRadius, transform: nil)
                     context.setBlendMode(.clear)
