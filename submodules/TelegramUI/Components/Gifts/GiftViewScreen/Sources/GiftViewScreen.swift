@@ -37,6 +37,8 @@ import BalanceNeededScreen
 import GiftItemComponent
 import GiftAnimationComponent
 import ChatThemeScreen
+import ProfileLevelRatingBarComponent
+import AnimatedTextComponent
 
 private final class GiftViewSheetContent: CombinedComponent {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
@@ -108,13 +110,14 @@ private final class GiftViewSheetContent: CombinedComponent {
         var canSkip = false
         
         var testUpgradeAnimation = !"".isEmpty
-        
-        var nextGiftToUpgrade: ProfileGiftsContext.State.StarGift?
-        var inUpgradePreview = false
+                
         var upgradeForm: BotPaymentForm?
         var upgradeFormDisposable: Disposable?
         var upgradeDisposable: Disposable?
+        var scheduledUpgradeCommit = false
+        
         let levelsDisposable = MetaDisposable()
+        var nextGiftToUpgrade: ProfileGiftsContext.State.StarGift?
         
         var buyForm: BotPaymentForm?
         var buyFormDisposable: Disposable?
@@ -125,8 +128,11 @@ private final class GiftViewSheetContent: CombinedComponent {
         var pendingWear = false
         var pendingTakeOff = false
         
+        var inUpgradePreview = false
+        var scheduledUpgradePreview = false
         var upgradePreview: StarGiftUpgradePreview?
         let upgradePreviewDisposable = DisposableSet()
+        var upgradePreviewTimer: SwiftSignalKit.Timer?
         
         var keepOriginalInfo = false
                 
@@ -264,17 +270,27 @@ private final class GiftViewSheetContent: CombinedComponent {
                             }
 
                             self.updated()
+                            
+                            if arguments.upgradeStars == nil {
+                                let currentTime = Int32(CFAbsoluteTimeGetCurrent() + kCFAbsoluteTimeIntervalSince1970)
+                                if let _ = upgradePreview.nextPrices.first(where: { currentTime < $0.date }) {
+                                    self.upgradePreviewTimer = SwiftSignalKit.Timer(timeout: 0.5, repeat: true, completion: { [weak self] in
+                                        self?.upgradePreviewTimerTick()
+                                    }, queue: Queue.mainQueue())
+                                    self.upgradePreviewTimer?.start()
+                                    self.upgradePreviewTimerTick()
+                                }
+                            }
+                            
+                            if self.scheduledUpgradePreview {
+                                self.inProgress = false
+                                self.scheduledUpgradePreview = false
+                                self.requestUpgradePreview()
+                            }
                         }))
                         
-                        if arguments.upgradeStars == nil, let reference = arguments.reference {
-                            self.upgradeFormDisposable = (context.engine.payments.fetchBotPaymentForm(source: .starGiftUpgrade(keepOriginalInfo: false, reference: reference), themeParams: nil)
-                            |> deliverOnMainQueue).start(next: { [weak self] paymentForm in
-                                guard let self else {
-                                    return
-                                }
-                                self.upgradeForm = paymentForm
-                                self.updated()
-                            })
+                        if arguments.upgradeStars == nil {
+                            self.fetchUpgradeForm()
                         }
                     }
                 }
@@ -1404,14 +1420,72 @@ private final class GiftViewSheetContent: CombinedComponent {
             }
         }
         
+        private func fetchUpgradeForm() {
+            guard let reference = self.subject.arguments?.reference else {
+                return
+            }
+            self.upgradeForm = nil
+            self.upgradeFormDisposable = (self.context.engine.payments.fetchBotPaymentForm(source: .starGiftUpgrade(keepOriginalInfo: false, reference: reference), themeParams: nil)
+            |> deliverOnMainQueue).start(next: { [weak self] paymentForm in
+                guard let self else {
+                    return
+                }
+                self.upgradeForm = paymentForm
+                self.updated()
+                
+                if self.scheduledUpgradeCommit {
+                    self.scheduledUpgradeCommit = false
+                    self.commitUpgrade()
+                }
+            })
+        }
+        
+        private(set) var effectiveUpgradePrice: StarGiftUpgradePreview.Price?
+        private(set) var nextUpgradePrice: StarGiftUpgradePreview.Price?
+        
+        func upgradePreviewTimerTick() {
+            guard let upgradePreview = self.upgradePreview else {
+                return
+            }
+            let currentTime = Int32(CFAbsoluteTimeGetCurrent() + kCFAbsoluteTimeIntervalSince1970)
+            if let currentPrice = self.effectiveUpgradePrice {
+                if let price = upgradePreview.nextPrices.reversed().first(where: { currentTime >= $0.date  }) {
+                    if price.stars != currentPrice.stars {
+                        self.effectiveUpgradePrice = price
+                        if let nextPrice = upgradePreview.nextPrices.first(where: { $0.stars < price.stars }) {
+                            self.nextUpgradePrice = nextPrice
+                        }
+                        self.fetchUpgradeForm()
+                    }
+                } else {
+                    self.upgradePreviewTimer?.invalidate()
+                    self.upgradePreviewTimer = nil
+                }
+            } else if let price = upgradePreview.nextPrices.reversed().first(where: { currentTime >= $0.date}) {
+                self.effectiveUpgradePrice = price
+                if let nextPrice = upgradePreview.nextPrices.first(where: { $0.stars < price.stars }) {
+                    self.nextUpgradePrice = nextPrice
+                }
+            }
+                        
+            self.updated()
+        }
+        
         func requestUpgradePreview() {
-            self.context.starsContext?.load(force: false)
-            
-            self.inUpgradePreview = true
-            self.updated(transition: .spring(duration: 0.4))
-            
-            if let controller = self.getController() as? GiftViewScreen, self.upgradeForm != nil {
-                controller.showBalance = true
+            if let _ = self.upgradePreview {
+                self.context.starsContext?.load(force: false)
+                
+                self.inUpgradePreview = true
+                self.updated(transition: .spring(duration: 0.4))
+                
+                if let controller = self.getController() as? GiftViewScreen, self.upgradeForm != nil {
+                    controller.showBalance = true
+                }
+            } else {
+                self.scheduledUpgradePreview = true
+                
+                self.inProgress = true
+                self.updated()
             }
         }
         
@@ -1948,13 +2022,19 @@ private final class GiftViewSheetContent: CombinedComponent {
                 } else {
                     proceed(upgradeForm.id)
                 }
+            } else {
+                self.scheduledUpgradeCommit = true
             }
-            
-//            if let controller = self.getController() as? GiftViewScreen {
-//                controller.showBalance = true
-//            }
         }
         
+        func openUpgradePricePreview() {
+            guard let controller = self.getController(), let upgradePreview = self.upgradePreview else {
+                return
+            }
+            let costController = GiftUpgradeCostScreen(context: self.context, upgradePreview: upgradePreview)
+            controller.push(costController)
+        }
+                
         func commitPrepaidUpgrade() {
             guard let arguments = self.subject.arguments, let peerId = arguments.peerId, let prepaidUpgradeHash = arguments.prepaidUpgradeHash, let starsContext = self.context.starsContext, let starsState = starsContext.currentState else {
                 return
@@ -2087,7 +2167,8 @@ private final class GiftViewSheetContent: CombinedComponent {
         let upgradeDescription = Child(BalancedTextComponent.self)
         let upgradePerks = Child(List<Empty>.self)
         let upgradeKeepName = Child(PlainButtonComponent.self)
-                
+        let upgradePriceButton = Child(PlainButtonComponent.self)
+    
         let spaceRegex = try? NSRegularExpression(pattern: "\\[(.*?)\\]", options: [])
         
         let giftCompositionExternalState = GiftCompositionComponent.ExternalState()
@@ -2372,6 +2453,16 @@ private final class GiftViewSheetContent: CombinedComponent {
             }
             
             var headerComponents: [() -> Void] = []
+            
+            let tableFont = Font.regular(15.0)
+            let tableBoldFont = Font.semibold(15.0)
+            let tableItalicFont = Font.italic(15.0)
+            let tableBoldItalicFont = Font.semiboldItalic(15.0)
+            let tableMonospaceFont = Font.monospace(15.0)
+            let tableLargeMonospaceFont = Font.monospace(16.0)
+            
+            let tableTextColor = theme.list.itemPrimaryTextColor
+            let tableLinkColor = theme.list.itemAccentColor
             
             if let headerSubject {
                 let animation = animation.update(
@@ -3062,15 +3153,6 @@ private final class GiftViewSheetContent: CombinedComponent {
                     }
                 }
                 
-                let tableFont = Font.regular(15.0)
-                let tableBoldFont = Font.semibold(15.0)
-                let tableItalicFont = Font.italic(15.0)
-                let tableBoldItalicFont = Font.semiboldItalic(15.0)
-                let tableMonospaceFont = Font.monospace(15.0)
-                let tableLargeMonospaceFont = Font.monospace(16.0)
-                
-                let tableTextColor = theme.list.itemPrimaryTextColor
-                let tableLinkColor = theme.list.itemAccentColor
                 var tableItems: [TableComponent.Item] = []
                 
                 var isWearing = state.pendingWear
@@ -3867,6 +3949,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                     transition: context.transition
                 )
                 context.add(table
+                    .clipsToBounds(true)
                     .position(CGPoint(x: context.availableSize.width / 2.0, y: originY + table.size.height / 2.0))
                     .appear(.default(alpha: true))
                     .disappear(ComponentTransition.Disappear({ view, transition, completion in
@@ -4176,14 +4259,18 @@ private final class GiftViewSheetContent: CombinedComponent {
                 if state.cachedStarImage == nil || state.cachedStarImage?.1 !== theme {
                     state.cachedStarImage = (generateTintedImage(image: UIImage(bundleImageName: "Item List/PremiumIcon"), color: theme.list.itemCheckColors.foregroundColor)!, theme)
                 }
+                var buttonTitleItems: [AnyComponentWithIdentity<Empty>] = []
                 var upgradeString = strings.Gift_Upgrade_Upgrade
                 if !incoming {
                     if let gift = state.starGiftsMap[giftId], let upgradeStars = gift.upgradeStars {
                         let priceString = presentationStringsFormattedNumber(Int32(clamping: upgradeStars), environment.dateTimeFormat.groupingSeparator)
                         upgradeString = strings.Gift_Upgrade_GiftUpgrade(" # \(priceString)").string
                     }
-                } else if let upgradeForm = state.upgradeForm, let price = upgradeForm.invoice.prices.first?.amount {
-                    let priceString = presentationStringsFormattedNumber(Int32(clamping: price), environment.dateTimeFormat.groupingSeparator)
+                } else if let upgradeStars = state.effectiveUpgradePrice?.stars {
+                    let priceString = presentationStringsFormattedNumber(Int32(clamping: upgradeStars), environment.dateTimeFormat.groupingSeparator)
+                    upgradeString = strings.Gift_Upgrade_GiftUpgrade(" # \(priceString)").string
+                } else if let upgradeForm = state.upgradeForm, let upgradeStars = upgradeForm.invoice.prices.first?.amount {
+                    let priceString = presentationStringsFormattedNumber(Int32(clamping: upgradeStars), environment.dateTimeFormat.groupingSeparator)
                     upgradeString = strings.Gift_Upgrade_UpgradeFor(" # \(priceString)").string
                 }
                 let buttonTitle = subject.arguments?.upgradeStars != nil ? strings.Gift_Upgrade_Confirm : upgradeString
@@ -4194,12 +4281,59 @@ private final class GiftViewSheetContent: CombinedComponent {
                     buttonAttributedString.addAttribute(.baselineOffset, value: 1.5, range: NSRange(range, in: buttonAttributedString.string))
                     buttonAttributedString.addAttribute(.kern, value: 2.0, range: NSRange(range, in: buttonAttributedString.string))
                 }
+                
+                if let nextUpgradePrice = state.nextUpgradePrice {
+                    let currentTime = Int32(CFAbsoluteTimeGetCurrent() + kCFAbsoluteTimeIntervalSince1970)
+                    let upgradeTimeout = nextUpgradePrice.date - currentTime
+                    
+                    buttonTitleItems.append(AnyComponentWithIdentity(id: "static_label", component: AnyComponent(MultilineTextComponent(text: .plain(buttonAttributedString)))))
+                    
+                    let minutes = Int(upgradeTimeout / 60)
+                    let seconds = Int(upgradeTimeout % 60)
+                    
+                    let rawString = strings.Gift_Upgrade_PriceWillDecrease
+                    var buttonAnimatedTitleItems: [AnimatedTextComponent.Item] = []
+                    var startIndex = rawString.startIndex
+                    while true {
+                        if let range = rawString.range(of: "{", range: startIndex ..< rawString.endIndex) {
+                            if range.lowerBound != startIndex {
+                                buttonAnimatedTitleItems.append(AnimatedTextComponent.Item(id: AnyHashable(buttonAnimatedTitleItems.count), content: .text(String(rawString[startIndex ..< range.lowerBound]))))
+                            }
+                            
+                            startIndex = range.upperBound
+                            if let endRange = rawString.range(of: "}", range: startIndex ..< rawString.endIndex) {
+                                let controlString = rawString[range.upperBound ..< endRange.lowerBound]
+                                if controlString == "m" {
+                                    buttonAnimatedTitleItems.append(AnimatedTextComponent.Item(id: AnyHashable(buttonAnimatedTitleItems.count), content: .number(minutes, minDigits: 2)))
+                                } else if controlString == "s" {
+                                    buttonAnimatedTitleItems.append(AnimatedTextComponent.Item(id: AnyHashable(buttonAnimatedTitleItems.count), content: .number(seconds, minDigits: 2)))
+                                }
+                                
+                                startIndex = endRange.upperBound
+                            }
+                        } else {
+                            break
+                        }
+                    }
+                    if startIndex != rawString.endIndex {
+                        buttonAnimatedTitleItems.append(AnimatedTextComponent.Item(id: AnyHashable(buttonAnimatedTitleItems.count), content: .text(String(rawString[startIndex ..< rawString.endIndex]))))
+                    }
+                    
+                    buttonTitleItems.append(AnyComponentWithIdentity(id: "timer", component: AnyComponent(AnimatedTextComponent(
+                        font: Font.with(size: 11.0, weight: .medium, traits: .monospacedNumbers),
+                        color: environment.theme.list.itemCheckColors.foregroundColor.withAlphaComponent(0.7),
+                        items: buttonAnimatedTitleItems
+                    ))))
+                } else {
+                    buttonTitleItems.append(AnyComponentWithIdentity(id: "static_label", component: AnyComponent(MultilineTextComponent(text: .plain(buttonAttributedString)))))
+                }
+                
                 buttonChild = button.update(
                     component: ButtonComponent(
                         background: buttonBackground,
                         content: AnyComponentWithIdentity(
                             id: AnyHashable("upgrade"),
-                            component: AnyComponent(MultilineTextComponent(text: .plain(buttonAttributedString)))
+                            component: AnyComponent(VStack(buttonTitleItems, spacing: 1.0))
                         ),
                         isEnabled: true,
                         displaysProgress: state.inProgress,
@@ -4211,7 +4345,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                             }
                         }),
                     availableSize: buttonSize,
-                    transition: context.transition
+                    transition: .spring(duration: 0.2)
                 )
             } else if upgraded, let upgradeMessageIdId = subject.arguments?.upgradeMessageId, let originalMessageId = subject.arguments?.messageId {
                 let upgradeMessageId = MessageId(peerId: originalMessageId.peerId, namespace: originalMessageId.namespace, id: upgradeMessageIdId)
@@ -4429,6 +4563,40 @@ private final class GiftViewSheetContent: CombinedComponent {
             )
             originY += buttonChild.size.height
             originY += 7.0
+            
+            if showUpgradePreview {
+                originY += 20.0
+                
+                if state.cachedSmallChevronImage == nil || state.cachedSmallChevronImage?.1 !== environment.theme {
+                    state.cachedSmallChevronImage = (generateTintedImage(image: UIImage(bundleImageName: "Item List/InlineTextRightArrow"), color: theme.actionSheet.controlAccentColor)!, theme)
+                }
+                
+                let attributedString = NSMutableAttributedString(string: "See how price will decrease >", font: Font.regular(13.0), textColor: theme.actionSheet.controlAccentColor)
+                if let range = attributedString.string.range(of: ">"), let chevronImage = state.cachedSmallChevronImage?.0 {
+                    attributedString.addAttribute(.attachment, value: chevronImage, range: NSRange(range, in: attributedString.string))
+                }
+                
+                let upgradePriceButton = upgradePriceButton.update(
+                    component: PlainButtonComponent(
+                        content: AnyComponent(
+                            MultilineTextComponent(text: .plain(attributedString))
+                        ),
+                        action: { [weak state] in
+                            state?.openUpgradePricePreview()
+                        },
+                        animateScale: false
+                    ),
+                    environment: {},
+                    availableSize: buttonChild.size,
+                    transition: .immediate
+                )
+                context.add(upgradePriceButton
+                    .position(CGPoint(x: buttonFrame.midX, y: originY))
+                    .appear(.default(scale: true, alpha: true))
+                    .disappear(.default(scale: true, alpha: true))
+                )
+                originY += upgradePriceButton.size.height
+            }
             
             context.add(buttons
                 .position(CGPoint(x: context.availableSize.width - environment.safeInsets.left - 16.0 - buttons.size.width / 2.0, y: 28.0))
