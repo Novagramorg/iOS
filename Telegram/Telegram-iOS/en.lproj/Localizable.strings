@@ -15013,5 +15013,8 @@ Sorry for the inconvenience.";
 "Gift.Options.Collectibles.Text" = "Collectible gifts are unique digital items you can exchange or sell.";
 
 "Gift.Upgrade.UpgradeFor" = "Upgrade for %@";
+"Gift.Upgrade.PriceWillDecrease" = "Price will decrease in {m}:{s}";
 
 "Stars.Purchase.RemoveOriginalDetailsStarGiftInfo" = "Buy Stars to remove original details of your gift.";
+
+
