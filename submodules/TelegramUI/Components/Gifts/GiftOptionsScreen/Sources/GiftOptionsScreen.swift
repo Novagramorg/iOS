@@ -508,7 +508,7 @@ final class GiftOptionsScreenComponent: Component {
                             } else if let _ = gift.availability {
                                 let text: String
                                 if let perUserLimit = gift.perUserLimit {
-                                    text = "\(perUserLimit.remains) left"
+                                    text = environment.strings.Gift_Options_Gift_Limited_Left(perUserLimit.remains)
                                 } else {
                                     text = environment.strings.Gift_Options_Gift_Limited
                                 }
@@ -520,8 +520,7 @@ final class GiftOptionsScreenComponent: Component {
                             if !isSoldOut && gift.flags.contains(.requiresPremium) {
                                 let text: String
                                 if component.context.isPremium, let perUserLimit = gift.perUserLimit {
-                                    //TODO:localize
-                                    text = "\(perUserLimit.remains) left"
+                                    text = environment.strings.Gift_Options_Gift_Premium_Left(perUserLimit.remains)
                                 } else {
                                     text = environment.strings.Gift_Options_Gift_Premium
                                 }

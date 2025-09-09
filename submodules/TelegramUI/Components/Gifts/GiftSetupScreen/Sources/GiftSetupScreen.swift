@@ -461,13 +461,12 @@ final class GiftSetupScreenComponent: Component {
                         
                         if case let .starGift(starGift, _) = component.subject, let perUserLimit = starGift.perUserLimit {
                             Queue.mainQueue().after(0.5) {
-                                //TODO:localize
                                 let remains = max(0, perUserLimit.remains - 1)
                                 let text: String
                                 if remains == 0 {
-                                    text = "You've reached your limit on this gift."
+                                    text = presentationData.strings.Gift_Send_Limited_Success_Text_None
                                 } else {
-                                    text = "You can send **\(remains)** more."
+                                    text = presentationData.strings.Gift_Send_Limited_Success_Text(remains)
                                 }
                                 let tooltipController = UndoOverlayController(
                                     presentationData: presentationData,
@@ -475,7 +474,7 @@ final class GiftSetupScreenComponent: Component {
                                         context: context,
                                         file: starGift.file,
                                         loop: true,
-                                        title: "Gift Sent!",
+                                        title: presentationData.strings.Gift_Send_Limited_Success_Title,
                                         text: text,
                                         undoText: nil,
                                         customAction: nil
