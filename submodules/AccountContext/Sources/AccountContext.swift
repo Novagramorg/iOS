@@ -703,6 +703,7 @@ public enum PeerInfoControllerMode {
     case recommendedChannels
     case myProfile
     case gifts
+    case upgradableGifts
     case myProfileGifts
     case groupsInCommon
     case monoforum(EnginePeer.Id)

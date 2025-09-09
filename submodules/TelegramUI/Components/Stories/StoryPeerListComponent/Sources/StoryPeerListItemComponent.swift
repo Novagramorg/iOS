@@ -14,6 +14,7 @@ import AsyncDisplayKit
 import StoryContainerScreen
 import MultilineTextComponent
 import HierarchyTrackingLayer
+import EmojiStatusComponent
 
 private func calculateCircleIntersection(center: CGPoint, otherCenter: CGPoint, radius: CGFloat) -> (point1Angle: CGFloat, point2Angle: CGFloat)? {
     let distanceVector = CGPoint(x: otherCenter.x - center.x, y: otherCenter.y - center.y)
@@ -501,6 +502,7 @@ public final class StoryPeerListItemComponent: Component {
         private let indicatorShapeSeenLayer: SimpleShapeLayer
         private let indicatorShapeUnseenLayer: SimpleShapeLayer
         private let title = ComponentView<Empty>()
+        private var verifiedIconView: ComponentHostView<Empty>?
         private let composeTitle = ComponentView<Empty>()
         
         private var component: StoryPeerListItemComponent?
@@ -885,7 +887,59 @@ public final class StoryPeerListItemComponent: Component {
                 environment: {},
                 containerSize: CGSize(width: availableSize.width + 12.0, height: 100.0)
             )
-            let titleFrame = CGRect(origin: CGPoint(x: floor((availableSize.width - titleSize.width) * 0.5) + (effectiveWidth - availableSize.width) * 0.5, y: indicatorFrame.midY + (indicatorFrame.height * 0.5 + 2.0) * effectiveScale), size: titleSize)
+            
+            var totalTitleWidth = titleSize.width
+            
+            var currentVerifiedIconContent: EmojiStatusComponent.Content?
+            if component.peer.isVerified {
+                currentVerifiedIconContent = .verified(fillColor: component.theme.list.itemCheckColors.fillColor, foregroundColor: component.theme.list.itemCheckColors.foregroundColor, sizeType: .smaller)
+            }
+            if let currentVerifiedIconContent {
+                let verifiedIconView: ComponentHostView<Empty>
+                if let current = self.verifiedIconView {
+                    verifiedIconView = current
+                } else {
+                    verifiedIconView = ComponentHostView<Empty>()
+                    verifiedIconView.isUserInteractionEnabled = false
+                    self.verifiedIconView = verifiedIconView
+                    self.button.addSubview(verifiedIconView)
+                }
+                
+                let containerSize = CGSize(width: 12.0, height: 12.0)
+                let verifiedIconComponent = EmojiStatusComponent(
+                    context: component.context,
+                    animationCache: component.context.animationCache,
+                    animationRenderer: component.context.animationRenderer,
+                    content: currentVerifiedIconContent,
+                    size: containerSize,
+                    isVisibleForAnimations: component.context.sharedContext.energyUsageSettings.loopEmoji,
+                    action: nil
+                )
+
+                let iconSize = verifiedIconView.update(
+                    transition: .immediate,
+                    component: AnyComponent(verifiedIconComponent),
+                    environment: {},
+                    containerSize: containerSize
+                )
+                totalTitleWidth += iconSize.width + 1.0
+                var titleScale = effectiveScale
+                if titleScale < 1.0 {
+                    titleScale = min(1.0, titleScale + 0.02)
+                } else if titleScale > 1.01 {
+                    titleScale = max(1.0, titleScale * 0.96)
+                }
+                let verifiedIconFrame = CGRect(origin: CGPoint(x: floor((availableSize.width - totalTitleWidth) * 0.5) + (titleSize.width + 1.0) * titleScale + (effectiveWidth - availableSize.width) * 0.5, y: indicatorFrame.midY + (indicatorFrame.height * 0.5 + 2.0 + UIScreenPixel) * effectiveScale), size: iconSize)
+                titleTransition.setPosition(view: verifiedIconView, position: verifiedIconFrame.center)
+                verifiedIconView.bounds = CGRect(origin: CGPoint(), size: verifiedIconFrame.size)
+                titleTransition.setScale(view: verifiedIconView, scale: effectiveScale)
+                titleTransition.setAlpha(view: verifiedIconView, alpha: component.expandedAlphaFraction)
+            } else if let verifiedIconView = self.verifiedIconView {
+                self.verifiedIconView = nil
+                verifiedIconView.removeFromSuperview()
+            }
+            
+            let titleFrame = CGRect(origin: CGPoint(x: floor((availableSize.width - totalTitleWidth) * 0.5) + (effectiveWidth - availableSize.width) * 0.5, y: indicatorFrame.midY + (indicatorFrame.height * 0.5 + 2.0) * effectiveScale), size: titleSize)
             if let titleView = self.title.view {
                 if titleView.superview == nil {
                     titleView.layer.anchorPoint = CGPoint(x: 0.5, y: 0.5)
