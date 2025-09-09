@@ -2094,8 +2094,8 @@ private final class GiftViewSheetContent: CombinedComponent {
                                         file: gift.file,
                                         loop: false,
                                         title: nil,
-                                        text: "Upgrade sent!",
-                                        undoText: "Gift More",
+                                        text: presentationData.strings.Gift_Upgrade_Gift_Sent_Text,
+                                        undoText: presentationData.strings.Gift_Upgrade_Gift_Sent_GiftMore,
                                         customAction: nil
                                     ),
                                     elevatedLayout: !(lastController is ChatController),

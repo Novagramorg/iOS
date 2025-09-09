@@ -373,7 +373,7 @@ private final class GiftUpgradeCostScreenComponent: Component {
           
             let titleSize = self.title.update(
                 transition: transition,
-                component: AnyComponent(MultilineTextComponent(text: .plain(NSAttributedString(string: "Upgrade Cost", font: Font.semibold(17.0), textColor: environment.theme.list.itemPrimaryTextColor))
+                component: AnyComponent(MultilineTextComponent(text: .plain(NSAttributedString(string: environment.strings.Gift_UpgradeCost_Title, font: Font.semibold(17.0), textColor: environment.theme.list.itemPrimaryTextColor))
                 )),
                 environment: {},
                 containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 100.0)
@@ -398,14 +398,13 @@ private final class GiftUpgradeCostScreenComponent: Component {
                 value = CGFloat(effectiveValue - endStars) / CGFloat(startStars - endStars)
             }
             
-            //TODO:localize
             let barSize = self.bar.update(
                 transition: transition,
                 component: AnyComponent(ProfileLevelRatingBarComponent(
                     theme: environment.theme,
                     value: 1.0 - value,
-                    leftLabel: "\(component.upgradePreview.prices.first?.stars ?? 0) Stars",
-                    rightLabel: "\(component.upgradePreview.prices.last?.stars ?? 0) Stars",
+                    leftLabel: environment.strings.Gift_UpgradeCost_Stars(Int32(clamping: component.upgradePreview.prices.first?.stars ?? 0)),
+                    rightLabel: environment.strings.Gift_UpgradeCost_Stars(Int32(clamping: component.upgradePreview.prices.last?.stars ?? 0)),
                     badgeValue: "\(self.effectiveUpgradePrice?.stars ?? 0)",
                     badgeTotal: "",
                     level: 0,
@@ -428,7 +427,7 @@ private final class GiftUpgradeCostScreenComponent: Component {
                 transition: transition,
                 component: AnyComponent(BalancedTextComponent(
                     text: .plain(NSAttributedString(
-                        string: "Users who upgrade their gifts first get collectibles with shorter numbers.",
+                        string: environment.strings.Gift_UpgradeCost_Description,
                         font: Font.regular(15.0),
                         textColor: environment.theme.list.itemPrimaryTextColor,
                         paragraphAlignment: .center
@@ -492,7 +491,7 @@ private final class GiftUpgradeCostScreenComponent: Component {
                 transition: transition,
                 component: AnyComponent(BalancedTextComponent(
                     text: .plain(NSAttributedString(
-                        string: "Upgrade cost drops every minute.",
+                        string: environment.strings.Gift_UpgradeCost_AdditionalDescription,
                         font: Font.regular(13.0),
                         textColor: environment.theme.list.itemSecondaryTextColor,
                         paragraphAlignment: .center
@@ -514,7 +513,7 @@ private final class GiftUpgradeCostScreenComponent: Component {
             contentHeight += additionalDescriptionSize.height + 15.0
             
 
-            let actionButtonTitle: String = "Understood"
+            let actionButtonTitle: String = environment.strings.Gift_UpgradeCost_Done
             
             var buttonTitle: [AnyComponentWithIdentity<Empty>] = []
             let playButtonAnimation = ActionSlot<Void>()
