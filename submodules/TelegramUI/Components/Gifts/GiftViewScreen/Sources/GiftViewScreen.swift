@@ -1549,19 +1549,14 @@ private final class GiftViewSheetContent: CombinedComponent {
                     if let buyGift = controller.buyGift {
                         buyGiftImpl = { slug, peerId, price in
                             return buyGift(slug, peerId, price)
-                            |> afterCompleted {
-                                context.starsContext?.load(force: true)
-                            }
                         }
                     } else {
                         buyGiftImpl = { slug, peerId, price in
                             return self.context.engine.payments.buyStarGift(slug: slug, peerId: peerId, price: price)
-                            |> afterCompleted {
-                                context.starsContext?.load(force: true)
-                            }
                         }
                     }
                     
+                    let finalPrice = acceptedPrice ?? resellAmount
                     self.buyDisposable = (buyGiftImpl(uniqueGift.slug, recipientPeerId, acceptedPrice ?? resellAmount)
                     |> deliverOnMainQueue).start(
                         error: { [weak self] error in
@@ -1683,7 +1678,12 @@ private final class GiftViewSheetContent: CombinedComponent {
                             self.updated(transition: .spring(duration: 0.4))
                         
                             Queue.mainQueue().after(0.5) {
-                                context.starsContext?.load(force: true)
+                                switch finalPrice.currency {
+                                case .stars:
+                                    context.starsContext?.load(force: true)
+                                case .ton:
+                                    context.tonContext?.load(force: true)
+                                }
                             }
                         }
                     )
