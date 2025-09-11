@@ -3287,6 +3287,7 @@ public final class SharedAccountContextImpl: SharedAccountContext {
                                     starsContext: starsContext,
                                     options: options ?? [],
                                     purpose: .transferStarGift(requiredStars: transferStars),
+                                    targetPeerId: nil,
                                     completion: { stars in
                                         starsContext.add(balance: StarsAmount(value: stars, nanos: 0))
                                         proceed(true)
@@ -3693,8 +3694,8 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         return StarsTransactionsScreen(context: context, starsContext: starsContext)
     }
         
-    public func makeStarsPurchaseScreen(context: AccountContext, starsContext: StarsContext, options: [Any], purpose: StarsPurchasePurpose, completion: @escaping (Int64) -> Void) -> ViewController {
-        return StarsPurchaseScreen(context: context, starsContext: starsContext, options: options, purpose: purpose, completion: completion)
+    public func makeStarsPurchaseScreen(context: AccountContext, starsContext: StarsContext, options: [Any], purpose: StarsPurchasePurpose, targetPeerId: EnginePeer.Id?, completion: @escaping (Int64) -> Void) -> ViewController {
+        return StarsPurchaseScreen(context: context, starsContext: starsContext, options: options, purpose: purpose, targetPeerId: targetPeerId, completion: completion)
     }
         
     public func makeStarsTransferScreen(context: AccountContext, starsContext: StarsContext, invoice: TelegramMediaInvoice, source: BotPaymentInvoiceSource, extendedMedia: [TelegramExtendedMedia], inputData: Signal<(StarsContext.State, BotPaymentForm, EnginePeer?, EnginePeer?)?, NoError>, completion: @escaping (Bool) -> Void) -> ViewController {
@@ -3947,7 +3948,7 @@ private func peerInfoControllerImpl(context: AccountContext, updatedPresentation
             forumTopicThread = thread
         case .recommendedChannels:
             switchToRecommendedChannels = true
-        case .gifts:
+        case .gifts, .upgradableGifts:
             switchToGifts = true
         case .groupsInCommon:
             switchToGroupsInCommon = true
@@ -3985,7 +3986,7 @@ private func peerInfoControllerImpl(context: AccountContext, updatedPresentation
             forumTopicThread = thread
         case .myProfile:
             isMyProfile = true
-        case .gifts:
+        case .gifts, .upgradableGifts:
             switchToGifts = true
         case .myProfileGifts:
             isMyProfile = true

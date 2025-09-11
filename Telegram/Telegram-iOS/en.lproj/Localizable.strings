@@ -15015,3 +15015,30 @@ Sorry for the inconvenience.";
 "Gift.Options.Collectibles.Text" = "Collectible gifts are unique digital items you can exchange or sell.";
 
 "Gift.Upgrade.UpgradeFor" = "Upgrade for %@";
+"Gift.Upgrade.PriceWillDecrease" = "Price will decrease in {m}:{s}";
+
+"Stars.Purchase.RemoveOriginalDetailsStarGiftInfo" = "Buy Stars to remove original details of your gift.";
+
+"Notification.StarGift.TitleTo" = "Gift for %@";
+
+"Gift.Upgrade.Gift.Sent.Text" = "Upgrade sent!";
+"Gift.Upgrade.Gift.Sent.GiftMore" = "Gift More";
+
+"Gift.Options.Gift.Limited.Left_1" = "%@ left";
+"Gift.Options.Gift.Limited.Left_any" = "%@ left";
+
+"Gift.Options.Gift.Premium.Left_1" = "%@ left";
+"Gift.Options.Gift.Premium.Left_any" = "%@ left";
+
+"Gift.Send.Limited.Success.Title" = "Gift Sent!";
+"Gift.Send.Limited.Success.Text_1" = "You can send **%@** more.";
+"Gift.Send.Limited.Success.Text_any" = "You can send **%@** more.";
+"Gift.Send.Limited.Success.Text.None" = "You've reached your limit on this gift.";
+
+"Gift.UpgradeCost.Title" = "Upgrade Cost";
+"Gift.UpgradeCost.Stars_1" = "%@ Star";
+"Gift.UpgradeCost.Stars_any" = "%@ Stars";
+"Gift.UpgradeCost.Description" = "Users who upgrade their gifts first get collectibles with shorter numbers.";
+"Gift.UpgradeCost.AdditionalDescription" = "Users who upgrade their gifts first get collectibles with shorter numbers.";
+"Gift.UpgradeCost.Done" = "Understood";
+

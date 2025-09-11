@@ -138,7 +138,7 @@ private final class GiftTransferAlertContentNode: AlertContentNode {
                 return ("URL", url)
             }
         ), textAlignment: .center)
-        self.arrowNode.image = generateTintedImage(image: UIImage(bundleImageName: "Peer Info/AlertArrow"), color: theme.secondaryColor)
+        self.arrowNode.image = generateTintedImage(image: UIImage(bundleImageName: "Peer Info/AlertArrow"), color: theme.secondaryColor.withAlphaComponent(0.9))
         
         self.actionNodesSeparator.backgroundColor = theme.separatorColor
         for actionNode in self.actionNodes {
