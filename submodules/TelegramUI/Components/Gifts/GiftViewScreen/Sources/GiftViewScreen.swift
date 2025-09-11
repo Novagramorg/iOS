@@ -1895,7 +1895,6 @@ private final class GiftViewSheetContent: CombinedComponent {
                 
                 controller.showBalance = false
                 
-                let context = self.context
                 let upgradeGiftImpl: ((Int64?, Bool) -> Signal<ProfileGiftsContext.State.StarGift, UpgradeStarGiftError>)
                 if let upgradeGift = controller.upgradeGift {
                     guard let reference = arguments.reference else {
@@ -1903,11 +1902,6 @@ private final class GiftViewSheetContent: CombinedComponent {
                     }
                     upgradeGiftImpl = { formId, keepOriginalInfo in
                         return upgradeGift(formId, reference, keepOriginalInfo)
-                        |> afterCompleted {
-                            if formId != nil {
-                                context.starsContext?.load(force: true)
-                            }
-                        }
                     }
                 } else {
                     guard let reference = arguments.reference else {
@@ -1915,11 +1909,6 @@ private final class GiftViewSheetContent: CombinedComponent {
                     }
                     upgradeGiftImpl = { formId, keepOriginalInfo in
                         return self.context.engine.payments.upgradeStarGift(formId: formId, reference: reference, keepOriginalInfo: keepOriginalInfo)
-                        |> afterCompleted {
-                            if formId != nil {
-                                context.starsContext?.load(force: true)
-                            }
-                        }
                     }
                 }
             
