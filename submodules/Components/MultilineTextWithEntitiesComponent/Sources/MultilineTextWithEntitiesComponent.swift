@@ -35,6 +35,7 @@ public final class MultilineTextWithEntitiesComponent: Component {
     public let manualVisibilityControl: Bool
     public let resetAnimationsOnVisibilityChange: Bool
     public let displaysAsynchronously: Bool
+    public let maxWidth: CGFloat?
     public let highlightAction: (([NSAttributedString.Key: Any]) -> NSAttributedString.Key?)?
     public let tapAction: (([NSAttributedString.Key: Any], Int) -> Void)?
     public let longTapAction: (([NSAttributedString.Key: Any], Int) -> Void)?
@@ -60,6 +61,7 @@ public final class MultilineTextWithEntitiesComponent: Component {
         manualVisibilityControl: Bool = false,
         resetAnimationsOnVisibilityChange: Bool = false,
         displaysAsynchronously: Bool = true,
+        maxWidth: CGFloat? = nil,
         highlightAction: (([NSAttributedString.Key: Any]) -> NSAttributedString.Key?)? = nil,
         tapAction: (([NSAttributedString.Key: Any], Int) -> Void)? = nil,
         longTapAction: (([NSAttributedString.Key: Any], Int) -> Void)? = nil
@@ -85,6 +87,7 @@ public final class MultilineTextWithEntitiesComponent: Component {
         self.manualVisibilityControl = manualVisibilityControl
         self.resetAnimationsOnVisibilityChange = resetAnimationsOnVisibilityChange
         self.displaysAsynchronously = displaysAsynchronously
+        self.maxWidth = maxWidth
         self.tapAction = tapAction
         self.longTapAction = longTapAction
     }
@@ -124,6 +127,9 @@ public final class MultilineTextWithEntitiesComponent: Component {
             return false
         }
         if lhs.displaysAsynchronously != rhs.displaysAsynchronously {
+            return false
+        }
+        if lhs.maxWidth != rhs.maxWidth {
             return false
         }
         if let lhsTextShadowColor = lhs.textShadowColor, let rhsTextShadowColor = rhs.textShadowColor {
@@ -237,7 +243,12 @@ public final class MultilineTextWithEntitiesComponent: Component {
                 )
             }
             
-            let size = self.textNode.updateLayout(availableSize)
+            var constrainedSize = availableSize
+            if let maxWidth = component.maxWidth {
+                constrainedSize.width = maxWidth
+            }
+            
+            let size = self.textNode.updateLayout(constrainedSize)
             self.textNode.frame = CGRect(origin: .zero, size: size)
             
             if component.handleSpoilers {
@@ -266,7 +277,7 @@ public final class MultilineTextWithEntitiesComponent: Component {
                 spoilerTextNode.textStroke = component.textStroke
                 spoilerTextNode.isUserInteractionEnabled = false
                 
-                let size = spoilerTextNode.updateLayout(availableSize)
+                let size = spoilerTextNode.updateLayout(constrainedSize)
                 spoilerTextNode.frame = CGRect(origin: .zero, size: size)
                 
                 if spoilerTextNode.view.superview == nil {

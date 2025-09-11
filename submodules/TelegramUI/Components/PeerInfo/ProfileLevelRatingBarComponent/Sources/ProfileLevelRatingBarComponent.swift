@@ -7,13 +7,18 @@ import MultilineTextComponent
 import BundleIconComponent
 import HierarchyTrackingLayer
 
-final class ProfileLevelRatingBarComponent: Component {
-    final class TransitionHint {
-        let animate: Bool
+public final class ProfileLevelRatingBarComponent: Component {
+    public final class TransitionHint {
+        public let animate: Bool
         
-        init(animate: Bool) {
+        public init(animate: Bool) {
             self.animate = animate
         }
+    }
+    
+    public enum Icon {
+        case rating
+        case stars
     }
     
     let theme: PresentationTheme
@@ -23,15 +28,19 @@ final class ProfileLevelRatingBarComponent: Component {
     let badgeValue: String
     let badgeTotal: String?
     let level: Int
+    let icon: Icon
+    let inversed: Bool
     
-    init(
+    public init(
         theme: PresentationTheme,
         value: CGFloat,
         leftLabel: String,
         rightLabel: String,
         badgeValue: String,
         badgeTotal: String?,
-        level: Int
+        level: Int,
+        icon: Icon,
+        inversed: Bool = false
     ) {
         self.theme = theme
         self.value = value
@@ -40,9 +49,11 @@ final class ProfileLevelRatingBarComponent: Component {
         self.badgeValue = badgeValue
         self.badgeTotal = badgeTotal
         self.level = level
+        self.icon = icon
+        self.inversed = inversed
     }
     
-    static func ==(lhs: ProfileLevelRatingBarComponent, rhs: ProfileLevelRatingBarComponent) -> Bool {
+    public static func ==(lhs: ProfileLevelRatingBarComponent, rhs: ProfileLevelRatingBarComponent) -> Bool {
         if lhs.theme !== rhs.theme {
             return false
         }
@@ -62,6 +73,12 @@ final class ProfileLevelRatingBarComponent: Component {
             return false
         }
         if lhs.level != rhs.level {
+            return false
+        }
+        if lhs.icon != rhs.icon {
+            return false
+        }
+        if lhs.inversed != rhs.inversed {
             return false
         }
         return true
@@ -152,7 +169,7 @@ final class ProfileLevelRatingBarComponent: Component {
         }
     }
     
-    final class View: UIView {
+    public final class View: UIView {
         private let barBackground: UIImageView
         private let backgroundClippingContainer: UIView
         private let foregroundBarClippingContainer: UIView
@@ -490,7 +507,9 @@ final class ProfileLevelRatingBarComponent: Component {
             let barBackgroundFrame = CGRect(origin: CGPoint(x: 0.0, y: availableSize.height - barHeight), size: CGSize(width: availableSize.width, height: barHeight))
             transition.setFrame(view: self.barBackground, frame: barBackgroundFrame)
             
-            var barForegroundFrame = CGRect(origin: barBackgroundFrame.origin, size: CGSize(width: floorToScreenPixels(progressValue * barBackgroundFrame.width), height: barBackgroundFrame.height))
+            let barForegroundOriginX = barBackgroundFrame.minX
+            let barForegroundWidth = floorToScreenPixels(progressValue * barBackgroundFrame.width)
+            var barForegroundFrame = CGRect(origin: CGPoint(x: barForegroundOriginX, y: barBackgroundFrame.minY), size: CGSize(width: barForegroundWidth, height: barBackgroundFrame.height))
             
             var foregroundAlpha: CGFloat = 1.0
             var foregroundContentsAlpha: CGFloat = 1.0
@@ -552,7 +571,7 @@ final class ProfileLevelRatingBarComponent: Component {
             self.barForeground.tintColor = badgeColor
             
             var effectiveBarForegroundFrame = barForegroundFrame
-            if currentIsNegativeRating {
+            if currentIsNegativeRating || component.inversed {
                 effectiveBarForegroundFrame.size.width = barBackgroundFrame.maxX - barForegroundFrame.maxX
                 effectiveBarForegroundFrame.origin.x = barBackgroundFrame.maxX - effectiveBarForegroundFrame.width
             }
@@ -564,7 +583,23 @@ final class ProfileLevelRatingBarComponent: Component {
             transition.setAlpha(view: self.foregroundBarClippingContainer, alpha: foregroundAlpha)
             transition.setAlpha(view: self.foregroundClippingContainer, alpha: foregroundContentsAlpha)
             
-            let backgroundClippingFrame = CGRect(origin: CGPoint(x: barBackgroundFrame.minX + barForegroundFrame.width, y: barBackgroundFrame.minY), size: CGSize(width: barBackgroundFrame.width - barForegroundFrame.width, height: barBackgroundFrame.height))
+            let backgroundClippingFrame: CGRect
+            if currentIsNegativeRating || component.inversed {
+                backgroundClippingFrame = CGRect(
+                    x: barBackgroundFrame.minX,
+                    y: barBackgroundFrame.minY,
+                    width: max(0.0, effectiveBarForegroundFrame.minX - barBackgroundFrame.minX),
+                    height: barBackgroundFrame.height
+                )
+            } else {
+                backgroundClippingFrame = CGRect(
+                    x: effectiveBarForegroundFrame.maxX,
+                    y: barBackgroundFrame.minY,
+                    width: max(0, barBackgroundFrame.maxX - effectiveBarForegroundFrame.maxX),
+                    height: barBackgroundFrame.height
+                )
+            }
+            
             transition.setPosition(view: self.backgroundClippingContainer, position: backgroundClippingFrame.center)
             transition.setBounds(view: self.backgroundClippingContainer, bounds: CGRect(origin: CGPoint(x: backgroundClippingFrame.minX - barBackgroundFrame.minX, y: 0.0), size: backgroundClippingFrame.size))
             transition.setAlpha(view: self.backgroundClippingContainer, alpha: foregroundContentsAlpha)
@@ -642,12 +677,21 @@ final class ProfileLevelRatingBarComponent: Component {
                 foregroundRightLabelView.bounds = CGRect(origin: CGPoint(), size: rightLabelFrame.size)
             }
             
+            let icon: ProfileLevelRatingBarBadge.Icon
+            switch component.icon {
+            case .rating:
+                icon = .rating
+            case .stars:
+                icon = .stars
+            }
+            
             let badgeSize = self.badge.update(
                 transition: transition.withUserData(ProfileLevelRatingBarBadge.TransitionHint(animateText: !labelsTransition.animation.isImmediate)),
                 component: AnyComponent(ProfileLevelRatingBarBadge(
                     theme: component.theme,
                     title: component.level < 0 ? "" : "\(component.badgeValue)",
-                    suffix: component.level < 0 ? nil : component.badgeTotal
+                    suffix: component.level < 0 ? nil : component.badgeTotal,
+                    icon: icon
                 )),
                 environment: {},
                 containerSize: CGSize(width: 200.0, height: 200.0)
@@ -665,7 +709,8 @@ final class ProfileLevelRatingBarComponent: Component {
                     apparentBadgeSize = badgeSize
                 }
                 
-                var badgeFrame = CGRect(origin: CGPoint(x: barBackgroundFrame.minX + barForegroundFrame.width - apparentBadgeSize.width * 0.5, y: barBackgroundFrame.minY - 18.0 - badgeSize.height), size: apparentBadgeSize)
+                let badgeOriginX = barBackgroundFrame.minX + barForegroundFrame.width
+                var badgeFrame = CGRect(origin: CGPoint(x: badgeOriginX - apparentBadgeSize.width * 0.5, y: barBackgroundFrame.minY - 18.0 - badgeSize.height), size: apparentBadgeSize)
                 
                 let badgeSideInset: CGFloat = 0.0
                 
@@ -703,11 +748,11 @@ final class ProfileLevelRatingBarComponent: Component {
         }
     }
     
-    func makeView() -> View {
+    public func makeView() -> View {
         return View(frame: CGRect())
     }
     
-    func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
+    public func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
         return view.update(component: self, availableSize: availableSize, state: state, environment: environment, transition: transition)
     }
 }

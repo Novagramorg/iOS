@@ -1921,10 +1921,15 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         if case .regular = layout.metrics.widthClass, layout.size.height == layout.deviceMetrics.screenSize.width {
             displayMode = .aspectFit
         } else if case .compact = layout.metrics.widthClass {
-            if layout.size.width < layout.size.height && layout.size.height < layout.deviceMetrics.screenSize.height {
-                wallpaperBounds.size = layout.deviceMetrics.screenSize
-            } else if layout.size.width > layout.size.height && layout.size.height < layout.deviceMetrics.screenSize.width {
-                wallpaperBounds.size = layout.deviceMetrics.screenSize
+            if layout.inSplitView {
+                displayMode = .aspectFit
+            } else if layout.inSlideOver {
+                switch layout.actualOrientation {
+                case .portrait:
+                    wallpaperBounds.size = CGSize(width: layout.size.width, height: layout.deviceMetrics.screenSize.height)
+                case .landscape:
+                    wallpaperBounds.size = CGSize(width: layout.size.width, height: layout.deviceMetrics.screenSize.width)
+                }
             }
         }
         self.backgroundNode.updateLayout(size: wallpaperBounds.size, displayMode: displayMode, transition: transition)
