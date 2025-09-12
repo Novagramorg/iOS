@@ -118,7 +118,7 @@ final class PlayButtonNode: ASDisplayNode {
         
         let backgroundFrame = buttonSize.centered(in: CGRect(origin: .zero, size: size))
         transition.updateFrame(view: self.backgroundView, frame: backgroundFrame)
-        self.backgroundView.update(size: backgroundFrame.size, cornerRadius: backgroundFrame.height * 0.5, isDark: theme.overallDarkAppearance, tintColor: theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.4), transition: ComponentTransition(transition))
+        self.backgroundView.update(size: backgroundFrame.size, cornerRadius: backgroundFrame.height * 0.5, isDark: theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.4)), transition: ComponentTransition(transition))
                 
         self.playPauseIconNode.frame = CGRect(origin: CGPoint(x: 3.0, y: 1.0 - UIScreenPixel), size: CGSize(width: 21.0, height: 21.0))
                                

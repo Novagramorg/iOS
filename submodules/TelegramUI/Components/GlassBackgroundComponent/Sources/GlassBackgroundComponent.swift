@@ -313,12 +313,27 @@ public final class GlassBackgroundView: UIView {
         }
     }
     
+    public struct TintColor: Equatable {
+        public enum Kind {
+            case panel
+            case custom
+        }
+        
+        public let kind: Kind
+        public let color: UIColor
+        
+        public init(kind: Kind, color: UIColor) {
+            self.kind = kind
+            self.color = color
+        }
+    }
+    
     private struct Params: Equatable {
         let cornerRadius: CGFloat
         let isDark: Bool
-        let tintColor: UIColor
+        let tintColor: TintColor
         
-        init(cornerRadius: CGFloat, isDark: Bool, tintColor: UIColor) {
+        init(cornerRadius: CGFloat, isDark: Bool, tintColor: TintColor) {
             self.cornerRadius = cornerRadius
             self.isDark = isDark
             self.tintColor = tintColor
@@ -329,12 +344,18 @@ public final class GlassBackgroundView: UIView {
     private let nativeView: UIVisualEffectView?
     
     private let foregroundView: UIImageView?
+    private let shadowView: UIImageView?
+    private let shadowMaskView: UIImageView?
     
     public let maskContentView: UIView
     private let contentContainer: ContentContainer
     
     public var contentView: UIView {
-        return self.contentContainer
+        if let nativeView = self.nativeView {
+            return nativeView.contentView
+        } else {
+            return self.contentContainer
+        }
     }
     
     private var params: Params?
@@ -350,10 +371,14 @@ public final class GlassBackgroundView: UIView {
             nativeView.traitOverrides.userInterfaceStyle = .light
             //self.foregroundView = UIImageView()
             self.foregroundView = nil
+            self.shadowView = nil
+            self.shadowMaskView = nil
         } else {
             self.backgroundNode = NavigationBackgroundNode(color: .black, enableBlur: true, customBlurRadius: 5.0)
             self.nativeView = nil
             self.foregroundView = UIImageView()
+            self.shadowView = UIImageView()
+            self.shadowMaskView = UIImageView()
         }
         
         self.maskContentView = UIView()
@@ -366,6 +391,12 @@ public final class GlassBackgroundView: UIView {
         
         super.init(frame: frame)
         
+        if let shadowView = self.shadowView {
+            self.addSubview(shadowView)
+            if let shadowMaskView = self.shadowMaskView {
+                shadowView.mask = shadowMaskView
+            }
+        }
         if let nativeView = self.nativeView {
             self.addSubview(nativeView)
         }
@@ -383,7 +414,7 @@ public final class GlassBackgroundView: UIView {
         fatalError("init(coder:) has not been implemented")
     }
     
-    public func update(size: CGSize, cornerRadius: CGFloat, isDark: Bool, tintColor: UIColor, transition: ComponentTransition) {
+    public func update(size: CGSize, cornerRadius: CGFloat, isDark: Bool, tintColor: TintColor, transition: ComponentTransition) {
         if let nativeView = self.nativeView {
             let previousFrame = nativeView.frame
             
@@ -399,7 +430,7 @@ public final class GlassBackgroundView: UIView {
             }
         }
         if let backgroundNode = self.backgroundNode {
-            backgroundNode.updateColor(color: .clear, forceKeepBlur: tintColor.alpha != 1.0, transition: transition.containedViewLayoutTransition)
+            backgroundNode.updateColor(color: .clear, forceKeepBlur: tintColor.color.alpha != 1.0, transition: transition.containedViewLayoutTransition)
             backgroundNode.update(size: size, cornerRadius: cornerRadius, transition: transition.containedViewLayoutTransition)
             transition.setFrame(view: backgroundNode.view, frame: CGRect(origin: CGPoint(), size: size))
         }
@@ -408,13 +439,38 @@ public final class GlassBackgroundView: UIView {
         if self.params != params {
             self.params = params
             
+            if let shadowView = self.shadowView {
+                shadowView.layer.shadowRadius = 10.0
+                shadowView.layer.shadowColor = UIColor(white: 0.0, alpha: 1.0).cgColor
+                shadowView.layer.shadowOpacity = 0.08
+                shadowView.layer.shadowOffset = CGSize(width: 0.0, height: 1.0)
+                
+                if let shadowMaskView = self.shadowMaskView {
+                    let shadowInset: CGFloat = 32.0
+                    let shadowInnerInset: CGFloat = 0.5
+                    shadowMaskView.image = generateImage(CGSize(width: shadowInset * 2.0 + cornerRadius * 2.0, height: shadowInset * 2.0 + cornerRadius * 2.0), rotatedContext: { size, context in
+                        context.setFillColor(UIColor.white.cgColor)
+                        context.fill(CGRect(origin: CGPoint(), size: size))
+                        
+                        context.setFillColor(UIColor.clear.cgColor)
+                        context.setBlendMode(.copy)
+                        context.fillEllipse(in: CGRect(origin: CGPoint(x: shadowInset + shadowInnerInset, y: shadowInset + shadowInnerInset), size: CGSize(width: size.width - shadowInset * 2.0 - shadowInnerInset * 2.0, height: size.height - shadowInset * 2.0 - shadowInnerInset * 2.0)))
+                    })?.stretchableImage(withLeftCapWidth: Int(shadowInset + cornerRadius), topCapHeight: Int(shadowInset + cornerRadius))
+                }
+            }
+            
             if let foregroundView = self.foregroundView {
-                foregroundView.image = generateForegroundImage(size: CGSize(width: cornerRadius * 2.0, height: cornerRadius * 2.0), isDark: isDark, fillColor: tintColor)
+                foregroundView.image = generateForegroundImage(size: CGSize(width: cornerRadius * 2.0, height: cornerRadius * 2.0), isDark: isDark, fillColor: tintColor.color)
             } else {
                 if let nativeView {
                     if #available(iOS 26.0, *) {
                         let glassEffect = UIGlassEffect(style: .regular)
-                        //glassEffect.tintColor = tintColor.withMultipliedAlpha(0.1)
+                        switch tintColor.kind {
+                        case .panel:
+                            glassEffect.tintColor = nil
+                        case .custom:
+                            glassEffect.tintColor = tintColor.color
+                        }
                         glassEffect.isInteractive = false
                         
                         nativeView.effect = glassEffect
@@ -424,8 +480,18 @@ public final class GlassBackgroundView: UIView {
         }
         
         transition.setFrame(view: self.maskContentView, frame: CGRect(origin: CGPoint(), size: size))
-        if let foregroundView {
+        if let foregroundView = self.foregroundView {
             transition.setFrame(view: foregroundView, frame: CGRect(origin: CGPoint(), size: size))
+        }
+        if let shadowView = self.shadowView {
+            if shadowView.bounds.size != size {
+                shadowView.layer.shadowPath = UIBezierPath(roundedRect: CGRect(origin: CGPoint(), size: size), cornerRadius: size.height * 0.5).cgPath
+            }
+            transition.setFrame(view: shadowView, frame: CGRect(origin: CGPoint(), size: size))
+            
+            if let shadowMaskView = self.shadowMaskView {
+                transition.setFrame(view: shadowMaskView, frame: CGRect(origin: CGPoint(), size: size).insetBy(dx: -32.0, dy: -32.0))
+            }
         }
         transition.setFrame(view: self.contentContainer, frame: CGRect(origin: CGPoint(), size: size))
     }
