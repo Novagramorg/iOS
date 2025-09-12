@@ -499,8 +499,8 @@ func _internal_setForumChannelPinnedTopics(account: Account, id: EnginePeer.Id, 
             }
         }
     } else {
-        return account.postbox.transaction { transaction -> Api.InputChannel? in
-            guard let inputChannel = transaction.getPeer(id).flatMap(apiInputChannel) else {
+        return account.postbox.transaction { transaction -> Api.InputPeer? in
+            guard let inputChannel = transaction.getPeer(id).flatMap(apiInputPeer) else {
                 return nil
             }
             
@@ -509,14 +509,14 @@ func _internal_setForumChannelPinnedTopics(account: Account, id: EnginePeer.Id, 
             return inputChannel
         }
         |> castError(SetForumChannelTopicPinnedError.self)
-        |> mapToSignal { inputChannel -> Signal<Never, SetForumChannelTopicPinnedError> in
-            guard let inputChannel = inputChannel else {
+        |> mapToSignal { inputPeer -> Signal<Never, SetForumChannelTopicPinnedError> in
+            guard let inputPeer else {
                 return .fail(.generic)
             }
             
-            return account.network.request(Api.functions.channels.reorderPinnedForumTopics(
+            return account.network.request(Api.functions.messages.reorderPinnedForumTopics(
                 flags: 1 << 0,
-                channel: inputChannel,
+                peer: inputPeer,
                 order: threadIds.map(Int32.init(clamping:))
             ))
             |> mapError { _ -> SetForumChannelTopicPinnedError in

@@ -115,10 +115,9 @@ private func peerIdsRequiringLocalChatStateFromUpdates(_ updates: [Api.Update]) 
             case let .updateChannelTooLong(_, channelId, _):
                 let peerId = PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(channelId))
                 peerIds.insert(peerId)
-            case let .updateChannelPinnedTopics(_, channelId, order):
+            case let .updatePinnedForumTopics(_, peerId, order):
                 if order == nil {
-                    let peerId = PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(channelId))
-                    peerIds.insert(peerId)
+                    peerIds.insert(peerId.peerId)
                 }
             case let .updateFolderPeers(folderPeers, _, _):
                 for peer in folderPeers {
@@ -357,10 +356,9 @@ private func peerIdsRequiringLocalChatStateFromDifference(_ difference: Api.upda
                 case let .updateChannelTooLong(_, channelId, _):
                     let peerId = PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(channelId))
                     peerIds.insert(peerId)
-                case let .updateChannelPinnedTopics(_, channelId, order):
+                case let .updatePinnedForumTopics(_, peerId, order):
                     if order == nil {
-                        let peerId = PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(channelId))
-                        peerIds.insert(peerId)
+                        peerIds.insert(peerId.peerId)
                     }
                 default:
                     break
@@ -384,10 +382,9 @@ private func peerIdsRequiringLocalChatStateFromDifference(_ difference: Api.upda
                 case let .updateChannelTooLong(_, channelId, _):
                     let peerId = PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(channelId))
                     peerIds.insert(peerId)
-                case let .updateChannelPinnedTopics(_, channelId, order):
+                case let .updatePinnedForumTopics(_, peerId, order):
                     if order == nil {
-                        let peerId = PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(channelId))
-                        peerIds.insert(peerId)
+                        peerIds.insert(peerId.peerId)
                     }
                 default:
                     break
@@ -767,15 +764,15 @@ private func sortedUpdates(_ updates: [Api.Update]) -> [Api.Update] {
                 } else {
                     updatesByChannel[peerId]!.append(update)
                 }
-            case let .updateChannelPinnedTopic(_, channelId, _):
-                let peerId = PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(channelId))
+            case let .updatePinnedForumTopic(_, peerId, _):
+                let peerId = peerId.peerId
                 if updatesByChannel[peerId] == nil {
                     updatesByChannel[peerId] = [update]
                 } else {
                     updatesByChannel[peerId]!.append(update)
                 }
-            case let .updateChannelPinnedTopics(_, channelId, _):
-                let peerId = PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(channelId))
+            case let .updatePinnedForumTopics(_, peerId, _):
+                let peerId = peerId.peerId
                 if updatesByChannel[peerId] == nil {
                     updatesByChannel[peerId] = [update]
                 } else {
@@ -922,11 +919,11 @@ private func finalStateWithUpdatesAndServerTime(accountPeerId: PeerId, postbox: 
                         channelsToPoll[peerId] = channelPts
                     }
                 }
-            case let .updateChannelPinnedTopics(_, channelId, order):
+            case let .updatePinnedForumTopics(_, peerId, order):
                 if let order = order {
-                    updatedState.addUpdatePinnedTopicOrder(peerId: PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(channelId)), threadIds: order.map(Int64.init))
+                    updatedState.addUpdatePinnedTopicOrder(peerId: peerId.peerId, threadIds: order.map(Int64.init))
                 } else {
-                    let peerId = PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(channelId))
+                    let peerId = peerId.peerId
                     if case .none = channelsToPoll[peerId] {
                         channelsToPoll[peerId] = nil
                     }
@@ -1555,9 +1552,9 @@ private func finalStateWithUpdatesAndServerTime(accountPeerId: PeerId, postbox: 
                 } else {
                     updatedState.addUpdatePinnedSavedItemIds(operation: .sync)
                 }
-            case let .updateChannelPinnedTopic(flags, channelId, topicId):
+            case let .updatePinnedForumTopic(flags, peerId, topicId):
                 let isPinned = (flags & (1 << 0)) != 0
-                updatedState.addUpdatePinnedTopic(peerId: PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(channelId)), threadId: Int64(topicId), isPinned: isPinned)
+                updatedState.addUpdatePinnedTopic(peerId: peerId.peerId, threadId: Int64(topicId), isPinned: isPinned)
             case let .updateReadMessagesContents(_, messages, _, _, date):
                 updatedState.addReadMessagesContents((nil, nil, messages), date: date)
             case let .updateChannelReadMessagesContents(_, channelId, topMsgId, savedPeerId, messages):
@@ -1686,6 +1683,14 @@ private func finalStateWithUpdatesAndServerTime(accountPeerId: PeerId, postbox: 
             case let .updateGroupCallChainBlocks(call, subChainId, blocks, nextOffset):
                 if case let .inputGroupCall(id, accessHash) = call {
                     updatedState.updateGroupCallChainBlocks(id: id, accessHash: accessHash, subChainId: subChainId, blocks: blocks.map { $0.makeData() }, nextOffset: nextOffset)
+                }
+            case let .updateGroupCallMessage(call, fromId, message):
+                if case let .inputGroupCall(id, _) = call {
+                    updatedState.updateGroupCallMessage(id: id, authorId: fromId.peerId, text: message)
+                }
+            case let .updateGroupCallEncryptedMessage(call, fromId, encryptedMessage):
+                if case let .inputGroupCall(id, _) = call {
+                    updatedState.updateGroupCallOpaqueMessage(id: id, authorId: fromId.peerId, data: encryptedMessage.makeData())
                 }
             case let .updatePeerHistoryTTL(_, peer, ttl):
                 updatedState.updateAutoremoveTimeout(peer: peer, value: CachedPeerAutoremoveTimeout.Value(ttl))
@@ -3613,7 +3618,7 @@ private func optimizedOperations(_ operations: [AccountStateMutationOperation]) 
     var currentAddQuickReplyMessages: OptimizeAddMessagesState?
     for operation in operations {
         switch operation {
-        case .DeleteMessages, .DeleteMessagesWithGlobalIds, .EditMessage, .UpdateMessagePoll, .UpdateMessageReactions, .UpdateMedia, .MergeApiChats, .MergeApiUsers, .MergePeerPresences, .UpdatePeer, .ReadInbox, .ReadOutbox, .ReadGroupFeedInbox, .ResetReadState, .ResetIncomingReadState, .UpdatePeerChatUnreadMark, .ResetMessageTagSummary, .UpdateNotificationSettings, .UpdateGlobalNotificationSettings, .UpdateSecretChat, .AddSecretMessages, .ReadSecretOutbox, .AddPeerInputActivity, .AddPeerLiveTypingDraftUpdate, .UpdateCachedPeerData, .UpdatePinnedItemIds, .UpdatePinnedSavedItemIds, .UpdatePinnedTopic, .UpdatePinnedTopicOrder, .ReadMessageContents, .UpdateMessageImpressionCount, .UpdateMessageForwardsCount, .UpdateInstalledStickerPacks, .UpdateRecentGifs, .UpdateChatInputState, .UpdateCall, .AddCallSignalingData, .UpdateLangPack, .UpdateMinAvailableMessage, .UpdateIsContact, .UpdatePeerChatInclusion, .UpdatePeersNearby, .UpdateTheme, .SyncChatListFilters, .UpdateChatListFilter, .UpdateChatListFilterOrder, .UpdateReadThread, .UpdateMessagesPinned, .UpdateGroupCallParticipants, .UpdateGroupCall, .UpdateGroupCallChainBlocks, .UpdateAutoremoveTimeout, .UpdateAttachMenuBots, .UpdateAudioTranscription, .UpdateConfig, .UpdateExtendedMedia, .ResetForumTopic, .UpdateStory, .UpdateReadStories, .UpdateStoryStealthMode, .UpdateStorySentReaction, .UpdateNewAuthorization, .UpdateWallpaper, .UpdateStarsBalance, .UpdateStarsRevenueStatus, .UpdateStarsReactionsDefaultPrivacy, .ReportMessageDelivery, .UpdateMonoForumNoPaidException:
+        case .DeleteMessages, .DeleteMessagesWithGlobalIds, .EditMessage, .UpdateMessagePoll, .UpdateMessageReactions, .UpdateMedia, .MergeApiChats, .MergeApiUsers, .MergePeerPresences, .UpdatePeer, .ReadInbox, .ReadOutbox, .ReadGroupFeedInbox, .ResetReadState, .ResetIncomingReadState, .UpdatePeerChatUnreadMark, .ResetMessageTagSummary, .UpdateNotificationSettings, .UpdateGlobalNotificationSettings, .UpdateSecretChat, .AddSecretMessages, .ReadSecretOutbox, .AddPeerInputActivity, .AddPeerLiveTypingDraftUpdate, .UpdateCachedPeerData, .UpdatePinnedItemIds, .UpdatePinnedSavedItemIds, .UpdatePinnedTopic, .UpdatePinnedTopicOrder, .ReadMessageContents, .UpdateMessageImpressionCount, .UpdateMessageForwardsCount, .UpdateInstalledStickerPacks, .UpdateRecentGifs, .UpdateChatInputState, .UpdateCall, .AddCallSignalingData, .UpdateLangPack, .UpdateMinAvailableMessage, .UpdateIsContact, .UpdatePeerChatInclusion, .UpdatePeersNearby, .UpdateTheme, .SyncChatListFilters, .UpdateChatListFilter, .UpdateChatListFilterOrder, .UpdateReadThread, .UpdateMessagesPinned, .UpdateGroupCallParticipants, .UpdateGroupCall, .UpdateGroupCallChainBlocks, .UpdateGroupCallMessage, .UpdateGroupCallOpaqueMessage, .UpdateAutoremoveTimeout, .UpdateAttachMenuBots, .UpdateAudioTranscription, .UpdateConfig, .UpdateExtendedMedia, .ResetForumTopic, .UpdateStory, .UpdateReadStories, .UpdateStoryStealthMode, .UpdateStorySentReaction, .UpdateNewAuthorization, .UpdateWallpaper, .UpdateStarsBalance, .UpdateStarsRevenueStatus, .UpdateStarsReactionsDefaultPrivacy, .ReportMessageDelivery, .UpdateMonoForumNoPaidException:
                 if let currentAddMessages = currentAddMessages, !currentAddMessages.messages.isEmpty {
                     result.append(.AddMessages(currentAddMessages.messages, currentAddMessages.location))
                 }
@@ -3730,6 +3735,7 @@ func replayFinalState(
     var updatedCalls: [Api.PhoneCall] = []
     var addedCallSignalingData: [(Int64, Data)] = []
     var updatedGroupCallParticipants: [(Int64, GroupCallParticipantsContext.Update)] = []
+    var groupCallMessageUpdates: [GroupCallMessageUpdate] = []
     var storyUpdates: [InternalStoryUpdate] = []
     var updatedPeersNearby: [PeerNearby]?
     var isContactUpdates: [(PeerId, Bool)] = []
@@ -4871,6 +4877,13 @@ func replayFinalState(
                     callId,
                     .state(update: GroupCallParticipantsContext.Update.StateUpdate(participants: participants, version: version))
                 ))
+            case let .UpdateGroupCallMessage(callId, authorId, text):
+                switch text {
+                case let .textWithEntities(text, entities):
+                    groupCallMessageUpdates.append(GroupCallMessageUpdate(callId: callId, update: .newPlaintextMessage(authorId: authorId, text: text, entities: messageTextEntitiesFromApiEntities(entities))))
+                }
+            case let .UpdateGroupCallOpaqueMessage(callId, authorId, data):
+                groupCallMessageUpdates.append(GroupCallMessageUpdate(callId: callId, update: .newOpaqueMessage(authorId: authorId, data: data)))
             case let .UpdateGroupCall(peerId, call):
                 switch call {
                 case .groupCall:
@@ -5834,6 +5847,7 @@ func replayFinalState(
         updatedCalls: updatedCalls,
         addedCallSignalingData: addedCallSignalingData,
         updatedGroupCallParticipants: updatedGroupCallParticipants,
+        groupCallMessageUpdates: groupCallMessageUpdates,
         storyUpdates: storyUpdates,
         updatedPeersNearby: updatedPeersNearby,
         isContactUpdates: isContactUpdates,

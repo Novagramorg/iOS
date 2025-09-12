@@ -3373,3 +3373,248 @@ func _internal_refreshInlineGroupCall(account: Account, messageId: MessageId) ->
         |> ignoreValues
     }
 }
+
+struct GroupCallMessageUpdate {
+    enum Update {
+        case newPlaintextMessage(authorId: PeerId, text: String, entities: [MessageTextEntity])
+        case newOpaqueMessage(authorId: PeerId, data: Data)
+    }
+    
+    var callId: Int64
+    var update: Update
+    
+    init(callId: Int64, update: Update) {
+        self.callId = callId
+        self.update = update
+    }
+}
+
+public final class GroupCallMessagesContext {
+    public final class Message: Equatable {
+        public let id: Int64
+        public let author: EnginePeer?
+        public let text: String
+        public let entities: [MessageTextEntity]
+        
+        public init(id: Int64, author: EnginePeer?, text: String, entities: [MessageTextEntity]) {
+            self.id = id
+            self.author = author
+            self.text = text
+            self.entities = entities
+        }
+        
+        public static func ==(lhs: Message, rhs: Message) -> Bool {
+            if lhs.id != rhs.id {
+                return false
+            }
+            if lhs === rhs {
+                return true
+            }
+            if lhs.author != rhs.author {
+                return false
+            }
+            if lhs.text != rhs.text {
+                return false
+            }
+            if lhs.entities != rhs.entities {
+                return false
+            }
+            return true
+        }
+    }
+    
+    public struct State: Equatable {
+        public var messages: [Message]
+        
+        public init(messages: [Message]) {
+            self.messages = messages
+        }
+    }
+    
+    private final class Impl {
+        let queue: Queue
+        let account: Account
+        let callId: Int64
+        let reference: InternalGroupCallReference
+        let e2eContext: ConferenceCallE2EContext?
+        
+        var nextId: Int64 = 1
+        
+        var state: State {
+            didSet {
+                self.stateValue.set(self.state)
+            }
+        }
+        let stateValue = ValuePromise<State>()
+        
+        var updatesDisposable: Disposable?
+        let sendMessageDisposables = DisposableSet()
+        
+        init(queue: Queue, account: Account, callId: Int64, reference: InternalGroupCallReference, e2eContext: ConferenceCallE2EContext?) {
+            self.queue = queue
+            self.account = account
+            self.callId = callId
+            self.reference = reference
+            self.e2eContext = e2eContext
+            
+            self.state = State(messages: [])
+            self.stateValue.set(self.state)
+            
+            self.updatesDisposable = (account.stateManager.groupCallMessageUpdates
+            |> deliverOn(self.queue)).startStrict(next: { [weak self] updates in
+                guard let self else {
+                    return
+                }
+                var addedMessages: [(authorId: PeerId, text: String, entities: [MessageTextEntity])] = []
+                var addedOpaqueMessages: [(authorId: PeerId, data: Data)] = []
+                for update in updates {
+                    if update.callId != self.callId {
+                        continue
+                    }
+                    switch update.update {
+                    case let .newPlaintextMessage(authorId, text, entities):
+                        addedMessages.append((authorId, text, entities))
+                    case let .newOpaqueMessage(authorId, data):
+                        addedOpaqueMessages.append((authorId, data))
+                    }
+                }
+                
+                if !addedMessages.isEmpty || !addedOpaqueMessages.isEmpty {
+                    let _ = (self.account.postbox.transaction { transaction -> [Message] in
+                        var messages: [Message] = []
+                        if let e2eContext = self.e2eContext {
+                            let decryptedMessages = e2eContext.state.with({ state -> [Data?] in
+                                guard let state = state.state else {
+                                    return []
+                                }
+                                var result: [Data?] = []
+                                for addedOpaqueMessage in addedOpaqueMessages {
+                                    result.append(state.decrypt(message: addedOpaqueMessage.data, userId: addedOpaqueMessage.authorId.id._internalGetInt64Value()))
+                                }
+                                return result
+                            })
+                            for i in 0 ..< addedOpaqueMessages.count {
+                                let addedOpaqueMessage = addedOpaqueMessages[i]
+                                var decryptedMessage: Data?
+                                if i < decryptedMessages.count {
+                                    decryptedMessage = decryptedMessages[i]
+                                }
+                                guard let decryptedMessage else {
+                                    continue
+                                }
+                                guard let text = String(data: decryptedMessage, encoding: .utf8) else {
+                                    continue
+                                }
+                                
+                                let messageId = self.nextId
+                                self.nextId += 1
+                                messages.append(Message(
+                                    id: messageId,
+                                    author: transaction.getPeer(addedOpaqueMessage.authorId).flatMap(EnginePeer.init),
+                                    text: text,
+                                    entities: []
+                                ))
+                            }
+                        } else {
+                            for addedMessage in addedMessages {
+                                let messageId = self.nextId
+                                self.nextId += 1
+                                messages.append(Message(
+                                    id: messageId,
+                                    author: transaction.getPeer(addedMessage.authorId).flatMap(EnginePeer.init),
+                                    text: addedMessage.text,
+                                    entities: addedMessage.entities
+                                ))
+                            }
+                        }
+                        return messages
+                    }
+                    |> deliverOn(self.queue)).startStandalone(next: { [weak self] messages in
+                        guard let self else {
+                            return
+                        }
+                        var state = self.state
+                        state.messages.append(contentsOf: messages)
+                        self.state = state
+                    })
+                }
+            })
+        }
+        
+        deinit {
+            self.updatesDisposable?.dispose()
+            self.sendMessageDisposables.dispose()
+        }
+        
+        func send(text: String, entities: [MessageTextEntity]) {
+            let accountPeerId = self.account.peerId
+            let _ = (self.account.postbox.transaction { transaction -> Peer? in
+                return transaction.getPeer(accountPeerId)
+            }
+            |> deliverOn(self.queue)).startStandalone(next: { [weak self] accountPeer in
+                guard let self else {
+                    return
+                }
+                
+                let messageId = self.nextId
+                self.nextId += 1
+                
+                var state = self.state
+                state.messages.append(Message(
+                    id: messageId,
+                    author: accountPeer.flatMap(EnginePeer.init),
+                    text: text,
+                    entities: entities
+                ))
+                self.state = state
+                
+                if let e2eContext = self.e2eContext {
+                    let messageData = text.data(using: .utf8)!
+                    let encryptedMessage = e2eContext.state.with({ state -> Data? in
+                        guard let state = state.state else {
+                            return nil
+                        }
+                        return state.encrypt(message: messageData, channelId: 2, plaintextPrefixLength: 0)
+                    })
+                    if let encryptedMessage {
+                        self.sendMessageDisposables.add(self.account.network.request(Api.functions.phone.sendGroupCallEncryptedMessage(
+                            call: self.reference.apiInputGroupCall,
+                            encryptedMessage: Buffer(data: encryptedMessage)
+                        )).startStrict())
+                    }
+                } else {
+                    self.sendMessageDisposables.add(self.account.network.request(Api.functions.phone.sendGroupCallMessage(
+                        call: self.reference.apiInputGroupCall,
+                        message: .textWithEntities(
+                            text: text,
+                            entities: apiEntitiesFromMessageTextEntities(entities, associatedPeers: SimpleDictionary())
+                        )
+                    )).startStrict())
+                }
+            })
+        }
+    }
+    
+    private let queue: Queue
+    private let impl: QueueLocalObject<Impl>
+    
+    public var state: Signal<State, NoError> {
+        return self.impl.signalWith { impl, subscriber in
+            return impl.stateValue.get().startStandalone(next: subscriber.putNext)
+        }
+    }
+    
+    init(account: Account, callId: Int64, reference: InternalGroupCallReference, e2eContext: ConferenceCallE2EContext?) {
+        let queue = Queue(name: "GroupCallMessagesContext")
+        self.queue = queue
+        self.impl = QueueLocalObject(queue: queue, generate: {
+            return Impl(queue: queue, account: account, callId: callId, reference: reference, e2eContext: e2eContext)
+        })
+    }
+    
+    public func send(text: String, entities: [MessageTextEntity]) {
+        self.impl.with { impl in
+            impl.send(text: text, entities: entities)
+        }
+    }
+}

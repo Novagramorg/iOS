@@ -569,8 +569,6 @@ public extension Api {
         case updateChannelMessageForwards(channelId: Int64, id: Int32, forwards: Int32)
         case updateChannelMessageViews(channelId: Int64, id: Int32, views: Int32)
         case updateChannelParticipant(flags: Int32, channelId: Int64, date: Int32, actorId: Int64, userId: Int64, prevParticipant: Api.ChannelParticipant?, newParticipant: Api.ChannelParticipant?, invite: Api.ExportedChatInvite?, qts: Int32)
-        case updateChannelPinnedTopic(flags: Int32, channelId: Int64, topicId: Int32)
-        case updateChannelPinnedTopics(flags: Int32, channelId: Int64, order: [Int32]?)
         case updateChannelReadMessagesContents(flags: Int32, channelId: Int64, topMsgId: Int32?, savedPeerId: Api.Peer?, messages: [Int32])
         case updateChannelTooLong(flags: Int32, channelId: Int64, pts: Int32?)
         case updateChannelUserTyping(flags: Int32, channelId: Int64, topMsgId: Int32?, fromId: Api.Peer, action: Api.SendMessageAction)
@@ -609,6 +607,8 @@ public extension Api {
         case updateGroupCall(flags: Int32, chatId: Int64?, call: Api.GroupCall)
         case updateGroupCallChainBlocks(call: Api.InputGroupCall, subChainId: Int32, blocks: [Buffer], nextOffset: Int32)
         case updateGroupCallConnection(flags: Int32, params: Api.DataJSON)
+        case updateGroupCallEncryptedMessage(call: Api.InputGroupCall, fromId: Api.Peer, encryptedMessage: Buffer)
+        case updateGroupCallMessage(call: Api.InputGroupCall, fromId: Api.Peer, message: Api.TextWithEntities)
         case updateGroupCallParticipants(call: Api.InputGroupCall, participants: [Api.GroupCallParticipant], version: Int32)
         case updateInlineBotCallbackQuery(flags: Int32, queryId: Int64, userId: Int64, msgId: Api.InputBotInlineMessageID, chatInstance: Int64, data: Buffer?, gameShortName: String?)
         case updateLangPack(difference: Api.LangPackDifference)
@@ -641,6 +641,8 @@ public extension Api {
         case updatePhoneCallSignalingData(phoneCallId: Int64, data: Buffer)
         case updatePinnedChannelMessages(flags: Int32, channelId: Int64, messages: [Int32], pts: Int32, ptsCount: Int32)
         case updatePinnedDialogs(flags: Int32, folderId: Int32?, order: [Api.DialogPeer]?)
+        case updatePinnedForumTopic(flags: Int32, peer: Api.Peer, topicId: Int32)
+        case updatePinnedForumTopics(flags: Int32, peer: Api.Peer, order: [Int32]?)
         case updatePinnedMessages(flags: Int32, peer: Api.Peer, messages: [Int32], pts: Int32, ptsCount: Int32)
         case updatePinnedSavedDialogs(flags: Int32, order: [Api.DialogPeer]?)
         case updatePrivacy(key: Api.PrivacyKey, rules: [Api.PrivacyRule])
@@ -958,26 +960,6 @@ public extension Api {
                     if Int(flags) & Int(1 << 1) != 0 {newParticipant!.serialize(buffer, true)}
                     if Int(flags) & Int(1 << 2) != 0 {invite!.serialize(buffer, true)}
                     serializeInt32(qts, buffer: buffer, boxed: false)
-                    break
-                case .updateChannelPinnedTopic(let flags, let channelId, let topicId):
-                    if boxed {
-                        buffer.appendInt32(422509539)
-                    }
-                    serializeInt32(flags, buffer: buffer, boxed: false)
-                    serializeInt64(channelId, buffer: buffer, boxed: false)
-                    serializeInt32(topicId, buffer: buffer, boxed: false)
-                    break
-                case .updateChannelPinnedTopics(let flags, let channelId, let order):
-                    if boxed {
-                        buffer.appendInt32(-31881726)
-                    }
-                    serializeInt32(flags, buffer: buffer, boxed: false)
-                    serializeInt64(channelId, buffer: buffer, boxed: false)
-                    if Int(flags) & Int(1 << 0) != 0 {buffer.appendInt32(481674261)
-                    buffer.appendInt32(Int32(order!.count))
-                    for item in order! {
-                        serializeInt32(item, buffer: buffer, boxed: false)
-                    }}
                     break
                 case .updateChannelReadMessagesContents(let flags, let channelId, let topMsgId, let savedPeerId, let messages):
                     if boxed {
@@ -1317,6 +1299,22 @@ public extension Api {
                     serializeInt32(flags, buffer: buffer, boxed: false)
                     params.serialize(buffer, true)
                     break
+                case .updateGroupCallEncryptedMessage(let call, let fromId, let encryptedMessage):
+                    if boxed {
+                        buffer.appendInt32(-917002394)
+                    }
+                    call.serialize(buffer, true)
+                    fromId.serialize(buffer, true)
+                    serializeBytes(encryptedMessage, buffer: buffer, boxed: false)
+                    break
+                case .updateGroupCallMessage(let call, let fromId, let message):
+                    if boxed {
+                        buffer.appendInt32(-1761933248)
+                    }
+                    call.serialize(buffer, true)
+                    fromId.serialize(buffer, true)
+                    message.serialize(buffer, true)
+                    break
                 case .updateGroupCallParticipants(let call, let participants, let version):
                     if boxed {
                         buffer.appendInt32(-219423922)
@@ -1587,6 +1585,26 @@ public extension Api {
                     buffer.appendInt32(Int32(order!.count))
                     for item in order! {
                         item.serialize(buffer, true)
+                    }}
+                    break
+                case .updatePinnedForumTopic(let flags, let peer, let topicId):
+                    if boxed {
+                        buffer.appendInt32(1748708434)
+                    }
+                    serializeInt32(flags, buffer: buffer, boxed: false)
+                    peer.serialize(buffer, true)
+                    serializeInt32(topicId, buffer: buffer, boxed: false)
+                    break
+                case .updatePinnedForumTopics(let flags, let peer, let order):
+                    if boxed {
+                        buffer.appendInt32(-554613808)
+                    }
+                    serializeInt32(flags, buffer: buffer, boxed: false)
+                    peer.serialize(buffer, true)
+                    if Int(flags) & Int(1 << 0) != 0 {buffer.appendInt32(481674261)
+                    buffer.appendInt32(Int32(order!.count))
+                    for item in order! {
+                        serializeInt32(item, buffer: buffer, boxed: false)
                     }}
                     break
                 case .updatePinnedMessages(let flags, let peer, let messages, let pts, let ptsCount):
@@ -2021,10 +2039,6 @@ public extension Api {
                 return ("updateChannelMessageViews", [("channelId", channelId as Any), ("id", id as Any), ("views", views as Any)])
                 case .updateChannelParticipant(let flags, let channelId, let date, let actorId, let userId, let prevParticipant, let newParticipant, let invite, let qts):
                 return ("updateChannelParticipant", [("flags", flags as Any), ("channelId", channelId as Any), ("date", date as Any), ("actorId", actorId as Any), ("userId", userId as Any), ("prevParticipant", prevParticipant as Any), ("newParticipant", newParticipant as Any), ("invite", invite as Any), ("qts", qts as Any)])
-                case .updateChannelPinnedTopic(let flags, let channelId, let topicId):
-                return ("updateChannelPinnedTopic", [("flags", flags as Any), ("channelId", channelId as Any), ("topicId", topicId as Any)])
-                case .updateChannelPinnedTopics(let flags, let channelId, let order):
-                return ("updateChannelPinnedTopics", [("flags", flags as Any), ("channelId", channelId as Any), ("order", order as Any)])
                 case .updateChannelReadMessagesContents(let flags, let channelId, let topMsgId, let savedPeerId, let messages):
                 return ("updateChannelReadMessagesContents", [("flags", flags as Any), ("channelId", channelId as Any), ("topMsgId", topMsgId as Any), ("savedPeerId", savedPeerId as Any), ("messages", messages as Any)])
                 case .updateChannelTooLong(let flags, let channelId, let pts):
@@ -2101,6 +2115,10 @@ public extension Api {
                 return ("updateGroupCallChainBlocks", [("call", call as Any), ("subChainId", subChainId as Any), ("blocks", blocks as Any), ("nextOffset", nextOffset as Any)])
                 case .updateGroupCallConnection(let flags, let params):
                 return ("updateGroupCallConnection", [("flags", flags as Any), ("params", params as Any)])
+                case .updateGroupCallEncryptedMessage(let call, let fromId, let encryptedMessage):
+                return ("updateGroupCallEncryptedMessage", [("call", call as Any), ("fromId", fromId as Any), ("encryptedMessage", encryptedMessage as Any)])
+                case .updateGroupCallMessage(let call, let fromId, let message):
+                return ("updateGroupCallMessage", [("call", call as Any), ("fromId", fromId as Any), ("message", message as Any)])
                 case .updateGroupCallParticipants(let call, let participants, let version):
                 return ("updateGroupCallParticipants", [("call", call as Any), ("participants", participants as Any), ("version", version as Any)])
                 case .updateInlineBotCallbackQuery(let flags, let queryId, let userId, let msgId, let chatInstance, let data, let gameShortName):
@@ -2165,6 +2183,10 @@ public extension Api {
                 return ("updatePinnedChannelMessages", [("flags", flags as Any), ("channelId", channelId as Any), ("messages", messages as Any), ("pts", pts as Any), ("ptsCount", ptsCount as Any)])
                 case .updatePinnedDialogs(let flags, let folderId, let order):
                 return ("updatePinnedDialogs", [("flags", flags as Any), ("folderId", folderId as Any), ("order", order as Any)])
+                case .updatePinnedForumTopic(let flags, let peer, let topicId):
+                return ("updatePinnedForumTopic", [("flags", flags as Any), ("peer", peer as Any), ("topicId", topicId as Any)])
+                case .updatePinnedForumTopics(let flags, let peer, let order):
+                return ("updatePinnedForumTopics", [("flags", flags as Any), ("peer", peer as Any), ("order", order as Any)])
                 case .updatePinnedMessages(let flags, let peer, let messages, let pts, let ptsCount):
                 return ("updatePinnedMessages", [("flags", flags as Any), ("peer", peer as Any), ("messages", messages as Any), ("pts", pts as Any), ("ptsCount", ptsCount as Any)])
                 case .updatePinnedSavedDialogs(let flags, let order):
@@ -2872,42 +2894,6 @@ public extension Api {
                 return nil
             }
         }
-        public static func parse_updateChannelPinnedTopic(_ reader: BufferReader) -> Update? {
-            var _1: Int32?
-            _1 = reader.readInt32()
-            var _2: Int64?
-            _2 = reader.readInt64()
-            var _3: Int32?
-            _3 = reader.readInt32()
-            let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            let _c3 = _3 != nil
-            if _c1 && _c2 && _c3 {
-                return Api.Update.updateChannelPinnedTopic(flags: _1!, channelId: _2!, topicId: _3!)
-            }
-            else {
-                return nil
-            }
-        }
-        public static func parse_updateChannelPinnedTopics(_ reader: BufferReader) -> Update? {
-            var _1: Int32?
-            _1 = reader.readInt32()
-            var _2: Int64?
-            _2 = reader.readInt64()
-            var _3: [Int32]?
-            if Int(_1!) & Int(1 << 0) != 0 {if let _ = reader.readInt32() {
-                _3 = Api.parseVector(reader, elementSignature: -1471112230, elementType: Int32.self)
-            } }
-            let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            let _c3 = (Int(_1!) & Int(1 << 0) == 0) || _3 != nil
-            if _c1 && _c2 && _c3 {
-                return Api.Update.updateChannelPinnedTopics(flags: _1!, channelId: _2!, order: _3)
-            }
-            else {
-                return nil
-            }
-        }
         public static func parse_updateChannelReadMessagesContents(_ reader: BufferReader) -> Update? {
             var _1: Int32?
             _1 = reader.readInt32()
@@ -3582,6 +3568,50 @@ public extension Api {
                 return nil
             }
         }
+        public static func parse_updateGroupCallEncryptedMessage(_ reader: BufferReader) -> Update? {
+            var _1: Api.InputGroupCall?
+            if let signature = reader.readInt32() {
+                _1 = Api.parse(reader, signature: signature) as? Api.InputGroupCall
+            }
+            var _2: Api.Peer?
+            if let signature = reader.readInt32() {
+                _2 = Api.parse(reader, signature: signature) as? Api.Peer
+            }
+            var _3: Buffer?
+            _3 = parseBytes(reader)
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            let _c3 = _3 != nil
+            if _c1 && _c2 && _c3 {
+                return Api.Update.updateGroupCallEncryptedMessage(call: _1!, fromId: _2!, encryptedMessage: _3!)
+            }
+            else {
+                return nil
+            }
+        }
+        public static func parse_updateGroupCallMessage(_ reader: BufferReader) -> Update? {
+            var _1: Api.InputGroupCall?
+            if let signature = reader.readInt32() {
+                _1 = Api.parse(reader, signature: signature) as? Api.InputGroupCall
+            }
+            var _2: Api.Peer?
+            if let signature = reader.readInt32() {
+                _2 = Api.parse(reader, signature: signature) as? Api.Peer
+            }
+            var _3: Api.TextWithEntities?
+            if let signature = reader.readInt32() {
+                _3 = Api.parse(reader, signature: signature) as? Api.TextWithEntities
+            }
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            let _c3 = _3 != nil
+            if _c1 && _c2 && _c3 {
+                return Api.Update.updateGroupCallMessage(call: _1!, fromId: _2!, message: _3!)
+            }
+            else {
+                return nil
+            }
+        }
         public static func parse_updateGroupCallParticipants(_ reader: BufferReader) -> Update? {
             var _1: Api.InputGroupCall?
             if let signature = reader.readInt32() {
@@ -4151,6 +4181,46 @@ public extension Api {
             let _c3 = (Int(_1!) & Int(1 << 0) == 0) || _3 != nil
             if _c1 && _c2 && _c3 {
                 return Api.Update.updatePinnedDialogs(flags: _1!, folderId: _2, order: _3)
+            }
+            else {
+                return nil
+            }
+        }
+        public static func parse_updatePinnedForumTopic(_ reader: BufferReader) -> Update? {
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: Api.Peer?
+            if let signature = reader.readInt32() {
+                _2 = Api.parse(reader, signature: signature) as? Api.Peer
+            }
+            var _3: Int32?
+            _3 = reader.readInt32()
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            let _c3 = _3 != nil
+            if _c1 && _c2 && _c3 {
+                return Api.Update.updatePinnedForumTopic(flags: _1!, peer: _2!, topicId: _3!)
+            }
+            else {
+                return nil
+            }
+        }
+        public static func parse_updatePinnedForumTopics(_ reader: BufferReader) -> Update? {
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: Api.Peer?
+            if let signature = reader.readInt32() {
+                _2 = Api.parse(reader, signature: signature) as? Api.Peer
+            }
+            var _3: [Int32]?
+            if Int(_1!) & Int(1 << 0) != 0 {if let _ = reader.readInt32() {
+                _3 = Api.parseVector(reader, elementSignature: -1471112230, elementType: Int32.self)
+            } }
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            let _c3 = (Int(_1!) & Int(1 << 0) == 0) || _3 != nil
+            if _c1 && _c2 && _c3 {
+                return Api.Update.updatePinnedForumTopics(flags: _1!, peer: _2!, order: _3)
             }
             else {
                 return nil

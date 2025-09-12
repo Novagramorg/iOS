@@ -822,6 +822,18 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
 
     private let e2eContext: ConferenceCallE2EContext?
     
+    private var messagesContext: GroupCallMessagesContext? {
+        didSet {
+            if let messagesContext = self.messagesContext {
+                self.messagesStatePromise.set(messagesContext.state)
+            }
+        }
+    }
+    private let messagesStatePromise = Promise<GroupCallMessagesContext.State>(GroupCallMessagesContext.State(messages: []))
+    public var messagesState: Signal<GroupCallMessagesContext.State, NoError> {
+        return self.messagesStatePromise.get()
+    }
+    
     private var lastErrorAlertTimestamp: Double = 0.0
     
     init(
@@ -909,6 +921,14 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
             )
         } else {
             self.e2eContext = nil
+        }
+        
+        if let initialCall {
+            self.messagesContext = accountContext.engine.messages.groupCallMessages(
+                callId: initialCall.description.id,
+                reference: .id(id: initialCall.description.id, accessHash: initialCall.description.accessHash),
+                e2eContext: self.e2eContext
+            )
         }
         
         var sharedAudioContext = sharedAudioContext
@@ -2959,6 +2979,11 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
     }
     
     public func setIsMuted(action: PresentationGroupCallMuteAction) {
+        if "".isEmpty {
+            self.messagesContext?.send(text: "test\(UInt32.random(in: 0 ... UInt32.max))", entities: [])
+            return
+        }
+        
         if self.isMutedValue == action {
             return
         }
@@ -3958,6 +3983,12 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
                 pendingDisconnedUpgradedConferenceCall.resetAsMovedToConference()
             }
         })
+    }
+    
+    public func sendMessage(text: String, entities: [MessageTextEntity]) {
+        if let messagesContext = self.messagesContext {
+            messagesContext.send(text: text, entities: entities)
+        }
     }
 }
 
