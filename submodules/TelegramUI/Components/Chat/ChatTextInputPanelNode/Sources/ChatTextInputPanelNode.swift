@@ -222,6 +222,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     public let textInputNodeClippingContainer: ASDisplayNode
     public let textInputSeparator: GlassBackgroundView.ContentColorView
     public var textInputNode: ChatInputTextNode?
+    private var textInputNodeLayout: (frame: CGRect, insets: UIEdgeInsets)?
     public var dustNode: InvisibleInkDustNode?
     public var customEmojiContainerView: CustomEmojiContainerView?
     
@@ -925,11 +926,10 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             textInputNode.textContainerInset = calculateTextFieldRealInsets(presentationInterfaceState: presentationInterfaceState, accessoryButtonsWidth: accessoryButtonsWidth)
         }
         
-        if !self.textInputContainer.bounds.size.width.isZero {
-            let textInputFrame = self.textInputContainer.frame
-            
-            textInputNode.frame = CGRect(origin: CGPoint(x: self.textInputViewInternalInsets.left, y: self.textInputViewInternalInsets.top), size: CGSize(width: textInputFrame.size.width - (self.textInputViewInternalInsets.left + self.textInputViewInternalInsets.right), height: textInputFrame.size.height - self.textInputViewInternalInsets.top - self.textInputViewInternalInsets.bottom))
-            textInputNode.updateLayout(size: textInputNode.bounds.size)
+        if let textInputNodeLayout = self.textInputNodeLayout {
+            textInputNode.textContainerInset = textInputNodeLayout.insets
+            textInputNode.frame = textInputNodeLayout.frame
+            textInputNode.updateLayout(size: textInputNodeLayout.frame.size)
             textInputNode.view.layoutIfNeeded()
             self.updateSpoiler()
         }
@@ -1865,7 +1865,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         let menuButtonFrame = CGRect(x: leftInset + 8.0, y: menuButtonOriginY, width: menuButtonExpanded ? menuButtonWidth : menuCollapsedButtonWidth, height: menuButtonHeight)
         transition.updateFrameAsPositionAndBounds(node: self.menuButton, frame: menuButtonFrame)
         transition.updateFrame(view: self.menuButtonBackgroundView, frame: CGRect(origin: CGPoint(), size: menuButtonFrame.size))
-        self.menuButtonBackgroundView.update(size: menuButtonFrame.size, cornerRadius: menuButtonFrame.height * 0.5, isDark: interfaceState.theme.overallDarkAppearance, tintColor: interfaceState.theme.chat.inputPanel.actionControlFillColor, transition: ComponentTransition(transition))
+        self.menuButtonBackgroundView.update(size: menuButtonFrame.size, cornerRadius: menuButtonFrame.height * 0.5, isDark: interfaceState.theme.overallDarkAppearance, tintColor: .init(kind: .custom, color: interfaceState.theme.chat.inputPanel.actionControlFillColor), transition: ComponentTransition(transition))
         transition.updateFrame(node: self.menuButtonClippingNode, frame: CGRect(origin: CGPoint(x: 19.0, y: 0.0), size: CGSize(width: menuButtonWidth - 19.0, height: menuButtonFrame.height)))
         var menuButtonTitleTransition = transition
         if buttonTitleUpdated {
@@ -2334,7 +2334,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         transition.updateFrame(node: self.textInputContainer, frame: textInputContainerBackgroundFrame)
         transition.updateFrame(view: self.textInputContainerBackgroundView, frame: CGRect(origin: CGPoint(), size: textInputContainerBackgroundFrame.size))
         
-        self.textInputContainerBackgroundView.update(size: textInputContainerBackgroundFrame.size, cornerRadius: floor(minimalInputHeight * 0.5), isDark: interfaceState.theme.overallDarkAppearance, tintColor: interfaceState.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.65), transition: ComponentTransition(transition))
+        self.textInputContainerBackgroundView.update(size: textInputContainerBackgroundFrame.size, cornerRadius: floor(minimalInputHeight * 0.5), isDark: interfaceState.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: interfaceState.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.65)), transition: ComponentTransition(transition))
         
         if let removedAccessoryPanelView {
             if let removedAccessoryPanelView = removedAccessoryPanelView as? ChatInputAccessoryPanelView {
@@ -2352,17 +2352,21 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             })
         }
         
+        let textFieldFrame = CGRect(origin: CGPoint(x: self.textInputViewInternalInsets.left, y: self.textInputViewInternalInsets.top + textFieldTopContentOffset), size: CGSize(width: textInputFrame.size.width - (self.textInputViewInternalInsets.left + self.textInputViewInternalInsets.right), height: textInputHeight - self.textInputViewInternalInsets.top - textInputViewInternalInsets.bottom))
+        let textInputNodeClippingContainerFrame = CGRect(origin: CGPoint(x: textFieldFrame.minX - self.textInputViewInternalInsets.left, y: textFieldFrame.minY - self.textInputViewInternalInsets.top), size: CGSize(width: textFieldFrame.width + self.textInputViewInternalInsets.left + self.textInputViewInternalInsets.right,  height: textFieldFrame.height + self.textInputViewInternalInsets.top + self.textInputViewInternalInsets.bottom))
+        let shouldUpdateLayout = textInputNodeClippingContainerFrame.size != self.textInputNodeClippingContainer.frame.size
+        transition.updateFrame(node: self.textInputNodeClippingContainer, frame: textInputNodeClippingContainerFrame)
+        
+        transition.updateFrame(view: self.textInputSeparator, frame: CGRect(origin: CGPoint(x: 15.0, y: textFieldTopContentOffset - UIScreenPixel), size: CGSize(width: textFieldFrame.width, height: UIScreenPixel)))
+        self.textInputSeparator.backgroundColor = interfaceState.theme.chat.inputPanel.inputPlaceholderColor
+        transition.updateAlpha(layer: self.textInputSeparator.layer, alpha: isTextFieldOverflow ? 1.0 : 0.0)
+        
+        let actualTextFieldFrame = CGRect(origin: CGPoint(x: self.textInputViewInternalInsets.left, y: self.textInputViewInternalInsets.top), size: textFieldFrame.size)
+        self.textInputNodeLayout = (actualTextFieldFrame, textInputViewRealInsets)
+            
         if let textInputNode = self.textInputNode {
             textInputNode.textContainerInset = textInputViewRealInsets
-            let textFieldFrame = CGRect(origin: CGPoint(x: self.textInputViewInternalInsets.left, y: self.textInputViewInternalInsets.top + textFieldTopContentOffset), size: CGSize(width: textInputFrame.size.width - (self.textInputViewInternalInsets.left + self.textInputViewInternalInsets.right), height: textInputHeight - self.textInputViewInternalInsets.top - textInputViewInternalInsets.bottom))
-            let shouldUpdateLayout = textFieldFrame.size != textInputNode.frame.size
-            transition.updateFrame(node: self.textInputNodeClippingContainer, frame: CGRect(origin: CGPoint(x: textFieldFrame.minX - self.textInputViewInternalInsets.left, y: textFieldFrame.minY - self.textInputViewInternalInsets.top), size: CGSize(width: textFieldFrame.width + self.textInputViewInternalInsets.left + self.textInputViewInternalInsets.right,  height: textFieldFrame.height + self.textInputViewInternalInsets.top + self.textInputViewInternalInsets.bottom)))
-            
-            transition.updateFrame(view: self.textInputSeparator, frame: CGRect(origin: CGPoint(x: 15.0, y: textFieldTopContentOffset - UIScreenPixel), size: CGSize(width: textFieldFrame.width, height: UIScreenPixel)))
-            self.textInputSeparator.backgroundColor = interfaceState.theme.chat.inputPanel.inputPlaceholderColor
-            transition.updateAlpha(layer: self.textInputSeparator.layer, alpha: isTextFieldOverflow ? 1.0 : 0.0)
-            
-            textInputNode.frame = CGRect(origin: CGPoint(x: self.textInputViewInternalInsets.left, y: self.textInputViewInternalInsets.top), size: textFieldFrame.size)
+            textInputNode.frame = actualTextFieldFrame
             textInputNode.updateLayout(size: textFieldFrame.size)
             self.updateInputField(textInputFrame: textFieldFrame, transition: ComponentTransition(transition))
             if shouldUpdateLayout {
@@ -2463,15 +2467,21 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         let textPlaceholderSize: CGSize
         let textPlaceholderMaxWidth: CGFloat = max(1.0, nextButtonTopRight.x - 12.0)
         
+        let placeholderColor: UIColor = interfaceState.theme.chat.inputPanel.inputPlaceholderColor
+        if #available(iOS 26.0, *) {
+            //placeholderColor = placeholderColor.withProminence(.tertiary)
+        }
+        //self.textPlaceholderNode.view.tintColor = .red
+        
         if (updatedPlaceholder != nil && self.currentPlaceholder != updatedPlaceholder) || themeUpdated {
             let currentPlaceholder = updatedPlaceholder ?? self.currentPlaceholder ?? ""
             self.currentPlaceholder = currentPlaceholder
             let baseFontSize = max(minInputFontSize, interfaceState.fontSize.baseDisplaySize)
             
-            let attributedPlaceholder = NSMutableAttributedString(string: currentPlaceholder, font: Font.regular(baseFontSize), textColor: interfaceState.theme.chat.inputPanel.inputPlaceholderColor)
+            let attributedPlaceholder = NSMutableAttributedString(string: currentPlaceholder, font: Font.regular(baseFontSize), textColor: placeholderColor)
             if placeholderHasStar, let range = attributedPlaceholder.string.range(of: "#") {
                 attributedPlaceholder.addAttribute(.attachment, value: PresentationResourcesChat.chatPlaceholderStarIcon(interfaceState.theme)!, range: NSRange(range, in: attributedPlaceholder.string))
-                attributedPlaceholder.addAttribute(.foregroundColor, value: interfaceState.theme.chat.inputPanel.inputPlaceholderColor, range: NSRange(range, in: attributedPlaceholder.string))
+                attributedPlaceholder.addAttribute(.foregroundColor, value: placeholderColor, range: NSRange(range, in: attributedPlaceholder.string))
                 attributedPlaceholder.addAttribute(.baselineOffset, value: 1.0, range: NSRange(range, in: attributedPlaceholder.string))
             }
             
@@ -2615,7 +2625,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         
         let attachmentButtonFrame = CGRect(origin: CGPoint(x: attachmentButtonX, y: textInputFrame.maxY - 40.0), size: CGSize(width: 40.0, height: 40.0))
         self.attachmentButtonBackground.frame = CGRect(origin: CGPoint(), size: attachmentButtonFrame.size)
-        self.attachmentButtonBackground.update(size: attachmentButtonFrame.size, cornerRadius: attachmentButtonFrame.height * 0.5, isDark: interfaceState.theme.overallDarkAppearance, tintColor: isEditingMedia ? interfaceState.theme.chat.inputPanel.actionControlFillColor : interfaceState.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.65), transition: ComponentTransition(transition))
+        self.attachmentButtonBackground.update(size: attachmentButtonFrame.size, cornerRadius: attachmentButtonFrame.height * 0.5, isDark: interfaceState.theme.overallDarkAppearance, tintColor: isEditingMedia ? .init(kind: .custom, color: interfaceState.theme.chat.inputPanel.actionControlFillColor) : .init(kind: .panel, color: interfaceState.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.65)), transition: ComponentTransition(transition))
         
         transition.updateFrame(layer: self.attachmentButton.layer, frame: attachmentButtonFrame)
         transition.updateFrame(node: self.attachmentButtonDisabledNode, frame: self.attachmentButton.frame)

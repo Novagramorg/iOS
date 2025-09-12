@@ -916,7 +916,7 @@ public final class ChatHistoryListNodeImpl: ListView, ChatHistoryNode, ChatHisto
         }
         
         self.dynamicBounceEnabled = !self.currentPresentationData.disableAnimations
-        self.experimentalSnapScrollToItem = true
+        self.experimentalSnapScrollToItem = false
         
         //self.debugInfo = true
         

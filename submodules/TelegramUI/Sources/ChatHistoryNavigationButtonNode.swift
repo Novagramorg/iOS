@@ -94,7 +94,7 @@ class ChatHistoryNavigationButtonNode: ContextControllerSourceNode {
 
         self.buttonNode.view.addSubview(self.backgroundView)
         self.backgroundView.frame = CGRect(origin: CGPoint(), size: size)
-        self.backgroundView.update(size: size, cornerRadius: size.height * 0.5, isDark: theme.overallDarkAppearance, tintColor: theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.65), transition: .immediate)
+        self.backgroundView.update(size: size, cornerRadius: size.height * 0.5, isDark: theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.65)), transition: .immediate)
         self.imageView.tintColor = theme.chat.inputPanel.inputControlColor
 
         self.backgroundView.contentView.addSubview(self.imageView)
@@ -110,7 +110,7 @@ class ChatHistoryNavigationButtonNode: ContextControllerSourceNode {
         if self.theme !== theme {
             self.theme = theme
 
-            self.backgroundView.update(size: self.backgroundView.bounds.size, cornerRadius: self.backgroundView.bounds.size.height * 0.5, isDark: theme.overallDarkAppearance, tintColor: theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.65), transition: .immediate)
+            self.backgroundView.update(size: self.backgroundView.bounds.size, cornerRadius: self.backgroundView.bounds.size.height * 0.5, isDark: theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.65)), transition: .immediate)
             self.imageView.tintColor = theme.chat.inputPanel.inputControlColor
             
             switch self.type {
@@ -124,7 +124,7 @@ class ChatHistoryNavigationButtonNode: ContextControllerSourceNode {
                 self.imageView.image = PresentationResourcesChat.chatHistoryReactionsButtonImage(theme)
             }
             
-            self.badgeBackgroundView.update(size: self.badgeBackgroundView.bounds.size, cornerRadius: self.badgeBackgroundView.bounds.height * 0.5, isDark: theme.overallDarkAppearance, tintColor: theme.chat.inputPanel.actionControlFillColor, transition: .immediate)
+            self.badgeBackgroundView.update(size: self.badgeBackgroundView.bounds.size, cornerRadius: self.badgeBackgroundView.bounds.height * 0.5, isDark: theme.overallDarkAppearance, tintColor: .init(kind: .custom, color: theme.chat.inputPanel.actionControlFillColor), transition: .immediate)
             
             var segments: [AnimatedCountLabelNode.Segment] = []
             if let value = Int(self.badge) {
@@ -174,7 +174,7 @@ class ChatHistoryNavigationButtonNode: ContextControllerSourceNode {
             }
             
             let transition: ContainedViewLayoutTransition = .animated(duration: 0.2, curve: .easeInOut)
-            self.badgeBackgroundView.update(size: backgroundFrame.size, cornerRadius: backgroundFrame.height * 0.5, isDark: theme.overallDarkAppearance, tintColor: self.theme.chat.inputPanel.actionControlFillColor, transition: ComponentTransition(transition))
+            self.badgeBackgroundView.update(size: backgroundFrame.size, cornerRadius: backgroundFrame.height * 0.5, isDark: theme.overallDarkAppearance, tintColor: .init(kind: .custom, color: self.theme.chat.inputPanel.actionControlFillColor), transition: ComponentTransition(transition))
             
             self.badgeTextNode.frame = CGRect(origin: CGPoint(x: floorToScreenPixels((backgroundFrame.width - badgeSize.width) / 2.0), y: 2.0), size: badgeSize)
             

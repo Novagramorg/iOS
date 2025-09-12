@@ -238,7 +238,7 @@ public final class MediaScrubberComponent: Component {
             self.coverDotWrapper.isUserInteractionEnabled = false
             self.coverDotWrapper.isHidden = true
             
-            self.coverDotView = UIImageView(image: generateFilledCircleImage(diameter: 7.0, color: UIColor(rgb: 0x007aff)))
+            self.coverDotView = UIImageView(image: generateFilledCircleImage(diameter: 7.0, color: UIColor(rgb: 0x0088ff)))
             
             self.coverImageView = UIImageView()
             self.coverImageView.clipsToBounds = true

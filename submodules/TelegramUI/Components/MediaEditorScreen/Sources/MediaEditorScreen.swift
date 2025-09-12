@@ -888,7 +888,7 @@ final class MediaEditorScreenComponent: Component {
                 transition: transition,
                 component: AnyComponent(PlainButtonComponent(
                     content: AnyComponent(DoneButtonContentComponent(
-                        backgroundColor: UIColor(rgb: 0x007aff),
+                        backgroundColor: UIColor(rgb: 0x0088ff),
                         icon: doneButtonIcon,
                         title: doneButtonTitle)),
                     effectAlignment: .center,

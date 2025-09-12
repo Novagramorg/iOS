@@ -718,7 +718,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
             if self.visibility != oldValue {
                 self.visibilityStatus = self.visibility != .none
                 
-                self.updateVisibility()
+                self.updateVisibility(isScroll: true)
             }
         }
     }
@@ -743,6 +743,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
     typealias Params = (item: ChatMessageItem, params: ListViewItemLayoutParams, mergedTop: ChatMessageMerge, mergedBottom: ChatMessageMerge, dateHeaderAtBottom: ChatMessageHeaderSpec)
     private var currentInputParams: Params?
     private var currentApplyParams: ListViewItemApply?
+    private var contentLayoutInsets = UIEdgeInsets()
     
     required public init(rotated: Bool) {
         self.mainContextSourceNode = ContextExtractedContentContainingNode()
@@ -3338,7 +3339,9 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
             }
         }
         
-        let layout = ListViewItemNodeLayout(contentSize: layoutSize, insets: layoutInsets)
+        layoutSize.height += layoutInsets.top + layoutInsets.bottom
+        
+        let layout = ListViewItemNodeLayout(contentSize: layoutSize, insets: UIEdgeInsets())
         
         let graphics = PresentationResourcesChat.principalGraphics(theme: item.presentationData.theme.theme, wallpaper: item.presentationData.theme.wallpaper, bubbleCorners: item.presentationData.chatBubbleCorners)
         
@@ -3364,6 +3367,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                 params: params,
                 applyInfo: applyInfo,
                 layout: layout,
+                layoutInsets: layoutInsets,
                 item: item,
                 forwardSource: forwardSource,
                 forwardAuthorSignature: forwardAuthorSignature,
@@ -3377,12 +3381,12 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                 graphics: graphics,
                 presentationContext: item.controllerInteraction.presentationContext,
                 bubbleContentWidth: bubbleContentWidth,
-                backgroundFrame: backgroundFrame,
+                backgroundFrame: backgroundFrame.offsetBy(dx: 0.0, dy: layoutInsets.top),
                 deliveryFailedInset: deliveryFailedInset,
                 nameNodeSizeApply: nameNodeSizeApply,
                 viaWidth: viaWidth,
-                contentOrigin: contentOrigin,
-                nameNodeOriginY: nameNodeOriginY + detachedContentNodesHeight + additionalTopHeight,
+                contentOrigin: contentOrigin.offsetBy(dx: 0.0, dy: layoutInsets.top),
+                nameNodeOriginY: layoutInsets.top + nameNodeOriginY + detachedContentNodesHeight + additionalTopHeight,
                 hasTitleAvatar: hasTitleAvatar,
                 hasTitleTopicNavigation: hasTitleTopicNavigation,
                 authorNameColor: authorNameColor,
@@ -3392,25 +3396,27 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                 boostNodeSizeApply: boostNodeSizeApply,
                 contentUpperRightCorner: contentUpperRightCorner,
                 threadInfoSizeApply: threadInfoSizeApply,
-                threadInfoOriginY: threadInfoOriginY + detachedContentNodesHeight + additionalTopHeight,
+                threadInfoOriginY: layoutInsets.top + threadInfoOriginY + detachedContentNodesHeight + additionalTopHeight,
                 forwardInfoSizeApply: forwardInfoSizeApply,
-                forwardInfoOriginY: forwardInfoOriginY + detachedContentNodesHeight + additionalTopHeight,
+                forwardInfoOriginY: layoutInsets.top + forwardInfoOriginY + detachedContentNodesHeight + additionalTopHeight,
                 replyInfoSizeApply: replyInfoSizeApply,
-                replyInfoOriginY: replyInfoOriginY + detachedContentNodesHeight + additionalTopHeight,
+                replyInfoOriginY: layoutInsets.top + replyInfoOriginY + detachedContentNodesHeight + additionalTopHeight,
                 removedContentNodeIndices: removedContentNodeIndices,
                 updatedContentNodeOrder: updatedContentNodeOrder,
                 addedContentNodes: addedContentNodes,
                 contentNodeMessagesAndClasses: contentNodeMessagesAndClasses,
                 contentNodeFramesPropertiesAndApply: contentNodeFramesPropertiesAndApply,
-                contentContainerNodeFrames: contentContainerNodeFrames,
-                mosaicStatusOrigin: mosaicStatusOrigin,
+                contentContainerNodeFrames: contentContainerNodeFrames.map { containerGroupId, containerFrame, currentItemSelection, currentContainerGroupOverlap in
+                    return (containerGroupId, containerFrame.offsetBy(dx: 0.0, dy: layoutInsets.top), currentItemSelection, currentContainerGroupOverlap)
+                },
+                mosaicStatusOrigin: mosaicStatusOrigin?.offsetBy(dx: 0.0, dy: layoutInsets.top),
                 mosaicStatusSizeAndApply: mosaicStatusSizeAndApply,
-                unlockButtonPosition: unlockButtonPosition,
+                 unlockButtonPosition: unlockButtonPosition?.offsetBy(dx: 0.0, dy: layoutInsets.top),
                 unlockButtonSizeAndApply: unlockButtonSizeApply,
-                mediaInfoOrigin: mediaInfoOrigin,
+                mediaInfoOrigin: mediaInfoOrigin?.offsetBy(dx: 0.0, dy: layoutInsets.top),
                 mediaInfoSizeAndApply: mediaInfoSizeApply,
                 needsShareButton: needsShareButton,
-                shareButtonOffset: shareButtonOffset,
+                shareButtonOffset: shareButtonOffset?.offsetBy(dx: 0.0, dy: layoutInsets.top),
                 avatarOffset: avatarOffset,
                 hidesHeaders: hidesHeaders,
                 disablesComments: disablesComments,
@@ -3428,6 +3434,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         params: ListViewItemLayoutParams,
         applyInfo: ListViewItemApply,
         layout: ListViewItemNodeLayout,
+        layoutInsets: UIEdgeInsets,
         item: ChatMessageItem,
         forwardSource: Peer?,
         forwardAuthorSignature: String?,
@@ -3488,6 +3495,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         
         strongSelf.currentInputParams = inputParams
         strongSelf.currentApplyParams = applyInfo
+        strongSelf.contentLayoutInsets = layoutInsets
         
         if item.message.id.namespace == Namespaces.Message.Local || item.message.id.namespace == Namespaces.Message.ScheduledLocal || item.message.id.namespace == Namespaces.Message.QuickReplyLocal {
             strongSelf.wasPending = true
@@ -3570,7 +3578,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                 strongSelf.suggestedPostInfoNode = suggestedPostInfoNode
                 strongSelf.addSubnode(suggestedPostInfoNode)
             }
-            let suggestedPostInfoFrame = CGRect(origin: CGPoint(x: floor((params.width - suggestedPostInfoSize.width) * 0.5), y: 4.0), size: suggestedPostInfoSize)
+            let suggestedPostInfoFrame = CGRect(origin: CGPoint(x: floor((params.width - suggestedPostInfoSize.width) * 0.5), y: layoutInsets.top + 4.0), size: suggestedPostInfoSize)
             suggestedPostInfoNode.frame = suggestedPostInfoFrame
         } else if let suggestedPostInfoNode = strongSelf.suggestedPostInfoNode {
             strongSelf.suggestedPostInfoNode = nil
@@ -4999,7 +5007,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         
         strongSelf.updateSearchTextHighlightState()
         
-        strongSelf.updateVisibility()
+        strongSelf.updateVisibility(isScroll: false)
         
         if let (_, f) = strongSelf.awaitingAppliedReaction {
             strongSelf.awaitingAppliedReaction = nil
@@ -6332,10 +6340,10 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                 if let swipeToReplyNode = self.swipeToReplyNode {
                     if translation.x < 0.0 {
                         swipeToReplyNode.bounds = CGRect(origin: .zero, size: CGSize(width: 33.0, height: 33.0))
-                        swipeToReplyNode.position = CGPoint(x: bounds.size.width + offset + 33.0 * 0.5, y: self.contentSize.height / 2.0)
+                        swipeToReplyNode.position = CGPoint(x: bounds.size.width + offset + 33.0 * 0.5, y: self.contentLayoutInsets.top + (self.contentSize.height - self.contentLayoutInsets.top - self.contentLayoutInsets.bottom) / 2.0)
                     } else {
                         swipeToReplyNode.bounds = CGRect(origin: .zero, size: CGSize(width: 33.0, height: 33.0))
-                        swipeToReplyNode.position = CGPoint(x: leftOffset - 33.0 * 0.5, y: self.contentSize.height / 2.0)
+                        swipeToReplyNode.position = CGPoint(x: leftOffset - 33.0 * 0.5, y: self.contentLayoutInsets.top + (self.contentSize.height - self.contentLayoutInsets.top - self.contentLayoutInsets.bottom) / 2.0)
                     }
 
                     if let (rect, containerSize) = self.absoluteRect {
@@ -6561,7 +6569,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
             contentNode.unreadMessageRangeUpdated()
         }
         
-        self.updateVisibility()
+        self.updateVisibility(isScroll: false)
     }
     
     public func animateQuizInvalidOptionSelected() {
@@ -6761,10 +6769,10 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
     
     override public func updateStickerSettings(forceStopAnimations: Bool) {
         self.forceStopAnimations = forceStopAnimations
-        self.updateVisibility()
+        self.updateVisibility(isScroll: false)
     }
     
-    private func updateVisibility() {
+    private func updateVisibility(isScroll: Bool) {
         guard let item = self.item else {
             return
         }
@@ -6839,6 +6847,15 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                 item.controllerInteraction.seenOneTimeAnimatedMedia.insert(item.message.id)
                 
                 self.playMessageEffect(force: false)
+            }
+        }
+        
+        if item.message.adAttribute != nil {
+            let transition: ContainedViewLayoutTransition = isScroll ? .animated(duration: 0.4, curve: .spring) : .immediate
+            if case let .visible(_, rect) = self.visibility, rect.height >= 1.0 {
+                transition.updateSublayerTransformOffset(layer: self.layer, offset: CGPoint(x: 0.0, y: 0.0))
+            } else {
+                transition.updateSublayerTransformOffset(layer: self.layer, offset: CGPoint(x: 0.0, y: 200.0))
             }
         }
     }

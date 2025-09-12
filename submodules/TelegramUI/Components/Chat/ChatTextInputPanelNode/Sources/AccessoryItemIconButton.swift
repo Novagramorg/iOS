@@ -66,6 +66,7 @@ final class AccessoryItemIconButton: HighlightTrackingButton, GlassBackgroundVie
         if let text {
             if self.textView == nil {
                 let textView = ImmediateTextView()
+                textView.isUserInteractionEnabled = false
                 self.textView = textView
                 self.addSubview(textView)
             }
