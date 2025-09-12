@@ -372,6 +372,17 @@ public enum DeviceModel: CaseIterable, Equatable {
     
     public static let current = DeviceModel()
     
+    public static func currentModelCode() -> String {
+        var systemInfo = utsname()
+        uname(&systemInfo)
+        let modelCode = withUnsafePointer(to: &systemInfo.machine) {
+            $0.withMemoryRebound(to: CChar.self, capacity: 1) {
+                ptr in String.init(validatingUTF8: ptr)
+            }
+        }
+        return modelCode ?? "unknown"
+    }
+    
     private init() {
         var systemInfo = utsname()
         uname(&systemInfo)
