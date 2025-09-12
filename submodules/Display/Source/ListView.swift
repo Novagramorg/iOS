@@ -3235,6 +3235,10 @@ open class ListView: ASDisplayNode, ASScrollViewDelegate, ASGestureRecognizerDel
                 completeOffset += snapToBoundsOffset
                 
                 if !updateSizeAndInsets.duration.isZero && !isExperimentalSnapToScrollToItem {
+                    for i in 0 ..< previousApparentFrames.count {
+                        previousApparentFrames[i].1.frame.origin.y += completeOffset - offsetFix
+                    }
+                    
                     let animation: CABasicAnimation
                     let animationCurve: ContainedViewLayoutTransitionCurve
                     let animationDuration: Double
