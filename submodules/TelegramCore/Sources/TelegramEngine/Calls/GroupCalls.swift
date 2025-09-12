@@ -3473,9 +3473,13 @@ public final class GroupCallMessagesContext {
                     }
                     switch update.update {
                     case let .newPlaintextMessage(authorId, text, entities):
-                        addedMessages.append((authorId, text, entities))
+                        if authorId != self.account.peerId {
+                            addedMessages.append((authorId, text, entities))
+                        }
                     case let .newOpaqueMessage(authorId, data):
-                        addedOpaqueMessages.append((authorId, data))
+                        if authorId != self.account.peerId {
+                            addedOpaqueMessages.append((authorId, data))
+                        }
                     }
                 }
                 
