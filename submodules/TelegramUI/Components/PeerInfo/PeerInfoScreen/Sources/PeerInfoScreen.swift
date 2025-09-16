@@ -5029,6 +5029,12 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                                 }
                                 profileGifts.convertStarGift(reference: reference)
                             },
+                            dropOriginalDetails: { [weak profileGifts] reference in
+                                guard let profileGifts else {
+                                    return .complete()
+                                }
+                                return profileGifts.dropOriginalDetails(reference: reference)
+                            },
                             transferGift: { [weak profileGifts] prepaid, reference, peerId in
                                 guard let profileGifts else {
                                     return .complete()

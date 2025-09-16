@@ -1503,16 +1503,24 @@ public final class WallpaperBackgroundNodeImpl: ASDisplayNode, WallpaperBackgrou
             
             let targetSize: CGSize = self.bounds.size
             let containerSize: CGSize = rect.containerSize
-            let useAspectFit: Bool = false
             
-            let renderScale: CGFloat = useAspectFit
+            let isAspectFit: Bool = (displayMode == .aspectFit || displayMode == .halfAspectFill)
+            
+            let renderScale: CGFloat = isAspectFit
             ? min(targetSize.width / containerSize.width, targetSize.height / containerSize.height)
             : max(targetSize.width / containerSize.width, targetSize.height / containerSize.height)
             
             let drawingSize = CGSize(width: containerSize.width * renderScale, height: containerSize.height * renderScale)
             
-            let offsetX = (targetSize.width  - drawingSize.width)  * 0.5
-            let offsetY = (targetSize.height - drawingSize.height) * 0.5
+            let offsetX: CGFloat
+            let offsetY: CGFloat
+            if isAspectFit {
+                offsetX = 0.0
+                offsetY = (targetSize.height - drawingSize.height) * 0.5
+            } else {
+                offsetX = (targetSize.width  - drawingSize.width)  * 0.5
+                offsetY = (targetSize.height - drawingSize.height) * 0.5
+            }
             
             let onScreenCenter = CGPoint(x: offsetX + rect.center.x * renderScale, y: offsetY + rect.center.y * renderScale)
             

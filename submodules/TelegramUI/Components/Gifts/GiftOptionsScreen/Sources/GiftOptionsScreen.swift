@@ -506,14 +506,26 @@ final class GiftOptionsScreenComponent: Component {
                                 }
                                 isSoldOut = true
                             } else if let _ = gift.availability {
+                                let text: String
+                                if let perUserLimit = gift.perUserLimit {
+                                    text = environment.strings.Gift_Options_Gift_Limited_Left(perUserLimit.remains)
+                                } else {
+                                    text = environment.strings.Gift_Options_Gift_Limited
+                                }
                                 ribbon = GiftItemComponent.Ribbon(
-                                    text: environment.strings.Gift_Options_Gift_Limited,
+                                    text: text,
                                     color: .blue
                                 )
                             }
                             if !isSoldOut && gift.flags.contains(.requiresPremium) {
+                                let text: String
+                                if component.context.isPremium, let perUserLimit = gift.perUserLimit {
+                                    text = environment.strings.Gift_Options_Gift_Premium_Left(perUserLimit.remains)
+                                } else {
+                                    text = environment.strings.Gift_Options_Gift_Premium
+                                }
                                 ribbon = GiftItemComponent.Ribbon(
-                                    text: environment.strings.Gift_Options_Gift_Premium,
+                                    text: text,
                                     color: .orange
                                 )
                                 outline = .orange
@@ -837,6 +849,7 @@ final class GiftOptionsScreenComponent: Component {
                                     starsContext: starsContext,
                                     options: options ?? [],
                                     purpose: .transferStarGift(requiredStars: transferStars),
+                                    targetPeerId: nil,
                                     completion: { stars in
                                         starsContext.add(balance: StarsAmount(value: stars, nanos: 0))
                                         proceed(true)
