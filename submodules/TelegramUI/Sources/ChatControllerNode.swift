@@ -1768,9 +1768,6 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                 if let inputNode = inputNode as? ChatEntityKeyboardInputNode {
                     inputNode.externalTopPanelContainerImpl = nil
                 }
-                inputNode.clipsToBounds = true
-                inputNode.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
-                inputNode.layer.cornerRadius = 30.0
                 
                 dismissedInputNode = self.inputNode
                 dismissedInputNodeExternalTopPanelContainer = self.inputNode?.externalTopPanelContainer
@@ -2158,11 +2155,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             if self.dismissedAsOverlay {
                 inputPanelFrame!.origin.y = layout.size.height
             }
-            if let inputNode = self.inputNode, inputNode.hideInput, !inputNode.adjustLayoutForHiddenInput {
-                inputPanelsHeight += inputPanelNodeBaseHeight
-            } else {
-                inputPanelsHeight += inputPanelSize!.height
-            }
+            inputPanelsHeight += inputPanelSize!.height
         }
         
         if self.secondaryInputPanelNode != nil {
@@ -3942,6 +3935,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                     chatPeerId: self.chatLocation.peerId,
                     areCustomEmojiEnabled: self.chatPresentationInterfaceState.customEmojiAvailable,
                     hasEdit: true,
+                    hideBackground: true,
                     sendGif: { [weak self] fileReference, sourceView, sourceRect, silentPosting, schedule in
                         if let self {
                             return self.controllerInteraction.sendGif(fileReference, sourceView, sourceRect, silentPosting, schedule)
@@ -4235,15 +4229,20 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         }
         
         var maybeDismissOverlayContent = true
-        if let inputNode = self.inputNode, inputNode.bounds.contains(self.view.convert(point, to: inputNode.view)) {
-            if let externalTopPanelContainer = inputNode.externalTopPanelContainer {
-                if externalTopPanelContainer.hitTest(self.view.convert(point, to: externalTopPanelContainer), with: nil) != nil {
-                    maybeDismissOverlayContent = true
+        if let inputNode = self.inputNode {
+            if let result = inputNode.view.hitTest(self.view.convert(point, to: inputNode.view), with: event) {
+                return result
+            }
+            if inputNode.bounds.contains(self.view.convert(point, to: inputNode.view)) {
+                if let externalTopPanelContainer = inputNode.externalTopPanelContainer {
+                    if externalTopPanelContainer.hitTest(self.view.convert(point, to: externalTopPanelContainer), with: nil) != nil {
+                        maybeDismissOverlayContent = true
+                    } else {
+                        maybeDismissOverlayContent = false
+                    }
                 } else {
                     maybeDismissOverlayContent = false
                 }
-            } else {
-                maybeDismissOverlayContent = false
             }
         }
         

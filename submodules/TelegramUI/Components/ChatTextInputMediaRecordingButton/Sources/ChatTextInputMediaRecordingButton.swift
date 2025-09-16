@@ -467,7 +467,7 @@ public final class ChatTextInputMediaRecordingButton: TGModernConversationInputM
             tintColor = UIColor(white: 0.0, alpha: 0.5)
         } else {
             isDark = self.theme.overallDarkAppearance
-            tintColor = self.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.65)
+            tintColor = self.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7)
         }
         
         let view = WrapperBlurrredBackgroundView(size: CGSize(width: 40.0, height: 72.0), isDark: isDark, tintColor: tintColor)

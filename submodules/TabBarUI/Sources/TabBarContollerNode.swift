@@ -179,9 +179,9 @@ final class TabBarControllerNode: ASDisplayNode {
         if bottomInset == 0.0 {
             bottomInset = 8.0
         } else {
-            bottomInset = max(bottomInset - 13.0, 8.0)
+            bottomInset = max(bottomInset, 8.0)
         }
-        let sideInset: CGFloat = 21.0
+        let sideInset: CGFloat = 20.0
         
         var selectedId: AnyHashable?
         if self.selectedIndex < self.tabBarItems.count {
