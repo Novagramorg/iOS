@@ -241,7 +241,7 @@ private final class GiftRemoveInfoAlertContentNode: AlertContentNode {
                         )
                     ),
                     environment: {},
-                    containerSize: CGSize(width: contentWidth - 32.0, height: size.height)
+                    containerSize: CGSize(width: contentWidth - 64.0, height: size.height)
                 )
                 let infoFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((size.width - infoSize.width) / 2.0), y: titleSize.height + textSize.height + 54.0), size: infoSize)
                 if let view = self.infoView.view {
@@ -326,8 +326,8 @@ public func giftRemoveInfoAlertController(
     
     var contentNode: GiftRemoveInfoAlertContentNode?
     var dismissImpl: ((Bool) -> Void)?
-    let actions: [TextAlertAction] = [TextAlertAction(type: .defaultAction, title: buttonText, action: { [weak contentNode] in
-        contentNode?.inProgress = true
+    let actions: [TextAlertAction] = [TextAlertAction(type: .defaultAction, title: buttonText, action: {
+        dismissImpl?(true)
         commit()
     }), TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: {
         dismissImpl?(true)

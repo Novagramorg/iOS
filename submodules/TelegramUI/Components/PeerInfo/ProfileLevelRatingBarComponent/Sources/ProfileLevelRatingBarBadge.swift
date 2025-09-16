@@ -3,7 +3,6 @@ import UIKit
 import Display
 import TelegramPresentationData
 import ComponentFlow
-import RoundedRectWithTailPath
 import AnimatedTextComponent
 import MultilineTextComponent
 import LottieComponent
@@ -17,18 +16,26 @@ final class ProfileLevelRatingBarBadge: Component {
         }
     }
     
+    enum Icon {
+        case rating
+        case stars
+    }
+    
     let theme: PresentationTheme
     let title: String
     let suffix: String?
+    let icon: Icon
     
     init(
         theme: PresentationTheme,
         title: String,
-        suffix: String?
+        suffix: String?,
+        icon: Icon
     ) {
         self.theme = theme
         self.title = title
         self.suffix = suffix
+        self.icon = icon
     }
     
     static func ==(lhs: ProfileLevelRatingBarBadge, rhs: ProfileLevelRatingBarBadge) -> Bool {
@@ -39,6 +46,9 @@ final class ProfileLevelRatingBarBadge: Component {
             return false
         }
         if lhs.suffix != rhs.suffix {
+            return false
+        }
+        if lhs.icon != rhs.icon {
             return false
         }
         return true
@@ -141,10 +151,15 @@ final class ProfileLevelRatingBarBadge: Component {
                     labelsTransition.animateAlpha(view: self.badgeIcon, from: 0.0, to: 1.0)
                 }
                 
-                if component.title.isEmpty {
-                    self.badgeIcon.image = UIImage(bundleImageName: "Peer Info/ProfileLevelWarningIcon")?.withRenderingMode(.alwaysTemplate)
-                } else {
-                    self.badgeIcon.image = UIImage(bundleImageName: "Peer Info/ProfileLevelProgressIcon")?.withRenderingMode(.alwaysTemplate)
+                switch component.icon {
+                case .rating:
+                    if component.title.isEmpty {
+                        self.badgeIcon.image = UIImage(bundleImageName: "Peer Info/ProfileLevelWarningIcon")?.withRenderingMode(.alwaysTemplate)
+                    } else {
+                        self.badgeIcon.image = UIImage(bundleImageName: "Peer Info/ProfileLevelProgressIcon")?.withRenderingMode(.alwaysTemplate)
+                    }
+                case .stars:
+                    self.badgeIcon.image = UIImage(bundleImageName: "Premium/SendStarsStarSliderIcon")?.withRenderingMode(.alwaysTemplate)
                 }
             }
              

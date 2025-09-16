@@ -457,6 +457,34 @@ final class GiftSetupScreenComponent: Component {
                             controllers.append(chatController)
                         }
                         navigationController.setViewControllers(controllers, animated: true)
+                        
+                        
+                        if case let .starGift(starGift, _) = component.subject, let perUserLimit = starGift.perUserLimit {
+                            Queue.mainQueue().after(0.5) {
+                                let remains = max(0, perUserLimit.remains - 1)
+                                let text: String
+                                if remains == 0 {
+                                    text = presentationData.strings.Gift_Send_Limited_Success_Text_None
+                                } else {
+                                    text = presentationData.strings.Gift_Send_Limited_Success_Text(remains)
+                                }
+                                let tooltipController = UndoOverlayController(
+                                    presentationData: presentationData,
+                                    content: .sticker(
+                                        context: context,
+                                        file: starGift.file,
+                                        loop: true,
+                                        title: presentationData.strings.Gift_Send_Limited_Success_Title,
+                                        text: text,
+                                        undoText: nil,
+                                        customAction: nil
+                                    ),
+                                    position: .top,
+                                    action: { _ in return true }
+                                )
+                                (navigationController.viewControllers.last as? ViewController)?.present(tooltipController, in: .current)
+                            }
+                        }
                     }
                     
                     if let completion {
@@ -519,6 +547,7 @@ final class GiftSetupScreenComponent: Component {
                         starsContext: starsContext,
                         options: options ?? [],
                         purpose: .starGift(peerId: component.peerId, requiredStars: finalPrice),
+                        targetPeerId: nil,
                         completion: { [weak self, weak starsContext] stars in
                             guard let self, let starsContext else {
                                 return
@@ -1130,7 +1159,7 @@ final class GiftSetupScreenComponent: Component {
                                     |> filter { $0 != nil }
                                     |> take(1)
                                     |> deliverOnMainQueue).startStandalone(next: { options in
-                                        let purchaseController = component.context.sharedContext.makeStarsPurchaseScreen(context: component.context, starsContext: starsContext, options: options ?? [], purpose: .generic, completion: { stars in
+                                        let purchaseController = component.context.sharedContext.makeStarsPurchaseScreen(context: component.context, starsContext: starsContext, options: options ?? [], purpose: .generic, targetPeerId: nil, completion: { stars in
                                             starsContext.add(balance: StarsAmount(value: stars, nanos: 0))
                                         })
                                         controller.push(purchaseController)

@@ -18,6 +18,7 @@ import Markdown
 import PremiumUI
 import LottieComponent
 import AnimatedTextComponent
+import ProfileLevelRatingBarComponent
 
 private final class ProfileLevelInfoScreenComponent: Component {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
@@ -84,10 +85,7 @@ private final class ProfileLevelInfoScreenComponent: Component {
         private let closeButton = ComponentView<Empty>()
         
         private let peerAvatar = ComponentView<Empty>()
-        
-        private let callIconBackground = ComponentView<Empty>()
-        private let callIcon = ComponentView<Empty>()
-        
+    
         private let title = ComponentView<Empty>()
         private let levelInfo = ComponentView<Empty>()
         private var secondaryDescriptionText: ComponentView<Empty>?
@@ -97,9 +95,7 @@ private final class ProfileLevelInfoScreenComponent: Component {
         
         private let bottomPanelContainer: UIView
         private let actionButton = ComponentView<Empty>()
-        
-        private let bottomOverscrollLimit: CGFloat
-        
+                
         private var isFirstTimeApplyingModalFactor: Bool = true
         private var ignoreScrolling: Bool = false
         
@@ -115,9 +111,7 @@ private final class ProfileLevelInfoScreenComponent: Component {
         private var cachedChevronImage: UIImage?
         private var cachedCloseImage: UIImage?
         
-        override init(frame: CGRect) {
-            self.bottomOverscrollLimit = 200.0
-            
+        override init(frame: CGRect) {            
             self.dimView = UIView()
             
             self.backgroundLayer = SimpleLayer()
@@ -496,7 +490,8 @@ private final class ProfileLevelInfoScreenComponent: Component {
                     rightLabel: currentLevel < 0 ? "Negative rating" : nextLevel.flatMap { environment.strings.ProfileLevelInfo_LevelIndex(Int32($0)) } ?? "",
                     badgeValue: badgeText,
                     badgeTotal: badgeTextSuffix,
-                    level: Int(currentLevel)
+                    level: Int(currentLevel),
+                    icon: .rating
                 )),
                 environment: {},
                 containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 110.0)
