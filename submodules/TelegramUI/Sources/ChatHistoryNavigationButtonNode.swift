@@ -94,7 +94,7 @@ class ChatHistoryNavigationButtonNode: ContextControllerSourceNode {
 
         self.buttonNode.view.addSubview(self.backgroundView)
         self.backgroundView.frame = CGRect(origin: CGPoint(), size: size)
-        self.backgroundView.update(size: size, cornerRadius: size.height * 0.5, isDark: theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.65)), transition: .immediate)
+        self.backgroundView.update(size: size, cornerRadius: size.height * 0.5, isDark: theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7)), transition: .immediate)
         self.imageView.tintColor = theme.chat.inputPanel.inputControlColor
 
         self.backgroundView.contentView.addSubview(self.imageView)
@@ -110,7 +110,7 @@ class ChatHistoryNavigationButtonNode: ContextControllerSourceNode {
         if self.theme !== theme {
             self.theme = theme
 
-            self.backgroundView.update(size: self.backgroundView.bounds.size, cornerRadius: self.backgroundView.bounds.size.height * 0.5, isDark: theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.65)), transition: .immediate)
+            self.backgroundView.update(size: self.backgroundView.bounds.size, cornerRadius: self.backgroundView.bounds.size.height * 0.5, isDark: theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7)), transition: .immediate)
             self.imageView.tintColor = theme.chat.inputPanel.inputControlColor
             
             switch self.type {

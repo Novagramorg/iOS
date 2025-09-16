@@ -163,7 +163,7 @@ final class EntityKeyboardBottomPanelComponent: Component {
         private var component: EntityKeyboardBottomPanelComponent?
         
         override init(frame: CGRect) {
-            self.backgroundView = BlurredBackgroundView(color: .clear, enableBlur: true)
+            self.backgroundView = BlurredBackgroundView(color: .clear, enableBlur: true, customBlurRadius: 5.0)
             
             self.separatorView = UIView()
             self.separatorView.isUserInteractionEnabled = false
@@ -186,8 +186,8 @@ final class EntityKeyboardBottomPanelComponent: Component {
         
         func update(component: EntityKeyboardBottomPanelComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<EnvironmentType>, transition: ComponentTransition) -> CGSize {
             if self.component?.theme !== component.theme {
-                self.separatorView.backgroundColor = component.theme.chat.inputMediaPanel.panelSeparatorColor
-                self.backgroundView.updateColor(color: component.theme.chat.inputPanel.panelBackgroundColor.withMultipliedAlpha(1.0), transition: .immediate)
+                self.separatorView.backgroundColor = component.theme.chat.inputPanel.panelSeparatorColor
+                self.backgroundView.updateColor(color: component.theme.chat.inputPanel.panelBackgroundColor.withMultipliedAlpha(0.65), transition: .immediate)
                 self.highlightedIconBackgroundView.backgroundColor = component.theme.chat.inputMediaPanel.panelHighlightedIconBackgroundColor
             }
             

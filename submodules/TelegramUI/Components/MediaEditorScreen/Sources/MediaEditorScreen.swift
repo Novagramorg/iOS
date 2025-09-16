@@ -407,6 +407,7 @@ final class MediaEditorScreenComponent: Component {
                         areCustomEmojiEnabled: true,
                         hasSearch: true,
                         hideBackground: true,
+                        maskEdge: true,
                         sendGif: nil
                     ) |> map { inputData -> ChatEntityKeyboardInputNode.InputData in
                         return ChatEntityKeyboardInputNode.InputData(

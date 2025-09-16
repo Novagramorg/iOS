@@ -4,86 +4,6 @@ import Display
 import ComponentFlow
 import ComponentDisplayAdapters
 
-private func generateForegroundImage(size: CGSize, isDark: Bool, fillColor: UIColor) -> UIImage {
-    var size = size
-    if size == .zero {
-        size = CGSize(width: 1.0, height: 1.0)
-    }
-    
-    return generateImage(size, rotatedContext: { size, context in
-        context.clear(CGRect(origin: CGPoint(), size: size))
-        
-        let maxColor = UIColor(white: 1.0, alpha: isDark ? 0.67 : 0.9)
-        let minColor = UIColor(white: 1.0, alpha: 0.0)
-        
-        context.setFillColor(fillColor.cgColor)
-        context.fillEllipse(in: CGRect(origin: CGPoint(), size: size))
-        
-        let lineWidth: CGFloat = isDark ? 0.66 : 0.66
-        
-        context.saveGState()
-        
-        let darkShadeColor = UIColor(white: isDark ? 1.0 : 0.0, alpha: 0.035)
-        let lightShadeColor = UIColor(white: isDark ? 0.0 : 1.0, alpha: 0.035)
-        let innerShadowBlur: CGFloat = 24.0
-        
-        context.resetClip()
-        context.addEllipse(in: CGRect(origin: CGPoint(), size: size).insetBy(dx: lineWidth * 0.5, dy: lineWidth * 0.5))
-        context.clip()
-        context.addRect(CGRect(origin: CGPoint(), size: size).insetBy(dx: -100.0, dy: -100.0))
-        context.addEllipse(in: CGRect(origin: CGPoint(), size: size))
-        context.setFillColor(UIColor.black.cgColor)
-        context.setShadow(offset: CGSize(width: 10.0, height: -10.0), blur: innerShadowBlur, color: darkShadeColor.cgColor)
-        context.fillPath(using: .evenOdd)
-        
-        context.resetClip()
-        context.addEllipse(in: CGRect(origin: CGPoint(), size: size).insetBy(dx: lineWidth * 0.5, dy: lineWidth * 0.5))
-        context.clip()
-        context.addRect(CGRect(origin: CGPoint(), size: size).insetBy(dx: -100.0, dy: -100.0))
-        context.addEllipse(in: CGRect(origin: CGPoint(), size: size))
-        context.setFillColor(UIColor.black.cgColor)
-        context.setShadow(offset: CGSize(width: -10.0, height: 10.0), blur: innerShadowBlur, color: lightShadeColor.cgColor)
-        context.fillPath(using: .evenOdd)
-        
-        context.restoreGState()
-        
-        context.setLineWidth(lineWidth)
-        
-        context.addRect(CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: size.width * 0.5, height: size.height)))
-        context.clip()
-        context.addEllipse(in: CGRect(origin: CGPoint(), size: size).insetBy(dx: lineWidth * 0.5, dy: lineWidth * 0.5))
-        context.replacePathWithStrokedPath()
-        context.clip()
-        
-        do {
-            var locations: [CGFloat] = [0.0, 0.5, 0.5 + 0.2, 1.0 - 0.1, 1.0]
-            let colors: [CGColor] = [maxColor.cgColor, maxColor.cgColor, minColor.cgColor, minColor.cgColor, maxColor.cgColor]
-            
-            let colorSpace = CGColorSpaceCreateDeviceRGB()
-            let gradient = CGGradient(colorsSpace: colorSpace, colors: colors as CFArray, locations: &locations)!
-            
-            context.drawLinearGradient(gradient, start: CGPoint(x: 0.0, y: 0.0), end: CGPoint(x: 0.0, y: size.height), options: CGGradientDrawingOptions())
-        }
-        
-        context.resetClip()
-        context.addRect(CGRect(origin: CGPoint(x: size.width - size.width * 0.5, y: 0.0), size: CGSize(width: size.width * 0.5, height: size.height)))
-        context.clip()
-        context.addEllipse(in: CGRect(origin: CGPoint(), size: size).insetBy(dx: lineWidth * 0.5, dy: lineWidth * 0.5))
-        context.replacePathWithStrokedPath()
-        context.clip()
-        
-        do {
-            var locations: [CGFloat] = [0.0, 0.1, 0.5 - 0.2, 0.5, 1.0]
-            let colors: [CGColor] = [maxColor.cgColor, minColor.cgColor, minColor.cgColor, maxColor.cgColor, maxColor.cgColor]
-            
-            let colorSpace = CGColorSpaceCreateDeviceRGB()
-            let gradient = CGGradient(colorsSpace: colorSpace, colors: colors as CFArray, locations: &locations)!
-            
-            context.drawLinearGradient(gradient, start: CGPoint(x: 0.0, y: 0.0), end: CGPoint(x: 0.0, y: size.height), options: CGGradientDrawingOptions())
-        }
-    })!.stretchableImage(withLeftCapWidth: Int(size.width * 0.5), topCapHeight: Int(size.height * 0.5))
-}
-
 private final class ContentContainer: UIView {
     private let maskContentView: UIView
     
@@ -345,7 +265,6 @@ public final class GlassBackgroundView: UIView {
     
     private let foregroundView: UIImageView?
     private let shadowView: UIImageView?
-    private let shadowMaskView: UIImageView?
     
     public let maskContentView: UIView
     private let contentContainer: ContentContainer
@@ -371,14 +290,12 @@ public final class GlassBackgroundView: UIView {
             nativeView.traitOverrides.userInterfaceStyle = .light
             //self.foregroundView = UIImageView()
             self.foregroundView = nil
-            self.shadowView = nil
-            self.shadowMaskView = nil
+            self.shadowView = UIImageView()
         } else {
             self.backgroundNode = NavigationBackgroundNode(color: .black, enableBlur: true, customBlurRadius: 5.0)
             self.nativeView = nil
             self.foregroundView = UIImageView()
             self.shadowView = UIImageView()
-            self.shadowMaskView = UIImageView()
         }
         
         self.maskContentView = UIView()
@@ -393,9 +310,6 @@ public final class GlassBackgroundView: UIView {
         
         if let shadowView = self.shadowView {
             self.addSubview(shadowView)
-            if let shadowMaskView = self.shadowMaskView {
-                shadowView.mask = shadowMaskView
-            }
         }
         if let nativeView = self.nativeView {
             self.addSubview(nativeView)
@@ -435,39 +349,36 @@ public final class GlassBackgroundView: UIView {
             transition.setFrame(view: backgroundNode.view, frame: CGRect(origin: CGPoint(), size: size))
         }
         
+        let shadowInset: CGFloat = 32.0
+        
         let params = Params(cornerRadius: cornerRadius, isDark: isDark, tintColor: tintColor)
         if self.params != params {
             self.params = params
             
             if let shadowView = self.shadowView {
-                shadowView.layer.shadowRadius = 10.0
-                shadowView.layer.shadowColor = UIColor(white: 0.0, alpha: 1.0).cgColor
-                shadowView.layer.shadowOpacity = 0.08
-                shadowView.layer.shadowOffset = CGSize(width: 0.0, height: 1.0)
-                
-                if let shadowMaskView = self.shadowMaskView {
-                    let shadowInset: CGFloat = 32.0
-                    let shadowInnerInset: CGFloat = 0.5
-                    shadowMaskView.image = generateImage(CGSize(width: shadowInset * 2.0 + cornerRadius * 2.0, height: shadowInset * 2.0 + cornerRadius * 2.0), rotatedContext: { size, context in
-                        context.setFillColor(UIColor.white.cgColor)
-                        context.fill(CGRect(origin: CGPoint(), size: size))
-                        
-                        context.setFillColor(UIColor.clear.cgColor)
-                        context.setBlendMode(.copy)
-                        context.fillEllipse(in: CGRect(origin: CGPoint(x: shadowInset + shadowInnerInset, y: shadowInset + shadowInnerInset), size: CGSize(width: size.width - shadowInset * 2.0 - shadowInnerInset * 2.0, height: size.height - shadowInset * 2.0 - shadowInnerInset * 2.0)))
-                    })?.stretchableImage(withLeftCapWidth: Int(shadowInset + cornerRadius), topCapHeight: Int(shadowInset + cornerRadius))
-                }
+                let shadowInnerInset: CGFloat = 0.5
+                shadowView.image = generateImage(CGSize(width: shadowInset * 2.0 + cornerRadius * 2.0, height: shadowInset * 2.0 + cornerRadius * 2.0), rotatedContext: { size, context in
+                    context.clear(CGRect(origin: CGPoint(), size: size))
+                    
+                    context.setFillColor(UIColor.black.cgColor)
+                    context.setShadow(offset: CGSize(width: 0.0, height: 1.0), blur: 30.0, color: UIColor(white: 0.0, alpha: 0.08).cgColor)
+                    context.fillEllipse(in: CGRect(origin: CGPoint(x: shadowInset + shadowInnerInset, y: shadowInset + shadowInnerInset), size: CGSize(width: size.width - shadowInset * 2.0 - shadowInnerInset * 2.0, height: size.height - shadowInset * 2.0 - shadowInnerInset * 2.0)))
+                    
+                    context.setFillColor(UIColor.clear.cgColor)
+                    context.setBlendMode(.copy)
+                    context.fillEllipse(in: CGRect(origin: CGPoint(x: shadowInset + shadowInnerInset, y: shadowInset + shadowInnerInset), size: CGSize(width: size.width - shadowInset * 2.0 - shadowInnerInset * 2.0, height: size.height - shadowInset * 2.0 - shadowInnerInset * 2.0)))
+                })?.stretchableImage(withLeftCapWidth: Int(shadowInset + cornerRadius), topCapHeight: Int(shadowInset + cornerRadius))
             }
             
             if let foregroundView = self.foregroundView {
-                foregroundView.image = generateForegroundImage(size: CGSize(width: cornerRadius * 2.0, height: cornerRadius * 2.0), isDark: isDark, fillColor: tintColor.color)
+                foregroundView.image = GlassBackgroundView.generateForegroundImage(size: CGSize(width: cornerRadius * 2.0, height: cornerRadius * 2.0), isDark: isDark, fillColor: tintColor.color)
             } else {
                 if let nativeView {
                     if #available(iOS 26.0, *) {
-                        let glassEffect = UIGlassEffect(style: .regular)
+                        let glassEffect = UIGlassEffect(style: .clear)
                         switch tintColor.kind {
                         case .panel:
-                            glassEffect.tintColor = nil
+                            glassEffect.tintColor = tintColor.color
                         case .custom:
                             glassEffect.tintColor = tintColor.color
                         }
@@ -484,14 +395,7 @@ public final class GlassBackgroundView: UIView {
             transition.setFrame(view: foregroundView, frame: CGRect(origin: CGPoint(), size: size))
         }
         if let shadowView = self.shadowView {
-            if shadowView.bounds.size != size {
-                shadowView.layer.shadowPath = UIBezierPath(roundedRect: CGRect(origin: CGPoint(), size: size), cornerRadius: size.height * 0.5).cgPath
-            }
-            transition.setFrame(view: shadowView, frame: CGRect(origin: CGPoint(), size: size))
-            
-            if let shadowMaskView = self.shadowMaskView {
-                transition.setFrame(view: shadowMaskView, frame: CGRect(origin: CGPoint(), size: size).insetBy(dx: -32.0, dy: -32.0))
-            }
+            transition.setFrame(view: shadowView, frame: CGRect(origin: CGPoint(), size: size).insetBy(dx: -shadowInset, dy: -shadowInset))
         }
         transition.setFrame(view: self.contentContainer, frame: CGRect(origin: CGPoint(), size: size))
     }
@@ -583,5 +487,87 @@ public final class VariableBlurView: UIVisualEffectView {
         
         let backdropLayer = self.subviews.first?.layer
         backdropLayer?.filters = [variableBlur]
+    }
+}
+
+public extension GlassBackgroundView {
+    static func generateForegroundImage(size: CGSize, isDark: Bool, fillColor: UIColor) -> UIImage {
+        var size = size
+        if size == .zero {
+            size = CGSize(width: 1.0, height: 1.0)
+        }
+        
+        return generateImage(size, rotatedContext: { size, context in
+            context.clear(CGRect(origin: CGPoint(), size: size))
+            
+            let maxColor = UIColor(white: 1.0, alpha: isDark ? 0.25 : 0.9)
+            let minColor = UIColor(white: 1.0, alpha: 0.0)
+            
+            context.setFillColor(fillColor.cgColor)
+            context.fillEllipse(in: CGRect(origin: CGPoint(), size: size))
+            
+            let lineWidth: CGFloat = isDark ? 0.66 : 0.66
+            
+            context.saveGState()
+            
+            let darkShadeColor = UIColor(white: isDark ? 1.0 : 0.0, alpha: 0.035)
+            let lightShadeColor = UIColor(white: isDark ? 0.0 : 1.0, alpha: 0.035)
+            let innerShadowBlur: CGFloat = 24.0
+            
+            context.resetClip()
+            context.addEllipse(in: CGRect(origin: CGPoint(), size: size).insetBy(dx: lineWidth * 0.5, dy: lineWidth * 0.5))
+            context.clip()
+            context.addRect(CGRect(origin: CGPoint(), size: size).insetBy(dx: -100.0, dy: -100.0))
+            context.addEllipse(in: CGRect(origin: CGPoint(), size: size))
+            context.setFillColor(UIColor.black.cgColor)
+            context.setShadow(offset: CGSize(width: 10.0, height: -10.0), blur: innerShadowBlur, color: darkShadeColor.cgColor)
+            context.fillPath(using: .evenOdd)
+            
+            context.resetClip()
+            context.addEllipse(in: CGRect(origin: CGPoint(), size: size).insetBy(dx: lineWidth * 0.5, dy: lineWidth * 0.5))
+            context.clip()
+            context.addRect(CGRect(origin: CGPoint(), size: size).insetBy(dx: -100.0, dy: -100.0))
+            context.addEllipse(in: CGRect(origin: CGPoint(), size: size))
+            context.setFillColor(UIColor.black.cgColor)
+            context.setShadow(offset: CGSize(width: -10.0, height: 10.0), blur: innerShadowBlur, color: lightShadeColor.cgColor)
+            context.fillPath(using: .evenOdd)
+            
+            context.restoreGState()
+            
+            context.setLineWidth(lineWidth)
+            
+            context.addRect(CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: size.width * 0.5, height: size.height)))
+            context.clip()
+            context.addEllipse(in: CGRect(origin: CGPoint(), size: size).insetBy(dx: lineWidth * 0.5, dy: lineWidth * 0.5))
+            context.replacePathWithStrokedPath()
+            context.clip()
+            
+            do {
+                var locations: [CGFloat] = [0.0, 0.5, 0.5 + 0.2, 1.0 - 0.1, 1.0]
+                let colors: [CGColor] = [maxColor.cgColor, maxColor.cgColor, minColor.cgColor, minColor.cgColor, maxColor.cgColor]
+                
+                let colorSpace = CGColorSpaceCreateDeviceRGB()
+                let gradient = CGGradient(colorsSpace: colorSpace, colors: colors as CFArray, locations: &locations)!
+                
+                context.drawLinearGradient(gradient, start: CGPoint(x: 0.0, y: 0.0), end: CGPoint(x: 0.0, y: size.height), options: CGGradientDrawingOptions())
+            }
+            
+            context.resetClip()
+            context.addRect(CGRect(origin: CGPoint(x: size.width - size.width * 0.5, y: 0.0), size: CGSize(width: size.width * 0.5, height: size.height)))
+            context.clip()
+            context.addEllipse(in: CGRect(origin: CGPoint(), size: size).insetBy(dx: lineWidth * 0.5, dy: lineWidth * 0.5))
+            context.replacePathWithStrokedPath()
+            context.clip()
+            
+            do {
+                var locations: [CGFloat] = [0.0, 0.1, 0.5 - 0.2, 0.5, 1.0]
+                let colors: [CGColor] = [maxColor.cgColor, minColor.cgColor, minColor.cgColor, maxColor.cgColor, maxColor.cgColor]
+                
+                let colorSpace = CGColorSpaceCreateDeviceRGB()
+                let gradient = CGGradient(colorsSpace: colorSpace, colors: colors as CFArray, locations: &locations)!
+                
+                context.drawLinearGradient(gradient, start: CGPoint(x: 0.0, y: 0.0), end: CGPoint(x: 0.0, y: size.height), options: CGGradientDrawingOptions())
+            }
+        })!.stretchableImage(withLeftCapWidth: Int(size.width * 0.5), topCapHeight: Int(size.height * 0.5))
     }
 }
