@@ -539,6 +539,7 @@ private enum PeerInfoSettingsSection {
     case logout
     case rememberPassword
     case emojiStatus
+    case profileColor
     case powerSaving
     case businessSetup
     case profile
@@ -566,6 +567,7 @@ private final class PeerInfoInteraction {
     let editingOpenSoundSettings: () -> Void
     let editingToggleShowMessageText: (Bool) -> Void
     let requestDeleteContact: () -> Void
+    let suggestBirthdate: () -> Void
     let suggestPhoto: () -> Void
     let setCustomPhoto: () -> Void
     let resetCustomPhoto: () -> Void
@@ -604,6 +606,7 @@ private final class PeerInfoInteraction {
     let logoutAccount: (AccountRecordId) -> Void
     let accountContextMenu: (AccountRecordId, ASDisplayNode, ContextGesture?) -> Void
     let updateBio: (String) -> Void
+    let updateNote: (NSAttributedString) -> Void
     let openDeletePeer: () -> Void
     let openFaq: (String?) -> Void
     let openAddMember: () -> Void
@@ -639,6 +642,7 @@ private final class PeerInfoInteraction {
         editingOpenSoundSettings: @escaping () -> Void,
         editingToggleShowMessageText: @escaping (Bool) -> Void,
         requestDeleteContact: @escaping () -> Void,
+        suggestBirthdate: @escaping () -> Void,
         suggestPhoto: @escaping () -> Void,
         setCustomPhoto: @escaping () -> Void,
         resetCustomPhoto: @escaping () -> Void,
@@ -678,6 +682,7 @@ private final class PeerInfoInteraction {
         logoutAccount: @escaping (AccountRecordId) -> Void,
         accountContextMenu: @escaping (AccountRecordId, ASDisplayNode, ContextGesture?) -> Void,
         updateBio: @escaping (String) -> Void,
+        updateNote: @escaping (NSAttributedString) -> Void,
         openDeletePeer: @escaping () -> Void,
         openFaq: @escaping (String?) -> Void,
         openAddMember: @escaping () -> Void,
@@ -712,6 +717,7 @@ private final class PeerInfoInteraction {
         self.editingOpenSoundSettings = editingOpenSoundSettings
         self.editingToggleShowMessageText = editingToggleShowMessageText
         self.requestDeleteContact = requestDeleteContact
+        self.suggestBirthdate = suggestBirthdate
         self.suggestPhoto = suggestPhoto
         self.setCustomPhoto = setCustomPhoto
         self.resetCustomPhoto = resetCustomPhoto
@@ -751,6 +757,7 @@ private final class PeerInfoInteraction {
         self.logoutAccount = logoutAccount
         self.accountContextMenu = accountContextMenu
         self.updateBio = updateBio
+        self.updateNote = updateNote
         self.openDeletePeer = openDeletePeer
         self.openFaq = openFaq
         self.openAddMember = openAddMember
@@ -809,13 +816,10 @@ private func settingsItems(data: PeerInfoScreenData?, context: AccountContext, p
     }
     
     let setPhotoTitle: String
-    let displaySetPhoto: Bool
     if let peer = data.peer, !peer.profileImageRepresentations.isEmpty {
         setPhotoTitle = presentationData.strings.Settings_ChangeProfilePhoto
-        displaySetPhoto = true
     } else {
         setPhotoTitle = presentationData.strings.Settings_SetProfilePhotoOrVideo
-        displaySetPhoto = true
     }
     
     var setStatusTitle: String = ""
@@ -837,15 +841,18 @@ private func settingsItems(data: PeerInfoScreenData?, context: AccountContext, p
         items[.edit]!.append(PeerInfoScreenActionItem(id: 0, text: setStatusTitle, icon: UIImage(bundleImageName: hasEmojiStatus ? "Settings/EditEmojiStatus" : "Settings/SetEmojiStatus"), action: {
             interaction.openSettings(.emojiStatus)
         }))
-    }
-    
-    if displaySetPhoto {
-        items[.edit]!.append(PeerInfoScreenActionItem(id: 1, text: setPhotoTitle, icon: UIImage(bundleImageName: "Settings/SetAvatar"), action: {
-            interaction.openSettings(.avatar)
+        
+        items[.edit]!.append(PeerInfoScreenActionItem(id: 1, text: presentationData.strings.PeerInfo_ChangeProfileColor, icon: UIImage(bundleImageName: "Premium/BoostPerk/CoverColor"), action: {
+            interaction.openSettings(.profileColor)
         }))
     }
+    
+    items[.edit]!.append(PeerInfoScreenActionItem(id: 2, text: setPhotoTitle, icon: UIImage(bundleImageName: "Settings/SetAvatar"), action: {
+        interaction.openSettings(.avatar)
+    }))
+    
     if let peer = data.peer, (peer.addressName ?? "").isEmpty {
-        items[.edit]!.append(PeerInfoScreenActionItem(id: 2, text: presentationData.strings.Settings_SetUsername, icon: UIImage(bundleImageName: "Settings/SetUsername"), action: {
+        items[.edit]!.append(PeerInfoScreenActionItem(id: 3, text: presentationData.strings.Settings_SetUsername, icon: UIImage(bundleImageName: "Settings/SetUsername"), action: {
             interaction.openSettings(.username)
         }))
     }
@@ -1414,6 +1421,10 @@ private func infoItems(data: PeerInfoScreenData?, context: AccountContext, prese
             if let about = cachedData.about, !about.isEmpty {
                 hasAbout = true
             }
+            var hasNote = false
+            if let note = cachedData.note, !note.text.isEmpty {
+                hasNote = true
+            }
             
             var hasWebApp = false
             if let botInfo = user.botInfo, botInfo.flags.contains(.hasWebApp) {
@@ -1428,7 +1439,7 @@ private func infoItems(data: PeerInfoScreenData?, context: AccountContext, prese
                 items[currentPeerInfoSection]!.append(PeerInfoScreenLabeledValueItem(id: 0, label: user.botInfo == nil ? presentationData.strings.Profile_About : presentationData.strings.Profile_BotInfo, text: user.botInfo != nil ? presentationData.strings.UserInfo_ScamBotWarning : presentationData.strings.UserInfo_ScamUserWarning, textColor: .primary, textBehavior: .multiLine(maxLines: 100, enabledEntities: user.botInfo != nil ? enabledPrivateBioEntities : []), action: nil, requestLayout: { animated in
                     interaction.requestLayout(animated)
                 }))
-            } else if hasAbout || hasWebApp {
+            } else if hasAbout || hasNote || hasWebApp {
                 var actionButton: PeerInfoScreenLabeledValueItem.Button?
                 if hasWebApp {
                     actionButton = PeerInfoScreenLabeledValueItem.Button(title: presentationData.strings.PeerInfo_OpenAppButton, action: {
@@ -1463,16 +1474,23 @@ private func infoItems(data: PeerInfoScreenData?, context: AccountContext, prese
                     })
                 }
                 
-                var label: String = ""
-                if let about = cachedData.about, !about.isEmpty {
-                    label = user.botInfo == nil ? presentationData.strings.Profile_About : presentationData.strings.Profile_BotInfo
+                if hasAbout || hasWebApp {
+                    var label: String = ""
+                    if let about = cachedData.about, !about.isEmpty {
+                        label = user.botInfo == nil ? presentationData.strings.Profile_About : presentationData.strings.Profile_BotInfo
+                    }
+                    items[currentPeerInfoSection]!.append(PeerInfoScreenLabeledValueItem(id: 0, label: label, text: cachedData.about ?? "", textColor: .primary, textBehavior: .multiLine(maxLines: 100, enabledEntities: user.isPremium ? enabledPublicBioEntities : enabledPrivateBioEntities), action: isMyProfile ? { node, _ in
+                        bioContextAction(node, nil, nil)
+                    } : nil, linkItemAction: bioLinkAction, button: actionButton, contextAction: bioContextAction, requestLayout: { animated in
+                        interaction.requestLayout(animated)
+                    }))
                 }
                 
-                items[currentPeerInfoSection]!.append(PeerInfoScreenLabeledValueItem(id: 0, label: label, text: cachedData.about ?? "", textColor: .primary, textBehavior: .multiLine(maxLines: 100, enabledEntities: user.isPremium ? enabledPublicBioEntities : enabledPrivateBioEntities), action: isMyProfile ? { node, _ in
-                    bioContextAction(node, nil, nil)
-                } : nil, linkItemAction: bioLinkAction, button: actionButton, contextAction: bioContextAction, requestLayout: { animated in
-                    interaction.requestLayout(animated)
-                }))
+                if let note = cachedData.note, !note.text.isEmpty {
+                    items[currentPeerInfoSection]!.append(PeerInfoScreenLabeledValueItem(id: 0, label: "notes", rightLabel: "only visible to you", text: note.text, entities: note.entities, textColor: .primary, textBehavior: .multiLine(maxLines: 100, enabledEntities: []), action: nil, linkItemAction: bioLinkAction, button: nil, contextAction: bioContextAction, requestLayout: { animated in
+                        interaction.requestLayout(animated)
+                    }))
+                }
                 
                 if let botInfo = user.botInfo, botInfo.flags.contains(.canEdit) {
                     items[currentPeerInfoSection]!.append(PeerInfoScreenCommentItem(id: 800, text: presentationData.strings.PeerInfo_AppFooterAdmin, linkAction: { action in
@@ -2066,6 +2084,7 @@ private func editingItems(data: PeerInfoScreenData?, boostStatus: ChannelBoostSt
         case notifications
         case groupLocation
         case peerPublicSettings
+        case peerNote
         case peerDataSettings
         case peerVerifySettings
         case peerSettings
@@ -2081,20 +2100,24 @@ private func editingItems(data: PeerInfoScreenData?, boostStatus: ChannelBoostSt
     
     if let data = data {
         if let user = data.peer as? TelegramUser {
-            let ItemSuggest = 0
-            let ItemCustom = 1
-            let ItemReset = 2
-            let ItemInfo = 3
-            let ItemDelete = 4
-            let ItemUsername = 5
-            let ItemAffiliateProgram = 6
+            let ItemNote = 0
+            let ItemNoteInfo = 1
             
-            let ItemVerify = 8
+            let ItemSuggestBirthdate = 2
+            let ItemSuggestPhoto = 3
+            let ItemCustomPhoto = 4
+            let ItemReset = 5
+            let ItemInfo = 6
+            let ItemDelete = 7
+            let ItemUsername = 8
+            let ItemAffiliateProgram = 9
             
-            let ItemIntro = 8
-            let ItemCommands = 9
-            let ItemBotSettings = 10
-            let ItemBotInfo = 11
+            let ItemVerify = 10
+            
+            let ItemIntro = 11
+            let ItemCommands = 12
+            let ItemBotSettings = 13
+            let ItemBotInfo = 14
             
             if let botInfo = user.botInfo, botInfo.flags.contains(.canEdit) {
                 items[.peerDataSettings]!.append(PeerInfoScreenDisclosureItem(id: ItemUsername, label: .text("@\(user.addressName ?? "")"), text: presentationData.strings.PeerInfo_Bot_Username, icon: PresentationResourcesSettings.bot, action: {
@@ -2143,12 +2166,34 @@ private func editingItems(data: PeerInfoScreenData?, boostStatus: ChannelBoostSt
             } else if !user.flags.contains(.isSupport) {
                 let compactName = EnginePeer(user).compactDisplayTitle
                 
-                if let cachedData = data.cachedData as? CachedUserData, let _ = cachedData.sendPaidMessageStars {
+                if let cachedData = data.cachedData as? CachedUserData {
+                    //TODO:localize
+                    items[.peerNote]!.append(PeerInfoScreenNoteListItem(
+                        id: ItemNote,
+                        initialValue: chatInputStateStringWithAppliedEntities(cachedData.note?.text ?? "", entities: cachedData.note?.entities ?? []),
+                        valueUpdated: { value in
+                            interaction.updateNote(value)
+                        },
+                        requestLayout: { animated in
+                            interaction.requestLayout(animated)
+                        }
+                    ))
                     
-                } else {   
-                    items[.peerDataSettings]!.append(PeerInfoScreenActionItem(id: ItemSuggest, text: presentationData.strings.UserInfo_SuggestPhoto(compactName).string, color: .accent, icon: UIImage(bundleImageName: "Peer Info/SuggestAvatar"), action: {
-                        interaction.suggestPhoto()
-                    }))
+                    items[.peerNote]!.append(PeerInfoScreenCommentItem(id: ItemNoteInfo, text: "Notes are only visible to you."))
+                    
+                    if let _ = cachedData.sendPaidMessageStars {
+                        
+                    } else {
+                        if cachedData.birthday == nil {
+                            items[.peerDataSettings]!.append(PeerInfoScreenActionItem(id: ItemSuggestBirthdate, text: presentationData.strings.UserInfo_SuggestBirthdate, color: .accent, icon: UIImage(bundleImageName: "Contact List/AddBirthdayIcon"), action: {
+                                interaction.suggestBirthdate()
+                            }))
+                        }
+   
+                        items[.peerDataSettings]!.append(PeerInfoScreenActionItem(id: ItemSuggestPhoto, text: presentationData.strings.UserInfo_SuggestPhoto(compactName).string, color: .accent, icon: UIImage(bundleImageName: "Peer Info/SuggestAvatar"), action: {
+                            interaction.suggestPhoto()
+                        }))
+                    }
                 }
                 
                 let setText: String
@@ -2158,7 +2203,7 @@ private func editingItems(data: PeerInfoScreenData?, boostStatus: ChannelBoostSt
                     setText = presentationData.strings.UserInfo_SetCustomPhoto(compactName).string
                 }
                 
-                items[.peerDataSettings]!.append(PeerInfoScreenActionItem(id: ItemCustom, text: setText, color: .accent, icon: UIImage(bundleImageName: "Settings/SetAvatar"), action: {
+                items[.peerDataSettings]!.append(PeerInfoScreenActionItem(id: ItemCustomPhoto, text: setText, color: .accent, icon: UIImage(bundleImageName: "Settings/SetAvatar"), action: {
                     interaction.setCustomPhoto()
                 }))
                 
@@ -2970,6 +3015,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
         paneIsReordering: false,
         updatingAvatar: nil,
         updatingBio: nil,
+        updatingNote: nil,
         avatarUploadProgress: nil,
         highlightedButton: nil,
         isEditingBirthDate: false,
@@ -3093,6 +3139,9 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
             requestDeleteContact: { [weak self] in
                 self?.requestDeleteContact()
             },
+            suggestBirthdate: { [weak self] in
+                self?.suggestBirthdate()
+            },
             suggestPhoto: { [weak self] in
                 self?.suggestPhoto()
             },
@@ -3209,6 +3258,11 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
             },
             updateBio: { [weak self] bio in
                 self?.updateBio(bio)
+            },
+            updateNote: { [weak self] note in
+                if let self {
+                    self.state = self.state.withUpdatingNote(note)
+                }
             },
             openDeletePeer: { [weak self] in
                 self?.openDeletePeer()
@@ -4445,7 +4499,22 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                             let firstName = strongSelf.headerNode.editingContentNode.editingTextForKey(.firstName) ?? ""
                             let lastName = strongSelf.headerNode.editingContentNode.editingTextForKey(.lastName) ?? ""
                             
-                            if (peer.firstName ?? "") != firstName || (peer.lastName ?? "") != lastName {
+                            let note = strongSelf.state.updatingNote
+                            
+                            let firstNameUpdated = (peer.firstName ?? "") != firstName
+                            let lastNameUpdated = (peer.lastName ?? "") != lastName
+                            var noteUpdated = false
+                            
+                            if let cachedData = data.cachedData as? CachedUserData {
+                                if let note {
+                                    let updatedEntities = generateChatInputTextEntities(note)
+                                    if note.string != (cachedData.note?.text ?? "") || updatedEntities != (cachedData.note?.entities ?? []) {
+                                        noteUpdated = true
+                                    }
+                                }
+                            }
+                            
+                            if firstNameUpdated || lastNameUpdated || noteUpdated {
                                 if firstName.isEmpty && lastName.isEmpty {
                                     strongSelf.hapticFeedback.error()
                                     strongSelf.headerNode.editingContentNode.shakeTextForKey(.firstName)
@@ -4460,8 +4529,32 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                                     }
                                     strongSelf.controller?.present(statusController, in: .window(.root))
                                     
-                                    strongSelf.activeActionDisposable.set((context.engine.contacts.updateContactName(peerId: peer.id, firstName: firstName, lastName: lastName)
-                                    |> deliverOnMainQueue).startStrict(error: { _ in
+                                    enum ContactUpdateError {
+                                        case generic
+                                    }
+                                    let nameUpdateSignal: Signal<Never, ContactUpdateError>
+                                    if firstNameUpdated || lastNameUpdated {
+                                        nameUpdateSignal = context.engine.contacts.updateContactName(peerId: peer.id, firstName: firstName, lastName: lastName)
+                                        |> mapError { _ -> ContactUpdateError in
+                                            return .generic
+                                        }
+                                        |> ignoreValues
+                                    } else {
+                                        nameUpdateSignal = .complete()
+                                    }
+
+                                    let noteUpdateSignal: Signal<Never, ContactUpdateError>
+                                    if noteUpdated, let note {
+                                        let entities = generateChatInputTextEntities(note)
+                                        noteUpdateSignal = context.engine.contacts.updateContactNote(peerId: peer.id, text: note.string, entities: entities)
+                                        |> mapError { _ -> ContactUpdateError in
+                                            return .generic
+                                        }
+                                    } else {
+                                        noteUpdateSignal = .complete()
+                                    }
+                                    
+                                    strongSelf.activeActionDisposable.set(combineLatest(queue: Queue.mainQueue(), nameUpdateSignal, noteUpdateSignal).startStrict(error: { _ in
                                         dismissStatus?()
                                         
                                         guard let strongSelf = self else {
@@ -4476,7 +4569,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                                         }
                                         let context = strongSelf.context
                                         
-                                        let _ = (getUserPeer(engine: strongSelf.context.engine, peerId: peer.id)
+                                        let _ = (getUserPeer(engine: context.engine, peerId: peer.id)
                                         |> mapToSignal { peer -> Signal<Void, NoError> in
                                             guard case let .user(peer) = peer, let phone = peer.phone, !phone.isEmpty else {
                                                 return .complete()
@@ -4627,7 +4720,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                         strongSelf.headerNode.navigationButtonContainer.performAction?(.cancel, nil, nil)
                     }
                 } else {
-                    strongSelf.state = strongSelf.state.withIsEditing(false).withUpdatingBio(nil).withUpdatingBirthDate(nil).withIsEditingBirthDate(false)
+                    strongSelf.state = strongSelf.state.withIsEditing(false).withUpdatingBio(nil).withUpdatingBirthDate(nil).withIsEditingBirthDate(false).withUpdatingNote(nil)
                     if let (layout, navigationHeight) = strongSelf.validLayout {
                         strongSelf.scrollNode.view.setContentOffset(CGPoint(), animated: false)
                         strongSelf.containerLayoutUpdated(layout: layout, navigationHeight: navigationHeight, transition: .immediate, additive: false)
@@ -7601,7 +7694,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                     strongSelf.controller?.present(UndoOverlayController(presentationData: presentationData, content: .forward(savedMessages: savedMessages, text: text), elevatedLayout: false, animateInAsReplacement: true, action: { action in
                         if savedMessages, let self, action == .info {
                             let _ = (self.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: self.context.account.peerId))
-                                     |> deliverOnMainQueue).start(next: { [weak self] peer in
+                            |> deliverOnMainQueue).start(next: { [weak self] peer in
                                 guard let self, let peer else {
                                     return
                                 }
@@ -10751,6 +10844,8 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
             push(controller)
         case .emojiStatus:
             self.headerNode.invokeDisplayPremiumIntro()
+        case .profileColor:
+            self.interaction.editingOpenNameColorSetup()
         case .powerSaving:
             push(energySavingSettingsScreen(context: self.context))
         case .businessSetup:
@@ -12206,6 +12301,30 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
             }
         })
         peerController.present(controller, in: .window(.root))
+    }
+    
+    private func suggestBirthdate() {
+        let controller = context.sharedContext.makeBirthdaySuggestionScreen(
+            context: self.context,
+            peerId: self.peerId,
+            completion: { [weak self] value in
+                guard let self else {
+                    return
+                }
+                //TODO:release
+                var text = "\(value.day)_\(value.month)"
+                if let year = value.year {
+                    text += "_\(year)"
+                }
+                let _ = enqueueMessages(account: self.context.account, peerId: self.peerId, messages: [
+                    .message(text: "[birthdate]\(text)", attributes: [], inlineStickers: [:], mediaReference: nil, threadId: nil, replyToMessageId: nil, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: [])
+                ]).start()
+                
+                self.headerNode.navigationButtonContainer.performAction?(.cancel, nil, nil)
+                self.openChat(peerId: self.peerId)
+            }
+        )
+        self.controller?.push(controller)
     }
     
     private func suggestPhoto() {

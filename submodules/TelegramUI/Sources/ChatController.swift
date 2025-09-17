@@ -868,7 +868,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             
             var openMessageByAction = false
             var isLocation = false
-                        
+                             
             for media in message.media {
                 if media is TelegramMediaMap {
                     if !displayVoiceMessageDiscardAlert() {
@@ -1227,6 +1227,36 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                             let controller = self.context.sharedContext.makeStarsGiftScreen(context: self.context, message: EngineMessage(message))
                             self.push(controller)
                             return true
+                        case let .suggestedBirthday(birthday):
+                            guard message.author.peerId != self.context.account.peerId else {
+                                return true
+                            }
+                            let settingsPromise: Promise<AccountPrivacySettings?>
+                            if let rootController = self.context.sharedContext.mainWindow?.viewController as? TelegramRootControllerInterface, let current = rootController.getPrivacySettings() {
+                                settingsPromise = current
+                            } else {
+                                settingsPromise = Promise()
+                                settingsPromise.set(.single(nil) |> then(self.context.engine.privacy.requestAccountPrivacySettings() |> map(Optional.init)))
+                            }
+                            
+                            let controller = self.context.sharedContext.makeBirthdayAcceptSuggestionScreen(context: self.context, birthday: birthday, settings: settingsPromise, openSettings: { [weak self] in
+                                guard let self else {
+                                    return
+                                }
+                                self.context.sharedContext.makeBirthdayPrivacyController(context: self.context, settings: settingsPromise, openedFromBirthdayScreen: true, present: { [weak self] c in
+                                    self?.push(c)
+                                })
+                            }, completion: { [weak self] value in
+                                guard let self else {
+                                    return
+                                }
+                                let _ = self.context.engine.accountData.updateBirthday(birthday: value).startStandalone()
+                                
+                                self.present(UndoOverlayController(presentationData: self.presentationData, content: .actionSucceeded(title: nil, text: self.presentationData.strings.SuggestBirthdate_Accept_Added, cancel: nil, destructive: false), elevatedLayout: false, action: { _ in
+                                    return true
+                                }), in: .current)
+                            })
+                            self.push(controller)
                         case let .suggestedProfilePhoto(image):
                             self.chatDisplayNode.dismissInput()
                             if let image = image {

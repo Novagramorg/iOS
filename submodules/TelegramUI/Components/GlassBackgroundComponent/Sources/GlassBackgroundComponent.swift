@@ -124,7 +124,7 @@ private final class ContentContainer: UIView {
     }
 }
 
-public final class GlassBackgroundView: UIView {
+public class GlassBackgroundView: UIView {
     public protocol ContentView: UIView {
         var tintMask: UIView { get }
     }
@@ -414,7 +414,7 @@ public final class GlassBackgroundView: UIView {
                 if let nativeView {
                     if #available(iOS 26.0, *) {
                         let glassEffect = UIGlassEffect(style: .regular)
-                        //glassEffect.tintColor = tintColor.withMultipliedAlpha(0.1)
+                        glassEffect.tintColor = tintColor//.withMultipliedAlpha(0.1)
                         glassEffect.isInteractive = false
                         
                         nativeView.effect = glassEffect
@@ -517,5 +517,42 @@ public final class VariableBlurView: UIVisualEffectView {
         
         let backdropLayer = self.subviews.first?.layer
         backdropLayer?.filters = [variableBlur]
+    }
+}
+
+public final class GlassBackgroundComponent: Component {
+    private let size: CGSize
+    private let tintColor: UIColor
+    
+    public init(size: CGSize, tintColor: UIColor) {
+        self.size = size
+        self.tintColor = tintColor
+    }
+    
+    public static func == (lhs: GlassBackgroundComponent, rhs: GlassBackgroundComponent) -> Bool {
+        if lhs.size != rhs.size {
+            return false
+        }
+        if lhs.tintColor != rhs.tintColor {
+            return false
+        }
+        return true
+    }
+    
+    public final class View: GlassBackgroundView {
+        func update(component: GlassBackgroundComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
+            self.update(size: component.size, cornerRadius: component.size.height / 2.0, isDark: true, tintColor: component.tintColor, transition: transition)
+            self.frame = CGRect(origin: .zero, size: component.size)
+            
+            return component.size
+        }
+    }
+    
+    public func makeView() -> View {
+        return View()
+    }
+    
+    public func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<EnvironmentType>, transition: ComponentTransition) -> CGSize {
+        return view.update(component: self, availableSize: availableSize, state: state, environment: environment, transition: transition)
     }
 }
