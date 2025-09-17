@@ -118,7 +118,7 @@ final class PlayButtonNode: ASDisplayNode {
         
         let backgroundFrame = buttonSize.centered(in: CGRect(origin: .zero, size: size))
         transition.updateFrame(view: self.backgroundView, frame: backgroundFrame)
-        self.backgroundView.update(size: backgroundFrame.size, cornerRadius: backgroundFrame.height * 0.5, isDark: theme.overallDarkAppearance, tintColor: theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.4), transition: ComponentTransition(transition))
+        self.backgroundView.update(size: backgroundFrame.size, cornerRadius: backgroundFrame.height * 0.5, isDark: theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.4)), transition: ComponentTransition(transition))
                 
         self.playPauseIconNode.frame = CGRect(origin: CGPoint(x: 3.0, y: 1.0 - UIScreenPixel), size: CGSize(width: 21.0, height: 21.0))
                                
@@ -387,7 +387,7 @@ public final class ChatRecordingPreviewInputPanelNodeImpl: ChatInputPanelNode {
         })*/
     }
     
-    override public func updateLayout(width: CGFloat, leftInset: CGFloat, rightInset: CGFloat, bottomInset: CGFloat, additionalSideInsets: UIEdgeInsets, maxHeight: CGFloat, isSecondary: Bool, transition: ContainedViewLayoutTransition, interfaceState: ChatPresentationInterfaceState, metrics: LayoutMetrics, isMediaInputExpanded: Bool) -> CGFloat {
+    override public func updateLayout(width: CGFloat, leftInset: CGFloat, rightInset: CGFloat, bottomInset: CGFloat, additionalSideInsets: UIEdgeInsets, maxHeight: CGFloat, maxOverlayHeight: CGFloat, isSecondary: Bool, transition: ContainedViewLayoutTransition, interfaceState: ChatPresentationInterfaceState, metrics: LayoutMetrics, isMediaInputExpanded: Bool) -> CGFloat {
         let innerSize = CGSize(width: 40.0, height: 40.0)
         
         let waveformBackgroundFrame = CGRect(origin: CGPoint(x: 2.0, y: 2.0), size: CGSize(width: width - 2.0 * 2.0, height: 40.0 - 2.0 * 2.0))

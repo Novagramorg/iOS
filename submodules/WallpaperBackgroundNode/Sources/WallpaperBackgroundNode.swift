@@ -123,6 +123,39 @@ public protocol WallpaperBackgroundNode: ASDisplayNode {
 }
 
 private final class EffectImageLayer: SimpleLayer, GradientBackgroundPatternOverlayLayer {
+    final class CloneLayer: SimpleLayer {
+        private weak var parentLayer: EffectImageLayer?
+        private var index: SparseBag<Weak<CloneLayer>>.Index?
+
+        init(parentLayer: EffectImageLayer) {
+            self.parentLayer = parentLayer
+
+            super.init()
+            
+            self.index = parentLayer.cloneLayers.add(Weak(self))
+
+            self.backgroundColor = parentLayer.backgroundColor
+            self.contents = parentLayer.contents
+            self.compositingFilter = parentLayer.compositingFilter
+            self.opacity = parentLayer.opacity
+            self.isOpaque = parentLayer.isOpaque
+        }
+        
+        override init(layer: Any) {
+            super.init(layer: layer)
+        }
+        
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
+        
+        deinit {
+            if let parentLayer = self.parentLayer, let index = self.index {
+                parentLayer.cloneLayers.remove(index)
+            }
+        }
+    }
+    
     enum SoftlightMode {
         case whileAnimating
         case always
@@ -140,6 +173,12 @@ private final class EffectImageLayer: SimpleLayer, GradientBackgroundPatternOver
                     }
                 } else {
                     self.backgroundColor = nil
+                }
+                
+                for cloneLayer in self.cloneLayers {
+                    if let value = cloneLayer.value {
+                        value.backgroundColor = self.backgroundColor
+                    }
                 }
             }
         }
@@ -184,6 +223,8 @@ private final class EffectImageLayer: SimpleLayer, GradientBackgroundPatternOver
     var suspendCompositionUpdates: Bool = false
     private var needsCompositionUpdate: Bool = false
     
+    fileprivate let cloneLayers = SparseBag<Weak<CloneLayer>>()
+    
     private func updateFilters() {
         let useSoftlight: Bool
         let useFilter: Bool
@@ -206,6 +247,12 @@ private final class EffectImageLayer: SimpleLayer, GradientBackgroundPatternOver
                 self.compositingFilter = "softLightBlendMode"
             } else {
                 self.compositingFilter = nil
+            }
+            
+            for cloneLayer in self.cloneLayers {
+                if let value = cloneLayer.value {
+                    value.compositingFilter = self.compositingFilter
+                }
             }
             
             self.updateContents()
@@ -330,6 +377,13 @@ private final class EffectImageLayer: SimpleLayer, GradientBackgroundPatternOver
             self.allowSettingContents = false
             
             self.backgroundColor = nil
+            
+            for cloneLayer in self.cloneLayers {
+                if let value = cloneLayer.value {
+                    value.contents = self.contents
+                    value.backgroundColor = self.backgroundColor
+                }
+            }
         }
     }
     
@@ -344,6 +398,13 @@ private final class EffectImageLayer: SimpleLayer, GradientBackgroundPatternOver
             self.opacity = 1.0
             self.allowSettingOpacity = false
             self.isOpaque = true
+        }
+        
+        for cloneLayer in self.cloneLayers {
+            if let value = cloneLayer.value {
+                value.opacity = self.opacity
+                value.isOpaque = self.isOpaque
+            }
         }
     }
 }
@@ -726,6 +787,8 @@ public final class WallpaperBackgroundNodeImpl: ASDisplayNode, WallpaperBackgrou
     
     private let contentNode: ASDisplayNode
     
+    fileprivate let edgeEffectNodes = SparseBag<Weak<WallpaperEdgeEffectNodeImpl>>()
+    
     private var blurredBackgroundContents: UIImage?
     
     private var freeBackgroundPortalSourceView: PortalSourceView?
@@ -773,9 +836,9 @@ public final class WallpaperBackgroundNodeImpl: ASDisplayNode, WallpaperBackgrou
         }
     }
 
-    private var gradientBackgroundNode: GradientBackgroundNode?
+    fileprivate var gradientBackgroundNode: GradientBackgroundNode?
     private var outgoingBubbleGradientBackgroundNode: GradientBackgroundNode?
-    private let patternImageLayer: EffectImageLayer
+    fileprivate let patternImageLayer: EffectImageLayer
     private let dimLayer: SimpleLayer
     private var isGeneratingPatternImage: Bool = false
 
@@ -785,8 +848,6 @@ public final class WallpaperBackgroundNodeImpl: ASDisplayNode, WallpaperBackgrou
     private var modelRectIndex: Int32?
     
     private var modelStickerNode: DefaultAnimatedStickerNodeImpl?
-    
-    fileprivate let edgeEffectNodes = SparseBag<Weak<WallpaperEdgeEffectNodeImpl>>()
     
     private var isSettingUpWallpaper: Bool = false
 
@@ -1056,6 +1117,12 @@ public final class WallpaperBackgroundNodeImpl: ASDisplayNode, WallpaperBackgrou
                 
                 if self.isLooping {
                     scheduleLoopingEvent = true
+                }
+                
+                for edgeEffectNode in self.edgeEffectNodes {
+                    if let edgeEffectNode = edgeEffectNode.value {
+                        edgeEffectNode.updateGradientNode()
+                    }
                 }
             }
             self.gradientBackgroundNode?.updateColors(colors: mappedColors)
@@ -1720,31 +1787,12 @@ public final class WallpaperBackgroundNodeImpl: ASDisplayNode, WallpaperBackgrou
     }
     
     public func makeEdgeEffectNode() -> WallpaperEdgeEffectNode? {
-        if let gradientBackgroundNode = self.gradientBackgroundNode {
-            let node = WallpaperEdgeEffectNodeImpl(parentNode: self)
-            node.cloneNode = GradientBackgroundNode.CloneNode(parentNode: gradientBackgroundNode, isDimmed: false)
-            return node
-        } else {
-            return nil
-        }
+        let node = WallpaperEdgeEffectNodeImpl(parentNode: self)
+        return node
     }
 }
 
 private final class WallpaperEdgeEffectNodeImpl: ASDisplayNode, WallpaperEdgeEffectNode {
-    var cloneNode: GradientBackgroundNode.CloneNode? {
-        didSet {
-            if self.cloneNode !== oldValue {
-                if let cloneNode = self.cloneNode {
-                    self.containerNode.insertSubnode(cloneNode, at: 0)
-                    
-                    if let params = self.params {
-                        self.updateImpl(rect: params.rect, edge: params.edge, containerSize: params.containerSize, transition: .immediate)
-                    }
-                }
-            }
-        }
-    }
-    
     private struct Params: Equatable {
         let rect: CGRect
         let edge: WallpaperEdgeEffectEdge
@@ -1756,6 +1804,9 @@ private final class WallpaperEdgeEffectNodeImpl: ASDisplayNode, WallpaperEdgeEff
             self.containerSize = containerSize
         }
     }
+    
+    private var gradientNode: GradientBackgroundNode.CloneNode?
+    private let patternImageLayer: EffectImageLayer.CloneLayer
     
     private let containerNode: ASDisplayNode
     private let containerMaskingNode: ASDisplayNode
@@ -1771,6 +1822,14 @@ private final class WallpaperEdgeEffectNodeImpl: ASDisplayNode, WallpaperEdgeEff
     init(parentNode: WallpaperBackgroundNodeImpl) {
         self.parentNode = parentNode
         
+        if let gradientBackgroundNode = parentNode.gradientBackgroundNode {
+            self.gradientNode = GradientBackgroundNode.CloneNode(parentNode: gradientBackgroundNode, isDimmed: false)
+        } else {
+            self.gradientNode = nil
+        }
+        
+        self.patternImageLayer = EffectImageLayer.CloneLayer(parentLayer: parentNode.patternImageLayer)
+        
         self.containerNode = ASDisplayNode()
         self.containerNode.anchorPoint = CGPoint()
         self.containerNode.clipsToBounds = true
@@ -1784,6 +1843,11 @@ private final class WallpaperEdgeEffectNodeImpl: ASDisplayNode, WallpaperEdgeEff
         
         super.init()
         
+        if let gradientNode = self.gradientNode {
+            self.containerNode.addSubnode(gradientNode)
+        }
+        //self.layer.addSublayer(self.patternImageLayer)
+        
         self.addSubnode(self.containerMaskingNode)
         self.containerMaskingNode.view.mask = self.maskView
         
@@ -1795,6 +1859,25 @@ private final class WallpaperEdgeEffectNodeImpl: ASDisplayNode, WallpaperEdgeEff
     deinit {
         if let index = self.index, let parentNode = self.parentNode {
             parentNode.edgeEffectNodes.remove(index)
+        }
+    }
+    
+    func updateGradientNode() {
+        if let gradientBackgroundNode = self.parentNode?.gradientBackgroundNode {
+            if self.gradientNode == nil {
+                let gradientNode = GradientBackgroundNode.CloneNode(parentNode: gradientBackgroundNode, isDimmed: false)
+                self.gradientNode = gradientNode
+                self.containerNode.insertSubnode(gradientNode, at: 0)
+                
+                if let params = self.params {
+                    self.updateImpl(rect: params.rect, edge: params.edge, containerSize: params.containerSize, transition: .immediate)
+                }
+            }
+        } else {
+            if let gradientNode = self.gradientNode {
+                self.gradientNode = nil
+                gradientNode.removeFromSupernode()
+            }
         }
     }
     
@@ -1852,9 +1935,10 @@ private final class WallpaperEdgeEffectNodeImpl: ASDisplayNode, WallpaperEdgeEff
         
         transition.updateFrame(node: self.overlayNode, frame: CGRect(origin: CGPoint(), size: containerSize))
         
-        if let cloneNode = self.cloneNode {
-            transition.updateFrame(node: cloneNode, frame: CGRect(origin: CGPoint(), size: containerSize))
+        if let gradientNode = self.gradientNode {
+            transition.updateFrame(node: gradientNode, frame: CGRect(origin: CGPoint(), size: containerSize))
         }
+        transition.updateFrame(layer: self.patternImageLayer, frame: CGRect(origin: CGPoint(), size: containerSize))
     }
 }
 

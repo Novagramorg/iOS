@@ -623,6 +623,7 @@ public final class EmojiPagerContentComponent: Component {
     public let searchState: SearchState
     public let warpContentsOnEdges: Bool
     public let hideBackground: Bool
+    public let maskEdge: Bool
     public let displaySearchWithPlaceholder: String?
     public let searchCategories: EmojiSearchCategories?
     public let searchInitiallyHidden: Bool
@@ -648,6 +649,7 @@ public final class EmojiPagerContentComponent: Component {
         searchState: SearchState,
         warpContentsOnEdges: Bool,
         hideBackground: Bool,
+        maskEdge: Bool,
         displaySearchWithPlaceholder: String?,
         searchCategories: EmojiSearchCategories?,
         searchInitiallyHidden: Bool,
@@ -672,6 +674,7 @@ public final class EmojiPagerContentComponent: Component {
         self.searchState = searchState
         self.warpContentsOnEdges = warpContentsOnEdges
         self.hideBackground = hideBackground
+        self.maskEdge = maskEdge
         self.displaySearchWithPlaceholder = displaySearchWithPlaceholder
         self.searchCategories = searchCategories
         self.searchInitiallyHidden = searchInitiallyHidden
@@ -699,6 +702,7 @@ public final class EmojiPagerContentComponent: Component {
             searchState: searchState,
             warpContentsOnEdges: self.warpContentsOnEdges,
             hideBackground: self.hideBackground,
+            maskEdge: self.maskEdge,
             displaySearchWithPlaceholder: self.displaySearchWithPlaceholder,
             searchCategories: self.searchCategories,
             searchInitiallyHidden: self.searchInitiallyHidden,
@@ -727,6 +731,7 @@ public final class EmojiPagerContentComponent: Component {
             searchState: searchState,
             warpContentsOnEdges: self.warpContentsOnEdges,
             hideBackground: self.hideBackground,
+            maskEdge: self.maskEdge,
             displaySearchWithPlaceholder: self.displaySearchWithPlaceholder,
             searchCategories: self.searchCategories,
             searchInitiallyHidden: self.searchInitiallyHidden,
@@ -755,6 +760,7 @@ public final class EmojiPagerContentComponent: Component {
             searchState: searchState,
             warpContentsOnEdges: self.warpContentsOnEdges,
             hideBackground: self.hideBackground,
+            maskEdge: self.maskEdge,
             displaySearchWithPlaceholder: self.displaySearchWithPlaceholder,
             searchCategories: self.searchCategories,
             searchInitiallyHidden: self.searchInitiallyHidden,
@@ -809,6 +815,9 @@ public final class EmojiPagerContentComponent: Component {
             return false
         }
         if lhs.hideBackground != rhs.hideBackground {
+            return false
+        }
+        if lhs.maskEdge != rhs.maskEdge {
             return false
         }
         if lhs.displaySearchWithPlaceholder != rhs.displaySearchWithPlaceholder {
@@ -4016,12 +4025,12 @@ public final class EmojiPagerContentComponent: Component {
             self.state?.updated(transition: ComponentTransition(animation: .curve(duration: 0.4, curve: .spring)).withUserData(ContentAnimation(type: .groupExpanded(id: groupId))))
         }
         
-        public func pagerUpdateBackground(backgroundFrame: CGRect, topPanelHeight: CGFloat, transition: ComponentTransition) {
+        public func pagerUpdateBackground(backgroundFrame: CGRect, topPanelHeight: CGFloat, externalTintMaskContainer: UIView?, transition: ComponentTransition) {
             guard let component = self.component, let keyboardChildEnvironment = self.keyboardChildEnvironment, let pagerEnvironment = self.pagerEnvironment else {
                 return
             }
             
-            if let externalBackground = component.inputInteractionHolder.inputInteraction?.externalBackground, let effectContainerView = externalBackground.effectContainerView {
+            if let effectContainerView = externalTintMaskContainer {
                 let mirrorContentClippingView: UIView
                 if let current = self.mirrorContentClippingView {
                     mirrorContentClippingView = current
@@ -4066,17 +4075,19 @@ public final class EmojiPagerContentComponent: Component {
             if component.hideBackground {
                 self.backgroundView.isHidden = true
                 
-                let maskLayer: FadingMaskLayer
-                if let current = self.fadingMaskLayer {
-                    maskLayer = current
-                } else {
-                    maskLayer = FadingMaskLayer()
-                    self.fadingMaskLayer = maskLayer
+                if component.maskEdge {
+                    let maskLayer: FadingMaskLayer
+                    if let current = self.fadingMaskLayer {
+                        maskLayer = current
+                    } else {
+                        maskLayer = FadingMaskLayer()
+                        self.fadingMaskLayer = maskLayer
+                    }
+                    if self.layer.mask == nil {
+                        self.layer.mask = maskLayer
+                    }
+                    maskLayer.frame = CGRect(origin: CGPoint(x: 0.0, y: floorToScreenPixels((topPanelHeight - 34.0) * 0.75)), size: backgroundFrame.size)
                 }
-                if self.layer.mask == nil {
-                    self.layer.mask = maskLayer
-                }
-                maskLayer.frame = CGRect(origin: CGPoint(x: 0.0, y: floorToScreenPixels((topPanelHeight - 34.0) * 0.75)), size: backgroundFrame.size)
             } else if component.warpContentsOnEdges {
                 self.backgroundView.isHidden = true
             } else {

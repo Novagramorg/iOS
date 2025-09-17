@@ -335,9 +335,11 @@ public struct PresentationResourcesChat {
         return theme.image(PresentationResourceKey.chatInputTextFieldClearImage.rawValue, { theme in
             return generateImage(CGSize(width: 14.0, height: 14.0), contextGenerator: { size, context in
                 context.clear(CGRect(origin: CGPoint(), size: size))
-                context.setFillColor(theme.chat.inputPanel.inputControlColor.cgColor)
-                context.setStrokeColor(theme.chat.inputPanel.inputBackgroundColor.cgColor)
+                context.setFillColor(UIColor.white.cgColor)
                 context.fillEllipse(in: CGRect(origin: CGPoint(), size: size))
+                
+                context.setStrokeColor(UIColor.clear.cgColor)
+                context.setBlendMode(.copy)
                 
                 context.setLineWidth(1.5)
                 context.setLineCap(.round)
@@ -356,7 +358,7 @@ public struct PresentationResourcesChat {
                 context.move(to: CGPoint(x: (size.width - lineHeight) / 2.0, y: size.width / 2.0))
                 context.addLine(to: CGPoint(x: (size.width - lineHeight) / 2.0 + lineHeight, y: size.width / 2.0))
                 context.strokePath()
-            })
+            })?.withRenderingMode(.alwaysTemplate)
         })
     }
     

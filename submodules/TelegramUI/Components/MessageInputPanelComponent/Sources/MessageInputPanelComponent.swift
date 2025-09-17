@@ -1076,8 +1076,7 @@ public final class MessageInputPanelComponent: Component {
                     self.fieldBackgroundTint.isHidden = true
                 }
                 if let fieldGlassBackgroundView = self.fieldGlassBackgroundView {
-                    let backgroundColor = UIColor(rgb: 0x1b1d22)
-                    fieldGlassBackgroundView.update(size: fieldBackgroundFrame.size, cornerRadius: baseFieldHeight * 0.5, isDark: true, tintColor: backgroundColor, transition: transition)
+                    fieldGlassBackgroundView.update(size: fieldBackgroundFrame.size, cornerRadius: baseFieldHeight * 0.5, isDark: true, tintColor: .init(kind: .custom, color: UIColor(rgb: 0x1b1d22)), transition: transition)
                     transition.setFrame(view: fieldGlassBackgroundView, frame: fieldBackgroundFrame)
                 }
             default:

@@ -452,20 +452,6 @@
 "Login.PhoneGenericEmailBody" = "I'm trying to use my mobile phone number: %1$@\nBut Telegram shows an error. Please help.\n\nError: %2$@\nApp version: %3$@\nOS version: %4$@\nLocale: %5$@\nMNC: %6$@";
 
 "Login.PhonePaidEmailSubject" = "Payment Issue";
-"Login.PhonePaidEmailBody" = "Hello Telegram Support,\n\nI’m experiencing an issue with an in-app purchase on iOS.\nMy phone number: %1$@\nApple ID (email used in the App Store): \nApp version: %2$@\nDevice model / iOS version: %3$@\nApp Store country/region: %4$@\nDate & time of attempt (with timezone): %5$@\nExact error message: \n\n#payment_failed";
-
-"Login.PhoneTitle" = "Your Phone";
-"Login.PhonePlaceholder" = "Your phone number";
-"Login.CountryCode" = "Country Code";
-"Login.InvalidCountryCode" = "Invalid Country Code";
-
-"Login.InfoTitle" = "Your Info";
-"Login.InfoAvatarAdd" = "add";
-"Login.InfoAvatarPhoto" = "photo";
-"Login.InfoFirstNamePlaceholder" = "First Name";
-"Login.InfoLastNamePlaceholder" = "Last Name";
-"Login.InfoDeletePhoto" = "Remove Photo";
-"Login.InfoHelp" = "Enter your name and add a profile photo.";
 
 // Login.SelectCountry
 "Login.SelectCountry.Title" = "Country";
@@ -15015,6 +15001,36 @@ Sorry for the inconvenience.";
 "Gift.Options.Collectibles.Text" = "Collectible gifts are unique digital items you can exchange or sell.";
 
 "Gift.Upgrade.UpgradeFor" = "Upgrade for %@";
+
+"Login.PhonePaidEmailText" = "1. NAME OF YOUR PHONE CARRIER:
+
+2. (OPTIONAL) WRITE YOUR COMMENT HERE:
+
+=================================================
+Device: %1$@
+OS version: %2$@
+Locale: %3$@
+
+Target phone: %4$@
+
+App: %5$@
+App version: %6$@          
+
+Issue: %7$@
+Error: %8$@";
+
+"Login.PhoneTitle" = "Your Phone";
+"Login.PhonePlaceholder" = "Your phone number";
+"Login.CountryCode" = "Country Code";
+"Login.InvalidCountryCode" = "Invalid Country Code";
+
+"Login.InfoTitle" = "Your Info";
+"Login.InfoAvatarAdd" = "add";
+"Login.InfoAvatarPhoto" = "photo";
+"Login.InfoFirstNamePlaceholder" = "First Name";
+"Login.InfoLastNamePlaceholder" = "Last Name";
+"Login.InfoDeletePhoto" = "Remove Photo";
+"Login.InfoHelp" = "Enter your name and add a profile photo.";
 "Gift.Upgrade.PriceWillDecrease" = "Price will decrease in {m}:{s}";
 
 "Stars.Purchase.RemoveOriginalDetailsStarGiftInfo" = "Buy Stars to remove original details of your gift.";

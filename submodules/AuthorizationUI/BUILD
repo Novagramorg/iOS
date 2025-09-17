@@ -46,6 +46,7 @@ swift_library(
         "//submodules/InAppPurchaseManager",
         "//submodules/TelegramUI/Components/Premium/PremiumCoinComponent",
         "//submodules/TelegramUI/Components/PlainButtonComponent",
+        "//submodules/Utils/DeviceModel",
     ],
     visibility = [
         "//visibility:public",

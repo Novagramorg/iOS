@@ -1232,24 +1232,6 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
                             }
                         })
                     }
-                    self.mainWindow.forEachViewController({ controller in
-                        if let controller = controller as? TabBarAccountSwitchController {
-                            if let rootController = self.mainWindow.viewController as? TelegramRootController {
-                                if let tabsController = rootController.viewControllers.first as? TabBarController {
-                                    for i in 0 ..< tabsController.controllers.count {
-                                        if let _ = tabsController.controllers[i] as? (SettingsController & ViewController) {
-                                            let sourceNodes = tabsController.sourceNodesForController(at: i)
-                                            if let sourceNodes = sourceNodes {
-                                                controller.dismiss(sourceNodes: sourceNodes)
-                                            }
-                                            return false
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        return true
-                    })
                     self.mainWindow.topLevelOverlayControllers = [context.sharedApplicationContext.overlayMediaController, context.notificationController]
                     (context.context.sharedContext as? SharedAccountContextImpl)?.notificationController = context.notificationController
                     var authorizeNotifications = true
