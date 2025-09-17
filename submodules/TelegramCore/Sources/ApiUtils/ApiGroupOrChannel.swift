@@ -175,6 +175,16 @@ func parseTelegramGroupOrChannel(chat: Api.Chat) -> Peer? {
             case let .peerColor(_, color, backgroundEmojiIdValue):
                 nameColorIndex = color
                 backgroundEmojiId = backgroundEmojiIdValue
+            case let .peerColorCollectible(_, collectibleId, giftEmojiId, backgroundEmojiId, accentColor, colors, darkAccentColor, darkColors):
+                let _ = collectibleId
+                let _ = giftEmojiId
+                let _ = backgroundEmojiId
+                let _ = accentColor
+                let _ = colors
+                let _ = darkAccentColor
+                let _ = darkColors
+            case .inputPeerColorCollectible:
+                break
             }
         }
         
@@ -185,6 +195,8 @@ func parseTelegramGroupOrChannel(chat: Api.Chat) -> Peer? {
             case let .peerColor(_, color, backgroundEmojiIdValue):
                 profileColorIndex = color
                 profileBackgroundEmojiId = backgroundEmojiIdValue
+            default:
+                break
             }
         }
         
@@ -254,6 +266,16 @@ func mergeGroupOrChannel(lhs: Peer?, rhs: Api.Chat) -> Peer? {
                     case let .peerColor(_, color, backgroundEmojiIdValue):
                         nameColorIndex = color
                         backgroundEmojiId = backgroundEmojiIdValue
+                    case let .peerColorCollectible(_, collectibleId, giftEmojiId, backgroundEmojiId, accentColor, colors, darkAccentColor, darkColors):
+                        let _ = collectibleId
+                        let _ = giftEmojiId
+                        let _ = backgroundEmojiId
+                        let _ = accentColor
+                        let _ = colors
+                        let _ = darkAccentColor
+                        let _ = darkColors
+                    case .inputPeerColorCollectible:
+                        break
                     }
                 }
                 
@@ -264,6 +286,8 @@ func mergeGroupOrChannel(lhs: Peer?, rhs: Api.Chat) -> Peer? {
                     case let .peerColor(_, color, backgroundEmojiIdValue):
                         profileColorIndex = color
                         profileBackgroundEmojiId = backgroundEmojiIdValue
+                    default:
+                        break
                     }
                 }
                 

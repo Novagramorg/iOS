@@ -435,6 +435,7 @@ func inputPanelForChatPresentationIntefaceState(_ chatPresentationInterfaceState
                 }
             }
         }
+        let _ = displayBotStartPanel
         
         displayInputTextPanel = true
     }

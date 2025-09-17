@@ -1654,13 +1654,12 @@ public extension Api.functions.account {
                 }
 }
 public extension Api.functions.account {
-                static func updateColor(flags: Int32, color: Int32?, backgroundEmojiId: Int64?) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Bool>) {
+                static func updateColor(flags: Int32, color: Api.PeerColor?) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Bool>) {
                     let buffer = Buffer()
-                    buffer.appendInt32(2096079197)
+                    buffer.appendInt32(1749885262)
                     serializeInt32(flags, buffer: buffer, boxed: false)
-                    if Int(flags) & Int(1 << 2) != 0 {serializeInt32(color!, buffer: buffer, boxed: false)}
-                    if Int(flags) & Int(1 << 0) != 0 {serializeInt64(backgroundEmojiId!, buffer: buffer, boxed: false)}
-                    return (FunctionDescription(name: "account.updateColor", parameters: [("flags", String(describing: flags)), ("color", String(describing: color)), ("backgroundEmojiId", String(describing: backgroundEmojiId))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.Bool? in
+                    if Int(flags) & Int(1 << 2) != 0 {color!.serialize(buffer, true)}
+                    return (FunctionDescription(name: "account.updateColor", parameters: [("flags", String(describing: flags)), ("color", String(describing: color))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.Bool? in
                         let reader = BufferReader(buffer)
                         var result: Api.Bool?
                         if let signature = reader.readInt32() {
@@ -4045,15 +4044,16 @@ public extension Api.functions.contacts {
                 }
 }
 public extension Api.functions.contacts {
-                static func addContact(flags: Int32, id: Api.InputUser, firstName: String, lastName: String, phone: String) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Updates>) {
+                static func addContact(flags: Int32, id: Api.InputUser, firstName: String, lastName: String, phone: String, note: Api.TextWithEntities?) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Updates>) {
                     let buffer = Buffer()
-                    buffer.appendInt32(-386636848)
+                    buffer.appendInt32(-642109868)
                     serializeInt32(flags, buffer: buffer, boxed: false)
                     id.serialize(buffer, true)
                     serializeString(firstName, buffer: buffer, boxed: false)
                     serializeString(lastName, buffer: buffer, boxed: false)
                     serializeString(phone, buffer: buffer, boxed: false)
-                    return (FunctionDescription(name: "contacts.addContact", parameters: [("flags", String(describing: flags)), ("id", String(describing: id)), ("firstName", String(describing: firstName)), ("lastName", String(describing: lastName)), ("phone", String(describing: phone))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.Updates? in
+                    if Int(flags) & Int(1 << 1) != 0 {note!.serialize(buffer, true)}
+                    return (FunctionDescription(name: "contacts.addContact", parameters: [("flags", String(describing: flags)), ("id", String(describing: id)), ("firstName", String(describing: firstName)), ("lastName", String(describing: lastName)), ("phone", String(describing: phone)), ("note", String(describing: note))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.Updates? in
                         let reader = BufferReader(buffer)
                         var result: Api.Updates?
                         if let signature = reader.readInt32() {
@@ -4465,6 +4465,22 @@ public extension Api.functions.contacts {
                     serializeInt32(flags, buffer: buffer, boxed: false)
                     id.serialize(buffer, true)
                     return (FunctionDescription(name: "contacts.unblock", parameters: [("flags", String(describing: flags)), ("id", String(describing: id))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.Bool? in
+                        let reader = BufferReader(buffer)
+                        var result: Api.Bool?
+                        if let signature = reader.readInt32() {
+                            result = Api.parse(reader, signature: signature) as? Api.Bool
+                        }
+                        return result
+                    })
+                }
+}
+public extension Api.functions.contacts {
+                static func updateContactNote(id: Api.InputUser, note: Api.TextWithEntities) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Bool>) {
+                    let buffer = Buffer()
+                    buffer.appendInt32(329212923)
+                    id.serialize(buffer, true)
+                    note.serialize(buffer, true)
+                    return (FunctionDescription(name: "contacts.updateContactNote", parameters: [("id", String(describing: id)), ("note", String(describing: note))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.Bool? in
                         let reader = BufferReader(buffer)
                         var result: Api.Bool?
                         if let signature = reader.readInt32() {
@@ -12443,6 +12459,22 @@ public extension Api.functions.users {
                         var result: Api.Bool?
                         if let signature = reader.readInt32() {
                             result = Api.parse(reader, signature: signature) as? Api.Bool
+                        }
+                        return result
+                    })
+                }
+}
+public extension Api.functions.users {
+                static func suggestBirthday(id: Api.InputUser, birthday: Api.Birthday) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Updates>) {
+                    let buffer = Buffer()
+                    buffer.appendInt32(-61656206)
+                    id.serialize(buffer, true)
+                    birthday.serialize(buffer, true)
+                    return (FunctionDescription(name: "users.suggestBirthday", parameters: [("id", String(describing: id)), ("birthday", String(describing: birthday))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.Updates? in
+                        let reader = BufferReader(buffer)
+                        var result: Api.Updates?
+                        if let signature = reader.readInt32() {
+                            result = Api.parse(reader, signature: signature) as? Api.Updates
                         }
                         return result
                     })
