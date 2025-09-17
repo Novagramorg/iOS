@@ -161,13 +161,9 @@ final class VerticalListContextResultsChatInputPanelButtonItemNode: ListViewItem
                     let titleOffsetY: CGFloat
                     switch item.style {
                     case .regular:
-                        strongSelf.backgroundColor = item.theme.list.plainBackgroundColor
-                        strongSelf.topSeparatorNode.isHidden = mergedTop
                         strongSelf.separatorNode.isHidden = !mergedBottom
                         titleOffsetY = 2.0
                     case .round:
-                        strongSelf.backgroundColor = nil
-                        strongSelf.topSeparatorNode.isHidden = true
                         strongSelf.separatorNode.isHidden = !mergedBottom
                         titleOffsetY = 1.0
                     }

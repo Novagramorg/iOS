@@ -461,6 +461,7 @@ func inputPanelForChatPresentationIntefaceState(_ chatPresentationInterfaceState
                     interfaceInteraction?.presentController(controller, nil)
                 })
                 panel.textInputAccessoryPanel = textInputAccessoryPanel
+                panel.textInputContextPanel = textInputContextPanel
                 panel.chatControllerInteraction = chatControllerInteraction
                 panel.interfaceInteraction = interfaceInteraction
                 panel.context = context

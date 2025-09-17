@@ -948,13 +948,13 @@ public func makeDefaultDayPresentationTheme(extendingThemeReference: Presentatio
         panelControlDestructiveColor: UIColor(rgb: 0xff3b30),
         inputBackgroundColor: UIColor(rgb: 0xffffff),
         inputStrokeColor: UIColor(rgb: 0x000000, alpha: 0.1),
-        inputPlaceholderColor: UIColor(rgb: 0x909090, alpha: 0.7),
+        inputPlaceholderColor: UIColor(rgb: 0x202020, alpha: 0.4),
         inputTextColor: UIColor(rgb: 0x000000),
         inputControlColor: UIColor(rgb: 0x202020, alpha: 0.6),
         actionControlFillColor: defaultDayAccentColor,
         actionControlForegroundColor: UIColor(rgb: 0xffffff),
-        primaryTextColor: UIColor(rgb: 0x000000),
-        secondaryTextColor: UIColor(rgb: 0x8e8e93),
+        primaryTextColor: UIColor(rgb: 0x000000, alpha: 0.9),
+        secondaryTextColor: UIColor(rgb: 0x202020, alpha: 0.6),
         mediaRecordingDotColor: UIColor(rgb: 0xed2521),
         mediaRecordingControl: inputPanelMediaRecordingControl
     )

@@ -387,7 +387,7 @@ public final class ChatRecordingPreviewInputPanelNodeImpl: ChatInputPanelNode {
         })*/
     }
     
-    override public func updateLayout(width: CGFloat, leftInset: CGFloat, rightInset: CGFloat, bottomInset: CGFloat, additionalSideInsets: UIEdgeInsets, maxHeight: CGFloat, isSecondary: Bool, transition: ContainedViewLayoutTransition, interfaceState: ChatPresentationInterfaceState, metrics: LayoutMetrics, isMediaInputExpanded: Bool) -> CGFloat {
+    override public func updateLayout(width: CGFloat, leftInset: CGFloat, rightInset: CGFloat, bottomInset: CGFloat, additionalSideInsets: UIEdgeInsets, maxHeight: CGFloat, maxOverlayHeight: CGFloat, isSecondary: Bool, transition: ContainedViewLayoutTransition, interfaceState: ChatPresentationInterfaceState, metrics: LayoutMetrics, isMediaInputExpanded: Bool) -> CGFloat {
         let innerSize = CGSize(width: 40.0, height: 40.0)
         
         let waveformBackgroundFrame = CGRect(origin: CGPoint(x: 2.0, y: 2.0), size: CGSize(width: width - 2.0 * 2.0, height: 40.0 - 2.0 * 2.0))

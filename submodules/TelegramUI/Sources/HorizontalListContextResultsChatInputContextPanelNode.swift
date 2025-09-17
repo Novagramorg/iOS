@@ -378,12 +378,12 @@ final class HorizontalListContextResultsChatInputContextPanelNode: ChatInputCont
     override func updateLayout(size: CGSize, leftInset: CGFloat, rightInset: CGFloat, bottomInset: CGFloat, transition: ContainedViewLayoutTransition, interfaceState: ChatPresentationInterfaceState) {
         let listHeight: CGFloat = 105.0
         
-        transition.updateFrame(node: self.separatorNode, frame: CGRect(origin: CGPoint(x: 0.0, y: size.height - listHeight), size: CGSize(width: size.width, height: UIScreenPixel)))
+        transition.updateFrame(node: self.separatorNode, frame: CGRect(origin: CGPoint(x: 0.0, y: size.height - bottomInset - 8.0 - listHeight), size: CGSize(width: size.width, height: UIScreenPixel)))
         self.listView.bounds = CGRect(x: 0.0, y: 0.0, width: listHeight, height: size.width)
         
         //transition.updateFrame(node: self.listView, frame: CGRect(x: 0.0, y: 0.0, width: size.width, height: size.height))
         
-        transition.updatePosition(node: self.listView, position: CGPoint(x: size.width / 2.0, y: size.height - listHeight / 2.0))
+        transition.updatePosition(node: self.listView, position: CGPoint(x: size.width / 2.0, y: size.height - bottomInset - 8.0 - listHeight / 2.0))
         
         var insets = UIEdgeInsets()
         insets.top = leftInset
