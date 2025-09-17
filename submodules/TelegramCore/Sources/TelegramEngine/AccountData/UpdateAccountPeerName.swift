@@ -68,7 +68,6 @@ func _internal_updateNameColorAndEmoji(account: Account, nameColor: PeerNameColo
         if let _ = backgroundEmojiId {
             flagsReplies |= (1 << 1)
         }
-        
         var flagsProfile: Int32 = 0
         if let _ = profileColor {
             flagsProfile |= (1 << 0)

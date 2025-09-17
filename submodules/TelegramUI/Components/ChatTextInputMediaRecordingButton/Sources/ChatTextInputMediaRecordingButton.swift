@@ -467,7 +467,7 @@ public final class ChatTextInputMediaRecordingButton: TGModernConversationInputM
             tintColor = UIColor(white: 0.0, alpha: 0.5)
         } else {
             isDark = self.theme.overallDarkAppearance
-            tintColor = self.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.65)
+            tintColor = self.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7)
         }
         
         let view = WrapperBlurrredBackgroundView(size: CGSize(width: 40.0, height: 72.0), isDark: isDark, tintColor: tintColor)
@@ -634,7 +634,7 @@ private class WrapperBlurrredBackgroundView: UIView, TGModernConversationInputMi
         
         let view = GlassBackgroundView()
         view.frame = CGRect(origin: CGPoint(), size: size)
-        view.update(size: size, cornerRadius: min(size.width, size.height) * 0.5, isDark: self.isDark, tintColor: self.glassTintColor, transition: .immediate)
+        view.update(size: size, cornerRadius: min(size.width, size.height) * 0.5, isDark: self.isDark, tintColor: .init(kind: .panel, color: self.glassTintColor), transition: .immediate)
         self.view = view
 
         super.init(frame: CGRect(origin: CGPoint(), size: size))
@@ -652,13 +652,13 @@ private class WrapperBlurrredBackgroundView: UIView, TGModernConversationInputMi
         } set {
             super.frame = newValue
             self.view.frame = CGRect(origin: CGPoint(), size: newValue.size)
-            self.view.update(size: newValue.size, cornerRadius: min(newValue.width, newValue.height) * 0.5, isDark: self.isDark, tintColor: self.glassTintColor, transition: .immediate)
+            self.view.update(size: newValue.size, cornerRadius: min(newValue.width, newValue.height) * 0.5, isDark: self.isDark, tintColor: .init(kind: .panel, color: self.glassTintColor), transition: .immediate)
         }
     }
     
     func update(_ size: CGSize) {
         let transition = ContainedViewLayoutTransition.animated(duration: 0.2, curve: .easeInOut)
         transition.updateFrame(view: self.view, frame: CGRect(origin: CGPoint(), size: size))
-        self.view.update(size: size, cornerRadius: min(size.width, size.height) * 0.5, isDark: self.isDark, tintColor: self.glassTintColor, transition: ComponentTransition(transition))
+        self.view.update(size: size, cornerRadius: min(size.width, size.height) * 0.5, isDark: self.isDark, tintColor: .init(kind: .panel, color: self.glassTintColor), transition: ComponentTransition(transition))
     }
 }

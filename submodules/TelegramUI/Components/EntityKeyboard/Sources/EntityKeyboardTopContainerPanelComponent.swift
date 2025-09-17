@@ -206,7 +206,8 @@ final class EntityKeyboardTopContainerPanelComponent: Component {
                 if let current = self.backgroundView {
                     backgroundView = current
                 } else {
-                    backgroundView = BlurredBackgroundView(color: .clear, enableBlur: true)
+                    backgroundView = BlurredBackgroundView(color: .clear, enableBlur: true, customBlurRadius: 5.0)
+                    self.backgroundView = backgroundView
                     self.insertSubview(backgroundView, at: 0)
                 }
                 
@@ -218,12 +219,12 @@ final class EntityKeyboardTopContainerPanelComponent: Component {
                     self.insertSubview(backgroundSeparatorView, aboveSubview: backgroundView)
                 }
                 
-                backgroundView.updateColor(color: component.theme.chat.inputPanel.panelBackgroundColor.withMultipliedAlpha(1.0), transition: .immediate)
-                backgroundView.update(size: CGSize(width: availableSize.width, height: height), transition: transition.containedViewLayoutTransition)
-                transition.setFrame(view: backgroundView, frame: CGRect(origin: CGPoint(), size: CGSize(width: availableSize.width, height: height)))
+                backgroundView.updateColor(color: component.theme.chat.inputPanel.panelBackgroundColor.withMultipliedAlpha(0.65), transition: .immediate)
+                backgroundView.update(size: CGSize(width: availableSize.width, height: height + component.overflowHeight), transition: transition.containedViewLayoutTransition)
+                transition.setFrame(view: backgroundView, frame: CGRect(origin: CGPoint(x: 0.0, y: -component.overflowHeight), size: CGSize(width: availableSize.width, height: height + component.overflowHeight)))
                 
                 backgroundSeparatorView.backgroundColor = component.theme.chat.inputPanel.panelSeparatorColor
-                transition.setFrame(view: backgroundSeparatorView, frame: CGRect(origin: CGPoint(x: 0.0, y: height), size: CGSize(width: availableSize.width, height: UIScreenPixel)))
+                transition.setFrame(view: backgroundSeparatorView, frame: CGRect(origin: CGPoint(x: 0.0, y: height - UIScreenPixel), size: CGSize(width: availableSize.width, height: UIScreenPixel)))
             } else if case .none = component.displayBackground {
                 self.backgroundColor = nil
                 

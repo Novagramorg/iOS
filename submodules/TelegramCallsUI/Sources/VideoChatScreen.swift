@@ -2232,7 +2232,7 @@ final class VideoChatScreenComponent: Component {
                         color: .white
                     )),
                     background: AnyComponent(
-                        GlassBackgroundComponent(size: CGSize(width: navigationButtonDiameter, height: navigationButtonDiameter), tintColor: UIColor(rgb: 0x101014))
+                        GlassBackgroundComponent(size: CGSize(width: navigationButtonDiameter, height: navigationButtonDiameter), tintColor: .init(kind: .custom, color: UIColor(rgb: 0x101014)))
                     ),
                     effectAlignment: .center,
                     minSize: CGSize(width: navigationButtonDiameter, height: navigationButtonDiameter),
@@ -2254,7 +2254,7 @@ final class VideoChatScreenComponent: Component {
                         image: closeButtonImage(dark: false)
                     )),
                     background: AnyComponent(
-                        GlassBackgroundComponent(size: CGSize(width: navigationButtonDiameter, height: navigationButtonDiameter), tintColor: UIColor(rgb: 0x101014))
+                        GlassBackgroundComponent(size: CGSize(width: navigationButtonDiameter, height: navigationButtonDiameter), tintColor: .init(kind: .custom, color: UIColor(rgb: 0x101014)))
                     ),
                     effectAlignment: .center,
                     minSize: CGSize(width: navigationButtonDiameter, height: navigationButtonDiameter),

@@ -418,25 +418,6 @@ func inputPanelForChatPresentationIntefaceState(_ chatPresentationInterfaceState
             }
         }
         
-        var isScheduledMessages = false
-        if case .scheduledMessages = chatPresentationInterfaceState.subject {
-            isScheduledMessages = true
-        }
-        var displayBotStartPanel = false
-        
-        if !isScheduledMessages {
-            if let _ = chatPresentationInterfaceState.botStartPayload {
-                if let user = chatPresentationInterfaceState.renderedPeer?.peer as? TelegramUser, user.botInfo != nil {
-                    displayBotStartPanel = true
-                }
-            } else if let chatHistoryState = chatPresentationInterfaceState.chatHistoryState, case .loaded(true, _) = chatHistoryState {
-                if let user = chatPresentationInterfaceState.renderedPeer?.peer as? TelegramUser, user.botInfo != nil {
-                    displayBotStartPanel = true
-                }
-            }
-        }
-        let _ = displayBotStartPanel
-        
         displayInputTextPanel = true
     }
     
@@ -480,6 +461,7 @@ func inputPanelForChatPresentationIntefaceState(_ chatPresentationInterfaceState
                     interfaceInteraction?.presentController(controller, nil)
                 })
                 panel.textInputAccessoryPanel = textInputAccessoryPanel
+                panel.textInputContextPanel = textInputContextPanel
                 panel.chatControllerInteraction = chatControllerInteraction
                 panel.interfaceInteraction = interfaceInteraction
                 panel.context = context

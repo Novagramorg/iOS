@@ -24,6 +24,9 @@ swift_library(
         "//submodules/AccountContext",
         "//submodules/TelegramUI/Components/PeerManagement/OldChannelsController",
         "//submodules/TooltipUI",
+        "//submodules/TelegramUI/Components/GlassBackgroundComponent",
+        "//submodules/ComponentFlow",
+        "//submodules/Components/ComponentDisplayAdapters",
     ],
     visibility = [
         "//visibility:public",

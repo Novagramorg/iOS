@@ -8000,19 +8000,12 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         }
         
         if let stickerPackReference = stickerPackReference {
-            self.presentEmojiList(references: [stickerPackReference], previewIconFile: file)
+            var previewIconFile: TelegramMediaFile? = file
+            if !file.isValidForDisplay(chatPeerId: message.id.peerId) {
+                previewIconFile = nil
+            }
             
-            /*let _ = (self.context.engine.stickers.loadedStickerPack(reference: stickerPackReference, forceActualized: false)
-            |> deliverOnMainQueue).startStandalone(next: { [weak self] stickerPack in
-                if let strongSelf = self, case let .result(info, _, _) = stickerPack {
-                    strongSelf.present(UndoOverlayController(presentationData: strongSelf.presentationData, content: .sticker(context: strongSelf.context, file: file, loop: true, title: nil, text: strongSelf.presentationData.strings.Stickers_EmojiPackInfoText(info.title).string, undoText: strongSelf.presentationData.strings.Stickers_PremiumPackView, customAction: nil), elevatedLayout: false, action: { [weak self] action in
-                        if let strongSelf = self, action == .undo {
-                            strongSelf.presentEmojiList(references: [stickerPackReference])
-                        }
-                        return false
-                    }), in: .current)
-                }
-            })*/
+            self.presentEmojiList(references: [stickerPackReference], previewIconFile: previewIconFile)
         }
     }
     

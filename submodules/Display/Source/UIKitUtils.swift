@@ -202,6 +202,37 @@ public extension UIColor {
         return UIColor(hue: hue, saturation: saturation, brightness: max(0.0, min(1.0, brightness * factor)), alpha: alpha)
     }
     
+    func adjustedPerceivedBrightness(_ factor: CGFloat) -> UIColor {
+        let f = max(0, factor)
+        let base = self
+        guard
+            let cs = CGColorSpace(name: CGColorSpace.extendedSRGB),
+            let cg = base.cgColor.converted(to: cs, intent: .defaultIntent, options: nil),
+            let c = cg.components, c.count >= 3
+        else { return base }
+
+        func toLin(_ x: CGFloat) -> CGFloat { x <= 0.04045 ? x/12.92 : pow((x+0.055)/1.055, 2.4) }
+        func toSRGB(_ x: CGFloat) -> CGFloat { x <= 0.0031308 ? 12.92*x : 1.055*pow(x, 1/2.4) - 0.055 }
+        func clamp(_ x: CGFloat) -> CGFloat { min(max(x, 0), 1) }
+
+        var r = toLin(c[0]), g = toLin(c[1]), b = toLin(c[2])
+        if f >= 1 {
+            // mix toward white: t = 1 - 1/f (so f=1 → t=0, f→∞ → t→1)
+            let t = 1 - 1/f
+            r = r + (1 - r) * t
+            g = g + (1 - g) * t
+            b = b + (1 - b) * t
+        } else {
+            // scale toward black
+            r *= f; g *= f; b *= f
+        }
+
+        return UIColor(red: clamp(toSRGB(r)),
+                       green: clamp(toSRGB(g)),
+                       blue: clamp(toSRGB(b)),
+                       alpha: cg.alpha)
+    }
+    
     func withMultiplied(hue: CGFloat, saturation: CGFloat, brightness: CGFloat) -> UIColor {
         var hueValue: CGFloat = 0.0
         var saturationValue: CGFloat = 0.0

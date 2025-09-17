@@ -534,7 +534,7 @@ public final class MessageInputActionButtonComponent: Component {
                     tintColor = UIColor(rgb: 0x0187ee)
                 }
                 let buttonSize = CGSize(width: 40.0, height: 40.0)
-                backgroundView.update(size: buttonSize, cornerRadius: buttonSize.height / 2.0, isDark: true, tintColor: tintColor, transition: transition)
+                backgroundView.update(size: buttonSize, cornerRadius: buttonSize.height / 2.0, isDark: true, tintColor: .init(kind: .custom, color: tintColor), transition: transition)
                 backgroundView.frame = CGRect(origin: .zero, size: buttonSize)
             }
             
