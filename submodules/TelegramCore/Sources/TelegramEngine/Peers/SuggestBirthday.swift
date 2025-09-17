@@ -19,5 +19,9 @@ func _internal_suggestBirthday(account: Account, peerId: EnginePeer.Id, birthday
         |> mapError { _ in
             return .generic
         }
+        |> mapToSignal { updates in
+            account.stateManager.addUpdates(updates)
+            return .complete()
+        }
     }
 }

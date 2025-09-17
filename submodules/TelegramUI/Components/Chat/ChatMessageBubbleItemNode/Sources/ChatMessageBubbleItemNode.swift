@@ -244,7 +244,7 @@ private func contentNodeMessagesAndClassesForItem(_ item: ChatMessageItem) -> ([
                     needReactions = false
                 } else if case let .setChatTheme(chatTheme) = action.action, case .gift = chatTheme {
                     result.append((message, ChatMessageGiftBubbleContentNode.self, itemAttributes, BubbleItemAttributes(isAttachment: false, neighborType: .text, neighborSpacing: .default)))
-                } else if case let .suggestedBirthday = action.action {
+                } else if case .suggestedBirthday = action.action {
                     result.append((message, ChatMessageBirthdateSuggestionContentNode.self, itemAttributes, BubbleItemAttributes(isAttachment: false, neighborType: .text, neighborSpacing: .default)))
                 } else {
                     if !canAddMessageReactions(message: message) {

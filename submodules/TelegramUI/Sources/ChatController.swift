@@ -1228,7 +1228,8 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                             self.push(controller)
                             return true
                         case let .suggestedBirthday(birthday):
-                            guard message.author.peerId != self.context.account.peerId else {
+                            self.chatDisplayNode.dismissInput()
+                            guard message.author?.id != self.context.account.peerId else {
                                 return true
                             }
                             let settingsPromise: Promise<AccountPrivacySettings?>
@@ -1257,6 +1258,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                                 }), in: .current)
                             })
                             self.push(controller)
+                            return true
                         case let .suggestedProfilePhoto(image):
                             self.chatDisplayNode.dismissInput()
                             if let image = image {
