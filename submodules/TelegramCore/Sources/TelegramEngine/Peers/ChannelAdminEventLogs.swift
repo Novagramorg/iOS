@@ -390,6 +390,10 @@ func channelAdminLogEvents(accountPeerId: PeerId, postbox: Postbox, network: Net
                                     case let .peerColor(_, color, backgroundEmojiIdValue):
                                         prevColorIndex = color ?? 0
                                         prevEmojiId = backgroundEmojiIdValue
+                                    case .peerColorCollectible, .inputPeerColorCollectible:
+                                        //TODO:release
+                                        prevColorIndex = 0
+                                        break
                                     }
                                     
                                     var newColorIndex: Int32
@@ -398,6 +402,10 @@ func channelAdminLogEvents(accountPeerId: PeerId, postbox: Postbox, network: Net
                                     case let .peerColor(_, color, backgroundEmojiIdValue):
                                         newColorIndex = color ?? 0
                                         newEmojiId = backgroundEmojiIdValue
+                                    case .peerColorCollectible, .inputPeerColorCollectible:
+                                        //TODO:release
+                                        newColorIndex = 0
+                                        break
                                     }
                                     
                                     action = .changeNameColor(prevColor: PeerNameColor(rawValue: prevColorIndex), prevIcon: prevEmojiId, newColor: PeerNameColor(rawValue: newColorIndex), newIcon: newEmojiId)
@@ -408,6 +416,9 @@ func channelAdminLogEvents(accountPeerId: PeerId, postbox: Postbox, network: Net
                                     case let .peerColor(_, color, backgroundEmojiIdValue):
                                         prevColorIndex = color
                                         prevEmojiId = backgroundEmojiIdValue
+                                    case .peerColorCollectible, .inputPeerColorCollectible:
+                                        //TODO:release
+                                        break
                                     }
                                     
                                     var newColorIndex: Int32?
@@ -416,6 +427,9 @@ func channelAdminLogEvents(accountPeerId: PeerId, postbox: Postbox, network: Net
                                     case let .peerColor(_, color, backgroundEmojiIdValue):
                                         newColorIndex = color
                                         newEmojiId = backgroundEmojiIdValue
+                                    case .peerColorCollectible, .inputPeerColorCollectible:
+                                        //TODO:release
+                                        break
                                     }
                                     
                                     action = .changeProfileColor(prevColor: prevColorIndex.flatMap(PeerNameColor.init(rawValue:)), prevIcon: prevEmojiId, newColor: newColorIndex.flatMap(PeerNameColor.init(rawValue:)), newIcon: newEmojiId)

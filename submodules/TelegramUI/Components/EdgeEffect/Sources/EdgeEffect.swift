@@ -26,7 +26,7 @@ public final class EdgeEffectView: UIView {
         fatalError("init(coder:) has not been implemented")
     }
     
-    public func update(content: UIColor, rect: CGRect, edge: Edge, edgeSize: CGFloat, containerSize: CGSize, transition: ComponentTransition) {
+    public func update(content: UIColor, isInverted: Bool, rect: CGRect, edge: Edge, edgeSize: CGFloat, containerSize: CGSize, transition: ComponentTransition) {
         self.contentView.backgroundColor = content
         
         transition.setFrame(view: self.contentView, frame: CGRect(origin: CGPoint(), size: rect.size))
