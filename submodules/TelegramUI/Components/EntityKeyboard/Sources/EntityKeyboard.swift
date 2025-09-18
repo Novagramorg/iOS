@@ -106,6 +106,7 @@ public final class EntityKeyboardComponent: Component {
     public let defaultToEmojiTab: Bool
     public let externalTopPanelContainer: PagerExternalTopPanelContainer?
     public let externalBottomPanelContainer: PagerExternalTopPanelContainer?
+    public let externalTintMaskContainer: UIView?
     public let displayTopPanelBackground: DisplayTopPanelBackground
     public let topPanelExtensionUpdated: (CGFloat, ComponentTransition) -> Void
     public let topPanelScrollingOffset: (CGFloat, ComponentTransition) -> Void
@@ -141,6 +142,7 @@ public final class EntityKeyboardComponent: Component {
         defaultToEmojiTab: Bool,
         externalTopPanelContainer: PagerExternalTopPanelContainer?,
         externalBottomPanelContainer: PagerExternalTopPanelContainer?,
+        externalTintMaskContainer: UIView?,
         displayTopPanelBackground: DisplayTopPanelBackground,
         topPanelExtensionUpdated: @escaping (CGFloat, ComponentTransition) -> Void,
         topPanelScrollingOffset: @escaping (CGFloat, ComponentTransition) -> Void,
@@ -175,6 +177,7 @@ public final class EntityKeyboardComponent: Component {
         self.defaultToEmojiTab = defaultToEmojiTab
         self.externalTopPanelContainer = externalTopPanelContainer
         self.externalBottomPanelContainer = externalBottomPanelContainer
+        self.externalTintMaskContainer = externalTintMaskContainer
         self.displayTopPanelBackground = displayTopPanelBackground
         self.topPanelExtensionUpdated = topPanelExtensionUpdated
         self.topPanelScrollingOffset = topPanelScrollingOffset
@@ -716,6 +719,12 @@ public final class EntityKeyboardComponent: Component {
                 forceUpdate = true
             }
             
+            var bottomPanelContainerInsets = component.containerInsets
+            if bottomPanelContainerInsets.left == 0.0 && bottomPanelContainerInsets.bottom != 0.0 {
+                bottomPanelContainerInsets.left += 16.0
+                bottomPanelContainerInsets.right += 16.0
+            }
+            
             let isContentInFocus = component.isContentInFocus && self.searchComponent == nil
             let pagerSize = self.pagerView.update(
                 transition: transition,
@@ -732,18 +741,20 @@ public final class EntityKeyboardComponent: Component {
                     topPanel: AnyComponent(EntityKeyboardTopContainerPanelComponent(
                         theme: component.theme,
                         overflowHeight: component.hiddenInputHeight,
+                        topInset: 6.0,
                         displayBackground: component.externalTopPanelContainer != nil ? .none : component.displayTopPanelBackground
                     )),
                     externalTopPanelContainer: component.externalTopPanelContainer,
                     bottomPanel: component.displayBottomPanel ? AnyComponent(EntityKeyboardBottomPanelComponent(
                         theme: component.theme,
-                        containerInsets: component.containerInsets,
+                        containerInsets: bottomPanelContainerInsets,
                         deleteBackwards: { [weak self] in
                             self?.component?.emojiContent?.inputInteractionHolder.inputInteraction?.deleteBackwards?()
                             AudioServicesPlaySystemSound(0x451)
                         }
                     )) : nil,
                     externalBottomPanelContainer: component.externalBottomPanelContainer,
+                    externalTintMaskContainer: component.externalTintMaskContainer,
                     panelStateUpdated: { [weak self] panelState, transition in
                         guard let strongSelf = self else {
                             return

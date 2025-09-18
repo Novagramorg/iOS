@@ -71,9 +71,10 @@ func _internal_updateNameColorAndEmoji(account: Account, nameColor: PeerNameColo
             flagsProfile |= (1 << 2)
         }
         
+        //TODO:release
         return combineLatest(
-            account.network.request(Api.functions.account.updateColor(flags: flagsReplies, color: nameColor.rawValue, backgroundEmojiId: backgroundEmojiId ?? 0)),
-            account.network.request(Api.functions.account.updateColor(flags: flagsProfile, color: profileColor?.rawValue, backgroundEmojiId: profileBackgroundEmojiId ?? 0))
+            account.network.request(Api.functions.account.updateColor(flags: 0 << 0, color: .peerColor(flags: flagsReplies, color: nameColor.rawValue, backgroundEmojiId: backgroundEmojiId ?? 0))),
+            account.network.request(Api.functions.account.updateColor(flags: 0 << 1, color: .peerColor(flags: flagsProfile, color: profileColor?.rawValue, backgroundEmojiId: profileBackgroundEmojiId ?? 0)))
         )
         |> mapError { _ -> UpdateNameColorAndEmojiError in
             return .generic

@@ -1967,21 +1967,21 @@ extension ChatControllerImpl {
             if let strongSelf = self {
                 strongSelf.updateChatPresentationInterfaceState(animated: true, interactive: true, { $0.updatedInterfaceState({ $0.withUpdatedForwardOptionsState(f($0.forwardOptionsState ?? ChatInterfaceForwardOptionsState(hideNames: false, hideCaptions: false, unhideNamesOnCaptionChange: false))) }) })
             }
-        }, presentForwardOptions: { [weak self] sourceNode in
+        }, presentForwardOptions: { [weak self] sourceView in
             guard let self else {
                 return
             }
-            presentChatForwardOptions(selfController: self, sourceNode: sourceNode)
-        }, presentReplyOptions: { [weak self] sourceNode in
+            presentChatForwardOptions(selfController: self, sourceView: sourceView)
+        }, presentReplyOptions: { [weak self] sourceView in
             guard let self else {
                 return
             }
-            presentChatReplyOptions(selfController: self, sourceNode: sourceNode)
-        }, presentLinkOptions: { [weak self] sourceNode in
+            presentChatReplyOptions(selfController: self, sourceView: sourceView)
+        }, presentLinkOptions: { [weak self] sourceView in
             guard let self else {
                 return
             }
-            presentChatLinkOptions(selfController: self, sourceNode: sourceNode)
+            presentChatLinkOptions(selfController: self, sourceView: sourceView)
         }, presentSuggestPostOptions: { [weak self] in
             guard let self else {
                 return
@@ -3917,7 +3917,7 @@ extension ChatControllerImpl {
             
             strongSelf.chatDisplayNode.messageTransitionNode.dismissMessageReactionContexts()
             
-            let contextController = ContextController(presentationData: strongSelf.presentationData, source: .reference(ChatControllerContextReferenceContentSource(controller: strongSelf, sourceView: node.view, insets: UIEdgeInsets(top: 0.0, left: 0.0, bottom: bottomInset, right: 0.0))), items: .single(ContextController.Items(content: .list(items))), gesture: gesture, workaroundUseLegacyImplementation: true)
+            let contextController = ContextController(presentationData: strongSelf.presentationData, source: .reference(ChatControllerContextReferenceContentSource(controller: strongSelf, sourceView: node.view, insets: UIEdgeInsets(top: 0.0, left: 0.0, bottom: bottomInset, right: 0.0), contentInsets: UIEdgeInsets(top: 0.0, left: 0.0, bottom: 0.0, right: 0.0))), items: .single(ContextController.Items(content: .list(items))), gesture: gesture, workaroundUseLegacyImplementation: true)
             contextController.dismissed = { [weak self] in
                 if let strongSelf = self {
                     strongSelf.updateChatPresentationInterfaceState(interactive: true, {
@@ -4325,6 +4325,30 @@ extension ChatControllerImpl {
                 return
             }
             self.openTodoEditing(messageId: messageId, itemId: itemId, append: append)
+        }, dismissUrlPreview: { [weak self] in
+            guard let self else {
+                return
+            }
+            self.chatDisplayNode.dismissUrlPreview()
+        }, dismissForwardMessages: { [weak self] in
+            guard let self else {
+                return
+            }
+            self.chatDisplayNode.requestUpdateChatInterfaceState(.animated(duration: 0.4, curve: .spring), false, { $0.withUpdatedForwardMessageIds(nil).withUpdatedForwardOptionsState(nil) })
+        }, dismissSuggestPost: { [weak self] in
+            guard let self else {
+                return
+            }
+            self.chatDisplayNode.requestUpdateChatInterfaceState(.animated(duration: 0.4, curve: .spring), false, { state in
+                var state = state
+                if let postSuggestionState = state.postSuggestionState {
+                    state = state.withUpdatedPostSuggestionState(nil)
+                    if postSuggestionState.editingOriginalMessageId != nil {
+                        state = state.withUpdatedEditMessage(nil)
+                    }
+                }
+                return state
+            })
         }, displayUndo: { [weak self] content in
             guard let self else {
                 return

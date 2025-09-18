@@ -21,6 +21,7 @@ import ChatFolderLinkPreviewScreen
 import ChatListHeaderComponent
 import StoryPeerListComponent
 import TelegramNotices
+import EdgeEffect
 
 public enum ChatListContainerNodeFilter: Equatable {
     case all

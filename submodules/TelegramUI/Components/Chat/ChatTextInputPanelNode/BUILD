@@ -59,6 +59,11 @@ swift_library(
         "//submodules/TelegramUI/Components/Chat/ChatTextInputAudioRecordingTimeNode",
         "//submodules/TelegramUI/Components/Chat/ChatTextInputAudioRecordingCancelIndicator",
         "//submodules/TelegramUI/Components/Chat/ChatRecordingViewOnceButtonNode",
+        "//submodules/TelegramUI/Components/GlassBackgroundComponent",
+        "//submodules/TelegramUI/Components/Chat/ChatInputAccessoryPanel",
+        "//submodules/TelegramUI/Components/Chat/ChatInputAutocompletePanel",
+        "//submodules/TelegramUI/Components/Chat/ChatRecordingPreviewInputPanelNode",
+        "//submodules/TelegramUI/Components/Chat/ChatInputContextPanelNode",
     ],
     visibility = [
         "//visibility:public",

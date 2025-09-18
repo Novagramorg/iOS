@@ -2979,10 +2979,10 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
     }
     
     public func setIsMuted(action: PresentationGroupCallMuteAction) {
-        if "".isEmpty {
+        /*if "".isEmpty {
             self.messagesContext?.send(text: "test\(UInt32.random(in: 0 ... UInt32.max))", entities: [])
             return
-        }
+        }*/
         
         if self.isMutedValue == action {
             return
