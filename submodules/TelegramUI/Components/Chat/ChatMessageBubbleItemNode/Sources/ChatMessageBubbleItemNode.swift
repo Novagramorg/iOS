@@ -64,6 +64,7 @@ import ChatMessageInvoiceBubbleContentNode
 import ChatMessageMapBubbleContentNode
 import ChatMessageMediaBubbleContentNode
 import ChatMessageProfilePhotoSuggestionContentNode
+import ChatMessageBirthdateSuggestionContentNode
 import ChatMessageRestrictedBubbleContentNode
 import ChatMessageStoryMentionContentNode
 import ChatMessageUnsupportedBubbleContentNode
@@ -243,6 +244,8 @@ private func contentNodeMessagesAndClassesForItem(_ item: ChatMessageItem) -> ([
                     needReactions = false
                 } else if case let .setChatTheme(chatTheme) = action.action, case .gift = chatTheme {
                     result.append((message, ChatMessageGiftBubbleContentNode.self, itemAttributes, BubbleItemAttributes(isAttachment: false, neighborType: .text, neighborSpacing: .default)))
+                } else if case .suggestedBirthday = action.action {
+                    result.append((message, ChatMessageBirthdateSuggestionContentNode.self, itemAttributes, BubbleItemAttributes(isAttachment: false, neighborType: .text, neighborSpacing: .default)))
                 } else {
                     if !canAddMessageReactions(message: message) {
                         needReactions = false
@@ -295,7 +298,7 @@ private func contentNodeMessagesAndClassesForItem(_ item: ChatMessageItem) -> ([
         if let updatingMedia = itemAttributes.updatingMedia {
             messageText = updatingMedia.text
         }
-        
+                
         if !messageText.isEmpty || isUnsupportedMedia || isStoryWithText {
             if !skipText {
                 if case .group = item.content, !isFile {

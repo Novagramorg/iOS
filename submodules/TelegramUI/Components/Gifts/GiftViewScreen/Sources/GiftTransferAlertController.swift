@@ -410,7 +410,8 @@ private final class GiftTransferAlertContentNode: AlertContentNode {
             }
             
             if let actionNode = self.actionNodes.first {
-                actionNode.isHidden = true
+                actionNode.isUserInteractionEnabled = false
+                actionNode.isHidden = false
                 
                 let indicatorSize = CGSize(width: 22.0, height: 22.0)
                 transition.updateFrame(node: activityIndicator, frame: CGRect(origin: CGPoint(x: actionNode.frame.minX + floor((actionNode.frame.width - indicatorSize.width) / 2.0), y: actionNode.frame.minY + floor((actionNode.frame.height - indicatorSize.height) / 2.0)), size: indicatorSize))

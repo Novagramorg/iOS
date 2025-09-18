@@ -6205,25 +6205,31 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
             settingsPromise = Promise()
             settingsPromise.set(.single(nil) |> then(context.engine.privacy.requestAccountPrivacySettings() |> map(Optional.init)))
         }
-        let controller = BirthdayPickerScreen(context: context, settings: settingsPromise.get(), openSettings: { [weak self] in
-            guard let self else {
-                return
+        
+        let controller = context.sharedContext.makeBirthdayPickerScreen(
+            context: context,
+            settings: settingsPromise,
+            openSettings: { [weak self] in
+                guard let self else {
+                    return
+                }
+                self.context.sharedContext.makeBirthdayPrivacyController(context: self.context, settings: settingsPromise, openedFromBirthdayScreen: true, present: { [weak self] c in
+                    self?.push(c)
+                })
+            },
+            completion: { [weak self] value in
+                guard let self else {
+                    return
+                }
+                
+                let _ = context.engine.accountData.updateBirthday(birthday: value).startStandalone()
+                
+                let presentationData = self.context.sharedContext.currentPresentationData.with { $0 }
+                self.present(UndoOverlayController(presentationData: presentationData, content: .actionSucceeded(title: nil, text: self.presentationData.strings.Birthday_Added, cancel: nil, destructive: false), elevatedLayout: false, action: { _ in
+                    return true
+                }), in: .current)
             }
-            self.context.sharedContext.makeBirthdayPrivacyController(context: self.context, settings: settingsPromise, openedFromBirthdayScreen: true, present: { [weak self] c in
-                self?.push(c)
-            })
-        }, completion: { [weak self] value in
-            guard let self else {
-                return
-            }
-            
-            let _ = context.engine.accountData.updateBirthday(birthday: value).startStandalone()
-            
-            let presentationData = self.context.sharedContext.currentPresentationData.with { $0 }
-            self.present(UndoOverlayController(presentationData: presentationData, content: .actionSucceeded(title: nil, text: self.presentationData.strings.Birthday_Added, cancel: nil, destructive: false), elevatedLayout: false, action: { _ in
-                return true
-            }), in: .current)
-        })
+        )
         self.push(controller)
     }
     

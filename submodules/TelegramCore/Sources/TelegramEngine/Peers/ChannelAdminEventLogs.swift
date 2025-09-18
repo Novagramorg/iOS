@@ -384,54 +384,20 @@ func channelAdminLogEvents(accountPeerId: PeerId, postbox: Postbox, network: Net
                                 case let .channelAdminLogEventActionToggleAntiSpam(newValue):
                                     action = .toggleAntiSpam(isEnabled: newValue == .boolTrue)
                                 case let .channelAdminLogEventActionChangePeerColor(prevValue, newValue):
-                                    var prevColorIndex: Int32
-                                    var prevEmojiId: Int64?
-                                    switch prevValue {
-                                    case let .peerColor(_, color, backgroundEmojiIdValue):
-                                        prevColorIndex = color ?? 0
-                                        prevEmojiId = backgroundEmojiIdValue
-                                    case .peerColorCollectible, .inputPeerColorCollectible:
-                                        //TODO:release
-                                        prevColorIndex = 0
-                                        break
+                                    guard case let .peerColor(_, prevColor, prevBackgroundEmojiIdValue) = prevValue, case let .peerColor(_, newColor, newBackgroundEmojiIdValue) = newValue else {
+                                        continue
                                     }
+                                    let prevColorIndex = prevColor ?? 0
+                                    let prevEmojiId = prevBackgroundEmojiIdValue
                                     
-                                    var newColorIndex: Int32
-                                    var newEmojiId: Int64?
-                                    switch newValue {
-                                    case let .peerColor(_, color, backgroundEmojiIdValue):
-                                        newColorIndex = color ?? 0
-                                        newEmojiId = backgroundEmojiIdValue
-                                    case .peerColorCollectible, .inputPeerColorCollectible:
-                                        //TODO:release
-                                        newColorIndex = 0
-                                        break
-                                    }
+                                    let newColorIndex = newColor ?? 0
+                                    let newEmojiId = newBackgroundEmojiIdValue
                                     
                                     action = .changeNameColor(prevColor: PeerNameColor(rawValue: prevColorIndex), prevIcon: prevEmojiId, newColor: PeerNameColor(rawValue: newColorIndex), newIcon: newEmojiId)
                                 case let .channelAdminLogEventActionChangeProfilePeerColor(prevValue, newValue):
-                                    var prevColorIndex: Int32?
-                                    var prevEmojiId: Int64?
-                                    switch prevValue {
-                                    case let .peerColor(_, color, backgroundEmojiIdValue):
-                                        prevColorIndex = color
-                                        prevEmojiId = backgroundEmojiIdValue
-                                    case .peerColorCollectible, .inputPeerColorCollectible:
-                                        //TODO:release
-                                        break
+                                    guard case let .peerColor(_, prevColorIndex, prevEmojiId) = prevValue, case let .peerColor(_, newColorIndex, newEmojiId) = newValue else {
+                                        continue
                                     }
-                                    
-                                    var newColorIndex: Int32?
-                                    var newEmojiId: Int64?
-                                    switch newValue {
-                                    case let .peerColor(_, color, backgroundEmojiIdValue):
-                                        newColorIndex = color
-                                        newEmojiId = backgroundEmojiIdValue
-                                    case .peerColorCollectible, .inputPeerColorCollectible:
-                                        //TODO:release
-                                        break
-                                    }
-                                    
                                     action = .changeProfileColor(prevColor: prevColorIndex.flatMap(PeerNameColor.init(rawValue:)), prevIcon: prevEmojiId, newColor: newColorIndex.flatMap(PeerNameColor.init(rawValue:)), newIcon: newEmojiId)
                                 case let .channelAdminLogEventActionChangeWallpaper(prevValue, newValue):
                                     let prev: TelegramWallpaper?

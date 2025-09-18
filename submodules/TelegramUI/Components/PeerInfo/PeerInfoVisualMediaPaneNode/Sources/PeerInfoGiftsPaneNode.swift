@@ -935,7 +935,7 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
         }
         
         let bottomContentOffset = max(0.0, self.scrollNode.view.contentSize.height - self.scrollNode.view.contentOffset.y - self.scrollNode.view.frame.height)
-        if interactive, bottomContentOffset < 200.0 {
+        if bottomContentOffset < 200.0 {
             self.giftsListView.loadMore()
         }
     }

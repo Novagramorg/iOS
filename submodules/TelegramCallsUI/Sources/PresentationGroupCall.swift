@@ -929,6 +929,7 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
                 reference: .id(id: initialCall.description.id, accessHash: initialCall.description.accessHash),
                 e2eContext: self.e2eContext
             )
+            self.messagesStatePromise.set(self.messagesContext!.state)
         }
         
         var sharedAudioContext = sharedAudioContext
@@ -2639,6 +2640,7 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
                     }
                 }))
                 
+                self.isFailedEventDisposable?.dispose()
                 self.isFailedEventDisposable = (participantsContext.isFailedEvent
                 |> filter { $0 }
                 |> take(1)
@@ -2983,7 +2985,7 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
             self.messagesContext?.send(text: "test\(UInt32.random(in: 0 ... UInt32.max))", entities: [])
             return
         }*/
-        
+
         if self.isMutedValue == action {
             return
         }

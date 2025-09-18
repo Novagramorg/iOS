@@ -15058,3 +15058,22 @@ Error: %8$@";
 "Gift.UpgradeCost.AdditionalDescription" = "Users who upgrade their gifts first get collectibles with shorter numbers.";
 "Gift.UpgradeCost.Done" = "Understood";
 
+"UserInfo.SuggestBirthdate" = "Suggest Date of Birth";
+
+"SuggestBirthdate.Suggest.Title" = "%@'s Date of Birth";
+"SuggestBirthdate.Suggest.Action" = "Suggest Date of Birth";
+"SuggestBirthdate.Accept.Title" = "Date of Birth";
+"SuggestBirthdate.Accept.HideYear" = "Hide the Year";
+"SuggestBirthdate.Accept.Action" = "Add to My Profile";
+"SuggestBirthdate.Accept.Added" = "Date of birth added.";
+
+"Notification.SuggestBirthdate" = "Suggested Date of Birth";
+
+"Conversation.SuggestedBirthdateText" = "**%@** suggests you to add you date of birth:.";
+"Conversation.SuggestedBirthdateTextYou" = "You suggested **%@** to add a date of birth:";
+"Conversation.SuggestedBirthdate.Day" = "Day";
+"Conversation.SuggestedBirthdate.Month" = "Month";
+"Conversation.SuggestedBirthdate.Year" = "Year";
+"Conversation.SuggestedBirthdate.View" = "View";
+
+"PeerInfo.ChangeProfileColor" = "Change Profile Color";
