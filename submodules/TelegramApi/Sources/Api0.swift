@@ -612,6 +612,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[1007897979] = { return Api.MessageAction.parse_messageActionSetMessagesTTL($0) }
     dict[-229775366] = { return Api.MessageAction.parse_messageActionStarGift($0) }
     dict[-1787656893] = { return Api.MessageAction.parse_messageActionStarGiftUnique($0) }
+    dict[747579941] = { return Api.MessageAction.parse_messageActionSuggestBirthday($0) }
     dict[1474192222] = { return Api.MessageAction.parse_messageActionSuggestProfilePhoto($0) }
     dict[-293988970] = { return Api.MessageAction.parse_messageActionSuggestedPostApproval($0) }
     dict[1777932024] = { return Api.MessageAction.parse_messageActionSuggestedPostRefund($0) }

@@ -272,6 +272,8 @@ func telegramMediaActionFromApiAction(_ action: Api.MessageAction) -> TelegramMe
         return TelegramMediaAction(action: .suggestedPostSuccess(amount: CurrencyAmount(apiAmount: price)))
     case let .messageActionSuggestedPostRefund(flags):
         return TelegramMediaAction(action: .suggestedPostRefund(TelegramMediaActionType.SuggestedPostRefund(isUserInitiated: (flags & (1 << 0)) != 0)))
+    case let .messageActionSuggestBirthday(birthday):
+        return TelegramMediaAction(action: .suggestedBirthday(TelegramBirthday(apiBirthday: birthday)))
     }
 }
 
