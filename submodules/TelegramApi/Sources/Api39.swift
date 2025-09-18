@@ -12464,3 +12464,19 @@ public extension Api.functions.users {
                     })
                 }
 }
+public extension Api.functions.users {
+                static func suggestBirthday(id: Api.InputUser, birthday: Api.Birthday) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Updates>) {
+                    let buffer = Buffer()
+                    buffer.appendInt32(-61656206)
+                    id.serialize(buffer, true)
+                    birthday.serialize(buffer, true)
+                    return (FunctionDescription(name: "users.suggestBirthday", parameters: [("id", String(describing: id)), ("birthday", String(describing: birthday))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.Updates? in
+                        let reader = BufferReader(buffer)
+                        var result: Api.Updates?
+                        if let signature = reader.readInt32() {
+                            result = Api.parse(reader, signature: signature) as? Api.Updates
+                        }
+                        return result
+                    })
+                }
+}

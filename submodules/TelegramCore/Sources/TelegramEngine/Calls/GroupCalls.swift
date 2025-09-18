@@ -3395,12 +3395,16 @@ public final class GroupCallMessagesContext {
         public let author: EnginePeer?
         public let text: String
         public let entities: [MessageTextEntity]
+        public let date: Int32
+        public let lifetime: Int32
         
-        public init(id: Int64, author: EnginePeer?, text: String, entities: [MessageTextEntity]) {
+        public init(id: Int64, author: EnginePeer?, text: String, entities: [MessageTextEntity], date: Int32, lifetime: Int32) {
             self.id = id
             self.author = author
             self.text = text
             self.entities = entities
+            self.date = date
+            self.lifetime = lifetime
         }
         
         public static func ==(lhs: Message, rhs: Message) -> Bool {
@@ -3419,6 +3423,12 @@ public final class GroupCallMessagesContext {
             if lhs.entities != rhs.entities {
                 return false
             }
+            if lhs.date != rhs.date {
+                return false
+            }
+            if lhs.lifetime != rhs.lifetime {
+                return false
+            }
             return true
         }
     }
@@ -3432,6 +3442,8 @@ public final class GroupCallMessagesContext {
     }
     
     private final class Impl {
+        private let defaultMessageLifetime: Int32 = 10
+        
         let queue: Queue
         let account: Account
         let callId: Int64
@@ -3450,6 +3462,8 @@ public final class GroupCallMessagesContext {
         var updatesDisposable: Disposable?
         let sendMessageDisposables = DisposableSet()
         
+        private var messageLifeTimer: SwiftSignalKit.Timer?
+        
         init(queue: Queue, account: Account, callId: Int64, reference: InternalGroupCallReference, e2eContext: ConferenceCallE2EContext?) {
             self.queue = queue
             self.account = account
@@ -3465,6 +3479,7 @@ public final class GroupCallMessagesContext {
                 guard let self else {
                     return
                 }
+                let currentTime = Int32(CFAbsoluteTimeGetCurrent())
                 var addedMessages: [(authorId: PeerId, text: String, entities: [MessageTextEntity])] = []
                 var addedOpaqueMessages: [(authorId: PeerId, data: Data)] = []
                 for update in updates {
@@ -3506,28 +3521,40 @@ public final class GroupCallMessagesContext {
                                 guard let decryptedMessage else {
                                     continue
                                 }
-                                guard let text = String(data: decryptedMessage, encoding: .utf8) else {
-                                    continue
+                                let buffer = Buffer(data: decryptedMessage)
+                                let bufferReader = BufferReader(buffer)
+                                if bufferReader.readInt32() == 1964978502 {
+                                    if let textWithEntities = Api.TextWithEntities.parse_textWithEntities(bufferReader) {
+                                        switch textWithEntities {
+                                        case let .textWithEntities(text, entities):
+                                            let messageId = self.nextId
+                                            self.nextId += 1
+                                            messages.append(Message(
+                                                id: messageId,
+                                                author: transaction.getPeer(addedOpaqueMessage.authorId).flatMap(EnginePeer.init),
+                                                text: text,
+                                                entities: messageTextEntitiesFromApiEntities(entities),
+                                                date: currentTime,
+                                                lifetime: self.defaultMessageLifetime
+                                            ))
+                                        }
+                                    }
                                 }
-                                
-                                let messageId = self.nextId
-                                self.nextId += 1
-                                messages.append(Message(
-                                    id: messageId,
-                                    author: transaction.getPeer(addedOpaqueMessage.authorId).flatMap(EnginePeer.init),
-                                    text: text,
-                                    entities: []
-                                ))
                             }
                         } else {
                             for addedMessage in addedMessages {
+                                if addedMessage.authorId == account.peerId {
+                                    continue
+                                }
                                 let messageId = self.nextId
                                 self.nextId += 1
                                 messages.append(Message(
                                     id: messageId,
                                     author: transaction.getPeer(addedMessage.authorId).flatMap(EnginePeer.init),
                                     text: addedMessage.text,
-                                    entities: addedMessage.entities
+                                    entities: addedMessage.entities,
+                                    date: currentTime,
+                                    lifetime: self.defaultMessageLifetime
                                 ))
                             }
                         }
@@ -3543,11 +3570,28 @@ public final class GroupCallMessagesContext {
                     })
                 }
             })
+            
+            let timer = SwiftSignalKit.Timer(timeout: 1.0, repeat: true, completion: { [weak self] in
+                self?.messageLifetimeTick()
+            }, queue: self.queue)
+            self.messageLifeTimer = timer
+            timer.start()
         }
         
         deinit {
             self.updatesDisposable?.dispose()
             self.sendMessageDisposables.dispose()
+            self.messageLifeTimer?.invalidate()
+        }
+        
+        private func messageLifetimeTick() {
+            let now = Int32(CFAbsoluteTimeGetCurrent())
+            let filtered = self.state.messages.filter { now - $0.date < $0.lifetime }
+            if filtered.count != self.state.messages.count {
+                var state = self.state
+                state.messages = filtered
+                self.state = state
+            }
         }
         
         func send(text: String, entities: [MessageTextEntity]) {
@@ -3559,6 +3603,7 @@ public final class GroupCallMessagesContext {
                 guard let self else {
                     return
                 }
+                let currentTime = Int32(CFAbsoluteTimeGetCurrent())
                 
                 let messageId = self.nextId
                 self.nextId += 1
@@ -3568,12 +3613,16 @@ public final class GroupCallMessagesContext {
                     id: messageId,
                     author: accountPeer.flatMap(EnginePeer.init),
                     text: text,
-                    entities: entities
+                    entities: entities,
+                    date: currentTime,
+                    lifetime: self.defaultMessageLifetime
                 ))
                 self.state = state
                 
                 if let e2eContext = self.e2eContext {
-                    let messageData = text.data(using: .utf8)!
+                    let buffer = Buffer()
+                    Api.TextWithEntities.textWithEntities(text: text, entities: apiEntitiesFromMessageTextEntities(entities, associatedPeers: SimpleDictionary())).serialize(buffer, true)
+                    let messageData = buffer.makeData()
                     let encryptedMessage = e2eContext.state.with({ state -> Data? in
                         guard let state = state.state else {
                             return nil

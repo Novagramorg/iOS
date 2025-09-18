@@ -1397,7 +1397,7 @@ final class MediaEditorScreenComponent: Component {
                             }
                             controller.presentInGlobalOverlay(c)
                         },
-                        sendMessageAction: { [weak self] in
+                        sendMessageAction: { [weak self] _ in
                             guard let self else {
                                 return
                             }

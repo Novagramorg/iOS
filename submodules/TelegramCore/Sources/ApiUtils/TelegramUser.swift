@@ -133,8 +133,15 @@ extension TelegramUser {
                 case let .peerColor(_, color, backgroundEmojiIdValue):
                     nameColorIndex = color
                     backgroundEmojiId = backgroundEmojiIdValue
-                case .peerColorCollectible, .inputPeerColorCollectible:
-                    //TODO:release
+                case let .peerColorCollectible(_, collectibleId, giftEmojiId, backgroundEmojiId, accentColor, colors, darkAccentColor, darkColors):
+                    let _ = collectibleId
+                    let _ = giftEmojiId
+                    let _ = backgroundEmojiId
+                    let _ = accentColor
+                    let _ = colors
+                    let _ = darkAccentColor
+                    let _ = darkColors
+                case .inputPeerColorCollectible:
                     break
                 }
             }
@@ -146,8 +153,7 @@ extension TelegramUser {
                 case let .peerColor(_, color, backgroundEmojiIdValue):
                     profileColorIndex = color
                     profileBackgroundEmojiId = backgroundEmojiIdValue
-                case .peerColorCollectible, .inputPeerColorCollectible:
-                    //TODO:release
+                default:
                     break
                 }
             }
@@ -248,8 +254,15 @@ extension TelegramUser {
                             case let .peerColor(_, color, backgroundEmojiIdValue):
                                 nameColorIndex = color
                                 backgroundEmojiId = backgroundEmojiIdValue
-                            case .peerColorCollectible, .inputPeerColorCollectible:
-                                //TODO:release
+                            case let .peerColorCollectible(_, collectibleId, giftEmojiId, backgroundEmojiId, accentColor, colors, darkAccentColor, darkColors):
+                                let _ = collectibleId
+                                let _ = giftEmojiId
+                                let _ = backgroundEmojiId
+                                let _ = accentColor
+                                let _ = colors
+                                let _ = darkAccentColor
+                                let _ = darkColors
+                            case .inputPeerColorCollectible:
                                 break
                             }
                         }
@@ -261,8 +274,7 @@ extension TelegramUser {
                             case let .peerColor(_, color, backgroundEmojiIdValue):
                                 profileColorIndex = color
                                 profileBackgroundEmojiId = backgroundEmojiIdValue
-                            case .peerColorCollectible, .inputPeerColorCollectible:
-                                //TODO:release
+                            default:
                                 break
                             }
                         }

@@ -165,6 +165,7 @@ swift_library(
         "//submodules/TelegramUI/Components/BottomButtonPanelComponent",
         "//submodules/TelegramUI/Components/MarqueeComponent",
         "//submodules/TelegramUI/Components/MediaManager/PeerMessagesMediaPlaylist",
+        "//submodules/TelegramUI/Components/TextFieldComponent",
         "//submodules/TelegramUI/Components/EdgeEffect",
     ],
     visibility = [
