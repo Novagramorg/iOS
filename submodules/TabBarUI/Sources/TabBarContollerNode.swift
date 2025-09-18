@@ -49,9 +49,8 @@ final class TabBarControllerNode: ASDisplayNode {
     
     private var theme: PresentationTheme
     private let itemSelected: (Int, Bool, [ASDisplayNode]) -> Void
-    private let contextAction: (Int, ContextExtractedContentContainingNode, ContextGesture) -> Void
+    private let contextAction: (Int, ContextExtractedContentContainingView, ContextGesture) -> Void
     
-    private let tabBarNode: TabBarNode
     private let tabBarView = ComponentView<Empty>()
     
     private let disabledOverlayNode: ASDisplayNode
@@ -62,7 +61,7 @@ final class TabBarControllerNode: ASDisplayNode {
     private(set) var tabBarItems: [TabBarNodeItem] = []
     private(set) var selectedIndex: Int = 0
 
-    var currentControllerNode: ASDisplayNode?
+    private(set) var currentControllerNode: ASDisplayNode?
     
     private var layoutResult: LayoutResult?
     private var isUpdateRequested: Bool = false
@@ -81,6 +80,9 @@ final class TabBarControllerNode: ASDisplayNode {
             } else {
                 self.insertSubnode(currentControllerNode, at: 0)
             }
+            if let tabBarView = self.tabBarView.view {
+                self.view.bringSubviewToFront(tabBarView)
+            }
         }
         
         return { [weak self, weak previousNode] in
@@ -90,11 +92,10 @@ final class TabBarControllerNode: ASDisplayNode {
         }
     }
     
-    init(theme: PresentationTheme, itemSelected: @escaping (Int, Bool, [ASDisplayNode]) -> Void, contextAction: @escaping (Int, ContextExtractedContentContainingNode, ContextGesture) -> Void, swipeAction: @escaping (Int, TabBarItemSwipeDirection) -> Void, toolbarActionSelected: @escaping (ToolbarActionOption) -> Void, disabledPressed: @escaping () -> Void) {
+    init(theme: PresentationTheme, itemSelected: @escaping (Int, Bool, [ASDisplayNode]) -> Void, contextAction: @escaping (Int, ContextExtractedContentContainingView, ContextGesture) -> Void, swipeAction: @escaping (Int, TabBarItemSwipeDirection) -> Void, toolbarActionSelected: @escaping (ToolbarActionOption) -> Void, disabledPressed: @escaping () -> Void) {
         self.theme = theme
         self.itemSelected = itemSelected
         self.contextAction = contextAction
-        self.tabBarNode = TabBarNode(theme: theme, itemSelected: itemSelected, contextAction: contextAction, swipeAction: swipeAction)
         self.disabledOverlayNode = ASDisplayNode()
         self.disabledOverlayNode.backgroundColor = theme.rootController.tabBar.backgroundColor.withAlphaComponent(0.5)
         self.disabledOverlayNode.alpha = 0.0
@@ -141,7 +142,6 @@ final class TabBarControllerNode: ASDisplayNode {
         self.theme = theme
         self.backgroundColor = theme.list.plainBackgroundColor
         
-        self.tabBarNode.updateTheme(theme)
         self.disabledOverlayNode.backgroundColor = theme.rootController.tabBar.backgroundColor.withAlphaComponent(0.5)
         self.toolbarNode?.updateTheme(ToolbarTheme(theme: theme))
         self.requestUpdate()
@@ -210,6 +210,14 @@ final class TabBarControllerNode: ASDisplayNode {
                             if let index = self.tabBarItems.firstIndex(where: { AnyHashable(ObjectIdentifier($0.item)) == itemId }) {
                                 self.itemSelected(index, isLongTap, [])
                             }
+                        },
+                        contextAction: { [weak self] gesture, sourceView in
+                            guard let self else {
+                                return
+                            }
+                            if let index = self.tabBarItems.firstIndex(where: { AnyHashable(ObjectIdentifier($0.item)) == itemId }) {
+                                self.contextAction(index, sourceView, gesture)
+                            }
                         }
                     )
                 },
@@ -226,9 +234,6 @@ final class TabBarControllerNode: ASDisplayNode {
             }
             transition.updateFrame(view: tabBarComponentView, frame: tabBarFrame)
         }
-        
-        //transition.updateFrame(node: self.tabBarNode, frame: tabBarFrame)
-        //self.tabBarNode.updateLayout(size: params.layout.size, leftInset: params.layout.safeInsets.left, rightInset: params.layout.safeInsets.right, additionalSideInsets: params.layout.additionalInsets, bottomInset: bottomInset, transition: transition)
         
         transition.updateFrame(node: self.disabledOverlayNode, frame: tabBarFrame)
         
@@ -263,11 +268,20 @@ final class TabBarControllerNode: ASDisplayNode {
     }
     
     func frameForControllerTab(at index: Int) -> CGRect? {
-        return self.tabBarNode.frameForControllerTab(at: index).flatMap { self.tabBarNode.view.convert($0, to: self.view) }
+        guard let tabBarView = self.tabBarView.view as? TabBarComponent.View else {
+            return nil
+        }
+        guard let itemFrame = tabBarView.frameForItem(at: index) else {
+            return nil
+        }
+        return self.view.convert(itemFrame, from: tabBarView)
     }
     
     func isPointInsideContentArea(point: CGPoint) -> Bool {
-        if point.y < self.tabBarNode.frame.minY {
+        guard let tabBarView = self.tabBarView.view else {
+            return false
+        }
+        if point.y < tabBarView.frame.minY {
             return true
         }
         return false
@@ -275,13 +289,11 @@ final class TabBarControllerNode: ASDisplayNode {
     
     func updateTabBarItems(items: [TabBarNodeItem]) {
         self.tabBarItems = items
-        self.tabBarNode.tabBarItems = items
         self.requestUpdate()
     }
     
     func updateSelectedIndex(index: Int) {
         self.selectedIndex = index
-        self.tabBarNode.selectedIndex = index
         self.isChangingSelectedIndex = true
         self.requestUpdate()
     }

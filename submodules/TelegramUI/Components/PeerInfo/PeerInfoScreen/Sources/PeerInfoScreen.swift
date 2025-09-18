@@ -13943,7 +13943,7 @@ public final class PeerInfoScreenImpl: ViewController, PeerInfoScreen, KeyShortc
         self.controllerNode.containerLayoutUpdated(layout: layout, navigationHeight: navigationHeight, transition: transition)
     }
     
-    override public func tabBarItemContextAction(sourceNode: ContextExtractedContentContainingNode, gesture: ContextGesture) {
+    override public func tabBarItemContextAction(sourceView: ContextExtractedContentContainingView, gesture: ContextGesture) {
         guard let (maybePrimary, other) = self.accountsAndPeersValue, let primary = maybePrimary else {
             return
         }
@@ -13994,7 +13994,7 @@ public final class PeerInfoScreenImpl: ViewController, PeerInfoScreen, KeyShortc
             })))*/
         }
         
-        let controller = ContextController(presentationData: self.presentationData, source: .extracted(SettingsTabBarContextExtractedContentSource(controller: self, sourceNode: sourceNode)), items: .single(ContextController.Items(content: .list(items))), recognizer: nil, gesture: gesture)
+        let controller = ContextController(presentationData: self.presentationData, source: .reference(SettingsTabBarContextReferenceContentSource(controller: self, sourceView: sourceView)), items: .single(ContextController.Items(content: .list(items))), recognizer: nil, gesture: gesture)
         self.context.sharedContext.mainWindow?.presentInGlobalOverlay(controller)
     }
     
@@ -14123,26 +14123,23 @@ public final class PeerInfoScreenImpl: ViewController, PeerInfoScreen, KeyShortc
     }
 }
 
-private final class SettingsTabBarContextExtractedContentSource: ContextExtractedContentSource {
+private final class SettingsTabBarContextReferenceContentSource: ContextReferenceContentSource {
     let keepInPlace: Bool = true
-    let ignoreContentTouches: Bool = true
-    let blurBackground: Bool = true
-    let actionsHorizontalAlignment: ContextActionsHorizontalAlignment = .center
     
     private let controller: ViewController
-    private let sourceNode: ContextExtractedContentContainingNode
+    private let sourceView: ContextExtractedContentContainingView
     
-    init(controller: ViewController, sourceNode: ContextExtractedContentContainingNode) {
+    init(controller: ViewController, sourceView: ContextExtractedContentContainingView) {
         self.controller = controller
-        self.sourceNode = sourceNode
+        self.sourceView = sourceView
     }
     
-    func takeView() -> ContextControllerTakeViewInfo? {
-        return ContextControllerTakeViewInfo(containingItem: .node(self.sourceNode), contentAreaInScreenSpace: UIScreen.main.bounds)
-    }
-    
-    func putBack() -> ContextControllerPutBackViewInfo? {
-        return ContextControllerPutBackViewInfo(contentAreaInScreenSpace: UIScreen.main.bounds)
+    func transitionInfo() -> ContextControllerReferenceViewInfo? {
+        return ContextControllerReferenceViewInfo(
+            referenceView: self.sourceView.contentView,
+            contentAreaInScreenSpace: UIScreen.main.bounds,
+            actionsPosition: .top
+        )
     }
 }
 
