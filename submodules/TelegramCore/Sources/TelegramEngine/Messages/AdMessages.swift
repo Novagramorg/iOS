@@ -534,6 +534,9 @@ private class AdMessagesHistoryContextImpl {
                                     case let .peerColor(_, color, backgroundEmojiIdValue):
                                         nameColorIndex = color
                                         backgroundEmojiId = backgroundEmojiIdValue
+                                    case .peerColorCollectible, .inputPeerColorCollectible:
+                                        //TODO:release
+                                        break
                                     }
                                 }
                                 

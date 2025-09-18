@@ -15,6 +15,8 @@ import ChatSendButtonRadialStatusNode
 import ChatSendMessageActionUI
 import ComponentFlow
 import AnimatedCountLabelNode
+import GlassBackgroundComponent
+import ComponentDisplayAdapters
 
 private final class EffectBadgeView: UIView {
     private let context: AccountContext
@@ -131,10 +133,12 @@ public final class ChatTextInputActionButtonsNode: ASDisplayNode, ChatSendMessag
     private let presentationContext: ChatPresentationContext?
     private let strings: PresentationStrings
     
+    public let micButtonBackgroundView: GlassBackgroundView
+    public let micButtonTintMaskView: UIImageView
     public let micButton: ChatTextInputMediaRecordingButton
+    
     public let sendContainerNode: ASDisplayNode
-    public let backdropNode: ChatMessageBubbleBackdrop
-    public let backgroundNode: ASDisplayNode
+    public let sendButtonBackgroundView: GlassBackgroundView
     public let sendButton: HighlightTrackingButtonNode
     public var sendButtonRadialStatusNode: ChatSendButtonRadialStatusNode?
     public var sendButtonHasApplyIcon = false
@@ -142,7 +146,10 @@ public final class ChatTextInputActionButtonsNode: ASDisplayNode, ChatSendMessag
     
     public let textNode: ImmediateAnimatedCountLabelNode
     
-    public let expandMediaInputButton: HighlightableButtonNode
+    public let expandMediaInputButton: HighlightTrackingButton
+    private let expandMediaInputButtonBackgroundView: GlassBackgroundView
+    private let expandMediaInputButtonIcon: GlassBackgroundView.ContentImageView
+    
     private var effectBadgeView: EffectBadgeView?
     
     public var sendButtonLongPressed: ((ASDisplayNode, ContextGesture) -> Void)?
@@ -165,22 +172,31 @@ public final class ChatTextInputActionButtonsNode: ASDisplayNode, ChatSendMessag
         let theme = presentationInterfaceState.theme
         let strings = presentationInterfaceState.strings
         self.strings = strings
-         
+        
+        self.micButtonBackgroundView = GlassBackgroundView()
+        self.micButtonTintMaskView = UIImageView()
+        self.micButtonTintMaskView.tintColor = .black
         self.micButton = ChatTextInputMediaRecordingButton(context: context, theme: theme, pause: true, strings: strings, presentController: presentController)
+        self.micButton.animationOutput = self.micButtonTintMaskView
+        self.micButtonBackgroundView.maskContentView.addSubview(self.micButtonTintMaskView)
         
         self.sendContainerNode = ASDisplayNode()
         self.sendContainerNode.layer.allowsGroupOpacity = true
         
-        self.backgroundNode = ASDisplayNode()
-        self.backgroundNode.backgroundColor = theme.chat.inputPanel.actionControlFillColor
-        self.backgroundNode.clipsToBounds = true
-        self.backdropNode = ChatMessageBubbleBackdrop()
+        self.sendButtonBackgroundView = GlassBackgroundView()
         self.sendButton = HighlightTrackingButtonNode(pointerStyle: nil)
         
         self.textNode = ImmediateAnimatedCountLabelNode()
         self.textNode.isUserInteractionEnabled = false
         
-        self.expandMediaInputButton = HighlightableButtonNode(pointerStyle: .circle(36.0))
+        self.expandMediaInputButton = HighlightTrackingButton()
+        self.expandMediaInputButtonBackgroundView = GlassBackgroundView()
+        self.expandMediaInputButtonBackgroundView.isUserInteractionEnabled = false
+        self.expandMediaInputButton.addSubview(self.expandMediaInputButtonBackgroundView)
+        self.expandMediaInputButtonIcon = GlassBackgroundView.ContentImageView()
+        self.expandMediaInputButtonBackgroundView.contentView.addSubview(self.expandMediaInputButtonIcon)
+        self.expandMediaInputButtonIcon.image = PresentationResourcesChat.chatInputPanelExpandButtonImage(presentationInterfaceState.theme)
+        self.expandMediaInputButtonIcon.tintColor = theme.chat.inputPanel.inputControlColor
         
         super.init()
         
@@ -208,18 +224,25 @@ public final class ChatTextInputActionButtonsNode: ASDisplayNode, ChatSendMessag
         }
         
         self.micButton.layer.allowsGroupOpacity = true
+        self.view.addSubview(self.micButtonBackgroundView)
         self.view.addSubview(self.micButton)
             
         self.addSubnode(self.sendContainerNode)
-        self.sendContainerNode.addSubnode(self.backgroundNode)
-        if let presentationContext = presentationContext {
-            let graphics = PresentationResourcesChat.principalGraphics(theme: theme, wallpaper: presentationInterfaceState.chatWallpaper, bubbleCorners: presentationInterfaceState.bubbleCorners)
-            self.backdropNode.setType(type: .outgoing(.None), theme: ChatPresentationThemeData(theme: theme, wallpaper: presentationInterfaceState.chatWallpaper), essentialGraphics: graphics, maskMode: true, backgroundNode: presentationContext.backgroundNode)
-            self.backgroundNode.addSubnode(self.backdropNode)
-        }
+        self.sendContainerNode.view.addSubview(self.sendButtonBackgroundView)
         self.sendContainerNode.addSubnode(self.sendButton)
         self.sendContainerNode.addSubnode(self.textNode)
-        self.addSubnode(self.expandMediaInputButton)
+        self.view.addSubview(self.expandMediaInputButton)
+        
+        self.expandMediaInputButton.highligthedChanged = { [weak self] highlighted in
+            guard let self else {
+                return
+            }
+            if highlighted {
+                self.expandMediaInputButton.layer.animateScale(from: 1.0, to: 0.75, duration: 0.4, removeOnCompletion: false)
+            } else if let presentationLayer = self.expandMediaInputButton.layer.presentation() {
+                self.expandMediaInputButton.layer.animateScale(from: CGFloat((presentationLayer.value(forKeyPath: "transform.scale.y") as? NSNumber)?.floatValue ?? 1.0), to: 1.0, duration: 0.25, removeOnCompletion: false)
+            }
+        }
     }
     
     override public func didLoad() {
@@ -236,30 +259,18 @@ public final class ChatTextInputActionButtonsNode: ASDisplayNode, ChatSendMessag
         }
         
         self.micButtonPointerInteraction = PointerInteraction(view: self.micButton, style: .circle(36.0))
-        self.sendButtonPointerInteraction = PointerInteraction(view: self.sendButton.view, customInteractionView: self.backgroundNode.view, style: .lift)
+        self.sendButtonPointerInteraction = PointerInteraction(view: self.sendButton.view, customInteractionView: self.sendButtonBackgroundView, style: .lift)
     }
     
     public func updateTheme(theme: PresentationTheme, wallpaper: TelegramWallpaper) {
         self.micButton.updateTheme(theme: theme)
-        self.expandMediaInputButton.setImage(PresentationResourcesChat.chatInputPanelExpandButtonImage(theme), for: [])
-        
-        self.backgroundNode.backgroundColor = theme.chat.inputPanel.actionControlFillColor
-        
-        if [.day, .night].contains(theme.referenceTheme.baseTheme) && !theme.chat.message.outgoing.bubble.withWallpaper.hasSingleFillColor {
-            self.backdropNode.isHidden = false
-        } else {
-            self.backdropNode.isHidden = true
-        }
-        
-        let graphics = PresentationResourcesChat.principalGraphics(theme: theme, wallpaper: wallpaper, bubbleCorners: .init(mainRadius: 1, auxiliaryRadius: 1, mergeBubbleCorners: false))
-        self.backdropNode.setType(type: .outgoing(.None), theme: ChatPresentationThemeData(theme: theme, wallpaper: wallpaper), essentialGraphics: graphics, maskMode: false, backgroundNode: self.presentationContext?.backgroundNode)
+        self.expandMediaInputButtonIcon.tintColor = theme.chat.inputPanel.inputControlColor
     }
     
     private var absoluteRect: (CGRect, CGSize)?
     public func updateAbsoluteRect(_ rect: CGRect, within containerSize: CGSize, transition: ContainedViewLayoutTransition) {
         let previousContaierSize = self.absoluteRect?.1
         self.absoluteRect = (rect, containerSize)
-        self.backdropNode.update(rect: rect, within: containerSize, transition: transition)
         
         if let previousContaierSize, previousContaierSize != containerSize {
             Queue.mainQueue().after(0.2) {
@@ -322,25 +333,29 @@ public final class ChatTextInputActionButtonsNode: ASDisplayNode, ChatSendMessag
             self.textNode.isHidden = true
         }
     
+        transition.updateFrame(view: self.micButtonBackgroundView, frame: CGRect(origin: CGPoint(), size: size))
+        self.micButtonBackgroundView.update(size: size, cornerRadius: size.height * 0.5, isDark:  interfaceState.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: interfaceState.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7)), transition: ComponentTransition(transition))
+        
         transition.updateFrame(layer: self.micButton.layer, frame: CGRect(origin: CGPoint(), size: size))
         self.micButton.layoutItems()
         
+        transition.updateFrame(view: self.sendButtonBackgroundView, frame: CGRect(origin: CGPoint(), size: innerSize))
+        self.sendButtonBackgroundView.update(size: innerSize, cornerRadius: innerSize.height * 0.5, isDark: interfaceState.theme.overallDarkAppearance, tintColor: .init(kind: .custom, color: interfaceState.theme.chat.inputPanel.actionControlFillColor), transition: ComponentTransition(transition))
         transition.updateFrame(layer: self.sendButton.layer, frame: CGRect(origin: CGPoint(), size: innerSize))
         transition.updateFrame(node: self.sendContainerNode, frame: CGRect(origin: CGPoint(), size: innerSize))
         
-        let backgroundSize = CGSize(width: innerSize.width - 11.0, height: 33.0)
+        let backgroundSize = CGSize(width: innerSize.width, height: 40.0)
         let backgroundFrame = CGRect(origin: CGPoint(x: showTitle ? 5.0 + UIScreenPixel : floorToScreenPixels((size.width - backgroundSize.width) / 2.0), y: floorToScreenPixels((size.height - backgroundSize.height) / 2.0)), size: backgroundSize)
-        transition.updateFrame(node: self.backgroundNode, frame: backgroundFrame)
-        self.backgroundNode.cornerRadius = backgroundSize.height / 2.0
         
-        transition.updateFrame(node: self.backdropNode, frame: CGRect(origin: CGPoint(x: -2.0, y: -2.0), size: CGSize(width: innerSize.width + 12.0, height: size.height + 2.0)))
-        if let (rect, containerSize) = self.absoluteRect {
-            self.backdropNode.update(rect: rect, within: containerSize)
+        transition.updateFrame(view: self.expandMediaInputButton, frame: CGRect(origin: CGPoint(), size: size))
+        transition.updateFrame(view: self.expandMediaInputButtonBackgroundView, frame: CGRect(origin: CGPoint(), size: size))
+        self.expandMediaInputButtonBackgroundView.update(size: size, cornerRadius: size.height * 0.5, isDark: interfaceState.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: interfaceState.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7)), transition: ComponentTransition(transition))
+        if let image = self.expandMediaInputButtonIcon.image {
+            let expandIconFrame = CGRect(origin: CGPoint(x: floor((size.width - image.size.width) * 0.5), y: floor((size.height - image.size.height) * 0.5)), size: image.size)
+            transition.updatePosition(layer: self.expandMediaInputButtonIcon.layer, position: expandIconFrame.center)
+            transition.updateBounds(layer: self.expandMediaInputButtonIcon.layer, bounds: CGRect(origin: CGPoint(), size: expandIconFrame.size))
+            transition.updateTransformScale(layer: self.expandMediaInputButtonIcon.layer, scale: CGPoint(x: 1.0, y: isMediaInputExpanded ? 1.0 : -1.0))
         }
-        
-        transition.updateFrame(node: self.expandMediaInputButton, frame: CGRect(origin: CGPoint(), size: size))
-        let expanded = isMediaInputExpanded
-        transition.updateSublayerTransformScale(node: self.expandMediaInputButton, scale: CGPoint(x: 1.0, y: expanded ? 1.0 : -1.0))
         
         if let currentMessageEffectId {
             let effectBadgeView: EffectBadgeView

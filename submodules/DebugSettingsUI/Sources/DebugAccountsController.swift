@@ -123,6 +123,10 @@ public func debugAccountsController(context: AccountContext, accountManager: Acc
                     
                     if case .internal = context.sharedContext.applicationBindings.appBuildType {
                         context.sharedContext.beginNewAuth(testingEnvironment: false)
+                    } else {
+                        #if DEBUG
+                        context.sharedContext.beginNewAuth(testingEnvironment: false)
+                        #endif
                     }
                 }),
                 ActionSheetButtonItem(title: "Test", color: .accent, action: {

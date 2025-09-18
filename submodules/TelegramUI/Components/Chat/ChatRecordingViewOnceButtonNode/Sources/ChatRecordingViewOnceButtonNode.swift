@@ -3,6 +3,7 @@ import UIKit
 import AsyncDisplayKit
 import Display
 import TelegramPresentationData
+import GlassBackgroundComponent
 
 public final class ChatRecordingViewOnceButtonNode: HighlightTrackingButtonNode {
     public enum Icon {
@@ -12,7 +13,7 @@ public final class ChatRecordingViewOnceButtonNode: HighlightTrackingButtonNode 
     
     private let icon: Icon
     
-    private let backgroundNode: ASImageNode
+    private let backgroundView: GlassBackgroundView
     private let iconNode: ASImageNode
     
     private var theme: PresentationTheme?
@@ -20,15 +21,15 @@ public final class ChatRecordingViewOnceButtonNode: HighlightTrackingButtonNode 
     public init(icon: Icon) {
         self.icon = icon
         
-        self.backgroundNode = ASImageNode()
-        self.backgroundNode.isUserInteractionEnabled = false
+        self.backgroundView = GlassBackgroundView()
+        self.backgroundView.isUserInteractionEnabled = false
         
         self.iconNode = ASImageNode()
         self.iconNode.isUserInteractionEnabled = false
         
         super.init(pointerStyle: .default)
         
-        self.addSubnode(self.backgroundNode)
+        self.view.addSubview(self.backgroundView)
         self.addSubnode(self.iconNode)
         
         self.highligthedChanged = { [weak self] highlighted in
@@ -88,21 +89,17 @@ public final class ChatRecordingViewOnceButtonNode: HighlightTrackingButtonNode 
         if self.theme !== theme {
             self.theme = theme
             
-            self.backgroundNode.image = generateFilledCircleImage(diameter: innerSize.width, color: theme.rootController.navigationBar.opaqueBackgroundColor, strokeColor: theme.chat.inputPanel.panelSeparatorColor, strokeWidth: 0.5, backgroundColor: nil)
-            
             switch self.icon {
             case .viewOnce:
                 self.iconNode.image = generateTintedImage(image: UIImage(bundleImageName: self.innerIsSelected ? "Media Gallery/ViewOnceEnabled" : "Media Gallery/ViewOnce"), color: theme.chat.inputPanel.panelControlAccentColor)
-                
             case .recordMore:
                 self.iconNode.image = generateTintedImage(image: UIImage(bundleImageName: "Chat/Input/Text/IconMicrophone"), color: theme.chat.inputPanel.panelControlAccentColor)
             }
         }
         
-        if let backgroundImage = self.backgroundNode.image {
-            let backgroundFrame = CGRect(origin: CGPoint(x: floorToScreenPixels(size.width / 2.0 - backgroundImage.size.width / 2.0), y: floorToScreenPixels(size.height / 2.0 - backgroundImage.size.height / 2.0)), size: backgroundImage.size)
-            self.backgroundNode.frame = backgroundFrame
-        }
+        let backgroundFrame = CGRect(origin: CGPoint(x: floorToScreenPixels(size.width / 2.0 - innerSize.width / 2.0), y: floorToScreenPixels(size.height / 2.0 - innerSize.height / 2.0)), size: innerSize)
+        self.backgroundView.frame = backgroundFrame
+        self.backgroundView.update(size: backgroundFrame.size, cornerRadius: backgroundFrame.height * 0.5, isDark: theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7)), transition: .immediate)
 
         if let iconImage = self.iconNode.image {
             let iconFrame = CGRect(origin: CGPoint(x: floorToScreenPixels(size.width / 2.0 - iconImage.size.width / 2.0), y: floorToScreenPixels(size.height / 2.0 - iconImage.size.height / 2.0)), size: iconImage.size)

@@ -487,7 +487,11 @@ swift_library(
         "//submodules/TelegramUI/Components/ChatThemeScreen",
         "//submodules/TelegramUI/Components/Chat/ChatTextInputPanelNode",
         "//submodules/ContactsHelper",
+        "//submodules/TelegramUI/Components/GlassBackgroundComponent",
+        "//submodules/TelegramUI/Components/Chat/ChatInputAccessoryPanel",
+        "//submodules/TelegramUI/Components/Chat/ChatInputMessageAccessoryPanel",
         "//submodules/TelegramUI/Components/Chat/ChatRecordingViewOnceButtonNode",
+        "//submodules/TelegramUI/Components/EdgeEffect",
     ] + select({
         "@build_bazel_rules_apple//apple:ios_arm64": appcenter_targets,
         "//build-system:ios_sim_arm64": [],

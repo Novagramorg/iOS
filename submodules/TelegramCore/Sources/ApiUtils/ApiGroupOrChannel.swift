@@ -175,6 +175,9 @@ func parseTelegramGroupOrChannel(chat: Api.Chat) -> Peer? {
             case let .peerColor(_, color, backgroundEmojiIdValue):
                 nameColorIndex = color
                 backgroundEmojiId = backgroundEmojiIdValue
+            case .peerColorCollectible, .inputPeerColorCollectible:
+                //TODO:release
+                break
             }
         }
         
@@ -185,6 +188,9 @@ func parseTelegramGroupOrChannel(chat: Api.Chat) -> Peer? {
             case let .peerColor(_, color, backgroundEmojiIdValue):
                 profileColorIndex = color
                 profileBackgroundEmojiId = backgroundEmojiIdValue
+            case .peerColorCollectible, .inputPeerColorCollectible:
+                //TODO:release
+                break
             }
         }
         
@@ -254,6 +260,9 @@ func mergeGroupOrChannel(lhs: Peer?, rhs: Api.Chat) -> Peer? {
                     case let .peerColor(_, color, backgroundEmojiIdValue):
                         nameColorIndex = color
                         backgroundEmojiId = backgroundEmojiIdValue
+                    case .peerColorCollectible, .inputPeerColorCollectible:
+                        //TODO:release
+                        break
                     }
                 }
                 
@@ -264,6 +273,9 @@ func mergeGroupOrChannel(lhs: Peer?, rhs: Api.Chat) -> Peer? {
                     case let .peerColor(_, color, backgroundEmojiIdValue):
                         profileColorIndex = color
                         profileBackgroundEmojiId = backgroundEmojiIdValue
+                    case .peerColorCollectible, .inputPeerColorCollectible:
+                        //TODO:release
+                        break
                     }
                 }
                 

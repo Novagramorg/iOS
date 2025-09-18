@@ -19,7 +19,7 @@ private final class ChatTextInputAudioRecordingTimeNodeParameters: NSObject {
     }
 }
 
-private let textFont = Font.regular(15.0)
+private let textFont = Font.with(size: 15.0, design: .camera)
 
 public final class ChatTextInputAudioRecordingTimeNode: ASDisplayNode {
     private let textNode: TextNode
