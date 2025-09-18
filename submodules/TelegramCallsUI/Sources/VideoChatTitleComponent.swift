@@ -201,7 +201,7 @@ final class VideoChatTitleComponent: Component {
             
             self.tapRecognizer?.isEnabled = component.longTapAction != nil || component.tapAction != nil
             
-            let spacing: CGFloat = 1.0
+            let spacing: CGFloat = 0.0
             
             var maxTitleWidth = availableSize.width
             if component.isRecording {
@@ -219,7 +219,7 @@ final class VideoChatTitleComponent: Component {
             
             let statusComponent: AnyComponent<Empty>
             statusComponent = AnyComponent(AnimatedTextComponent(
-                font: Font.regular(13.0),
+                font: Font.regular(12.0),
                 color: UIColor(white: 1.0, alpha: 0.5),
                 items: component.status
             ))

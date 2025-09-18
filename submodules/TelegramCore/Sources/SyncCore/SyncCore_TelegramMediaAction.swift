@@ -254,6 +254,7 @@ public enum TelegramMediaActionType: PostboxCoding, Equatable {
     case giftTon(currency: String, amount: Int64, cryptoCurrency: String?, cryptoAmount: Int64?, transactionId: String?)
     case suggestedPostSuccess(amount: CurrencyAmount)
     case suggestedPostRefund(SuggestedPostRefund)
+    case suggestedBirthday(TelegramBirthday)
     
     public init(decoder: PostboxDecoder) {
         let rawValue: Int32 = decoder.decodeInt32ForKey("_rawValue", orElse: 0)
@@ -419,6 +420,8 @@ public enum TelegramMediaActionType: PostboxCoding, Equatable {
             self = .suggestedPostSuccess(amount: decoder.decodeCodable(CurrencyAmount.self, forKey: "amt") ?? CurrencyAmount(amount: .zero, currency: .stars))
         case 54:
             self = .suggestedPostRefund(decoder.decodeCodable(SuggestedPostRefund.self, forKey: "s") ?? SuggestedPostRefund(isUserInitiated: true))
+        case 55:
+            self = .suggestedBirthday(decoder.decodeCodable(TelegramBirthday.self, forKey: "birthday") ?? TelegramBirthday(day: 1, month: 1, year: nil))
         default:
             self = .unknown
         }
@@ -874,6 +877,9 @@ public enum TelegramMediaActionType: PostboxCoding, Equatable {
         case let .suggestedPostRefund(status):
             encoder.encodeInt32(54, forKey: "_rawValue")
             encoder.encodeCodable(status, forKey: "s")
+        case let .suggestedBirthday(birthday):
+            encoder.encodeInt32(55, forKey: "_rawValue")
+            encoder.encodeCodable(birthday, forKey: "birthday")
         }
     }
     

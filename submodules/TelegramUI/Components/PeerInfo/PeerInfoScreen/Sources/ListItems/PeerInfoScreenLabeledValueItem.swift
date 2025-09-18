@@ -65,7 +65,9 @@ final class PeerInfoScreenLabeledValueItem: PeerInfoScreenItem {
     let id: AnyHashable
     let context: AccountContext?
     let label: String
+    let rightLabel: String?
     let text: String
+    let entities: [MessageTextEntity]
     let additionalText: String?
     let textColor: PeerInfoScreenLabeledValueTextColor
     let textBehavior: PeerInfoScreenLabeledValueTextBehavior
@@ -83,7 +85,9 @@ final class PeerInfoScreenLabeledValueItem: PeerInfoScreenItem {
         id: AnyHashable,
         context: AccountContext? = nil,
         label: String,
+        rightLabel: String? = nil,
         text: String,
+        entities: [MessageTextEntity] = [],
         additionalText: String? = nil,
         textColor: PeerInfoScreenLabeledValueTextColor = .primary,
         textBehavior: PeerInfoScreenLabeledValueTextBehavior = .singleLine,
@@ -100,7 +104,9 @@ final class PeerInfoScreenLabeledValueItem: PeerInfoScreenItem {
         self.id = id
         self.context = context
         self.label = label
+        self.rightLabel = rightLabel
         self.text = text
+        self.entities = entities
         self.additionalText = additionalText
         self.textColor = textColor
         self.textBehavior = textBehavior
@@ -150,6 +156,7 @@ private final class PeerInfoScreenLabeledValueItemNode: PeerInfoScreenItemNode {
     private let selectionNode: PeerInfoScreenSelectableBackgroundNode
     private let maskNode: ASImageNode
     private let labelNode: ImmediateTextNode
+    private let rightLabelNode: ImmediateTextNode
     private let textNode: ImmediateTextNode
     private let additionalTextNode: ImmediateTextNode
     private let measureTextNode: ImmediateTextNode
@@ -199,6 +206,10 @@ private final class PeerInfoScreenLabeledValueItemNode: PeerInfoScreenItemNode {
         self.labelNode = ImmediateTextNode()
         self.labelNode.displaysAsynchronously = false
         self.labelNode.isUserInteractionEnabled = false
+        
+        self.rightLabelNode = ImmediateTextNode()
+        self.rightLabelNode.displaysAsynchronously = false
+        self.rightLabelNode.isUserInteractionEnabled = false
         
         self.textNode = ImmediateTextNode()
         self.textNode.displaysAsynchronously = false
@@ -250,6 +261,7 @@ private final class PeerInfoScreenLabeledValueItemNode: PeerInfoScreenItemNode {
         self.contextSourceNode.contentNode.addSubnode(self.extractedBackgroundImageNode)
         
         self.contextSourceNode.contentNode.addSubnode(self.labelNode)
+        self.contextSourceNode.contentNode.addSubnode(self.rightLabelNode)
         self.contextSourceNode.contentNode.addSubnode(self.textNode)
         self.contextSourceNode.contentNode.addSubnode(self.additionalTextNode)
         
@@ -488,6 +500,8 @@ private final class PeerInfoScreenLabeledValueItemNode: PeerInfoScreenItemNode {
         
         self.labelNode.attributedText = NSAttributedString(string: item.label, font: Font.regular(14.0), textColor: presentationData.theme.list.itemPrimaryTextColor)
         
+        self.rightLabelNode.attributedText = NSAttributedString(string: item.rightLabel ?? "", font: Font.regular(14.0), textColor: presentationData.theme.list.itemSecondaryTextColor)
+        
         if let icon = item.icon {
             let iconImage: UIImage?
             switch icon {
@@ -541,26 +555,32 @@ private final class PeerInfoScreenLabeledValueItemNode: PeerInfoScreenItemNode {
                 text = trimToLineCount(text, lineCount: 3)
             }
             
+            let fontSize: CGFloat = 17.0
+            let baseFont = Font.regular(fontSize)
+            let linkFont = baseFont
+            let boldFont = Font.medium(fontSize)
+            let italicFont = Font.italic(fontSize)
+            let boldItalicFont = Font.semiboldItalic(fontSize)
+            let titleFixedFont = Font.monospace(fontSize)
+            
             func createAttributedText(_ text: String) -> NSAttributedString {
                 if enabledEntities.isEmpty {
-                    return NSAttributedString(string: text, font: Font.regular(17.0), textColor: textColorValue)
+                    return NSAttributedString(string: text, font: baseFont, textColor: textColorValue)
                 } else {
-                    let fontSize: CGFloat = 17.0
-                    
-                    let baseFont = Font.regular(fontSize)
-                    let linkFont = baseFont
-                    let boldFont = Font.medium(fontSize)
-                    let italicFont = Font.italic(fontSize)
-                    let boldItalicFont = Font.semiboldItalic(fontSize)
-                    let titleFixedFont = Font.monospace(fontSize)
-                    
                     let entities = generateTextEntities(text, enabledTypes: enabledEntities)
                     return stringWithAppliedEntities(text, entities: entities, baseColor: textColorValue, linkColor: presentationData.theme.list.itemAccentColor, baseFont: baseFont, linkFont: linkFont, boldFont: boldFont, italicFont: italicFont, boldItalicFont: boldItalicFont, fixedFont: titleFixedFont, blockQuoteFont: baseFont, message: nil)
                 }
             }
                         
             self.measureTextNode.maximumNumberOfLines = 0
-            self.measureTextNode.attributedText = createAttributedText(originalText)
+            
+            if !item.entities.isEmpty {
+                self.measureTextNode.attributedText = stringWithAppliedEntities(originalText, entities: item.entities, baseColor: textColorValue, linkColor: presentationData.theme.list.itemAccentColor, baseFont: baseFont, linkFont: linkFont, boldFont: boldFont, italicFont: italicFont, boldItalicFont: boldItalicFont, fixedFont: titleFixedFont, blockQuoteFont: baseFont, message: nil)
+                self.textNode.attributedText = stringWithAppliedEntities(text, entities: item.entities, baseColor: textColorValue, linkColor: presentationData.theme.list.itemAccentColor, baseFont: baseFont, linkFont: linkFont, boldFont: boldFont, italicFont: italicFont, boldItalicFont: boldItalicFont, fixedFont: titleFixedFont, blockQuoteFont: baseFont, message: nil)
+            } else {
+                self.measureTextNode.attributedText = createAttributedText(originalText)
+                self.textNode.attributedText = createAttributedText(text)
+            }
             
             let textLayout = self.measureTextNode.updateLayoutInfo(CGSize(width: width - sideInset * 2.0 - additionalSideInset, height: .greatestFiniteMagnitude))
             var collapsedNumberOfLines = 3
@@ -568,7 +588,7 @@ private final class PeerInfoScreenLabeledValueItemNode: PeerInfoScreenItemNode {
                 collapsedNumberOfLines = 4
             }
             
-            self.textNode.attributedText = createAttributedText(text)
+
             
             maxNumberOfLines = self.isExpanded ? maxLines : collapsedNumberOfLines
             self.textNode.maximumNumberOfLines = maxNumberOfLines
@@ -576,6 +596,7 @@ private final class PeerInfoScreenLabeledValueItemNode: PeerInfoScreenItemNode {
         
 
         let labelSize = self.labelNode.updateLayout(CGSize(width: width - sideInset * 2.0, height: .greatestFiniteMagnitude))
+        let rightLabelSize = self.rightLabelNode.updateLayout(CGSize(width: width - sideInset * 2.0, height: .greatestFiniteMagnitude))
         let textLayout = self.textNode.updateLayoutInfo(CGSize(width: width - sideInset * 2.0 - additionalSideInset, height: .greatestFiniteMagnitude))
         let textSize = textLayout.size
         
@@ -601,6 +622,7 @@ private final class PeerInfoScreenLabeledValueItemNode: PeerInfoScreenItemNode {
         var topOffset = 11.0
         var height = topOffset * 2.0
         let labelFrame = CGRect(origin: CGPoint(x: sideInset, y: topOffset), size: labelSize)
+        let rightLabelFrame = CGRect(origin: CGPoint(x: width - sideInset - rightLabelSize.width, y: topOffset), size: rightLabelSize)
         if labelSize.height > 0.0 {
             topOffset += labelSize.height + 3.0
             height += labelSize.height + 3.0
@@ -653,6 +675,7 @@ private final class PeerInfoScreenLabeledValueItemNode: PeerInfoScreenItemNode {
         self.expandBackgroundNode.image = generateExpandBackground(size: expandBackgroundFrame.size, color: presentationData.theme.list.itemBlocksBackgroundColor)
         
         transition.updateFrame(node: self.labelNode, frame: labelFrame)
+        transition.updateFrame(node: self.rightLabelNode, frame: rightLabelFrame)
         
         var textTransition = transition
         if self.textNode.frame.size != textFrame.size {

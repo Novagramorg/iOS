@@ -6,6 +6,7 @@ import MultilineTextComponent
 import TelegramPresentationData
 import AppBundle
 import TelegramAudio
+import GlassBackgroundComponent
 
 final class VideoChatActionButtonComponent: Component {
     enum Content: Equatable {
@@ -34,12 +35,14 @@ final class VideoChatActionButtonComponent: Component {
             case audio(audio: Audio)
             case video
             case rotateCamera
+            case message
             case leave
         }
         
         case audio(audio: Audio, isEnabled: Bool)
         case video(isActive: Bool)
         case rotateCamera
+        case message
         case leave
         
         fileprivate var iconType: IconType {
@@ -59,6 +62,8 @@ final class VideoChatActionButtonComponent: Component {
                 return .video
             case .rotateCamera:
                 return .rotateCamera
+            case .message:
+                return .message
             case .leave:
                 return .leave
             }
@@ -108,7 +113,7 @@ final class VideoChatActionButtonComponent: Component {
 
     final class View: HighlightTrackingButton {
         private let icon = ComponentView<Empty>()
-        private let background: UIImageView
+        private let background: GlassBackgroundView
         private let title = ComponentView<Empty>()
 
         private var component: VideoChatActionButtonComponent?
@@ -117,7 +122,7 @@ final class VideoChatActionButtonComponent: Component {
         private var contentImage: UIImage?
         
         override init(frame: CGRect) {
-            self.background = UIImageView()
+            self.background = GlassBackgroundView()
             
             super.init(frame: frame)
         }
@@ -136,6 +141,8 @@ final class VideoChatActionButtonComponent: Component {
             self.component = component
             
             let alphaTransition: ComponentTransition = transition.animation.isImmediate ? .immediate : .easeInOut(duration: 0.2)
+            
+            let genericBackgroundColor = UIColor(rgb: 0x1b1d22)
             
             let titleText: String
             let backgroundColor: UIColor
@@ -158,11 +165,11 @@ final class VideoChatActionButtonComponent: Component {
                 }
                 switch component.microphoneState {
                 case .connecting:
-                    backgroundColor = UIColor(white: 0.1, alpha: 1.0)
+                    backgroundColor = genericBackgroundColor
                 case .muted:
-                    backgroundColor = !isActive ? UIColor(rgb: 0x002E5D) : UIColor(rgb: 0x027FFF)
+                    backgroundColor = !isActive ? genericBackgroundColor : UIColor(rgb: 0x027FFF)
                 case .unmuted:
-                    backgroundColor = !isActive ? UIColor(rgb: 0x124B21) : UIColor(rgb: 0x34C659)
+                    backgroundColor = !isActive ? genericBackgroundColor : UIColor(rgb: 0x34C659)
                 case .raiseHand, .scheduled:
                     backgroundColor = !isActive ? UIColor(rgb: 0x23306B) : UIColor(rgb: 0x3252EF)
                 }
@@ -171,20 +178,20 @@ final class VideoChatActionButtonComponent: Component {
                 titleText = component.strings.VoiceChat_Video
                 switch component.microphoneState {
                 case .connecting:
-                    backgroundColor = UIColor(white: 0.1, alpha: 1.0)
+                    backgroundColor = genericBackgroundColor
                 case .muted:
-                    backgroundColor = !isActive ? UIColor(rgb: 0x002E5D) : UIColor(rgb: 0x027FFF)
+                    backgroundColor = !isActive ? genericBackgroundColor : UIColor(rgb: 0x027FFF)
                 case .unmuted:
-                    backgroundColor = !isActive ? UIColor(rgb: 0x124B21) : UIColor(rgb: 0x34C659)
+                    backgroundColor = !isActive ? genericBackgroundColor : UIColor(rgb: 0x34C659)
                 case .raiseHand, .scheduled:
                     backgroundColor = UIColor(rgb: 0x3252EF)
                 }
-                iconDiameter = 60.0
+                iconDiameter = 58.0
             case .rotateCamera:
                 titleText = ""
                 switch component.microphoneState {
                 case .connecting:
-                    backgroundColor = UIColor(white: 0.1, alpha: 1.0)
+                    backgroundColor = genericBackgroundColor
                 case .muted:
                     backgroundColor = UIColor(rgb: 0x027FFF)
                 case .unmuted:
@@ -193,9 +200,14 @@ final class VideoChatActionButtonComponent: Component {
                     backgroundColor = UIColor(rgb: 0x3252EF)
                 }
                 iconDiameter = 60.0
+            case .message:
+                //TODO:localize
+                titleText = "message"
+                backgroundColor = genericBackgroundColor
+                iconDiameter = 56.0
             case .leave:
                 titleText = component.strings.VoiceChat_Leave
-                backgroundColor = UIColor(rgb: 0x47191E)
+                backgroundColor = UIColor(rgb: 0x330d0b)
                 iconDiameter = 22.0
             }
             
@@ -225,6 +237,8 @@ final class VideoChatActionButtonComponent: Component {
                     self.contentImage = UIImage(bundleImageName: "Call/CallCameraButton")?.precomposed().withRenderingMode(.alwaysTemplate)
                 case .rotateCamera:
                     self.contentImage = UIImage(bundleImageName: "Call/CallSwitchCameraButton")?.precomposed().withRenderingMode(.alwaysTemplate)
+                case .message:
+                    self.contentImage = UIImage(bundleImageName: "Call/CallMessageButton")?.precomposed().withRenderingMode(.alwaysTemplate)
                 case .leave:
                     self.contentImage = generateImage(CGSize(width: 28.0, height: 28.0), opaque: false, rotatedContext: { size, context in
                         let bounds = CGRect(origin: CGPoint(), size: size)
@@ -256,20 +270,20 @@ final class VideoChatActionButtonComponent: Component {
             
             let size = CGSize(width: availableSize.width, height: availableSize.height)
             
-            if self.background.superview == nil {
-                self.addSubview(self.background)
-                self.background.image = generateStretchableFilledCircleImage(diameter: 56.0, color: .white)?.withRenderingMode(.alwaysTemplate)
-                self.background.tintColor = backgroundColor
-            }
-            transition.setFrame(view: self.background, frame: CGRect(origin: CGPoint(), size: size))
-            
             let tintTransition: ComponentTransition
-            if !transition.animation.isImmediate {
-                tintTransition = .easeInOut(duration: 0.2)
-            } else {
+            if self.background.superview == nil {
                 tintTransition = .immediate
+                self.insertSubview(self.background, at: 0)
+            } else {
+                if !transition.animation.isImmediate {
+                    tintTransition = .easeInOut(duration: 0.2)
+                } else {
+                    tintTransition = .immediate
+                }
             }
-            tintTransition.setTintColor(layer: self.background.layer, color: backgroundColor)
+
+            self.background.update(size: size, cornerRadius: size.width * 0.5, isDark: true, tintColor: .init(kind: .custom, color: backgroundColor), transition: tintTransition)
+            transition.setFrame(view: self.background, frame: CGRect(origin: CGPoint(), size: size))
             
             let titleFrame = CGRect(origin: CGPoint(x: floor((size.width - titleSize.width) * 0.5), y: size.height + 8.0), size: titleSize)
             if let titleView = self.title.view {

@@ -3932,6 +3932,36 @@ public final class SharedAccountContextImpl: SharedAccountContext {
     public func makeForumSettingsScreen(context: AccountContext, peerId: EnginePeer.Id) -> ViewController {
         return ForumSettingsScreen(context: context, peerId: peerId)
     }
+    
+    public func makeBirthdayPickerScreen(context: AccountContext, settings: Promise<AccountPrivacySettings?>, openSettings: @escaping (() -> Void), completion: @escaping (TelegramBirthday) -> Void) -> ViewController {
+        return BirthdayPickerScreen(
+            context: context,
+            mode: .generic,
+            settings: settings.get(),
+            openSettings: openSettings,
+            completion: completion
+        )
+    }
+    
+    public func makeBirthdaySuggestionScreen(context: AccountContext, peerId: EnginePeer.Id, completion: @escaping (TelegramBirthday) -> Void) -> ViewController {
+        return BirthdayPickerScreen(
+            context: context,
+            mode: .suggest(peerId),
+            settings: .single(nil),
+            openSettings: nil,
+            completion: completion
+        )
+    }
+    
+    public func makeBirthdayAcceptSuggestionScreen(context: AccountContext, birthday: TelegramBirthday, settings: Promise<AccountPrivacySettings?>, openSettings: @escaping () -> Void, completion: @escaping (TelegramBirthday) -> Void) -> ViewController {
+        return BirthdayPickerScreen(
+            context: context,
+            mode: .acceptSuggestion(birthday),
+            settings: settings.get(),
+            openSettings: openSettings,
+            completion: completion
+        )
+    }
 }
 
 private func peerInfoControllerImpl(context: AccountContext, updatedPresentationData: (PresentationData, Signal<PresentationData, NoError>)?, peer: Peer, mode: PeerInfoControllerMode, avatarInitiallyExpanded: Bool, isOpenedFromChat: Bool, requestsContext: PeerInvitationImportersContext? = nil) -> ViewController? {
