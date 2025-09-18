@@ -985,6 +985,7 @@ final class GiftOptionsScreenComponent: Component {
                 }
                 transition.setBounds(view: headerView, bounds: CGRect(origin: .zero, size: headerSize))
             }
+            
                         
 //            let topPanelSize = self.topPanel.update(
 //                transition: transition,
@@ -1221,6 +1222,7 @@ final class GiftOptionsScreenComponent: Component {
                     
                     var validIds: [AnyHashable] = []
                     var itemFrame = CGRect(origin: CGPoint(x: sideInset, y: contentHeight), size: premiumOptionSize)
+                    
                     for product in premiumProducts {
                         if let _ = product.starsPrice {
                             premiumOptionSize.height = 178.0 + 23.0
@@ -1251,28 +1253,37 @@ final class GiftOptionsScreenComponent: Component {
                             title = strings.Gift_Options_Premium_Months(3)
                         }
                         
+                        var label: String?
+                        if showStarPrice {
+                            if let starsPrice = product.starsPrice {
+                                label = strings.Gift_Options_Premium_OrStars("**#\(presentationStringsFormattedNumber(Int32(starsPrice), environment.dateTimeFormat.groupingSeparator))**").string
+                            }
+                        }
+                        
+                        let giftItemComponent = GiftItemComponent(
+                            context: component.context,
+                            theme: theme,
+                            strings: environment.strings,
+                            peer: nil,
+                            subject: .premium(months: product.months, price: product.price),
+                            title: title,
+                            subtitle: strings.Gift_Options_Premium_Premium,
+                            label: label,
+                            ribbon: product.discount.flatMap {
+                                GiftItemComponent.Ribbon(
+                                    text:  "-\($0)%",
+                                    color: .purple
+                                )
+                            },
+                            isLoading: false
+                        )
+                        
                         let _ = visibleItem.update(
                             transition: itemTransition,
                             component: AnyComponent(
                                 PlainButtonComponent(
                                     content: AnyComponent(
-                                        GiftItemComponent(
-                                            context: component.context,
-                                            theme: theme,
-                                            strings: environment.strings,
-                                            peer: nil,
-                                            subject: .premium(months: product.months, price: product.price),
-                                            title: title,
-                                            subtitle: strings.Gift_Options_Premium_Premium,
-                                            label: showStarPrice ? product.starsPrice.flatMap { strings.Gift_Options_Premium_OrStars("**#\(presentationStringsFormattedNumber(Int32($0), environment.dateTimeFormat.groupingSeparator))**").string } : nil,
-                                            ribbon: product.discount.flatMap {
-                                                GiftItemComponent.Ribbon(
-                                                    text:  "-\($0)%",
-                                                    color: .purple
-                                                )
-                                            },
-                                            isLoading: false
-                                        )
+                                        giftItemComponent
                                     ),
                                     effectAlignment: .center,
                                     action: { [weak self] in
