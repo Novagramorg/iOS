@@ -41,6 +41,7 @@ public final class ListSectionContentView: UIView {
     
     public final class Configuration {
         public let theme: PresentationTheme
+        public let style: ListSectionComponent.Style
         public let isModal: Bool
         public let displaySeparators: Bool
         public let extendsItemHighlightToSection: Bool
@@ -48,12 +49,14 @@ public final class ListSectionContentView: UIView {
         
         public init(
             theme: PresentationTheme,
+            style: ListSectionComponent.Style = .legacy,
             isModal: Bool = false,
             displaySeparators: Bool,
             extendsItemHighlightToSection: Bool,
             background: ListSectionComponent.Background
         ) {
             self.theme = theme
+            self.style = style
             self.isModal = isModal
             self.displaySeparators = displaySeparators
             self.extendsItemHighlightToSection = extendsItemHighlightToSection
@@ -151,6 +154,14 @@ public final class ListSectionContentView: UIView {
             backgroundColor = configuration.isModal ? configuration.theme.list.itemModalBlocksBackgroundColor : configuration.theme.list.itemBlocksBackgroundColor
         }
         self.externalContentBackgroundView.updateColor(color: backgroundColor, transition: transition)
+        
+        let cornerRadius: CGFloat
+        switch configuration.style {
+        case .glass:
+            cornerRadius = 26.0
+        case .legacy:
+            cornerRadius = 11.0
+        }
         
         var innerContentHeight: CGFloat = 0.0
         var validItemIds: [AnyHashable] = []
@@ -264,18 +275,18 @@ public final class ListSectionContentView: UIView {
         
         let backgroundFrame: CGRect
         var backgroundAlpha: CGFloat = 1.0
-        var contentCornerRadius: CGFloat = 11.0
+        var contentCornerRadius: CGFloat = cornerRadius
         switch configuration.background {
         case let .none(clipped):
             backgroundFrame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: size)
             backgroundAlpha = 0.0
-            self.externalContentBackgroundView.update(size: backgroundFrame.size, corners: DynamicCornerRadiusView.Corners(minXMinY: 11.0, maxXMinY: 11.0, minXMaxY: 11.0, maxXMaxY: 11.0), transition: transition)
+            self.externalContentBackgroundView.update(size: backgroundFrame.size, corners: DynamicCornerRadiusView.Corners(minXMinY: cornerRadius, maxXMinY: cornerRadius, minXMaxY: cornerRadius, maxXMaxY: cornerRadius), transition: transition)
             if !clipped {
                 contentCornerRadius = 0.0
             }
         case .all:
             backgroundFrame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: size)
-            self.externalContentBackgroundView.update(size: backgroundFrame.size, corners: DynamicCornerRadiusView.Corners(minXMinY: 11.0, maxXMinY: 11.0, minXMaxY: 11.0, maxXMaxY: 11.0), transition: transition)
+            self.externalContentBackgroundView.update(size: backgroundFrame.size, corners: DynamicCornerRadiusView.Corners(minXMinY: cornerRadius, maxXMinY: cornerRadius, minXMaxY: cornerRadius, maxXMaxY: cornerRadius), transition: transition)
         case let .range(from, corners):
             if let itemView = self.itemViews[from], itemView.frame.minY < size.height {
                 backgroundFrame = CGRect(origin: CGPoint(x: 0.0, y: itemView.frame.minY), size: CGSize(width: size.width, height: size.height - itemView.frame.minY))
@@ -306,7 +317,13 @@ public final class ListSectionComponent: Component {
         case range(from: AnyHashable, corners: DynamicCornerRadiusView.Corners)
     }
     
+    public enum Style {
+        case glass
+        case legacy
+    }
+    
     public let theme: PresentationTheme
+    public let style: Style
     public let background: Background
     public let header: AnyComponent<Empty>?
     public let footer: AnyComponent<Empty>?
@@ -317,6 +334,7 @@ public final class ListSectionComponent: Component {
     
     public init(
         theme: PresentationTheme,
+        style: Style = .legacy,
         background: Background = .all,
         header: AnyComponent<Empty>?,
         footer: AnyComponent<Empty>?,
@@ -326,6 +344,7 @@ public final class ListSectionComponent: Component {
         extendsItemHighlightToSection: Bool = false
     ) {
         self.theme = theme
+        self.style = style
         self.background = background
         self.header = header
         self.footer = footer
@@ -337,6 +356,9 @@ public final class ListSectionComponent: Component {
     
     public static func ==(lhs: ListSectionComponent, rhs: ListSectionComponent) -> Bool {
         if lhs.theme !== rhs.theme {
+            return false
+        }
+        if lhs.style != rhs.style {
             return false
         }
         if lhs.background != rhs.background {
@@ -464,6 +486,7 @@ public final class ListSectionComponent: Component {
             let contentResult = self.contentView.update(
                 configuration: ListSectionContentView.Configuration(
                     theme: component.theme,
+                    style: component.style,
                     isModal: component.isModal,
                     displaySeparators: component.displaySeparators,
                     extendsItemHighlightToSection: component.extendsItemHighlightToSection,
@@ -638,6 +661,7 @@ public final class ListSubSectionComponent: Component {
             let contentResult = self.contentView.update(
                 configuration: ListSectionContentView.Configuration(
                     theme: component.theme,
+                    style: .legacy,
                     isModal: component.isModal,
                     displaySeparators: component.displaySeparators,
                     extendsItemHighlightToSection: false,

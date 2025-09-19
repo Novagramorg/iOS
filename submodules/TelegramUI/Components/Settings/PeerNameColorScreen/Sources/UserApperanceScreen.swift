@@ -33,6 +33,8 @@ import PeerNameColorItem
 import EmojiActionIconComponent
 import TabSelectorComponent
 import WallpaperResources
+import EdgeEffect
+import TextFormat
 
 private let giftListTag = GenericComponentViewTag()
 
@@ -143,8 +145,7 @@ final class UserAppearanceScreenComponent: Component {
         private let topOverscrollLayer = SimpleLayer()
         private let scrollView: ScrollView
         private let actionButton = ComponentView<Empty>()
-        private let bottomPanelBackgroundView: BlurredBackgroundView
-        private let bottomPanelSeparator: SimpleLayer
+        private let edgeEffectView: EdgeEffectView
         
         private let backButton = PeerInfoHeaderNavigationButton()
         
@@ -154,13 +155,14 @@ final class UserAppearanceScreenComponent: Component {
             case name
         }
         private var currentSection: Section = .profile
-        
-        private let previewSection = ComponentView<Empty>()
-        private let boostSection = ComponentView<Empty>()
-        private let bannerSection = ComponentView<Empty>()
-        private let replySection = ComponentView<Empty>()
-        private let resetColorSection = ComponentView<Empty>()
+                
+        private let profilePreview = ComponentView<Empty>()
+        private let profileColorSection = ComponentView<Empty>()
+        private let profileResetColorSection = ComponentView<Empty>()
         private let profileGiftsSection = ComponentView<Empty>()
+        
+        private let namePreview = ComponentView<Empty>()
+        private let nameColorSection = ComponentView<Empty>()
         private let nameGiftsSection = ComponentView<Empty>()
         
         private var isUpdating: Bool = false
@@ -195,6 +197,8 @@ final class UserAppearanceScreenComponent: Component {
         
         private weak var emojiStatusSelectionController: ViewController?
         
+        private var cachedChevronImage: (UIImage, PresentationTheme)?
+        
         override init(frame: CGRect) {
             self.scrollView = ScrollView()
             self.scrollView.showsVerticalScrollIndicator = false
@@ -208,8 +212,7 @@ final class UserAppearanceScreenComponent: Component {
             }
             self.scrollView.alwaysBounceVertical = true
             
-            self.bottomPanelBackgroundView = BlurredBackgroundView(color: .clear, enableBlur: true)
-            self.bottomPanelSeparator = SimpleLayer()
+            self.edgeEffectView = EdgeEffectView()
             
             super.init(frame: frame)
             
@@ -218,9 +221,8 @@ final class UserAppearanceScreenComponent: Component {
             
             self.scrollView.layer.addSublayer(self.topOverscrollLayer)
             
-            self.addSubview(self.bottomPanelBackgroundView)
-            self.layer.addSublayer(self.bottomPanelSeparator)
-            
+            self.addSubview(self.edgeEffectView)
+                        
             self.backButton.action = { [weak self] _, _ in
                 if let self, let controller = self.environment?.controller() {
                     controller.navigationController?.popViewController(animated: true)
@@ -297,16 +299,10 @@ final class UserAppearanceScreenComponent: Component {
             if self.scrolledUp != scrolledUp {
                 self.scrolledUp = scrolledUp
                 if !self.isUpdating {
-                    self.state?.updated()
+                    self.state?.updated(transition: .easeInOut(duration: 0.3))
                 }
             }
                         
-            let bottomNavigationAlphaDistance: CGFloat = 16.0
-            let bottomNavigationAlpha: CGFloat = max(0.0, min(1.0, (self.scrollView.contentSize.height - self.scrollView.bounds.maxY) / bottomNavigationAlphaDistance))
-            
-            transition.setAlpha(view: self.bottomPanelBackgroundView, alpha: bottomNavigationAlpha)
-            transition.setAlpha(layer: self.bottomPanelSeparator, alpha: bottomNavigationAlpha)
-            
             switch self.currentSection {
             case .profile:
                 if let giftListView = self.profileGiftsSection.findTaggedView(tag: giftListTag) as? GiftListItemComponent.View {
@@ -600,6 +596,9 @@ final class UserAppearanceScreenComponent: Component {
                     }
                     switch subject {
                     case .reply:
+                        if case .collectible = resolvedState.nameColor {
+                            self.updatedPeerNameColor = .preset(.blue)
+                        }
                         if let result {
                             self.updatedPeerNameEmoji = result.fileId.id
                         } else {
@@ -679,6 +678,10 @@ final class UserAppearanceScreenComponent: Component {
             let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
             if themeUpdated {
                 self.backgroundColor = environment.theme.list.blocksBackgroundColor
+            }
+            
+            if self.cachedChevronImage == nil || self.cachedChevronImage?.1 !== environment.theme {
+                self.cachedChevronImage = (generateTintedImage(image: UIImage(bundleImageName: "Item List/InlineTextRightArrow"), color: environment.theme.list.itemAccentColor)!, environment.theme)
             }
             
             if self.contentsDataDisposable == nil {
@@ -804,7 +807,7 @@ final class UserAppearanceScreenComponent: Component {
                             }
                             if let intValue = value.base as? Int32 {
                                 self.currentSection = Section(rawValue: intValue) ?? .profile
-                                self.state?.updated(transition: .immediate)
+                                self.state?.updated(transition: .easeInOut(duration: 0.3))
                             }
                         }
                     )
@@ -828,15 +831,21 @@ final class UserAppearanceScreenComponent: Component {
             let listItemParams = ListViewItemLayoutParams(width: availableSize.width - sideInset * 2.0, leftInset: 0.0, rightInset: 0.0, availableHeight: 10000.0, isStandalone: true)
             
             var contentHeight: CGFloat = 0.0
-            
-            let sectionTransition = transition
-             
-            let itemCornerRadius: CGFloat = 10.0
+                         
+            let itemCornerRadius: CGFloat = 26.0
             
             switch self.currentSection {
             case .profile:
-                if let replySectionView = self.replySection.view, replySectionView.superview != nil {
-                    replySectionView.removeFromSuperview()
+                var transition = transition
+                if self.profilePreview.view == nil {
+                    transition = .immediate
+                }
+                
+                if let namePreviewView = self.namePreview.view, namePreviewView.superview != nil {
+                    namePreviewView.removeFromSuperview()
+                }
+                if let nameColorSectionView = self.nameColorSection.view, nameColorSectionView.superview != nil {
+                    nameColorSectionView.removeFromSuperview()
                 }
                 if let nameGiftsSectionView = self.nameGiftsSection.view, nameGiftsSectionView.superview != nil {
                     nameGiftsSectionView.removeFromSuperview()
@@ -849,47 +858,36 @@ final class UserAppearanceScreenComponent: Component {
                 if case .starGift = resolvedState.emojiStatus?.content {
                     hasHeaderColor = true
                 }
-                
-                let previewSectionSize = self.previewSection.update(
-                    transition: sectionTransition,
-                    component: AnyComponent(ListSectionComponent(
-                        theme: environment.theme,
-                        background: .none(clipped: false),
-                        header: nil,
-                        footer: nil,
-                        items: [
-                            AnyComponentWithIdentity(id: 0, component: AnyComponent(ListItemComponentAdaptor(
-                                itemGenerator: PeerNameColorProfilePreviewItem(
-                                    context: component.context,
-                                    theme: environment.theme,
-                                    componentTheme: environment.theme,
-                                    strings: environment.strings,
-                                    topInset: 0.0,
-                                    sectionId: 0,
-                                    peer: peer,
-                                    subtitleString: environment.strings.Presence_online,
-                                    files: self.cachedIconFiles,
-                                    nameDisplayOrder: presentationData.nameDisplayOrder,
-                                    showBackground: false
-                                ),
-                                params: ListViewItemLayoutParams(width: availableSize.width - sideInset * 2.0, leftInset: 0.0, rightInset: 0.0, availableHeight: 10000.0, isStandalone: true)
-                            ))),
-                        ],
-                        displaySeparators: false,
-                        extendsItemHighlightToSection: true
-                    )),
+                                
+                let profilePreviewSize = self.profilePreview.update(
+                    transition: transition,
+                    component: AnyComponent(TopBottomCornersComponent(topCornerRadius: itemCornerRadius, bottomCornerRadius: !self.scrolledUp ? itemCornerRadius : 0.0, component: AnyComponent(ListItemComponentAdaptor(
+                        itemGenerator: PeerNameColorProfilePreviewItem(
+                            context: component.context,
+                            theme: environment.theme,
+                            componentTheme: environment.theme,
+                            strings: environment.strings,
+                            topInset: 0.0,
+                            sectionId: 0,
+                            peer: peer,
+                            subtitleString: environment.strings.Presence_online,
+                            files: self.cachedIconFiles,
+                            nameDisplayOrder: presentationData.nameDisplayOrder,
+                            showBackground: false
+                        ),
+                        params: ListViewItemLayoutParams(width: availableSize.width - sideInset * 2.0, leftInset: 0.0, rightInset: 0.0, availableHeight: 10000.0, isStandalone: true)
+                    )))),
                     environment: {},
                     containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 1000.0)
                 )
-                let previewSectionFrame = CGRect(origin: CGPoint(x: sideInset, y: environment.navigationHeight + 12.0), size: previewSectionSize)
-                if let previewSectionView = self.previewSection.view {
-                    if previewSectionView.superview == nil {
-                        self.addSubview(previewSectionView)
+                let profilePreviewFrame = CGRect(origin: CGPoint(x: sideInset, y: environment.navigationHeight + 12.0), size: profilePreviewSize)
+                if let profilePreviewView = self.profilePreview.view {
+                    if profilePreviewView.superview == nil {
+                        self.addSubview(profilePreviewView)
                     }
-                    sectionTransition.setFrame(view: previewSectionView, frame: previewSectionFrame)
+                    transition.setFrame(view: profilePreviewView, frame: profilePreviewFrame)
                 }
-                contentHeight += previewSectionSize.height
-                contentHeight += environment.navigationHeight + 12.0
+                contentHeight += profilePreviewSize.height - 18.0
                 
                 var profileLogoContents: [AnyComponentWithIdentity<Empty>] = []
                 profileLogoContents.append(AnyComponentWithIdentity(id: 0, component: AnyComponent(MultilineTextComponent(
@@ -900,15 +898,50 @@ final class UserAppearanceScreenComponent: Component {
                     )),
                     maximumNumberOfLines: 0
                 ))))
-                let bannerSectionSize = self.bannerSection.update(
-                    transition: sectionTransition,
+                
+                //TODO:localize
+                let footerAttributes = MarkdownAttributes(
+                    body: MarkdownAttributeSet(font: Font.regular(13.0), textColor: environment.theme.list.freeTextColor),
+                    bold: MarkdownAttributeSet(font: Font.semibold(13.0), textColor: environment.theme.list.freeTextColor),
+                    link: MarkdownAttributeSet(font: Font.regular(13.0), textColor: environment.theme.list.itemAccentColor),
+                    linkAttribute: { contents in
+                        return (TelegramTextAttributes.URL, contents)
+                    }
+                )
+                let previewFooterText = NSMutableAttributedString(attributedString: parseMarkdownIntoAttributedString("You can also change color of your name and customize replies to you. [Change >]()", attributes: footerAttributes))
+                if let range = previewFooterText.string.range(of: ">"), let chevronImage = self.cachedChevronImage?.0 {
+                    previewFooterText.addAttribute(.attachment, value: chevronImage, range: NSRange(range, in: previewFooterText.string))
+                }
+                
+                let profileColorSectionSize = self.profileColorSection.update(
+                    transition: transition,
                     component: AnyComponent(ListSectionComponent(
                         theme: environment.theme,
-                        background: .range(from: 1, corners: DynamicCornerRadiusView.Corners(minXMinY: !hasHeaderColor ? itemCornerRadius : 0.0, maxXMinY: !hasHeaderColor ? itemCornerRadius : 0.0, minXMaxY: itemCornerRadius, maxXMaxY: itemCornerRadius)),
+                        style: .glass,
+                        background: .range(from: 0, corners: DynamicCornerRadiusView.Corners(minXMinY: !hasHeaderColor ? itemCornerRadius : 0.0, maxXMinY: !hasHeaderColor ? itemCornerRadius : 0.0, minXMaxY: itemCornerRadius, maxXMaxY: itemCornerRadius)),
                         header: nil,
-                        footer: nil,
+                        footer: AnyComponent(MultilineTextComponent(
+                            text: .plain(previewFooterText),
+                            maximumNumberOfLines: 0,
+                            highlightColor: environment.theme.list.itemAccentColor.withAlphaComponent(0.1),
+                            highlightInset: UIEdgeInsets(top: 0.0, left: 0.0, bottom: 0.0, right: -8.0),
+                            highlightAction: { attributes in
+                                if let _ = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.URL)] {
+                                    return NSAttributedString.Key(rawValue: TelegramTextAttributes.URL)
+                                } else {
+                                    return nil
+                                }
+                            },
+                            tapAction: { [weak self] _, _ in
+                                guard let self else {
+                                    return
+                                }
+                                self.currentSection = .name
+                                self.state?.updated(transition: .easeInOut(duration: 0.3))
+                            }
+                        )),
                         items: [
-                            AnyComponentWithIdentity(id: 1, component: AnyComponent(ListItemComponentAdaptor(
+                            AnyComponentWithIdentity(id: 0, component: AnyComponent(ListItemComponentAdaptor(
                                 itemGenerator: PeerNameColorItem(
                                     theme: environment.theme,
                                     colors: component.context.peerNameColors,
@@ -928,8 +961,9 @@ final class UserAppearanceScreenComponent: Component {
                                 ),
                                 params: listItemParams
                             ))),
-                            AnyComponentWithIdentity(id: 2, component: AnyComponent(ListActionItemComponent(
+                            AnyComponentWithIdentity(id: 1, component: AnyComponent(ListActionItemComponent(
                                 theme: environment.theme,
+                                style: .glass,
                                 title: AnyComponent(HStack(profileLogoContents, spacing: 6.0)),
                                 icon: ListActionItemComponent.Icon(component: AnyComponentWithIdentity(id: 0, component: AnyComponent(EmojiActionIconComponent(
                                     context: component.context,
@@ -956,25 +990,27 @@ final class UserAppearanceScreenComponent: Component {
                     environment: {},
                     containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 1000.0)
                 )
-                let bannerSectionFrame = CGRect(origin: CGPoint(x: sideInset, y: contentHeight), size: bannerSectionSize)
-                if let bannerSectionView = self.bannerSection.view {
-                    if bannerSectionView.superview == nil {
-                        self.scrollView.addSubview(bannerSectionView)
+                let profileColorSectionFrame = CGRect(origin: CGPoint(x: sideInset, y: contentHeight), size: profileColorSectionSize)
+                if let profileColorSectionView = self.profileColorSection.view {
+                    if profileColorSectionView.superview == nil {
+                        self.scrollView.addSubview(profileColorSectionView)
                     }
-                    sectionTransition.setFrame(view: bannerSectionView, frame: bannerSectionFrame)
+                    transition.setFrame(view: profileColorSectionView, frame: profileColorSectionFrame)
                 }
-                contentHeight += bannerSectionSize.height
+                contentHeight += profileColorSectionSize.height
                 contentHeight += sectionSpacing
                 
-                let resetColorSectionSize = self.resetColorSection.update(
-                    transition: sectionTransition,
+                let profileResetColorSectionSize = self.profileResetColorSection.update(
+                    transition: transition,
                     component: AnyComponent(ListSectionComponent(
                         theme: environment.theme,
+                        style: .glass,
                         header: nil,
                         footer: nil,
                         items: [
                             AnyComponentWithIdentity(id: 0, component: AnyComponent(ListActionItemComponent(
                                 theme: environment.theme,
+                                style: .glass,
                                 title: AnyComponent(MultilineTextComponent(
                                     text: .plain(NSAttributedString(
                                         string: environment.strings.Channel_Appearance_ResetProfileColor,
@@ -1011,18 +1047,18 @@ final class UserAppearanceScreenComponent: Component {
                     displayResetProfileColor = true
                 }
                 
-                let resetColorSectionFrame = CGRect(origin: CGPoint(x: sideInset, y: contentHeight), size: resetColorSectionSize)
-                if let resetColorSectionView = self.resetColorSection.view {
-                    if resetColorSectionView.superview == nil {
-                        self.scrollView.addSubview(resetColorSectionView)
+                let profileResetColorSectionFrame = CGRect(origin: CGPoint(x: sideInset, y: contentHeight), size: profileResetColorSectionSize)
+                if let profileResetColorSectionView = self.profileResetColorSection.view {
+                    if profileResetColorSectionView.superview == nil {
+                        self.scrollView.addSubview(profileResetColorSectionView)
                     }
-                    sectionTransition.setPosition(view: resetColorSectionView, position: resetColorSectionFrame.center)
-                    sectionTransition.setBounds(view: resetColorSectionView, bounds: CGRect(origin: CGPoint(), size: resetColorSectionFrame.size))
-                    sectionTransition.setScale(view: resetColorSectionView, scale: displayResetProfileColor ? 1.0 : 0.001)
-                    sectionTransition.setAlpha(view: resetColorSectionView, alpha: displayResetProfileColor ? 1.0 : 0.0)
+                    transition.setPosition(view: profileResetColorSectionView, position: profileResetColorSectionFrame.center)
+                    transition.setBounds(view: profileResetColorSectionView, bounds: CGRect(origin: CGPoint(), size: profileResetColorSectionFrame.size))
+                    transition.setScale(view: profileResetColorSectionView, scale: displayResetProfileColor ? 1.0 : 0.001)
+                    transition.setAlpha(view: profileResetColorSectionView, alpha: displayResetProfileColor ? 1.0 : 0.0)
                 }
                 if displayResetProfileColor {
-                    contentHeight += resetColorSectionSize.height
+                    contentHeight += profileResetColorSectionSize.height
                     contentHeight += sectionSpacing
                 }
                 
@@ -1032,9 +1068,10 @@ final class UserAppearanceScreenComponent: Component {
                         selectedGiftId = id
                     }
                     let giftsSectionSize = self.profileGiftsSection.update(
-                        transition: sectionTransition,
+                        transition: transition,
                         component: AnyComponent(ListSectionComponent(
                             theme: environment.theme,
+                            style: .glass,
                             header: AnyComponent(MultilineTextComponent(
                                 text: .plain(NSAttributedString(
                                     string: environment.strings.NameColor_GiftTitle,
@@ -1106,19 +1143,24 @@ final class UserAppearanceScreenComponent: Component {
                         if giftsSectionView.superview == nil {
                             self.scrollView.addSubview(giftsSectionView)
                         }
-                        sectionTransition.setFrame(view: giftsSectionView, frame: giftsSectionFrame)
+                        transition.setFrame(view: giftsSectionView, frame: giftsSectionFrame)
                     }
                     contentHeight += giftsSectionSize.height
                     contentHeight += sectionSpacing
                 }
             case .name:
-                if let previewSectionView = self.previewSection.view, previewSectionView.superview != nil {
-                    previewSectionView.removeFromSuperview()
+                var transition = transition
+                if self.namePreview.view == nil {
+                    transition = .immediate
                 }
-                if let bannerSectionView = self.bannerSection.view, bannerSectionView.superview != nil {
-                    bannerSectionView.removeFromSuperview()
+                
+                if let profilePreviewView = self.profilePreview.view, profilePreviewView.superview != nil {
+                    profilePreviewView.removeFromSuperview()
                 }
-                if let resetColorSectionView = self.resetColorSection.view, resetColorSectionView.superview != nil {
+                if let profileColorSectionView = self.profileColorSection.view, profileColorSectionView.superview != nil {
+                    profileColorSectionView.removeFromSuperview()
+                }
+                if let resetColorSectionView = self.profileResetColorSection.view, resetColorSectionView.superview != nil {
                     resetColorSectionView.removeFromSuperview()
                 }
                 if let profileGiftsSectionView = self.profileGiftsSection.view, profileGiftsSectionView.superview != nil {
@@ -1165,10 +1207,42 @@ final class UserAppearanceScreenComponent: Component {
                     replyColor = collectibleColor.mainColor(dark: environment.theme.overallDarkAppearance)
                 }
                 
-                let replySectionSize = self.replySection.update(
-                    transition: sectionTransition,
+                let namePreviewSize = self.namePreview.update(
+                    transition: transition,
+                    component: AnyComponent(TopBottomCornersComponent(topCornerRadius: itemCornerRadius, bottomCornerRadius: !self.scrolledUp ? itemCornerRadius : 0.0, component: AnyComponent(ListItemComponentAdaptor(
+                        itemGenerator: PeerNameColorChatPreviewItem(
+                            context: component.context,
+                            theme: chatPreviewTheme,
+                            componentTheme: chatPreviewTheme,
+                            strings: environment.strings,
+                            sectionId: 0,
+                            fontSize: presentationData.chatFontSize,
+                            chatBubbleCorners: presentationData.chatBubbleCorners,
+                            wallpaper: chatPreviewWallpaper,
+                            dateTimeFormat: environment.dateTimeFormat,
+                            nameDisplayOrder: presentationData.nameDisplayOrder,
+                            messageItems: [messageItem]
+                        ),
+                        params: ListViewItemLayoutParams(width: availableSize.width - sideInset * 2.0, leftInset: 0.0, rightInset: 0.0, availableHeight: 10000.0, isStandalone: true)
+                    )))),
+                    environment: {},
+                    containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 1000.0)
+                )
+                let namePreviewFrame = CGRect(origin: CGPoint(x: sideInset, y: environment.navigationHeight + 12.0), size: namePreviewSize)
+                if let namePreviewView = self.namePreview.view {
+                    if namePreviewView.superview == nil {
+                        self.addSubview(namePreviewView)
+                    }
+                    transition.setFrame(view: namePreviewView, frame: namePreviewFrame)
+                }
+                contentHeight += namePreviewSize.height - 18.0
+                
+                let nameColorSectionSize = self.nameColorSection.update(
+                    transition: transition,
                     component: AnyComponent(ListSectionComponent(
                         theme: environment.theme,
+                        style: .glass,
+                        background: .range(from: 0, corners: DynamicCornerRadiusView.Corners(minXMinY: 0.0, maxXMinY: 0.0, minXMaxY: itemCornerRadius, maxXMaxY: itemCornerRadius)),
                         header: nil,
                         footer: AnyComponent(MultilineTextComponent(
                             text: .plain(NSAttributedString(
@@ -1180,30 +1254,17 @@ final class UserAppearanceScreenComponent: Component {
                         )),
                         items: [
                             AnyComponentWithIdentity(id: 0, component: AnyComponent(ListItemComponentAdaptor(
-                                itemGenerator: PeerNameColorChatPreviewItem(
-                                    context: component.context,
-                                    theme: chatPreviewTheme,
-                                    componentTheme: chatPreviewTheme,
-                                    strings: environment.strings,
-                                    sectionId: 0,
-                                    fontSize: presentationData.chatFontSize,
-                                    chatBubbleCorners: presentationData.chatBubbleCorners,
-                                    wallpaper: chatPreviewWallpaper,
-                                    dateTimeFormat: environment.dateTimeFormat,
-                                    nameDisplayOrder: presentationData.nameDisplayOrder,
-                                    messageItems: [messageItem]
-                                ),
-                                params: listItemParams
-                            ))),
-                            AnyComponentWithIdentity(id: 1, component: AnyComponent(ListItemComponentAdaptor(
                                 itemGenerator: PeerNameColorItem(
                                     theme: environment.theme,
                                     colors: component.context.peerNameColors,
                                     mode: .name,
                                     currentColor: resolvedState.nameColor.nameColor,
                                     updated: { [weak self] value in
-                                        guard let self, let value else {
+                                        guard let self, let resolvedState = self.resolveState(), let value else {
                                             return
+                                        }
+                                        if case .collectible = resolvedState.nameColor {
+                                            self.updatedPeerNameEmoji = .some(nil)
                                         }
                                         self.updatedPeerNameColor = .preset(value)
                                         self.state?.updated(transition: .spring(duration: 0.4))
@@ -1212,8 +1273,9 @@ final class UserAppearanceScreenComponent: Component {
                                 ),
                                 params: listItemParams
                             ))),
-                            AnyComponentWithIdentity(id: 2, component: AnyComponent(ListActionItemComponent(
+                            AnyComponentWithIdentity(id: 1, component: AnyComponent(ListActionItemComponent(
                                 theme: environment.theme,
+                                style: .glass,
                                 title: AnyComponent(HStack(replyLogoContents, spacing: 6.0)),
                                 icon: ListActionItemComponent.Icon(component: AnyComponentWithIdentity(id: 0, component: AnyComponent(EmojiActionIconComponent(
                                     context: component.context,
@@ -1236,14 +1298,14 @@ final class UserAppearanceScreenComponent: Component {
                     environment: {},
                     containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 1000.0)
                 )
-                let replySectionFrame = CGRect(origin: CGPoint(x: sideInset, y: contentHeight), size: replySectionSize)
-                if let replySectionView = self.replySection.view {
-                    if replySectionView.superview == nil {
-                        self.scrollView.addSubview(replySectionView)
+                let nameColorSectionFrame = CGRect(origin: CGPoint(x: sideInset, y: contentHeight), size: nameColorSectionSize)
+                if let nameColorSectionView = self.nameColorSection.view {
+                    if nameColorSectionView.superview == nil {
+                        self.scrollView.addSubview(nameColorSectionView)
                     }
-                    sectionTransition.setFrame(view: replySectionView, frame: replySectionFrame)
+                    transition.setFrame(view: nameColorSectionView, frame: nameColorSectionFrame)
                 }
-                contentHeight += replySectionSize.height
+                contentHeight += nameColorSectionSize.height
                 contentHeight += sectionSpacing
                 
                 if !self.starGifts.isEmpty {
@@ -1252,9 +1314,10 @@ final class UserAppearanceScreenComponent: Component {
                         selectedGiftId = collectibleColor.collectibleId
                     }
                     let giftsSectionSize = self.nameGiftsSection.update(
-                        transition: sectionTransition,
+                        transition: transition,
                         component: AnyComponent(ListSectionComponent(
                             theme: environment.theme,
+                            style: .glass,
                             header: AnyComponent(MultilineTextComponent(
                                 text: .plain(NSAttributedString(
                                     string: environment.strings.NameColor_GiftTitle,
@@ -1284,6 +1347,7 @@ final class UserAppearanceScreenComponent: Component {
                                             }
                                             
                                             self.updatedPeerNameColor = .collectible(peerColor)
+                                            self.updatedPeerNameEmoji = peerColor.backgroundEmojiId
                                             self.state?.updated(transition: .spring(duration: 0.4))
                                         },
                                         tag: giftListTag
@@ -1300,7 +1364,7 @@ final class UserAppearanceScreenComponent: Component {
                         if giftsSectionView.superview == nil {
                             self.scrollView.addSubview(giftsSectionView)
                         }
-                        sectionTransition.setFrame(view: giftsSectionView, frame: giftsSectionFrame)
+                        transition.setFrame(view: giftsSectionView, frame: giftsSectionFrame)
                     }
                     contentHeight += giftsSectionSize.height
                     contentHeight += sectionSpacing
@@ -1309,10 +1373,12 @@ final class UserAppearanceScreenComponent: Component {
                     
             contentHeight += bottomContentInset
             
-            var buttonTitle = environment.strings.Channel_Appearance_ApplyButton
-            if let emojiStatus = resolvedState.emojiStatus, case .starGift = emojiStatus.content, resolvedState.changes.contains(.emojiStatus) {
-                buttonTitle = environment.strings.NameColor_WearCollectible
-            }
+            //TODO:localize
+            let buttonSideInset: CGFloat = 36.0
+            let buttonTitle = "Apply Style" // environment.strings.Channel_Appearance_ApplyButton
+//            if let emojiStatus = resolvedState.emojiStatus, case .starGift = emojiStatus.content, resolvedState.changes.contains(.emojiStatus) {
+//                buttonTitle = environment.strings.NameColor_WearCollectible
+//            }
             
             var buttonContents: [AnyComponentWithIdentity<Empty>] = []
             buttonContents.append(AnyComponentWithIdentity(id: AnyHashable(buttonTitle), component: AnyComponent(
@@ -1323,6 +1389,7 @@ final class UserAppearanceScreenComponent: Component {
                 transition: transition,
                 component: AnyComponent(ButtonComponent(
                     background: ButtonComponent.Background(
+                        style: .glass,
                         color: environment.theme.list.itemCheckColors.fillColor,
                         foreground: environment.theme.list.itemCheckColors.foregroundColor,
                         pressedColor: environment.theme.list.itemCheckColors.fillColor.withMultipliedAlpha(0.8)
@@ -1341,7 +1408,7 @@ final class UserAppearanceScreenComponent: Component {
                     }
                 )),
                 environment: {},
-                containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 50.0)
+                containerSize: CGSize(width: availableSize.width - buttonSideInset * 2.0, height: 52.0)
             )
             contentHeight += buttonSize.height
             
@@ -1350,7 +1417,7 @@ final class UserAppearanceScreenComponent: Component {
             
             let buttonY = availableSize.height - bottomInset - environment.safeInsets.bottom - buttonSize.height
             
-            let buttonFrame = CGRect(origin: CGPoint(x: sideInset, y: buttonY), size: buttonSize)
+            let buttonFrame = CGRect(origin: CGPoint(x: buttonSideInset, y: buttonY), size: buttonSize)
             if let buttonView = self.actionButton.view {
                 if buttonView.superview == nil {
                     self.addSubview(buttonView)
@@ -1359,26 +1426,24 @@ final class UserAppearanceScreenComponent: Component {
                 transition.setAlpha(view: buttonView, alpha: 1.0)
             }
             
-            let bottomPanelFrame = CGRect(origin: CGPoint(x: 0.0, y: buttonY - 8.0), size: CGSize(width: availableSize.width, height: availableSize.height - buttonY + 8.0))
-            transition.setFrame(view: self.bottomPanelBackgroundView, frame: bottomPanelFrame)
-            self.bottomPanelBackgroundView.updateColor(color: environment.theme.rootController.navigationBar.blurredBackgroundColor, transition: .immediate)
-            self.bottomPanelBackgroundView.update(size: bottomPanelFrame.size, transition: transition.containedViewLayoutTransition)
-            
-            self.bottomPanelSeparator.backgroundColor = environment.theme.rootController.navigationBar.separatorColor.cgColor
-            transition.setFrame(layer: self.bottomPanelSeparator, frame: CGRect(origin: CGPoint(x: bottomPanelFrame.minX, y: bottomPanelFrame.minY), size: CGSize(width: bottomPanelFrame.width, height: UIScreenPixel)))
-            
+            let edgeEffectHeight: CGFloat = availableSize.height - buttonY + 8.0
+            let edgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: availableSize.height - edgeEffectHeight), size: CGSize(width: availableSize.width, height: edgeEffectHeight))
+            transition.setFrame(view: self.edgeEffectView, frame: edgeEffectFrame)
+            self.edgeEffectView.update(content: environment.theme.list.blocksBackgroundColor, isInverted: false, rect: edgeEffectFrame, edge: .bottom, edgeSize: edgeEffectFrame.height, containerSize: availableSize, transition: transition)
+              
             let previousBounds = self.scrollView.bounds
             let contentSize = CGSize(width: availableSize.width, height: contentHeight)
-            if self.scrollView.frame != CGRect(origin: CGPoint(), size: availableSize) {
-                self.scrollView.frame = CGRect(origin: CGPoint(), size: availableSize)
+            let scrollViewFrame = CGRect(origin: CGPoint(x: 0.0, y: environment.navigationHeight + 30.0), size: CGSize(width: availableSize.width, height: availableSize.height - environment.navigationHeight - 30.0))
+            if self.scrollView.frame != scrollViewFrame {
+                self.scrollView.frame = scrollViewFrame
             }
             if self.scrollView.contentSize != contentSize {
                 self.scrollView.contentSize = contentSize
             }
-            let scrollInsets = UIEdgeInsets(top: environment.navigationHeight, left: 0.0, bottom: availableSize.height - bottomPanelFrame.minY, right: 0.0)
-            if self.scrollView.verticalScrollIndicatorInsets != scrollInsets {
-                self.scrollView.verticalScrollIndicatorInsets = scrollInsets
-            }
+//            let scrollInsets = UIEdgeInsets(top: 0.0, left: 0.0, bottom: availableSize.height - bottomPanelFrame.minY, right: 0.0)
+//            if self.scrollView.verticalScrollIndicatorInsets != scrollInsets {
+//                self.scrollView.verticalScrollIndicatorInsets = scrollInsets
+//            }
                         
             if !previousBounds.isEmpty, !transition.animation.isImmediate {
                 let bounds = self.scrollView.bounds
@@ -1388,7 +1453,8 @@ final class UserAppearanceScreenComponent: Component {
                 }
             }
             
-            self.topOverscrollLayer.frame = CGRect(origin: CGPoint(x: 0.0, y: -3000.0), size: CGSize(width: availableSize.width, height: 3000.0))
+            self.topOverscrollLayer.backgroundColor = environment.theme.list.itemBlocksBackgroundColor.cgColor
+            self.topOverscrollLayer.frame = CGRect(origin: CGPoint(x: sideInset, y: -1000.0), size: CGSize(width: availableSize.width - sideInset * 2.0, height: 1315.0))
             
             self.updateScrolling(transition: transition)
             
@@ -1397,7 +1463,7 @@ final class UserAppearanceScreenComponent: Component {
                     size: availableSize,
                     metrics: environment.metrics,
                     deviceMetrics: environment.deviceMetrics,
-                    intrinsicInsets: UIEdgeInsets(top: 0.0, left: 0.0, bottom: bottomPanelFrame.height, right: 0.0),
+                    intrinsicInsets: UIEdgeInsets(top: 0.0, left: 0.0, bottom: edgeEffectHeight, right: 0.0),
                     safeInsets: UIEdgeInsets(top: 0.0, left: environment.safeInsets.left, bottom: 0.0, right: environment.safeInsets.right),
                     additionalInsets: .zero,
                     statusBarHeight: environment.statusBarHeight,
@@ -1492,5 +1558,81 @@ private extension PeerColor {
         default:
             return nil
         }
+    }
+}
+
+
+final class TopBottomCornersComponent: Component {
+    private let topCornerRadius: CGFloat
+    private let bottomCornerRadius: CGFloat
+    private let component: AnyComponent<Empty>
+    
+    public init(
+        topCornerRadius: CGFloat,
+        bottomCornerRadius: CGFloat,
+        component: AnyComponent<Empty>
+    ) {
+        self.topCornerRadius = topCornerRadius
+        self.bottomCornerRadius = bottomCornerRadius
+        self.component = component
+    }
+    
+    public static func == (lhs: TopBottomCornersComponent, rhs: TopBottomCornersComponent) -> Bool {
+        if lhs.topCornerRadius != rhs.topCornerRadius {
+            return false
+        }
+        if lhs.bottomCornerRadius != rhs.bottomCornerRadius {
+            return false
+        }
+        if lhs.component != rhs.component {
+            return false
+        }
+        return true
+    }
+    
+    public final class View: UIView {
+        private let containerView: UIView
+        private let hostView: ComponentHostView<Empty>
+        
+        public override init(frame: CGRect) {
+            self.containerView = UIView()
+            self.hostView = ComponentHostView<Empty>()
+            
+            super.init(frame: frame)
+            
+            self.clipsToBounds = true
+            self.containerView.clipsToBounds = true
+            
+            self.addSubview(self.containerView)
+            self.containerView.addSubview(self.hostView)
+        }
+        
+        public required init?(coder: NSCoder) {
+            preconditionFailure()
+        }
+        
+        func update(component: TopBottomCornersComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
+            
+            let size = self.hostView.update(
+                transition: transition,
+                component: component.component,
+                environment: {},
+                containerSize: availableSize
+            )
+            
+            transition.setCornerRadius(layer: self.containerView.layer, cornerRadius: component.topCornerRadius)
+            transition.setCornerRadius(layer: self.layer, cornerRadius: component.bottomCornerRadius)
+            transition.setFrame(view: self.containerView, frame: CGRect(origin: .zero, size: CGSize(width: availableSize.width, height: availableSize.height + component.bottomCornerRadius)))
+            
+            return size
+        }
+    }
+    
+    public func makeView() -> View {
+        return View()
+    }
+    
+    public func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<EnvironmentType>, transition: ComponentTransition) -> CGSize {
+        return view.update(component: self, availableSize: availableSize, state: state, environment: environment, transition: transition)
     }
 }
