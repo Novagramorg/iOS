@@ -125,14 +125,29 @@ public final class TabBarComponent: Component {
                             }
                             
                             self.itemWithActiveContextGesture = id
+                            
+                            let startPoint = point
+                            self.contextGestureContainerView.contextGesture?.externalUpdated = { [weak self] _, point in
+                                guard let self else {
+                                    return
+                                }
+                                
+                                let dist = sqrt(pow(startPoint.x - point.x, 2.0) + pow(startPoint.y - point.y, 2.0))
+                                if dist > 10.0 {
+                                    self.contextGestureContainerView.contextGesture?.cancel()
+                                }
+                            }
+                            
                             return true
                         }
                     }
                 }
                 return false
             }
-            /*self.contextGestureContainerView.customActivationProgress = { [weak self] progress, update in
-                guard let self, let itemWithActiveContextGesture = self.itemWithActiveContextGesture else {
+            self.contextGestureContainerView.customActivationProgress = { [weak self] _, _ in
+                let _ = self
+                return
+                /*guard let self, let itemWithActiveContextGesture = self.itemWithActiveContextGesture else {
                     return
                 }
                 guard let itemView = self.itemViews[itemWithActiveContextGesture]?.view else {
@@ -155,8 +170,8 @@ public final class TabBarComponent: Component {
                     itemView.layer.sublayerTransform = sublayerTransform
 
                     itemView.layer.animate(from: NSValue(caTransform3D: previousTransform), to: NSValue(caTransform3D: sublayerTransform), keyPath: "sublayerTransform", timingFunction: CAMediaTimingFunctionName.easeOut.rawValue, duration: 0.2)
-                }
-            }*/
+                }*/
+            }
             self.contextGestureContainerView.activated = { [weak self] gesture, _ in
                 guard let self, let component = self.component else {
                     return
