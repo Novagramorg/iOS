@@ -301,19 +301,19 @@ public extension Peer {
         }
     }
     
-    var nameColor: PeerNameColor? {
+    var nameColor: PeerColor? {
         switch self {
         case let user as TelegramUser:
             if let nameColor = user.nameColor {
                 return nameColor
             } else {
-                return PeerNameColor(rawValue: Int32(self.id.id._internalGetInt64Value() % 7))
+                return .preset(PeerNameColor(rawValue: Int32(self.id.id._internalGetInt64Value() % 7)))
             }
         case let channel as TelegramChannel:
             if let nameColor = channel.nameColor {
-                return nameColor
+                return .preset(nameColor)
             } else {
-                return PeerNameColor(rawValue: Int32(self.id.id._internalGetInt64Value() % 7))
+                return .preset(PeerNameColor(rawValue: Int32(self.id.id._internalGetInt64Value() % 7)))
             }
         default:
             return nil
@@ -352,7 +352,7 @@ public extension Peer {
     
     var hasCustomNameColor: Bool {
         let defaultNameColor = PeerNameColor(rawValue: Int32(self.id.id._internalGetInt64Value() % 7))
-        if self.nameColor != defaultNameColor {
+        if self.nameColor != .preset(defaultNameColor) {
             return true
         }
         return false
