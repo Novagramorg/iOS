@@ -2211,11 +2211,26 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         
         if let peer = firstMessage.peers[firstMessage.id.peerId] as? TelegramChannel, case .broadcast = peer.info, item.content.firstMessage.adAttribute == nil {
             let peer = (peer as Peer)
-            let nameColors = peer.nameColor.flatMap { item.context.peerNameColors.get($0, dark: item.presentationData.theme.theme.overallDarkAppearance) }
+            let nameColors: PeerNameColors.Colors?
+            switch peer.nameColor {
+            case let .preset(nameColor):
+                nameColors = item.context.peerNameColors.get(nameColor, dark: item.presentationData.theme.theme.overallDarkAppearance)
+            case let .collectible(collectibleColor):
+                nameColors = collectibleColor.peerNameColors(dark: item.presentationData.theme.theme.overallDarkAppearance)
+            default:
+                nameColors = nil
+            }
             authorNameColor = nameColors?.main
         } else if let effectiveAuthor = effectiveAuthor {
-            let nameColor = effectiveAuthor.nameColor ?? .blue
-            let nameColors = item.context.peerNameColors.get(nameColor, dark: item.presentationData.theme.theme.overallDarkAppearance)
+            let nameColors: PeerNameColors.Colors
+            switch effectiveAuthor.nameColor {
+            case let .preset(nameColor):
+                nameColors = item.context.peerNameColors.get(nameColor, dark: item.presentationData.theme.theme.overallDarkAppearance)
+            case let .collectible(collectibleColor):
+                nameColors = collectibleColor.peerNameColors(dark: item.presentationData.theme.theme.overallDarkAppearance)
+            default:
+                nameColors = item.context.peerNameColors.get(.blue, dark: item.presentationData.theme.theme.overallDarkAppearance)
+            }
             let color: UIColor
             if incoming {
                 color = nameColors.main
@@ -2230,13 +2245,28 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                 authorNameString = EnginePeer(peer).displayTitle(strings: item.presentationData.strings, displayOrder: item.presentationData.nameDisplayOrder)
                 
                 let peer = (peer as Peer)
-                let nameColors = peer.nameColor.flatMap { item.context.peerNameColors.get($0, dark: item.presentationData.theme.theme.overallDarkAppearance) }
+                let nameColors: PeerNameColors.Colors?
+                switch peer.nameColor {
+                case let .preset(nameColor):
+                    nameColors = item.context.peerNameColors.get(nameColor, dark: item.presentationData.theme.theme.overallDarkAppearance)
+                case let .collectible(collectibleColor):
+                    nameColors = collectibleColor.peerNameColors(dark: item.presentationData.theme.theme.overallDarkAppearance)
+                default:
+                    nameColors = nil
+                }
                 authorNameColor = nameColors?.main
             } else if let effectiveAuthor = effectiveAuthor {
                 authorNameString = EnginePeer(effectiveAuthor).displayTitle(strings: item.presentationData.strings, displayOrder: item.presentationData.nameDisplayOrder)
                 
-                let nameColor = effectiveAuthor.nameColor ?? .blue
-                let nameColors = item.context.peerNameColors.get(nameColor, dark: item.presentationData.theme.theme.overallDarkAppearance)
+                let nameColors: PeerNameColors.Colors
+                switch effectiveAuthor.nameColor {
+                case let .preset(nameColor):
+                    nameColors = item.context.peerNameColors.get(nameColor, dark: item.presentationData.theme.theme.overallDarkAppearance)
+                case let .collectible(collectibleColor):
+                    nameColors = collectibleColor.peerNameColors(dark: item.presentationData.theme.theme.overallDarkAppearance)
+                default:
+                    nameColors = item.context.peerNameColors.get(.blue, dark: item.presentationData.theme.theme.overallDarkAppearance)
+                }
                 let color: UIColor
                 if incoming {
                     color = nameColors.main
@@ -6259,7 +6289,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                 default:
                     return
                 }
-                item.controllerInteraction.openPremiumStatusInfo(peer.id, credibilityIconView, emojiFileId, peer.nameColor ?? .blue)
+                item.controllerInteraction.openPremiumStatusInfo(peer.id, credibilityIconView, emojiFileId, peer.nameColor ?? .preset(.blue))
             }
         }
     }
