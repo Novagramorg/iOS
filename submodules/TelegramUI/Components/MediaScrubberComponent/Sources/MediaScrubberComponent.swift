@@ -750,7 +750,7 @@ public final class MediaScrubberComponent: Component {
             case .editor, .cover:
                 fullTrackHeight = trackHeight
             case .videoMessage, .voiceMessage:
-                fullTrackHeight = 33.0
+                fullTrackHeight = 36.0
             }
             let scrubberSize = CGSize(width: availableSize.width, height: fullTrackHeight)
             
@@ -1134,6 +1134,10 @@ private class TrackView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelega
             let fullTrackHeight: CGFloat
             if case .cover = params.style {
                 fullTrackHeight = trackHeight
+            } else if case .voiceMessage = params.style {
+                fullTrackHeight = 36.0
+            } else if case .videoMessage = params.style {
+                fullTrackHeight = 36.0
             } else {
                 fullTrackHeight = 33.0
             }
@@ -1209,7 +1213,7 @@ private class TrackView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelega
             framesCornerRadius = 9.0
             self.videoTransparentFramesContainer.alpha = 0.35
         case .videoMessage, .voiceMessage:
-            fullTrackHeight = 33.0
+            fullTrackHeight = 36.0
             framesCornerRadius = fullTrackHeight / 2.0
             self.videoTransparentFramesContainer.alpha = 0.5
         }
