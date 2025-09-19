@@ -2190,12 +2190,6 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             self.actionButtons.micButton.audioRecorder = nil
             self.actionButtons.micButton.videoRecordingStatus = nil
             transition.updateAlpha(layer: self.textInputBackgroundNode.layer, alpha: 1.0)
-            if let textInputNode = self.textInputNode {
-                transition.updateAlpha(node: textInputNode, alpha: audioRecordingItemsAlpha)
-            }
-            for (_, button) in self.accessoryItemButtons {
-                transition.updateAlpha(layer: button.layer, alpha: audioRecordingItemsAlpha)
-            }
             
             if let audioRecordingInfoContainerNode = self.audioRecordingInfoContainerNode {
                 self.audioRecordingInfoContainerNode = nil
@@ -2236,6 +2230,13 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                     audioRecordingCancelIndicator.removeFromSuperview()
                 }
             }
+        }
+        
+        if let textInputNode = self.textInputNode {
+            transition.updateAlpha(node: textInputNode, alpha: audioRecordingItemsAlpha)
+        }
+        for (_, button) in self.accessoryItemButtons {
+            transition.updateAlpha(layer: button.layer, alpha: audioRecordingItemsAlpha)
         }
         
         leftInset += leftMenuInset
@@ -2359,8 +2360,9 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             let _ = mediaPreviewPanelNode.updateLayout(width: mediaPreviewPanelFrame.width, leftInset: 0.0, rightInset: 0.0, bottomInset: 0.0, additionalSideInsets: UIEdgeInsets(), maxHeight: 40.0, maxOverlayHeight: 40.0, isSecondary: false, transition: mediaPreviewPanelTransition, interfaceState: interfaceState, metrics: metrics, isMediaInputExpanded: false)
         } else if let mediaPreviewPanelNode = self.mediaPreviewPanelNode {
             self.mediaPreviewPanelNode = nil
-            transition.updateAlpha(node: mediaPreviewPanelNode, alpha: 0.0, completion: { [weak mediaPreviewPanelNode] _ in
-                mediaPreviewPanelNode?.view.removeFromSuperview()
+            let mediaPreviewPanelView = mediaPreviewPanelNode.view
+            transition.updateAlpha(layer: mediaPreviewPanelView.layer, alpha: 0.0, completion: { [weak mediaPreviewPanelView] _ in
+                mediaPreviewPanelView?.removeFromSuperview()
             })
             let mediaPreviewPanelNodeTintMaskView = mediaPreviewPanelNode.tintMaskView
             transition.updateAlpha(layer: mediaPreviewPanelNodeTintMaskView.layer, alpha: 0.0, completion: { [weak mediaPreviewPanelNodeTintMaskView] _ in

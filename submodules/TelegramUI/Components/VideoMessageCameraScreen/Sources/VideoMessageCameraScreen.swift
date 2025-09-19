@@ -420,10 +420,13 @@ private final class VideoMessageCameraScreenComponent: CombinedComponent {
         
             controller.updatePreviewState({ _ in return nil }, transition: .spring(duration: 0.4))
             
-            controller.node.withReadyCamera(isFirstTime: !controller.node.cameraIsActive) {
+            controller.node.withReadyCamera(isFirstTime: !controller.node.cameraIsActive) { [weak self] in
                 Queue.mainQueue().after(0.15) {
+                    guard let self else {
+                        return
+                    }
                     self.resultDisposable.set((camera.startRecording()
-                    |> deliverOnMainQueue).start(next: { [weak self] recordingData in
+                    |> deliverOnMainQueue).startStrict(next: { [weak self] recordingData in
                         let duration = initialDuration + recordingData.duration
                         if let self, let controller = self.getController() {
                             controller.updateCameraState({ $0.updatedDuration(duration) }, transition: .easeInOut(duration: 0.1))
@@ -462,7 +465,7 @@ private final class VideoMessageCameraScreenComponent: CombinedComponent {
             controller.lastActionTimestamp = currentTimestamp
             
             self.resultDisposable.set((camera.stopRecording()
-            |> deliverOnMainQueue).start(next: { [weak self] result in
+            |> deliverOnMainQueue).startStrict(next: { [weak self] result in
                 if let self, let controller = self.getController(), case let .finished(mainResult, _, duration, _, _) = result {
                     self.completion.invoke(
                         .video(VideoMessageCameraScreen.CaptureResult.Video(
@@ -986,7 +989,10 @@ public class VideoMessageCameraScreen: ViewController {
             if isDualCameraEnabled {
                 self.mainPreviewView.removePlaceholder(delay: 0.0)
             }
-            self.withReadyCamera(isFirstTime: true, {
+            self.withReadyCamera(isFirstTime: true, { [weak self] in
+                guard let self else {
+                    return
+                }
                 if !isDualCameraEnabled {
                     self.mainPreviewView.removePlaceholder(delay: 0.0)
                 }
@@ -1063,7 +1069,7 @@ public class VideoMessageCameraScreen: ViewController {
                 queue: Queue.mainQueue(),
                 camera.flashMode,
                 camera.position
-            ).start(next: { [weak self] flashMode, position in
+            ).startStrict(next: { [weak self] flashMode, position in
                 guard let self else {
                     return
                 }
@@ -1116,8 +1122,8 @@ public class VideoMessageCameraScreen: ViewController {
             
             UIView.animate(withDuration: 0.5, delay: 0.0, usingSpringWithDamping: 0.8, initialSpringVelocity: 0.2, animations: {
                 self.previewContainerView.center = targetPosition
-            }, completion: { _ in
-                self.animatingIn = false
+            }, completion: { [weak self] _ in
+                self?.animatingIn = false
             })
             
             if let view = self.componentHost.view {
@@ -1130,8 +1136,8 @@ public class VideoMessageCameraScreen: ViewController {
                                     
             UIView.animate(withDuration: 0.25, animations: {
                 self.backgroundView.alpha = 0.0
-            }, completion: { _ in
-                self.backgroundView.removeFromSuperview()
+            }, completion: { [weak self] _ in
+                self?.backgroundView.removeFromSuperview()
                 completion()
             })
             
@@ -1150,9 +1156,9 @@ public class VideoMessageCameraScreen: ViewController {
                     }
                     UIView.animate(withDuration: 0.2, animations: {
                         self.previewSnapshotView?.alpha = 0.0
-                    }, completion: { _ in
-                        self.previewSnapshotView?.removeFromSuperview()
-                        self.previewSnapshotView = nil
+                    }, completion: { [weak self] _ in
+                        self?.previewSnapshotView?.removeFromSuperview()
+                        self?.previewSnapshotView = nil
                     })
                 }
                 
@@ -1195,22 +1201,16 @@ public class VideoMessageCameraScreen: ViewController {
                     UIView.animate(withDuration: 0.4, animations: {
                         self.previewBlurView.effect = nil
                         self.previewSnapshotView?.alpha = 0.0
-                    }, completion: { _ in
-                        self.previewSnapshotView?.removeFromSuperview()
-                        self.previewSnapshotView = nil
+                    }, completion: { [weak self] _ in
+                        self?.previewSnapshotView?.removeFromSuperview()
+                        self?.previewSnapshotView = nil
                     })
                 }
-                if #available(iOS 13.0, *) {
-                    let _ = (self.mainPreviewView.isPreviewing
-                    |> filter { $0 }
-                    |> take(1)).startStandalone(next: { _ in
-                        action()
-                    })
-                } else {
-                    Queue.mainQueue().after(1.0) {
-                        action()
-                    }
-                }
+                let _ = (self.mainPreviewView.isPreviewing
+                |> filter { $0 }
+                |> take(1)).startStandalone(next: { _ in
+                    action()
+                })
                 
                 self.cameraIsActive = true
                 self.requestUpdateLayout(transition: .immediate)
@@ -1260,7 +1260,7 @@ public class VideoMessageCameraScreen: ViewController {
             let file = TelegramMediaFile(fileId: MediaId(namespace: Namespaces.Media.LocalFile, id: id), partialReference: nil, resource: fileResource, previewRepresentations: [], videoThumbnails: [], immediateThumbnailData: nil, mimeType: "video/mp4", size: Int64(data.count), attributes: [.FileName(fileName: "video.mp4")], alternativeRepresentations: [])
             let message: EnqueueMessage = .message(text: "", attributes: [], inlineStickers: [:], mediaReference: .standalone(media: file), threadId: nil, replyToMessageId: nil, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: [])
 
-            let _ = enqueueMessages(account: self.context.engine.account, peerId: self.context.engine.account.peerId, messages: [message]).start()
+            let _ = enqueueMessages(account: self.context.engine.account, peerId: self.context.engine.account.peerId, messages: [message]).startStandalone()
         }
         
         override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
