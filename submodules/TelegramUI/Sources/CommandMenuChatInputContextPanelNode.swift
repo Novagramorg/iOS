@@ -16,6 +16,7 @@ import ChatInputContextPanelNode
 import ComponentFlow
 import ComponentDisplayAdapters
 import GlassBackgroundComponent
+import EdgeEffect
 
 private struct CommandMenuChatInputContextPanelEntryStableId: Hashable {
     let command: PeerCommand
@@ -66,6 +67,7 @@ private func preparedTransition(from fromEntries: [CommandMenuChatInputContextPa
 final class CommandMenuChatInputContextPanelNode: ChatInputContextPanelNode {
     private let backgroundView: GlassBackgroundView
     private let listView: ListView
+    private let listMaskView: UIImageView
     private var currentEntries: [CommandMenuChatInputContextPanelEntry]?
     
     private var enqueuedTransitions: [(CommandMenuChatInputContextPanelTransition, Bool)] = []
@@ -87,6 +89,8 @@ final class CommandMenuChatInputContextPanelNode: ChatInputContextPanelNode {
             return strings.VoiceOver_ScrollStatus(row, count).string
         }
         
+        self.listMaskView = UIImageView()
+        
         super.init(context: context, theme: theme, strings: strings, fontSize: fontSize, chatPresentationContext: chatPresentationContext)
         
         self.isOpaque = false
@@ -94,6 +98,7 @@ final class CommandMenuChatInputContextPanelNode: ChatInputContextPanelNode {
         
         self.view.addSubview(self.backgroundView)
         self.addSubnode(self.listView)
+        self.listView.view.mask = self.listMaskView
         
         self.backgroundView.isHidden = true
         self.listView.visibleContentOffsetChanged = { [weak self] offset in
@@ -240,6 +245,15 @@ final class CommandMenuChatInputContextPanelNode: ChatInputContextPanelNode {
         let hadValidLayout = self.validLayout != nil
         self.validLayout = (size, leftInset, rightInset, bottomInset)
         
+        self.backgroundView.bounds = CGRect(origin: CGPoint(), size: CGSize(width: size.width, height: size.height + 32.0))
+        self.backgroundView.update(
+            size: self.backgroundView.bounds.size,
+            cornerRadius: 20.0,
+            isDark: interfaceState.theme.overallDarkAppearance,
+            tintColor: .init(kind: .panel, color: interfaceState.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7)),
+            transition: ComponentTransition(transition)
+        )
+        
         var insets = UIEdgeInsets()
         insets.top = self.topInsetForLayout(size: size, bottomInset: bottomInset)
         insets.left = leftInset
@@ -247,6 +261,37 @@ final class CommandMenuChatInputContextPanelNode: ChatInputContextPanelNode {
         insets.bottom = bottomInset
         
         transition.updateFrame(node: self.listView, frame: CGRect(x: 0.0, y: 0.0, width: size.width, height: size.height))
+        let listMaskHeight: CGFloat = bottomInset + 1.0
+        if self.listMaskView.image?.size.height != listMaskHeight {
+            let baseGradientAlpha: CGFloat = 0.65
+            let numSteps = 8
+            let firstStep = 1
+            let firstLocation = 0.0
+            let colors: [UIColor] = (0 ..< numSteps).map { i in
+                if i < firstStep {
+                    return UIColor(white: 0.0, alpha: 0.0)
+                } else {
+                    let step: CGFloat = CGFloat(i - firstStep) / CGFloat(numSteps - firstStep - 1)
+                    let value: CGFloat = bezierPoint(0.42, 0.0, 0.58, 1.0, step)
+                    return UIColor(white: 0.0, alpha: 1.0 - baseGradientAlpha * value)
+                }
+            }
+            let locations: [CGFloat] = (0 ..< numSteps).map { i in
+                if i < firstStep {
+                    return 0.0
+                } else {
+                    let step: CGFloat = CGFloat(i - firstStep) / CGFloat(numSteps - firstStep - 1)
+                    return (firstLocation + (1.0 - firstLocation) * step)
+                }
+            }
+            
+            self.listMaskView.image = generateGradientImage(
+                size: CGSize(width: 8.0, height: listMaskHeight),
+                colors: colors,
+                locations: locations
+            )?.stretchableImage(withLeftCapWidth: 0, topCapHeight: 1)
+        }
+        transition.updateFrame(view: self.listMaskView, frame: CGRect(x: 0.0, y: 0.0, width: size.width, height: size.height))
         
         let (duration, curve) = listViewAnimationDurationAndCurve(transition: transition)
         let updateSizeAndInsets = ListViewUpdateSizeAndInsets(size: size, insets: insets, duration: duration, curve: curve)

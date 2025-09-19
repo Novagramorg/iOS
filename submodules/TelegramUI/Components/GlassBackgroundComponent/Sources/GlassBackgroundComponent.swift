@@ -286,6 +286,7 @@ public class GlassBackgroundView: UIView {
             let glassEffect = UIGlassEffect(style: .clear)
             glassEffect.isInteractive = false
             let nativeView = UIVisualEffectView(effect: glassEffect)
+            nativeView.layer.cornerCurve = .circular
             self.nativeView = nativeView
             nativeView.overrideUserInterfaceStyle = .light
             nativeView.traitOverrides.userInterfaceStyle = .light
@@ -382,7 +383,7 @@ public class GlassBackgroundView: UIView {
                         let glassEffect = UIGlassEffect(style: .clear)
                         switch tintColor.kind {
                         case .panel:
-                            glassEffect.tintColor = tintColor.color
+                            glassEffect.tintColor = tintColor.color.withMultipliedAlpha(1.2)
                         case .custom:
                             glassEffect.tintColor = tintColor.color
                         }
