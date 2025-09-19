@@ -485,6 +485,14 @@ final class VideoChatScreenComponent: Component {
             if gestureRecognizer is UIPanGestureRecognizer {
                 if let otherGestureRecognizer = otherGestureRecognizer as? UIPanGestureRecognizer {
                     if otherGestureRecognizer.view is UIScrollView {
+                        if let view = otherGestureRecognizer.view {
+                            if let inputView = self.inputMediaNode?.view, view.isDescendant(of: inputView) {
+                                return false
+                            }
+                            if let reactionView = self.reactionContextNode?.view, view.isDescendant(of: reactionView) {
+                                return false
+                            }
+                        }
                         return true
                     }
                     if let participantsView = self.participants.view as? VideoChatParticipantsComponent.View {
@@ -2195,7 +2203,7 @@ final class VideoChatScreenComponent: Component {
             
             let landscapeControlsWidth: CGFloat = 104.0
             var landscapeControlsOffsetX: CGFloat = 0.0
-            //let landscapeControlsSpacing: CGFloat = 30.0
+            let landscapeControlsSpacing: CGFloat = 30.0
             
             var leftInset: CGFloat = max(environment.safeInsets.left, 16.0)
             
@@ -2222,6 +2230,8 @@ final class VideoChatScreenComponent: Component {
             let navigationButtonDiameter: CGFloat = 40.0
             let navigationButtonInset: CGFloat = 4.0
             
+            let panelColor = UIColor(rgb: 0x1f1f27)
+            
             let navigationLeftButtonSize = self.navigationLeftButton.update(
                 transition: .immediate,
                 component: AnyComponent(PlainButtonComponent(
@@ -2232,7 +2242,7 @@ final class VideoChatScreenComponent: Component {
                         color: .white
                     )),
                     background: AnyComponent(
-                        GlassBackgroundComponent(size: CGSize(width: navigationButtonDiameter, height: navigationButtonDiameter), tintColor: .init(kind: .custom, color: UIColor(rgb: 0x101014)))
+                        GlassBackgroundComponent(size: CGSize(width: navigationButtonDiameter, height: navigationButtonDiameter), isDark: false, tintColor: .init(kind: .panel, color: panelColor))
                     ),
                     effectAlignment: .center,
                     minSize: CGSize(width: navigationButtonDiameter, height: navigationButtonDiameter),
@@ -2254,7 +2264,7 @@ final class VideoChatScreenComponent: Component {
                         image: closeButtonImage(dark: false)
                     )),
                     background: AnyComponent(
-                        GlassBackgroundComponent(size: CGSize(width: navigationButtonDiameter, height: navigationButtonDiameter), tintColor: .init(kind: .custom, color: UIColor(rgb: 0x101014)))
+                        GlassBackgroundComponent(size: CGSize(width: navigationButtonDiameter, height: navigationButtonDiameter), isDark: false, tintColor: .init(kind: .panel, color: panelColor))
                     ),
                     effectAlignment: .center,
                     minSize: CGSize(width: navigationButtonDiameter, height: navigationButtonDiameter),
@@ -2646,24 +2656,28 @@ final class VideoChatScreenComponent: Component {
             
             //TODO:release
             let actionButtonSize = CGSize(width: actionButtonDiameter, height: actionButtonDiameter)
-            let firstActionButtonFrame = CGRect(origin: CGPoint(x: microphoneButtonFrame.minX - actionMicrophoneButtonSpacing - actionButtonDiameter, y: microphoneButtonFrame.minY + floor((microphoneButtonFrame.height - actionButtonDiameter) * 0.5)), size: actionButtonSize)
-            let secondActionButtonFrame = CGRect(origin: CGPoint(x: firstActionButtonFrame.minX + 80.0, y: microphoneButtonFrame.minY + floor((microphoneButtonFrame.height - actionButtonDiameter) * 0.5)), size: actionButtonSize)
+            var firstActionButtonFrame = CGRect(origin: CGPoint(x: microphoneButtonFrame.minX - actionMicrophoneButtonSpacing - actionButtonDiameter, y: microphoneButtonFrame.minY + floor((microphoneButtonFrame.height - actionButtonDiameter) * 0.5)), size: actionButtonSize)
+            var secondActionButtonFrame = CGRect(origin: CGPoint(x: firstActionButtonFrame.minX + 80.0, y: microphoneButtonFrame.minY + floor((microphoneButtonFrame.height - actionButtonDiameter) * 0.5)), size: actionButtonSize)
 
-            let fourthActionButtonFrame = CGRect(origin: CGPoint(x: microphoneButtonFrame.maxX + actionMicrophoneButtonSpacing, y: microphoneButtonFrame.minY + floor((microphoneButtonFrame.height - actionButtonDiameter) * 0.5)), size: actionButtonSize)
-            let thirdActionButtonFrame = CGRect(origin: CGPoint(x: fourthActionButtonFrame.minX - 80.0, y: microphoneButtonFrame.minY + floor((microphoneButtonFrame.height - actionButtonDiameter) * 0.5)), size: actionButtonSize)
-            
-            let _ = firstActionButtonFrame
-            
+            var fourthActionButtonFrame = CGRect(origin: CGPoint(x: microphoneButtonFrame.maxX + actionMicrophoneButtonSpacing, y: microphoneButtonFrame.minY + floor((microphoneButtonFrame.height - actionButtonDiameter) * 0.5)), size: actionButtonSize)
+            var thirdActionButtonFrame = CGRect(origin: CGPoint(x: fourthActionButtonFrame.minX - 80.0, y: microphoneButtonFrame.minY + floor((microphoneButtonFrame.height - actionButtonDiameter) * 0.5)), size: actionButtonSize)
+                        
 //            var leftActionButtonFrame = CGRect(origin: CGPoint(x: microphoneButtonFrame.minX - actionMicrophoneButtonSpacing - actionButtonDiameter, y: microphoneButtonFrame.minY + floor((microphoneButtonFrame.height - actionButtonDiameter) * 0.5)), size: CGSize(width: actionButtonDiameter, height: actionButtonDiameter))
 //            var rightActionButtonFrame = CGRect(origin: CGPoint(x: microphoneButtonFrame.maxX + actionMicrophoneButtonSpacing, y: microphoneButtonFrame.minY + floor((microphoneButtonFrame.height - actionButtonDiameter) * 0.5)), size: CGSize(width: actionButtonDiameter, height: actionButtonDiameter))
             
-//            if buttonsOnTheSide {
-//                leftActionButtonFrame.origin.x = microphoneButtonFrame.minX
-//                leftActionButtonFrame.origin.y = microphoneButtonFrame.minY - landscapeControlsSpacing - actionButtonDiameter
-//                
-//                rightActionButtonFrame.origin.x = microphoneButtonFrame.minX
-//                rightActionButtonFrame.origin.y = microphoneButtonFrame.maxY + landscapeControlsSpacing
-//            }
+            if buttonsOnTheSide {
+                secondActionButtonFrame.origin.x = microphoneButtonFrame.minX
+                secondActionButtonFrame.origin.y = microphoneButtonFrame.minY - landscapeControlsSpacing - actionButtonDiameter
+                
+                firstActionButtonFrame.origin.x = microphoneButtonFrame.minX
+                firstActionButtonFrame.origin.y = secondActionButtonFrame.minY - landscapeControlsSpacing - actionButtonDiameter
+            
+                thirdActionButtonFrame.origin.x = microphoneButtonFrame.minX
+                thirdActionButtonFrame.origin.y = microphoneButtonFrame.maxY + landscapeControlsSpacing
+                
+                fourthActionButtonFrame.origin.x = microphoneButtonFrame.minX
+                fourthActionButtonFrame.origin.y = thirdActionButtonFrame.maxY + landscapeControlsSpacing
+            }
             
             let participantsSize = availableSize
             

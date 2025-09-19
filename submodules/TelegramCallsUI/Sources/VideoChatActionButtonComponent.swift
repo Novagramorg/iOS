@@ -142,10 +142,11 @@ final class VideoChatActionButtonComponent: Component {
             
             let alphaTransition: ComponentTransition = transition.animation.isImmediate ? .immediate : .easeInOut(duration: 0.2)
             
-            let genericBackgroundColor = UIColor(rgb: 0x1b1d22)
+            let genericBackgroundColor = UIColor(rgb: 0x2d2f38)
             
             let titleText: String
             let backgroundColor: UIColor
+            var tintColorKind: GlassBackgroundView.TintColor.Kind = .panel
             let iconDiameter: CGFloat
             var isEnabled: Bool = true
             switch component.content {
@@ -208,6 +209,7 @@ final class VideoChatActionButtonComponent: Component {
             case .leave:
                 titleText = component.strings.VoiceChat_Leave
                 backgroundColor = UIColor(rgb: 0x330d0b)
+                tintColorKind = .custom
                 iconDiameter = 22.0
             }
             
@@ -282,7 +284,7 @@ final class VideoChatActionButtonComponent: Component {
                 }
             }
 
-            self.background.update(size: size, cornerRadius: size.width * 0.5, isDark: true, tintColor: .init(kind: .custom, color: backgroundColor), transition: tintTransition)
+            self.background.update(size: size, cornerRadius: size.width * 0.5, isDark: true, tintColor: .init(kind: tintColorKind, color: backgroundColor), transition: tintTransition)
             transition.setFrame(view: self.background, frame: CGRect(origin: CGPoint(), size: size))
             
             let titleFrame = CGRect(origin: CGPoint(x: floor((size.width - titleSize.width) * 0.5), y: size.height + 8.0), size: titleSize)

@@ -6,6 +6,7 @@ import AnimatedTextComponent
 import ActivityIndicator
 import BundleIconComponent
 import ShimmerEffect
+import GlassBackgroundComponent
 
 public final class ButtonBadgeComponent: Component {
     let fillColor: UIColor
@@ -338,6 +339,12 @@ public final class ButtonTextContentComponent: Component {
 
 public final class ButtonComponent: Component {
     public struct Background: Equatable {
+        public enum Style {
+            case glass
+            case legacy
+        }
+        
+        public var style: Style
         public var color: UIColor
         public var foreground: UIColor
         public var pressedColor: UIColor
@@ -345,12 +352,14 @@ public final class ButtonComponent: Component {
         public var isShimmering: Bool
 
         public init(
+            style: Style = .legacy,
             color: UIColor,
             foreground: UIColor,
             pressedColor: UIColor,
             cornerRadius: CGFloat = 10.0,
             isShimmering: Bool = false
         ) {
+            self.style = style
             self.color = color
             self.foreground = foreground
             self.pressedColor = pressedColor
@@ -360,6 +369,7 @@ public final class ButtonComponent: Component {
         
         public func withIsShimmering(_ isShimmering: Bool) -> Background {
             return Background(
+                style: self.style,
                 color: self.color,
                 foreground: self.foreground,
                 pressedColor: self.pressedColor,
@@ -431,6 +441,7 @@ public final class ButtonComponent: Component {
         private weak var componentState: EmptyComponentState?
 
         private var shimmeringView: ButtonShimmeringView?
+        private var chromeView: UIImageView?
         private var contentItem: ContentItem?
         
         private var activityIndicator: ActivityIndicator?
@@ -475,7 +486,12 @@ public final class ButtonComponent: Component {
             self.isEnabled = (component.isEnabled || component.allowActionWhenDisabled) && !component.displaysProgress
             
             transition.setBackgroundColor(view: self, color: component.background.color)
-            transition.setCornerRadius(layer: self.layer, cornerRadius: component.background.cornerRadius)
+            
+            var cornerRadius: CGFloat = component.background.cornerRadius
+            if case .glass = component.background.style, component.background.cornerRadius == 10.0 {
+                cornerRadius = availableSize.height * 0.5
+            }
+            transition.setCornerRadius(layer: self.layer, cornerRadius: cornerRadius)
             
             var contentAlpha: CGFloat = 1.0
             if component.displaysProgress {
@@ -578,6 +594,33 @@ public final class ButtonComponent: Component {
                 self.shimmeringView = nil
                 shimmeringView.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.15, removeOnCompletion: false, completion: { _ in
                     shimmeringView.removeFromSuperview()
+                })
+            }
+            
+            if component.background.style == .glass {
+                let chromeView: UIImageView
+                var chromeTransition = transition
+                if let current = self.chromeView {
+                    chromeView = current
+                } else {
+                    chromeTransition = .immediate
+                    chromeView = UIImageView()
+                    self.chromeView = chromeView
+                    if let shimmeringView = self.shimmeringView {
+                        self.insertSubview(chromeView, aboveSubview: shimmeringView)
+                    } else {
+                        self.insertSubview(chromeView, at: 0)
+                    }
+                    
+                    chromeView.layer.compositingFilter = "overlayBlendMode"
+                    chromeView.alpha = 0.8
+                    chromeView.image = GlassBackgroundView.generateForegroundImage(size: CGSize(width: 26.0 * 2.0, height: 26.0 * 2.0), isDark: component.background.color.lightness < 0.4, fillColor: .clear)
+                }
+                chromeTransition.setFrame(view: chromeView, frame: CGRect(origin: .zero, size: availableSize))
+            } else if let chromeView = self.chromeView {
+                self.chromeView = nil
+                chromeView.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.15, removeOnCompletion: false, completion: { _ in
+                    chromeView.removeFromSuperview()
                 })
             }
             

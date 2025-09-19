@@ -54,6 +54,7 @@ swift_library(
         "//submodules/TelegramUI/Components/EmojiActionIconComponent",
         "//submodules/TelegramUI/Components/TabSelectorComponent",
         "//submodules/TelegramUI/Components/PlainButtonComponent",
+        "//submodules/TextFormat",
     ],
     visibility = [
         "//visibility:public",
