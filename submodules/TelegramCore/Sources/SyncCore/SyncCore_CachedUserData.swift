@@ -275,6 +275,124 @@ public enum PeerNameColor: Hashable {
     }
 }
 
+public struct PeerCollectibleColor: Equatable, Codable {
+    enum CodingKeys: String, CodingKey {
+        case collectibleId
+        case giftEmojiFileId
+        case backgroundEmojiId
+        case accentColor
+        case colors
+        case darkAccentColor
+        case darkColors
+    }
+    
+    public let collectibleId: Int64
+    public let giftEmojiFileId: Int64
+    public let backgroundEmojiId: Int64
+    public let accentColor: UInt32
+    public let colors: [UInt32]
+    public let darkAccentColor: UInt32?
+    public let darkColors: [UInt32]?
+    
+    public init(
+        collectibleId: Int64,
+        giftEmojiFileId: Int64,
+        backgroundEmojiId: Int64,
+        accentColor: UInt32,
+        colors: [UInt32],
+        darkAccentColor: UInt32?,
+        darkColors: [UInt32]?
+    ) {
+        self.collectibleId = collectibleId
+        self.giftEmojiFileId = giftEmojiFileId
+        self.backgroundEmojiId = backgroundEmojiId
+        self.accentColor = accentColor
+        self.colors = colors
+        self.darkAccentColor = darkAccentColor
+        self.darkColors = darkColors
+    }
+    
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+
+        self.collectibleId = try container.decode(Int64.self, forKey: .collectibleId)
+        self.giftEmojiFileId = try container.decode(Int64.self, forKey: .giftEmojiFileId)
+        self.backgroundEmojiId = try container.decode(Int64.self, forKey: .backgroundEmojiId)
+        self.accentColor = UInt32(bitPattern: try container.decode(Int32.self, forKey: .accentColor))
+        self.colors = try container.decode([Int32].self, forKey: .colors).map { UInt32(bitPattern: $0) }
+        self.darkAccentColor = try container.decodeIfPresent(Int32.self, forKey: .darkAccentColor).flatMap { UInt32(bitPattern: $0) }
+        self.darkColors = try container.decodeIfPresent([Int32].self, forKey: .darkColors).flatMap { $0.map { UInt32(bitPattern: $0) }  }
+    }
+    
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        
+        try container.encode(self.collectibleId, forKey: .collectibleId)
+        try container.encode(self.giftEmojiFileId, forKey: .giftEmojiFileId)
+        try container.encode(self.backgroundEmojiId, forKey: .backgroundEmojiId)
+        try container.encode(Int32(bitPattern: self.accentColor), forKey: .accentColor)
+        try container.encode(self.colors.map { Int32(bitPattern: $0) }, forKey: .colors)
+        try container.encodeIfPresent(self.darkAccentColor.flatMap { Int32(bitPattern: $0)}, forKey: .darkAccentColor)
+        try container.encodeIfPresent(self.darkColors.flatMap { $0.map { Int32(bitPattern: $0) } }, forKey: .darkColors)
+    }
+    
+    public init(flatBuffersObject: TelegramCore_PeerCollectibleColor) throws {
+        self.collectibleId = flatBuffersObject.collectibleId
+        self.giftEmojiFileId = flatBuffersObject.giftEmojiFileId
+        self.backgroundEmojiId = flatBuffersObject.backgroundEmojiId
+        self.accentColor = flatBuffersObject.accentColor
+                
+        let colorsCount = Int(flatBuffersObject.colorsCount)
+        if colorsCount > 0 {
+            var colors: [UInt32] = []
+            colors.reserveCapacity(colorsCount)
+            for i in 0..<colorsCount {
+                colors.append(flatBuffersObject.colors(at: Int32(i)))
+            }
+            self.colors = colors
+        } else {
+            self.colors = []
+        }
+        
+        self.darkAccentColor = flatBuffersObject.darkAccentColor == UInt32.min ? nil : flatBuffersObject.darkAccentColor
+        
+        let darkColorsCount = Int(flatBuffersObject.darkColorsCount)
+        if darkColorsCount > 0 {
+            var darkColors: [UInt32] = []
+            darkColors.reserveCapacity(darkColorsCount)
+            for i in 0..<darkColorsCount {
+                darkColors.append(flatBuffersObject.darkColors(at: Int32(i)))
+            }
+            self.darkColors = darkColors
+        } else {
+            self.darkColors = nil
+        }
+    }
+    
+    public func encodeToFlatBuffers(builder: inout FlatBufferBuilder) -> Offset {
+        let colorsOffset = builder.createVector(self.colors)
+        let darkColorsOffset: Offset? = self.darkColors.map { builder.createVector($0) }
+               
+        let start = TelegramCore_PeerCollectibleColor.startPeerCollectibleColor(&builder)
+        TelegramCore_PeerCollectibleColor.add(collectibleId: self.collectibleId, &builder)
+        TelegramCore_PeerCollectibleColor.add(giftEmojiFileId: self.giftEmojiFileId, &builder)
+        TelegramCore_PeerCollectibleColor.add(backgroundEmojiId: self.backgroundEmojiId, &builder)
+        TelegramCore_PeerCollectibleColor.add(accentColor: self.accentColor, &builder)
+        TelegramCore_PeerCollectibleColor.addVectorOf(colors: colorsOffset, &builder)
+        TelegramCore_PeerCollectibleColor.add(darkAccentColor: self.darkAccentColor ?? UInt32.min, &builder)
+        if let darkColorsOffset {
+            TelegramCore_PeerCollectibleColor.addVectorOf(darkColors: darkColorsOffset, &builder)
+        }
+        
+        return TelegramCore_PeerCollectibleColor.endPeerCollectibleColor(&builder, start: start)
+    }
+}
+
+public enum PeerColor: Equatable {
+    case preset(PeerNameColor)
+    case collectible(PeerCollectibleColor)
+}
+
 public struct PeerEmojiStatus: Equatable, Codable {
     private enum CodingKeys: String, CodingKey {
         case fileId

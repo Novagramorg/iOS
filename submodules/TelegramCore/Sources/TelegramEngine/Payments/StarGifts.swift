@@ -608,8 +608,9 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
         public let valueCurrency: String?
         public let flags: Flags
         public let themePeerId: EnginePeer.Id?
+        public let peerColor: PeerCollectibleColor?
         
-        public init(id: Int64, giftId: Int64, title: String, number: Int32, slug: String, owner: Owner, attributes: [Attribute], availability: Availability, giftAddress: String?, resellAmounts: [CurrencyAmount]?, resellForTonOnly: Bool, releasedBy: EnginePeer.Id?, valueAmount: Int64?, valueCurrency: String?, flags: Flags, themePeerId: EnginePeer.Id?) {
+        public init(id: Int64, giftId: Int64, title: String, number: Int32, slug: String, owner: Owner, attributes: [Attribute], availability: Availability, giftAddress: String?, resellAmounts: [CurrencyAmount]?, resellForTonOnly: Bool, releasedBy: EnginePeer.Id?, valueAmount: Int64?, valueCurrency: String?, flags: Flags, themePeerId: EnginePeer.Id?, peerColor: PeerCollectibleColor?) {
             self.id = id
             self.giftId = giftId
             self.title = title
@@ -626,6 +627,7 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
             self.valueCurrency = valueCurrency
             self.flags = flags
             self.themePeerId = themePeerId
+            self.peerColor = peerColor
         }
         
         public init(from decoder: Decoder) throws {
@@ -660,6 +662,7 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
             self.valueCurrency = try container.decodeIfPresent(String.self, forKey: .valueCurrency)
             self.flags = try container.decodeIfPresent(Int32.self, forKey: .flags).flatMap { Flags(rawValue: $0) } ?? []
             self.themePeerId = try container.decodeIfPresent(Int64.self, forKey: .themePeerId).flatMap { EnginePeer.Id($0) }
+            self.peerColor = try container.decodeIfPresent(PeerCollectibleColor.self, forKey: .peerColor)
         }
         
         public init(decoder: PostboxDecoder) {
@@ -693,6 +696,7 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
             self.valueCurrency = decoder.decodeOptionalStringForKey(CodingKeys.valueCurrency.rawValue)
             self.flags = decoder.decodeOptionalInt32ForKey(CodingKeys.flags.rawValue).flatMap { Flags(rawValue: $0) } ?? []
             self.themePeerId = decoder.decodeOptionalInt64ForKey(CodingKeys.themePeerId.rawValue).flatMap { EnginePeer.Id($0) }
+            self.peerColor = decoder.decodeCodable(PeerCollectibleColor.self, forKey: CodingKeys.peerColor.rawValue)
         }
         
         public func encode(to encoder: Encoder) throws {
@@ -720,6 +724,7 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
             try container.encodeIfPresent(self.valueCurrency, forKey: .valueCurrency)
             try container.encode(self.flags.rawValue, forKey: .flags)
             try container.encodeIfPresent(self.themePeerId?.toInt64(), forKey: .themePeerId)
+            try container.encodeIfPresent(self.peerColor, forKey: .peerColor)
         }
         
         public func encode(_ encoder: PostboxEncoder) {
@@ -767,6 +772,11 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
             } else {
                 encoder.encodeNil(forKey: CodingKeys.themePeerId.rawValue)
             }
+            if let peerColor = self.peerColor {
+                encoder.encodeCodable(peerColor, forKey: CodingKeys.peerColor.rawValue)
+            } else {
+                encoder.encodeNil(forKey: CodingKeys.peerColor.rawValue)
+            }
         }
         
         public func withResellAmounts(_ resellAmounts: [CurrencyAmount]?) -> UniqueGift {
@@ -786,7 +796,8 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
                 valueAmount: self.valueAmount,
                 valueCurrency: self.valueCurrency,
                 flags: self.flags,
-                themePeerId: self.themePeerId
+                themePeerId: self.themePeerId,
+                peerColor: self.peerColor
             )
         }
         
@@ -807,7 +818,8 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
                 valueAmount: self.valueAmount,
                 valueCurrency: self.valueCurrency,
                 flags: self.flags,
-                themePeerId: self.themePeerId
+                themePeerId: self.themePeerId,
+                peerColor: self.peerColor
             )
         }
         
@@ -828,7 +840,8 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
                 valueAmount: self.valueAmount,
                 valueCurrency: self.valueCurrency,
                 flags: self.flags,
-                themePeerId: themePeerId
+                themePeerId: themePeerId,
+                peerColor: self.peerColor
             )
         }
         
@@ -849,7 +862,8 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
                 valueAmount: self.valueAmount,
                 valueCurrency: self.valueCurrency,
                 flags: self.flags,
-                themePeerId: self.themePeerId
+                themePeerId: self.themePeerId,
+                peerColor: self.peerColor
             )
         }
     }
@@ -960,7 +974,6 @@ extension StarGift {
             }
             self = .generic(StarGift.Gift(id: id, title: title, file: file, price: stars, convertStars: convertStars, availability: availability, soldOut: soldOut, flags: flags, upgradeStars: upgradeStars, releasedBy: releasedBy?.peerId, perUserLimit: perUserLimit, lockedUntilDate: lockedUntilDate))
         case let .starGiftUnique(apiFlags, id, giftId, title, slug, num, ownerPeerId, ownerName, ownerAddress, attributes, availabilityIssued, availabilityTotal, giftAddress, resellAmounts, releasedBy, valueAmount, valueCurrency, themePeer, peerColor):
-            let _ = peerColor
             let owner: StarGift.UniqueGift.Owner
             if let ownerAddress {
                 owner = .address(ownerAddress)
@@ -976,7 +989,23 @@ extension StarGift {
             if (apiFlags & (1 << 9)) != 0 {
                 flags.insert(.isThemeAvailable)
             }
-            self = .unique(StarGift.UniqueGift(id: id, giftId: giftId, title: title, number: num, slug: slug, owner: owner, attributes: attributes.compactMap { UniqueGift.Attribute(apiAttribute: $0) }, availability: UniqueGift.Availability(issued: availabilityIssued, total: availabilityTotal), giftAddress: giftAddress, resellAmounts: resellAmounts, resellForTonOnly: (apiFlags & (1 << 7)) != 0, releasedBy: releasedBy?.peerId, valueAmount: valueAmount, valueCurrency: valueCurrency, flags: flags, themePeerId: themePeer?.peerId))
+            var peerCollectibleColor: PeerCollectibleColor?
+            switch peerColor {
+            case let .peerColorCollectible(_, collectibleId, giftEmojiId, backgroundEmojiId, accentColor, colors, darkAccentColor, darkColors):
+                peerCollectibleColor = PeerCollectibleColor(
+                    collectibleId: collectibleId,
+                    giftEmojiFileId: giftEmojiId,
+                    backgroundEmojiId: backgroundEmojiId,
+                    accentColor: UInt32(bitPattern: accentColor),
+                    colors: colors.map { UInt32(bitPattern: $0) },
+                    darkAccentColor: darkAccentColor.flatMap { UInt32(bitPattern: $0) },
+                    darkColors: darkColors.flatMap { $0.map { UInt32(bitPattern: $0) } }
+                )
+            default:
+                break
+            }
+            
+            self = .unique(StarGift.UniqueGift(id: id, giftId: giftId, title: title, number: num, slug: slug, owner: owner, attributes: attributes.compactMap { UniqueGift.Attribute(apiAttribute: $0) }, availability: UniqueGift.Availability(issued: availabilityIssued, total: availabilityTotal), giftAddress: giftAddress, resellAmounts: resellAmounts, resellForTonOnly: (apiFlags & (1 << 7)) != 0, releasedBy: releasedBy?.peerId, valueAmount: valueAmount, valueCurrency: valueCurrency, flags: flags, themePeerId: themePeer?.peerId, peerColor: peerCollectibleColor))
         }
     }
 }
@@ -1513,13 +1542,14 @@ private final class ProfileGiftsContextImpl {
             self.filteredCount = nil
         }
         let isUniqueOnlyFilter = self.filter == [.unique, .displayed, .hidden]
+        let isPeerColorFilter = self.filter == .peerColor
         
         let dataState = isFiltered ? self.filteredDataState : self.dataState
         
         guard case let .ready(true, initialNextOffset) = dataState else {
             return
         }
-        if !isFiltered || isUniqueOnlyFilter, self.gifts.isEmpty, initialNextOffset == nil, !reload {
+        if !isFiltered || isUniqueOnlyFilter || isPeerColorFilter, self.gifts.isEmpty, initialNextOffset == nil, !reload {
             self.cacheDisposable.set((self.account.postbox.transaction { transaction -> CachedProfileGifts? in
                 let cachedGifts = transaction.retrieveItemCacheEntry(id: giftsEntryId(peerId: peerId, collectionId: collectionId))?.get(CachedProfileGifts.self)
                 cachedGifts?.render(transaction: transaction)
@@ -1528,17 +1558,26 @@ private final class ProfileGiftsContextImpl {
                 guard let self, let cachedGifts else {
                     return
                 }
-                if isUniqueOnlyFilter, case .loading = self.filteredDataState {
-                    var gifts = cachedGifts.gifts
-                    if isUniqueOnlyFilter {
-                        gifts = gifts.filter({ gift in
-                            if case .unique = gift.gift {
-                                return true
-                            } else {
-                                return false
-                            }
-                        })
-                    }
+                if isPeerColorFilter, case .loading = self.filteredDataState {
+                    let gifts = cachedGifts.gifts.filter({ gift in
+                        if case let .unique(uniqueGift) = gift.gift, let _ = uniqueGift.peerColor {
+                            return true
+                        } else {
+                            return false
+                        }
+                    })
+                    self.gifts = gifts
+                    self.count = cachedGifts.count
+                    self.notificationsEnabled = cachedGifts.notificationsEnabled
+                    self.pushState()
+                } else if isUniqueOnlyFilter, case .loading = self.filteredDataState {
+                    let gifts = cachedGifts.gifts.filter({ gift in
+                        if case .unique = gift.gift {
+                            return true
+                        } else {
+                            return false
+                        }
+                    })
                     self.gifts = gifts
                     self.count = cachedGifts.count
                     self.notificationsEnabled = cachedGifts.notificationsEnabled
@@ -1575,23 +1614,27 @@ private final class ProfileGiftsContextImpl {
             if case .value = sorting {
                 flags |= (1 << 5)
             }
-            if !filter.contains(.hidden) {
-                flags |= (1 << 0)
-            }
-            if !filter.contains(.displayed) {
-                flags |= (1 << 1)
-            }
-            if !filter.contains(.unlimited) {
-                flags |= (1 << 2)
-            }
-            if !filter.contains(.limitedUpgradable) {
-                flags |= (1 << 7)
-            }
-            if !filter.contains(.limitedNonUpgradable) {
-                flags |= (1 << 8)
-            }
-            if !filter.contains(.unique) {
-                flags |= (1 << 4)
+            if filter.contains(.peerColor) {
+                flags |= (1 << 9)
+            } else {
+                if !filter.contains(.hidden) {
+                    flags |= (1 << 0)
+                }
+                if !filter.contains(.displayed) {
+                    flags |= (1 << 1)
+                }
+                if !filter.contains(.unlimited) {
+                    flags |= (1 << 2)
+                }
+                if !filter.contains(.limitedUpgradable) {
+                    flags |= (1 << 7)
+                }
+                if !filter.contains(.limitedNonUpgradable) {
+                    flags |= (1 << 8)
+                }
+                if !filter.contains(.unique) {
+                    flags |= (1 << 4)
+                }
             }
             return network.request(Api.functions.payments.getSavedStarGifts(flags: flags, peer: inputPeer, collectionId: collectionId, offset: initialNextOffset ?? "", limit: limit))
             |> map(Optional.init)
@@ -2187,6 +2230,7 @@ public final class ProfileGiftsContext {
         public static let unique = Filters(rawValue: 1 << 3)
         public static let displayed = Filters(rawValue: 1 << 4)
         public static let hidden = Filters(rawValue: 1 << 5)
+        public static let peerColor = Filters(rawValue: 1 << 6)
         
         public static var All: Filters {
             return [.unlimited, .limitedUpgradable, .limitedNonUpgradable, .unique, .displayed, .hidden]

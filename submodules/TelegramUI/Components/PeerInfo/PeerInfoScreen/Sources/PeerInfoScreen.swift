@@ -1212,8 +1212,15 @@ private func settingsEditingItems(data: PeerInfoScreenData?, state: PeerInfoStat
     
     if let peer = data.peer as? TelegramUser {
         var colors: [PeerNameColors.Colors] = []
-        if let nameColor = peer.nameColor.flatMap({ context.peerNameColors.get($0, dark: presentationData.theme.overallDarkAppearance) }) {
-            colors.append(nameColor)
+        if let nameColor = peer.nameColor {
+            let nameColors: PeerNameColors.Colors
+            switch nameColor {
+            case let .preset(nameColor):
+                nameColors = context.peerNameColors.get(nameColor, dark: presentationData.theme.overallDarkAppearance)
+            case let .collectible(collectibleColor):
+                nameColors = collectibleColor.peerNameColors(dark: presentationData.theme.overallDarkAppearance)
+            }
+            colors.append(nameColors)
         }
         if let profileColor = peer.profileColor.flatMap({ context.peerNameColors.getProfile($0, dark: presentationData.theme.overallDarkAppearance, subject: .palette) }) {
             colors.append(profileColor)

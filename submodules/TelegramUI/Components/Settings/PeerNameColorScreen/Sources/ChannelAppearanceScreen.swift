@@ -360,12 +360,12 @@ final class ChannelAppearanceScreenComponent: Component {
             let nameColor: PeerNameColor
             if let updatedPeerNameColor = self.updatedPeerNameColor {
                 nameColor = updatedPeerNameColor
-            } else if let peerNameColor = peer.nameColor {
-                nameColor = peerNameColor
+            } else if let peerNameColor = peer.nameColor, case let .preset(nameColorValue) = peerNameColor {
+                nameColor = nameColorValue
             } else {
                 nameColor = .blue
             }
-            if nameColor != peer.nameColor {
+            if .preset(nameColor) != peer.nameColor {
                 changes.insert(.nameColor)
             }
             
@@ -962,7 +962,7 @@ final class ChannelAppearanceScreenComponent: Component {
             
             if case let .user(user) = peer {
                 peer = .user(user
-                    .withUpdatedNameColor(resolvedState.nameColor)
+                    .withUpdatedNameColor(.preset(resolvedState.nameColor))
                     .withUpdatedProfileColor(profileColor)
                     .withUpdatedEmojiStatus(emojiStatus)
                     .withUpdatedBackgroundEmojiId(replyFileId)
@@ -1502,9 +1502,9 @@ final class ChannelAppearanceScreenComponent: Component {
                     peerId: EnginePeer.Id(namespace: peer.id.namespace, id: PeerId.Id._internalFromInt64Value(0)),
                     author: peer.compactDisplayTitle,
                     photo: peer.profileImageRepresentations,
-                    nameColor: resolvedState.nameColor,
+                    nameColor: .preset(resolvedState.nameColor),
                     backgroundEmojiId: replyFileId,
-                    reply: (peer.compactDisplayTitle, environment.strings.Channel_Appearance_ExampleReplyText, resolvedState.nameColor),
+                    reply: (peer.compactDisplayTitle, environment.strings.Channel_Appearance_ExampleReplyText, .preset(resolvedState.nameColor)),
                     linkPreview: (environment.strings.Channel_Appearance_ExampleLinkWebsite, environment.strings.Channel_Appearance_ExampleLinkTitle, environment.strings.Channel_Appearance_ExampleLinkText),
                     text: environment.strings.Channel_Appearance_ExampleText
                 )
@@ -1639,9 +1639,9 @@ final class ChannelAppearanceScreenComponent: Component {
                         peerId: EnginePeer.Id(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(0)),
                         author: environment.strings.Group_Appearance_PreviewAuthor,
                         photo: [],
-                        nameColor: .red,
+                        nameColor: .preset(.red),
                         backgroundEmojiId: 5301072507598550489,
-                        reply: (environment.strings.Appearance_PreviewReplyAuthor, environment.strings.Appearance_PreviewReplyText, .violet),
+                        reply: (environment.strings.Appearance_PreviewReplyAuthor, environment.strings.Appearance_PreviewReplyText, .preset(.violet)),
                         linkPreview: nil,
                         text: environment.strings.Appearance_PreviewIncomingText
                     )
@@ -1651,7 +1651,7 @@ final class ChannelAppearanceScreenComponent: Component {
                         peerId: EnginePeer.Id(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(1)),
                         author: peer.compactDisplayTitle,
                         photo: peer.profileImageRepresentations,
-                        nameColor: .blue,
+                        nameColor: .preset(.blue),
                         backgroundEmojiId: nil,
                         reply: nil,
                         linkPreview: nil,
