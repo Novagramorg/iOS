@@ -928,7 +928,6 @@ public class VideoMessageCameraScreen: ViewController {
             
             self.backgroundColor = .clear
             
-            self.view.addSubview(self.backgroundView)
             self.view.addSubview(self.containerView)
             
             self.containerView.addSubview(self.previewContainerView)
@@ -963,6 +962,7 @@ public class VideoMessageCameraScreen: ViewController {
         deinit {
             self.cameraStateDisposable?.dispose()
             self.idleTimerExtensionDisposable.dispose()
+            self.backgroundView.removeFromSuperview()
         }
         
         func withReadyCamera(isFirstTime: Bool = false, _ f: @escaping () -> Void) {
@@ -1067,10 +1067,6 @@ public class VideoMessageCameraScreen: ViewController {
         private var animatingIn = false
         func animateIn() {
             self.animatingIn = true
-            
-//            if let chatNode = self.controller?.chatNode {
-//                chatNode.supernode?.view.insertSubview(self.backgroundView, aboveSubview: chatNode.view)
-//            }
             
             self.backgroundView.alpha = 0.0
             UIView.animate(withDuration: 0.4, animations: {
@@ -1430,12 +1426,13 @@ public class VideoMessageCameraScreen: ViewController {
             }
 
             var backgroundFrame = CGRect(origin: .zero, size: CGSize(width: layout.size.width, height: controller.inputPanelFrame.0.minY))
+            let actualBackgroundFrame = CGRect(origin: .zero, size: CGSize(width: layout.size.width, height: layout.size.height))
             if backgroundFrame.maxY < layout.size.height - 100.0 && (layout.inputHeight ?? 0.0).isZero && !controller.inputPanelFrame.1 && layout.additionalInsets.bottom.isZero {
                 backgroundFrame = CGRect(origin: .zero, size: CGSize(width: layout.size.width, height: layout.size.height - layout.intrinsicInsets.bottom - controller.inputPanelFrame.0.height))
             }
                         
-            transition.setPosition(view: self.backgroundView, position: backgroundFrame.center)
-            transition.setBounds(view: self.backgroundView, bounds: CGRect(origin: .zero, size: backgroundFrame.size))
+            transition.setPosition(view: self.backgroundView, position: actualBackgroundFrame.center)
+            transition.setBounds(view: self.backgroundView, bounds: CGRect(origin: .zero, size: actualBackgroundFrame.size))
             
             transition.setPosition(view: self.containerView, position: backgroundFrame.center)
             transition.setBounds(view: self.containerView, bounds: CGRect(origin: .zero, size: backgroundFrame.size))
@@ -1635,6 +1632,10 @@ public class VideoMessageCameraScreen: ViewController {
     }
     
     public var onResume: () -> Void = {
+    }
+    
+    public var backgroundView: UIVisualEffectView {
+        return self.node.backgroundView
     }
     
     public struct RecordedVideoData {

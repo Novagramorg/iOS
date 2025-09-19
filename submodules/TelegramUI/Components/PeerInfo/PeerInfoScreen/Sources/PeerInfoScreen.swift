@@ -290,7 +290,7 @@ final class PeerInfoSelectionPanelNode: ASDisplayNode {
     private let shareMessages: () -> Void
     private let forwardMessages: () -> Void
     private let reportMessages: () -> Void
-    private let displayCopyProtectionTip: (ASDisplayNode, Bool) -> Void
+    private let displayCopyProtectionTip: (UIView, Bool) -> Void
     
     let selectionPanel: ChatMessageSelectionInputPanelNode
     let separatorNode: ASDisplayNode
@@ -300,7 +300,7 @@ final class PeerInfoSelectionPanelNode: ASDisplayNode {
         return self.selectionPanel.viewForOverlayContent
     }
     
-    init(context: AccountContext, presentationData: PresentationData, peerId: PeerId, deleteMessages: @escaping () -> Void, shareMessages: @escaping () -> Void, forwardMessages: @escaping () -> Void, reportMessages: @escaping () -> Void, displayCopyProtectionTip: @escaping (ASDisplayNode, Bool) -> Void) {
+    init(context: AccountContext, presentationData: PresentationData, peerId: PeerId, deleteMessages: @escaping () -> Void, shareMessages: @escaping () -> Void, forwardMessages: @escaping () -> Void, reportMessages: @escaping () -> Void, displayCopyProtectionTip: @escaping (UIView, Bool) -> Void) {
         self.context = context
         self.peerId = peerId
         self.deleteMessages = deleteMessages
@@ -420,8 +420,8 @@ final class PeerInfoSelectionPanelNode: ASDisplayNode {
         }, openInviteRequests: {
         }, openSendAsPeer: { _, _ in
         }, presentChatRequestAdminInfo: {
-        }, displayCopyProtectionTip: { node, save in
-            displayCopyProtectionTip(node, save)
+        }, displayCopyProtectionTip: { view, save in
+            displayCopyProtectionTip(view, save)
         }, openWebView: { _, _, _, _ in
         }, updateShowWebView: { _ in
         }, insertText: { _ in
@@ -12645,7 +12645,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                     strongSelf.context.sharedContext.makeContentReportScreen(context: strongSelf.context, subject: .messages(Array(messageIds).sorted()), forceDark: false, present: { [weak self] controller in
                         self?.controller?.push(controller)
                     }, completion: {}, requestSelectMessages: nil)
-                }, displayCopyProtectionTip: { [weak self] node, save in
+                }, displayCopyProtectionTip: { [weak self] sourceView, save in
                     if let strongSelf = self, let peer = strongSelf.data?.peer, let messageIds = strongSelf.state.selectedMessageIds, !messageIds.isEmpty {
                         let _ = (strongSelf.context.engine.data.get(EngineDataMap(
                             messageIds.map(TelegramEngine.EngineData.Item.Messages.Message.init)
@@ -12707,7 +12707,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                             }
                             strongSelf.controller?.present(tooltipController, in: .window(.root), with: TooltipControllerPresentationArguments(sourceNodeAndRect: {
                                 if let strongSelf = self {
-                                    let rect = node.view.convert(node.view.bounds, to: strongSelf.view).offsetBy(dx: 0.0, dy: 3.0)
+                                    let rect = sourceView.convert(sourceView.bounds, to: strongSelf.view).offsetBy(dx: 0.0, dy: 3.0)
                                     return (strongSelf, rect)
                                 }
                                 return nil
