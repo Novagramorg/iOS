@@ -15,14 +15,16 @@ public final class TabBarComponent: Component {
     public final class Item: Equatable {
         public let item: UITabBarItem
         public let action: (Bool) -> Void
+        public let contextAction: ((ContextGesture, ContextExtractedContentContainingView) -> Void)?
         
         fileprivate var id: AnyHashable {
             return AnyHashable(ObjectIdentifier(self.item))
         }
         
-        public init(item: UITabBarItem, action: @escaping (Bool) -> Void) {
+        public init(item: UITabBarItem, action: @escaping (Bool) -> Void, contextAction: ((ContextGesture, ContextExtractedContentContainingView) -> Void)?) {
             self.item = item
             self.action = action
+            self.contextAction = contextAction
         }
         
         public static func ==(lhs: Item, rhs: Item) -> Bool {
@@ -30,6 +32,9 @@ public final class TabBarComponent: Component {
                 return true
             }
             if lhs.item !== rhs.item {
+                return false
+            }
+            if (lhs.contextAction == nil) != (rhs.contextAction == nil) {
                 return false
             }
             return true
@@ -66,10 +71,13 @@ public final class TabBarComponent: Component {
     public final class View: UIView, UITabBarDelegate, UIGestureRecognizerDelegate {
         private let backgroundView: GlassBackgroundView
         private let selectionView: GlassBackgroundView.ContentImageView
+        private let contextGestureContainerView: ContextControllerSourceView
         private let nativeTabBar: UITabBar?
         
         private var itemViews: [AnyHashable: ComponentView<Empty>] = [:]
         private var selectedItemViews: [AnyHashable: ComponentView<Empty>] = [:]
+        
+        private var itemWithActiveContextGesture: AnyHashable?
         
         private var component: TabBarComponent?
         private weak var state: EmptyComponentState?
@@ -77,6 +85,9 @@ public final class TabBarComponent: Component {
         public override init(frame: CGRect) {
             self.backgroundView = GlassBackgroundView(frame: CGRect())
             self.selectionView = GlassBackgroundView.ContentImageView()
+            
+            self.contextGestureContainerView = ContextControllerSourceView()
+            self.contextGestureContainerView.isGestureEnabled = true
             
             if #available(iOS 26.0, *) {
                 self.nativeTabBar = UITabBar()
@@ -86,15 +97,109 @@ public final class TabBarComponent: Component {
             
             super.init(frame: frame)
             
+            self.addSubview(self.contextGestureContainerView)
+            
             if let nativeTabBar = self.nativeTabBar {
-                self.addSubview(nativeTabBar)
+                self.contextGestureContainerView.addSubview(nativeTabBar)
                 nativeTabBar.delegate = self
-                let longPressGesture = UILongPressGestureRecognizer(target: self, action: #selector(self.onLongPressGesture(_:)))
+                /*let longPressGesture = UILongPressGestureRecognizer(target: self, action: #selector(self.onLongPressGesture(_:)))
                 longPressGesture.delegate = self
-                self.addGestureRecognizer(longPressGesture)
+                self.addGestureRecognizer(longPressGesture)*/
             } else {
-                self.addSubview(self.backgroundView)
+                self.contextGestureContainerView.addSubview(self.backgroundView)
                 self.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(self.onTapGesture(_:))))
+            }
+            
+            self.contextGestureContainerView.shouldBegin = { [weak self] point in
+                guard let self, let component = self.component else {
+                    return false
+                }
+                for (id, itemView) in self.itemViews {
+                    if let itemView = itemView.view {
+                        if self.convert(itemView.bounds, from: itemView).contains(point) {
+                            guard let item = component.items.first(where: { $0.id == id }) else {
+                                return false
+                            }
+                            if item.contextAction == nil {
+                                return false
+                            }
+                            
+                            self.itemWithActiveContextGesture = id
+                            return true
+                        }
+                    }
+                }
+                return false
+            }
+            /*self.contextGestureContainerView.customActivationProgress = { [weak self] progress, update in
+                guard let self, let itemWithActiveContextGesture = self.itemWithActiveContextGesture else {
+                    return
+                }
+                guard let itemView = self.itemViews[itemWithActiveContextGesture]?.view else {
+                    return
+                }
+                let scaleSide = itemView.bounds.width
+                let minScale: CGFloat = max(0.7, (scaleSide - 15.0) / scaleSide)
+                let currentScale = 1.0 * (1.0 - progress) + minScale * progress
+
+                switch update {
+                case .update:
+                    let sublayerTransform = CATransform3DScale(CATransform3DIdentity, currentScale, currentScale, 1.0)
+                    itemView.layer.sublayerTransform = sublayerTransform
+                case .begin:
+                    let sublayerTransform = CATransform3DScale(CATransform3DIdentity, currentScale, currentScale, 1.0)
+                    itemView.layer.sublayerTransform = sublayerTransform
+                case .ended:
+                    let sublayerTransform = CATransform3DScale(CATransform3DIdentity, currentScale, currentScale, 1.0)
+                    let previousTransform = itemView.layer.sublayerTransform
+                    itemView.layer.sublayerTransform = sublayerTransform
+
+                    itemView.layer.animate(from: NSValue(caTransform3D: previousTransform), to: NSValue(caTransform3D: sublayerTransform), keyPath: "sublayerTransform", timingFunction: CAMediaTimingFunctionName.easeOut.rawValue, duration: 0.2)
+                }
+            }*/
+            self.contextGestureContainerView.activated = { [weak self] gesture, _ in
+                guard let self, let component = self.component else {
+                    return
+                }
+                guard let itemWithActiveContextGesture = self.itemWithActiveContextGesture else {
+                    return
+                }
+                
+                var itemView: ItemComponent.View?
+                if self.nativeTabBar != nil {
+                    itemView = self.selectedItemViews[itemWithActiveContextGesture]?.view as? ItemComponent.View
+                } else {
+                    itemView = self.itemViews[itemWithActiveContextGesture]?.view as? ItemComponent.View
+                }
+                
+                guard let itemView else {
+                    return
+                }
+                
+                DispatchQueue.main.async { [weak self] in
+                    guard let self else {
+                        return
+                    }
+                    if let nativeTabBar = self.nativeTabBar {
+                        func cancelGestures(view: UIView) {
+                            for recognizer in view.gestureRecognizers ?? [] {
+                                if NSStringFromClass(type(of: recognizer)).contains("sSelectionGestureRecognizer") {
+                                    recognizer.state = .cancelled
+                                }
+                            }
+                            for subview in view.subviews {
+                                cancelGestures(view: subview)
+                            }
+                        }
+                        
+                        cancelGestures(view: nativeTabBar)
+                    }
+                }
+                
+                guard let item = component.items.first(where: { $0.id == itemWithActiveContextGesture }) else {
+                    return
+                }
+                item.contextAction?(gesture, itemView.contextContainerView)
             }
         }
         
@@ -173,6 +278,19 @@ public final class TabBarComponent: Component {
         
         override public func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
             return super.hitTest(point, with: event)
+        }
+        
+        public func frameForItem(at index: Int) -> CGRect? {
+            guard let component = self.component else {
+                return nil
+            }
+            if index < 0 || index >= component.items.count {
+                return nil
+            }
+            guard let itemView = self.itemViews[component.items[index].id]?.view else {
+                return nil
+            }
+            return self.convert(itemView.bounds, from: itemView)
         }
         
         func update(component: TabBarComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
@@ -304,7 +422,7 @@ public final class TabBarComponent: Component {
                                 itemContainer.addSubview(selectedItemComponentView)
                             }
                         } else {
-                            self.addSubview(itemComponentView)
+                            self.contextGestureContainerView.addSubview(itemComponentView)
                         }
                     }
                     if self.nativeTabBar != nil {
@@ -363,6 +481,8 @@ public final class TabBarComponent: Component {
                 transition.setFrame(view: nativeTabBar, frame: CGRect(origin: CGPoint(x: floor((size.width - nativeTabBar.bounds.width) * 0.5), y: 0.0), size: nativeTabBar.bounds.size))
             }
             
+            transition.setFrame(view: self.contextGestureContainerView, frame: CGRect(origin: CGPoint(), size: size))
+            
             return size
         }
     }
@@ -401,6 +521,8 @@ private final class ItemComponent: Component {
     }
     
     final class View: UIView {
+        let contextContainerView: ContextExtractedContentContainingView
+        
         private var imageIcon: ComponentView<Empty>?
         private var animationIcon: ComponentView<Empty>?
         private let title = ComponentView<Empty>()
@@ -414,7 +536,11 @@ private final class ItemComponent: Component {
         private var setBadgeListener: Int?
         
         override init(frame: CGRect) {
+            self.contextContainerView = ContextExtractedContentContainingView()
+            
             super.init(frame: frame)
+            
+            self.addSubview(self.contextContainerView)
         }
         
         required init?(coder: NSCoder) {
@@ -512,9 +638,9 @@ private final class ItemComponent: Component {
                 if let animationIconView = animationIcon.view {
                     if animationIconView.superview == nil {
                         if let badgeView = self.badge?.view {
-                            self.insertSubview(animationIconView, belowSubview: badgeView)
+                            self.contextContainerView.contentView.insertSubview(animationIconView, belowSubview: badgeView)
                         } else {
-                            self.addSubview(animationIconView)
+                            self.contextContainerView.contentView.addSubview(animationIconView)
                         }
                     }
                     iconTransition.setFrame(view: animationIconView, frame: iconFrame)
@@ -549,9 +675,9 @@ private final class ItemComponent: Component {
                 if let imageIconView = imageIcon.view {
                     if imageIconView.superview == nil {
                         if let badgeView = self.badge?.view {
-                            self.insertSubview(imageIconView, belowSubview: badgeView)
+                            self.contextContainerView.contentView.insertSubview(imageIconView, belowSubview: badgeView)
                         } else {
-                            self.addSubview(imageIconView)
+                            self.contextContainerView.contentView.addSubview(imageIconView)
                         }
                     }
                     iconTransition.setFrame(view: imageIconView, frame: iconFrame)
@@ -569,7 +695,7 @@ private final class ItemComponent: Component {
             let titleFrame = CGRect(origin: CGPoint(x: floor((availableSize.width - titleSize.width) * 0.5), y: availableSize.height - 9.0 - titleSize.height), size: titleSize)
             if let titleView = self.title.view {
                 if titleView.superview == nil {
-                    self.addSubview(titleView)
+                    self.contextContainerView.contentView.addSubview(titleView)
                 }
                 titleView.frame = titleFrame
             }
@@ -600,7 +726,7 @@ private final class ItemComponent: Component {
                 let badgeFrame = CGRect(origin: CGPoint(x: floor(availableSize.width / 2.0) + contentWidth - badgeSize.width - 5.0, y: -1.0), size: badgeSize)
                 if let badgeView = badge.view {
                     if badgeView.superview == nil {
-                        self.addSubview(badgeView)
+                        self.contextContainerView.contentView.addSubview(badgeView)
                     }
                     badgeTransition.setFrame(view: badgeView, frame: badgeFrame)
                 }
@@ -608,6 +734,10 @@ private final class ItemComponent: Component {
                 self.badge = nil
                 badge.view?.removeFromSuperview()
             }
+            
+            transition.setFrame(view: self.contextContainerView, frame: CGRect(origin: CGPoint(), size: availableSize))
+            transition.setFrame(view: self.contextContainerView.contentView, frame: CGRect(origin: CGPoint(), size: availableSize))
+            self.contextContainerView.contentRect = CGRect(origin: CGPoint(), size: availableSize)
             
             return availableSize
         }

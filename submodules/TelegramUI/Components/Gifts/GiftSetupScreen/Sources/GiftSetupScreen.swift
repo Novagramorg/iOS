@@ -1900,7 +1900,7 @@ private struct GiftConfiguration {
     }
 }
 
-public struct PremiumGiftProduct: Equatable {
+public final class PremiumGiftProduct: Equatable {
     public let giftOption: CachedPremiumGiftOption
     public let starsGiftOption: CachedPremiumGiftOption?
     public let storeProduct: InAppPurchaseManager.Product?
@@ -1932,5 +1932,21 @@ public struct PremiumGiftProduct: Equatable {
         self.starsGiftOption = starsGiftOption
         self.storeProduct = storeProduct
         self.discount = discount
+    }
+    
+    public static func ==(lhs: PremiumGiftProduct, rhs: PremiumGiftProduct) -> Bool {
+        if lhs.giftOption != rhs.giftOption {
+            return false
+        }
+        if lhs.starsGiftOption != rhs.starsGiftOption {
+            return false
+        }
+        if lhs.storeProduct != rhs.storeProduct {
+            return false
+        }
+        if lhs.discount != rhs.discount {
+            return false
+        }
+        return true
     }
 }
