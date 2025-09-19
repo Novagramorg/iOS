@@ -150,7 +150,13 @@ public func galleryCaptionStringWithAppliedEntities(context: AccountContext, tex
     var baseQuoteSecondaryTintColor: UIColor?
     var baseQuoteTertiaryTintColor: UIColor?
     if let nameColor = message?.author?.nameColor {
-        let resolvedColor = context.peerNameColors.get(nameColor)
+        let resolvedColor: PeerNameColors.Colors
+        switch nameColor {
+        case let .preset(nameColor):
+            resolvedColor = context.peerNameColors.get(nameColor)
+        case let .collectible(collectibleColor):
+            resolvedColor = collectibleColor.peerNameColors(dark: false)
+        }
         if resolvedColor.secondary != nil {
             baseQuoteSecondaryTintColor = .clear
         }

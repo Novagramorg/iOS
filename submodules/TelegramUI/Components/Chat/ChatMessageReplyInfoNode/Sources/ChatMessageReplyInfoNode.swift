@@ -18,6 +18,7 @@ import MultiAnimationRenderer
 import ChatMessageItemCommon
 import MessageInlineBlockBackgroundView
 import CheckNode
+import EmojiTextAttachmentView
 
 public enum ChatMessageReplyInfoType {
     case bubble(incoming: Bool)
@@ -141,6 +142,7 @@ public class ChatMessageReplyInfoNode: ASDisplayNode {
     private var previousMediaReference: AnyMediaReference?
     private var expiredStoryIconView: UIImageView?
     private var checkLayer: CheckLayer?
+    private var giftEmojiLayer: InlineStickerItemLayer?
     
     private var currentProgressDisposable: Disposable?
     
@@ -204,9 +206,11 @@ public class ChatMessageReplyInfoNode: ASDisplayNode {
             var secondaryColor: UIColor?
             var tertiaryColor: UIColor?
             
+            
             var authorNameColor: UIColor?
             var dashSecondaryColor: UIColor?
             var dashTertiaryColor: UIColor?
+            let placeholderColor: UIColor
             
             var author = arguments.message?.effectiveAuthor
             
@@ -218,10 +222,22 @@ public class ChatMessageReplyInfoNode: ASDisplayNode {
                 }
             }
             
-            let colors = author?.nameColor.flatMap { arguments.context.peerNameColors.get($0, dark: arguments.presentationData.theme.theme.overallDarkAppearance) }
-            authorNameColor = colors?.main
-            dashSecondaryColor = colors?.secondary
-            dashTertiaryColor = colors?.tertiary
+            var giftEmojiFileId: Int64?
+            switch author?.nameColor {
+            case let .preset(nameColor):
+                let colors = arguments.context.peerNameColors.get(nameColor, dark: arguments.presentationData.theme.theme.overallDarkAppearance)
+                authorNameColor = colors.main
+                dashSecondaryColor = colors.secondary
+                dashTertiaryColor = colors.tertiary
+            case let .collectible(collectibleColor):
+                let colors = collectibleColor.peerNameColors(dark: arguments.presentationData.theme.theme.overallDarkAppearance)
+                authorNameColor = colors.main
+                dashSecondaryColor = colors.secondary
+                dashTertiaryColor = colors.tertiary
+                giftEmojiFileId = collectibleColor.giftEmojiFileId
+            default:
+                break
+            }
             
             switch arguments.type {
             case let .bubble(incoming):
@@ -244,6 +260,7 @@ public class ChatMessageReplyInfoNode: ASDisplayNode {
                     }
                 }
                 dustColor = incoming ? arguments.presentationData.theme.theme.chat.message.incoming.secondaryTextColor : arguments.presentationData.theme.theme.chat.message.outgoing.secondaryTextColor
+                placeholderColor = incoming ? arguments.presentationData.theme.theme.chat.message.incoming.mediaPlaceholderColor : arguments.presentationData.theme.theme.chat.message.outgoing.mediaPlaceholderColor
             case .standalone:
                 let serviceColor = serviceMessageColorComponents(theme: arguments.presentationData.theme.theme, wallpaper: arguments.presentationData.theme.wallpaper)
                 titleColor = serviceColor.primaryText
@@ -256,6 +273,7 @@ public class ChatMessageReplyInfoNode: ASDisplayNode {
                 
                 mainColor = serviceMessageColorComponents(chatTheme: arguments.presentationData.theme.theme.chat, wallpaper: arguments.presentationData.theme.wallpaper).primaryText
                 dustColor = titleColor
+                placeholderColor = serviceColor.primaryText.withAlphaComponent(0.2)
             }
             
             if let message = arguments.message {
@@ -402,10 +420,6 @@ public class ChatMessageReplyInfoNode: ASDisplayNode {
                 isMedia = true
                 isText = false
             }
-            
-            let isIncoming = arguments.parentMessage.effectivelyIncoming(arguments.context.account.peerId)
-            
-            let placeholderColor: UIColor = isIncoming ? arguments.presentationData.theme.theme.chat.message.incoming.mediaPlaceholderColor : arguments.presentationData.theme.theme.chat.message.outgoing.mediaPlaceholderColor
             
             let textColor: UIColor
             
@@ -881,6 +895,28 @@ public class ChatMessageReplyInfoNode: ASDisplayNode {
                 } else if let checkLayer = node.checkLayer {
                     node.checkLayer = nil
                     checkLayer.removeFromSuperlayer()
+                }
+                
+                if let giftEmojiFileId {
+                    let giftLayerSize = CGSize(width: 20.0, height: 20.0)
+                    let giftLayerFrame = CGRect(origin: CGPoint(x: textFrame.minX - 16.0, y: 5.0), size: giftLayerSize)
+                    
+                    let giftEmojiLayer: InlineStickerItemLayer
+                    if let current = node.giftEmojiLayer {
+                        giftEmojiLayer = current
+                        
+                        animation.animator.updateFrame(layer: giftEmojiLayer, frame: giftLayerFrame, completion: nil)
+                    } else {
+                        giftEmojiLayer = InlineStickerItemLayer(context: arguments.context, userLocation: .other, attemptSynchronousLoad: true, emoji: ChatTextInputTextCustomEmojiAttribute(interactivelySelectedFromPackId: nil, fileId: giftEmojiFileId, file: nil, custom: nil, enableAnimation: true), file: nil, cache: arguments.context.animationCache, renderer: arguments.context.animationRenderer, unique: false, placeholderColor: placeholderColor, pointSize: giftLayerSize, dynamicColor: nil, loopCount: 2)
+                        node.giftEmojiLayer = giftEmojiLayer
+                        node.contentNode.layer.addSublayer(giftEmojiLayer)
+                        
+                        giftEmojiLayer.frame = giftLayerFrame
+                    }
+                    
+                } else if let giftEmojiLayer = node.giftEmojiLayer {
+                    node.giftEmojiLayer = nil
+                    giftEmojiLayer.removeFromSuperlayer()
                 }
                 
                 node.contentNode.frame = CGRect(origin: CGPoint(), size: size)

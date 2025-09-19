@@ -343,7 +343,7 @@ final class PeerNameColorProfilePreviewItemNode: ListViewItemNode {
                 case .scam:
                     emojiStatusContent = .text(color: item.theme.chat.message.incoming.scamColor, string: item.strings.Message_ScamAccount.uppercased())
                 case let .emojiStatus(emojiStatus):
-                    emojiStatusContent = .animation(content: .customEmoji(fileId: emojiStatus.fileId), size: CGSize(width: 80.0, height: 80.0), placeholderColor: item.theme.list.mediaPlaceholderColor, themeColor: statusColor, loopMode: .forever)
+                    emojiStatusContent = .animation(content: .customEmoji(fileId: emojiStatus.fileId), size: CGSize(width: 80.0, height: 80.0), placeholderColor: item.theme.list.mediaPlaceholderColor, themeColor: statusColor, loopMode: .count(2))
                 }
                 
                 let backgroundColor: UIColor

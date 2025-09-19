@@ -4643,8 +4643,15 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                 }
                 let controller = PremiumIntroScreen(context: self.context, source: source)
                 controller.sourceView = sourceView
-                controller.containerView = self.navigationController?.view
-                controller.animationColor = self.context.peerNameColors.get(nameColor, dark: self.presentationData.theme.overallDarkAppearance).main
+                controller.containerView = self.navigationController?.view                
+                let animationColor: UIColor
+                switch nameColor {
+                case let .preset(nameColor):
+                    animationColor = self.context.peerNameColors.get(nameColor, dark: self.presentationData.theme.overallDarkAppearance).main
+                case let .collectible(collectibleColor):
+                    animationColor = collectibleColor.mainColor(dark: self.presentationData.theme.overallDarkAppearance)
+                }
+                controller.animationColor = animationColor
                 self.push(controller)
             })
             
@@ -5535,7 +5542,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                 guard let self, let accountPeer, let chatPeer else {
                     return
                 }
-                var nameColor: PeerNameColor?
+                var nameColor: PeerColor?
                 if case let .channel(channel) = chatPeer, case .broadcast = channel.info {
                     nameColor = chatPeer.nameColor
                 } else {
@@ -5543,7 +5550,13 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                 }
                 var accountPeerColor: ChatPresentationInterfaceState.AccountPeerColor?
                 if let nameColor {
-                    let colors = self.context.peerNameColors.get(nameColor)
+                    let colors: PeerNameColors.Colors
+                    switch nameColor {
+                    case let .preset(nameColor):
+                        colors = self.context.peerNameColors.get(nameColor)
+                    case let .collectible(collectibleColor):
+                        colors = collectibleColor.peerNameColors(dark: false)
+                    }
                     var style: ChatPresentationInterfaceState.AccountPeerColor.Style = .solid
                     if colors.tertiary != nil {
                         style = .tripleDashed

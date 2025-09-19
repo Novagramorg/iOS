@@ -531,7 +531,7 @@ public extension EnginePeer {
         return false
     }
     
-    var nameColor: PeerNameColor? {
+    var nameColor: PeerColor? {
         return self._asPeer().nameColor
     }
     
