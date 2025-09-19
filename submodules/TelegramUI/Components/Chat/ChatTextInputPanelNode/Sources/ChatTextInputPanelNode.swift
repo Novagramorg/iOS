@@ -466,7 +466,6 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     private var spoilersRevealed = false
     
     private var animatingTransition = false
-    public var finishedTransitionToPreview: Bool?
     
     private var touchDownGestureRecognizer: TouchDownGestureRecognizer?
     
@@ -2188,8 +2187,6 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 audioRecordingCancelIndicator.layer.animateAlpha(from: CGFloat(audioRecordingCancelIndicator.layer.presentation()?.opacity ?? 1), to: 0, duration: 0.15, delay: 0, removeOnCompletion: false)
             }
         } else if self.audioRecordingInfoContainerNode != nil {
-            self.finishedTransitionToPreview = nil
-            
             self.actionButtons.micButton.audioRecorder = nil
             self.actionButtons.micButton.videoRecordingStatus = nil
             transition.updateAlpha(layer: self.textInputBackgroundNode.layer, alpha: 1.0)
