@@ -217,12 +217,12 @@ open class TabBarControllerImpl: ViewController, TabBarController {
                     }
                 }))
             }
-        }, contextAction: { [weak self] index, node, gesture in
+        }, contextAction: { [weak self] index, view, gesture in
             guard let strongSelf = self else {
                 return
             }
             if index >= 0 && index < strongSelf.tabBarControllerNode.tabBarItems.count {
-                strongSelf.controllers[index].tabBarItemContextAction(sourceNode: node, gesture: gesture)
+                strongSelf.controllers[index].tabBarItemContextAction(sourceView: view, gesture: gesture)
             }
         }, swipeAction: { [weak self] index, direction in
             guard let strongSelf = self else {
