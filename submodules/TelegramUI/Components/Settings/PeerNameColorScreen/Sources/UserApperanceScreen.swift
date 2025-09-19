@@ -114,7 +114,7 @@ final class UserAppearanceScreenComponent: Component {
             static let emojiStatus = Changes(rawValue: 1 << 4)
         }
         
-        var nameColor: PeerNameColor
+        var nameColor: PeerColor
         var profileColor: PeerNameColor?
         var replyFileId: Int64?
         var backgroundFileId: Int64?
@@ -123,7 +123,7 @@ final class UserAppearanceScreenComponent: Component {
         var changes: Changes
         
         init(
-            nameColor: PeerNameColor,
+            nameColor: PeerColor,
             profileColor: PeerNameColor?,
             replyFileId: Int64?,
             backgroundFileId: Int64?,
@@ -149,15 +149,20 @@ final class UserAppearanceScreenComponent: Component {
         private let backButton = PeerInfoHeaderNavigationButton()
         
         private let tabSelector = ComponentView<Empty>()
+        enum Section: Int32 {
+            case profile
+            case name
+        }
+        private var currentSection: Section = .profile
         
         private let previewSection = ComponentView<Empty>()
         private let boostSection = ComponentView<Empty>()
         private let bannerSection = ComponentView<Empty>()
         private let replySection = ComponentView<Empty>()
-        private let wallpaperSection = ComponentView<Empty>()
         private let resetColorSection = ComponentView<Empty>()
-        private let giftsSection = ComponentView<Empty>()
-                
+        private let profileGiftsSection = ComponentView<Empty>()
+        private let nameGiftsSection = ComponentView<Empty>()
+        
         private var isUpdating: Bool = false
         
         private var component: UserAppearanceScreenComponent?
@@ -168,9 +173,13 @@ final class UserAppearanceScreenComponent: Component {
         private var contentsData: ContentsData?
         private var contentsDataDisposable: Disposable?
         
+        private var starGiftsContext: ProfileGiftsContext?
+        private var starGiftsDisposable: Disposable?
+        private var starGifts: [StarGift.UniqueGift] = []
+        
         private var cachedIconFiles: [Int64: TelegramMediaFile] = [:]
         
-        private var updatedPeerNameColor: PeerNameColor?
+        private var updatedPeerNameColor: PeerColor?
         private var updatedPeerNameEmoji: Int64??
         
         private var updatedPeerProfileColor: PeerNameColor??
@@ -225,6 +234,7 @@ final class UserAppearanceScreenComponent: Component {
         
         deinit {
             self.contentsDataDisposable?.dispose()
+            self.starGiftsDisposable?.dispose()
             self.applyDisposable?.dispose()
             self.resolvingCurrentTheme?.disposable.dispose()
         }
@@ -297,10 +307,24 @@ final class UserAppearanceScreenComponent: Component {
             transition.setAlpha(view: self.bottomPanelBackgroundView, alpha: bottomNavigationAlpha)
             transition.setAlpha(layer: self.bottomPanelSeparator, alpha: bottomNavigationAlpha)
             
-            if let giftListView = self.giftsSection.findTaggedView(tag: giftListTag) as? GiftListItemComponent.View {
-                let rect = self.scrollView.convert(self.scrollView.bounds, to: giftListView)
-                let visibleRect = giftListView.bounds.intersection(rect)
-                giftListView.updateVisibleBounds(visibleRect)
+            switch self.currentSection {
+            case .profile:
+                if let giftListView = self.profileGiftsSection.findTaggedView(tag: giftListTag) as? GiftListItemComponent.View {
+                    let rect = self.scrollView.convert(self.scrollView.bounds, to: giftListView)
+                    let visibleRect = giftListView.bounds.intersection(rect)
+                    giftListView.updateVisibleBounds(visibleRect)
+                }
+            case .name:
+                if let giftListView = self.nameGiftsSection.findTaggedView(tag: giftListTag) as? GiftListItemComponent.View {
+                    let rect = self.scrollView.convert(self.scrollView.bounds, to: giftListView)
+                    let visibleRect = giftListView.bounds.intersection(rect)
+                    giftListView.updateVisibleBounds(visibleRect)
+                }
+                
+                let bottomContentOffset = max(0.0, self.scrollView.contentSize.height - self.scrollView.contentOffset.y - self.scrollView.frame.height)
+                if bottomContentOffset < 320.0 {
+                    self.starGiftsContext?.loadMore()
+                }
             }
         }
         
@@ -311,13 +335,13 @@ final class UserAppearanceScreenComponent: Component {
             
             var changes: ResolvedState.Changes = []
             
-            let nameColor: PeerNameColor
+            let nameColor: PeerColor
             if let updatedPeerNameColor = self.updatedPeerNameColor {
                 nameColor = updatedPeerNameColor
             } else if let peerNameColor = peer.nameColor {
                 nameColor = peerNameColor
             } else {
-                nameColor = .blue
+                nameColor = .preset(.blue)
             }
             if nameColor != peer.nameColor {
                 changes.insert(.nameColor)
@@ -428,7 +452,14 @@ final class UserAppearanceScreenComponent: Component {
             
             var signals: [Signal<Never, ApplyError>] = []
             if !resolvedState.changes.intersection([.nameColor, .replyFileId, .profileColor, .backgroundFileId]).isEmpty {
-                signals.append(component.context.engine.accountData.updateNameColorAndEmoji(nameColor: resolvedState.nameColor, backgroundEmojiId: resolvedState.replyFileId, profileColor: resolvedState.profileColor, profileBackgroundEmojiId: resolvedState.backgroundFileId)
+                let nameColor: UpdateNameColor
+                switch resolvedState.nameColor {
+                case let .preset(peerNameColor):
+                    nameColor = .preset(color: peerNameColor, backgroundEmojiId: resolvedState.replyFileId)
+                case let .collectible(peerCollectibleColor):
+                    nameColor = .collectible(peerCollectibleColor)
+                }
+                signals.append(component.context.engine.accountData.updateNameColorAndEmoji(nameColor: nameColor, profileColor: resolvedState.profileColor, profileBackgroundEmojiId: resolvedState.backgroundFileId)
                 |> ignoreValues
                 |> mapError { _ -> ApplyError in
                     return .generic
@@ -467,7 +498,8 @@ final class UserAppearanceScreenComponent: Component {
                                 valueAmount: nil,
                                 valueCurrency: nil,
                                 flags: [],
-                                themePeerId: nil
+                                themePeerId: nil,
+                                peerColor: nil
                             )
                             signal = component.context.engine.accountData.setStarGiftStatus(starGift: gift, expirationDate: emojiStatus.expirationDate)
                         } else {
@@ -662,6 +694,26 @@ final class UserAppearanceScreenComponent: Component {
                     }
                     self.isReady.set(true)
                 })
+                
+                let starGiftsContext = ProfileGiftsContext(account: component.context.account, peerId: component.context.account.peerId, collectionId: nil, filter: .peerColor, limit: 30)
+                self.starGiftsContext = starGiftsContext
+                self.starGiftsDisposable = (starGiftsContext.state
+                |> deliverOnMainQueue).start(next: { [weak self] state in
+                    guard let self else {
+                        return
+                    }
+                    var uniqueGifts: [StarGift.UniqueGift] = []
+                    for gift in state.gifts {
+                        if case let .unique(uniqueGift) = gift.gift {
+                            uniqueGifts.append(uniqueGift)
+                        }
+                    }
+                    self.starGifts = uniqueGifts
+                    
+                    if !self.isUpdating {
+                        self.state?.updated()
+                    }
+                })
             }
             
             guard let contentsData = self.contentsData, var peer = contentsData.peer, let resolvedState = self.resolveState() else {
@@ -719,35 +771,53 @@ final class UserAppearanceScreenComponent: Component {
                     .withUpdatedProfileBackgroundEmojiId(resolvedState.backgroundFileId)
                 )
             }
-                                    
-            let headerColor: UIColor
-            if let profileColor = resolvedState.profileColor {
-                let headerBackgroundColors = component.context.peerNameColors.getProfile(profileColor, dark: environment.theme.overallDarkAppearance, subject: .background)
-                headerColor = headerBackgroundColors.secondary ?? headerBackgroundColors.main
-            } else {
-                headerColor = .clear
-            }
-            self.topOverscrollLayer.backgroundColor = headerColor.cgColor
-            
+                                                
             let backSize = self.backButton.update(key: .back, presentationData: component.context.sharedContext.currentPresentationData.with { $0 }, height: 44.0)
 
-            var hasHeaderColor = false
-            if resolvedState.profileColor != nil {
-                hasHeaderColor = true
-            }
-            if case .starGift = resolvedState.emojiStatus?.content {
-                hasHeaderColor = true
-            }
-            if let controller = self.environment?.controller() as? UserAppearanceScreen {
-                controller.statusBar.updateStatusBarStyle(hasHeaderColor ? .White : .Ignore, animated: true)
-            }
-            
-            self.backButton.updateContentsColor(backgroundColor: hasHeaderColor ? UIColor(white: 1.0, alpha: 0.1) : .clear, contentsColor: hasHeaderColor ? .white : environment.theme.rootController.navigationBar.accentTextColor, canBeExpanded: !hasHeaderColor, transition: .animated(duration: 0.2, curve: .easeInOut))
+            self.backButton.updateContentsColor(backgroundColor: .clear, contentsColor: environment.theme.rootController.navigationBar.accentTextColor, canBeExpanded: true, transition: .animated(duration: 0.2, curve: .easeInOut))
             self.backButton.frame = CGRect(origin: CGPoint(x: environment.safeInsets.left + 16.0, y: environment.navigationHeight - 44.0), size: backSize)
             if self.backButton.view.superview == nil {
                 if let controller = self.environment?.controller(), let navigationBar = controller.navigationBar {
                     navigationBar.view.addSubview(self.backButton.view)
                 }
+            }
+            
+            //TODO:localize
+            let tabSelectorSize = self.tabSelector.update(
+                transition: transition,
+                component: AnyComponent(
+                    TabSelectorComponent(
+                        colors: TabSelectorComponent.Colors(
+                            foreground: environment.theme.list.itemSecondaryTextColor,
+                            selection: environment.theme.list.itemSecondaryTextColor.withMultipliedAlpha(0.15),
+                            simple: true
+                        ),
+                        theme: environment.theme,
+                        items: [
+                            TabSelectorComponent.Item(id: Section.profile.rawValue, title: "Profile"),
+                            TabSelectorComponent.Item(id: Section.name.rawValue, title: "Name")
+                        ],
+                        selectedId: self.currentSection.rawValue,
+                        setSelectedId: { [weak self] value in
+                            guard let self else {
+                                return
+                            }
+                            if let intValue = value.base as? Int32 {
+                                self.currentSection = Section(rawValue: intValue) ?? .profile
+                                self.state?.updated(transition: .immediate)
+                            }
+                        }
+                    )
+                ),
+                environment: {},
+                containerSize: CGSize(width: availableSize.width, height: 44.0)
+            )
+            let tabSelectorFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((availableSize.width - tabSelectorSize.width) / 2.0), y: environment.statusBarHeight + floorToScreenPixels((environment.navigationHeight - environment.statusBarHeight - tabSelectorSize.height) / 2.0)), size: tabSelectorSize)
+            if let tabSelectorView = self.tabSelector.view {
+                if tabSelectorView.superview == nil {
+                    self.addSubview(tabSelectorView)
+                }
+                transition.setFrame(view: tabSelectorView, frame: tabSelectorFrame)
             }
                         
             let bottomContentInset: CGFloat = 24.0
@@ -760,380 +830,483 @@ final class UserAppearanceScreenComponent: Component {
             var contentHeight: CGFloat = 0.0
             
             let sectionTransition = transition
-                    
-            let previewSectionSize = self.previewSection.update(
-                transition: sectionTransition,
-                component: AnyComponent(ListSectionComponent(
-                    theme: environment.theme,
-                    background: .none(clipped: false),
-                    header: nil,
-                    footer: nil,
-                    items: [
-                        AnyComponentWithIdentity(id: 0, component: AnyComponent(ListItemComponentAdaptor(
-                            itemGenerator: PeerNameColorProfilePreviewItem(
-                                context: component.context,
-                                theme: environment.theme,
-                                componentTheme: environment.theme,
-                                strings: environment.strings,
-                                topInset: environment.statusBarHeight,
-                                sectionId: 0,
-                                peer: peer,
-                                subtitleString: environment.strings.Presence_online,
-                                files: self.cachedIconFiles,
-                                nameDisplayOrder: presentationData.nameDisplayOrder,
-                                showBackground: !self.scrolledUp
-                            ),
-                            params: ListViewItemLayoutParams(width: availableSize.width, leftInset: 0.0, rightInset: 0.0, availableHeight: 10000.0, isStandalone: true)
-                        ))),
-                    ],
-                    displaySeparators: false,
-                    extendsItemHighlightToSection: true
-                )),
-                environment: {},
-                containerSize: CGSize(width: availableSize.width, height: 1000.0)
-            )
-            let previewSectionFrame = CGRect(origin: CGPoint(x: 0.0, y: contentHeight), size: previewSectionSize)
-            if let previewSectionView = self.previewSection.view {
-                if previewSectionView.superview == nil {
-                    self.addSubview(previewSectionView)
-                }
-                sectionTransition.setFrame(view: previewSectionView, frame: previewSectionFrame)
-            }
-            contentHeight += previewSectionSize.height
-            contentHeight += sectionSpacing - 15.0
+             
+            let itemCornerRadius: CGFloat = 10.0
             
-            var profileLogoContents: [AnyComponentWithIdentity<Empty>] = []
-            profileLogoContents.append(AnyComponentWithIdentity(id: 0, component: AnyComponent(MultilineTextComponent(
-                text: .plain(NSAttributedString(
-                    string: environment.strings.NameColor_AddProfileIcons,
-                    font: Font.regular(presentationData.listsFontSize.baseDisplaySize),
-                    textColor: environment.theme.list.itemPrimaryTextColor
-                )),
-                maximumNumberOfLines: 0
-            ))))
-            let bannerSectionSize = self.bannerSection.update(
-                transition: sectionTransition,
-                component: AnyComponent(ListSectionComponent(
-                    theme: environment.theme,
-                    background: .all,
-                    header: nil,
-                    footer: nil,
-                    items: [
-                        AnyComponentWithIdentity(id: 1, component: AnyComponent(ListItemComponentAdaptor(
-                            itemGenerator: PeerNameColorItem(
+            switch self.currentSection {
+            case .profile:
+                if let replySectionView = self.replySection.view, replySectionView.superview != nil {
+                    replySectionView.removeFromSuperview()
+                }
+                if let nameGiftsSectionView = self.nameGiftsSection.view, nameGiftsSectionView.superview != nil {
+                    nameGiftsSectionView.removeFromSuperview()
+                }
+                
+                var hasHeaderColor = false
+                if resolvedState.profileColor != nil {
+                    hasHeaderColor = true
+                }
+                if case .starGift = resolvedState.emojiStatus?.content {
+                    hasHeaderColor = true
+                }
+                
+                let previewSectionSize = self.previewSection.update(
+                    transition: sectionTransition,
+                    component: AnyComponent(ListSectionComponent(
+                        theme: environment.theme,
+                        background: .none(clipped: false),
+                        header: nil,
+                        footer: nil,
+                        items: [
+                            AnyComponentWithIdentity(id: 0, component: AnyComponent(ListItemComponentAdaptor(
+                                itemGenerator: PeerNameColorProfilePreviewItem(
+                                    context: component.context,
+                                    theme: environment.theme,
+                                    componentTheme: environment.theme,
+                                    strings: environment.strings,
+                                    topInset: 0.0,
+                                    sectionId: 0,
+                                    peer: peer,
+                                    subtitleString: environment.strings.Presence_online,
+                                    files: self.cachedIconFiles,
+                                    nameDisplayOrder: presentationData.nameDisplayOrder,
+                                    showBackground: false
+                                ),
+                                params: ListViewItemLayoutParams(width: availableSize.width - sideInset * 2.0, leftInset: 0.0, rightInset: 0.0, availableHeight: 10000.0, isStandalone: true)
+                            ))),
+                        ],
+                        displaySeparators: false,
+                        extendsItemHighlightToSection: true
+                    )),
+                    environment: {},
+                    containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 1000.0)
+                )
+                let previewSectionFrame = CGRect(origin: CGPoint(x: sideInset, y: environment.navigationHeight + 12.0), size: previewSectionSize)
+                if let previewSectionView = self.previewSection.view {
+                    if previewSectionView.superview == nil {
+                        self.addSubview(previewSectionView)
+                    }
+                    sectionTransition.setFrame(view: previewSectionView, frame: previewSectionFrame)
+                }
+                contentHeight += previewSectionSize.height
+                contentHeight += environment.navigationHeight + 12.0
+                
+                var profileLogoContents: [AnyComponentWithIdentity<Empty>] = []
+                profileLogoContents.append(AnyComponentWithIdentity(id: 0, component: AnyComponent(MultilineTextComponent(
+                    text: .plain(NSAttributedString(
+                        string: environment.strings.NameColor_AddProfileIcons,
+                        font: Font.regular(presentationData.listsFontSize.baseDisplaySize),
+                        textColor: environment.theme.list.itemPrimaryTextColor
+                    )),
+                    maximumNumberOfLines: 0
+                ))))
+                let bannerSectionSize = self.bannerSection.update(
+                    transition: sectionTransition,
+                    component: AnyComponent(ListSectionComponent(
+                        theme: environment.theme,
+                        background: .range(from: 1, corners: DynamicCornerRadiusView.Corners(minXMinY: !hasHeaderColor ? itemCornerRadius : 0.0, maxXMinY: !hasHeaderColor ? itemCornerRadius : 0.0, minXMaxY: itemCornerRadius, maxXMaxY: itemCornerRadius)),
+                        header: nil,
+                        footer: nil,
+                        items: [
+                            AnyComponentWithIdentity(id: 1, component: AnyComponent(ListItemComponentAdaptor(
+                                itemGenerator: PeerNameColorItem(
+                                    theme: environment.theme,
+                                    colors: component.context.peerNameColors,
+                                    mode: .profile,
+                                    currentColor: resolvedState.profileColor,
+                                    updated: { [weak self] value in
+                                        guard let self, let value, let resolvedState = self.resolveState() else {
+                                            return
+                                        }
+                                        self.updatedPeerProfileColor = value
+                                        if case .starGift = resolvedState.emojiStatus?.content {
+                                            self.updatedPeerStatus = .some(nil)
+                                        }
+                                        self.state?.updated(transition: .spring(duration: 0.4))
+                                    },
+                                    sectionId: 0
+                                ),
+                                params: listItemParams
+                            ))),
+                            AnyComponentWithIdentity(id: 2, component: AnyComponent(ListActionItemComponent(
                                 theme: environment.theme,
-                                colors: component.context.peerNameColors,
-                                mode: .profile,
-                                currentColor: resolvedState.profileColor,
-                                updated: { [weak self] value in
-                                    guard let self, let value, let resolvedState = self.resolveState() else {
+                                title: AnyComponent(HStack(profileLogoContents, spacing: 6.0)),
+                                icon: ListActionItemComponent.Icon(component: AnyComponentWithIdentity(id: 0, component: AnyComponent(EmojiActionIconComponent(
+                                    context: component.context,
+                                    color: resolvedState.profileColor.flatMap { profileColor in
+                                        component.context.peerNameColors.getProfile(profileColor, dark: environment.theme.overallDarkAppearance, subject: .palette).main
+                                    } ?? environment.theme.list.itemAccentColor,
+                                    fileId: resolvedState.backgroundFileId,
+                                    file: resolvedState.backgroundFileId.flatMap { self.cachedIconFiles[$0] }
+                                )))),
+                                action: { [weak self] view in
+                                    guard let self, let resolvedState = self.resolveState(), let view = view as? ListActionItemComponent.View, let iconView = view.iconView else {
                                         return
                                     }
-                                    self.updatedPeerProfileColor = value
+                                    
+                                    self.openEmojiSetup(sourceView: iconView, currentFileId: resolvedState.backgroundFileId, color: resolvedState.profileColor.flatMap {
+                                        component.context.peerNameColors.getProfile($0, dark: environment.theme.overallDarkAppearance, subject: .palette).main
+                                    } ?? environment.theme.list.itemAccentColor, subject: .profile)
+                                }
+                            )))
+                        ],
+                        displaySeparators: true,
+                        extendsItemHighlightToSection: false
+                    )),
+                    environment: {},
+                    containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 1000.0)
+                )
+                let bannerSectionFrame = CGRect(origin: CGPoint(x: sideInset, y: contentHeight), size: bannerSectionSize)
+                if let bannerSectionView = self.bannerSection.view {
+                    if bannerSectionView.superview == nil {
+                        self.scrollView.addSubview(bannerSectionView)
+                    }
+                    sectionTransition.setFrame(view: bannerSectionView, frame: bannerSectionFrame)
+                }
+                contentHeight += bannerSectionSize.height
+                contentHeight += sectionSpacing
+                
+                let resetColorSectionSize = self.resetColorSection.update(
+                    transition: sectionTransition,
+                    component: AnyComponent(ListSectionComponent(
+                        theme: environment.theme,
+                        header: nil,
+                        footer: nil,
+                        items: [
+                            AnyComponentWithIdentity(id: 0, component: AnyComponent(ListActionItemComponent(
+                                theme: environment.theme,
+                                title: AnyComponent(MultilineTextComponent(
+                                    text: .plain(NSAttributedString(
+                                        string: environment.strings.Channel_Appearance_ResetProfileColor,
+                                        font: Font.regular(presentationData.listsFontSize.baseDisplaySize),
+                                        textColor: environment.theme.list.itemAccentColor
+                                    )),
+                                    maximumNumberOfLines: 0
+                                )),
+                                icon: nil,
+                                accessory: nil,
+                                action: { [weak self] view in
+                                    guard let self, let resolvedState = self.resolveState() else {
+                                        return
+                                    }
+                                    
+                                    self.updatedPeerProfileColor = .some(nil)
+                                    self.updatedPeerProfileEmoji = .some(nil)
                                     if case .starGift = resolvedState.emojiStatus?.content {
                                         self.updatedPeerStatus = .some(nil)
                                     }
                                     self.state?.updated(transition: .spring(duration: 0.4))
-                                },
-                                sectionId: 0
-                            ),
-                            params: listItemParams
-                        ))),
-                        AnyComponentWithIdentity(id: 2, component: AnyComponent(ListActionItemComponent(
-                            theme: environment.theme,
-                            title: AnyComponent(HStack(profileLogoContents, spacing: 6.0)),
-                            icon: ListActionItemComponent.Icon(component: AnyComponentWithIdentity(id: 0, component: AnyComponent(EmojiActionIconComponent(
-                                context: component.context,
-                                color: resolvedState.profileColor.flatMap { profileColor in
-                                    component.context.peerNameColors.getProfile(profileColor, dark: environment.theme.overallDarkAppearance, subject: .palette).main
-                                } ?? environment.theme.list.itemAccentColor,
-                                fileId: resolvedState.backgroundFileId,
-                                file: resolvedState.backgroundFileId.flatMap { self.cachedIconFiles[$0] }
-                            )))),
-                            action: { [weak self] view in
-                                guard let self, let resolvedState = self.resolveState(), let view = view as? ListActionItemComponent.View, let iconView = view.iconView else {
-                                    return
                                 }
-                                
-                                self.openEmojiSetup(sourceView: iconView, currentFileId: resolvedState.backgroundFileId, color: resolvedState.profileColor.flatMap {
-                                    component.context.peerNameColors.getProfile($0, dark: environment.theme.overallDarkAppearance, subject: .palette).main
-                                } ?? environment.theme.list.itemAccentColor, subject: .profile)
-                            }
-                        )))
-                    ],
-                    displaySeparators: true,
-                    extendsItemHighlightToSection: false
-                )),
-                environment: {},
-                containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 1000.0)
-            )
-            let bannerSectionFrame = CGRect(origin: CGPoint(x: sideInset, y: contentHeight), size: bannerSectionSize)
-            if let bannerSectionView = self.bannerSection.view {
-                if bannerSectionView.superview == nil {
-                    self.scrollView.addSubview(bannerSectionView)
+                            )))
+                        ],
+                        displaySeparators: false,
+                        extendsItemHighlightToSection: true
+                    )),
+                    environment: {},
+                    containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 1000.0)
+                )
+                
+                var displayResetProfileColor = resolvedState.profileColor != nil || resolvedState.backgroundFileId != nil
+                if case .starGift = resolvedState.emojiStatus?.content {
+                    displayResetProfileColor = true
                 }
-                sectionTransition.setFrame(view: bannerSectionView, frame: bannerSectionFrame)
-            }
-            contentHeight += bannerSectionSize.height
-            contentHeight += sectionSpacing
-            
-            let resetColorSectionSize = self.resetColorSection.update(
-                transition: sectionTransition,
-                component: AnyComponent(ListSectionComponent(
-                    theme: environment.theme,
-                    header: nil,
-                    footer: nil,
-                    items: [
-                        AnyComponentWithIdentity(id: 0, component: AnyComponent(ListActionItemComponent(
+                
+                let resetColorSectionFrame = CGRect(origin: CGPoint(x: sideInset, y: contentHeight), size: resetColorSectionSize)
+                if let resetColorSectionView = self.resetColorSection.view {
+                    if resetColorSectionView.superview == nil {
+                        self.scrollView.addSubview(resetColorSectionView)
+                    }
+                    sectionTransition.setPosition(view: resetColorSectionView, position: resetColorSectionFrame.center)
+                    sectionTransition.setBounds(view: resetColorSectionView, bounds: CGRect(origin: CGPoint(), size: resetColorSectionFrame.size))
+                    sectionTransition.setScale(view: resetColorSectionView, scale: displayResetProfileColor ? 1.0 : 0.001)
+                    sectionTransition.setAlpha(view: resetColorSectionView, alpha: displayResetProfileColor ? 1.0 : 0.0)
+                }
+                if displayResetProfileColor {
+                    contentHeight += resetColorSectionSize.height
+                    contentHeight += sectionSpacing
+                }
+                
+                if !contentsData.gifts.isEmpty {
+                    var selectedGiftId: Int64?
+                    if let status = resolvedState.emojiStatus, case let .starGift(id, _, _, _, _, _, _, _, _) = status.content {
+                        selectedGiftId = id
+                    }
+                    let giftsSectionSize = self.profileGiftsSection.update(
+                        transition: sectionTransition,
+                        component: AnyComponent(ListSectionComponent(
                             theme: environment.theme,
-                            title: AnyComponent(MultilineTextComponent(
+                            header: AnyComponent(MultilineTextComponent(
                                 text: .plain(NSAttributedString(
-                                    string: environment.strings.Channel_Appearance_ResetProfileColor,
-                                    font: Font.regular(presentationData.listsFontSize.baseDisplaySize),
-                                    textColor: environment.theme.list.itemAccentColor
+                                    string: environment.strings.NameColor_GiftTitle,
+                                    font: Font.regular(presentationData.listsFontSize.itemListBaseHeaderFontSize),
+                                    textColor: environment.theme.list.freeTextColor
                                 )),
                                 maximumNumberOfLines: 0
                             )),
-                            icon: nil,
-                            accessory: nil,
-                            action: { [weak self] view in
-                                guard let self, let resolvedState = self.resolveState() else {
-                                    return
-                                }
-                                
-                                self.updatedPeerProfileColor = .some(nil)
-                                self.updatedPeerProfileEmoji = .some(nil)
-                                if case .starGift = resolvedState.emojiStatus?.content {
-                                    self.updatedPeerStatus = .some(nil)
-                                }
-                                self.state?.updated(transition: .spring(duration: 0.4))
-                            }
-                        )))
-                    ],
-                    displaySeparators: false,
-                    extendsItemHighlightToSection: true
-                )),
-                environment: {},
-                containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 1000.0)
-            )
-            
-            var displayResetProfileColor = resolvedState.profileColor != nil || resolvedState.backgroundFileId != nil
-            if case .starGift = resolvedState.emojiStatus?.content {
-                displayResetProfileColor = true
-            }
-            
-            let resetColorSectionFrame = CGRect(origin: CGPoint(x: sideInset, y: contentHeight), size: resetColorSectionSize)
-            if let resetColorSectionView = self.resetColorSection.view {
-                if resetColorSectionView.superview == nil {
-                    self.scrollView.addSubview(resetColorSectionView)
-                }
-                sectionTransition.setPosition(view: resetColorSectionView, position: resetColorSectionFrame.center)
-                sectionTransition.setBounds(view: resetColorSectionView, bounds: CGRect(origin: CGPoint(), size: resetColorSectionFrame.size))
-                sectionTransition.setScale(view: resetColorSectionView, scale: displayResetProfileColor ? 1.0 : 0.001)
-                sectionTransition.setAlpha(view: resetColorSectionView, alpha: displayResetProfileColor ? 1.0 : 0.0)
-            }
-            if displayResetProfileColor {
-                contentHeight += resetColorSectionSize.height
-                contentHeight += sectionSpacing
-            }
-            
-            var chatPreviewTheme: PresentationTheme = environment.theme
-            var chatPreviewWallpaper: TelegramWallpaper = presentationData.chatWallpaper
-            if let resolvedCurrentTheme = self.resolvedCurrentTheme {
-                chatPreviewTheme = resolvedCurrentTheme.theme
-                if let wallpaper = resolvedCurrentTheme.wallpaper {
-                    chatPreviewWallpaper = wallpaper
-                }
-            }
-            
-            let messageItem = PeerNameColorChatPreviewItem.MessageItem(
-                outgoing: false,
-                peerId: EnginePeer.Id(namespace: peer.id.namespace, id: PeerId.Id._internalFromInt64Value(0)),
-                author: peer.compactDisplayTitle,
-                photo: peer.profileImageRepresentations,
-                nameColor: resolvedState.nameColor,
-                backgroundEmojiId: resolvedState.replyFileId,
-                reply: (peer.compactDisplayTitle, environment.strings.NameColor_ChatPreview_ReplyText_Account, resolvedState.nameColor),
-                linkPreview: (environment.strings.NameColor_ChatPreview_LinkSite, environment.strings.NameColor_ChatPreview_LinkTitle, environment.strings.NameColor_ChatPreview_LinkText),
-                text: environment.strings.NameColor_ChatPreview_MessageText_Account
-            )
-            
-            var replyLogoContents: [AnyComponentWithIdentity<Empty>] = []
-            replyLogoContents.append(AnyComponentWithIdentity(id: 0, component: AnyComponent(MultilineTextComponent(
-                text: .plain(NSAttributedString(
-                    string: environment.strings.NameColor_AddRepliesIcons,
-                    font: Font.regular(presentationData.listsFontSize.baseDisplaySize),
-                    textColor: environment.theme.list.itemPrimaryTextColor
-                )),
-                maximumNumberOfLines: 0
-            ))))
-            let replySectionSize = self.replySection.update(
-                transition: sectionTransition,
-                component: AnyComponent(ListSectionComponent(
-                    theme: environment.theme,
-                    header: nil,
-                    footer: AnyComponent(MultilineTextComponent(
-                        text: .plain(NSAttributedString(
-                            string: environment.strings.NameColor_ChatPreview_Description_Account,
-                            font: Font.regular(presentationData.listsFontSize.itemListBaseHeaderFontSize),
-                            textColor: environment.theme.list.freeTextColor
+                            footer: AnyComponent(MultilineTextComponent(
+                                text: .plain(NSAttributedString(
+                                    string: environment.strings.NameColor_GiftInfo,
+                                    font: Font.regular(presentationData.listsFontSize.itemListBaseHeaderFontSize),
+                                    textColor: environment.theme.list.freeTextColor
+                                )),
+                                maximumNumberOfLines: 0
+                            )),
+                            items: [
+                                AnyComponentWithIdentity(id: 0, component: AnyComponent(
+                                    GiftListItemComponent(
+                                        context: component.context,
+                                        theme: environment.theme,
+                                        gifts: contentsData.gifts,
+                                        selectedId: selectedGiftId,
+                                        selectionUpdated: { [weak self] gift in
+                                            guard let self else {
+                                                return
+                                            }
+                                            var fileId: Int64?
+                                            var patternFileId: Int64?
+                                            var innerColor: Int32?
+                                            var outerColor: Int32?
+                                            var patternColor: Int32?
+                                            var textColor: Int32?
+                                            for attribute in gift.attributes {
+                                                switch attribute {
+                                                case let .model(_, file, _):
+                                                    fileId = file.fileId.id
+                                                    self.cachedIconFiles[file.fileId.id] = file
+                                                case let .pattern(_, file, _):
+                                                    patternFileId = file.fileId.id
+                                                    self.cachedIconFiles[file.fileId.id] = file
+                                                case let .backdrop(_, _, innerColorValue, outerColorValue, patternColorValue, textColorValue, _):
+                                                    innerColor = innerColorValue
+                                                    outerColor = outerColorValue
+                                                    patternColor = patternColorValue
+                                                    textColor = textColorValue
+                                                default:
+                                                    break
+                                                }
+                                            }
+                                            if let fileId, let patternFileId, let innerColor, let outerColor, let patternColor, let textColor {
+                                                self.updatedPeerProfileColor = .some(nil)
+                                                self.updatedPeerProfileEmoji = .some(nil)
+                                                self.updatedPeerStatus = .some(PeerEmojiStatus(content: .starGift(id: gift.id, fileId: fileId, title: gift.title, slug: gift.slug, patternFileId: patternFileId, innerColor: innerColor, outerColor: outerColor, patternColor: patternColor, textColor: textColor), expirationDate: nil))
+                                                self.state?.updated(transition: .spring(duration: 0.4))
+                                            }
+                                        },
+                                        tag: giftListTag
+                                    )
+                                )),
+                            ],
+                            displaySeparators: false
                         )),
-                        maximumNumberOfLines: 0
+                        environment: {},
+                        containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 10000.0)
+                    )
+                    let giftsSectionFrame = CGRect(origin: CGPoint(x: sideInset, y: contentHeight), size: giftsSectionSize)
+                    if let giftsSectionView = self.profileGiftsSection.view {
+                        if giftsSectionView.superview == nil {
+                            self.scrollView.addSubview(giftsSectionView)
+                        }
+                        sectionTransition.setFrame(view: giftsSectionView, frame: giftsSectionFrame)
+                    }
+                    contentHeight += giftsSectionSize.height
+                    contentHeight += sectionSpacing
+                }
+            case .name:
+                if let previewSectionView = self.previewSection.view, previewSectionView.superview != nil {
+                    previewSectionView.removeFromSuperview()
+                }
+                if let bannerSectionView = self.bannerSection.view, bannerSectionView.superview != nil {
+                    bannerSectionView.removeFromSuperview()
+                }
+                if let resetColorSectionView = self.resetColorSection.view, resetColorSectionView.superview != nil {
+                    resetColorSectionView.removeFromSuperview()
+                }
+                if let profileGiftsSectionView = self.profileGiftsSection.view, profileGiftsSectionView.superview != nil {
+                    profileGiftsSectionView.removeFromSuperview()
+                }
+                
+                var chatPreviewTheme: PresentationTheme = environment.theme
+                var chatPreviewWallpaper: TelegramWallpaper = presentationData.chatWallpaper
+                if let resolvedCurrentTheme = self.resolvedCurrentTheme {
+                    chatPreviewTheme = resolvedCurrentTheme.theme
+                    if let wallpaper = resolvedCurrentTheme.wallpaper {
+                        chatPreviewWallpaper = wallpaper
+                    }
+                }
+                
+                let messageItem = PeerNameColorChatPreviewItem.MessageItem(
+                    outgoing: false,
+                    peerId: EnginePeer.Id(namespace: peer.id.namespace, id: PeerId.Id._internalFromInt64Value(0)),
+                    author: peer.compactDisplayTitle,
+                    photo: peer.profileImageRepresentations,
+                    nameColor: resolvedState.nameColor,
+                    backgroundEmojiId: resolvedState.replyFileId,
+                    reply: (peer.compactDisplayTitle, environment.strings.NameColor_ChatPreview_ReplyText_Account, resolvedState.nameColor),
+                    linkPreview: (environment.strings.NameColor_ChatPreview_LinkSite, environment.strings.NameColor_ChatPreview_LinkTitle, environment.strings.NameColor_ChatPreview_LinkText),
+                    text: environment.strings.NameColor_ChatPreview_MessageText_Account
+                )
+                
+                var replyLogoContents: [AnyComponentWithIdentity<Empty>] = []
+                replyLogoContents.append(AnyComponentWithIdentity(id: 0, component: AnyComponent(MultilineTextComponent(
+                    text: .plain(NSAttributedString(
+                        string: environment.strings.NameColor_AddRepliesIcons,
+                        font: Font.regular(presentationData.listsFontSize.baseDisplaySize),
+                        textColor: environment.theme.list.itemPrimaryTextColor
                     )),
-                    items: [
-                        AnyComponentWithIdentity(id: 0, component: AnyComponent(ListItemComponentAdaptor(
-                            itemGenerator: PeerNameColorChatPreviewItem(
-                                context: component.context,
-                                theme: chatPreviewTheme,
-                                componentTheme: chatPreviewTheme,
-                                strings: environment.strings,
-                                sectionId: 0,
-                                fontSize: presentationData.chatFontSize,
-                                chatBubbleCorners: presentationData.chatBubbleCorners,
-                                wallpaper: chatPreviewWallpaper,
-                                dateTimeFormat: environment.dateTimeFormat,
-                                nameDisplayOrder: presentationData.nameDisplayOrder,
-                                messageItems: [messageItem]
-                            ),
-                            params: listItemParams
-                        ))),
-                        AnyComponentWithIdentity(id: 1, component: AnyComponent(ListItemComponentAdaptor(
-                            itemGenerator: PeerNameColorItem(
-                                theme: environment.theme,
-                                colors: component.context.peerNameColors,
-                                mode: .name,
-                                currentColor: resolvedState.nameColor,
-                                updated: { [weak self] value in
-                                    guard let self, let value else {
-                                        return
-                                    }
-                                    self.updatedPeerNameColor = value
-                                    self.state?.updated(transition: .spring(duration: 0.4))
-                                },
-                                sectionId: 0
-                            ),
-                            params: listItemParams
-                        ))),
-                        AnyComponentWithIdentity(id: 2, component: AnyComponent(ListActionItemComponent(
-                            theme: environment.theme,
-                            title: AnyComponent(HStack(replyLogoContents, spacing: 6.0)),
-                            icon: ListActionItemComponent.Icon(component: AnyComponentWithIdentity(id: 0, component: AnyComponent(EmojiActionIconComponent(
-                                context: component.context,
-                                color: component.context.peerNameColors.get(resolvedState.nameColor, dark: environment.theme.overallDarkAppearance).main,
-                                fileId: resolvedState.replyFileId,
-                                file: resolvedState.replyFileId.flatMap { self.cachedIconFiles[$0] }
-                            )))),
-                            action: { [weak self] view in
-                                guard let self, let resolvedState = self.resolveState(), let view = view as? ListActionItemComponent.View, let iconView = view.iconView else {
-                                    return
-                                }
-                                
-                                self.openEmojiSetup(sourceView: iconView, currentFileId: resolvedState.replyFileId, color: component.context.peerNameColors.get(resolvedState.nameColor, dark: environment.theme.overallDarkAppearance).main, subject: .reply)
-                            }
-                        )))
-                    ],
-                    displaySeparators: true,
-                    extendsItemHighlightToSection: false
-                )),
-                environment: {},
-                containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 1000.0)
-            )
-            let replySectionFrame = CGRect(origin: CGPoint(x: sideInset, y: contentHeight), size: replySectionSize)
-            if let replySectionView = self.replySection.view {
-                if replySectionView.superview == nil {
-                    self.scrollView.addSubview(replySectionView)
+                    maximumNumberOfLines: 0
+                ))))
+                
+                
+                var replyColor: UIColor
+                switch resolvedState.nameColor {
+                case let .preset(nameColor):
+                    replyColor = component.context.peerNameColors.get(nameColor, dark: environment.theme.overallDarkAppearance).main
+                case let .collectible(collectibleColor):
+                    replyColor = collectibleColor.mainColor(dark: environment.theme.overallDarkAppearance)
                 }
-                sectionTransition.setFrame(view: replySectionView, frame: replySectionFrame)
-            }
-            contentHeight += replySectionSize.height
-            contentHeight += sectionSpacing
-            
-            if !contentsData.gifts.isEmpty {
-                var selectedGiftId: Int64?
-                if let status = resolvedState.emojiStatus, case let .starGift(id, _, _, _, _, _, _, _, _) = status.content {
-                    selectedGiftId = id
-                }
-                let giftsSectionSize = self.giftsSection.update(
+                
+                let replySectionSize = self.replySection.update(
                     transition: sectionTransition,
                     component: AnyComponent(ListSectionComponent(
                         theme: environment.theme,
-                        header: AnyComponent(MultilineTextComponent(
-                            text: .plain(NSAttributedString(
-                                string: environment.strings.NameColor_GiftTitle,
-                                font: Font.regular(presentationData.listsFontSize.itemListBaseHeaderFontSize),
-                                textColor: environment.theme.list.freeTextColor
-                            )),
-                            maximumNumberOfLines: 0
-                        )),
+                        header: nil,
                         footer: AnyComponent(MultilineTextComponent(
                             text: .plain(NSAttributedString(
-                                string: environment.strings.NameColor_GiftInfo,
+                                string: environment.strings.NameColor_ChatPreview_Description_Account,
                                 font: Font.regular(presentationData.listsFontSize.itemListBaseHeaderFontSize),
                                 textColor: environment.theme.list.freeTextColor
                             )),
                             maximumNumberOfLines: 0
                         )),
                         items: [
-                            AnyComponentWithIdentity(id: 0, component: AnyComponent(
-                                GiftListItemComponent(
+                            AnyComponentWithIdentity(id: 0, component: AnyComponent(ListItemComponentAdaptor(
+                                itemGenerator: PeerNameColorChatPreviewItem(
                                     context: component.context,
+                                    theme: chatPreviewTheme,
+                                    componentTheme: chatPreviewTheme,
+                                    strings: environment.strings,
+                                    sectionId: 0,
+                                    fontSize: presentationData.chatFontSize,
+                                    chatBubbleCorners: presentationData.chatBubbleCorners,
+                                    wallpaper: chatPreviewWallpaper,
+                                    dateTimeFormat: environment.dateTimeFormat,
+                                    nameDisplayOrder: presentationData.nameDisplayOrder,
+                                    messageItems: [messageItem]
+                                ),
+                                params: listItemParams
+                            ))),
+                            AnyComponentWithIdentity(id: 1, component: AnyComponent(ListItemComponentAdaptor(
+                                itemGenerator: PeerNameColorItem(
                                     theme: environment.theme,
-                                    gifts: contentsData.gifts,
-                                    selectedId: selectedGiftId,
-                                    selectionUpdated: { [weak self] gift in
-                                        guard let self else {
+                                    colors: component.context.peerNameColors,
+                                    mode: .name,
+                                    currentColor: resolvedState.nameColor.nameColor,
+                                    updated: { [weak self] value in
+                                        guard let self, let value else {
                                             return
                                         }
-                                        var fileId: Int64?
-                                        var patternFileId: Int64?
-                                        var innerColor: Int32?
-                                        var outerColor: Int32?
-                                        var patternColor: Int32?
-                                        var textColor: Int32?
-                                        for attribute in gift.attributes {
-                                            switch attribute {
-                                            case let .model(_, file, _):
-                                                fileId = file.fileId.id
-                                                self.cachedIconFiles[file.fileId.id] = file
-                                            case let .pattern(_, file, _):
-                                                patternFileId = file.fileId.id
-                                                self.cachedIconFiles[file.fileId.id] = file
-                                            case let .backdrop(_, _, innerColorValue, outerColorValue, patternColorValue, textColorValue, _):
-                                                innerColor = innerColorValue
-                                                outerColor = outerColorValue
-                                                patternColor = patternColorValue
-                                                textColor = textColorValue
-                                            default:
-                                                break
-                                            }
-                                        }
-                                        if let fileId, let patternFileId, let innerColor, let outerColor, let patternColor, let textColor {
-                                            self.updatedPeerProfileColor = .some(nil)
-                                            self.updatedPeerProfileEmoji = .some(nil)
-                                            self.updatedPeerStatus = .some(PeerEmojiStatus(content: .starGift(id: gift.id, fileId: fileId, title: gift.title, slug: gift.slug, patternFileId: patternFileId, innerColor: innerColor, outerColor: outerColor, patternColor: patternColor, textColor: textColor), expirationDate: nil))
-                                            self.state?.updated(transition: .spring(duration: 0.4))
-                                        }
+                                        self.updatedPeerNameColor = .preset(value)
+                                        self.state?.updated(transition: .spring(duration: 0.4))
                                     },
-                                    tag: giftListTag
-                                )
-                            )),
+                                    sectionId: 0
+                                ),
+                                params: listItemParams
+                            ))),
+                            AnyComponentWithIdentity(id: 2, component: AnyComponent(ListActionItemComponent(
+                                theme: environment.theme,
+                                title: AnyComponent(HStack(replyLogoContents, spacing: 6.0)),
+                                icon: ListActionItemComponent.Icon(component: AnyComponentWithIdentity(id: 0, component: AnyComponent(EmojiActionIconComponent(
+                                    context: component.context,
+                                    color: replyColor,
+                                    fileId: resolvedState.replyFileId,
+                                    file: resolvedState.replyFileId.flatMap { self.cachedIconFiles[$0] }
+                                )))),
+                                action: { [weak self] view in
+                                    guard let self, let resolvedState = self.resolveState(), let view = view as? ListActionItemComponent.View, let iconView = view.iconView else {
+                                        return
+                                    }
+                                    
+                                    self.openEmojiSetup(sourceView: iconView, currentFileId: resolvedState.replyFileId, color: replyColor, subject: .reply)
+                                }
+                            )))
                         ],
-                        displaySeparators: false
+                        displaySeparators: true,
+                        extendsItemHighlightToSection: false
                     )),
                     environment: {},
-                    containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 10000.0)
+                    containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 1000.0)
                 )
-                let giftsSectionFrame = CGRect(origin: CGPoint(x: sideInset, y: contentHeight), size: giftsSectionSize)
-                if let giftsSectionView = self.giftsSection.view {
-                    if giftsSectionView.superview == nil {
-                        self.scrollView.addSubview(giftsSectionView)
+                let replySectionFrame = CGRect(origin: CGPoint(x: sideInset, y: contentHeight), size: replySectionSize)
+                if let replySectionView = self.replySection.view {
+                    if replySectionView.superview == nil {
+                        self.scrollView.addSubview(replySectionView)
                     }
-                    sectionTransition.setFrame(view: giftsSectionView, frame: giftsSectionFrame)
+                    sectionTransition.setFrame(view: replySectionView, frame: replySectionFrame)
                 }
-                contentHeight += giftsSectionSize.height
+                contentHeight += replySectionSize.height
                 contentHeight += sectionSpacing
+                
+                if !self.starGifts.isEmpty {
+                    var selectedGiftId: Int64?
+                    if case let .collectible(collectibleColor) = resolvedState.nameColor {
+                        selectedGiftId = collectibleColor.collectibleId
+                    }
+                    let giftsSectionSize = self.nameGiftsSection.update(
+                        transition: sectionTransition,
+                        component: AnyComponent(ListSectionComponent(
+                            theme: environment.theme,
+                            header: AnyComponent(MultilineTextComponent(
+                                text: .plain(NSAttributedString(
+                                    string: environment.strings.NameColor_GiftTitle,
+                                    font: Font.regular(presentationData.listsFontSize.itemListBaseHeaderFontSize),
+                                    textColor: environment.theme.list.freeTextColor
+                                )),
+                                maximumNumberOfLines: 0
+                            )),
+                            footer: AnyComponent(MultilineTextComponent(
+                                text: .plain(NSAttributedString(
+                                    string: environment.strings.NameColor_GiftInfo,
+                                    font: Font.regular(presentationData.listsFontSize.itemListBaseHeaderFontSize),
+                                    textColor: environment.theme.list.freeTextColor
+                                )),
+                                maximumNumberOfLines: 0
+                            )),
+                            items: [
+                                AnyComponentWithIdentity(id: 0, component: AnyComponent(
+                                    GiftListItemComponent(
+                                        context: component.context,
+                                        theme: environment.theme,
+                                        gifts: self.starGifts,
+                                        selectedId: selectedGiftId,
+                                        selectionUpdated: { [weak self] gift in
+                                            guard let self, let peerColor = gift.peerColor else {
+                                                return
+                                            }
+                                            
+                                            self.updatedPeerNameColor = .collectible(peerColor)
+                                            self.state?.updated(transition: .spring(duration: 0.4))
+                                        },
+                                        tag: giftListTag
+                                    )
+                                )),
+                            ],
+                            displaySeparators: false
+                        )),
+                        environment: {},
+                        containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 10000.0)
+                    )
+                    let giftsSectionFrame = CGRect(origin: CGPoint(x: sideInset, y: contentHeight), size: giftsSectionSize)
+                    if let giftsSectionView = self.nameGiftsSection.view {
+                        if giftsSectionView.superview == nil {
+                            self.scrollView.addSubview(giftsSectionView)
+                        }
+                        sectionTransition.setFrame(view: giftsSectionView, frame: giftsSectionFrame)
+                    }
+                    contentHeight += giftsSectionSize.height
+                    contentHeight += sectionSpacing
+                }
             }
-            
+                    
             contentHeight += bottomContentInset
             
             var buttonTitle = environment.strings.Channel_Appearance_ApplyButton
@@ -1307,6 +1480,17 @@ public class UserAppearanceScreen: ViewControllerComponentContainer {
                 self.didSetReady = true
                 self.ready.set(componentView.isReady.get())
             }
+        }
+    }
+}
+
+private extension PeerColor {
+    var nameColor: PeerNameColor? {
+        switch self {
+        case let .preset(nameColor):
+            return nameColor
+        default:
+            return nil
         }
     }
 }
