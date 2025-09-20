@@ -6215,7 +6215,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
             }
         case .discussion:
             if let cachedData = self.data?.cachedData as? CachedChannelData, case let .known(maybeLinkedDiscussionPeerId) = cachedData.linkedDiscussionPeerId, let linkedDiscussionPeerId = maybeLinkedDiscussionPeerId {
-                let _ = (context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: linkedDiscussionPeerId))
+                let _ = (self.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: linkedDiscussionPeerId))
                 |> deliverOnMainQueue).startStandalone(next: { [weak self] linkedDiscussionPeer in
                     guard let self, let linkedDiscussionPeer else {
                         return
@@ -6616,7 +6616,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                         canSetupAutoremoveTimeout = true
                     }
                 }
-                            
+                
                 if filteredButtons.contains(.call) {
                     items.append(.action(ContextMenuActionItem(text: presentationData.strings.PeerInfo_ButtonCall, icon: { theme in
                         generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Call"), color: theme.contextMenu.primaryColor)
@@ -6631,6 +6631,25 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                     }, action: { [weak self] _, f in
                         f(.dismissWithoutContent)
                         self?.openChatWithMessageSearch()
+                    })))
+                }
+                
+                var hasDiscussion = false
+                if let channel = chatPeer as? TelegramChannel {
+                    switch channel.info {
+                    case let .broadcast(info):
+                        hasDiscussion = info.flags.contains(.hasDiscussionGroup)
+                    case .group:
+                        hasDiscussion = false
+                    }
+                }
+                if !headerButtons.contains(.discussion) && hasDiscussion {
+                    //TODO:localize
+                    items.append(.action(ContextMenuActionItem(text: "View Discussion", icon: { theme in
+                        generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/MessageBubble"), color: theme.contextMenu.primaryColor)
+                    }, action: { [weak self] _, f in
+                        f(.dismissWithoutContent)
+                        self?.performButtonAction(key: .discussion, gesture: nil)
                     })))
                 }
                 
