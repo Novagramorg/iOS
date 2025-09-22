@@ -15091,3 +15091,5 @@ Error: %8$@";
 "PeerInfo.NoteActionCopy" = "Copy Note";
 "PeerInfo.NoteActionEdit" = "Edit Note";
 "PeerInfo.ToastNoteCopied" = "Note copied to clipboard.";
+
+"MESSAGE_SUGGEST_BIRTHDAY" = "%@ suggested you your birthday";
