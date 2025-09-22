@@ -388,8 +388,6 @@ public final class ChatRecordingPreviewInputPanelNodeImpl: ChatInputPanelNode {
     }
     
     override public func updateLayout(width: CGFloat, leftInset: CGFloat, rightInset: CGFloat, bottomInset: CGFloat, additionalSideInsets: UIEdgeInsets, maxHeight: CGFloat, maxOverlayHeight: CGFloat, isSecondary: Bool, transition: ContainedViewLayoutTransition, interfaceState: ChatPresentationInterfaceState, metrics: LayoutMetrics, isMediaInputExpanded: Bool) -> CGFloat {
-        let innerSize = CGSize(width: 40.0, height: 40.0)
-        
         let waveformBackgroundFrame = CGRect(origin: CGPoint(x: 2.0, y: 2.0), size: CGSize(width: width - 2.0 * 2.0, height: 40.0 - 2.0 * 2.0))
         
         if self.presentationInterfaceState != interfaceState {
@@ -558,21 +556,17 @@ public final class ChatRecordingPreviewInputPanelNodeImpl: ChatInputPanelNode {
                         ),
                         environment: {},
                         forceUpdate: false,
-                        containerSize: CGSize(width: min(424.0, width - leftInset - rightInset - innerSize.width - 1.0), height: 40.0)
+                        containerSize: CGSize(width: waveformBackgroundFrame.width, height: 44.0)
                     )
 
                     if let view = self.scrubber.view {
                         if view.superview == nil {
                             self.view.addSubview(view)
                         }
-                        view.bounds = CGRect(origin: .zero, size: scrubberSize)
+                        view.frame = CGRect(origin: CGPoint(x: 2.0, y: 2.0), size: scrubberSize)
                     }
                 }
             }
-        }
-        
-        if let view = self.scrubber.view {
-            view.frame = CGRect(origin: CGPoint(x: min(width - innerSize.width - view.bounds.width, max(leftInset + 45.0, floorToScreenPixels((width - view.bounds.width) / 2.0))), y: 7.0 - UIScreenPixel), size: view.bounds.size)
         }
                 
         let panelHeight = 40.0

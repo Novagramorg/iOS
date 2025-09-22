@@ -416,10 +416,10 @@ final class AuthorizationSequencePaymentScreenComponent: Component {
                 transition: transition,
                 component: AnyComponent(ButtonComponent(
                     background: ButtonComponent.Background(
+                        style: .glass,
                         color: environment.theme.list.itemCheckColors.fillColor,
                         foreground: environment.theme.list.itemCheckColors.foregroundColor,
-                        pressedColor: environment.theme.list.itemCheckColors.fillColor.withMultipliedAlpha(0.9),
-                        cornerRadius: 10.0
+                        pressedColor: environment.theme.list.itemCheckColors.fillColor.withMultipliedAlpha(0.9)
                     ),
                     content: AnyComponentWithIdentity(
                         id: AnyHashable(buttonString),

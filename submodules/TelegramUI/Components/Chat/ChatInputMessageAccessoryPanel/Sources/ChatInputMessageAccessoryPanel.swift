@@ -331,7 +331,7 @@ public final class ChatInputMessageAccessoryPanel: Component {
             
             let environment = environment[EnvironmentType.self].value
             
-            if self.component == nil {
+            let messageIdsFromComponent: (ChatInputMessageAccessoryPanel) -> [EngineMessage.Id] = { component in
                 let messageIds: [EngineMessage.Id]
                 switch component.contents {
                 case let .edit(edit):
@@ -343,7 +343,11 @@ public final class ChatInputMessageAccessoryPanel: Component {
                 case .linkPreview, .suggestPost:
                     messageIds = []
                 }
-                
+                return messageIds
+            }
+            
+            let messageIds = messageIdsFromComponent(component)
+            if self.component == nil || self.component.flatMap(messageIdsFromComponent) != messageIds {
                 self.contentDisposable?.dispose()
                 if !messageIds.isEmpty {
                     self.contentDisposable = (component.context.engine.data.subscribe(

@@ -106,8 +106,8 @@ final class MessageItemComponent: Component {
             transition.setPosition(view: textSnapshotView, position: CGPoint(x: textSnapshotView.center.x + 71.0, y: textSnapshotView.center.y))
             
             let initialSize = self.background.frame.size
-            self.background.update(size: globalFrame.size, cornerRadius: cornerRadius, isDark: true, tintColor: .init(kind: .custom, color: UIColor(rgb: 0x1b1d22)), transition: .immediate)
-            self.background.update(size: initialSize, cornerRadius: 18.0, isDark: true, tintColor: .init(kind: .custom, color: UIColor(rgb: 0x1b1d22)), transition: transition)
+            self.background.update(size: globalFrame.size, cornerRadius: cornerRadius, isDark: true, tintColor: .init(kind: .panel, color: UIColor(rgb: 0x1f1f27)), transition: .immediate)
+            self.background.update(size: initialSize, cornerRadius: 18.0, isDark: true, tintColor: .init(kind: .panel, color: UIColor(rgb: 0x1f1f27)), transition: transition)
             
             let deltaX = (globalFrame.width - self.container.frame.width) / 2.0
             let deltaY = (globalFrame.height - self.container.frame.height) / 2.0
@@ -209,7 +209,7 @@ final class MessageItemComponent: Component {
             
             transition.setFrame(view: self.container, frame: CGRect(origin: CGPoint(), size: size))
 
-            self.background.update(size: size, cornerRadius: cornerRadius, isDark: true, tintColor: .init(kind: .custom, color: UIColor(rgb: 0x1b1d22)), transition: transition)
+            self.background.update(size: size, cornerRadius: cornerRadius, isDark: true, tintColor: .init(kind: .panel, color: UIColor(rgb: 0x1f1f27)), transition: transition)
             transition.setFrame(view: self.background, frame: CGRect(origin: CGPoint(), size: size))
             
             if isFirstTime, let availableReactions = component.availableReactions, let textView = self.text.view {

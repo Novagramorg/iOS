@@ -1065,6 +1065,7 @@ final class ChannelAppearanceScreenComponent: Component {
                                 componentTheme: environment.theme,
                                 strings: environment.strings,
                                 topInset: environment.statusBarHeight,
+                                bottomInset: 0.0,
                                 sectionId: 0,
                                 peer: peer,
                                 subtitleString: contentsData.subscriberCount.flatMap {

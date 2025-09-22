@@ -290,7 +290,7 @@ final class PeerInfoSelectionPanelNode: ASDisplayNode {
     private let shareMessages: () -> Void
     private let forwardMessages: () -> Void
     private let reportMessages: () -> Void
-    private let displayCopyProtectionTip: (ASDisplayNode, Bool) -> Void
+    private let displayCopyProtectionTip: (UIView, Bool) -> Void
     
     let selectionPanel: ChatMessageSelectionInputPanelNode
     let separatorNode: ASDisplayNode
@@ -300,7 +300,7 @@ final class PeerInfoSelectionPanelNode: ASDisplayNode {
         return self.selectionPanel.viewForOverlayContent
     }
     
-    init(context: AccountContext, presentationData: PresentationData, peerId: PeerId, deleteMessages: @escaping () -> Void, shareMessages: @escaping () -> Void, forwardMessages: @escaping () -> Void, reportMessages: @escaping () -> Void, displayCopyProtectionTip: @escaping (ASDisplayNode, Bool) -> Void) {
+    init(context: AccountContext, presentationData: PresentationData, peerId: PeerId, deleteMessages: @escaping () -> Void, shareMessages: @escaping () -> Void, forwardMessages: @escaping () -> Void, reportMessages: @escaping () -> Void, displayCopyProtectionTip: @escaping (UIView, Bool) -> Void) {
         self.context = context
         self.peerId = peerId
         self.deleteMessages = deleteMessages
@@ -420,8 +420,8 @@ final class PeerInfoSelectionPanelNode: ASDisplayNode {
         }, openInviteRequests: {
         }, openSendAsPeer: { _, _ in
         }, presentChatRequestAdminInfo: {
-        }, displayCopyProtectionTip: { node, save in
-            displayCopyProtectionTip(node, save)
+        }, displayCopyProtectionTip: { view, save in
+            displayCopyProtectionTip(view, save)
         }, openWebView: { _, _, _, _ in
         }, updateShowWebView: { _ in
         }, insertText: { _ in
@@ -627,6 +627,7 @@ private final class PeerInfoInteraction {
     let editingOpenPersonalChannel: () -> Void
     let openUsernameContextMenu: (ASDisplayNode, ContextGesture?) -> Void
     let openBioContextMenu: (ASDisplayNode, ContextGesture?) -> Void
+    let openNoteContextMenu: (ASDisplayNode, ContextGesture?) -> Void
     let openWorkingHoursContextMenu: (ASDisplayNode, ContextGesture?) -> Void
     let openBusinessLocationContextMenu: (ASDisplayNode, ContextGesture?) -> Void
     let openBirthdayContextMenu: (ASDisplayNode, ContextGesture?) -> Void
@@ -703,6 +704,7 @@ private final class PeerInfoInteraction {
         editingOpenPersonalChannel: @escaping () -> Void,
         openUsernameContextMenu: @escaping (ASDisplayNode, ContextGesture?) -> Void,
         openBioContextMenu: @escaping (ASDisplayNode, ContextGesture?) -> Void,
+        openNoteContextMenu: @escaping (ASDisplayNode, ContextGesture?) -> Void,
         openWorkingHoursContextMenu: @escaping (ASDisplayNode, ContextGesture?) -> Void,
         openBusinessLocationContextMenu: @escaping (ASDisplayNode, ContextGesture?) -> Void,
         openBirthdayContextMenu: @escaping (ASDisplayNode, ContextGesture?) -> Void,
@@ -778,6 +780,7 @@ private final class PeerInfoInteraction {
         self.editingOpenPersonalChannel = editingOpenPersonalChannel
         self.openUsernameContextMenu = openUsernameContextMenu
         self.openBioContextMenu = openBioContextMenu
+        self.openNoteContextMenu = openNoteContextMenu
         self.openWorkingHoursContextMenu = openWorkingHoursContextMenu
         self.openBusinessLocationContextMenu = openBusinessLocationContextMenu
         self.openBirthdayContextMenu = openBirthdayContextMenu
@@ -1312,6 +1315,9 @@ private func infoItems(data: PeerInfoScreenData?, context: AccountContext, prese
     let bioContextAction: (ASDisplayNode, ContextGesture?, CGPoint?) -> Void = { node, gesture, _ in
         interaction.openBioContextMenu(node, gesture)
     }
+    let noteContextAction: (ASDisplayNode, ContextGesture?, CGPoint?) -> Void = { node, gesture, _ in
+        interaction.openNoteContextMenu(node, gesture)
+    }
     let bioLinkAction: (TextLinkItemActionType, TextLinkItem, ASDisplayNode, CGRect?, Promise<Bool>?) -> Void = { action, item, _, _, _ in
         interaction.performBioLinkAction(action, item)
     }
@@ -1495,7 +1501,7 @@ private func infoItems(data: PeerInfoScreenData?, context: AccountContext, prese
                 }
                 
                 if let note = cachedData.note, !note.text.isEmpty {
-                    items[currentPeerInfoSection]!.append(PeerInfoScreenLabeledValueItem(id: 0, label: "notes", rightLabel: "only visible to you", text: note.text, entities: note.entities, textColor: .primary, textBehavior: .multiLine(maxLines: 100, enabledEntities: []), action: nil, linkItemAction: bioLinkAction, button: nil, contextAction: bioContextAction, requestLayout: { animated in
+                    items[currentPeerInfoSection]!.append(PeerInfoScreenLabeledValueItem(id: 0, label: presentationData.strings.PeerInfo_Notes, rightLabel: presentationData.strings.PeerInfo_NotesInfo, text: note.text, entities: note.entities, textColor: .primary, textBehavior: .multiLine(maxLines: 100, enabledEntities: []), action: nil, linkItemAction: bioLinkAction, button: nil, contextAction: noteContextAction, requestLayout: { animated in
                         interaction.requestLayout(animated)
                     }))
                 }
@@ -2108,7 +2114,7 @@ private func editingItems(data: PeerInfoScreenData?, boostStatus: ChannelBoostSt
     
     if let data = data {
         if let user = data.peer as? TelegramUser {
-            let ItemNote = 0
+            let ItemNote: AnyHashable = AnyHashable("note_edit")
             let ItemNoteInfo = 1
             
             let ItemSuggestBirthdate = 2
@@ -3376,6 +3382,11 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                     return
                 }
                 self.openBioContextMenu(node: node, gesture: gesture)
+            }, openNoteContextMenu: { [weak self] node, gesture in
+                guard let self else {
+                    return
+                }
+                self.openNoteContextMenu(node: node, gesture: gesture)
             }, openWorkingHoursContextMenu: { [weak self] node, gesture in
                 guard let self else {
                     return
@@ -6215,7 +6226,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
             }
         case .discussion:
             if let cachedData = self.data?.cachedData as? CachedChannelData, case let .known(maybeLinkedDiscussionPeerId) = cachedData.linkedDiscussionPeerId, let linkedDiscussionPeerId = maybeLinkedDiscussionPeerId {
-                let _ = (context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: linkedDiscussionPeerId))
+                let _ = (self.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: linkedDiscussionPeerId))
                 |> deliverOnMainQueue).startStandalone(next: { [weak self] linkedDiscussionPeer in
                     guard let self, let linkedDiscussionPeer else {
                         return
@@ -6616,7 +6627,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                         canSetupAutoremoveTimeout = true
                     }
                 }
-                            
+                
                 if filteredButtons.contains(.call) {
                     items.append(.action(ContextMenuActionItem(text: presentationData.strings.PeerInfo_ButtonCall, icon: { theme in
                         generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Call"), color: theme.contextMenu.primaryColor)
@@ -6631,6 +6642,25 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                     }, action: { [weak self] _, f in
                         f(.dismissWithoutContent)
                         self?.openChatWithMessageSearch()
+                    })))
+                }
+                
+                var hasDiscussion = false
+                if let channel = chatPeer as? TelegramChannel {
+                    switch channel.info {
+                    case let .broadcast(info):
+                        hasDiscussion = info.flags.contains(.hasDiscussionGroup)
+                    case .group:
+                        hasDiscussion = false
+                    }
+                }
+                if !headerButtons.contains(.discussion) && hasDiscussion {
+                    //TODO:localize
+                    items.append(.action(ContextMenuActionItem(text: "View Discussion", icon: { theme in
+                        generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/MessageBubble"), color: theme.contextMenu.primaryColor)
+                    }, action: { [weak self] _, f in
+                        f(.dismissWithoutContent)
+                        self?.performButtonAction(key: .discussion, gesture: nil)
                     })))
                 }
                 
@@ -8208,6 +8238,67 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                 c?.pushItems(items: .single(ContextController.Items(content: .list(subItems))))
             })))
         }
+        
+        let actions = ContextController.Items(content: .list(items))
+        
+        let contextController = ContextController(presentationData: self.presentationData, source: .extracted(PeerInfoContextExtractedContentSource(sourceNode: sourceNode)), items: .single(actions), gesture: gesture)
+        self.controller?.present(contextController, in: .window(.root))
+    }
+    
+    private func openNoteContextMenu(node: ASDisplayNode, gesture: ContextGesture?) {
+        guard let sourceNode = node as? ContextExtractedContentContainingNode else {
+            return
+        }
+        guard let cachedData = self.data?.cachedData else {
+            return
+        }
+        
+        var noteText: String?
+        if let cachedData = cachedData as? CachedUserData {
+            noteText = cachedData.note?.text
+        }
+        
+        guard let noteText, !noteText.isEmpty else {
+            return
+        }
+        
+        let copyAction = { [weak self] in
+            guard let self else {
+                return
+            }
+            UIPasteboard.general.string = noteText
+            
+            let toastText = self.presentationData.strings.UserInfo_ToastNoteCopied
+            self.controller?.present(UndoOverlayController(presentationData: self.presentationData, content: .copy(text: toastText), elevatedLayout: false, animateInAsReplacement: false, action: { _ in return false }), in: .current)
+        }
+        
+        var items: [ContextMenuItem] = []
+        items.append(.action(ContextMenuActionItem(text: self.presentationData.strings.UserInfo_NoteActionEdit, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Edit"), color: theme.contextMenu.primaryColor) }, action: { [weak self] c, _ in
+            c?.dismiss {
+                guard let self else {
+                    return
+                }
+                self.headerNode.navigationButtonContainer.performAction?(.edit, nil, nil)
+                
+                for (_, section) in self.editingSections {
+                    for (id, itemNode) in section.itemNodes {
+                        if id == AnyHashable("note_edit") {
+                            if let itemNode = itemNode as? PeerInfoScreenNoteListItemNode {
+                                itemNode.focus()
+                            }
+                            break
+                        }
+                    }
+                }
+            }
+        })))
+        
+        let copyText = self.presentationData.strings.UserInfo_NoteActionCopy
+        items.append(.action(ContextMenuActionItem(text: copyText, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Copy"), color: theme.contextMenu.primaryColor) }, action: { c, _ in
+            c?.dismiss {
+                copyAction()
+            }
+        })))
         
         let actions = ContextController.Items(content: .list(items))
         
@@ -12652,7 +12743,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                     strongSelf.context.sharedContext.makeContentReportScreen(context: strongSelf.context, subject: .messages(Array(messageIds).sorted()), forceDark: false, present: { [weak self] controller in
                         self?.controller?.push(controller)
                     }, completion: {}, requestSelectMessages: nil)
-                }, displayCopyProtectionTip: { [weak self] node, save in
+                }, displayCopyProtectionTip: { [weak self] sourceView, save in
                     if let strongSelf = self, let peer = strongSelf.data?.peer, let messageIds = strongSelf.state.selectedMessageIds, !messageIds.isEmpty {
                         let _ = (strongSelf.context.engine.data.get(EngineDataMap(
                             messageIds.map(TelegramEngine.EngineData.Item.Messages.Message.init)
@@ -12714,7 +12805,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                             }
                             strongSelf.controller?.present(tooltipController, in: .window(.root), with: TooltipControllerPresentationArguments(sourceNodeAndRect: {
                                 if let strongSelf = self {
-                                    let rect = node.view.convert(node.view.bounds, to: strongSelf.view).offsetBy(dx: 0.0, dy: 3.0)
+                                    let rect = sourceView.convert(sourceView.bounds, to: strongSelf.view).offsetBy(dx: 0.0, dy: 3.0)
                                     return (strongSelf, rect)
                                 }
                                 return nil

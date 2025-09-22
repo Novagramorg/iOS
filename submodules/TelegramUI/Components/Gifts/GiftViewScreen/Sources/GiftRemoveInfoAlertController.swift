@@ -319,11 +319,10 @@ public func giftRemoveInfoAlertController(
     let presentationData = context.sharedContext.currentPresentationData.with { $0 }
     let strings = presentationData.strings
     
-    //TODO:localize
-    let title = "Remove Description"
-    let text = "Do you want to permanently remove this description from your gift?"
-    let buttonText = "Remove for  $  \(presentationStringsFormattedNumber(Int32(clamping: removeInfoStars), presentationData.dateTimeFormat.groupingSeparator))"
-    
+    let title = strings.Gift_RemoveDetails_Title
+    let text = strings.Gift_RemoveDetails_Text
+    let buttonText = strings.Gift_RemoveDetails_Action(" $  \(presentationStringsFormattedNumber(Int32(clamping: removeInfoStars), presentationData.dateTimeFormat.groupingSeparator))").string
+   
     var contentNode: GiftRemoveInfoAlertContentNode?
     var dismissImpl: ((Bool) -> Void)?
     let actions: [TextAlertAction] = [TextAlertAction(type: .defaultAction, title: buttonText, action: {

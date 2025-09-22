@@ -151,7 +151,13 @@ final class TabBarControllerNode: ASDisplayNode {
         transition.updateAlpha(node: self.disabledOverlayNode, alpha: value ? 0.0 : 1.0)
     }
     
-    var tabBarHidden = false
+    var tabBarHidden = false {
+        didSet {
+            if self.tabBarHidden != oldValue {
+                self.requestUpdate()
+            }
+        }
+    }
     
     func containerLayoutUpdated(_ layout: ContainerViewLayout, toolbar: Toolbar?, transition: ContainedViewLayoutTransition) -> CGFloat {
         let params = Params(layout: layout, toolbar: toolbar)
