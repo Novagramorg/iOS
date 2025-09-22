@@ -35,11 +35,20 @@ import TabSelectorComponent
 import WallpaperResources
 import EdgeEffect
 import TextFormat
+import TelegramStringFormatting
 
 private let giftListTag = GenericComponentViewTag()
 
 final class UserAppearanceScreenComponent: Component {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
+    
+    public final class TransitionHint {
+        public let animateTabChange: Bool
+        
+        public init(animateTabChange: Bool) {
+            self.animateTabChange = animateTabChange
+        }
+    }
     
     let context: AccountContext
 
@@ -59,13 +68,16 @@ final class UserAppearanceScreenComponent: Component {
     private final class ContentsData {
         let peer: EnginePeer?
         let gifts: [StarGift.UniqueGift]
+        let starGifts: [StarGift]
         
         init(
             peer: EnginePeer?,
-            gifts: [StarGift.UniqueGift]
+            gifts: [StarGift.UniqueGift],
+            starGifts: [StarGift]
         ) {
             self.peer = peer
             self.gifts = gifts
+            self.starGifts = starGifts
         }
         
         static func get(context: AccountContext) -> Signal<ContentsData, NoError> {
@@ -73,9 +85,10 @@ final class UserAppearanceScreenComponent: Component {
                 context.engine.data.subscribe(
                     TelegramEngine.EngineData.Item.Peer.Peer(id: context.account.peerId)
                 ),
-                context.account.postbox.itemCollectionsView(orderedItemListCollectionIds: [Namespaces.OrderedItemList.CloudUniqueStarGifts], namespaces: [Namespaces.ItemCollection.CloudDice], aroundIndex: nil, count: 10000000)
+                context.account.postbox.itemCollectionsView(orderedItemListCollectionIds: [Namespaces.OrderedItemList.CloudUniqueStarGifts], namespaces: [Namespaces.ItemCollection.CloudDice], aroundIndex: nil, count: 10000000),
+                context.engine.payments.cachedStarGifts()
             )
-            |> map { peer, view -> ContentsData in
+            |> map { peer, view, starGifts -> ContentsData in
                 var gifts: [StarGift.UniqueGift] = []
                 for orderedView in view.orderedItemListsViews {
                     if orderedView.collectionId == Namespaces.OrderedItemList.CloudUniqueStarGifts {
@@ -89,7 +102,8 @@ final class UserAppearanceScreenComponent: Component {
                 }
                 return ContentsData(
                     peer: peer,
-                    gifts: gifts
+                    gifts: gifts,
+                    starGifts: starGifts ?? []
                 )
             }
         }
@@ -142,6 +156,7 @@ final class UserAppearanceScreenComponent: Component {
     }
     
     final class View: UIView, UIScrollViewDelegate {
+        private let containerView = UIView()
         private let topOverscrollLayer = SimpleLayer()
         private let scrollView: ScrollView
         private let actionButton = ComponentView<Empty>()
@@ -181,9 +196,11 @@ final class UserAppearanceScreenComponent: Component {
         
         private var cachedIconFiles: [Int64: TelegramMediaFile] = [:]
         
+        private var selectedNameGift: StarGift.UniqueGift?
         private var updatedPeerNameColor: PeerColor?
         private var updatedPeerNameEmoji: Int64??
         
+        private var selectedProfileGift: StarGift.UniqueGift?
         private var updatedPeerProfileColor: PeerNameColor??
         private var updatedPeerProfileEmoji: Int64??
         private var updatedPeerStatus: PeerEmojiStatus??
@@ -198,6 +215,9 @@ final class UserAppearanceScreenComponent: Component {
         private weak var emojiStatusSelectionController: ViewController?
         
         private var cachedChevronImage: (UIImage, PresentationTheme)?
+        private var cachedStarImage: (UIImage, PresentationTheme)?
+        private var cachedSubtitleStarImage: (UIImage, PresentationTheme)?
+        private var cachedTonImage: (UIImage, PresentationTheme)?
         
         override init(frame: CGRect) {
             self.scrollView = ScrollView()
@@ -216,8 +236,10 @@ final class UserAppearanceScreenComponent: Component {
             
             super.init(frame: frame)
             
+            self.addSubview(self.containerView)
+            
             self.scrollView.delegate = self
-            self.addSubview(self.scrollView)
+            self.containerView.addSubview(self.scrollView)
             
             self.scrollView.layer.addSublayer(self.topOverscrollLayer)
             
@@ -308,18 +330,32 @@ final class UserAppearanceScreenComponent: Component {
                 if let giftListView = self.profileGiftsSection.findTaggedView(tag: giftListTag) as? GiftListItemComponent.View {
                     let rect = self.scrollView.convert(self.scrollView.bounds, to: giftListView)
                     let visibleRect = giftListView.bounds.intersection(rect)
-                    giftListView.updateVisibleBounds(visibleRect)
+                    if !self.isUpdating {
+                        giftListView.updateVisibleBounds(visibleRect)
+                    } else if giftListView.visibleBounds == nil {
+                        Queue.mainQueue().justDispatch {
+                            giftListView.updateVisibleBounds(visibleRect)
+                        }
+                    }
                 }
             case .name:
                 if let giftListView = self.nameGiftsSection.findTaggedView(tag: giftListTag) as? GiftListItemComponent.View {
                     let rect = self.scrollView.convert(self.scrollView.bounds, to: giftListView)
                     let visibleRect = giftListView.bounds.intersection(rect)
-                    giftListView.updateVisibleBounds(visibleRect)
-                }
-                
-                let bottomContentOffset = max(0.0, self.scrollView.contentSize.height - self.scrollView.contentOffset.y - self.scrollView.frame.height)
-                if bottomContentOffset < 320.0 {
-                    self.starGiftsContext?.loadMore()
+                    if !self.isUpdating {
+                        giftListView.updateVisibleBounds(visibleRect)
+                    } else if giftListView.visibleBounds == nil {
+                        Queue.mainQueue().justDispatch {
+                            giftListView.updateVisibleBounds(visibleRect)
+                        }
+                    }
+                    
+                    let bottomContentOffset = max(0.0, self.scrollView.contentSize.height - self.scrollView.contentOffset.y - self.scrollView.frame.height)
+                    if bottomContentOffset < 320.0 {
+                        if !giftListView.loadMore() {
+                            self.starGiftsContext?.loadMore()
+                        }
+                    }
                 }
             }
         }
@@ -599,6 +635,7 @@ final class UserAppearanceScreenComponent: Component {
                         if case .collectible = resolvedState.nameColor {
                             self.updatedPeerNameColor = .preset(.blue)
                         }
+                        self.selectedNameGift = nil
                         if let result {
                             self.updatedPeerNameEmoji = result.fileId.id
                         } else {
@@ -671,13 +708,21 @@ final class UserAppearanceScreenComponent: Component {
             let environment = environment[EnvironmentType.self].value
             let themeUpdated = self.environment?.theme !== environment.theme
             self.environment = environment
-            
+                        
             self.component = component
             self.state = state
+            
+            let theme = environment.theme
+            
+            var animateTabChange = false
+            if let hint = transition.userData(TransitionHint.self) {
+                animateTabChange = hint.animateTabChange
+            }
             
             let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
             if themeUpdated {
                 self.backgroundColor = environment.theme.list.blocksBackgroundColor
+                self.scrollView.backgroundColor = environment.theme.list.blocksBackgroundColor
             }
             
             if self.cachedChevronImage == nil || self.cachedChevronImage?.1 !== environment.theme {
@@ -722,7 +767,7 @@ final class UserAppearanceScreenComponent: Component {
             guard let contentsData = self.contentsData, var peer = contentsData.peer, let resolvedState = self.resolveState() else {
                 return availableSize
             }
-                                                
+            
             if let currentTheme = self.currentTheme, (self.resolvedCurrentTheme?.reference != currentTheme || self.resolvedCurrentTheme?.isDark != environment.theme.overallDarkAppearance), (self.resolvingCurrentTheme?.reference != currentTheme || self.resolvingCurrentTheme?.isDark != environment.theme.overallDarkAppearance) {
                 self.resolvingCurrentTheme?.disposable.dispose()
                 
@@ -785,20 +830,39 @@ final class UserAppearanceScreenComponent: Component {
                 }
             }
             
-            //TODO:localize
+            var previewTransition = transition
+            let transitionScale = (availableSize.height - 3.0) / availableSize.height
+            if animateTabChange, let snapshotView = self.containerView.snapshotView(afterScreenUpdates: false) {
+                self.insertSubview(snapshotView, belowSubview: self.containerView)
+                snapshotView.layer.animateScale(from: 1.0, to: transitionScale, duration: 0.12, timingFunction: kCAMediaTimingFunctionSpring, removeOnCompletion: false, completion: { completed in
+                    snapshotView.removeFromSuperview()
+                })
+                
+                self.scrollView.contentOffset = CGPoint(x: 0.0, y: 0.0)
+                
+                self.containerView.layer.animateScale(from: transitionScale, to: 1.0, duration: 0.15, delay: 0.1, timingFunction: kCAMediaTimingFunctionSpring)
+                self.containerView.layer.allowsGroupOpacity = true
+                self.containerView.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.1, completion: { completed in
+                    self.containerView.layer.allowsGroupOpacity = false
+                })
+                previewTransition = .immediate
+            }
+            
             let tabSelectorSize = self.tabSelector.update(
                 transition: transition,
                 component: AnyComponent(
                     TabSelectorComponent(
                         colors: TabSelectorComponent.Colors(
-                            foreground: environment.theme.list.itemSecondaryTextColor,
-                            selection: environment.theme.list.itemSecondaryTextColor.withMultipliedAlpha(0.15),
+                            foreground: environment.theme.list.itemAccentColor,
+                            selection: environment.theme.list.itemAccentColor.withMultipliedAlpha(0.1),
+                            normal: environment.theme.list.itemPrimaryTextColor.withMultipliedAlpha(0.78),
                             simple: true
                         ),
                         theme: environment.theme,
+                        customLayout: TabSelectorComponent.CustomLayout(font: Font.semibold(16.0)),
                         items: [
-                            TabSelectorComponent.Item(id: Section.profile.rawValue, title: "Profile"),
-                            TabSelectorComponent.Item(id: Section.name.rawValue, title: "Name")
+                            TabSelectorComponent.Item(id: Section.profile.rawValue, title: environment.strings.ProfileColorSetup_TitleProfile),
+                            TabSelectorComponent.Item(id: Section.name.rawValue, title: environment.strings.ProfileColorSetup_TitleName)
                         ],
                         selectedId: self.currentSection.rawValue,
                         setSelectedId: { [weak self] value in
@@ -806,8 +870,11 @@ final class UserAppearanceScreenComponent: Component {
                                 return
                             }
                             if let intValue = value.base as? Int32 {
-                                self.currentSection = Section(rawValue: intValue) ?? .profile
-                                self.state?.updated(transition: .easeInOut(duration: 0.3))
+                                let updatedSection = Section(rawValue: intValue) ?? .profile
+                                if self.currentSection != updatedSection {
+                                    self.currentSection = updatedSection
+                                    self.state?.updated(transition: .easeInOut(duration: 0.3).withUserData(TransitionHint(animateTabChange: true)))
+                                }
                             }
                         }
                     )
@@ -850,30 +917,23 @@ final class UserAppearanceScreenComponent: Component {
                 if let nameGiftsSectionView = self.nameGiftsSection.view, nameGiftsSectionView.superview != nil {
                     nameGiftsSectionView.removeFromSuperview()
                 }
-                
-                var hasHeaderColor = false
-                if resolvedState.profileColor != nil {
-                    hasHeaderColor = true
-                }
-                if case .starGift = resolvedState.emojiStatus?.content {
-                    hasHeaderColor = true
-                }
-                                
+                   
                 let profilePreviewSize = self.profilePreview.update(
-                    transition: transition,
+                    transition: previewTransition,
                     component: AnyComponent(TopBottomCornersComponent(topCornerRadius: itemCornerRadius, bottomCornerRadius: !self.scrolledUp ? itemCornerRadius : 0.0, component: AnyComponent(ListItemComponentAdaptor(
                         itemGenerator: PeerNameColorProfilePreviewItem(
                             context: component.context,
                             theme: environment.theme,
                             componentTheme: environment.theme,
                             strings: environment.strings,
-                            topInset: 0.0,
+                            topInset: 28.0,
+                            bottomInset: 15.0 + UIScreenPixel,
                             sectionId: 0,
                             peer: peer,
                             subtitleString: environment.strings.Presence_online,
                             files: self.cachedIconFiles,
                             nameDisplayOrder: presentationData.nameDisplayOrder,
-                            showBackground: false
+                            showBackground: true
                         ),
                         params: ListViewItemLayoutParams(width: availableSize.width - sideInset * 2.0, leftInset: 0.0, rightInset: 0.0, availableHeight: 10000.0, isStandalone: true)
                     )))),
@@ -883,7 +943,8 @@ final class UserAppearanceScreenComponent: Component {
                 let profilePreviewFrame = CGRect(origin: CGPoint(x: sideInset, y: environment.navigationHeight + 12.0), size: profilePreviewSize)
                 if let profilePreviewView = self.profilePreview.view {
                     if profilePreviewView.superview == nil {
-                        self.addSubview(profilePreviewView)
+                        profilePreviewView.isUserInteractionEnabled = false
+                        self.containerView.addSubview(profilePreviewView)
                     }
                     transition.setFrame(view: profilePreviewView, frame: profilePreviewFrame)
                 }
@@ -918,7 +979,6 @@ final class UserAppearanceScreenComponent: Component {
                     component: AnyComponent(ListSectionComponent(
                         theme: environment.theme,
                         style: .glass,
-                        background: .range(from: 0, corners: DynamicCornerRadiusView.Corners(minXMinY: !hasHeaderColor ? itemCornerRadius : 0.0, maxXMinY: !hasHeaderColor ? itemCornerRadius : 0.0, minXMaxY: itemCornerRadius, maxXMaxY: itemCornerRadius)),
                         header: nil,
                         footer: AnyComponent(MultilineTextComponent(
                             text: .plain(previewFooterText),
@@ -937,7 +997,7 @@ final class UserAppearanceScreenComponent: Component {
                                     return
                                 }
                                 self.currentSection = .name
-                                self.state?.updated(transition: .easeInOut(duration: 0.3))
+                                self.state?.updated(transition: .easeInOut(duration: 0.3).withUserData(TransitionHint(animateTabChange: true)))
                             }
                         )),
                         items: [
@@ -951,6 +1011,7 @@ final class UserAppearanceScreenComponent: Component {
                                         guard let self, let value, let resolvedState = self.resolveState() else {
                                             return
                                         }
+                                        self.selectedProfileGift = nil
                                         self.updatedPeerProfileColor = value
                                         if case .starGift = resolvedState.emojiStatus?.content {
                                             self.updatedPeerStatus = .some(nil)
@@ -1025,7 +1086,7 @@ final class UserAppearanceScreenComponent: Component {
                                     guard let self, let resolvedState = self.resolveState() else {
                                         return
                                     }
-                                    
+                                    self.selectedProfileGift = nil
                                     self.updatedPeerProfileColor = .some(nil)
                                     self.updatedPeerProfileEmoji = .some(nil)
                                     if case .starGift = resolvedState.emojiStatus?.content {
@@ -1062,92 +1123,87 @@ final class UserAppearanceScreenComponent: Component {
                     contentHeight += sectionSpacing
                 }
                 
-                if !contentsData.gifts.isEmpty {
-                    var selectedGiftId: Int64?
-                    if let status = resolvedState.emojiStatus, case let .starGift(id, _, _, _, _, _, _, _, _) = status.content {
-                        selectedGiftId = id
-                    }
-                    let giftsSectionSize = self.profileGiftsSection.update(
-                        transition: transition,
-                        component: AnyComponent(ListSectionComponent(
-                            theme: environment.theme,
-                            style: .glass,
-                            header: AnyComponent(MultilineTextComponent(
-                                text: .plain(NSAttributedString(
-                                    string: environment.strings.NameColor_GiftTitle,
-                                    font: Font.regular(presentationData.listsFontSize.itemListBaseHeaderFontSize),
-                                    textColor: environment.theme.list.freeTextColor
-                                )),
-                                maximumNumberOfLines: 0
-                            )),
-                            footer: AnyComponent(MultilineTextComponent(
-                                text: .plain(NSAttributedString(
-                                    string: environment.strings.NameColor_GiftInfo,
-                                    font: Font.regular(presentationData.listsFontSize.itemListBaseHeaderFontSize),
-                                    textColor: environment.theme.list.freeTextColor
-                                )),
-                                maximumNumberOfLines: 0
-                            )),
-                            items: [
-                                AnyComponentWithIdentity(id: 0, component: AnyComponent(
-                                    GiftListItemComponent(
-                                        context: component.context,
-                                        theme: environment.theme,
-                                        gifts: contentsData.gifts,
-                                        selectedId: selectedGiftId,
-                                        selectionUpdated: { [weak self] gift in
-                                            guard let self else {
-                                                return
-                                            }
-                                            var fileId: Int64?
-                                            var patternFileId: Int64?
-                                            var innerColor: Int32?
-                                            var outerColor: Int32?
-                                            var patternColor: Int32?
-                                            var textColor: Int32?
-                                            for attribute in gift.attributes {
-                                                switch attribute {
-                                                case let .model(_, file, _):
-                                                    fileId = file.fileId.id
-                                                    self.cachedIconFiles[file.fileId.id] = file
-                                                case let .pattern(_, file, _):
-                                                    patternFileId = file.fileId.id
-                                                    self.cachedIconFiles[file.fileId.id] = file
-                                                case let .backdrop(_, _, innerColorValue, outerColorValue, patternColorValue, textColorValue, _):
-                                                    innerColor = innerColorValue
-                                                    outerColor = outerColorValue
-                                                    patternColor = patternColorValue
-                                                    textColor = textColorValue
-                                                default:
-                                                    break
-                                                }
-                                            }
-                                            if let fileId, let patternFileId, let innerColor, let outerColor, let patternColor, let textColor {
-                                                self.updatedPeerProfileColor = .some(nil)
-                                                self.updatedPeerProfileEmoji = .some(nil)
-                                                self.updatedPeerStatus = .some(PeerEmojiStatus(content: .starGift(id: gift.id, fileId: fileId, title: gift.title, slug: gift.slug, patternFileId: patternFileId, innerColor: innerColor, outerColor: outerColor, patternColor: patternColor, textColor: textColor), expirationDate: nil))
-                                                self.state?.updated(transition: .spring(duration: 0.4))
-                                            }
-                                        },
-                                        tag: giftListTag
-                                    )
-                                )),
-                            ],
-                            displaySeparators: false
-                        )),
-                        environment: {},
-                        containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 10000.0)
-                    )
-                    let giftsSectionFrame = CGRect(origin: CGPoint(x: sideInset, y: contentHeight), size: giftsSectionSize)
-                    if let giftsSectionView = self.profileGiftsSection.view {
-                        if giftsSectionView.superview == nil {
-                            self.scrollView.addSubview(giftsSectionView)
-                        }
-                        transition.setFrame(view: giftsSectionView, frame: giftsSectionFrame)
-                    }
-                    contentHeight += giftsSectionSize.height
-                    contentHeight += sectionSpacing
+                var selectedGiftId: Int64?
+                if let status = resolvedState.emojiStatus, case let .starGift(id, _, _, _, _, _, _, _, _) = status.content {
+                    selectedGiftId = id
                 }
+                //TODO:localize
+                self.profileGiftsSection.parentState = self.state
+                let giftsSectionSize = self.profileGiftsSection.update(
+                    transition: transition,
+                    component: AnyComponent(ListSectionComponent(
+                        theme: environment.theme,
+                        style: .glass,
+                        header: AnyComponent(MultilineTextComponent(
+                            text: .plain(NSAttributedString(
+                                string: "Your Gifts".uppercased(),
+                                font: Font.regular(presentationData.listsFontSize.itemListBaseHeaderFontSize),
+                                textColor: environment.theme.list.freeTextColor
+                            )),
+                            maximumNumberOfLines: 0
+                        )),
+                        footer: nil,
+                        items: [
+                            AnyComponentWithIdentity(id: 0, component: AnyComponent(
+                                GiftListItemComponent(
+                                    context: component.context,
+                                    theme: environment.theme,
+                                    gifts: contentsData.gifts,
+                                    starGifts: contentsData.starGifts,
+                                    selectedId: selectedGiftId,
+                                    selectionUpdated: { [weak self] gift in
+                                        guard let self else {
+                                            return
+                                        }
+                                        var fileId: Int64?
+                                        var patternFileId: Int64?
+                                        var innerColor: Int32?
+                                        var outerColor: Int32?
+                                        var patternColor: Int32?
+                                        var textColor: Int32?
+                                        for attribute in gift.attributes {
+                                            switch attribute {
+                                            case let .model(_, file, _):
+                                                fileId = file.fileId.id
+                                                self.cachedIconFiles[file.fileId.id] = file
+                                            case let .pattern(_, file, _):
+                                                patternFileId = file.fileId.id
+                                                self.cachedIconFiles[file.fileId.id] = file
+                                            case let .backdrop(_, _, innerColorValue, outerColorValue, patternColorValue, textColorValue, _):
+                                                innerColor = innerColorValue
+                                                outerColor = outerColorValue
+                                                patternColor = patternColorValue
+                                                textColor = textColorValue
+                                            default:
+                                                break
+                                            }
+                                        }
+                                        if let fileId, let patternFileId, let innerColor, let outerColor, let patternColor, let textColor {
+                                            self.selectedProfileGift = gift
+                                            self.updatedPeerProfileColor = .some(nil)
+                                            self.updatedPeerProfileEmoji = .some(nil)
+                                            self.updatedPeerStatus = .some(PeerEmojiStatus(content: .starGift(id: gift.id, fileId: fileId, title: gift.title, slug: gift.slug, patternFileId: patternFileId, innerColor: innerColor, outerColor: outerColor, patternColor: patternColor, textColor: textColor), expirationDate: nil))
+                                            self.state?.updated(transition: .spring(duration: 0.4))
+                                        }
+                                    },
+                                    tag: giftListTag
+                                )
+                            )),
+                        ],
+                        displaySeparators: false
+                    )),
+                    environment: {},
+                    containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 10000.0)
+                )
+                let giftsSectionFrame = CGRect(origin: CGPoint(x: sideInset, y: contentHeight), size: giftsSectionSize)
+                if let giftsSectionView = self.profileGiftsSection.view {
+                    if giftsSectionView.superview == nil {
+                        self.scrollView.addSubview(giftsSectionView)
+                    }
+                    transition.setFrame(view: giftsSectionView, frame: giftsSectionFrame)
+                }
+                contentHeight += giftsSectionSize.height
+                contentHeight += sectionSpacing
             case .name:
                 var transition = transition
                 if self.namePreview.view == nil {
@@ -1208,7 +1264,7 @@ final class UserAppearanceScreenComponent: Component {
                 }
                 
                 let namePreviewSize = self.namePreview.update(
-                    transition: transition,
+                    transition: previewTransition,
                     component: AnyComponent(TopBottomCornersComponent(topCornerRadius: itemCornerRadius, bottomCornerRadius: !self.scrolledUp ? itemCornerRadius : 0.0, component: AnyComponent(ListItemComponentAdaptor(
                         itemGenerator: PeerNameColorChatPreviewItem(
                             context: component.context,
@@ -1231,7 +1287,8 @@ final class UserAppearanceScreenComponent: Component {
                 let namePreviewFrame = CGRect(origin: CGPoint(x: sideInset, y: environment.navigationHeight + 12.0), size: namePreviewSize)
                 if let namePreviewView = self.namePreview.view {
                     if namePreviewView.superview == nil {
-                        self.addSubview(namePreviewView)
+                        namePreviewView.isUserInteractionEnabled = false
+                        self.containerView.addSubview(namePreviewView)
                     }
                     transition.setFrame(view: namePreviewView, frame: namePreviewFrame)
                 }
@@ -1267,6 +1324,7 @@ final class UserAppearanceScreenComponent: Component {
                                             self.updatedPeerNameEmoji = .some(nil)
                                         }
                                         self.updatedPeerNameColor = .preset(value)
+                                        self.selectedNameGift = nil
                                         self.state?.updated(transition: .spring(duration: 0.4))
                                     },
                                     sectionId: 0
@@ -1308,83 +1366,141 @@ final class UserAppearanceScreenComponent: Component {
                 contentHeight += nameColorSectionSize.height
                 contentHeight += sectionSpacing
                 
-                if !self.starGifts.isEmpty {
-                    var selectedGiftId: Int64?
-                    if case let .collectible(collectibleColor) = resolvedState.nameColor {
-                        selectedGiftId = collectibleColor.collectibleId
-                    }
-                    let giftsSectionSize = self.nameGiftsSection.update(
-                        transition: transition,
-                        component: AnyComponent(ListSectionComponent(
-                            theme: environment.theme,
-                            style: .glass,
-                            header: AnyComponent(MultilineTextComponent(
-                                text: .plain(NSAttributedString(
-                                    string: environment.strings.NameColor_GiftTitle,
-                                    font: Font.regular(presentationData.listsFontSize.itemListBaseHeaderFontSize),
-                                    textColor: environment.theme.list.freeTextColor
-                                )),
-                                maximumNumberOfLines: 0
-                            )),
-                            footer: AnyComponent(MultilineTextComponent(
-                                text: .plain(NSAttributedString(
-                                    string: environment.strings.NameColor_GiftInfo,
-                                    font: Font.regular(presentationData.listsFontSize.itemListBaseHeaderFontSize),
-                                    textColor: environment.theme.list.freeTextColor
-                                )),
-                                maximumNumberOfLines: 0
-                            )),
-                            items: [
-                                AnyComponentWithIdentity(id: 0, component: AnyComponent(
-                                    GiftListItemComponent(
-                                        context: component.context,
-                                        theme: environment.theme,
-                                        gifts: self.starGifts,
-                                        selectedId: selectedGiftId,
-                                        selectionUpdated: { [weak self] gift in
-                                            guard let self, let peerColor = gift.peerColor else {
-                                                return
-                                            }
-                                            
-                                            self.updatedPeerNameColor = .collectible(peerColor)
-                                            self.updatedPeerNameEmoji = peerColor.backgroundEmojiId
-                                            self.state?.updated(transition: .spring(duration: 0.4))
-                                        },
-                                        tag: giftListTag
-                                    )
-                                )),
-                            ],
-                            displaySeparators: false
-                        )),
-                        environment: {},
-                        containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 10000.0)
-                    )
-                    let giftsSectionFrame = CGRect(origin: CGPoint(x: sideInset, y: contentHeight), size: giftsSectionSize)
-                    if let giftsSectionView = self.nameGiftsSection.view {
-                        if giftsSectionView.superview == nil {
-                            self.scrollView.addSubview(giftsSectionView)
-                        }
-                        transition.setFrame(view: giftsSectionView, frame: giftsSectionFrame)
-                    }
-                    contentHeight += giftsSectionSize.height
-                    contentHeight += sectionSpacing
+                var selectedGiftId: Int64?
+                if case let .collectible(collectibleColor) = resolvedState.nameColor {
+                    selectedGiftId = collectibleColor.collectibleId
                 }
+                //TODO:localize
+                
+                var peerColorStarGifts: [StarGift] = []
+                for gift in contentsData.starGifts {
+                    if case let .generic(genericGift) = gift, genericGift.flags.contains(.peerColorAvailable), let resale = genericGift.availability?.resale, resale > 0 {
+                        peerColorStarGifts.append(gift)
+                    }
+                }
+                
+                self.nameGiftsSection.parentState = self.state
+                let giftsSectionSize = self.nameGiftsSection.update(
+                    transition: transition,
+                    component: AnyComponent(ListSectionComponent(
+                        theme: environment.theme,
+                        style: .glass,
+                        header: AnyComponent(MultilineTextComponent(
+                            text: .plain(NSAttributedString(
+                                string: "Your Gifts".uppercased(),
+                                font: Font.regular(presentationData.listsFontSize.itemListBaseHeaderFontSize),
+                                textColor: environment.theme.list.freeTextColor
+                            )),
+                            maximumNumberOfLines: 0
+                        )),
+                        footer: nil,
+                        items: [
+                            AnyComponentWithIdentity(id: 0, component: AnyComponent(
+                                GiftListItemComponent(
+                                    context: component.context,
+                                    theme: environment.theme,
+                                    gifts: self.starGifts,
+                                    starGifts: peerColorStarGifts,
+                                    selectedId: selectedGiftId,
+                                    selectionUpdated: { [weak self] gift in
+                                        guard let self, let peerColor = gift.peerColor else {
+                                            return
+                                        }
+                                        self.selectedNameGift = gift
+                                        self.updatedPeerNameColor = .collectible(peerColor)
+                                        self.updatedPeerNameEmoji = peerColor.backgroundEmojiId
+                                        self.state?.updated(transition: .spring(duration: 0.4))
+                                    },
+                                    tag: giftListTag
+                                )
+                            )),
+                        ],
+                        displaySeparators: false
+                    )),
+                    environment: {},
+                    containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 10000.0)
+                )
+                let giftsSectionFrame = CGRect(origin: CGPoint(x: sideInset, y: contentHeight), size: giftsSectionSize)
+                if let giftsSectionView = self.nameGiftsSection.view {
+                    if giftsSectionView.superview == nil {
+                        self.scrollView.addSubview(giftsSectionView)
+                    }
+                    transition.setFrame(view: giftsSectionView, frame: giftsSectionFrame)
+                }
+                contentHeight += giftsSectionSize.height
+                contentHeight += sectionSpacing
             }
                     
             contentHeight += bottomContentInset
             
             //TODO:localize
-            let buttonSideInset: CGFloat = 36.0
-            let buttonTitle = "Apply Style" // environment.strings.Channel_Appearance_ApplyButton
-//            if let emojiStatus = resolvedState.emojiStatus, case .starGift = emojiStatus.content, resolvedState.changes.contains(.emojiStatus) {
-//                buttonTitle = environment.strings.NameColor_WearCollectible
-//            }
+            let buttonSideInset: CGFloat = environment.safeInsets.left + 36.0
+            var buttonTitle = "Apply Style" // environment.strings.Channel_Appearance_ApplyButton
+            var buttonAttributedSubtitleString: NSMutableAttributedString?
             
-            var buttonContents: [AnyComponentWithIdentity<Empty>] = []
-            buttonContents.append(AnyComponentWithIdentity(id: AnyHashable(buttonTitle), component: AnyComponent(
-                Text(text: buttonTitle, font: Font.semibold(17.0), color: environment.theme.list.itemCheckColors.foregroundColor)
-            )))
-             
+            if let gift = self.selectedProfileGift, let resellAmounts = gift.resellAmounts, let starsAmount = resellAmounts.first(where: { $0.currency == .stars }) {
+                let resellAmount: CurrencyAmount
+                if gift.resellForTonOnly {
+                    resellAmount = resellAmounts.first(where: { $0.currency == .ton }) ?? starsAmount
+                } else {
+                    resellAmount = starsAmount
+                }
+                
+                if self.cachedStarImage == nil || self.cachedStarImage?.1 !== theme {
+                    self.cachedStarImage = (generateTintedImage(image: UIImage(bundleImageName: "Item List/PremiumIcon"), color: theme.list.itemCheckColors.foregroundColor)!, theme)
+                }
+                if self.cachedTonImage == nil || self.cachedTonImage?.1 !== theme {
+                    self.cachedTonImage = (generateTintedImage(image: UIImage(bundleImageName: "Ads/TonAbout"), color: theme.list.itemCheckColors.foregroundColor)!, theme)
+                }
+                if self.cachedSubtitleStarImage == nil || self.cachedSubtitleStarImage?.1 !== environment.theme {
+                    self.cachedSubtitleStarImage = (generateTintedImage(image: UIImage(bundleImageName: "Chat/Message/StarsCount"), color: .white)!, theme)
+                }
+                
+                var buyString = environment.strings.Gift_View_BuyFor
+                let currencySymbol: String
+                let currencyAmount: String
+                switch resellAmount.currency {
+                case .stars:
+                    currencySymbol = "#"
+                    currencyAmount = formatStarsAmountText(resellAmount.amount, dateTimeFormat: environment.dateTimeFormat)
+                case .ton:
+                    currencySymbol = "$"
+                    currencyAmount = formatTonAmountText(resellAmount.amount.value, dateTimeFormat: environment.dateTimeFormat, maxDecimalPositions: nil)
+                    
+                    buttonAttributedSubtitleString = NSMutableAttributedString(string: environment.strings.Gift_View_EqualsTo(" # \(formatStarsAmountText(starsAmount.amount, dateTimeFormat: environment.dateTimeFormat))").string, font: Font.medium(11.0), textColor: theme.list.itemCheckColors.foregroundColor.withAlphaComponent(0.7), paragraphAlignment: .center)
+                    
+                }
+                buyString += "  \(currencySymbol) \(currencyAmount)"
+                buttonTitle = buyString
+            }
+            
+            let buttonAttributedString = NSMutableAttributedString(string: buttonTitle, font: Font.semibold(17.0), textColor: theme.list.itemCheckColors.foregroundColor, paragraphAlignment: .center)
+            if let range = buttonAttributedString.string.range(of: "#"), let starImage = self.cachedStarImage?.0 {
+                buttonAttributedString.addAttribute(.attachment, value: starImage, range: NSRange(range, in: buttonAttributedString.string))
+                buttonAttributedString.addAttribute(.foregroundColor, value: theme.list.itemCheckColors.foregroundColor, range: NSRange(range, in: buttonAttributedString.string))
+                buttonAttributedString.addAttribute(.baselineOffset, value: 1.5, range: NSRange(range, in: buttonAttributedString.string))
+                buttonAttributedString.addAttribute(.kern, value: 2.0, range: NSRange(range, in: buttonAttributedString.string))
+            }
+            if let range = buttonAttributedString.string.range(of: "$"), let tonImage = self.cachedTonImage?.0 {
+                buttonAttributedString.addAttribute(.attachment, value: tonImage, range: NSRange(range, in: buttonAttributedString.string))
+                buttonAttributedString.addAttribute(.foregroundColor, value: theme.list.itemCheckColors.foregroundColor, range: NSRange(range, in: buttonAttributedString.string))
+                buttonAttributedString.addAttribute(.baselineOffset, value: 1.5, range: NSRange(range, in: buttonAttributedString.string))
+                buttonAttributedString.addAttribute(.kern, value: 2.0, range: NSRange(range, in: buttonAttributedString.string))
+            }
+            if let buttonAttributedSubtitleString, let range = buttonAttributedSubtitleString.string.range(of: "#"), let starImage = self.cachedSubtitleStarImage?.0 {
+                buttonAttributedSubtitleString.addAttribute(.attachment, value: starImage, range: NSRange(range, in: buttonAttributedSubtitleString.string))
+                buttonAttributedSubtitleString.addAttribute(.foregroundColor, value: theme.list.itemCheckColors.foregroundColor.withAlphaComponent(0.7), range: NSRange(range, in: buttonAttributedSubtitleString.string))
+                buttonAttributedSubtitleString.addAttribute(.baselineOffset, value: 1.5, range: NSRange(range, in: buttonAttributedSubtitleString.string))
+                buttonAttributedSubtitleString.addAttribute(.kern, value: 2.0, range: NSRange(range, in: buttonAttributedSubtitleString.string))
+            }
+            
+            var buttonContents: [AnyComponentWithIdentity<Empty>] = [
+                AnyComponentWithIdentity(id: AnyHashable(buttonTitle), component: AnyComponent(MultilineTextComponent(text: .plain(buttonAttributedString))))
+            ]
+            if let buttonAttributedSubtitleString {
+                buttonContents.append(AnyComponentWithIdentity(id: AnyHashable(1), component: AnyComponent(MultilineTextComponent(text: .plain(buttonAttributedSubtitleString)))))
+            }
+            
             let buttonSize = self.actionButton.update(
                 transition: transition,
                 component: AnyComponent(ButtonComponent(
@@ -1426,7 +1542,7 @@ final class UserAppearanceScreenComponent: Component {
                 transition.setAlpha(view: buttonView, alpha: 1.0)
             }
             
-            let edgeEffectHeight: CGFloat = availableSize.height - buttonY + 8.0
+            let edgeEffectHeight: CGFloat = availableSize.height - buttonY + 24.0
             let edgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: availableSize.height - edgeEffectHeight), size: CGSize(width: availableSize.width, height: edgeEffectHeight))
             transition.setFrame(view: self.edgeEffectView, frame: edgeEffectFrame)
             self.edgeEffectView.update(content: environment.theme.list.blocksBackgroundColor, isInverted: false, rect: edgeEffectFrame, edge: .bottom, edgeSize: edgeEffectFrame.height, containerSize: availableSize, transition: transition)
@@ -1440,10 +1556,8 @@ final class UserAppearanceScreenComponent: Component {
             if self.scrollView.contentSize != contentSize {
                 self.scrollView.contentSize = contentSize
             }
-//            let scrollInsets = UIEdgeInsets(top: 0.0, left: 0.0, bottom: availableSize.height - bottomPanelFrame.minY, right: 0.0)
-//            if self.scrollView.verticalScrollIndicatorInsets != scrollInsets {
-//                self.scrollView.verticalScrollIndicatorInsets = scrollInsets
-//            }
+
+            transition.setFrame(view: self.containerView, frame: CGRect(origin: .zero, size: availableSize))
                         
             if !previousBounds.isEmpty, !transition.animation.isImmediate {
                 let bounds = self.scrollView.bounds

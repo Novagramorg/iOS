@@ -440,6 +440,7 @@ public final class ButtonComponent: Component {
         private var component: ButtonComponent?
         private weak var componentState: EmptyComponentState?
 
+        private var containerView: UIView
         private var shimmeringView: ButtonShimmeringView?
         private var chromeView: UIImageView?
         private var contentItem: ContentItem?
@@ -447,18 +448,38 @@ public final class ButtonComponent: Component {
         private var activityIndicator: ActivityIndicator?
         
         override init(frame: CGRect) {
+            self.containerView = UIView()
+            self.containerView.clipsToBounds = true
+            self.containerView.isUserInteractionEnabled = false
+            
             super.init(frame: frame)
+            
+            self.addSubview(self.containerView)
             
             self.addTarget(self, action: #selector(self.pressed), for: .touchUpInside)
             
             self.highligthedChanged = { [weak self] highlighted in
                 if let self, let component = self.component, component.isEnabled {
-                    if highlighted {
-                        self.layer.removeAnimation(forKey: "opacity")
-                        self.alpha = 0.7
-                    } else {
-                        self.alpha = 1.0
-                        self.layer.animateAlpha(from: 7, to: 1.0, duration: 0.2)
+                    switch component.background.style {
+                    case .glass:
+                        let transition = ComponentTransition(animation: .curve(duration: 0.3, curve: .easeInOut))
+                        if highlighted {
+                            let highlightedColor = component.background.color.withMultiplied(hue: 1.0, saturation: 0.77, brightness: 1.01)
+                            transition.setBackgroundColor(view: self.containerView, color: highlightedColor)
+                            transition.setScale(view: self.containerView, scale: 1.05)
+                            
+                        } else {
+                            transition.setBackgroundColor(view: self.containerView, color: component.background.color)
+                            transition.setScale(view: self.containerView, scale: 1.0)
+                        }
+                    case .legacy:
+                        if highlighted {
+                            self.containerView.layer.removeAnimation(forKey: "opacity")
+                            self.containerView.alpha = 0.7
+                        } else {
+                            self.containerView.alpha = 1.0
+                            self.containerView.layer.animateAlpha(from: 0.7, to: 1.0, duration: 0.2)
+                        }
                     }
                 }
             }
@@ -485,13 +506,13 @@ public final class ButtonComponent: Component {
             
             self.isEnabled = (component.isEnabled || component.allowActionWhenDisabled) && !component.displaysProgress
             
-            transition.setBackgroundColor(view: self, color: component.background.color)
+            transition.setBackgroundColor(view: self.containerView, color: component.background.color)
             
             var cornerRadius: CGFloat = component.background.cornerRadius
             if case .glass = component.background.style, component.background.cornerRadius == 10.0 {
                 cornerRadius = availableSize.height * 0.5
             }
-            transition.setCornerRadius(layer: self.layer, cornerRadius: cornerRadius)
+            transition.setCornerRadius(layer: self.containerView.layer, cornerRadius: cornerRadius)
             
             var contentAlpha: CGFloat = 1.0
             if component.displaysProgress {
@@ -525,7 +546,7 @@ public final class ButtonComponent: Component {
                     contentTransition = .immediate
                     animateIn = true
                     contentView.isUserInteractionEnabled = false
-                    self.addSubview(contentView)
+                    self.containerView.addSubview(contentView)
                     
                     contentItem.view.parentState = state
                 }
@@ -563,7 +584,7 @@ public final class ButtonComponent: Component {
                     activityIndicator = ActivityIndicator(type: .custom(component.background.foreground, 22.0, 2.0, true))
                     activityIndicator.view.alpha = 0.0
                     self.activityIndicator = activityIndicator
-                    self.addSubview(activityIndicator.view)
+                    self.containerView.addSubview(activityIndicator.view)
                 }
                 let indicatorSize = CGSize(width: 22.0, height: 22.0)
                 transition.setAlpha(view: activityIndicator.view, alpha: 1.0)
@@ -586,7 +607,7 @@ public final class ButtonComponent: Component {
                     shimmeringTransition = .immediate
                     shimmeringView = ButtonShimmeringView(frame: .zero)
                     self.shimmeringView = shimmeringView
-                    self.insertSubview(shimmeringView, at: 0)
+                    self.containerView.insertSubview(shimmeringView, at: 0)
                 }
                 shimmeringView.update(size: availableSize, background: component.background, cornerRadius: component.background.cornerRadius, transition: shimmeringTransition)
                 shimmeringTransition.setFrame(view: shimmeringView, frame: CGRect(origin: .zero, size: availableSize))
@@ -607,9 +628,9 @@ public final class ButtonComponent: Component {
                     chromeView = UIImageView()
                     self.chromeView = chromeView
                     if let shimmeringView = self.shimmeringView {
-                        self.insertSubview(chromeView, aboveSubview: shimmeringView)
+                        self.containerView.insertSubview(chromeView, aboveSubview: shimmeringView)
                     } else {
-                        self.insertSubview(chromeView, at: 0)
+                        self.containerView.insertSubview(chromeView, at: 0)
                     }
                     
                     chromeView.layer.compositingFilter = "overlayBlendMode"
@@ -623,6 +644,9 @@ public final class ButtonComponent: Component {
                     chromeView.removeFromSuperview()
                 })
             }
+            
+            transition.setPosition(view: self.containerView, position: CGPoint(x: availableSize.width / 2.0, y: availableSize.height / 2.0))
+            transition.setBoundsSize(view: self.containerView, size: availableSize)
             
             return availableSize
         }
