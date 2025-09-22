@@ -684,7 +684,13 @@ public final class ListActionItemComponent: Component {
                         switchNode.handleColor = component.theme.list.itemSwitchColors.handleColor
                     }
                     
-                    let switchSize = CGSize(width: 51.0, height: 31.0)
+                    var switchSize = CGSize(width: 51.0, height: 31.0)
+                    if let switchView = switchNode.view as? UISwitch {
+                        if switchNode.bounds.size.width.isZero {
+                            switchView.sizeToFit()
+                        }
+                        switchSize = switchView.bounds.size
+                    }
                     let switchFrame = CGRect(origin: CGPoint(x: availableSize.width - 16.0 - switchSize.width, y: floor((min(60.0, contentHeight) - switchSize.height) * 0.5)), size: switchSize)
                     switchTransition.setFrame(view: switchNode.view, frame: switchFrame)
                 case .icons, .lock:
@@ -727,7 +733,13 @@ public final class ListActionItemComponent: Component {
                         switchNode.negativeContentColor = component.theme.list.itemSwitchColors.negativeColor
                     }
                     
-                    let switchSize = CGSize(width: 51.0, height: 31.0)
+                    var switchSize = CGSize(width: 51.0, height: 31.0)
+                    if let switchView = switchNode.view as? UISwitch {
+                        if switchNode.bounds.size.width.isZero {
+                            switchView.sizeToFit()
+                        }
+                        switchSize = switchView.bounds.size
+                    }
                     let switchFrame = CGRect(origin: CGPoint(x: availableSize.width - 16.0 - switchSize.width, y: floor((min(60.0, contentHeight) - switchSize.height) * 0.5)), size: switchSize)
                     switchTransition.setFrame(view: switchNode.view, frame: switchFrame)
                 }
