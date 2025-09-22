@@ -706,7 +706,12 @@ private final class GiftViewSheetContent: CombinedComponent {
             }
             
             let context = self.context
-            let proceed = {
+            let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+            
+            let proceed = { [weak self, weak starsContext, weak controller] in
+                guard let self, let controller else {
+                    return
+                }
                 let dropOriginalDetailsImpl = controller.dropOriginalDetails
                 
                 let signal: Signal<Never, DropStarGiftOriginalDetailsError>
@@ -719,7 +724,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                 
                 self.upgradeDisposable = (signal
                 |> deliverOnMainQueue).start(error: { _ in
-                }, completed: { [weak self, weak starsContext] in
+                }, completed: { [weak self, weak starsContext, weak controller] in
                     guard let self else {
                         return
                     }
@@ -734,6 +739,9 @@ private final class GiftViewSheetContent: CombinedComponent {
                         break
                     }
                     self.updated(transition: .spring(duration: 0.3))
+                    
+                    let giftTitle = "\(uniqueGift.title) #\(formatCollectibleNumber(uniqueGift.number, dateTimeFormat: presentationData.dateTimeFormat))"
+                    controller?.present(UndoOverlayController(presentationData: presentationData, content: .actionSucceeded(title: nil, text: presentationData.strings.Gift_RemoveDetails_Success(giftTitle).string, cancel: nil, destructive: false), elevatedLayout: false, animateInAsReplacement: false, action: { _ in return false }), in: .current)
                 })
             }
             

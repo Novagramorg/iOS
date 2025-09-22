@@ -31,7 +31,7 @@ final class PeerInfoScreenNoteListItem: PeerInfoScreenItem {
     }
 }
 
-private final class PeerInfoScreenNoteListItemNode: PeerInfoScreenItemNode {
+final class PeerInfoScreenNoteListItemNode: PeerInfoScreenItemNode {
     private let maskNode: ASImageNode
     private let textField = ComponentView<Empty>()
     private let textFieldExternalState = TextFieldComponent.ExternalState()
@@ -56,6 +56,12 @@ private final class PeerInfoScreenNoteListItemNode: PeerInfoScreenItemNode {
         self.addSubnode(self.bottomSeparatorNode)
         
         self.addSubnode(self.maskNode)
+    }
+    
+    func focus() {
+        if let textView = self.textField.view as? TextFieldComponent.View {
+            textView.activateInput()
+        }
     }
     
     override func update(context: AccountContext, width: CGFloat, safeInsets: UIEdgeInsets, presentationData: PresentationData, item: PeerInfoScreenItem, topItem: PeerInfoScreenItem?, bottomItem: PeerInfoScreenItem?, hasCorners: Bool, transition: ContainedViewLayoutTransition) -> CGFloat {
