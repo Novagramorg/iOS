@@ -1253,7 +1253,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                                 }
                                 let _ = self.context.engine.accountData.updateBirthday(birthday: value).startStandalone()
                                 
-                                self.present(UndoOverlayController(presentationData: self.presentationData, content: .actionSucceeded(title: nil, text: self.presentationData.strings.SuggestBirthdate_Accept_Added, cancel: nil, destructive: false), elevatedLayout: false, action: { _ in
+                                self.present(UndoOverlayController(presentationData: self.presentationData, content: .universal(animation: "anim_gift", scale: 0.058, colors: ["__allcolors__": UIColor.white], title: nil, text: self.presentationData.strings.SuggestBirthdate_Accept_Added, customUndoText: nil, timeout: 5.0), elevatedLayout: false, action: { _ in
                                     return true
                                 }), in: .current)
                             })

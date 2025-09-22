@@ -1064,7 +1064,8 @@ func peerInfoScreenData(
     chatLocationContextHolder: Atomic<ChatLocationContextHolder?>,
     sharedMediaFromForumTopic: (EnginePeer.Id, Int64)?,
     privacySettings: Signal<AccountPrivacySettings?, NoError>,
-    forceHasGifts: Bool
+    forceHasGifts: Bool,
+    switchToUpgradableGifts: Bool
 ) -> Signal<PeerInfoScreenData, NoError> {
     return peerInfoScreenInputData(context: context, peerId: peerId, isSettings: isSettings)
     |> mapToSignal { inputData -> Signal<PeerInfoScreenData, NoError> in
@@ -1140,6 +1141,10 @@ func peerInfoScreenData(
                 if isMyProfile || userPeerId != context.account.peerId {
                     profileGiftsContext = existingProfileGiftsContext ?? ProfileGiftsContext(account: context.account, peerId: userPeerId)
                     profileGiftsCollectionsContext = existingProfileGiftsCollectionsContext ?? ProfileGiftsCollectionsContext(account: context.account, peerId: userPeerId, allGiftsContext: profileGiftsContext)
+                    
+                    if switchToUpgradableGifts {
+                        profileGiftsContext?.updateFilter([.displayed, .hidden, .limitedUpgradable])
+                    }
                 } else {
                     profileGiftsContext = nil
                     profileGiftsCollectionsContext = nil
