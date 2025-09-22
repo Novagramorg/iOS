@@ -1380,7 +1380,7 @@ final class VideoChatScreenComponent: Component {
                 guard !text.string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                     return
                 }
-                let entities = generateChatInputTextEntities(text)
+                let entities = generateTextEntities(text.string, enabledTypes: [.mention, .hashtag, .allUrl], currentEntities: generateChatInputTextEntities(text))
                 call.sendMessage(text: text.string, entities: entities)
             }
             

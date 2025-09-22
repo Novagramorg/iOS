@@ -869,11 +869,13 @@ final class GiftSetupScreenComponent: Component {
                         transition: transition,
                         component: AnyComponent(ListSectionComponent(
                             theme: environment.theme,
+                            style: .glass,
                             header: nil,
                             footer: nil,
                             items: [
                                 AnyComponentWithIdentity(id: 0, component: AnyComponent(ListActionItemComponent(
                                     theme: environment.theme,
+                                    style: .glass,
                                     title: AnyComponent(VStack([
                                         AnyComponentWithIdentity(id: AnyHashable(0), component: AnyComponent(
                                             MultilineTextComponent(
@@ -998,6 +1000,7 @@ final class GiftSetupScreenComponent: Component {
                 transition: transition,
                 component: AnyComponent(ListSectionComponent(
                     theme: environment.theme,
+                    style: .glass,
                     header: nil,
                     footer: introFooter,
                     items: introSectionItems
@@ -1134,6 +1137,7 @@ final class GiftSetupScreenComponent: Component {
                         transition: transition,
                         component: AnyComponent(ListSectionComponent(
                             theme: environment.theme,
+                            style: .glass,
                             header: nil,
                             footer: AnyComponent(MultilineTextWithEntitiesComponent(
                                 context: component.context,
@@ -1169,6 +1173,7 @@ final class GiftSetupScreenComponent: Component {
                             items: [
                                 AnyComponentWithIdentity(id: 0, component: AnyComponent(ListActionItemComponent(
                                     theme: environment.theme,
+                                    style: .glass,
                                     title: AnyComponent(VStack([
                                         AnyComponentWithIdentity(id: AnyHashable(0), component: AnyComponent(
                                             MultilineTextWithEntitiesComponent(
@@ -1238,6 +1243,7 @@ final class GiftSetupScreenComponent: Component {
                         transition: transition,
                         component: AnyComponent(ListSectionComponent(
                             theme: environment.theme,
+                            style: .glass,
                             header: nil,
                             footer: AnyComponent(MultilineTextComponent(
                                 text: .plain(upgradeFooterText),
@@ -1272,6 +1278,7 @@ final class GiftSetupScreenComponent: Component {
                             items: [
                                 AnyComponentWithIdentity(id: 0, component: AnyComponent(ListActionItemComponent(
                                     theme: environment.theme,
+                                    style: .glass,
                                     title: AnyComponent(VStack([
                                         AnyComponentWithIdentity(id: AnyHashable(0), component: AnyComponent(
                                             MultilineTextWithEntitiesComponent(
@@ -1320,6 +1327,7 @@ final class GiftSetupScreenComponent: Component {
                     transition: transition,
                     component: AnyComponent(ListSectionComponent(
                         theme: environment.theme,
+                        style: .glass,
                         header: nil,
                         footer: AnyComponent(MultilineTextComponent(
                             text: .plain(NSAttributedString(
@@ -1332,6 +1340,7 @@ final class GiftSetupScreenComponent: Component {
                         items: [
                             AnyComponentWithIdentity(id: 0, component: AnyComponent(ListActionItemComponent(
                                 theme: environment.theme,
+                                style: .glass,
                                 title: AnyComponent(VStack([
                                     AnyComponentWithIdentity(id: AnyHashable(0), component: AnyComponent(MultilineTextComponent(
                                         text: .plain(NSAttributedString(
@@ -1431,14 +1440,15 @@ final class GiftSetupScreenComponent: Component {
                 buttonAttributedString.addAttribute(.kern, value: 2.0, range: NSRange(range, in: buttonAttributedString.string))
             }
             
+            let buttonSideInset = environment.safeInsets.left + 36.0
             let buttonSize = self.button.update(
                 transition: transition,
                 component: AnyComponent(ButtonComponent(
                     background: ButtonComponent.Background(
+                        style: .glass,
                         color: environment.theme.list.itemCheckColors.fillColor,
                         foreground: environment.theme.list.itemCheckColors.foregroundColor,
                         pressedColor: environment.theme.list.itemCheckColors.fillColor.withMultipliedAlpha(0.9),
-                        cornerRadius: 10.0,
                         isShimmering: true
                     ),
                     content: AnyComponentWithIdentity(
@@ -1452,7 +1462,7 @@ final class GiftSetupScreenComponent: Component {
                     }
                 )),
                 environment: {},
-                containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: buttonHeight)
+                containerSize: CGSize(width: availableSize.width - buttonSideInset * 2.0, height: buttonHeight)
             )
             if let buttonView = self.button.view {
                 if buttonView.superview == nil {

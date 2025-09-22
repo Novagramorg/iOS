@@ -208,7 +208,7 @@ final class VideoChatActionButtonComponent: Component {
                 iconDiameter = 56.0
             case .leave:
                 titleText = component.strings.VoiceChat_Leave
-                backgroundColor = UIColor(rgb: 0x330d0b)
+                backgroundColor = UIColor(rgb: 0x4f1613)
                 tintColorKind = .custom
                 iconDiameter = 22.0
             }
