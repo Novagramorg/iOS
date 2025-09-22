@@ -15070,7 +15070,7 @@ Error: %8$@";
 "SuggestBirthdate.Accept.Title" = "Date of Birth";
 "SuggestBirthdate.Accept.HideYear" = "Hide the Year";
 "SuggestBirthdate.Accept.Action" = "Add to My Profile";
-"SuggestBirthdate.Accept.Added" = "Date of birth added.";
+"SuggestBirthdate.Accept.Added" = "Date of birth added. You can change it in **Settings**.";
 
 "Notification.SuggestBirthdate" = "Suggested Date of Birth";
 
@@ -15085,7 +15085,9 @@ Error: %8$@";
 
 "PeerInfo.Notes" = "notes";
 "PeerInfo.NotesInfo" = "only visible to you";
+"PeerInfo.AddNotesPlaceholder" = "Add Notes";
+"PeerInfo.AddNotesInfo" = "Notes are only visible to you.";
 
-"UserInfo.NoteActionCopy" = "Copy Note";
-"UserInfo.NoteActionEdit" = "Edit Note";
-"UserInfo.ToastNoteCopied" = "Note copied to clipboard.";
+"PeerInfo.NoteActionCopy" = "Copy Note";
+"PeerInfo.NoteActionEdit" = "Edit Note";
+"PeerInfo.ToastNoteCopied" = "Note copied to clipboard.";
