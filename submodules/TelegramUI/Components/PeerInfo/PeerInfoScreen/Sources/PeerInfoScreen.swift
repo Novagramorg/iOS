@@ -627,6 +627,7 @@ private final class PeerInfoInteraction {
     let editingOpenPersonalChannel: () -> Void
     let openUsernameContextMenu: (ASDisplayNode, ContextGesture?) -> Void
     let openBioContextMenu: (ASDisplayNode, ContextGesture?) -> Void
+    let openNoteContextMenu: (ASDisplayNode, ContextGesture?) -> Void
     let openWorkingHoursContextMenu: (ASDisplayNode, ContextGesture?) -> Void
     let openBusinessLocationContextMenu: (ASDisplayNode, ContextGesture?) -> Void
     let openBirthdayContextMenu: (ASDisplayNode, ContextGesture?) -> Void
@@ -703,6 +704,7 @@ private final class PeerInfoInteraction {
         editingOpenPersonalChannel: @escaping () -> Void,
         openUsernameContextMenu: @escaping (ASDisplayNode, ContextGesture?) -> Void,
         openBioContextMenu: @escaping (ASDisplayNode, ContextGesture?) -> Void,
+        openNoteContextMenu: @escaping (ASDisplayNode, ContextGesture?) -> Void,
         openWorkingHoursContextMenu: @escaping (ASDisplayNode, ContextGesture?) -> Void,
         openBusinessLocationContextMenu: @escaping (ASDisplayNode, ContextGesture?) -> Void,
         openBirthdayContextMenu: @escaping (ASDisplayNode, ContextGesture?) -> Void,
@@ -778,6 +780,7 @@ private final class PeerInfoInteraction {
         self.editingOpenPersonalChannel = editingOpenPersonalChannel
         self.openUsernameContextMenu = openUsernameContextMenu
         self.openBioContextMenu = openBioContextMenu
+        self.openNoteContextMenu = openNoteContextMenu
         self.openWorkingHoursContextMenu = openWorkingHoursContextMenu
         self.openBusinessLocationContextMenu = openBusinessLocationContextMenu
         self.openBirthdayContextMenu = openBirthdayContextMenu
@@ -1312,6 +1315,9 @@ private func infoItems(data: PeerInfoScreenData?, context: AccountContext, prese
     let bioContextAction: (ASDisplayNode, ContextGesture?, CGPoint?) -> Void = { node, gesture, _ in
         interaction.openBioContextMenu(node, gesture)
     }
+    let noteContextAction: (ASDisplayNode, ContextGesture?, CGPoint?) -> Void = { node, gesture, _ in
+        interaction.openNoteContextMenu(node, gesture)
+    }
     let bioLinkAction: (TextLinkItemActionType, TextLinkItem, ASDisplayNode, CGRect?, Promise<Bool>?) -> Void = { action, item, _, _, _ in
         interaction.performBioLinkAction(action, item)
     }
@@ -1495,7 +1501,7 @@ private func infoItems(data: PeerInfoScreenData?, context: AccountContext, prese
                 }
                 
                 if let note = cachedData.note, !note.text.isEmpty {
-                    items[currentPeerInfoSection]!.append(PeerInfoScreenLabeledValueItem(id: 0, label: "notes", rightLabel: "only visible to you", text: note.text, entities: note.entities, textColor: .primary, textBehavior: .multiLine(maxLines: 100, enabledEntities: []), action: nil, linkItemAction: bioLinkAction, button: nil, contextAction: bioContextAction, requestLayout: { animated in
+                    items[currentPeerInfoSection]!.append(PeerInfoScreenLabeledValueItem(id: 0, label: presentationData.strings.PeerInfo_Notes, rightLabel: presentationData.strings.PeerInfo_NotesInfo, text: note.text, entities: note.entities, textColor: .primary, textBehavior: .multiLine(maxLines: 100, enabledEntities: []), action: nil, linkItemAction: bioLinkAction, button: nil, contextAction: noteContextAction, requestLayout: { animated in
                         interaction.requestLayout(animated)
                     }))
                 }
@@ -2108,7 +2114,7 @@ private func editingItems(data: PeerInfoScreenData?, boostStatus: ChannelBoostSt
     
     if let data = data {
         if let user = data.peer as? TelegramUser {
-            let ItemNote = 0
+            let ItemNote: AnyHashable = AnyHashable("note_edit")
             let ItemNoteInfo = 1
             
             let ItemSuggestBirthdate = 2
@@ -3376,6 +3382,11 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                     return
                 }
                 self.openBioContextMenu(node: node, gesture: gesture)
+            }, openNoteContextMenu: { [weak self] node, gesture in
+                guard let self else {
+                    return
+                }
+                self.openNoteContextMenu(node: node, gesture: gesture)
             }, openWorkingHoursContextMenu: { [weak self] node, gesture in
                 guard let self else {
                     return
@@ -8227,6 +8238,67 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                 c?.pushItems(items: .single(ContextController.Items(content: .list(subItems))))
             })))
         }
+        
+        let actions = ContextController.Items(content: .list(items))
+        
+        let contextController = ContextController(presentationData: self.presentationData, source: .extracted(PeerInfoContextExtractedContentSource(sourceNode: sourceNode)), items: .single(actions), gesture: gesture)
+        self.controller?.present(contextController, in: .window(.root))
+    }
+    
+    private func openNoteContextMenu(node: ASDisplayNode, gesture: ContextGesture?) {
+        guard let sourceNode = node as? ContextExtractedContentContainingNode else {
+            return
+        }
+        guard let cachedData = self.data?.cachedData else {
+            return
+        }
+        
+        var noteText: String?
+        if let cachedData = cachedData as? CachedUserData {
+            noteText = cachedData.note?.text
+        }
+        
+        guard let noteText, !noteText.isEmpty else {
+            return
+        }
+        
+        let copyAction = { [weak self] in
+            guard let self else {
+                return
+            }
+            UIPasteboard.general.string = noteText
+            
+            let toastText = self.presentationData.strings.UserInfo_ToastNoteCopied
+            self.controller?.present(UndoOverlayController(presentationData: self.presentationData, content: .copy(text: toastText), elevatedLayout: false, animateInAsReplacement: false, action: { _ in return false }), in: .current)
+        }
+        
+        var items: [ContextMenuItem] = []
+        items.append(.action(ContextMenuActionItem(text: self.presentationData.strings.UserInfo_NoteActionEdit, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Edit"), color: theme.contextMenu.primaryColor) }, action: { [weak self] c, _ in
+            c?.dismiss {
+                guard let self else {
+                    return
+                }
+                self.headerNode.navigationButtonContainer.performAction?(.edit, nil, nil)
+                
+                for (_, section) in self.editingSections {
+                    for (id, itemNode) in section.itemNodes {
+                        if id == AnyHashable("note_edit") {
+                            if let itemNode = itemNode as? PeerInfoScreenNoteListItemNode {
+                                itemNode.focus()
+                            }
+                            break
+                        }
+                    }
+                }
+            }
+        })))
+        
+        let copyText = self.presentationData.strings.UserInfo_NoteActionCopy
+        items.append(.action(ContextMenuActionItem(text: copyText, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Copy"), color: theme.contextMenu.primaryColor) }, action: { c, _ in
+            c?.dismiss {
+                copyAction()
+            }
+        })))
         
         let actions = ContextController.Items(content: .list(items))
         
