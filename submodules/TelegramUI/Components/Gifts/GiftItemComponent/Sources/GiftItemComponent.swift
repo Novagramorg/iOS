@@ -561,6 +561,7 @@ public final class GiftItemComponent: Component {
                 }
             }
             
+            var tonButtonColor: UIColor = .clear
             if case .generic = component.mode {
                 if let title = component.title {
                     let titleSize = self.title.update(
@@ -630,6 +631,7 @@ public final class GiftItemComponent: Component {
                     price = priceValue ?? component.strings.Gift_Options_Gift_Transfer
                     tinted = true
                 }
+                tonButtonColor = buttonColor
                 
                 let buttonSize = self.button.update(
                     transition: transition,
@@ -657,29 +659,7 @@ public final class GiftItemComponent: Component {
                     transition.setFrame(view: buttonView, frame: buttonFrame)
                 }
                 
-                if case let .uniqueGift(gift, _) = component.subject, gift.resellForTonOnly {
-                    let tonSize = self.ton.update(
-                        transition: .immediate,
-                        component: AnyComponent(
-                            ZStack([
-                                AnyComponentWithIdentity(id: "background", component: AnyComponent(RoundedRectangle(color: buttonColor, cornerRadius: 12.0))),
-                                AnyComponentWithIdentity(id: "icon", component: AnyComponent(BundleIconComponent(name: "Premium/TonGift", tintColor: .white)))
-                            ])
-                        ),
-                        environment: {},
-                        containerSize: CGSize(width: 24.0, height: 24.0)
-                    )
-                    let tonFrame = CGRect(origin: CGPoint(x: 4.0, y: 4.0), size: tonSize)
-                    if let tonView = self.ton.view {
-                        if tonView.superview == nil {
-                            self.addSubview(tonView)
-                        }
-                        transition.setFrame(view: tonView, frame: tonFrame)
-                    }
-                } else if let tonView = self.ton.view, tonView.superview != nil {
-                    tonView.removeFromSuperview()
-                }
-                
+
                 if let label = component.label {
                     let labelColor = component.theme.overallDarkAppearance ? UIColor(rgb: 0xffc337) : UIColor(rgb: 0xd3720a)
                     let attributes = MarkdownAttributes(
@@ -718,6 +698,29 @@ public final class GiftItemComponent: Component {
                         transition.setFrame(view: labelView, frame: labelFrame)
                     }
                 }
+            }
+            
+            if case .generic = component.mode, case let .uniqueGift(gift, _) = component.subject, gift.resellForTonOnly {
+                let tonSize = self.ton.update(
+                    transition: .immediate,
+                    component: AnyComponent(
+                        ZStack([
+                            AnyComponentWithIdentity(id: "background", component: AnyComponent(RoundedRectangle(color: tonButtonColor, cornerRadius: 12.0))),
+                            AnyComponentWithIdentity(id: "icon", component: AnyComponent(BundleIconComponent(name: "Premium/TonGift", tintColor: .white)))
+                        ])
+                    ),
+                    environment: {},
+                    containerSize: CGSize(width: 24.0, height: 24.0)
+                )
+                let tonFrame = CGRect(origin: CGPoint(x: 4.0, y: 4.0), size: tonSize)
+                if let tonView = self.ton.view {
+                    if tonView.superview == nil {
+                        self.addSubview(tonView)
+                    }
+                    transition.setFrame(view: tonView, frame: tonFrame)
+                }
+            } else if let tonView = self.ton.view, tonView.superview != nil {
+                tonView.removeFromSuperview()
             }
             
             if let ribbon = component.ribbon {
@@ -995,7 +998,7 @@ public final class GiftItemComponent: Component {
                 } else {
                     resellBackgroundTransition = .immediate
                     
-                    resellBackground = BlurredBackgroundView(color: UIColor(rgb: 0x000000, alpha: 0.3), enableBlur: true) //UIVisualEffectView(effect: blurEffect)
+                    resellBackground = BlurredBackgroundView(color: UIColor(rgb: 0x000000, alpha: 0.3), enableBlur: true)
                     resellBackground.clipsToBounds = true
                     self.resellBackground = resellBackground
                     
@@ -1019,7 +1022,8 @@ public final class GiftItemComponent: Component {
                 }
             }
             
-            if case .grid = component.mode {
+            switch component.mode {
+            case .generic, .grid:
                 let lineWidth: CGFloat = 2.0
                 let selectionFrame = backgroundFrame.insetBy(dx: 3.0, dy: 3.0)
                 
@@ -1030,7 +1034,9 @@ public final class GiftItemComponent: Component {
                     } else {
                         selectionLayer = SimpleShapeLayer()
                         self.selectionLayer = selectionLayer
-                        if self.ribbon.layer.superlayer != nil {
+                        if self.ton.view?.superview != nil {
+                            self.layer.insertSublayer(selectionLayer, below: self.ton.view?.layer)
+                        } else if self.ribbon.layer.superlayer != nil {
                             self.layer.insertSublayer(selectionLayer, below: self.ribbon.layer)
                         } else {
                             self.layer.addSublayer(selectionLayer)
@@ -1058,6 +1064,8 @@ public final class GiftItemComponent: Component {
                         selectionLayer.removeFromSuperlayer()
                     })
                 }
+            default:
+                break
             }
             
             if case .select = component.mode {

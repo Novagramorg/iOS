@@ -2239,7 +2239,8 @@ final class VideoChatScreenComponent: Component {
                         content: LottieComponent.AppBundleContent(
                             name: "anim_profilemore"
                         ),
-                        color: .white
+                        color: .white,
+                        size: CGSize(width: 34.0, height: 34.0)
                     )),
                     background: AnyComponent(
                         GlassBackgroundComponent(size: CGSize(width: navigationButtonDiameter, height: navigationButtonDiameter), isDark: false, tintColor: .init(kind: .panel, color: panelColor))
@@ -2261,7 +2262,8 @@ final class VideoChatScreenComponent: Component {
                 transition: .immediate,
                 component: AnyComponent(PlainButtonComponent(
                     content: AnyComponent(Image(
-                        image: closeButtonImage(dark: false)
+                        image: closeButtonImage(dark: false),
+                        contentMode: .center
                     )),
                     background: AnyComponent(
                         GlassBackgroundComponent(size: CGSize(width: navigationButtonDiameter, height: navigationButtonDiameter), isDark: false, tintColor: .init(kind: .panel, color: panelColor))

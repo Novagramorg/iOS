@@ -527,7 +527,7 @@ public final class ListSectionComponent: Component {
                     containerSize: CGSize(width: availableSize.width - headerSideInset * 2.0, height: availableSize.height)
                 )
                 if contentHeight != 0.0 {
-                    contentHeight += 7.0
+                    contentHeight += 8.0 - UIScreenPixel
                 }
                 if let footerView = footer.view {
                     if footerView.superview == nil {

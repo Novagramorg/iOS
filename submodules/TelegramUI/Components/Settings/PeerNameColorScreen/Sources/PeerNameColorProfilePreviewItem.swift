@@ -24,6 +24,7 @@ final class PeerNameColorProfilePreviewItem: ListViewItem, ItemListItem, ListIte
     let componentTheme: PresentationTheme
     let strings: PresentationStrings
     let topInset: CGFloat
+    let bottomInset: CGFloat
     let sectionId: ItemListSectionId
     let peer: EnginePeer?
     let subtitleString: String?
@@ -31,12 +32,13 @@ final class PeerNameColorProfilePreviewItem: ListViewItem, ItemListItem, ListIte
     let nameDisplayOrder: PresentationPersonNameOrder
     let showBackground: Bool
     
-    init(context: AccountContext, theme: PresentationTheme, componentTheme: PresentationTheme, strings: PresentationStrings, topInset: CGFloat, sectionId: ItemListSectionId, peer: EnginePeer?, subtitleString: String? = nil, files: [Int64: TelegramMediaFile], nameDisplayOrder: PresentationPersonNameOrder, showBackground: Bool) {
+    init(context: AccountContext, theme: PresentationTheme, componentTheme: PresentationTheme, strings: PresentationStrings, topInset: CGFloat, bottomInset: CGFloat, sectionId: ItemListSectionId, peer: EnginePeer?, subtitleString: String? = nil, files: [Int64: TelegramMediaFile], nameDisplayOrder: PresentationPersonNameOrder, showBackground: Bool) {
         self.context = context
         self.theme = theme
         self.componentTheme = componentTheme
         self.strings = strings
         self.topInset = topInset
+        self.bottomInset = bottomInset
         self.sectionId = sectionId
         self.peer = peer
         self.subtitleString = subtitleString
@@ -150,7 +152,7 @@ final class PeerNameColorProfilePreviewItemNode: ListViewItemNode {
         return { [weak self] item, params, neighbors in
             let separatorHeight = UIScreenPixel
             
-            let contentSize = CGSize(width: params.width, height: 210.0 + item.topInset)
+            let contentSize = CGSize(width: params.width, height: 210.0 + item.topInset + item.bottomInset)
             var insets = itemListNeighborsGroupedInsets(neighbors, params)
             if params.width <= 320.0 {
                 insets.top = 0.0
@@ -169,7 +171,7 @@ final class PeerNameColorProfilePreviewItemNode: ListViewItemNode {
                 }
                 self.item = item
                     
-                self.backgroundNode.backgroundColor = item.theme.rootController.navigationBar.opaqueBackgroundColor
+                self.backgroundNode.backgroundColor = item.theme.list.itemBlocksBackgroundColor
                 self.topStripeNode.backgroundColor = item.theme.list.itemBlocksSeparatorColor
                 self.bottomStripeNode.backgroundColor = item.theme.list.itemBlocksSeparatorColor
 
