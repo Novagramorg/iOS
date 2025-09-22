@@ -59,7 +59,9 @@ swift_library(
         "//submodules/TelegramUI/Components/PeerInfo/CollectionTabItemComponent",
         "//submodules/TelegramUI/Components/LottieComponent",
         "//submodules/TelegramUI/Components/Gifts/GiftItemComponent",
-        "//submodules/TelegramUI/Components/Gifts/GiftLoadingShimmerView"
+        "//submodules/TelegramUI/Components/Gifts/GiftLoadingShimmerView",
+        "//submodules/TelegramUI/Components/Gifts/GiftViewScreen",
+        "//submodules/TelegramUI/Components/Stars/BalanceNeededScreen",
     ],
     visibility = [
         "//visibility:public",

@@ -1148,6 +1148,7 @@ public enum BuyStarGiftError {
     case generic
     case priceChanged(CurrencyAmount)
     case starGiftResellTooEarly(Int32)
+    case serverProvided(String)
 }
 
 public enum UpdateStarGiftPriceError {
@@ -1181,8 +1182,12 @@ func _internal_buyStarGift(account: Account, slug: String, peerId: EnginePeer.Id
                 return .fail(.priceChanged(currencyAmount))
             }
             return _internal_sendStarsPaymentForm(account: account, formId: paymentForm.id, source: source)
-            |> mapError { _ -> BuyStarGiftError in
-                return .generic
+            |> mapError { error -> BuyStarGiftError in
+                if case let .serverProvided(text) = error {
+                    return .serverProvided(text)
+                } else {
+                    return .generic
+                }
             }
             |> ignoreValues
         } else {
