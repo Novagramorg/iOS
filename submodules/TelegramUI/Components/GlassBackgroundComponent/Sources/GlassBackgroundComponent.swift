@@ -286,6 +286,7 @@ public class GlassBackgroundView: UIView {
             let glassEffect = UIGlassEffect(style: .clear)
             glassEffect.isInteractive = false
             let nativeView = UIVisualEffectView(effect: glassEffect)
+            nativeView.layer.cornerCurve = .circular
             self.nativeView = nativeView
             nativeView.overrideUserInterfaceStyle = .light
             nativeView.traitOverrides.userInterfaceStyle = .light
@@ -382,7 +383,7 @@ public class GlassBackgroundView: UIView {
                         let glassEffect = UIGlassEffect(style: .clear)
                         switch tintColor.kind {
                         case .panel:
-                            glassEffect.tintColor = tintColor.color
+                            glassEffect.tintColor = tintColor.color.withMultipliedAlpha(1.2)
                         case .custom:
                             glassEffect.tintColor = tintColor.color
                         }
@@ -783,15 +784,20 @@ public extension GlassBackgroundView {
 
 public final class GlassBackgroundComponent: Component {
     private let size: CGSize
+    private let isDark: Bool
     private let tintColor: GlassBackgroundView.TintColor
     
-    public init(size: CGSize, tintColor: GlassBackgroundView.TintColor) {
+    public init(size: CGSize, isDark: Bool, tintColor: GlassBackgroundView.TintColor) {
         self.size = size
+        self.isDark = isDark
         self.tintColor = tintColor
     }
     
     public static func == (lhs: GlassBackgroundComponent, rhs: GlassBackgroundComponent) -> Bool {
         if lhs.size != rhs.size {
+            return false
+        }
+        if lhs.isDark != rhs.isDark {
             return false
         }
         if lhs.tintColor != rhs.tintColor {
@@ -802,7 +808,7 @@ public final class GlassBackgroundComponent: Component {
     
     public final class View: GlassBackgroundView {
         func update(component: GlassBackgroundComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
-            self.update(size: component.size, cornerRadius: component.size.height / 2.0, isDark: true, tintColor: component.tintColor, transition: transition)
+            self.update(size: component.size, cornerRadius: component.size.height / 2.0, isDark: component.isDark, tintColor: component.tintColor, transition: transition)
             self.frame = CGRect(origin: .zero, size: component.size)
             
             return component.size

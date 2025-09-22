@@ -15055,8 +15055,13 @@ Error: %8$@";
 "Gift.UpgradeCost.Stars_1" = "%@ Star";
 "Gift.UpgradeCost.Stars_any" = "%@ Stars";
 "Gift.UpgradeCost.Description" = "Users who upgrade their gifts first get collectibles with shorter numbers.";
-"Gift.UpgradeCost.AdditionalDescription" = "Users who upgrade their gifts first get collectibles with shorter numbers.";
+"Gift.UpgradeCost.AdditionalDescription" = "Upgrade cost drops every minute.";
 "Gift.UpgradeCost.Done" = "Understood";
+
+"Gift.RemoveDetails.Title" = "Remove Description";
+"Gift.RemoveDetails.Text" = "Do you want to permanently remove this description from your gift?";
+"Gift.RemoveDetails.Action" = "Remove for %@";
+"Gift.RemoveDetails.Success" = "Removed %@'s description!";
 
 "UserInfo.SuggestBirthdate" = "Suggest Date of Birth";
 
@@ -15077,3 +15082,10 @@ Error: %8$@";
 "Conversation.SuggestedBirthdate.View" = "View";
 
 "PeerInfo.ChangeProfileColor" = "Change Profile Color";
+
+"PeerInfo.Notes" = "notes";
+"PeerInfo.NotesInfo" = "only visible to you";
+
+"UserInfo.NoteActionCopy" = "Copy Note";
+"UserInfo.NoteActionEdit" = "Edit Note";
+"UserInfo.ToastNoteCopied" = "Note copied to clipboard.";

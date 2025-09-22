@@ -166,7 +166,7 @@ public final class ChatPanelInterfaceInteraction {
     public let openInviteRequests: () -> Void
     public let openSendAsPeer: (ASDisplayNode, ContextGesture?) -> Void
     public let presentChatRequestAdminInfo: () -> Void
-    public let displayCopyProtectionTip: (ASDisplayNode, Bool) -> Void
+    public let displayCopyProtectionTip: (UIView, Bool) -> Void
     public let openWebView: (String, String, Bool, ChatOpenWebViewSource) -> Void
     public let updateShowWebView: ((Bool) -> Bool) -> Void
     public let insertText: (NSAttributedString) -> Void
@@ -294,7 +294,7 @@ public final class ChatPanelInterfaceInteraction {
         openInviteRequests: @escaping () -> Void,
         openSendAsPeer: @escaping (ASDisplayNode, ContextGesture?) -> Void,
         presentChatRequestAdminInfo: @escaping () -> Void,
-        displayCopyProtectionTip: @escaping (ASDisplayNode, Bool) -> Void,
+        displayCopyProtectionTip: @escaping (UIView, Bool) -> Void,
         openWebView: @escaping (String, String, Bool, ChatOpenWebViewSource) -> Void,
         updateShowWebView: @escaping ((Bool) -> Bool) -> Void,
         insertText: @escaping (NSAttributedString) -> Void,

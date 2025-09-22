@@ -5095,10 +5095,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             inputPanelNodeSnapshot.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.3, removeOnCompletion: false, completion: { [weak inputPanelNodeSnapshot] _ in
                 inputPanelNodeSnapshot?.removeFromSuperview()
             })
-            inputPanelNodeSnapshot.layer.animatePosition(from: CGPoint(), to: CGPoint(x: 0.0, y: -5.0), duration: 0.5, timingFunction: kCAMediaTimingFunctionSpring, removeOnCompletion: false, additive: true)
-
             inputPanelNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.3)
-            inputPanelNode.layer.animatePosition(from: CGPoint(x: 0.0, y: 5.0), to: CGPoint(), duration: 0.5, timingFunction: kCAMediaTimingFunctionSpring, additive: true)
         }
     }
     
@@ -5260,6 +5257,12 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                 historyNode: historyNode,
                 animationDirection: animationDirection
             )
+        }
+    }
+    
+    func setVideoRecorder(backgroundView: UIView?) {
+        if let backgroundView {
+            self.wrappingNode.contentNode.view.insertSubview(backgroundView, belowSubview: self.inputPanelContainerNode.view)
         }
     }
 }

@@ -237,7 +237,7 @@ final class ReactionContextBackgroundNode: ASDisplayNode {
             var glassBackgroundFrame = contentBounds.insetBy(dx: 10.0, dy: 10.0)
             glassBackgroundFrame.size.height -= 8.0
             transition.updateFrame(view: glassBackgroundView, frame: glassBackgroundFrame, beginWithCurrentState: true)
-            glassBackgroundView.update(size: glassBackgroundFrame.size, cornerRadius: 23.0, isDark: true, tintColor: .init(kind: .custom, color: UIColor(rgb: 0x1b1d22)), transition: ComponentTransition(transition))
+            glassBackgroundView.update(size: glassBackgroundFrame.size, cornerRadius: 23.0, isDark: true, tintColor: .init(kind: .panel, color: UIColor(rgb: 0x1f1f27)), transition: ComponentTransition(transition))
             
             transition.updateFrame(view: self.backgroundTintView, frame: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: contentBounds.width, height: contentBounds.height)).insetBy(dx: -10.0, dy: -10.0))
         } else {

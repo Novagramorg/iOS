@@ -3881,7 +3881,7 @@ extension ChatControllerImpl {
                         
             let cleanInsets = layout.intrinsicInsets
             let insets = layout.insets(options: .input)
-            let bottomInset = max(insets.bottom, cleanInsets.bottom) + 43.0
+            let bottomInset = max(insets.bottom, cleanInsets.bottom) + 54.0
             
             let defaultMyPeerId: PeerId
             if let channel = strongSelf.presentationInterfaceState.renderedPeer?.chatMainPeer as? TelegramChannel, case .group = channel.info, channel.hasPermission(.canBeAnonymous) {
@@ -3932,7 +3932,7 @@ extension ChatControllerImpl {
             })
         }, presentChatRequestAdminInfo: { [weak self] in
             self?.presentChatRequestAdminInfo()
-        }, displayCopyProtectionTip: { [weak self] node, save in
+        }, displayCopyProtectionTip: { [weak self] sourceView, save in
             if let strongSelf = self, let peer = strongSelf.presentationInterfaceState.renderedPeer?.peer, let messageIds = strongSelf.presentationInterfaceState.interfaceState.selectionState?.selectedIds {
                 let _ = (strongSelf.context.engine.data.get(EngineDataMap(
                     messageIds.map(TelegramEngine.EngineData.Item.Messages.Message.init)
@@ -3994,7 +3994,7 @@ extension ChatControllerImpl {
                     }
                     strongSelf.present(tooltipController, in: .window(.root), with: TooltipControllerPresentationArguments(sourceNodeAndRect: {
                         if let strongSelf = self {
-                            let rect = node.view.convert(node.view.bounds, to: strongSelf.chatDisplayNode.view).offsetBy(dx: 0.0, dy: 3.0)
+                            let rect = sourceView.convert(sourceView.bounds, to: strongSelf.chatDisplayNode.view).offsetBy(dx: 0.0, dy: 3.0)
                             return (strongSelf.chatDisplayNode, rect)
                         }
                         return nil

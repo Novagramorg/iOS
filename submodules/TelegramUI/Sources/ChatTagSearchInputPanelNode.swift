@@ -16,6 +16,7 @@ import PlainButtonComponent
 import ComponentDisplayAdapters
 import BundleIconComponent
 import AnimatedTextComponent
+import GlassBackgroundComponent
 
 private let labelFont = Font.regular(15.0)
 
@@ -58,6 +59,8 @@ final class ChatTagSearchInputPanelNode: ChatInputPanelNode {
         }
     }
 
+    private let leftControlsBackgroundView: GlassBackgroundView
+    private let rightControlsBackgroundView: GlassBackgroundView
     private let calendarButton = ComponentView<Empty>()
     private var membersButton: ComponentView<Empty>?
     private var resultsText: ComponentView<Empty>?
@@ -90,7 +93,13 @@ final class ChatTagSearchInputPanelNode: ChatInputPanelNode {
     init(theme: PresentationTheme, alwaysShowTotalMessagesCount: Bool) {
         self.alwaysShowTotalMessagesCount = alwaysShowTotalMessagesCount
         
+        self.leftControlsBackgroundView = GlassBackgroundView()
+        self.rightControlsBackgroundView = GlassBackgroundView()
+        
         super.init()
+        
+        self.view.addSubview(self.leftControlsBackgroundView)
+        self.view.addSubview(self.rightControlsBackgroundView)
     }
     
     deinit {
@@ -282,6 +291,7 @@ final class ChatTagSearchInputPanelNode: ChatInputPanelNode {
 
         let size = CGSize(width: params.width - params.additionalSideInsets.left * 2.0 - params.leftInset * 2.0, height: height)
         
+        var listModeButtonFrameValue: CGRect?
         if canChangeListMode {
             var listModeButtonTransition = transition
             let listModeButton: ComponentView<Empty>
@@ -298,11 +308,11 @@ final class ChatTagSearchInputPanelNode: ChatInputPanelNode {
                 component: AnyComponent(PlainButtonComponent(
                     content: AnyComponent(AnimatedTextComponent(
                         font: Font.regular(15.0),
-                        color: params.interfaceState.theme.rootController.navigationBar.accentTextColor,
+                        color: params.interfaceState.theme.chat.inputPanel.inputControlColor,
                         items: modeButtonTitle
                     )),
                     effectAlignment: .right,
-                    minSize: CGSize(width: 1.0, height: size.height),
+                    minSize: CGSize(width: 1.0, height: 40.0),
                     contentInsets: UIEdgeInsets(top: 0.0, left: 4.0, bottom: 0.0, right: 4.0),
                     action: { [weak self] in
                         guard let self, let params = self.currentLayout?.params else {
@@ -322,7 +332,8 @@ final class ChatTagSearchInputPanelNode: ChatInputPanelNode {
                     buttonView.alpha = 0.0
                     self.view.addSubview(buttonView)
                 }
-                let listModeFrame = CGRect(origin: CGPoint(x: size.width - params.rightInset - 11.0 - buttonSize.width, y: floor((size.height - buttonSize.height) * 0.5)), size: buttonSize)
+                let listModeFrame = CGRect(origin: CGPoint(x: size.width - params.rightInset - 20.0 - 8.0 - buttonSize.width, y: floor((size.height - buttonSize.height) * 0.5)), size: buttonSize)
+                listModeButtonFrameValue = listModeFrame
                 listModeButtonTransition.setPosition(view: buttonView, position: CGPoint(x: listModeFrame.minX + listModeFrame.width * buttonView.layer.anchorPoint.x, y: listModeFrame.minY + listModeFrame.height * buttonView.layer.anchorPoint.y))
                 listModeButtonTransition.setBounds(view: buttonView, bounds: CGRect(origin: CGPoint(), size: listModeFrame.size))
                 transition.setAlpha(view: buttonView, alpha: 1.0)
@@ -338,20 +349,23 @@ final class ChatTagSearchInputPanelNode: ChatInputPanelNode {
             }
         }
         
-        var nextLeftX: CGFloat = 16.0
+        var nextLeftX: CGFloat = 16.0 + 8.0
+        
+        var calendarButtonFrameValue: CGRect?
+        var membersButtonFrameValue: CGRect?
+        var resultsTextFrameValue: CGRect?
         
         if !self.alwaysShowTotalMessagesCount && self.externalSearchResultsCount == nil {
-            nextLeftX = 12.0
+            nextLeftX -= 4.0
             let calendarButtonSize = self.calendarButton.update(
                 transition: .immediate,
                 component: AnyComponent(PlainButtonComponent(
                     content: AnyComponent(BundleIconComponent(
                         name: "Chat/Input/Search/Calendar",
-                        tintColor: params.interfaceState.theme.rootController.navigationBar.accentTextColor
+                        tintColor: params.interfaceState.theme.chat.inputPanel.inputControlColor
                     )),
                     effectAlignment: .center,
-                    minSize: CGSize(width: 1.0, height: size.height),
-                    contentInsets: UIEdgeInsets(top: 0.0, left: 4.0, bottom: 0.0, right: 4.0),
+                    minSize: CGSize(width: 40.0, height: 40.0),
                     action: { [weak self] in
                         guard let self else {
                             return
@@ -363,6 +377,7 @@ final class ChatTagSearchInputPanelNode: ChatInputPanelNode {
                 containerSize: size
             )
             let calendarButtonFrame = CGRect(origin: CGPoint(x: nextLeftX, y: floor((size.height - calendarButtonSize.height) * 0.5)), size: calendarButtonSize)
+            calendarButtonFrameValue = calendarButtonFrame
             if let calendarButtonView = self.calendarButton.view {
                 if calendarButtonView.superview == nil {
                     self.view.addSubview(calendarButtonView)
@@ -375,7 +390,7 @@ final class ChatTagSearchInputPanelNode: ChatInputPanelNode {
                 }
                 transition.setFrame(view: calendarButtonView, frame: calendarButtonFrame)
             }
-            nextLeftX += calendarButtonSize.width + 8.0
+            nextLeftX += calendarButtonSize.width + 0.0
         } else if let calendarButtonView = self.calendarButton.view {
             if transition.animation.isImmediate {
                 calendarButtonView.removeFromSuperview()
@@ -404,11 +419,10 @@ final class ChatTagSearchInputPanelNode: ChatInputPanelNode {
                 component: AnyComponent(PlainButtonComponent(
                     content: AnyComponent(BundleIconComponent(
                         name: "Chat/Input/Search/Members",
-                        tintColor: params.interfaceState.theme.rootController.navigationBar.accentTextColor
+                        tintColor: params.interfaceState.theme.chat.inputPanel.inputControlColor
                     )),
                     effectAlignment: .center,
-                    minSize: CGSize(width: 1.0, height: size.height),
-                    contentInsets: UIEdgeInsets(top: 0.0, left: 4.0, bottom: 0.0, right: 4.0),
+                    minSize: CGSize(width: 40.0, height: 40.0),
                     action: { [weak self] in
                         guard let self else {
                             return
@@ -428,14 +442,16 @@ final class ChatTagSearchInputPanelNode: ChatInputPanelNode {
                     animateIn = true
                     self.view.addSubview(buttonView)
                 }
-                membersButtonTransition.setFrame(view: buttonView, frame: CGRect(origin: CGPoint(x: nextLeftX, y: floor((size.height - buttonSize.height) * 0.5)), size: buttonSize))
+                let membersButtonFrame = CGRect(origin: CGPoint(x: nextLeftX, y: floor((size.height - buttonSize.height) * 0.5)), size: buttonSize)
+                membersButtonFrameValue = membersButtonFrame
+                membersButtonTransition.setFrame(view: buttonView, frame: membersButtonFrame)
                 
                 transition.setAlpha(view: buttonView, alpha: 1.0)
                 if animateIn {
                     transition.animateScale(view: buttonView, from: 0.001, to: 1.0)
                 }
             }
-            nextLeftX += buttonSize.width + 8.0
+            nextLeftX += buttonSize.width + 0.0
         } else {
             if let membersButton = self.membersButton {
                 self.membersButton = nil
@@ -468,7 +484,7 @@ final class ChatTagSearchInputPanelNode: ChatInputPanelNode {
                 component: AnyComponent(PlainButtonComponent(
                     content: AnyComponent(AnimatedTextComponent(
                         font: Font.regular(15.0),
-                        color: (params.interfaceState.displayHistoryFilterAsList && canChangeListMode) ? params.interfaceState.theme.rootController.navigationBar.accentTextColor : params.interfaceState.theme.rootController.navigationBar.secondaryTextColor,
+                        color: params.interfaceState.theme.rootController.navigationBar.secondaryTextColor,
                         items: resultsTextString
                     )),
                     effectAlignment: .center,
@@ -484,6 +500,7 @@ final class ChatTagSearchInputPanelNode: ChatInputPanelNode {
                 containerSize: CGSize(width: 200.0, height: 100.0)
             )
             let resultsTextFrame = CGRect(origin: CGPoint(x: nextLeftX - 3.0, y: floor((size.height - resultsTextSize.height) * 0.5)), size: resultsTextSize)
+            resultsTextFrameValue = resultsTextFrame
             if let resultsTextView = resultsText.view {
                 if resultsTextView.superview == nil {
                     resultsTextView.alpha = 0.0
@@ -503,6 +520,57 @@ final class ChatTagSearchInputPanelNode: ChatInputPanelNode {
                 }
             }
         }
+        
+        let adjustedResultsTextFrameValue = resultsTextFrameValue.flatMap { rect in
+            var rect = rect
+            rect.size.width += 8.0
+            return rect
+        }
+        
+        let leftControlsFrames: [CGRect?] = [
+            calendarButtonFrameValue,
+            membersButtonFrameValue,
+            adjustedResultsTextFrameValue
+        ]
+        var leftControlsRect = CGRect()
+        for rect in leftControlsFrames {
+            guard let rect else {
+                continue
+            }
+            if leftControlsRect.isEmpty {
+                leftControlsRect = rect
+            } else {
+                leftControlsRect = leftControlsRect.union(rect)
+            }
+        }
+        
+        var leftControlsBackgroundFrame = CGRect(origin: CGPoint(x: 20.0, y: floor((height - 40.0) * 0.5)), size: CGSize(width: 0.0, height: 40.0))
+        leftControlsBackgroundFrame.size.width = max(40.0, leftControlsRect.maxX - leftControlsBackgroundFrame.minX)
+        transition.setFrame(view: self.leftControlsBackgroundView, frame: leftControlsBackgroundFrame)
+        self.leftControlsBackgroundView.update(size: leftControlsBackgroundFrame.size, cornerRadius: leftControlsBackgroundFrame.height * 0.5, isDark: params.interfaceState.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: params.interfaceState.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7)), transition: transition)
+        transition.setAlpha(view: self.leftControlsBackgroundView, alpha: leftControlsRect.isEmpty ? 0.0 : 1.0)
+        
+        let rightControlsFrames: [CGRect?] = [
+            listModeButtonFrameValue
+        ]
+        var rightControlsRect = CGRect()
+        for rect in rightControlsFrames {
+            guard let rect else {
+                continue
+            }
+            if rightControlsRect.isEmpty {
+                rightControlsRect = rect
+            } else {
+                rightControlsRect = rightControlsRect.union(rect)
+            }
+        }
+        
+        var rightControlsBackgroundFrame = CGRect(origin: CGPoint(x: params.width - params.rightInset - 20.0, y: floor((height - 40.0) * 0.5)), size: CGSize(width: 0.0, height: 40.0))
+        rightControlsBackgroundFrame.size.width = max(40.0, rightControlsRect.maxX - rightControlsRect.minX + 8.0 * 2.0)
+        rightControlsBackgroundFrame.origin.x -= rightControlsBackgroundFrame.width
+        transition.setFrame(view: self.rightControlsBackgroundView, frame: rightControlsBackgroundFrame)
+        self.rightControlsBackgroundView.update(size: rightControlsBackgroundFrame.size, cornerRadius: rightControlsBackgroundFrame.height * 0.5, isDark: params.interfaceState.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: params.interfaceState.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7)), transition: transition)
+        transition.setAlpha(view: self.rightControlsBackgroundView, alpha: rightControlsRect.isEmpty ? 0.0 : 1.0)
 
         return height
     }

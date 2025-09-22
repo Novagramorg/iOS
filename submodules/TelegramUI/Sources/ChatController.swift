@@ -5689,7 +5689,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                         }
                     })
                     
-                    if let videoRecorder = videoRecorder {
+                    if let videoRecorder {
                         strongSelf.recorderFeedback?.impact(.light)
                         
                         videoRecorder.onStop = {
@@ -5697,6 +5697,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                                 strongSelf.dismissMediaRecorder(.pause)
                             }
                         }
+                        strongSelf.chatDisplayNode.setVideoRecorder(backgroundView: videoRecorder.backgroundView)
                         strongSelf.present(videoRecorder, in: .window(.root))
                         
                         if strongSelf.lockMediaRecordingRequestId == strongSelf.beginMediaRecordingRequestId {

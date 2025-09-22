@@ -163,7 +163,6 @@ final class VerticalListContextResultsChatInputContextPanelNode: ChatInputContex
         
         self.view.addSubview(self.backgroundView)
         self.addSubnode(self.listView)
-        //self.view.addSubview(self.listMaskView)
         self.listView.view.mask = self.listMaskView
         
         self.listView.visibleBottomContentOffsetChanged = { [weak self] offset in
