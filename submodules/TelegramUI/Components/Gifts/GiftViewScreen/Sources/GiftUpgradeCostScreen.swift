@@ -395,14 +395,16 @@ private final class GiftUpgradeCostScreenComponent: Component {
             var value: CGFloat = 0.0
             if let startStars = component.upgradePreview.prices.first?.stars, let endStars = component.upgradePreview.prices.last?.stars {
                 let effectiveValue = self.effectiveUpgradePrice?.stars ?? endStars
-                value = CGFloat(effectiveValue - endStars) / CGFloat(startStars - endStars)
+                value = (CGFloat(effectiveValue - endStars) / CGFloat(startStars - endStars))
             }
+            value = pow(value, 0.6)
+            value = min(0.96, 1.0 - value)
             
             let barSize = self.bar.update(
                 transition: transition,
                 component: AnyComponent(ProfileLevelRatingBarComponent(
                     theme: environment.theme,
-                    value: 1.0 - value,
+                    value: value,
                     leftLabel: environment.strings.Gift_UpgradeCost_Stars(Int32(clamping: component.upgradePreview.prices.first?.stars ?? 0)),
                     rightLabel: environment.strings.Gift_UpgradeCost_Stars(Int32(clamping: component.upgradePreview.prices.last?.stars ?? 0)),
                     badgeValue: "\(self.effectiveUpgradePrice?.stars ?? 0)",

@@ -450,6 +450,7 @@ public func giftPurchaseAlertController(
     context: AccountContext,
     gift: StarGift.UniqueGift,
     peer: EnginePeer,
+    animateBalanceOverlay: Bool = false,
     navigationController: NavigationController?,
     commit: @escaping (CurrencyAmount.Currency) -> Void,
     dismissed: @escaping () -> Void
@@ -477,7 +478,7 @@ public func giftPurchaseAlertController(
         chatPeerId: context.account.peerId,
         showBalance: true,
         currency: gift.resellForTonOnly ? .ton : .stars,
-        animateBalanceOverlay: false
+        animateBalanceOverlay: animateBalanceOverlay
     )
     controller.dismissed = { _ in
         dismissed()

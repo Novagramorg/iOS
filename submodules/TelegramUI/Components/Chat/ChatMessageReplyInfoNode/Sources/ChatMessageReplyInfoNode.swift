@@ -834,7 +834,8 @@ public class ChatMessageReplyInfoNode: ASDisplayNode {
                         file: arguments.parentMessage.associatedMedia[MediaId(
                             namespace: Namespaces.Media.CloudFile,
                             id: backgroundEmojiId
-                        )] as? TelegramMediaFile
+                        )] as? TelegramMediaFile,
+                        emptyCorner: giftEmojiFileId != nil
                     )
                 }
                 var isTransparent: Bool = false
@@ -898,16 +899,19 @@ public class ChatMessageReplyInfoNode: ASDisplayNode {
                 }
                 
                 if let giftEmojiFileId {
-                    let giftLayerSize = CGSize(width: 20.0, height: 20.0)
-                    let giftLayerFrame = CGRect(origin: CGPoint(x: textFrame.minX - 16.0, y: 5.0), size: giftLayerSize)
+                    let giftLayerSize = CGSize(width: 18.0, height: 18.0)
+                    let giftLayerFrame = CGRect(origin: CGPoint(x: realSize.width - giftLayerSize.width - 4.0, y: 3.0), size: giftLayerSize)
                     
                     let giftEmojiLayer: InlineStickerItemLayer
-                    if let current = node.giftEmojiLayer {
+                    if let current = node.giftEmojiLayer, current.file?.fileId.id == giftEmojiFileId {
                         giftEmojiLayer = current
-                        
                         animation.animator.updateFrame(layer: giftEmojiLayer, frame: giftLayerFrame, completion: nil)
                     } else {
-                        giftEmojiLayer = InlineStickerItemLayer(context: arguments.context, userLocation: .other, attemptSynchronousLoad: true, emoji: ChatTextInputTextCustomEmojiAttribute(interactivelySelectedFromPackId: nil, fileId: giftEmojiFileId, file: nil, custom: nil, enableAnimation: true), file: nil, cache: arguments.context.animationCache, renderer: arguments.context.animationRenderer, unique: false, placeholderColor: placeholderColor, pointSize: giftLayerSize, dynamicColor: nil, loopCount: 2)
+                        if let giftEmojiLayer = node.giftEmojiLayer {
+                            node.giftEmojiLayer = nil
+                            giftEmojiLayer.removeFromSuperlayer()
+                        }
+                        giftEmojiLayer = InlineStickerItemLayer(context: arguments.context, userLocation: .other, attemptSynchronousLoad: true, emoji: ChatTextInputTextCustomEmojiAttribute(interactivelySelectedFromPackId: nil, fileId: giftEmojiFileId, file: nil, custom: nil, enableAnimation: true), file: nil, cache: arguments.context.animationCache, renderer: arguments.context.animationRenderer, unique: false, placeholderColor: placeholderColor, pointSize: CGSize(width: giftLayerSize.width * 2.0, height: giftLayerSize.height * 2.0), dynamicColor: nil, loopCount: 2)
                         node.giftEmojiLayer = giftEmojiLayer
                         node.contentNode.layer.addSublayer(giftEmojiLayer)
                         
