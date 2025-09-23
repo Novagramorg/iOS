@@ -84,17 +84,13 @@ final class VerticalListContextResultsChatInputPanelButtonItemNode: ListViewItem
     
     private let buttonNode: HighlightTrackingButtonNode
     private let titleNode: TextNode
-    private let topSeparatorNode: ASDisplayNode
     private let separatorNode: ASDisplayNode
     
     private var item: VerticalListContextResultsChatInputPanelButtonItem?
     
     init() {
         self.buttonNode = HighlightTrackingButtonNode()
-        
-        self.topSeparatorNode = ASDisplayNode()
-        self.topSeparatorNode.isLayerBacked = true
-        
+
         self.separatorNode = ASDisplayNode()
         self.separatorNode.isLayerBacked = true
         
@@ -102,7 +98,6 @@ final class VerticalListContextResultsChatInputPanelButtonItemNode: ListViewItem
         
         super.init(layerBacked: false, dynamicBounce: false)
         
-        self.addSubnode(self.topSeparatorNode)
         self.addSubnode(self.separatorNode)
         
         self.addSubnode(self.titleNode)
@@ -145,7 +140,7 @@ final class VerticalListContextResultsChatInputPanelButtonItemNode: ListViewItem
                 titleFont = Font.regular(17.0)
             }
             
-            let titleString = NSAttributedString(string: item.title, font: titleFont, textColor: item.theme.list.itemAccentColor)
+            let titleString = NSAttributedString(string: item.title, font: titleFont, textColor: item.theme.chat.inputPanel.panelControlColor)
             
             let (titleLayout, titleApply) = makeTitleLayout(TextNodeLayoutArguments(attributedString: titleString, backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .end, constrainedSize: CGSize(width: params.width - params.leftInset - params.rightInset - 16.0, height: 100.0), alignment: .natural, cutout: nil, insets: UIEdgeInsets()))
             
@@ -156,7 +151,6 @@ final class VerticalListContextResultsChatInputPanelButtonItemNode: ListViewItem
                     strongSelf.item = item
                     
                     strongSelf.separatorNode.backgroundColor = item.theme.list.itemPlainSeparatorColor
-                    strongSelf.topSeparatorNode.backgroundColor = item.theme.list.itemPlainSeparatorColor
                     
                     let titleOffsetY: CGFloat
                     switch item.style {
@@ -172,7 +166,6 @@ final class VerticalListContextResultsChatInputPanelButtonItemNode: ListViewItem
                     
                     strongSelf.titleNode.frame = CGRect(origin: CGPoint(x: floor((params.width - titleLayout.size.width) / 2.0), y: floor((nodeLayout.contentSize.height - titleLayout.size.height) / 2.0) + titleOffsetY), size: titleLayout.size)
                     
-                    strongSelf.topSeparatorNode.frame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: params.width, height: UIScreenPixel))
                     strongSelf.separatorNode.frame = CGRect(origin: CGPoint(x: 0.0, y: nodeLayout.contentSize.height - UIScreenPixel), size: CGSize(width: params.width, height: UIScreenPixel))
                     
                     strongSelf.buttonNode.frame = CGRect(origin: CGPoint(), size: nodeLayout.contentSize)

@@ -202,6 +202,14 @@ public class GlassBackgroundView: UIView {
             }
         }
         
+        override public var tintColor: UIColor? {
+            didSet {
+                if self.tintColor != oldValue {
+                    self.setMonochromaticEffect(tintColor: self.tintColor)
+                }
+            }
+        }
+        
         override public init(frame: CGRect) {
             self.tintImageView = UIImageView()
             
@@ -252,16 +260,19 @@ public class GlassBackgroundView: UIView {
         let cornerRadius: CGFloat
         let isDark: Bool
         let tintColor: TintColor
+        let isInteractive: Bool
         
-        init(cornerRadius: CGFloat, isDark: Bool, tintColor: TintColor) {
+        init(cornerRadius: CGFloat, isDark: Bool, tintColor: TintColor, isInteractive: Bool) {
             self.cornerRadius = cornerRadius
             self.isDark = isDark
             self.tintColor = tintColor
+            self.isInteractive = isInteractive
         }
     }
     
     private let backgroundNode: NavigationBackgroundNode?
     private let nativeView: UIVisualEffectView?
+    private let nativeContainerView: UIVisualEffectView?
     
     private let foregroundView: UIImageView?
     private let shadowView: UIImageView?
@@ -283,19 +294,23 @@ public class GlassBackgroundView: UIView {
     public override init(frame: CGRect) {
         if #available(iOS 26.0, *) {
             self.backgroundNode = nil
-            let glassEffect = UIGlassEffect(style: .clear)
+            
+            let glassEffect = UIGlassEffect(style: .regular)
             glassEffect.isInteractive = false
             let nativeView = UIVisualEffectView(effect: glassEffect)
-            nativeView.layer.cornerCurve = .circular
             self.nativeView = nativeView
-            nativeView.overrideUserInterfaceStyle = .light
-            nativeView.traitOverrides.userInterfaceStyle = .light
-            //self.foregroundView = UIImageView()
+            
+            let glassContainerEffect = UIGlassContainerEffect()
+            let nativeContainerView = UIVisualEffectView(effect: glassContainerEffect)
+            self.nativeContainerView = nativeContainerView
+            nativeContainerView.contentView.addSubview(nativeView)
+            
             self.foregroundView = nil
-            self.shadowView = UIImageView()
+            self.shadowView = nil
         } else {
             self.backgroundNode = NavigationBackgroundNode(color: .black, enableBlur: true, customBlurRadius: 5.0)
             self.nativeView = nil
+            self.nativeContainerView = nil
             self.foregroundView = UIImageView()
             self.shadowView = UIImageView()
         }
@@ -316,8 +331,8 @@ public class GlassBackgroundView: UIView {
         if let shadowView = self.shadowView {
             self.addSubview(shadowView)
         }
-        if let nativeView = self.nativeView {
-            self.addSubview(nativeView)
+        if let nativeContainerView = self.nativeContainerView {
+            self.addSubview(nativeContainerView)
         }
         if let backgroundNode = self.backgroundNode {
             self.addSubview(backgroundNode.view)
@@ -333,8 +348,17 @@ public class GlassBackgroundView: UIView {
         fatalError("init(coder:) has not been implemented")
     }
     
-    public func update(size: CGSize, cornerRadius: CGFloat, isDark: Bool, tintColor: TintColor, transition: ComponentTransition) {
-        if let nativeView = self.nativeView {
+    override public func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        /*if let nativeContainerView = self.nativeContainerView {
+            if let result = nativeContainerView.hitTest(self.convert(point, to: nativeContainerView), with: event) {
+                return result
+            }
+        }*/
+        return nil
+    }
+    
+    public func update(size: CGSize, cornerRadius: CGFloat, isDark: Bool, tintColor: TintColor, isInteractive: Bool = false, transition: ComponentTransition) {
+        if let nativeContainerView = self.nativeContainerView, let nativeView = self.nativeView {
             let previousFrame = nativeView.frame
             
             if transition.animation.isImmediate {
@@ -347,6 +371,8 @@ public class GlassBackgroundView: UIView {
                 }
                 nativeView.layer.animateFrame(from: previousFrame, to: CGRect(origin: CGPoint(), size: size), duration: 0.4, timingFunction: kCAMediaTimingFunctionSpring)
             }
+            
+            transition.setFrame(view: nativeContainerView, frame: CGRect(origin: CGPoint(), size: size))
         }
         if let backgroundNode = self.backgroundNode {
             backgroundNode.updateColor(color: .clear, forceKeepBlur: tintColor.color.alpha != 1.0, transition: transition.containedViewLayoutTransition)
@@ -356,7 +382,7 @@ public class GlassBackgroundView: UIView {
         
         let shadowInset: CGFloat = 32.0
         
-        let params = Params(cornerRadius: cornerRadius, isDark: isDark, tintColor: tintColor)
+        let params = Params(cornerRadius: cornerRadius, isDark: isDark, tintColor: tintColor, isInteractive: isInteractive)
         if self.params != params {
             self.params = params
             
@@ -378,18 +404,21 @@ public class GlassBackgroundView: UIView {
             if let foregroundView = self.foregroundView {
                 foregroundView.image = GlassBackgroundView.generateLegacyGlassImage(size: CGSize(width: cornerRadius * 2.0, height: cornerRadius * 2.0), inset: shadowInset, isDark: isDark, fillColor: tintColor.color)
             } else {
-                if let nativeView {
+                if let nativeContainerView = self.nativeContainerView, let nativeView {
                     if #available(iOS 26.0, *) {
-                        let glassEffect = UIGlassEffect(style: .clear)
+                        let glassEffect = UIGlassEffect(style: .regular)
                         switch tintColor.kind {
                         case .panel:
-                            glassEffect.tintColor = tintColor.color.withMultipliedAlpha(1.2)
+                            glassEffect.tintColor = nil
                         case .custom:
                             glassEffect.tintColor = tintColor.color
                         }
-                        glassEffect.isInteractive = false
+                        glassEffect.isInteractive = params.isInteractive
                         
                         nativeView.effect = glassEffect
+                        let _ = nativeContainerView
+                        //nativeContainerView.overrideUserInterfaceStyle = .light// isDark ? .dark : .light
+                        self.overrideUserInterfaceStyle = isDark ? .dark : .light
                     }
                 }
             }
@@ -404,6 +433,27 @@ public class GlassBackgroundView: UIView {
             transition.setFrame(view: shadowView, frame: CGRect(origin: CGPoint(), size: size).insetBy(dx: -shadowInset, dy: -shadowInset))
         }
         transition.setFrame(view: self.contentContainer, frame: CGRect(origin: CGPoint(), size: size))
+    }
+}
+
+public final class GlassBackgroundContainerView: UIView {
+    private final class ContentView: UIView {
+        
+    }
+    
+    private let contentViewImpl: ContentView
+    public var contentView: UIView {
+        return self.contentViewImpl
+    }
+    
+    public override init(frame: CGRect) {
+        self.contentViewImpl = ContentView()
+        
+        super.init(frame: frame)
+    }
+    
+    required public init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
     }
 }
 
@@ -536,8 +586,7 @@ public extension GlassBackgroundView {
                 return result
             }
 
-            // Your requested closure:
-            let addShadow: (Bool, CGPoint, CGFloat, CGFloat, UIColor) -> Void = { isOuter, position, blur, spread, shadowColor in
+            let addShadow: (Bool, CGPoint, CGFloat, CGFloat, UIColor, Bool) -> Void = { isOuter, position, blur, spread, shadowColor, isMultiply in
                 var blur = blur
                 blur += abs(spread)
                 
@@ -571,132 +620,70 @@ public extension GlassBackgroundView {
                     context.fillPath()
                     context.setBlendMode(.normal)
                 } else {
-                    context.beginTransparencyLayer(auxiliaryInfo: nil)
-                    context.saveGState()
-                    defer {
-                        context.restoreGState()
-                        context.endTransparencyLayer()
+                    if let image = generateImage(size, rotatedContext: { size, context in
+                        context.clear(CGRect(origin: CGPoint(), size: size))
+                        let spreadRect = CGRect(origin: CGPoint(x: inset, y: inset), size: innerSize).insetBy(dx: -0.25, dy: -0.25)
+                        let spreadPath = UIBezierPath(
+                            roundedRect: spreadRect,
+                            cornerRadius: min(spreadRect.width, spreadRect.height) * 0.5
+                        ).cgPath
+
+                        context.setShadow(offset: CGSize(width: position.x, height: position.y), blur: blur, color: shadowColor.cgColor)
+                        context.setFillColor(UIColor.black.withAlphaComponent(1.0).cgColor)
+                        let enclosingRect = spreadRect.insetBy(dx: -10000.0, dy: -10000.0)
+                        context.addPath(UIBezierPath(rect: enclosingRect).cgPath)
+                        context.addPath(spreadPath)
+                        context.fillPath(using: .evenOdd)
+                        
+                        let cleanRect = CGRect(origin: CGPoint(x: inset, y: inset), size: innerSize)
+                        let cleanPath = UIBezierPath(
+                            roundedRect: cleanRect,
+                            cornerRadius: min(cleanRect.width, cleanRect.height) * 0.5
+                        ).cgPath
+                        context.setBlendMode(.copy)
+                        context.setFillColor(UIColor.clear.cgColor)
+                        context.addPath(UIBezierPath(rect: enclosingRect).cgPath)
+                        context.addPath(cleanPath)
+                        context.fillPath(using: .evenOdd)
+                        context.setBlendMode(.normal)
+                    }) {
+                        UIGraphicsPushContext(context)
+                        image.draw(in: CGRect(origin: .zero, size: size), blendMode: isMultiply ? .destinationOut : .normal, alpha: 1.0)
+                        UIGraphicsPopContext()
                     }
-
-                    let spreadRect = CGRect(origin: CGPoint(x: inset, y: inset), size: innerSize).insetBy(dx: -0.25, dy: -0.25)
-                    let spreadPath = UIBezierPath(
-                        roundedRect: spreadRect,
-                        cornerRadius: min(spreadRect.width, spreadRect.height) * 0.5
-                    ).cgPath
-
-                    context.setShadow(offset: CGSize(width: position.x, height: position.y), blur: blur, color: shadowColor.cgColor)
-                    context.setFillColor(UIColor.black.withAlphaComponent(1.0).cgColor)
-                    let enclosingRect = spreadRect.insetBy(dx: -10000.0, dy: -10000.0)
-                    context.addPath(UIBezierPath(rect: enclosingRect).cgPath)
-                    context.addPath(spreadPath)
-                    context.fillPath(using: .evenOdd)
-                    
-                    let cleanRect = CGRect(origin: CGPoint(x: inset, y: inset), size: innerSize)
-                    let cleanPath = UIBezierPath(
-                        roundedRect: cleanRect,
-                        cornerRadius: min(cleanRect.width, cleanRect.height) * 0.5
-                    ).cgPath
-                    context.setBlendMode(.copy)
-                    context.setFillColor(UIColor.clear.cgColor)
-                    context.addPath(UIBezierPath(rect: enclosingRect).cgPath)
-                    context.addPath(cleanPath)
-                    context.fillPath(using: .evenOdd)
-                    context.setBlendMode(.normal)
                 }
             }
             
             if isDark {
-                addShadow(true, CGPoint(), 16.0, 0.0, UIColor(white: 0.0, alpha: 0.12))
-                addShadow(true, CGPoint(), 8.0, 0.0, UIColor(white: 0.0, alpha: 0.1))
+                addShadow(true, CGPoint(), 16.0, 0.0, UIColor(white: 0.0, alpha: 0.12), false)
+                addShadow(true, CGPoint(), 8.0, 0.0, UIColor(white: 0.0, alpha: 0.1), false)
                 
                 context.setFillColor(fillColor.cgColor)
                 context.fillEllipse(in: CGRect(origin: CGPoint(), size: size).insetBy(dx: inset, dy: inset))
                 
-                addShadow(false, CGPoint(x: 0.0, y: 0.0), 3.0, 0.0, UIColor(white: 1.0, alpha: 0.5))
-                addShadow(false, CGPoint(x: 3.0, y: -3.0), 2.0, 0.0, UIColor(white: 1.0, alpha: 0.25))
-                addShadow(false, CGPoint(x: -3.0, y: 3.0), 2.0, 0.0, UIColor(white: 1.0, alpha: 0.25))
+                addShadow(false, CGPoint(x: 0.0, y: 0.0), 3.0, 0.0, UIColor(white: 1.0, alpha: 0.5), false)
+                addShadow(false, CGPoint(x: 3.0, y: -3.0), 2.0, 0.0, UIColor(white: 1.0, alpha: 0.25), false)
+                addShadow(false, CGPoint(x: -3.0, y: 3.0), 2.0, 0.0, UIColor(white: 1.0, alpha: 0.25), false)
             } else {
-                addShadow(true, CGPoint(), 16.0, 0.0, UIColor(white: 0.0, alpha: 0.08))
-                addShadow(true, CGPoint(), 8.0, 0.0, UIColor(white: 0.0, alpha: 0.08))
+                addShadow(true, CGPoint(), 32.0, 0.0, UIColor(white: 0.0, alpha: 0.08), false)
+                addShadow(true, CGPoint(), 16.0, 0.0, UIColor(white: 0.0, alpha: 0.08), false)
                 
                 context.setFillColor(fillColor.cgColor)
                 context.fillEllipse(in: CGRect(origin: CGPoint(), size: size).insetBy(dx: inset, dy: inset))
                 
-                addShadow(false, CGPoint(x: 3.0, y: -3.0), 0.5, 0.0, fillColor.withMultiplied(hue: 1.0, saturation: 2.0, brightness: 1.0).adjustedPerceivedBrightness(3.0).withMultipliedAlpha(1.0))
-                addShadow(false, CGPoint(x: -2.0, y: 2.0), 0.5, 0.0, UIColor.black.withMultipliedAlpha(0.15))
-            }
-            
-            if "".isEmpty {
-                return
-            }
-            
-            let maxColor = UIColor(white: 1.0, alpha: isDark ? 0.25 : 0.9)
-            let minColor = UIColor(white: 1.0, alpha: 0.0)
-            
-            context.setFillColor(fillColor.cgColor)
-            context.fillEllipse(in: CGRect(origin: CGPoint(), size: size))
-            
-            let lineWidth: CGFloat = isDark ? 0.66 : 0.66
-            
-            context.saveGState()
-            
-            let darkShadeColor = UIColor(white: isDark ? 1.0 : 0.0, alpha: 0.035)
-            let lightShadeColor = UIColor(white: isDark ? 0.0 : 1.0, alpha: 0.035)
-            let innerShadowBlur: CGFloat = 24.0
-            
-            context.resetClip()
-            context.addEllipse(in: CGRect(origin: CGPoint(), size: size).insetBy(dx: lineWidth * 0.5, dy: lineWidth * 0.5))
-            context.clip()
-            context.addRect(CGRect(origin: CGPoint(), size: size).insetBy(dx: -100.0, dy: -100.0))
-            context.addEllipse(in: CGRect(origin: CGPoint(), size: size))
-            context.setFillColor(UIColor.black.cgColor)
-            context.setShadow(offset: CGSize(width: 10.0, height: -10.0), blur: innerShadowBlur, color: darkShadeColor.cgColor)
-            context.fillPath(using: .evenOdd)
-            
-            context.resetClip()
-            context.addEllipse(in: CGRect(origin: CGPoint(), size: size).insetBy(dx: lineWidth * 0.5, dy: lineWidth * 0.5))
-            context.clip()
-            context.addRect(CGRect(origin: CGPoint(), size: size).insetBy(dx: -100.0, dy: -100.0))
-            context.addEllipse(in: CGRect(origin: CGPoint(), size: size))
-            context.setFillColor(UIColor.black.cgColor)
-            context.setShadow(offset: CGSize(width: -10.0, height: 10.0), blur: innerShadowBlur, color: lightShadeColor.cgColor)
-            context.fillPath(using: .evenOdd)
-            
-            context.restoreGState()
-            
-            context.setLineWidth(lineWidth)
-            
-            context.addRect(CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: size.width * 0.5, height: size.height)))
-            context.clip()
-            context.addEllipse(in: CGRect(origin: CGPoint(), size: size).insetBy(dx: lineWidth * 0.5, dy: lineWidth * 0.5))
-            context.replacePathWithStrokedPath()
-            context.clip()
-            
-            do {
-                var locations: [CGFloat] = [0.0, 0.5, 0.5 + 0.2, 1.0 - 0.1, 1.0]
-                let colors: [CGColor] = [maxColor.cgColor, maxColor.cgColor, minColor.cgColor, minColor.cgColor, maxColor.cgColor]
+                let highlightColor: UIColor
+                if fillColor.hsb.s > 0.5 {
+                    highlightColor = fillColor.withMultiplied(hue: 1.0, saturation: 2.0, brightness: 1.0).adjustedPerceivedBrightness(2.0)
+                    
+                    let shadowColor = fillColor.withMultiplied(hue: 1.0, saturation: 2.0, brightness: 1.0).adjustedPerceivedBrightness(0.5).withMultipliedAlpha(0.2)
+                    addShadow(false, CGPoint(x: -2.0, y: 2.0), 0.5, 0.0, shadowColor, false)
+                } else {
+                    highlightColor = UIColor(white: 1.0, alpha: 0.4)
+                    addShadow(false, CGPoint(x: -2.0, y: 2.0), 0.5, 0.0, UIColor.black.withMultipliedAlpha(0.15), true)
+                    addShadow(false, CGPoint(x: -2.0, y: 2.0), 0.6, 0.0, UIColor(white: 0.0, alpha: 0.1), false)
+                }
                 
-                let colorSpace = CGColorSpaceCreateDeviceRGB()
-                let gradient = CGGradient(colorsSpace: colorSpace, colors: colors as CFArray, locations: &locations)!
-                
-                context.drawLinearGradient(gradient, start: CGPoint(x: 0.0, y: 0.0), end: CGPoint(x: 0.0, y: size.height), options: CGGradientDrawingOptions())
-            }
-            
-            context.resetClip()
-            context.addRect(CGRect(origin: CGPoint(x: size.width - size.width * 0.5, y: 0.0), size: CGSize(width: size.width * 0.5, height: size.height)))
-            context.clip()
-            context.addEllipse(in: CGRect(origin: CGPoint(), size: size).insetBy(dx: lineWidth * 0.5, dy: lineWidth * 0.5))
-            context.replacePathWithStrokedPath()
-            context.clip()
-            
-            do {
-                var locations: [CGFloat] = [0.0, 0.1, 0.5 - 0.2, 0.5, 1.0]
-                let colors: [CGColor] = [maxColor.cgColor, minColor.cgColor, minColor.cgColor, maxColor.cgColor, maxColor.cgColor]
-                
-                let colorSpace = CGColorSpaceCreateDeviceRGB()
-                let gradient = CGGradient(colorsSpace: colorSpace, colors: colors as CFArray, locations: &locations)!
-                
-                context.drawLinearGradient(gradient, start: CGPoint(x: 0.0, y: 0.0), end: CGPoint(x: 0.0, y: size.height), options: CGGradientDrawingOptions())
+                addShadow(false, CGPoint(x: 2.0, y: -2.0), 0.5, 0.0, highlightColor, false)
             }
         })!.stretchableImage(withLeftCapWidth: Int(size.width * 0.5), topCapHeight: Int(size.height * 0.5))
     }
@@ -784,15 +771,20 @@ public extension GlassBackgroundView {
 
 public final class GlassBackgroundComponent: Component {
     private let size: CGSize
+    private let isDark: Bool
     private let tintColor: GlassBackgroundView.TintColor
     
-    public init(size: CGSize, tintColor: GlassBackgroundView.TintColor) {
+    public init(size: CGSize, isDark: Bool, tintColor: GlassBackgroundView.TintColor) {
         self.size = size
+        self.isDark = isDark
         self.tintColor = tintColor
     }
     
     public static func == (lhs: GlassBackgroundComponent, rhs: GlassBackgroundComponent) -> Bool {
         if lhs.size != rhs.size {
+            return false
+        }
+        if lhs.isDark != rhs.isDark {
             return false
         }
         if lhs.tintColor != rhs.tintColor {
@@ -803,7 +795,7 @@ public final class GlassBackgroundComponent: Component {
     
     public final class View: GlassBackgroundView {
         func update(component: GlassBackgroundComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
-            self.update(size: component.size, cornerRadius: component.size.height / 2.0, isDark: true, tintColor: component.tintColor, transition: transition)
+            self.update(size: component.size, cornerRadius: component.size.height / 2.0, isDark: component.isDark, tintColor: component.tintColor, transition: transition)
             self.frame = CGRect(origin: .zero, size: component.size)
             
             return component.size

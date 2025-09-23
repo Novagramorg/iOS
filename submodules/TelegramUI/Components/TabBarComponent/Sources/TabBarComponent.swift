@@ -315,6 +315,8 @@ public final class TabBarComponent: Component {
             self.component = component
             self.state = state
             
+            self.overrideUserInterfaceStyle = component.theme.overallDarkAppearance ? .dark : .light
+            
             if let nativeTabBar = self.nativeTabBar {
                 if nativeTabBar.items?.count != component.items.count {
                     nativeTabBar.items = (0 ..< component.items.count).map { i in

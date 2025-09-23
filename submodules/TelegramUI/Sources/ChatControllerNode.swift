@@ -1311,6 +1311,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             previousInputPanelOrigin.y -= inputPanelNode.bounds.size.height
         }
         if let secondaryInputPanelNode = self.secondaryInputPanelNode {
+            previousInputPanelOrigin.y -= 8.0
             previousInputPanelOrigin.y -= secondaryInputPanelNode.bounds.size.height
         }
         self.containerLayoutAndNavigationBarHeight = (layout, navigationBarHeight)
@@ -1568,6 +1569,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             inputPanelNodeBaseHeight += inputPanelNode.minimalHeight(interfaceState: self.chatPresentationInterfaceState, metrics: layout.metrics)
         }
         if let secondaryInputPanelNode = self.secondaryInputPanelNode {
+            inputPanelNodeBaseHeight += 8.0
             inputPanelNodeBaseHeight += secondaryInputPanelNode.minimalHeight(interfaceState: self.chatPresentationInterfaceState, metrics: layout.metrics)
         }
         
@@ -1739,6 +1741,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             }
         }
         if let secondaryInputPanelSize = secondaryInputPanelSize {
+            maximumInputNodeHeight -= 8.0
             maximumInputNodeHeight -= secondaryInputPanelSize.height
         }
         if let accessoryPanelSize = accessoryPanelSize {
@@ -2128,8 +2131,11 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             if overlayContextPanelNode !== self.overlayContextPanelNode {
                 dismissedOverlayContextPanelNode = self.overlayContextPanelNode
                 self.overlayContextPanelNode = overlayContextPanelNode
-                
-                self.contentContainerNode.contentNode.addSubnode(overlayContextPanelNode)
+                if let navigationBar = self.navigationBar {
+                    self.contentContainerNode.contentNode.insertSubnode(overlayContextPanelNode, belowSubnode: navigationBar)
+                } else {
+                    self.contentContainerNode.contentNode.addSubnode(overlayContextPanelNode)
+                }
                 immediatelyLayoutOverlayContextPanelAndAnimateAppearance = true
             }
         } else if let overlayContextPanelNode = self.overlayContextPanelNode {
@@ -2147,10 +2153,10 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         var inputPanelHideOffset: CGFloat = 0.0
         if let inputNode = self.inputNode, inputNode.hideInput {
             if let inputPanelSize = inputPanelSize {
-                inputPanelHideOffset += -inputPanelSize.height
+                inputPanelHideOffset += -inputPanelSize.height - 80.0
             }
             if let accessoryPanelSize = accessoryPanelSize {
-                inputPanelHideOffset += -accessoryPanelSize.height
+                inputPanelHideOffset += -accessoryPanelSize.height - 80.0
             }
         }
         
@@ -2164,11 +2170,11 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         }
         
         if self.secondaryInputPanelNode != nil {
-            secondaryInputPanelFrame = CGRect(origin: CGPoint(x: 0.0, y: layout.size.height - insets.bottom - bottomOverflowOffset - inputPanelsHeight - secondaryInputPanelSize!.height), size: CGSize(width: layout.size.width, height: secondaryInputPanelSize!.height))
+            secondaryInputPanelFrame = CGRect(origin: CGPoint(x: 0.0, y: layout.size.height - insets.bottom - bottomOverflowOffset - inputPanelsHeight - secondaryInputPanelSize!.height - 8.0), size: CGSize(width: layout.size.width, height: secondaryInputPanelSize!.height))
             if self.dismissedAsOverlay {
                 secondaryInputPanelFrame!.origin.y = layout.size.height
             }
-            inputPanelsHeight += secondaryInputPanelSize!.height
+            inputPanelsHeight += 8.0 + secondaryInputPanelSize!.height
         }
         
         var accessoryPanelFrame: CGRect?

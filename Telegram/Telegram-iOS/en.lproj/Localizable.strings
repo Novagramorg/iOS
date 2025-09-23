@@ -15077,3 +15077,14 @@ Error: %8$@";
 "Conversation.SuggestedBirthdate.View" = "View";
 
 "PeerInfo.ChangeProfileColor" = "Change Profile Color";
+
+"PUSH_MESSAGE_TODO" = "%1$@|sent you a todo-list %2$@";
+"PUSH_CHANNEL_MESSAGE_TODO" = "%1$@|posted a todo-list %2$@";
+"PUSH_CHANNEL_MESSAGE_TODO_DONE" = "%1$@|toggled %2$@ tasks";
+"PUSH_CHANNEL_MESSAGE_TODO_APPEND" = "%1$@|added %2$@ tasks";
+"PUSH_CHAT_MESSAGE_TODO" = "%2$@|%1$@ sent a todo-list %3$@";
+"PUSH_CHAT_MESSAGE_TODO_DONE" = "%2$@|%1$@ toggled %3$@ tasks";
+"PUSH_CHAT_MESSAGE_TODO_APPEND" = "%2$@|%1$@ added %3$@ tasks";
+"PUSH_PINNED_TODO" = "%1$@|pinned a todo-list %2$@";
+"PUSH_REACT_TODO" = "%1$@|reacted %2$@ to your todo %3$@";
+"PUSH_CHAT_REACT_TODO" = "%2$@|%1$@ reacted %3$@ to your todo %4$@";
