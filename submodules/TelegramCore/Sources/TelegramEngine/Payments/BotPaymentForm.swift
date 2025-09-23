@@ -670,6 +670,7 @@ public enum SendBotPaymentFormError {
     case starGiftOutOfStock
     case disallowedStarGift
     case starGiftUserLimit
+    case serverProvided(String)
 }
 
 public enum SendBotPaymentResult {

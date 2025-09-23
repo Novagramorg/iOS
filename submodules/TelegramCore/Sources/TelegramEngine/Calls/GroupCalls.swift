@@ -3442,7 +3442,7 @@ public final class GroupCallMessagesContext {
     }
     
     private final class Impl {
-        private let defaultMessageLifetime: Int32 = 10
+        private let messageLifetime: Int32
         
         let queue: Queue
         let account: Account
@@ -3464,12 +3464,13 @@ public final class GroupCallMessagesContext {
         
         private var messageLifeTimer: SwiftSignalKit.Timer?
         
-        init(queue: Queue, account: Account, callId: Int64, reference: InternalGroupCallReference, e2eContext: ConferenceCallE2EContext?) {
+        init(queue: Queue, account: Account, callId: Int64, reference: InternalGroupCallReference, e2eContext: ConferenceCallE2EContext?, messageLifetime: Int32) {
             self.queue = queue
             self.account = account
             self.callId = callId
             self.reference = reference
             self.e2eContext = e2eContext
+            self.messageLifetime = messageLifetime
             
             self.state = State(messages: [])
             self.stateValue.set(self.state)
@@ -3535,7 +3536,7 @@ public final class GroupCallMessagesContext {
                                                 text: text,
                                                 entities: messageTextEntitiesFromApiEntities(entities),
                                                 date: currentTime,
-                                                lifetime: self.defaultMessageLifetime
+                                                lifetime: self.messageLifetime
                                             ))
                                         }
                                     }
@@ -3554,7 +3555,7 @@ public final class GroupCallMessagesContext {
                                     text: addedMessage.text,
                                     entities: addedMessage.entities,
                                     date: currentTime,
-                                    lifetime: self.defaultMessageLifetime
+                                    lifetime: self.messageLifetime
                                 ))
                             }
                         }
@@ -3615,7 +3616,7 @@ public final class GroupCallMessagesContext {
                     text: text,
                     entities: entities,
                     date: currentTime,
-                    lifetime: self.defaultMessageLifetime
+                    lifetime: self.messageLifetime
                 ))
                 self.state = state
                 
@@ -3657,11 +3658,11 @@ public final class GroupCallMessagesContext {
         }
     }
     
-    init(account: Account, callId: Int64, reference: InternalGroupCallReference, e2eContext: ConferenceCallE2EContext?) {
+    init(account: Account, callId: Int64, reference: InternalGroupCallReference, e2eContext: ConferenceCallE2EContext?, messageLifetime: Int32) {
         let queue = Queue(name: "GroupCallMessagesContext")
         self.queue = queue
         self.impl = QueueLocalObject(queue: queue, generate: {
-            return Impl(queue: queue, account: account, callId: callId, reference: reference, e2eContext: e2eContext)
+            return Impl(queue: queue, account: account, callId: callId, reference: reference, e2eContext: e2eContext, messageLifetime: messageLifetime)
         })
     }
     

@@ -70,7 +70,7 @@ final class PeerInfoScreenNoteListItemNode: PeerInfoScreenItemNode {
         }
         
         var resetText: NSAttributedString?
-        if self.item == nil {
+        if self.item?.initialValue != item.initialValue {
             resetText = item.initialValue
         }
         
@@ -97,7 +97,7 @@ final class PeerInfoScreenNoteListItemNode: PeerInfoScreenItemNode {
         self.textField.parentState = self.state
         let textFieldSize = self.textField.update(
             transition: .immediate,
-            component: AnyComponent(TextFieldComponent(context: context, theme: presentationData.theme, strings: presentationData.strings, externalState: self.textFieldExternalState, fontSize: 17.0, textColor: presentationData.theme.list.itemPrimaryTextColor, accentColor: presentationData.theme.list.itemAccentColor, insets: UIEdgeInsets(top: 9.0, left: 8.0, bottom: 10.0, right: 8.0), hideKeyboard: false, customInputView: nil, placeholder: NSAttributedString(string: "Add notes", font: Font.regular(17.0), textColor: presentationData.theme.list.itemPlaceholderTextColor), resetText: resetText, isOneLineWhenUnfocused: false, characterLimit: characterLimit, formatMenuAvailability: .available([.bold, .italic, .underline, .strikethrough, .spoiler]), lockedFormatAction: {}, present: { c in }, paste: { _ in })),
+            component: AnyComponent(TextFieldComponent(context: context, theme: presentationData.theme, strings: presentationData.strings, externalState: self.textFieldExternalState, fontSize: 17.0, textColor: presentationData.theme.list.itemPrimaryTextColor, accentColor: presentationData.theme.list.itemAccentColor, insets: UIEdgeInsets(top: 9.0, left: 8.0, bottom: 10.0, right: 8.0), hideKeyboard: false, customInputView: nil, placeholder: NSAttributedString(string: presentationData.strings.PeerInfo_AddNotesPlaceholder, font: Font.regular(17.0), textColor: presentationData.theme.list.itemPlaceholderTextColor), resetText: resetText, isOneLineWhenUnfocused: false, characterLimit: characterLimit, formatMenuAvailability: .available([.bold, .italic, .underline, .strikethrough, .spoiler]), lockedFormatAction: {}, present: { c in }, paste: { _ in })),
             environment: {},
             containerSize: CGSize(width: width - sideInset * 2.0, height: .greatestFiniteMagnitude)
         )
