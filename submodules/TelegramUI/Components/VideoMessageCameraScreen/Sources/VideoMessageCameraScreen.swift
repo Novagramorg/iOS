@@ -586,6 +586,7 @@ private final class VideoMessageCameraScreenComponent: CombinedComponent {
                 let flipButtonBackground = flipButtonBackground.update(
                     component: GlassBackgroundComponent(
                         size: CGSize(width: 40.0, height: 40.0),
+                        cornerRadius: 40.0 * 0.5,
                         isDark: environment.theme.overallDarkAppearance,
                         tintColor: .init(kind: .panel, color: environment.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7))
                     ),
@@ -688,6 +689,7 @@ private final class VideoMessageCameraScreenComponent: CombinedComponent {
                     let flashButtonBackground = flashButtonBackground.update(
                         component: GlassBackgroundComponent(
                             size: CGSize(width: 40.0, height: 40.0),
+                            cornerRadius: 40.0 * 0.5,
                             isDark: environment.theme.overallDarkAppearance,
                             tintColor: .init(kind: .panel, color: environment.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7))
                         ),
@@ -719,6 +721,7 @@ private final class VideoMessageCameraScreenComponent: CombinedComponent {
                                     component: AnyComponent(
                                         GlassBackgroundComponent(
                                             size: CGSize(width: 40.0, height: 40.0),
+                                            cornerRadius: 40.0 * 0.5,
                                             isDark: environment.theme.overallDarkAppearance,
                                             tintColor: .init(kind: .panel, color: environment.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7))
                                         )
@@ -763,6 +766,7 @@ private final class VideoMessageCameraScreenComponent: CombinedComponent {
                                     id: "background",
                                     component: AnyComponent(GlassBackgroundComponent(
                                         size: CGSize(width: 40.0, height: 40.0),
+                                        cornerRadius: 40.0 * 0.5,
                                         isDark: environment.theme.overallDarkAppearance,
                                         tintColor: .init(kind: .panel, color: environment.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7))
                                     ))

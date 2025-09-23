@@ -771,17 +771,22 @@ public extension GlassBackgroundView {
 
 public final class GlassBackgroundComponent: Component {
     private let size: CGSize
+    private let cornerRadius: CGFloat
     private let isDark: Bool
     private let tintColor: GlassBackgroundView.TintColor
     
-    public init(size: CGSize, isDark: Bool, tintColor: GlassBackgroundView.TintColor) {
+    public init(size: CGSize, cornerRadius: CGFloat, isDark: Bool, tintColor: GlassBackgroundView.TintColor) {
         self.size = size
+        self.cornerRadius = cornerRadius
         self.isDark = isDark
         self.tintColor = tintColor
     }
     
     public static func == (lhs: GlassBackgroundComponent, rhs: GlassBackgroundComponent) -> Bool {
         if lhs.size != rhs.size {
+            return false
+        }
+        if lhs.cornerRadius != rhs.cornerRadius {
             return false
         }
         if lhs.isDark != rhs.isDark {
@@ -795,7 +800,7 @@ public final class GlassBackgroundComponent: Component {
     
     public final class View: GlassBackgroundView {
         func update(component: GlassBackgroundComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
-            self.update(size: component.size, cornerRadius: component.size.height / 2.0, isDark: component.isDark, tintColor: component.tintColor, transition: transition)
+            self.update(size: component.size, cornerRadius: component.cornerRadius, isDark: component.isDark, tintColor: component.tintColor, transition: transition)
             self.frame = CGRect(origin: .zero, size: component.size)
             
             return component.size
