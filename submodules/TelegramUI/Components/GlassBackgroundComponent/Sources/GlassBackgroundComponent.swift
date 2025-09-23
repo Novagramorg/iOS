@@ -263,8 +263,9 @@ public class GlassBackgroundView: UIView {
     private let backgroundNode: NavigationBackgroundNode?
     private let nativeView: UIVisualEffectView?
     
-    private let foregroundView: UIImageView?
+    private var foregroundView: UIImageView?
     private let shadowView: UIImageView?
+    private var antiGlareView: UIImageView?
     
     private let maskContainerView: UIView
     public let maskContentView: UIView
@@ -356,6 +357,11 @@ public class GlassBackgroundView: UIView {
         
         let shadowInset: CGFloat = 32.0
         
+        var useAntiGlare = false
+        if #available(iOS 26.0, *), isDark {
+            useAntiGlare = true
+        }
+        
         let params = Params(cornerRadius: cornerRadius, isDark: isDark, tintColor: tintColor)
         if self.params != params {
             self.params = params
@@ -375,9 +381,25 @@ public class GlassBackgroundView: UIView {
                 })?.stretchableImage(withLeftCapWidth: Int(shadowInset + cornerRadius), topCapHeight: Int(shadowInset + cornerRadius))
             }
             
+            if useAntiGlare {
+                if self.antiGlareView == nil {
+                    let antiGlareView = UIImageView()
+                    self.antiGlareView = antiGlareView
+                    self.addSubview(antiGlareView)
+                }
+            } else if let antiGlareView = self.antiGlareView {
+                self.antiGlareView = nil
+                antiGlareView.removeFromSuperview()
+            }
+            
             if let foregroundView = self.foregroundView {
                 foregroundView.image = GlassBackgroundView.generateLegacyGlassImage(size: CGSize(width: cornerRadius * 2.0, height: cornerRadius * 2.0), inset: shadowInset, isDark: isDark, fillColor: tintColor.color)
             } else {
+                if let antiGlareView = self.antiGlareView {
+                    antiGlareView.image = GlassBackgroundView.generateAntiglareImage(size: CGSize(width: cornerRadius * 2.0, height: cornerRadius * 2.0), color: tintColor.color.withAlphaComponent(1.0))
+                    antiGlareView.layer.compositingFilter = "overlayBlendMode"
+                }
+                
                 if let nativeView {
                     if #available(iOS 26.0, *) {
                         let glassEffect = UIGlassEffect(style: .clear)
@@ -399,6 +421,9 @@ public class GlassBackgroundView: UIView {
         transition.setFrame(view: self.maskContentView, frame: CGRect(origin: CGPoint(x: shadowInset, y: shadowInset), size: size))
         if let foregroundView = self.foregroundView {
             transition.setFrame(view: foregroundView, frame: CGRect(origin: CGPoint(), size: size).insetBy(dx: -shadowInset, dy: -shadowInset))
+        }
+        if let antiGlareView = self.antiGlareView {
+            transition.setFrame(view: antiGlareView, frame: CGRect(origin: CGPoint(), size: size))
         }
         if let shadowView = self.shadowView {
             transition.setFrame(view: shadowView, frame: CGRect(origin: CGPoint(), size: size).insetBy(dx: -shadowInset, dy: -shadowInset))
@@ -701,6 +726,22 @@ public extension GlassBackgroundView {
         })!.stretchableImage(withLeftCapWidth: Int(size.width * 0.5), topCapHeight: Int(size.height * 0.5))
     }
     
+    static func generateAntiglareImage(size: CGSize, color: UIColor) -> UIImage {
+        var size = size
+        if size == .zero {
+            size = CGSize(width: 1.0, height: 1.0)
+        }
+        
+        return generateImage(size, rotatedContext: { size, context in
+            context.clear(CGRect(origin: CGPoint(), size: size))
+            
+            let lineWidth: CGFloat = 1.0
+            context.addEllipse(in: CGRect(origin: CGPoint(), size: size).insetBy(dx: lineWidth * 0.5, dy: lineWidth * 0.5))
+            context.setStrokeColor(color.cgColor)
+            context.strokePath()
+        })!.stretchableImage(withLeftCapWidth: Int(size.width * 0.5), topCapHeight: Int(size.height * 0.5))
+    }
+    
     static func generateForegroundImage(size: CGSize, isDark: Bool, fillColor: UIColor) -> UIImage {
         var size = size
         if size == .zero {
@@ -784,17 +825,22 @@ public extension GlassBackgroundView {
 
 public final class GlassBackgroundComponent: Component {
     private let size: CGSize
+    private let cornerRadius: CGFloat
     private let isDark: Bool
     private let tintColor: GlassBackgroundView.TintColor
     
-    public init(size: CGSize, isDark: Bool, tintColor: GlassBackgroundView.TintColor) {
+    public init(size: CGSize, cornerRadius: CGFloat, isDark: Bool, tintColor: GlassBackgroundView.TintColor) {
         self.size = size
+        self.cornerRadius = cornerRadius
         self.isDark = isDark
         self.tintColor = tintColor
     }
     
     public static func == (lhs: GlassBackgroundComponent, rhs: GlassBackgroundComponent) -> Bool {
         if lhs.size != rhs.size {
+            return false
+        }
+        if lhs.cornerRadius != rhs.cornerRadius {
             return false
         }
         if lhs.isDark != rhs.isDark {
@@ -808,7 +854,7 @@ public final class GlassBackgroundComponent: Component {
     
     public final class View: GlassBackgroundView {
         func update(component: GlassBackgroundComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
-            self.update(size: component.size, cornerRadius: component.size.height / 2.0, isDark: component.isDark, tintColor: component.tintColor, transition: transition)
+            self.update(size: component.size, cornerRadius: component.cornerRadius, isDark: component.isDark, tintColor: component.tintColor, transition: transition)
             self.frame = CGRect(origin: .zero, size: component.size)
             
             return component.size
