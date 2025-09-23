@@ -924,10 +924,15 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
         }
         
         if let initialCall {
+            var messageLifetime: Int32 = 10
+            if let data = accountContext.currentAppConfiguration.with({ $0 }).data, let value = data["group_call_message_ttl"] as? Double {
+                messageLifetime = Int32(value)
+            }
             self.messagesContext = accountContext.engine.messages.groupCallMessages(
                 callId: initialCall.description.id,
                 reference: .id(id: initialCall.description.id, accessHash: initialCall.description.accessHash),
-                e2eContext: self.e2eContext
+                e2eContext: self.e2eContext,
+                messageLifetime: messageLifetime
             )
             self.messagesStatePromise.set(self.messagesContext!.state)
         }

@@ -1140,7 +1140,7 @@ final class GiftOptionsScreenComponent: Component {
                 premiumDescriptionRawString = strings.Gift_Options_Premium_Text(peerName).string
                 isPremiumDescription = true
             }
-            if !isPremiumDescription && self.starsFilter == .resale {
+            if !isPremiumDescription && self.starsFilter == .resale && component.peerId != component.context.account.peerId {
                 premiumDescriptionRawString = strings.Gift_Options_Collectibles_Text
             }
             

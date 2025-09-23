@@ -873,6 +873,7 @@ public final class MessageInputPanelComponent: Component {
                     },
                     isOneLineWhenUnfocused: component.style == .media,
                     formatMenuAvailability: component.isFormattingLocked ? .locked : .available(TextFieldComponent.FormatMenuAvailability.Action.all),
+                    returnKeyType: component.style == .glass ? .done : .default,
                     lockedFormatAction: {
                         component.presentTextFormattingTooltip?()
                     },
@@ -1076,7 +1077,7 @@ public final class MessageInputPanelComponent: Component {
                     self.fieldBackgroundTint.isHidden = true
                 }
                 if let fieldGlassBackgroundView = self.fieldGlassBackgroundView {
-                    fieldGlassBackgroundView.update(size: fieldBackgroundFrame.size, cornerRadius: baseFieldHeight * 0.5, isDark: true, tintColor: .init(kind: .custom, color: UIColor(rgb: 0x1b1d22)), transition: transition)
+                    fieldGlassBackgroundView.update(size: fieldBackgroundFrame.size, cornerRadius: baseFieldHeight * 0.5, isDark: true, tintColor: .init(kind: .panel, color: UIColor(rgb: 0x4d4f5c, alpha: 0.6)), transition: transition)
                     transition.setFrame(view: fieldGlassBackgroundView, frame: fieldBackgroundFrame)
                 }
             default:
