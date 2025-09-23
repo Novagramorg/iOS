@@ -239,14 +239,18 @@ final class TabBarControllerNode: ASDisplayNode {
                 self.view.addSubview(tabBarComponentView)
             }
             transition.updateFrame(view: tabBarComponentView, frame: tabBarFrame)
+            transition.updateAlpha(layer: tabBarComponentView.layer, alpha: params.toolbar == nil ? 1.0 : 0.0)
         }
         
         transition.updateFrame(node: self.disabledOverlayNode, frame: tabBarFrame)
         
+        let toolbarHeight = 50.0 + params.layout.insets(options: options).bottom
+        let toolbarFrame = CGRect(origin: CGPoint(x: 0.0, y: params.layout.size.height - toolbarHeight), size: CGSize(width: params.layout.size.width, height: toolbarHeight))
+        
         if let toolbar = params.toolbar {
             if let toolbarNode = self.toolbarNode {
-                transition.updateFrame(node: toolbarNode, frame: tabBarFrame)
-                toolbarNode.updateLayout(size: tabBarFrame.size, leftInset: params.layout.safeInsets.left, rightInset: params.layout.safeInsets.right, additionalSideInsets: params.layout.additionalInsets, bottomInset: bottomInset, toolbar: toolbar, transition: transition)
+                transition.updateFrame(node: toolbarNode, frame: toolbarFrame)
+                toolbarNode.updateLayout(size: toolbarFrame.size, leftInset: params.layout.safeInsets.left, rightInset: params.layout.safeInsets.right, additionalSideInsets: params.layout.additionalInsets, bottomInset: bottomInset, toolbar: toolbar, transition: transition)
             } else {
                 let toolbarNode = ToolbarNode(theme: ToolbarTheme(theme: self.theme), displaySeparator: true, left: { [weak self] in
                     self?.toolbarActionSelected(.left)
@@ -255,8 +259,8 @@ final class TabBarControllerNode: ASDisplayNode {
                 }, middle: { [weak self] in
                     self?.toolbarActionSelected(.middle)
                 })
-                toolbarNode.frame = tabBarFrame
-                toolbarNode.updateLayout(size: tabBarFrame.size, leftInset: params.layout.safeInsets.left, rightInset: params.layout.safeInsets.right, additionalSideInsets: params.layout.additionalInsets, bottomInset: bottomInset, toolbar: toolbar, transition: .immediate)
+                toolbarNode.frame = toolbarFrame
+                toolbarNode.updateLayout(size: toolbarFrame.size, leftInset: params.layout.safeInsets.left, rightInset: params.layout.safeInsets.right, additionalSideInsets: params.layout.additionalInsets, bottomInset: bottomInset, toolbar: toolbar, transition: .immediate)
                 self.addSubnode(toolbarNode)
                 self.toolbarNode = toolbarNode
                 if transition.isAnimated {
