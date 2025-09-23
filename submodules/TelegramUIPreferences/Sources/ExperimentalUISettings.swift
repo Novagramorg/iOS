@@ -69,6 +69,7 @@ public struct ExperimentalUISettings: Codable, Equatable {
     public var checkSerializedData: Bool
     public var allForumsHaveTabs: Bool
     public var debugRatingLayout: Bool
+    public var enableUpdates: Bool
     
     public static var defaultSettings: ExperimentalUISettings {
         return ExperimentalUISettings(
@@ -115,7 +116,8 @@ public struct ExperimentalUISettings: Codable, Equatable {
             conferenceDebug: false,
             checkSerializedData: false,
             allForumsHaveTabs: false,
-            debugRatingLayout: false
+            debugRatingLayout: false,
+            enableUpdates: false
         )
     }
     
@@ -163,7 +165,8 @@ public struct ExperimentalUISettings: Codable, Equatable {
         conferenceDebug: Bool,
         checkSerializedData: Bool,
         allForumsHaveTabs: Bool,
-        debugRatingLayout: Bool
+        debugRatingLayout: Bool,
+        enableUpdates: Bool
     ) {
         self.keepChatNavigationStack = keepChatNavigationStack
         self.skipReadHistory = skipReadHistory
@@ -209,6 +212,7 @@ public struct ExperimentalUISettings: Codable, Equatable {
         self.checkSerializedData = checkSerializedData
         self.allForumsHaveTabs = allForumsHaveTabs
         self.debugRatingLayout = debugRatingLayout
+        self.enableUpdates = enableUpdates
     }
     
     public init(from decoder: Decoder) throws {
@@ -258,6 +262,7 @@ public struct ExperimentalUISettings: Codable, Equatable {
         self.checkSerializedData = try container.decodeIfPresent(Bool.self, forKey: "checkSerializedData") ?? false
         self.allForumsHaveTabs = try container.decodeIfPresent(Bool.self, forKey: "allForumsHaveTabs") ?? false
         self.debugRatingLayout = try container.decodeIfPresent(Bool.self, forKey: "debugRatingLayout") ?? false
+        self.enableUpdates = try container.decodeIfPresent(Bool.self, forKey: "enableUpdates") ?? false
     }
     
     public func encode(to encoder: Encoder) throws {
@@ -307,6 +312,7 @@ public struct ExperimentalUISettings: Codable, Equatable {
         try container.encodeIfPresent(self.checkSerializedData, forKey: "checkSerializedData")
         try container.encodeIfPresent(self.allForumsHaveTabs, forKey: "allForumsHaveTabs")
         try container.encodeIfPresent(self.debugRatingLayout, forKey: "debugRatingLayout")
+        try container.encodeIfPresent(self.enableUpdates, forKey: "enableUpdates")
     }
 }
 
