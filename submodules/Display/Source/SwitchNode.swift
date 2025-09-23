@@ -9,7 +9,11 @@ private final class SwitchNodeViewLayer: CALayer {
 
 private final class SwitchNodeView: UISwitch {
     override class var layerClass: AnyClass {
-        return SwitchNodeViewLayer.self
+        if #available(iOS 26.0, *) {
+            return super.layerClass
+        } else {
+            return SwitchNodeViewLayer.self
+        }
     }
 }
 
@@ -82,7 +86,11 @@ open class SwitchNode: ASDisplayNode {
     }
     
     override open func calculateSizeThatFits(_ constrainedSize: CGSize) -> CGSize {
-        return CGSize(width: 51.0, height: 31.0)
+        if #available(iOS 26.0, *) {
+            return CGSize(width: 63.0, height: 28.0)
+        } else {
+            return CGSize(width: 51.0, height: 31.0)
+        }
     }
     
     @objc func switchValueChanged(_ view: UISwitch) {
