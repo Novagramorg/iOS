@@ -71,10 +71,9 @@ final class MessageListComponent: Component {
         
         private var component: MessageListComponent?
         private weak var state: EmptyComponentState?
-        private var isUpdating: Bool = false
+        private var isUpdating = false
         
         private var nextSendActionTransition: MessageListComponent.SendActionTransition?
-        
         private var itemViews: [AnyHashable: ComponentView<Empty>] = [:]
         
         private let topInset: CGFloat = 8.0
