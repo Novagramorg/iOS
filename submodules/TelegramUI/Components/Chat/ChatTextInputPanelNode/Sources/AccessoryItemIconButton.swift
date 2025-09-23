@@ -16,8 +16,7 @@ final class AccessoryItemIconButton: HighlightTrackingButton, GlassBackgroundVie
     private var theme: PresentationTheme
     private var strings: PresentationStrings
     private var width: CGFloat
-    private let iconImageView: UIImageView
-    private let tintMaskIconImageView: UIImageView
+    private let iconImageView: GlassBackgroundView.ContentImageView
     private var textView: ImmediateTextView?
     private var tintMaskTextView: ImmediateTextView?
     private var animationView: ComponentView<Empty>?
@@ -34,8 +33,7 @@ final class AccessoryItemIconButton: HighlightTrackingButton, GlassBackgroundVie
         self.theme = theme
         self.strings = strings
         
-        self.iconImageView = UIImageView()
-        self.tintMaskIconImageView = UIImageView()
+        self.iconImageView = GlassBackgroundView.ContentImageView()
         
         let (image, text, accessibilityLabel, alpha, _) = AccessoryItemIconButton.imageAndInsets(item: item, theme: theme, strings: strings)
         
@@ -51,12 +49,11 @@ final class AccessoryItemIconButton: HighlightTrackingButton, GlassBackgroundVie
         self.iconImageView.isUserInteractionEnabled = false
         self.addSubview(self.iconImageView)
         
-        self.tintMask.addSubview(self.tintMaskIconImageView)
+        self.tintMask.addSubview(self.iconImageView.tintMask)
         
         switch item {
         case .input, .botInput, .silentPost:
             self.iconImageView.isHidden = true
-            self.tintMaskIconImageView.isHidden = self.iconImageView.isHidden
             self.animationView = ComponentView<Empty>()
             self.tintMaskAnimationView = UIImageView()
         default:
@@ -92,10 +89,6 @@ final class AccessoryItemIconButton: HighlightTrackingButton, GlassBackgroundVie
         self.iconImageView.image = image
         self.iconImageView.tintColor = theme.chat.inputPanel.inputControlColor
         self.iconImageView.alpha = alpha
-        
-        self.tintMaskIconImageView.image = self.iconImageView.image
-        self.tintMaskIconImageView.tintColor = .black
-        self.tintMaskIconImageView.alpha = self.iconImageView.alpha
         
         self.accessibilityLabel = accessibilityLabel
         
@@ -137,10 +130,6 @@ final class AccessoryItemIconButton: HighlightTrackingButton, GlassBackgroundVie
         self.iconImageView.image = image
         self.iconImageView.tintColor = theme.chat.inputPanel.inputControlColor
         self.iconImageView.alpha = alpha
-        
-        self.tintMaskIconImageView.image = self.iconImageView.image
-        self.tintMaskIconImageView.tintColor = .black
-        self.tintMaskIconImageView.alpha = self.iconImageView.alpha
         
         self.accessibilityLabel = accessibilityLabel
     }
@@ -205,12 +194,13 @@ final class AccessoryItemIconButton: HighlightTrackingButton, GlassBackgroundVie
         
         if let image = self.iconImageView.image {
             self.iconImageView.image = updatedImage
-            self.tintMaskIconImageView.image = updatedImage
             
             let bottomInset: CGFloat = 0.0
-            let imageFrame = CGRect(origin: CGPoint(x: floor((size.width - image.size.width) / 2.0), y: floor((size.height - image.size.height) / 2.0) - bottomInset), size: image.size)
+            var imageFrame = CGRect(origin: CGPoint(x: floor((size.width - image.size.width) / 2.0), y: floor((size.height - image.size.height) / 2.0) - bottomInset), size: image.size)
+            if case .scheduledMessages = item {
+                imageFrame.origin.y += 1.0
+            }
             self.iconImageView.frame = imageFrame
-            self.tintMaskIconImageView.frame = imageFrame
             
             if let animationView = self.animationView {
                 let width = AccessoryItemIconButton.calculateWidth(item: item, image: image, text: "", strings: self.strings)
@@ -332,6 +322,7 @@ final class AccessoryItemIconButton: HighlightTrackingButton, GlassBackgroundVie
                             self.tintMask.addSubview(tintMaskAnimationView)
                         }
                     }
+                    view.setMonochromaticEffect(tintColor: self.theme.chat.inputPanel.inputControlColor)
                     let animationFrameValue = CGRect(origin: CGPoint(x: animationFrame.minX + floor((animationFrame.width - animationSize.width) / 2.0), y: animationFrame.minY + floor((animationFrame.height - animationSize.height) / 2.0)), size: animationSize)
                     view.frame = animationFrameValue
                     if let tintMaskAnimationView = self.tintMaskAnimationView {

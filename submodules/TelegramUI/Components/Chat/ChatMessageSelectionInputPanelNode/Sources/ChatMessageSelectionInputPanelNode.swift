@@ -449,10 +449,10 @@ public final class ChatMessageSelectionInputPanelNode: ChatInputPanelNode {
         self.validLayout = (width, leftInset, rightInset, bottomInset, additionalSideInsets, maxHeight, maxOverlayHeight, metrics, isSecondary, isMediaInputExpanded)
         
         var leftInset = leftInset
-        leftInset += 8.0
+        leftInset += 16.0
         
         var rightInset = rightInset
-        rightInset += 8.0
+        rightInset += 16.0
         
         let panelHeight = defaultHeight(metrics: metrics)
         

@@ -86,6 +86,10 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
     
     private var currentProgressDisposable: Disposable?
     
+    override public var disablesClipping: Bool {
+        return true
+    }
+    
     override public var visibility: ListViewItemNodeVisibility {
         didSet {
             let wasVisible = oldValue != .none

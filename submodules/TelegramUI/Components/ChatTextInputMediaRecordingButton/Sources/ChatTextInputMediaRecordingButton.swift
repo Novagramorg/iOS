@@ -420,11 +420,12 @@ public final class ChatTextInputMediaRecordingButton: TGModernConversationInputM
                 animationName = "anim_micToVideo"
         }
 
+        let animationTintColor = self.useDarkTheme ? .white : self.theme.chat.inputPanel.inputControlColor
         let _ = self.animationView.update(
             transition: .immediate,
             component: AnyComponent(LottieComponent(
                 content: LottieComponent.AppBundleContent(name: animationName),
-                color: self.useDarkTheme ? .white : self.theme.chat.inputPanel.inputControlColor
+                color: animationTintColor
             )),
             environment: {},
             containerSize: animationFrame.size
@@ -437,6 +438,7 @@ public final class ChatTextInputMediaRecordingButton: TGModernConversationInputM
                 view.output = self.animationOutput
                 self.updateShadow()
             }
+            view.setMonochromaticEffect(tintColor: animationTintColor)
             view.frame = animationFrame
             
             if previousMode != mode {

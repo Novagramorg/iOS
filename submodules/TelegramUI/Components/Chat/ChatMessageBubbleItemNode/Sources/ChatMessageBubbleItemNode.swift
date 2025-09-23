@@ -3442,14 +3442,14 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                 contentContainerNodeFrames: contentContainerNodeFrames.map { containerGroupId, containerFrame, currentItemSelection, currentContainerGroupOverlap in
                     return (containerGroupId, containerFrame.offsetBy(dx: 0.0, dy: layoutInsets.top), currentItemSelection, currentContainerGroupOverlap)
                 },
-                mosaicStatusOrigin: mosaicStatusOrigin?.offsetBy(dx: 0.0, dy: layoutInsets.top),
+                mosaicStatusOrigin: mosaicStatusOrigin,
                 mosaicStatusSizeAndApply: mosaicStatusSizeAndApply,
-                 unlockButtonPosition: unlockButtonPosition?.offsetBy(dx: 0.0, dy: layoutInsets.top),
+                unlockButtonPosition: unlockButtonPosition?.offsetBy(dx: 0.0, dy: layoutInsets.top),
                 unlockButtonSizeAndApply: unlockButtonSizeApply,
                 mediaInfoOrigin: mediaInfoOrigin?.offsetBy(dx: 0.0, dy: layoutInsets.top),
                 mediaInfoSizeAndApply: mediaInfoSizeApply,
                 needsShareButton: needsShareButton,
-                shareButtonOffset: shareButtonOffset?.offsetBy(dx: 0.0, dy: layoutInsets.top),
+                shareButtonOffset: shareButtonOffset,
                 avatarOffset: avatarOffset,
                 hidesHeaders: hidesHeaders,
                 disablesComments: disablesComments,
