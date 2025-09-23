@@ -3,6 +3,7 @@ import UIKit
 import Display
 import ComponentFlow
 import ComponentDisplayAdapters
+import UIKitRuntimeUtils
 
 private final class ContentContainer: UIView {
     private let maskContentView: UIView
@@ -273,6 +274,7 @@ public class GlassBackgroundView: UIView {
     private let backgroundNode: NavigationBackgroundNode?
     private let nativeView: UIVisualEffectView?
     private let nativeContainerView: UIVisualEffectView?
+    private let nativeParamsView: EffectSettingsContainerView?
     
     private let foregroundView: UIImageView?
     private let shadowView: UIImageView?
@@ -305,13 +307,20 @@ public class GlassBackgroundView: UIView {
             self.nativeContainerView = nativeContainerView
             nativeContainerView.contentView.addSubview(nativeView)
             
+            let nativeParamsView = EffectSettingsContainerView(frame: CGRect())
+            self.nativeParamsView = nativeParamsView
+            
+            nativeParamsView.addSubview(nativeContainerView)
+            
             self.foregroundView = nil
             self.shadowView = nil
         } else {
             self.backgroundNode = NavigationBackgroundNode(color: .black, enableBlur: true, customBlurRadius: 5.0)
             self.nativeView = nil
             self.nativeContainerView = nil
+            self.nativeParamsView = nil
             self.foregroundView = UIImageView()
+            
             self.shadowView = UIImageView()
         }
         
@@ -331,8 +340,8 @@ public class GlassBackgroundView: UIView {
         if let shadowView = self.shadowView {
             self.addSubview(shadowView)
         }
-        if let nativeContainerView = self.nativeContainerView {
-            self.addSubview(nativeContainerView)
+        if let nativeParamsView = self.nativeParamsView {
+            self.addSubview(nativeParamsView)
         }
         if let backgroundNode = self.backgroundNode {
             self.addSubview(backgroundNode.view)
@@ -372,7 +381,7 @@ public class GlassBackgroundView: UIView {
                 nativeView.layer.animateFrame(from: previousFrame, to: CGRect(origin: CGPoint(), size: size), duration: 0.4, timingFunction: kCAMediaTimingFunctionSpring)
             }
             
-            transition.setFrame(view: nativeContainerView, frame: CGRect(origin: CGPoint(), size: size))
+            transition.setFrame(view: nativeContainerView, frame: CGRect(origin: CGPoint(), size: CGSize(width: size.width, height: max(size.height, 400.0))))
         }
         if let backgroundNode = self.backgroundNode {
             backgroundNode.updateColor(color: .clear, forceKeepBlur: tintColor.color.alpha != 1.0, transition: transition.containedViewLayoutTransition)
@@ -404,7 +413,7 @@ public class GlassBackgroundView: UIView {
             if let foregroundView = self.foregroundView {
                 foregroundView.image = GlassBackgroundView.generateLegacyGlassImage(size: CGSize(width: cornerRadius * 2.0, height: cornerRadius * 2.0), inset: shadowInset, isDark: isDark, fillColor: tintColor.color)
             } else {
-                if let nativeContainerView = self.nativeContainerView, let nativeView {
+                if let nativeParamsView = self.nativeParamsView, let nativeContainerView = self.nativeContainerView, let nativeView {
                     if #available(iOS 26.0, *) {
                         let glassEffect = UIGlassEffect(style: .regular)
                         switch tintColor.kind {
@@ -416,9 +425,16 @@ public class GlassBackgroundView: UIView {
                         glassEffect.isInteractive = params.isInteractive
                         
                         nativeView.effect = glassEffect
-                        let _ = nativeContainerView
-                        //nativeContainerView.overrideUserInterfaceStyle = .light// isDark ? .dark : .light
-                        self.overrideUserInterfaceStyle = isDark ? .dark : .light
+                        
+                        if isDark {
+                            nativeParamsView.lumaMin = 0.0
+                            nativeParamsView.lumaMax = 0.15
+                        } else {
+                            nativeParamsView.lumaMin = 0.25
+                            nativeParamsView.lumaMax = 1.0
+                        }
+                        
+                        nativeContainerView.overrideUserInterfaceStyle = isDark ? .dark : .light
                     }
                 }
             }
@@ -665,7 +681,6 @@ public extension GlassBackgroundView {
                 addShadow(false, CGPoint(x: 3.0, y: -3.0), 2.0, 0.0, UIColor(white: 1.0, alpha: 0.25), false)
                 addShadow(false, CGPoint(x: -3.0, y: 3.0), 2.0, 0.0, UIColor(white: 1.0, alpha: 0.25), false)
             } else {
-                addShadow(true, CGPoint(), 32.0, 0.0, UIColor(white: 0.0, alpha: 0.08), false)
                 addShadow(true, CGPoint(), 16.0, 0.0, UIColor(white: 0.0, alpha: 0.08), false)
                 
                 context.setFillColor(fillColor.cgColor)
@@ -673,17 +688,18 @@ public extension GlassBackgroundView {
                 
                 let highlightColor: UIColor
                 if fillColor.hsb.s > 0.5 {
-                    highlightColor = fillColor.withMultiplied(hue: 1.0, saturation: 2.0, brightness: 1.0).adjustedPerceivedBrightness(2.0)
+                    var (h, s, v) = fillColor.hsb
+                    s = max(0.0, min(1.0, s * 0.25))
+                    v = max(v, 0.95)
+                    h = max(0.0, min(1.0, h - 0.1))
                     
-                    let shadowColor = fillColor.withMultiplied(hue: 1.0, saturation: 2.0, brightness: 1.0).adjustedPerceivedBrightness(0.5).withMultipliedAlpha(0.2)
-                    addShadow(false, CGPoint(x: -2.0, y: 2.0), 0.5, 0.0, shadowColor, false)
+                    highlightColor = UIColor(hue: h, saturation: s, brightness: v, alpha: fillColor.alpha)
                 } else {
-                    highlightColor = UIColor(white: 1.0, alpha: 0.4)
-                    addShadow(false, CGPoint(x: -2.0, y: 2.0), 0.5, 0.0, UIColor.black.withMultipliedAlpha(0.15), true)
-                    addShadow(false, CGPoint(x: -2.0, y: 2.0), 0.6, 0.0, UIColor(white: 0.0, alpha: 0.1), false)
+                    highlightColor = UIColor(white: 1.0, alpha: min(1.0, fillColor.alpha * 1.2))
                 }
                 
-                addShadow(false, CGPoint(x: 2.0, y: -2.0), 0.5, 0.0, highlightColor, false)
+                addShadow(false, CGPoint(x: 2.0, y: -2.0), 1.0, 0.0, highlightColor, false)
+                addShadow(false, CGPoint(x: -2.0, y: 2.0), 1.0, 0.0, highlightColor, false)
             }
         })!.stretchableImage(withLeftCapWidth: Int(size.width * 0.5), topCapHeight: Int(size.height * 0.5))
     }

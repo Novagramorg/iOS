@@ -33,9 +33,9 @@ open class ChatInputPanelNode: ASDisplayNode {
     
     open func defaultHeight(metrics: LayoutMetrics) -> CGFloat {
         if case .regular = metrics.widthClass, case .regular = metrics.heightClass {
-            return 49.0
+            return 40.0
         } else {
-            return 45.0
+            return 40.0
         }
     }
     

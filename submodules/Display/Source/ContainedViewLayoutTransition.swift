@@ -830,7 +830,7 @@ public extension ContainedViewLayoutTransition {
     }
     
     func updateAlpha(node: ASDisplayNode, alpha: CGFloat, beginWithCurrentState: Bool = false, force: Bool = false, delay: Double = 0.0, completion: ((Bool) -> Void)? = nil) {
-        if node.alpha.isEqual(to: alpha) && !force {
+        if node.layer.opacity == Float(alpha) && !force {
             if let completion = completion {
                 completion(true)
             }
@@ -844,14 +844,18 @@ public extension ContainedViewLayoutTransition {
                 completion(true)
             }
         case let .animated(duration, curve):
-            let previousAlpha: CGFloat
+            let previousAlpha: Float
             if beginWithCurrentState, let presentation = node.layer.presentation() {
-                previousAlpha = CGFloat(presentation.opacity)
+                previousAlpha = presentation.opacity
             } else {
-                previousAlpha = node.alpha
+                previousAlpha = node.layer.opacity
             }
-            node.alpha = alpha
-            node.layer.animateAlpha(from: previousAlpha, to: alpha, duration: duration, delay: delay, timingFunction: curve.timingFunction, mediaTimingFunction: curve.mediaTimingFunction, completion: { result in
+            if alpha == 0.0 {
+                node.layer.opacity = Float(alpha)
+            } else {
+                node.alpha = alpha
+            }
+            node.layer.animateAlpha(from: CGFloat(previousAlpha), to: alpha, duration: duration, delay: delay, timingFunction: curve.timingFunction, mediaTimingFunction: curve.mediaTimingFunction, completion: { result in
                 if let completion = completion {
                     completion(result)
                 }
