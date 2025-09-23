@@ -67,7 +67,6 @@ open class SwitchNode: ASDisplayNode {
         
         (self.view as! UISwitch).backgroundColor = self.backgroundColor
         (self.view as! UISwitch).tintColor = self.frameColor
-        //(self.view as! UISwitch).thumbTintColor = self.handleColor
         (self.view as! UISwitch).onTintColor = self.contentColor
         
         (self.view as! UISwitch).setOn(self._isOn, animated: false)

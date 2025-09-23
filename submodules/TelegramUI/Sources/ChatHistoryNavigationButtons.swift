@@ -192,7 +192,7 @@ final class ChatHistoryNavigationButtons: ASDisplayNode {
             transition.updateAlpha(node: self.downButton, alpha: 1.0)
             transition.updateTransformScale(node: self.downButton, scale: 1.0)
         } else {
-            transition.updateAlpha(node: self.downButton, alpha: 0.0, completion: { [weak self] completed in
+            transition.updateAlpha(node: self.downButton, alpha: 0.1, completion: { [weak self] completed in
                 guard let strongSelf = self, completed else {
                     return
                 }

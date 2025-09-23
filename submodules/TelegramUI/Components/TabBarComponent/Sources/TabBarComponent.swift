@@ -311,6 +311,8 @@ public final class TabBarComponent: Component {
         func update(component: TabBarComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
             let innerInset: CGFloat = 3.0
             
+            let availableSize = CGSize(width: min(500.0, availableSize.width), height: availableSize.height)
+            
             let previousComponent = self.component
             self.component = component
             self.state = state
