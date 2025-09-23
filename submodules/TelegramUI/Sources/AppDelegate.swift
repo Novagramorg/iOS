@@ -2939,7 +2939,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
                 }
             }
             |> deliverOnMainQueue).start(next: { sharedContext, urlString in
-                guard buildConfig.isInternalBuild || sharedContext.immediateExperimentalUISettings.enableUpdates else {
+                guard buildConfig.isInternalBuild || sharedContext.sharedContext.immediateExperimentalUISettings.enableUpdates else {
                     return
                 }
                 guard let url = urlString.flatMap({ URL(string: $0) }) else {
