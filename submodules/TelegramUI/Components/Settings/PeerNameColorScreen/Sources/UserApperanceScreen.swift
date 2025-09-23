@@ -36,6 +36,8 @@ import WallpaperResources
 import EdgeEffect
 import TextFormat
 import TelegramStringFormatting
+import GiftViewScreen
+import BalanceNeededScreen
 
 private let giftListTag = GenericComponentViewTag()
 
@@ -212,6 +214,16 @@ final class UserAppearanceScreenComponent: Component {
         private var isApplyingSettings: Bool = false
         private var applyDisposable: Disposable?
         
+        private var buyDisposable: Disposable?
+        
+        private var starsTopUpOptionsDisposable: Disposable?
+        private(set) var starsTopUpOptions: [StarsTopUpOption] = [] {
+            didSet {
+                self.starsTopUpOptionsPromise.set(self.starsTopUpOptions)
+            }
+        }
+        private let starsTopUpOptionsPromise = ValuePromise<[StarsTopUpOption]?>(nil)
+        
         private weak var emojiStatusSelectionController: ViewController?
         
         private var cachedChevronImage: (UIImage, PresentationTheme)?
@@ -246,8 +258,8 @@ final class UserAppearanceScreenComponent: Component {
             self.addSubview(self.edgeEffectView)
                         
             self.backButton.action = { [weak self] _, _ in
-                if let self, let controller = self.environment?.controller() {
-                    controller.navigationController?.popViewController(animated: true)
+                if let self, let controller = self.environment?.controller() as? UserAppearanceScreen {
+                    controller.backPressed()
                 }
             }
         }
@@ -260,6 +272,8 @@ final class UserAppearanceScreenComponent: Component {
             self.contentsDataDisposable?.dispose()
             self.starGiftsDisposable?.dispose()
             self.applyDisposable?.dispose()
+            self.buyDisposable?.dispose()
+            self.starsTopUpOptionsDisposable?.dispose()
             self.resolvingCurrentTheme?.disposable.dispose()
         }
 
@@ -431,6 +445,224 @@ final class UserAppearanceScreenComponent: Component {
             )
         }
         
+        private func commitBuy(acceptedPrice: CurrencyAmount? = nil, skipConfirmation: Bool = false) {
+            guard let component = self.component, let environment = self.environment, let controller = environment.controller() else {
+                return
+            }
+            
+            var uniqueGift: StarGift.UniqueGift?
+            if let gift = self.selectedProfileGift {
+                uniqueGift = gift
+            } else if let gift = self.selectedNameGift {
+                uniqueGift = gift
+            }
+            
+            guard let uniqueGift else {
+                return
+            }
+            
+            if self.starsTopUpOptionsDisposable == nil {
+                self.starsTopUpOptionsDisposable = (component.context.engine.payments.starsTopUpOptions()
+                |> deliverOnMainQueue).start(next: { [weak self] options in
+                    guard let self else {
+                        return
+                    }
+                    self.starsTopUpOptions = options
+                })
+            }
+            
+            let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+            let action: (CurrencyAmount.Currency) -> Void = { [weak self, weak controller] currency in
+                guard let self, let resellAmount = uniqueGift.resellAmounts?.first(where: { $0.currency == currency }) else {
+                    guard let controller else {
+                        return
+                    }
+                    let alertController = textAlertController(context: component.context, title: nil, text: presentationData.strings.Gift_Buy_ErrorUnknown, actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})], parseMarkdown: true)
+                    controller.present(alertController, in: .window(.root))
+                    return
+                }
+                
+                let proceed: () -> Void = {
+                    self.isApplyingSettings = true
+                    self.state?.updated()
+                    
+                    let finalPrice = acceptedPrice ?? resellAmount
+                    let signal = component.context.engine.payments.buyStarGift(slug: uniqueGift.slug, peerId: component.context.account.peerId, price: finalPrice)
+                    self.buyDisposable = (signal
+                    |> deliverOnMainQueue).start(error: { [weak self, weak controller] error in
+                        guard let self, let controller else {
+                            return
+                        }
+                        
+                        self.isApplyingSettings = false
+                        self.state?.updated()
+                        
+                        HapticFeedback().error()
+                        
+                        switch error {
+                        case .serverProvided:
+                            return
+                        case let .priceChanged(newPrice):
+                            let errorTitle = presentationData.strings.Gift_Buy_ErrorPriceChanged_Title
+                            let originalPriceString: String
+                            switch resellAmount.currency {
+                            case .stars:
+                                originalPriceString = presentationData.strings.Gift_Buy_ErrorPriceChanged_Text_Stars(Int32(clamping: resellAmount.amount.value))
+                            case .ton:
+                                originalPriceString = formatTonAmountText(resellAmount.amount.value, dateTimeFormat: presentationData.dateTimeFormat, maxDecimalPositions: nil) + " TON"
+                            }
+                            
+                            let newPriceString: String
+                            let buttonText: String
+                            switch newPrice.currency {
+                            case .stars:
+                                newPriceString = presentationData.strings.Gift_Buy_ErrorPriceChanged_Text_Stars(Int32(clamping: newPrice.amount.value))
+                                buttonText = presentationData.strings.Gift_Buy_Confirm_BuyFor(Int32(newPrice.amount.value))
+                            case .ton:
+                                let tonValueString = formatTonAmountText(newPrice.amount.value, dateTimeFormat: presentationData.dateTimeFormat, maxDecimalPositions: nil)
+                                newPriceString = tonValueString + " TON"
+                                buttonText = presentationData.strings.Gift_Buy_Confirm_BuyForTon(tonValueString).string
+                            }
+                            let errorText = presentationData.strings.Gift_Buy_ErrorPriceChanged_Text(originalPriceString, newPriceString).string
+                            
+                            let alertController = textAlertController(
+                                context: component.context,
+                                title: errorTitle,
+                                text: errorText,
+                                actions: [
+                                    TextAlertAction(type: .defaultAction, title: buttonText, action: { [weak self] in
+                                        guard let self else {
+                                            return
+                                        }
+                                        self.commitBuy(acceptedPrice: newPrice, skipConfirmation: true)
+                                    }),
+                                    TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: {
+                                    })
+                                ],
+                                actionLayout: .vertical,
+                                parseMarkdown: true
+                            )
+                            controller.present(alertController, in: .window(.root))
+                        default:
+                            let alertController = textAlertController(context: component.context, title: nil, text: presentationData.strings.Gift_Buy_ErrorUnknown, actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})], parseMarkdown: true)
+                            controller.present(alertController, in: .window(.root))
+                        }
+                    }, completed: { [weak self] in
+                        guard let self else {
+                            return
+                        }
+                        self.selectedNameGift = nil
+                        self.selectedProfileGift = nil
+                        
+                        self.isApplyingSettings = false
+                        self.applySettings()
+                        
+                        Queue.mainQueue().after(0.5) {
+                            switch finalPrice.currency {
+                            case .stars:
+                                component.context.starsContext?.load(force: true)
+                            case .ton:
+                                component.context.tonContext?.load(force: true)
+                            }
+                        }
+                    })
+                }
+                
+                if resellAmount.currency == .stars, let starsContext = component.context.starsContext, let starsState = starsContext.currentState, starsState.balance < resellAmount.amount {
+                    if self.starsTopUpOptions.isEmpty {
+                        self.isApplyingSettings = true
+                        self.state?.updated()
+                    }
+                    let _ = (self.starsTopUpOptionsPromise.get()
+                    |> filter { $0 != nil }
+                    |> take(1)
+                    |> deliverOnMainQueue).startStandalone(next: { [weak self, weak controller] options in
+                        guard let self, let controller else {
+                            return
+                        }
+                        let purchaseController = component.context.sharedContext.makeStarsPurchaseScreen(
+                            context: component.context,
+                            starsContext: starsContext,
+                            options: options ?? [],
+                            purpose: .buyStarGift(requiredStars: resellAmount.amount.value),
+                            targetPeerId: nil,
+                            completion: { [weak self, weak starsContext] stars in
+                                guard let self, let starsContext else {
+                                    return
+                                }
+                                self.isApplyingSettings = true
+                                self.state?.updated()
+                                
+                                starsContext.add(balance: StarsAmount(value: stars, nanos: 0))
+                                let _ = (starsContext.onUpdate
+                                |> deliverOnMainQueue).start(next: { [weak self, weak starsContext] in
+                                    guard let self else {
+                                        return
+                                    }
+                                    Queue.mainQueue().after(0.1, { [weak self] in
+                                        guard let self, let starsContext, let starsState = starsContext.currentState else {
+                                            return
+                                        }
+                                        if starsState.balance < resellAmount.amount {
+                                            self.isApplyingSettings = false
+                                            self.state?.updated()
+                                            
+                                            self.commitBuy(skipConfirmation: true)
+                                        } else {
+                                            proceed()
+                                        }
+                                    });
+                                })
+                            }
+                        )
+                        controller.push(purchaseController)
+                    })
+                } else if resellAmount.currency == .ton, let tonState = component.context.tonContext?.currentState, tonState.balance < resellAmount.amount {
+                    guard let controller else {
+                        return
+                    }
+                    let needed = resellAmount.amount - tonState.balance
+                    var fragmentUrl = "https://fragment.com/ads/topup"
+                    if let data = component.context.currentAppConfiguration.with({ $0 }).data, let value = data["ton_topup_url"] as? String {
+                        fragmentUrl = value
+                    }
+                    controller.push(BalanceNeededScreen(
+                        context: component.context,
+                        amount: needed,
+                        buttonAction: {
+                            component.context.sharedContext.applicationBindings.openUrl(fragmentUrl)
+                        }
+                    ))
+                } else {
+                    proceed()
+                }
+            }
+            
+            if skipConfirmation {
+                action(acceptedPrice?.currency ?? .stars)
+            } else {
+                let _ = (component.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: component.context.account.peerId))
+                |> deliverOnMainQueue).start(next: { [weak controller] peer in
+                    guard let controller, let peer else {
+                        return
+                    }
+                    let alertController = giftPurchaseAlertController(
+                        context: component.context,
+                        gift: uniqueGift,
+                        peer: peer,
+                        animateBalanceOverlay: true,
+                        navigationController: controller.navigationController as? NavigationController,
+                        commit: { currency in
+                            action(currency)
+                        },
+                        dismissed: {
+                        }
+                    )
+                    controller.present(alertController, in: .window(.root))
+                })
+            }
+        }
+        
         private func applySettings() {
             guard let component = self.component, let environment = self.environment, let resolvedState = self.resolveState() else {
                 return
@@ -470,6 +702,11 @@ final class UserAppearanceScreenComponent: Component {
                     }
                 )
                 environment.controller()?.present(toastController, in: .current)
+                return
+            }
+            
+            if self.selectedProfileGift != nil || self.selectedNameGift != nil {
+                self.commitBuy()
                 return
             }
             
@@ -872,8 +1109,12 @@ final class UserAppearanceScreenComponent: Component {
                             if let intValue = value.base as? Int32 {
                                 let updatedSection = Section(rawValue: intValue) ?? .profile
                                 if self.currentSection != updatedSection {
-                                    self.currentSection = updatedSection
-                                    self.state?.updated(transition: .easeInOut(duration: 0.3).withUserData(TransitionHint(animateTabChange: true)))
+                                    if (updatedSection == .name && self.selectedProfileGift != nil) || (updatedSection == .profile && self.selectedNameGift != nil) {
+                                        
+                                    } else {
+                                        self.currentSection = updatedSection
+                                        self.state?.updated(transition: .easeInOut(duration: 0.3).withUserData(TransitionHint(animateTabChange: true)))
+                                    }
                                 }
                             }
                         }
@@ -996,8 +1237,12 @@ final class UserAppearanceScreenComponent: Component {
                                 guard let self else {
                                     return
                                 }
-                                self.currentSection = .name
-                                self.state?.updated(transition: .easeInOut(duration: 0.3).withUserData(TransitionHint(animateTabChange: true)))
+                                if self.selectedProfileGift != nil {
+                                    
+                                } else {
+                                    self.currentSection = .name
+                                    self.state?.updated(transition: .easeInOut(duration: 0.3).withUserData(TransitionHint(animateTabChange: true)))
+                                }
                             }
                         )),
                         items: [
@@ -1179,7 +1424,11 @@ final class UserAppearanceScreenComponent: Component {
                                             }
                                         }
                                         if let fileId, let patternFileId, let innerColor, let outerColor, let patternColor, let textColor {
-                                            self.selectedProfileGift = gift
+                                            if let resellAmounts = gift.resellAmounts, !resellAmounts.isEmpty {
+                                                self.selectedProfileGift = gift
+                                            } else {
+                                                self.selectedProfileGift = nil
+                                            }
                                             self.updatedPeerProfileColor = .some(nil)
                                             self.updatedPeerProfileEmoji = .some(nil)
                                             self.updatedPeerStatus = .some(PeerEmojiStatus(content: .starGift(id: gift.id, fileId: fileId, title: gift.title, slug: gift.slug, patternFileId: patternFileId, innerColor: innerColor, outerColor: outerColor, patternColor: patternColor, textColor: textColor), expirationDate: nil))
@@ -1406,7 +1655,11 @@ final class UserAppearanceScreenComponent: Component {
                                         guard let self, let peerColor = gift.peerColor else {
                                             return
                                         }
-                                        self.selectedNameGift = gift
+                                        if let resellAmounts = gift.resellAmounts, !resellAmounts.isEmpty {
+                                            self.selectedNameGift = gift
+                                        } else {
+                                            self.selectedNameGift = nil
+                                        }
                                         self.updatedPeerNameColor = .collectible(peerColor)
                                         self.updatedPeerNameEmoji = peerColor.backgroundEmojiId
                                         self.state?.updated(transition: .spring(duration: 0.4))
@@ -1648,8 +1901,12 @@ public class UserAppearanceScreen: ViewControllerComponentContainer {
     deinit {
     }
     
-    @objc private func cancelPressed() {
-        self.dismiss()
+    fileprivate func backPressed() {
+        if self.attemptNavigation({ [weak self] in
+            self?.dismiss()
+        }) {
+            self.dismiss()
+        }
     }
     
     override public func containerLayoutUpdated(_ layout: ContainerViewLayout, transition: ContainedViewLayoutTransition) {

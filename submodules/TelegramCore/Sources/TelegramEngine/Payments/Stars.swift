@@ -1669,7 +1669,9 @@ func _internal_sendStarsPaymentForm(account: Account, formId: Int64, source: Bot
             }
         }
         |> `catch` { error -> Signal<SendBotPaymentResult, SendBotPaymentFormError> in
-            if error.errorDescription == "BOT_PRECHECKOUT_FAILED" {
+            if error.errorCode == 406 {
+                return .fail(.serverProvided(error.errorDescription))
+            } else if error.errorDescription == "BOT_PRECHECKOUT_FAILED" {
                 return .fail(.precheckoutFailed)
             } else if error.errorDescription == "PAYMENT_FAILED" {
                 return .fail(.paymentFailed)

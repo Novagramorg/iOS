@@ -136,13 +136,13 @@ private final class GiftViewSheetContent: CombinedComponent {
         
         var keepOriginalInfo = false
                 
-        private var optionsDisposable: Disposable?
-        private(set) var options: [StarsTopUpOption] = [] {
+        private var starsTopUpOptionsDisposable: Disposable?
+        private(set) var starsTopUpOptions: [StarsTopUpOption] = [] {
             didSet {
-                self.optionsPromise.set(self.options)
+                self.starsTopUpOptionsPromise.set(self.starsTopUpOptions)
             }
         }
-        private let optionsPromise = ValuePromise<[StarsTopUpOption]?>(nil)
+        private let starsTopUpOptionsPromise = ValuePromise<[StarsTopUpOption]?>(nil)
         
         private let animateOut: ActionSlot<Action<()>>
         
@@ -352,12 +352,12 @@ private final class GiftViewSheetContent: CombinedComponent {
             if case let .unique(gift) = subject.arguments?.gift, gift.resellForTonOnly {
                 
             } else {
-                self.optionsDisposable = (context.engine.payments.starsTopUpOptions()
+                self.starsTopUpOptionsDisposable = (context.engine.payments.starsTopUpOptions()
                 |> deliverOnMainQueue).start(next: { [weak self] options in
                     guard let self else {
                         return
                     }
-                    self.options = options
+                    self.starsTopUpOptions = options
                 })
             }
         }
@@ -370,7 +370,7 @@ private final class GiftViewSheetContent: CombinedComponent {
             self.buyFormDisposable?.dispose()
             self.buyDisposable?.dispose()
             self.levelsDisposable.dispose()
-            self.optionsDisposable?.dispose()
+            self.starsTopUpOptionsDisposable?.dispose()
         }
 
         func openPeer(_ peer: EnginePeer, gifts: Bool = false, dismiss: Bool = true) {
@@ -746,7 +746,7 @@ private final class GiftViewSheetContent: CombinedComponent {
             }
             
             if starsState.balance < StarsAmount(value: price, nanos: 0) {
-                let _ = (self.optionsPromise.get()
+                let _ = (self.starsTopUpOptionsPromise.get()
                 |> filter { $0 != nil }
                 |> take(1)
                 |> deliverOnMainQueue).startStandalone(next: { [weak self] options in
@@ -1565,7 +1565,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                     }
                     
                     let finalPrice = acceptedPrice ?? resellAmount
-                    self.buyDisposable = (buyGiftImpl(uniqueGift.slug, recipientPeerId, acceptedPrice ?? resellAmount)
+                    self.buyDisposable = (buyGiftImpl(uniqueGift.slug, recipientPeerId, finalPrice)
                     |> deliverOnMainQueue).start(
                         error: { [weak self] error in
                             guard let self, let controller = self.getController() else {
@@ -1575,7 +1575,11 @@ private final class GiftViewSheetContent: CombinedComponent {
                             self.inProgress = false
                             self.updated()
                             
+                            HapticFeedback().error()
+                            
                             switch error {
+                            case .serverProvided:
+                                return
                             case let .priceChanged(newPrice):
                                 let errorTitle = presentationData.strings.Gift_Buy_ErrorPriceChanged_Title
                                 let originalPriceString: String
@@ -1617,8 +1621,6 @@ private final class GiftViewSheetContent: CombinedComponent {
                                     parseMarkdown: true
                                 )
                                 controller.present(alertController, in: .window(.root))
-
-                                HapticFeedback().error()
                             default:
                                 let alertController = textAlertController(context: context, title: nil, text: presentationData.strings.Gift_Buy_ErrorUnknown, actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})], parseMarkdown: true)
                                 controller.present(alertController, in: .window(.root))
@@ -1700,11 +1702,11 @@ private final class GiftViewSheetContent: CombinedComponent {
                 
                 if let _ = self.buyForm {
                     if resellAmount.currency == .stars, let starsContext = context.starsContext, let starsState = context.starsContext?.currentState, starsState.balance < resellAmount.amount {
-                        if self.options.isEmpty {
+                        if self.starsTopUpOptions.isEmpty {
                             self.inProgress = true
                             self.updated()
                         }
-                        let _ = (self.optionsPromise.get()
+                        let _ = (self.starsTopUpOptionsPromise.get()
                          |> filter { $0 != nil }
                          |> take(1)
                          |> deliverOnMainQueue).startStandalone(next: { [weak self] options in
@@ -1987,7 +1989,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                 proceed(nil)
             } else if let upgradeForm = self.upgradeForm, let price = upgradeForm.invoice.prices.first?.amount {
                 if starsState.balance < StarsAmount(value: price, nanos: 0) {
-                    let _ = (self.optionsPromise.get()
+                    let _ = (self.starsTopUpOptionsPromise.get()
                     |> filter { $0 != nil }
                     |> take(1)
                     |> deliverOnMainQueue).startStandalone(next: { [weak self] options in
@@ -2129,7 +2131,7 @@ private final class GiftViewSheetContent: CombinedComponent {
             }
             
             if starsState.balance < StarsAmount(value: price, nanos: 0) {
-                let _ = (self.optionsPromise.get()
+                let _ = (self.starsTopUpOptionsPromise.get()
                 |> filter { $0 != nil }
                 |> take(1)
                 |> deliverOnMainQueue).startStandalone(next: { [weak self, weak controller] options in

@@ -3442,6 +3442,12 @@ final class VideoChatScreenComponent: Component {
                     nextInputMode = .emoji
                 }
                 
+                var characterLimit: Int = 128
+                if let data = call.accountContext.currentAppConfiguration.with({ $0 }).data, let value = data["group_call_message_length_limit"] as? Double {
+                    characterLimit = Int(value)
+                }
+                
+                //TODO:localize
                 self.inputPanel.parentState = state
                 inputPanelSize = self.inputPanel.update(
                     transition: transition,
@@ -3453,7 +3459,7 @@ final class VideoChatScreenComponent: Component {
                         style: .glass,
                         placeholder: .plain("Message"),
                         sendPaidMessageStars: nil,
-                        maxLength: 128,
+                        maxLength: characterLimit,
                         queryTypes: [.mention, .hashtag],
                         alwaysDarkWhenHasText: false,
                         useGrayBackground: false,
