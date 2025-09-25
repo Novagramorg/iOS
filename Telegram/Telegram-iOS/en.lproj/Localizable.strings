@@ -15104,3 +15104,10 @@ Error: %8$@";
 "PeerInfo.ToastNoteCopied" = "Note copied to clipboard.";
 
 "MESSAGE_SUGGEST_BIRTHDAY" = "%@ suggested you your birthday";
+
+"Gift.UnavailableAction.Title" = "Action Locked";
+"Gift.UnavailableAction.Text" = "Transfer this gift to your Telegram account on Fragment to unlock this action.";
+"Gift.UnavailableAction.OpenFragment" = "Open Fragment";
+"Gift.UnavailableAction.OpenFragment_URL" = "https://fragment.com";
+
+"Gift.Unique.Telegram" = "Telegram";
