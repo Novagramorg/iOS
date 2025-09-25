@@ -768,7 +768,8 @@ final class UserAppearanceScreenComponent: Component {
                                 valueCurrency: nil,
                                 flags: [],
                                 themePeerId: nil,
-                                peerColor: nil
+                                peerColor: nil,
+                                hostPeerId: nil
                             )
                             signal = component.context.engine.accountData.setStarGiftStatus(starGift: gift, expirationDate: emojiStatus.expirationDate)
                         } else {
@@ -1110,7 +1111,16 @@ final class UserAppearanceScreenComponent: Component {
                                 let updatedSection = Section(rawValue: intValue) ?? .profile
                                 if self.currentSection != updatedSection {
                                     if (updatedSection == .name && self.selectedProfileGift != nil) || (updatedSection == .profile && self.selectedNameGift != nil) {
-                                        
+                                        switch updatedSection {
+                                        case .profile:
+                                            self.selectedNameGift = nil
+                                            self.updatedPeerNameColor = nil
+                                            self.updatedPeerNameEmoji = nil
+                                        case .name:
+                                            self.selectedProfileGift = nil
+                                            self.updatedPeerProfileColor = nil
+                                            self.updatedPeerProfileEmoji = nil
+                                        }
                                     } else {
                                         self.currentSection = updatedSection
                                         self.state?.updated(transition: .easeInOut(duration: 0.3).withUserData(TransitionHint(animateTabChange: true)))
@@ -1870,6 +1880,8 @@ public class UserAppearanceScreen: ViewControllerComponentContainer {
         ), navigationBarAppearance: .default, theme: .default, updatedPresentationData: updatedPresentationData)
         
         self.automaticallyControlPresentationContextLayout = false
+        
+        self.supportedOrientations = ViewControllerSupportedOrientations(regularSize: .all, compactSize: .portrait)
         
         let presentationData = context.sharedContext.currentPresentationData.with { $0 }
         self.title = ""

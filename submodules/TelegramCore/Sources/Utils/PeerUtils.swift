@@ -332,14 +332,6 @@ public extension Peer {
     }
     
     var profileColor: PeerNameColor? {
-        if let emojiStatus {
-            switch emojiStatus.content {
-            case let .starGift(_, _, _, _, _, _, outerColor, _, _):
-                return PeerNameColor.other(outerColor)
-            default:
-                break
-            }
-        }
         switch self {
         case let user as TelegramUser:
             return user.profileColor
@@ -402,7 +394,7 @@ public extension Peer {
 
 public extension TelegramPeerUsername {
     var isActive: Bool {
-        return self.flags.contains(.isActive) || self.flags.contains(.isEditable)
+        return self.flags.contains(.isActive)
     }
 }
 
