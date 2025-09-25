@@ -72,7 +72,7 @@ final class MessageItemComponent: Component {
             
             self.background = GlassBackgroundView()
             
-            self.avatarNode = AvatarNode(font: avatarPlaceholderFont(size: 10.0))
+            self.avatarNode = AvatarNode(font: avatarPlaceholderFont(size: 12.0))
             
             self.text = ComponentView()
             

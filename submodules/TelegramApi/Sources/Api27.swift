@@ -608,7 +608,7 @@ public extension Api {
         case updateGroupCallChainBlocks(call: Api.InputGroupCall, subChainId: Int32, blocks: [Buffer], nextOffset: Int32)
         case updateGroupCallConnection(flags: Int32, params: Api.DataJSON)
         case updateGroupCallEncryptedMessage(call: Api.InputGroupCall, fromId: Api.Peer, encryptedMessage: Buffer)
-        case updateGroupCallMessage(call: Api.InputGroupCall, fromId: Api.Peer, message: Api.TextWithEntities)
+        case updateGroupCallMessage(call: Api.InputGroupCall, fromId: Api.Peer, randomId: Int64, message: Api.TextWithEntities)
         case updateGroupCallParticipants(call: Api.InputGroupCall, participants: [Api.GroupCallParticipant], version: Int32)
         case updateInlineBotCallbackQuery(flags: Int32, queryId: Int64, userId: Int64, msgId: Api.InputBotInlineMessageID, chatInstance: Int64, data: Buffer?, gameShortName: String?)
         case updateLangPack(difference: Api.LangPackDifference)
@@ -1307,12 +1307,13 @@ public extension Api {
                     fromId.serialize(buffer, true)
                     serializeBytes(encryptedMessage, buffer: buffer, boxed: false)
                     break
-                case .updateGroupCallMessage(let call, let fromId, let message):
+                case .updateGroupCallMessage(let call, let fromId, let randomId, let message):
                     if boxed {
-                        buffer.appendInt32(-1761933248)
+                        buffer.appendInt32(2026050784)
                     }
                     call.serialize(buffer, true)
                     fromId.serialize(buffer, true)
+                    serializeInt64(randomId, buffer: buffer, boxed: false)
                     message.serialize(buffer, true)
                     break
                 case .updateGroupCallParticipants(let call, let participants, let version):
@@ -2117,8 +2118,8 @@ public extension Api {
                 return ("updateGroupCallConnection", [("flags", flags as Any), ("params", params as Any)])
                 case .updateGroupCallEncryptedMessage(let call, let fromId, let encryptedMessage):
                 return ("updateGroupCallEncryptedMessage", [("call", call as Any), ("fromId", fromId as Any), ("encryptedMessage", encryptedMessage as Any)])
-                case .updateGroupCallMessage(let call, let fromId, let message):
-                return ("updateGroupCallMessage", [("call", call as Any), ("fromId", fromId as Any), ("message", message as Any)])
+                case .updateGroupCallMessage(let call, let fromId, let randomId, let message):
+                return ("updateGroupCallMessage", [("call", call as Any), ("fromId", fromId as Any), ("randomId", randomId as Any), ("message", message as Any)])
                 case .updateGroupCallParticipants(let call, let participants, let version):
                 return ("updateGroupCallParticipants", [("call", call as Any), ("participants", participants as Any), ("version", version as Any)])
                 case .updateInlineBotCallbackQuery(let flags, let queryId, let userId, let msgId, let chatInstance, let data, let gameShortName):
@@ -3598,15 +3599,18 @@ public extension Api {
             if let signature = reader.readInt32() {
                 _2 = Api.parse(reader, signature: signature) as? Api.Peer
             }
-            var _3: Api.TextWithEntities?
+            var _3: Int64?
+            _3 = reader.readInt64()
+            var _4: Api.TextWithEntities?
             if let signature = reader.readInt32() {
-                _3 = Api.parse(reader, signature: signature) as? Api.TextWithEntities
+                _4 = Api.parse(reader, signature: signature) as? Api.TextWithEntities
             }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            if _c1 && _c2 && _c3 {
-                return Api.Update.updateGroupCallMessage(call: _1!, fromId: _2!, message: _3!)
+            let _c4 = _4 != nil
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.Update.updateGroupCallMessage(call: _1!, fromId: _2!, randomId: _3!, message: _4!)
             }
             else {
                 return nil

@@ -1181,6 +1181,7 @@ final class VideoChatScreenComponent: Component {
                     adminIds: Set([accountPeerId, conferenceSourcePeerId]),
                     muteState: isMuted ? GroupCallParticipantsContext.Participant.MuteState(canUnmute: true, mutedByYou: true) : nil,
                     defaultParticipantMuteState: nil,
+                    messagesAreEnabled: true,
                     recordingStartTimestamp: nil,
                     title: nil,
                     raisedHand: false,

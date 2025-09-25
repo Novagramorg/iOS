@@ -26,14 +26,21 @@ public final class EdgeEffectView: UIView {
         fatalError("init(coder:) has not been implemented")
     }
     
-    public func update(content: UIColor, isInverted: Bool, rect: CGRect, edge: Edge, edgeSize: CGFloat, containerSize: CGSize, transition: ComponentTransition) {
+    public func update(content: UIColor, alpha: CGFloat = 0.65, rect: CGRect, edge: Edge, edgeSize: CGFloat, transition: ComponentTransition) {
         self.contentView.backgroundColor = content
+        
+        switch edge {
+        case .top:
+            self.contentMaskView.transform = CGAffineTransformMakeScale(1.0, -1.0)
+        case .bottom:
+            self.contentMaskView.transform = .identity
+        }
         
         transition.setFrame(view: self.contentView, frame: CGRect(origin: CGPoint(), size: rect.size))
         transition.setFrame(view: self.contentMaskView, frame: CGRect(origin: CGPoint(), size: rect.size))
         
         if self.contentMaskView.image?.size.height != edgeSize {
-            let baseGradientAlpha: CGFloat = 0.65
+            let baseGradientAlpha: CGFloat = alpha
             let numSteps = 8
             let firstStep = 1
             let firstLocation = 0.0
@@ -54,7 +61,7 @@ public final class EdgeEffectView: UIView {
                     return (firstLocation + (1.0 - firstLocation) * step)
                 }
             }
-            
+                
             if edgeSize > 0.0 {
                 self.contentMaskView.image = generateGradientImage(
                     size: CGSize(width: 8.0, height: edgeSize),
