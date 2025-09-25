@@ -108,6 +108,7 @@ private enum DebugControllerEntry: ItemListNodeEntry {
     case experimentalCallMute(Bool)
     case playerV2(Bool)
     case devRequests(Bool)
+    case enableUpdates(Bool)
     case fakeAds(Bool)
     case enableLocalTranslation(Bool)
     case preferredVideoCodec(Int, String, String?, Bool)
@@ -134,7 +135,7 @@ private enum DebugControllerEntry: ItemListNodeEntry {
             return DebugControllerSection.web.rawValue
         case .keepChatNavigationStack, .skipReadHistory, .alwaysDisplayTyping, .debugRatingLayout, .crashOnSlowQueries, .crashOnMemoryPressure:
             return DebugControllerSection.experiments.rawValue
-        case .clearTips, .resetNotifications, .crash, .fillLocalSavedMessageCache, .resetDatabase, .resetDatabaseAndCache, .resetHoles, .resetTagHoles, .reindexUnread, .resetCacheIndex, .reindexCache, .resetBiometricsData, .optimizeDatabase, .photoPreview, .knockoutWallpaper, .compressedEmojiCache, .storiesJpegExperiment, .checkSerializedData, .enableQuickReactionSwitch, .experimentalCompatibility, .enableDebugDataDisplay, .rippleEffect, .browserExperiment, .allForumsHaveTabs, .enableReactionOverrides, .restorePurchases, .disableReloginTokens, .liveStreamV2, .experimentalCallMute, .playerV2, .devRequests, .fakeAds, .enableLocalTranslation:
+        case .clearTips, .resetNotifications, .crash, .fillLocalSavedMessageCache, .resetDatabase, .resetDatabaseAndCache, .resetHoles, .resetTagHoles, .reindexUnread, .resetCacheIndex, .reindexCache, .resetBiometricsData, .optimizeDatabase, .photoPreview, .knockoutWallpaper, .compressedEmojiCache, .storiesJpegExperiment, .checkSerializedData, .enableQuickReactionSwitch, .experimentalCompatibility, .enableDebugDataDisplay, .rippleEffect, .browserExperiment, .allForumsHaveTabs, .enableReactionOverrides, .restorePurchases, .disableReloginTokens, .liveStreamV2, .experimentalCallMute, .playerV2, .devRequests, .enableUpdates, .fakeAds, .enableLocalTranslation:
             return DebugControllerSection.experiments.rawValue
         case .logTranslationRecognition, .resetTranslationStates:
             return DebugControllerSection.translation.rawValue
@@ -261,8 +262,10 @@ private enum DebugControllerEntry: ItemListNodeEntry {
             return 56
         case .enableLocalTranslation:
             return 57
+        case .enableUpdates:
+            return 58
         case let .preferredVideoCodec(index, _, _, _):
-            return 58 + index
+            return 59 + index
         case .disableVideoAspectScaling:
             return 100
         case .enableNetworkFramework:
@@ -1379,6 +1382,16 @@ private enum DebugControllerEntry: ItemListNodeEntry {
                     })
                 }).start()
             })
+        case let .enableUpdates(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Enable Updates", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                let _ = arguments.sharedContext.accountManager.transaction ({ transaction in
+                    transaction.updateSharedData(ApplicationSpecificSharedDataKeys.experimentalUISettings, { settings in
+                        var settings = settings?.get(ExperimentalUISettings.self) ?? ExperimentalUISettings.defaultSettings
+                        settings.enableUpdates = value
+                        return PreferencesEntry(settings)
+                    })
+                }).start()
+            })
         case let .fakeAds(value):
             return ItemListSwitchItem(presentationData: presentationData, title: "Fake Ads", value: value, sectionId: self.section, style: .blocks, updated: { value in
                 let _ = arguments.sharedContext.accountManager.transaction ({ transaction in
@@ -1561,6 +1574,7 @@ private func debugControllerEntries(sharedContext: SharedAccountContext, present
         entries.append(.devRequests(experimentalSettings.devRequests))
         entries.append(.fakeAds(experimentalSettings.fakeAds))
         entries.append(.enableLocalTranslation(experimentalSettings.enableLocalTranslation))
+        entries.append(.enableUpdates(experimentalSettings.enableUpdates))
     }
 
     if isMainApp {
