@@ -8,8 +8,8 @@ public extension UIView {
     }
 }
 
-public func makeSpringAnimation(_ keyPath: String) -> CABasicAnimation {
-    return makeSpringAnimationImpl(keyPath)
+public func makeSpringAnimation(_ keyPath: String, duration: Double) -> CABasicAnimation {
+    return makeSpringAnimationImpl(keyPath, duration)
 }
 
 public func makeSpringBounceAnimation(_ keyPath: String, _ initialVelocity: CGFloat, _ damping: CGFloat) -> CABasicAnimation {

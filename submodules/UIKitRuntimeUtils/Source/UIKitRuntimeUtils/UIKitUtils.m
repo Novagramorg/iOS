@@ -50,7 +50,11 @@ double animationDurationFactorImpl() {
 
 @end
 
-CABasicAnimation * _Nonnull makeSpringAnimationImpl(NSString * _Nonnull keyPath) {
+CABasicAnimation * _Nonnull makeSpringAnimationImpl(NSString * _Nonnull keyPath, double duration) {
+    if (@available(iOS 26.0, *)) {
+        return make26SpringAnimationImpl(keyPath, duration);
+    }
+    
     CASpringAnimation *springAnimation = [CASpringAnimation animationWithKeyPath:keyPath];
     springAnimation.mass = 3.0f;
     springAnimation.stiffness = 1000.0f;
