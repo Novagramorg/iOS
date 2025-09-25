@@ -132,7 +132,7 @@ public extension CALayer {
                 
                 return animation
             } else if duration == 0.5 {
-                let animation = makeSpringAnimation(keyPath)
+                let animation = makeSpringAnimation(keyPath, duration: duration)
                 animation.fromValue = from
                 animation.toValue = to
                 animation.isRemovedOnCompletion = removeOnCompletion
@@ -297,12 +297,7 @@ public extension CALayer {
     }
     
     func springAnimation(from: AnyObject, to: AnyObject, keyPath: String, duration: Double, delay: Double = 0.0, initialVelocity: CGFloat = 0.0, damping: CGFloat = 88.0, removeOnCompletion: Bool = true, additive: Bool = false) -> CABasicAnimation {
-        let animation: CABasicAnimation
-        if #available(iOS 9.0, *) {
-            animation = makeSpringBounceAnimation(keyPath, initialVelocity, damping)
-        } else {
-            animation = makeSpringAnimation(keyPath)
-        }
+        let animation = makeSpringBounceAnimation(keyPath, initialVelocity, damping)
         animation.fromValue = from
         animation.toValue = to
         animation.isRemovedOnCompletion = removeOnCompletion
@@ -328,12 +323,7 @@ public extension CALayer {
     }
 
     func animateSpring(from: AnyObject, to: AnyObject, keyPath: String, duration: Double, delay: Double = 0.0, initialVelocity: CGFloat = 0.0, damping: CGFloat = 88.0, removeOnCompletion: Bool = true, additive: Bool = false, completion: ((Bool) -> Void)? = nil) {
-        let animation: CABasicAnimation
-        if #available(iOS 9.0, *) {
-            animation = makeSpringBounceAnimation(keyPath, initialVelocity, damping)
-        } else {
-            animation = makeSpringAnimation(keyPath)
-        }
+        let animation = makeSpringBounceAnimation(keyPath, initialVelocity, damping)
         animation.fromValue = from
         animation.toValue = to
         animation.isRemovedOnCompletion = removeOnCompletion
