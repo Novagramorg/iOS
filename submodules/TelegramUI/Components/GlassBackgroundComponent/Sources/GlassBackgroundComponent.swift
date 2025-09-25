@@ -376,11 +376,15 @@ public class GlassBackgroundView: UIView {
                 nativeView.frame = CGRect(origin: CGPoint(), size: size)
                 nativeContainerView.frame = CGRect(origin: CGPoint(), size: CGSize(width: size.width, height: max(size.height, 400.0)))
             } else {
-                transition.containedViewLayoutTransition.animateView {
+                /*transition.containedViewLayoutTransition.animateView {
                     nativeView.layer.cornerRadius = cornerRadius
                     nativeView.frame = CGRect(origin: CGPoint(), size: size)
                     nativeContainerView.frame = CGRect(origin: CGPoint(), size: CGSize(width: size.width, height: max(size.height, 400.0)))
-                }
+                }*/
+                nativeView.layer.cornerRadius = cornerRadius
+                transition.setFrame(view: nativeView, frame: CGRect(origin: CGPoint(), size: size))
+                transition.setFrame(view: nativeContainerView, frame: CGRect(origin: CGPoint(), size: CGSize(width: size.width, height: max(size.height, 400.0))))
+                
                 //nativeView.layer.animateFrame(from: previousFrame, to: CGRect(origin: CGPoint(), size: size), duration: 0.4, timingFunction: kCAMediaTimingFunctionSpring)
             }
         }
