@@ -773,7 +773,7 @@ public final class MessageInputPanelComponent: Component {
             return result
         }
         
-        private var sendMessageAction() {
+        private func sendMessageAction() {
             guard let component = self.component else {
                 return
             }
@@ -781,6 +781,7 @@ public final class MessageInputPanelComponent: Component {
                 self.animateError()
                 component.presentTextLengthLimitTooltip?()
             } else {
+                let baseFieldHeight: CGFloat = 40.0
                 var sendActionTransition: MessageInputPanelComponent.SendActionTransition?
                 if let snapshotView = self.textClippingView.snapshotView(afterScreenUpdates: false), let backgroundView = self.fieldGlassBackgroundView {
                     sendActionTransition = MessageInputPanelComponent.SendActionTransition(
