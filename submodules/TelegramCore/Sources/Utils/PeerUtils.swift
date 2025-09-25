@@ -394,7 +394,7 @@ public extension Peer {
 
 public extension TelegramPeerUsername {
     var isActive: Bool {
-        return self.flags.contains(.isActive) || self.flags.contains(.isEditable)
+        return self.flags.contains(.isActive)
     }
 }
 
