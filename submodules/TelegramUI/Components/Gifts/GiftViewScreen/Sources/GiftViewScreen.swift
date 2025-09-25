@@ -3347,23 +3347,13 @@ private final class GiftViewSheetContent: CombinedComponent {
                         case let .address(address):
                             exported = true
                             
-                            func formatAddress(_ str: String) -> String {
-                                guard str.count == 48 && !str.hasSuffix(".ton") else {
-                                    return str
-                                }
-                                var result = str
-                                let middleIndex = result.index(result.startIndex, offsetBy: str.count / 2)
-                                result.insert("\n", at: middleIndex)
-                                return result
-                            }
-                            
                             tableItems.append(.init(
                                 id: "address_owner",
                                 title: strings.Gift_Unique_Owner,
                                 component: AnyComponent(
                                     Button(
                                         content: AnyComponent(
-                                            MultilineTextComponent(text: .plain(NSAttributedString(string: formatAddress(address), font: tableLargeMonospaceFont, textColor: tableLinkColor)), maximumNumberOfLines: 2, lineSpacing: 0.2)
+                                            MultilineTextComponent(text: .plain(NSAttributedString(string: address, font: tableLargeMonospaceFont, textColor: tableLinkColor)), truncationType: .middle, maximumNumberOfLines: 1, lineSpacing: 0.2)
                                         ),
                                         action: { [weak state] in
                                             state?.copyAddress(address)
