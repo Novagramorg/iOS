@@ -217,9 +217,9 @@ public enum DeviceMetrics: CaseIterable, Equatable {
             case .iPhone14Pro, .iPhone14ProMax:
                 return 55.0
             case .iPhone16Pro, .iPhone16ProMax:
-                return 55.0
+                return 62.0
             case .iPhoneAir:
-                return 55.0
+                return 62.0
             case let .unknown(_, _, _, screenCornerRadius):
                 return screenCornerRadius
             default:

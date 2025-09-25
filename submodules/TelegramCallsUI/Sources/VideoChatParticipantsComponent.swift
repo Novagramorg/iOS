@@ -2034,7 +2034,7 @@ final class VideoChatParticipantsComponent: Component {
                     } else {
                         let step: CGFloat = CGFloat(i - firstStep) / CGFloat(numSteps - firstStep - 1)
                         let value: CGFloat = 1.0 - Display.bezierPoint(0.42, 0.0, 0.58, 1.0, step)
-                        return UIColor(white: 0.0, alpha: baseGradientAlpha * value).multipliedWith(.red)
+                        return UIColor(white: 0.0, alpha: baseGradientAlpha * value)
                     }
                 }
                 let locations = (0 ..< numSteps).map { i -> CGFloat in
