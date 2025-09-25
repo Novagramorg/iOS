@@ -991,8 +991,9 @@ func _internal_requestMessageHistoryThreads(accountPeerId: PeerId, postbox: Post
                         
                         for topic in topics {
                             switch topic {
-                            case let .forumTopic(flags, id, date, title, iconColor, iconEmojiId, topMessage, readInboxMaxId, readOutboxMaxId, unreadCount, unreadMentionsCount, unreadReactionsCount, fromId, notifySettings, draft):
+                            case let .forumTopic(flags, id, date, peer, title, iconColor, iconEmojiId, topMessage, readInboxMaxId, readOutboxMaxId, unreadCount, unreadMentionsCount, unreadReactionsCount, fromId, notifySettings, draft):
                                 let _ = draft
+                                let _ = peer
                                 
                                 if (flags & (1 << 3)) != 0 {
                                     pinnedIds.append(Int64(id))
@@ -1198,7 +1199,7 @@ func _internal_forumChannelTopicNotificationExceptions(account: Account, id: Eng
                 case let .forumTopics(_, _, topics, _, _, _, _):
                     for topic in topics {
                         switch topic {
-                        case let .forumTopic(_, id, _, title, iconColor, iconEmojiId, _, _, _, _, _, _, _, _, _):
+                        case let .forumTopic(_, id, _, _, title, iconColor, iconEmojiId, _, _, _, _, _, _, _, _, _):
                             infoMapping[Int64(id)] = EngineMessageHistoryThread.Info(title: title, icon: iconEmojiId, iconColor: iconColor)
                         case .forumTopicDeleted:
                             break

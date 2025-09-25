@@ -453,7 +453,7 @@ final class ChatListContainerItemNode: ASDisplayNode {
         let edgeEffectHeight: CGFloat = insets.bottom
         let edgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: size.height - edgeEffectHeight), size: CGSize(width: size.width, height: edgeEffectHeight))
         transition.updateFrame(view: self.edgeEffectView, frame: edgeEffectFrame)
-        self.edgeEffectView.update(content: self.presentationData.theme.list.plainBackgroundColor, isInverted: false, rect: edgeEffectFrame, edge: .bottom, edgeSize: edgeEffectFrame.height, containerSize: size, transition: ComponentTransition(transition))
+        self.edgeEffectView.update(content: self.presentationData.theme.list.plainBackgroundColor, rect: edgeEffectFrame, edge: .bottom, edgeSize: edgeEffectFrame.height, transition: ComponentTransition(transition))
     }
     
     func updateScrollingOffset(navigationHeight: CGFloat, offset: CGFloat, transition: ContainedViewLayoutTransition) {
