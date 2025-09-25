@@ -374,7 +374,7 @@ private func themeSettingsControllerEntries(presentationData: PresentationData, 
         if accountPeer._asPeer().hasCustomNameColor {
             authorName = accountPeer.displayTitle(strings: strings, displayOrder: presentationData.nameDisplayOrder)
         }
-        profileColor = accountPeer.profileColor
+        profileColor = accountPeer.effectiveProfileColor
     } else {
         nameColor = .preset(.blue)
         profileColor = nil
