@@ -8,6 +8,7 @@ import TelegramPresentationData
 import CallsEmoji
 import ImageBlur
 import HierarchyTrackingLayer
+import GlassBackgroundComponent
 
 private final class EmojiContainerView: UIView {
     private let maskImageView: UIImageView?
@@ -686,14 +687,11 @@ final class VideoChatEncryptionKeyComponent: Component {
             }
             
             let backgroundSize = component.isExpanded ? expandedSize : collapsedSize
-            let backgroundCornerRadius: CGFloat = component.isExpanded ? 10.0 : collapsedSize.height * 0.5
+            let backgroundCornerRadius: CGFloat = component.isExpanded ? 26.0 : collapsedSize.height * 0.5
             
             let _ = self.background.update(
                 transition: transition,
-                component: AnyComponent(FilledRoundedRectangleComponent(
-                    color: component.theme.list.itemBlocksBackgroundColor,
-                    cornerRadius: .value(backgroundCornerRadius), smoothCorners: false
-                )),
+                component: AnyComponent(GlassBackgroundComponent(size: backgroundSize, cornerRadius: backgroundCornerRadius, isDark: true, tintColor: .init(kind: .panel, color: UIColor(rgb: 0x1f1f27)))),
                 environment: {},
                 containerSize: backgroundSize
             )

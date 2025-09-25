@@ -279,9 +279,9 @@ final class ChatTagSearchInputPanelNode: ChatInputPanelNode {
         
         let height: CGFloat
         if case .regular = params.metrics.widthClass {
-            height = 49.0
+            height = 40.0
         } else {
-            height = 45.0
+            height = 40.0
         }
         
         var modeButtonTitle: [AnimatedTextComponent.Item] = []

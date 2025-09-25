@@ -191,7 +191,6 @@ private final class VideoMessageCameraScreenComponent: CombinedComponent {
         enum ImageKey: Hashable {
             case flip
             case flash
-            case buttonBackground
             case flashImage
         }
         private var cachedImages: [ImageKey: UIImage] = [:]
@@ -205,9 +204,6 @@ private final class VideoMessageCameraScreenComponent: CombinedComponent {
                     image = UIImage(bundleImageName: "Camera/VideoMessageFlip")!.withRenderingMode(.alwaysTemplate)
                 case .flash:
                     image = UIImage(bundleImageName: "Camera/VideoMessageFlash")!.withRenderingMode(.alwaysTemplate)
-                case .buttonBackground:
-                    let innerSize = CGSize(width: 40.0, height: 40.0)
-                    image = generateFilledCircleImage(diameter: innerSize.width, color: theme.rootController.navigationBar.opaqueBackgroundColor, strokeColor: theme.chat.inputPanel.panelSeparatorColor, strokeWidth: 0.5, backgroundColor: nil)!
                 case .flashImage:
                     image = generateImage(CGSize(width: 393.0, height: 852.0), rotatedContext: { size, context in
                         context.clear(CGRect(origin: .zero, size: size))
@@ -590,7 +586,8 @@ private final class VideoMessageCameraScreenComponent: CombinedComponent {
                 let flipButtonBackground = flipButtonBackground.update(
                     component: GlassBackgroundComponent(
                         size: CGSize(width: 40.0, height: 40.0),
-                        isDark: true,
+                        cornerRadius: 40.0 * 0.5,
+                        isDark: environment.theme.overallDarkAppearance,
                         tintColor: .init(kind: .panel, color: environment.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7))
                     ),
                     availableSize: CGSize(width: 40.0, height: 40.0),
@@ -692,7 +689,8 @@ private final class VideoMessageCameraScreenComponent: CombinedComponent {
                     let flashButtonBackground = flashButtonBackground.update(
                         component: GlassBackgroundComponent(
                             size: CGSize(width: 40.0, height: 40.0),
-                            isDark: true,
+                            cornerRadius: 40.0 * 0.5,
+                            isDark: environment.theme.overallDarkAppearance,
                             tintColor: .init(kind: .panel, color: environment.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7))
                         ),
                         availableSize: CGSize(width: 40.0, height: 40.0),
@@ -721,9 +719,11 @@ private final class VideoMessageCameraScreenComponent: CombinedComponent {
                                 AnyComponentWithIdentity(
                                     id: "background",
                                     component: AnyComponent(
-                                        Image(
-                                            image: state.image(.buttonBackground, theme: environment.theme),
-                                            size: CGSize(width: 40.0, height: 40.0)
+                                        GlassBackgroundComponent(
+                                            size: CGSize(width: 40.0, height: 40.0),
+                                            cornerRadius: 40.0 * 0.5,
+                                            isDark: environment.theme.overallDarkAppearance,
+                                            tintColor: .init(kind: .panel, color: environment.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7))
                                         )
                                     )
                                 ),
@@ -751,7 +751,7 @@ private final class VideoMessageCameraScreenComponent: CombinedComponent {
                     transition: context.transition
                 )
                 context.add(viewOnceButton
-                    .position(CGPoint(x: availableSize.width - viewOnceButton.size.width / 2.0 - 2.0 - UIScreenPixel, y: availableSize.height - viewOnceButton.size.height / 2.0 - 8.0 - viewOnceOffset))
+                    .position(CGPoint(x: availableSize.width - viewOnceButton.size.width / 2.0 - 8.0, y: availableSize.height - viewOnceButton.size.height / 2.0 - 8.0 - viewOnceOffset))
                     .appear(.default(scale: true, alpha: true))
                     .disappear(.default(scale: true, alpha: true))
                 )
@@ -766,7 +766,8 @@ private final class VideoMessageCameraScreenComponent: CombinedComponent {
                                     id: "background",
                                     component: AnyComponent(GlassBackgroundComponent(
                                         size: CGSize(width: 40.0, height: 40.0),
-                                        isDark: true,
+                                        cornerRadius: 40.0 * 0.5,
+                                        isDark: environment.theme.overallDarkAppearance,
                                         tintColor: .init(kind: .panel, color: environment.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7))
                                     ))
                                 ),
@@ -1469,7 +1470,7 @@ public class VideoMessageCameraScreen: ViewController {
             var backgroundFrame = CGRect(origin: .zero, size: CGSize(width: layout.size.width, height: controller.inputPanelFrame.0.minY))
             let actualBackgroundFrame = CGRect(origin: .zero, size: CGSize(width: layout.size.width, height: layout.size.height))
             if backgroundFrame.maxY < layout.size.height - 100.0 && (layout.inputHeight ?? 0.0).isZero && !controller.inputPanelFrame.1 && layout.additionalInsets.bottom.isZero {
-                backgroundFrame = CGRect(origin: .zero, size: CGSize(width: layout.size.width, height: layout.size.height - layout.intrinsicInsets.bottom - controller.inputPanelFrame.0.height))
+                backgroundFrame = CGRect(origin: .zero, size: CGSize(width: layout.size.width, height: layout.size.height - layout.intrinsicInsets.bottom - controller.inputPanelFrame.0.height - 8.0))
             }
                         
             transition.setPosition(view: self.backgroundView, position: actualBackgroundFrame.center)

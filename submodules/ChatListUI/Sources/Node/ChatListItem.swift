@@ -124,14 +124,16 @@ public enum ChatListItemContent {
         public var hideSeparator: Bool
         public var hideDate: Bool
         public var hidePeerStatus: Bool
+        public var isInTransparentContainer: Bool
         
-        public init(commandPrefix: String?, searchQuery: String?, messageCount: Int?, hideSeparator: Bool, hideDate: Bool, hidePeerStatus: Bool) {
+        public init(commandPrefix: String?, searchQuery: String?, messageCount: Int?, hideSeparator: Bool, hideDate: Bool, hidePeerStatus: Bool, isInTransparentContainer: Bool = false) {
             self.commandPrefix = commandPrefix
             self.searchQuery = searchQuery
             self.messageCount = messageCount
             self.hideSeparator = hideSeparator
             self.hideDate = hideDate
             self.hidePeerStatus = hidePeerStatus
+            self.isInTransparentContainer = isInTransparentContainer
         }
     }
     
@@ -1964,6 +1966,11 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
             if let itemChatLocation = item.content.chatLocation {
                 if itemChatLocation == item.interaction.highlightedChatLocation?.location {
                     reallyHighlighted = true
+                }
+            }
+            if case let .peer(peerData) = item.content, let customMessageListData = peerData.customMessageListData {
+                if customMessageListData.isInTransparentContainer {
+                    reallyHighlighted = false
                 }
             }
         }

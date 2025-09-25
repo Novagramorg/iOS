@@ -893,7 +893,7 @@ public class ChatMessageAnimatedStickerItemNode: ChatMessageItemView {
             }
             
             if hasAvatar {
-                avatarInset = layoutConstants.avatarDiameter
+                avatarInset = layoutConstants.avatarInset
             } else {
                 avatarInset = 0.0
             }

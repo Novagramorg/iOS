@@ -604,7 +604,10 @@ public class Window1 {
                             
                 var duration: Double = (notification.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? NSNumber)?.doubleValue ?? 0.0
                 if duration > Double.ulpOfOne {
-                    duration = 0.5
+                    if #available(iOS 26.0, *) {
+                    } else {
+                        duration = 0.5
+                    }
                 }
                 let curve: UInt = (notification.userInfo?[UIResponder.keyboardAnimationCurveUserInfoKey] as? NSNumber)?.uintValue ?? 7
                 

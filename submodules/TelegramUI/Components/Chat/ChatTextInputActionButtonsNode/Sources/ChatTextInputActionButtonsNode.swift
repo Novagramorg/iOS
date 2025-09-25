@@ -197,6 +197,7 @@ public final class ChatTextInputActionButtonsNode: ASDisplayNode, ChatSendMessag
         self.expandMediaInputButtonBackgroundView.contentView.addSubview(self.expandMediaInputButtonIcon)
         self.expandMediaInputButtonIcon.image = PresentationResourcesChat.chatInputPanelExpandButtonImage(presentationInterfaceState.theme)
         self.expandMediaInputButtonIcon.tintColor = theme.chat.inputPanel.inputControlColor
+        self.expandMediaInputButtonIcon.setMonochromaticEffect(tintColor: theme.chat.inputPanel.inputControlColor)
         
         super.init()
         
@@ -265,6 +266,7 @@ public final class ChatTextInputActionButtonsNode: ASDisplayNode, ChatSendMessag
     public func updateTheme(theme: PresentationTheme, wallpaper: TelegramWallpaper) {
         self.micButton.updateTheme(theme: theme)
         self.expandMediaInputButtonIcon.tintColor = theme.chat.inputPanel.inputControlColor
+        self.expandMediaInputButtonIcon.setMonochromaticEffect(tintColor: theme.chat.inputPanel.inputControlColor)
     }
     
     private var absoluteRect: (CGRect, CGSize)?
@@ -352,8 +354,8 @@ public final class ChatTextInputActionButtonsNode: ASDisplayNode, ChatSendMessag
         self.expandMediaInputButtonBackgroundView.update(size: size, cornerRadius: size.height * 0.5, isDark: interfaceState.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: interfaceState.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7)), transition: ComponentTransition(transition))
         if let image = self.expandMediaInputButtonIcon.image {
             let expandIconFrame = CGRect(origin: CGPoint(x: floor((size.width - image.size.width) * 0.5), y: floor((size.height - image.size.height) * 0.5)), size: image.size)
-            transition.updatePosition(layer: self.expandMediaInputButtonIcon.layer, position: expandIconFrame.center)
-            transition.updateBounds(layer: self.expandMediaInputButtonIcon.layer, bounds: CGRect(origin: CGPoint(), size: expandIconFrame.size))
+            self.expandMediaInputButtonIcon.center = expandIconFrame.center
+            self.expandMediaInputButtonIcon.bounds = CGRect(origin: CGPoint(), size: expandIconFrame.size)
             transition.updateTransformScale(layer: self.expandMediaInputButtonIcon.layer, scale: CGPoint(x: 1.0, y: isMediaInputExpanded ? 1.0 : -1.0))
         }
         

@@ -161,6 +161,7 @@ final class ChatRestrictedInputPanelNode: ChatInputPanelNode {
         let subtitleSize = self.subtitleNode.updateLayout(CGSize(width: width - leftInset - rightInset - 8.0 * 2.0, height: panelHeight))
         
         var originX: CGFloat = leftInset + floor((width - leftInset - rightInset - textSize.width) / 2.0)
+        var totalWidth = textSize.width
         
         if let iconImage {
             let iconView: UIImageView
@@ -173,7 +174,7 @@ final class ChatRestrictedInputPanelNode: ChatInputPanelNode {
             }
             iconView.image = iconImage
             
-            let totalWidth = textSize.width + iconImage.size.width + iconSpacing
+            totalWidth += iconImage.size.width + iconSpacing
             iconView.frame = CGRect(origin: CGPoint(x: leftInset + floor((width - leftInset - rightInset - totalWidth) / 2.0), y: floor((panelHeight - textSize.height) / 2.0) + UIScreenPixel + floorToScreenPixels((textSize.height - iconImage.size.height) / 2.0)), size: iconImage.size)
             
             originX += iconImage.size.width + iconSpacing
@@ -190,7 +191,11 @@ final class ChatRestrictedInputPanelNode: ChatInputPanelNode {
         
         let subtitleFrame = CGRect(origin: CGPoint(x: leftInset + floor((width - leftInset - rightInset - subtitleSize.width) / 2.0), y: floor((panelHeight + combinedHeight) / 2.0) - subtitleSize.height), size: subtitleSize)
         
-        var combinedFrame = textFrame.union(subtitleFrame).insetBy(dx: -12.0, dy: -6.0)
+        var combinedFrame = textFrame.union(subtitleFrame)
+        if let iconView {
+            combinedFrame = combinedFrame.union(iconView.frame)
+        }
+        combinedFrame = combinedFrame.insetBy(dx: -12.0, dy: -6.0)
         combinedFrame.origin.y += 1.0
         
         self.textNode.frame = textFrame.offsetBy(dx: -combinedFrame.minX, dy: -combinedFrame.minY)

@@ -104,7 +104,34 @@ public extension CALayer {
             
             return animation
         } else if timingFunction == kCAMediaTimingFunctionSpring {
-            if duration == 0.5 {
+            if #available(iOS 26.0, *), abs(duration - 0.3832) <= 0.0001 {
+                let animation = make26SpringAnimationImpl(keyPath, duration)
+                animation.fromValue = from
+                animation.toValue = to
+                animation.isRemovedOnCompletion = removeOnCompletion
+                animation.fillMode = .forwards
+                if let completion {
+                    animation.delegate = CALayerAnimationDelegate(animation: animation, completion: completion)
+                }
+                
+                let k = Float(UIView.animationDurationFactor())
+                var speed: Float = 1.0
+                if k != 0 && k != 1 {
+                    speed = Float(1.0) / k
+                }
+                
+                animation.speed = speed * Float(animation.duration / duration)
+                animation.isAdditive = additive
+                
+                if !delay.isZero {
+                    animation.beginTime = self.convertTime(CACurrentMediaTime(), from: nil) + delay * UIView.animationDurationFactor()
+                    animation.fillMode = .both
+                }
+                
+                adjustFrameRate(animation: animation)
+                
+                return animation
+            } else if duration == 0.5 {
                 let animation = makeSpringAnimation(keyPath)
                 animation.fromValue = from
                 animation.toValue = to
