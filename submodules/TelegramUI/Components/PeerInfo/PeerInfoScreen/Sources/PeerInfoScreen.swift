@@ -1501,6 +1501,17 @@ private func infoItems(data: PeerInfoScreenData?, context: AccountContext, prese
                 }
                 
                 if let note = cachedData.note, !note.text.isEmpty {
+                    var entities = note.entities
+                    if !context.isPremium {
+                        entities = entities.filter { entity in
+                            switch entity.type {
+                            case .Url, .TextUrl:
+                                return false
+                            default:
+                                return true
+                            }
+                        }
+                    }
                     items[currentPeerInfoSection]!.append(PeerInfoScreenLabeledValueItem(id: 0, label: presentationData.strings.PeerInfo_Notes, rightLabel: presentationData.strings.PeerInfo_NotesInfo, text: note.text, entities: note.entities, textColor: .primary, textBehavior: .multiLine(maxLines: 100, enabledEntities: []), action: nil, linkItemAction: bioLinkAction, button: nil, contextAction: noteContextAction, requestLayout: { animated in
                         interaction.requestLayout(animated)
                     }))
@@ -4577,7 +4588,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
 
                                     let noteUpdateSignal: Signal<Never, ContactUpdateError>
                                     if noteUpdated, let note {
-                                        let entities = generateChatInputTextEntities(note)
+                                        let entities = generateTextEntities(note.string, enabledTypes: [.mention, .hashtag, .allUrl], currentEntities: generateChatInputTextEntities(note))
                                         noteUpdateSignal = context.engine.contacts.updateContactNote(peerId: peer.id, text: note.string, entities: entities)
                                         |> mapError { _ -> ContactUpdateError in
                                             return .generic

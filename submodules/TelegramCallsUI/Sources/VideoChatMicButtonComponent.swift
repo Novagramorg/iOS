@@ -520,9 +520,10 @@ final class VideoChatMicButtonComponent: Component {
             var titleFrame = CGRect(origin: CGPoint(x: floor((size.width - titleSize.width) * 0.5), y: size.height + 16.0), size: titleSize)
             if component.isCompact {
                 titleFrame.origin.y -= 11.0
-            }
-            if subtitleText != nil {
-                titleFrame.origin.y -= 5.0
+            } else {
+                if subtitleText != nil {
+                    titleFrame.origin.y -= 5.0
+                }
             }
             if let titleView = self.title.view {
                 if titleView.superview == nil {
