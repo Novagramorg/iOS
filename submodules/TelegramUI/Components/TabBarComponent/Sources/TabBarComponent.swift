@@ -91,11 +91,18 @@ public final class TabBarComponent: Component {
             
             if #available(iOS 26.0, *) {
                 self.nativeTabBar = UITabBar()
+                self.nativeTabBar?.traitOverrides.verticalSizeClass = .compact
+                self.nativeTabBar?.traitOverrides.horizontalSizeClass = .compact
             } else {
                 self.nativeTabBar = nil
             }
             
             super.init(frame: frame)
+            
+            if #available(iOS 17.0, *) {
+                self.traitOverrides.verticalSizeClass = .compact
+                self.traitOverrides.horizontalSizeClass = .compact
+            }
             
             self.addSubview(self.contextGestureContainerView)
             
@@ -311,9 +318,13 @@ public final class TabBarComponent: Component {
         func update(component: TabBarComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
             let innerInset: CGFloat = 3.0
             
+            let availableSize = CGSize(width: min(500.0, availableSize.width), height: availableSize.height)
+            
             let previousComponent = self.component
             self.component = component
             self.state = state
+            
+            self.overrideUserInterfaceStyle = component.theme.overallDarkAppearance ? .dark : .light
             
             if let nativeTabBar = self.nativeTabBar {
                 if nativeTabBar.items?.count != component.items.count {

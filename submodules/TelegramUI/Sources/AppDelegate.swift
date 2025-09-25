@@ -2923,7 +2923,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
     private func maybeCheckForUpdates() {
         #if targetEnvironment(simulator)
         #else
-        guard let buildConfig = self.buildConfig, buildConfig.isInternalBuild else {
+        guard let buildConfig = self.buildConfig else {
             return
         }
         let timestamp = CFAbsoluteTimeGetCurrent()
@@ -2939,6 +2939,9 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
                 }
             }
             |> deliverOnMainQueue).start(next: { sharedContext, urlString in
+                guard buildConfig.isInternalBuild || sharedContext.sharedContext.immediateExperimentalUISettings.enableUpdates else {
+                    return
+                }
                 guard let url = urlString.flatMap({ URL(string: $0) }) else {
                     return
                 }

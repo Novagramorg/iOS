@@ -900,3 +900,54 @@ public extension CGPoint {
         return CGPoint(x: self.x + dx, y: self.y + dy)
     }
 }
+
+public extension UIView {
+    func setMonochromaticEffect(tintColor: UIColor?) {
+        var overrideUserInterfaceStyle: UIUserInterfaceStyle = .unspecified
+        var red: CGFloat = 0.0
+        var green: CGFloat = 0.0
+        var blue: CGFloat = 0.0
+        var alpha: CGFloat = 1.0
+        if let tintColor {
+            if tintColor.getRed(&red, green: &green, blue: &blue, alpha: &alpha) {
+                if red == 0.0 && green == 0.0 && blue == 0.0 && alpha == 1.0 {
+                    overrideUserInterfaceStyle = .light
+                }
+            } else {
+                if red == 1.0 && green == 1.0 && blue == 1.0 && alpha == 1.0 {
+                    overrideUserInterfaceStyle = .dark
+                }
+            }
+        }
+        
+        if self.overrideUserInterfaceStyle != overrideUserInterfaceStyle {
+            self.overrideUserInterfaceStyle = overrideUserInterfaceStyle
+            setMonochromaticEffectImpl(self, overrideUserInterfaceStyle != .unspecified)
+        }
+    }
+    
+    func setMonochromaticEffectAndAlpha(tintColor: UIColor?, transition: ContainedViewLayoutTransition) {
+        var overrideUserInterfaceStyle: UIUserInterfaceStyle = .unspecified
+        var red: CGFloat = 0.0
+        var green: CGFloat = 0.0
+        var blue: CGFloat = 0.0
+        var alpha: CGFloat = 1.0
+        if let tintColor {
+            if tintColor.getRed(&red, green: &green, blue: &blue, alpha: &alpha) {
+                if red == 0.0 && green == 0.0 && blue == 0.0 {
+                    overrideUserInterfaceStyle = .light
+                }
+            } else {
+                if red == 1.0 && green == 1.0 && blue == 1.0 {
+                    overrideUserInterfaceStyle = .dark
+                }
+            }
+        }
+        
+        if self.overrideUserInterfaceStyle != overrideUserInterfaceStyle {
+            self.overrideUserInterfaceStyle = overrideUserInterfaceStyle
+            setMonochromaticEffectImpl(self, overrideUserInterfaceStyle != .unspecified)
+        }
+        transition.updateAlpha(layer: self.layer, alpha: alpha)
+    }
+}

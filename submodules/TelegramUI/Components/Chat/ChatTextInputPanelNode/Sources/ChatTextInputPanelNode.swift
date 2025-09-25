@@ -214,11 +214,9 @@ private func makeTextInputTheme(context: AccountContext, interfaceState: ChatPre
 public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDelegate, ChatInputTextNodeDelegate {
     public let clippingNode: ASDisplayNode
     public let textPlaceholderNode: ImmediateTextNodeWithEntities
-    public let tintMaskTextPlaceholderNode: ImmediateTextNodeWithEntities
     
     public var textLockIconNode: ASImageNode?
     public var contextPlaceholderNode: TextNode?
-    public var tintContextPlaceholderNode: TextNode?
     public var slowmodePlaceholderNode: ChatTextInputSlowmodePlaceholderNode?
     public let textInputContainerBackgroundView: GlassBackgroundView
     public let textInputContainer: ASDisplayNode
@@ -521,20 +519,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         self.textPlaceholderNode.contentsScale = UIScreenScale
         self.textPlaceholderNode.maximumNumberOfLines = 1
         self.textPlaceholderNode.isUserInteractionEnabled = false
-        
-        //TODO:release add tinted output instead
-        self.tintMaskTextPlaceholderNode = ImmediateTextNodeWithEntities()
-        self.tintMaskTextPlaceholderNode.arguments = TextNodeWithEntities.Arguments(
-            context: context,
-            cache: context.animationCache,
-            renderer: context.animationRenderer,
-            placeholderColor: .clear,
-            attemptSynchronous: true
-        )
-        self.tintMaskTextPlaceholderNode.contentMode = .topLeft
-        self.tintMaskTextPlaceholderNode.contentsScale = UIScreenScale
-        self.tintMaskTextPlaceholderNode.maximumNumberOfLines = 1
-        
+
         self.menuButton = HighlightTrackingButtonNode()
         self.menuButton.clipsToBounds = true
         self.menuButton.cornerRadius = 16.0
@@ -566,7 +551,6 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         self.attachmentButton.isAccessibilityElement = true
         
         self.attachmentButtonBackground = GlassBackgroundView(frame: CGRect())
-        self.attachmentButtonBackground.isUserInteractionEnabled = false
         self.attachmentButton.addSubview(self.attachmentButtonBackground)
         
         self.attachmentButtonIcon = GlassBackgroundView.ContentImageView()
@@ -785,7 +769,6 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         self.clippingNode.addSubnode(self.textInputBackgroundNode)
         
         self.textInputContainerBackgroundView.contentView.addSubview(self.textPlaceholderNode.view)
-        self.textInputContainerBackgroundView.maskContentView.addSubview(self.tintMaskTextPlaceholderNode.view)
         
         self.menuButton.view.addSubview(self.menuButtonBackgroundView)
         self.menuButton.addSubnode(self.menuButtonClippingNode)
@@ -1039,6 +1022,8 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     }
     
     private func calculateTextFieldMetrics(width: CGFloat, maxHeight: CGFloat, metrics: LayoutMetrics) -> (accessoryButtonsWidth: CGFloat, textFieldHeight: CGFloat, isOverflow: Bool) {
+        let maxHeight = max(maxHeight, 40.0)
+        
         var textFieldInsets = self.textFieldInsets(metrics: metrics)
         if self.actionButtons.frame.width > 40.0 {
             textFieldInsets.right = self.actionButtons.frame.width - 2.0
@@ -1076,7 +1061,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             
             let unboundTextFieldHeight = max(textFieldMinHeight, ceil(measuredHeight))
             
-            let maxNumberOfLines = min(12, (Int(fieldMaxHeight - 11.0) - 33) / 22)
+            let maxNumberOfLines = max(1, min(12, (Int(fieldMaxHeight - 11.0) - 33) / 22))
             
             let updatedMaxHeight = (CGFloat(maxNumberOfLines) * (22.0 + 2.0) + 10.0)
             
@@ -1256,6 +1241,8 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     ) -> CGFloat {
         let previousAdditionalSideInsets = self.validLayout?.4
         self.validLayout = (width, leftInset, rightInset, bottomInset, additionalSideInsets, maxHeight, maxOverlayHeight, metrics, isSecondary, isMediaInputExpanded)
+        
+        let placeholderColor: UIColor = interfaceState.theme.chat.inputPanel.inputPlaceholderColor
     
         var transition = transition
         var additionalOffset: CGFloat = 0.0
@@ -2423,20 +2410,15 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         
         if interfaceState.slowmodeState == nil || isScheduledMessages, let contextPlaceholder = interfaceState.inputTextPanelState.contextPlaceholder {
             let placeholderLayout = TextNode.asyncLayout(self.contextPlaceholderNode)
-            let tintPlaceholderLayout = TextNode.asyncLayout(self.tintContextPlaceholderNode)
+            let contextPlaceholder = NSMutableAttributedString(attributedString: contextPlaceholder)
+            contextPlaceholder.addAttribute(.foregroundColor, value: placeholderColor.withAlphaComponent(1.0), range: NSRange(location: 0, length: contextPlaceholder.length))
             let (placeholderSize, placeholderApply) = placeholderLayout(TextNodeLayoutArguments(attributedString: contextPlaceholder, backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .end, constrainedSize: CGSize(width: width - leftInset - rightInset - textFieldInsets.left - textFieldInsets.right - self.textInputViewInternalInsets.left - self.textInputViewInternalInsets.right - accessoryButtonsWidth, height: CGFloat.greatestFiniteMagnitude), alignment: .natural, cutout: nil, insets: UIEdgeInsets()))
             let tintContextPlaceholder = NSMutableAttributedString(attributedString: contextPlaceholder)
             tintContextPlaceholder.addAttribute(.foregroundColor, value: UIColor.black, range: NSRange(location: 0, length: tintContextPlaceholder.length))
-            let (_, tintPlaceholderApply) = tintPlaceholderLayout(TextNodeLayoutArguments(attributedString: tintContextPlaceholder, backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .end, constrainedSize: CGSize(width: width - leftInset - rightInset - textFieldInsets.left - textFieldInsets.right - self.textInputViewInternalInsets.left - self.textInputViewInternalInsets.right - accessoryButtonsWidth, height: CGFloat.greatestFiniteMagnitude), alignment: .natural, cutout: nil, insets: UIEdgeInsets()))
             let contextPlaceholderNode = placeholderApply()
-            let tintContextPlaceholderNode = tintPlaceholderApply()
             if let currentContextPlaceholderNode = self.contextPlaceholderNode, currentContextPlaceholderNode !== contextPlaceholderNode {
                 self.contextPlaceholderNode = nil
                 currentContextPlaceholderNode.removeFromSupernode()
-            }
-            if let currentTintContextPlaceholderNode = self.tintContextPlaceholderNode, currentTintContextPlaceholderNode !== tintContextPlaceholderNode {
-                self.tintContextPlaceholderNode = nil
-                currentTintContextPlaceholderNode.removeFromSupernode()
             }
             
             if self.contextPlaceholderNode !== contextPlaceholderNode {
@@ -2444,12 +2426,6 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 contextPlaceholderNode.isUserInteractionEnabled = false
                 self.contextPlaceholderNode = contextPlaceholderNode
                 self.textInputContainerBackgroundView.contentView.insertSubview(contextPlaceholderNode.view, aboveSubview: self.textPlaceholderNode.view)
-            }
-            if self.tintContextPlaceholderNode !== tintContextPlaceholderNode {
-                tintContextPlaceholderNode.displaysAsynchronously = false
-                tintContextPlaceholderNode.isUserInteractionEnabled = false
-                self.tintContextPlaceholderNode = tintContextPlaceholderNode
-                self.textInputContainerBackgroundView.maskContentView.insertSubview(tintContextPlaceholderNode.view, aboveSubview: self.tintMaskTextPlaceholderNode.view)
             }
             
             let _ = placeholderApply()
@@ -2460,21 +2436,14 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             } else {
                 placeholderTransition = .immediate
             }
-            placeholderTransition.updateFrame(node: contextPlaceholderNode, frame: CGRect(origin: CGPoint(x: self.textInputViewInternalInsets.left, y: hideOffset.y + textFieldInsets.top + self.textInputViewInternalInsets.top + textInputViewRealInsets.top + UIScreenPixel), size: placeholderSize.size))
-            contextPlaceholderNode.alpha = audioRecordingItemsAlpha
-            
-            placeholderTransition.updateFrame(node: tintContextPlaceholderNode, frame: CGRect(origin: CGPoint(x: self.textInputViewInternalInsets.left, y: hideOffset.y + textFieldInsets.top + self.textInputViewInternalInsets.top + textInputViewRealInsets.top + UIScreenPixel), size: placeholderSize.size))
-            tintContextPlaceholderNode.alpha = audioRecordingItemsAlpha
+            placeholderTransition.updateFrame(node: contextPlaceholderNode, frame: CGRect(origin: CGPoint(x: self.textInputViewInternalInsets.left, y: hideOffset.y + textFieldInsets.top + self.textInputViewInternalInsets.top + textInputViewRealInsets.top + UIScreenPixel + (accessoryPanel != nil ? 52.0 : 0.0)), size: placeholderSize.size))
+            contextPlaceholderNode.view.setMonochromaticEffect(tintColor: placeholderColor)
+            contextPlaceholderNode.alpha = audioRecordingItemsAlpha * placeholderColor.alpha
         } else {
             if let contextPlaceholderNode = self.contextPlaceholderNode {
                 self.contextPlaceholderNode = nil
                 contextPlaceholderNode.removeFromSupernode()
-                self.textPlaceholderNode.alpha = 1.0
-                self.tintMaskTextPlaceholderNode.alpha = 1.0
-            }
-            if let tintContextPlaceholderNode = self.tintContextPlaceholderNode {
-                self.tintContextPlaceholderNode = nil
-                tintContextPlaceholderNode.removeFromSupernode()
+                self.textPlaceholderNode.alpha = 1.0 * placeholderColor.alpha
             }
         }
         
@@ -2499,11 +2468,9 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
 
         if (interfaceState.slowmodeState != nil && rightSlowModeInset.isZero && !isScheduledMessages && interfaceState.editMessageState == nil) || interfaceState.inputTextPanelState.contextPlaceholder != nil {
             self.textPlaceholderNode.isHidden = true
-            self.tintMaskTextPlaceholderNode.isHidden = true
             self.slowmodePlaceholderNode?.isHidden = inputHasText
         } else {
             self.textPlaceholderNode.isHidden = inputHasText
-            self.tintMaskTextPlaceholderNode.isHidden = inputHasText
             self.slowmodePlaceholderNode?.isHidden = true
         }
         
@@ -2539,38 +2506,24 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         let textPlaceholderSize: CGSize
         let textPlaceholderMaxWidth: CGFloat = max(1.0, nextButtonTopRight.x - 12.0)
         
-        let placeholderColor: UIColor = interfaceState.theme.chat.inputPanel.inputPlaceholderColor
-        if #available(iOS 26.0, *) {
-            //placeholderColor = placeholderColor.withProminence(.tertiary)
-        }
-        //self.textPlaceholderNode.view.tintColor = .red
-        
         if (updatedPlaceholder != nil && self.currentPlaceholder != updatedPlaceholder) || themeUpdated {
             let currentPlaceholder = updatedPlaceholder ?? self.currentPlaceholder ?? ""
             self.currentPlaceholder = currentPlaceholder
             let baseFontSize = max(minInputFontSize, interfaceState.fontSize.baseDisplaySize)
             
-            let attributedPlaceholder = NSMutableAttributedString(string: currentPlaceholder, font: Font.regular(baseFontSize), textColor: placeholderColor)
+            let attributedPlaceholder = NSMutableAttributedString(string: currentPlaceholder, font: Font.regular(baseFontSize), textColor: placeholderColor.withAlphaComponent(1.0))
             if placeholderHasStar, let range = attributedPlaceholder.string.range(of: "#") {
                 attributedPlaceholder.addAttribute(.attachment, value: PresentationResourcesChat.chatPlaceholderStarIcon(interfaceState.theme)!, range: NSRange(range, in: attributedPlaceholder.string))
-                attributedPlaceholder.addAttribute(.foregroundColor, value: placeholderColor, range: NSRange(range, in: attributedPlaceholder.string))
+                attributedPlaceholder.addAttribute(.foregroundColor, value: placeholderColor.withAlphaComponent(1.0), range: NSRange(range, in: attributedPlaceholder.string))
                 attributedPlaceholder.addAttribute(.baselineOffset, value: 1.0, range: NSRange(range, in: attributedPlaceholder.string))
             }
             
-            let attributedTintMaskPlaceholder = NSMutableAttributedString(string: currentPlaceholder, font: Font.regular(baseFontSize), textColor: UIColor(white: 0.0, alpha: placeholderColor.alpha))
-            if placeholderHasStar, let range = attributedPlaceholder.string.range(of: "#") {
-                attributedTintMaskPlaceholder.addAttribute(.attachment, value: PresentationResourcesChat.chatPlaceholderStarIcon(interfaceState.theme)!, range: NSRange(range, in: attributedPlaceholder.string))
-                attributedTintMaskPlaceholder.addAttribute(.foregroundColor, value: UIColor.black, range: NSRange(range, in: attributedPlaceholder.string))
-                attributedTintMaskPlaceholder.addAttribute(.baselineOffset, value: 1.0, range: NSRange(range, in: attributedPlaceholder.string))
-            }
-            
             self.textPlaceholderNode.attributedText = attributedPlaceholder
-            self.tintMaskTextPlaceholderNode.attributedText = attributedTintMaskPlaceholder
+            self.textPlaceholderNode.view.setMonochromaticEffect(tintColor: placeholderColor)
             
             self.textInputNode?.textView.accessibilityHint = currentPlaceholder
             
             let placeholderSize = self.textPlaceholderNode.updateLayout(CGSize(width: textPlaceholderMaxWidth, height: CGFloat.greatestFiniteMagnitude))
-            let _ = self.tintMaskTextPlaceholderNode.updateLayout(CGSize(width: textPlaceholderMaxWidth, height: CGFloat.greatestFiniteMagnitude))
             
             if transition.isAnimated, let snapshotLayer = self.textPlaceholderNode.layer.snapshotContentTree() {
                 self.textPlaceholderNode.supernode?.layer.insertSublayer(snapshotLayer, above: self.textPlaceholderNode.layer)
@@ -2578,15 +2531,6 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                     snapshotLayer?.removeFromSuperlayer()
                 })
                 self.textPlaceholderNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.18)
-            }
-            
-            let _ = self.tintMaskTextPlaceholderNode.updateLayout(CGSize(width: textPlaceholderMaxWidth, height: CGFloat.greatestFiniteMagnitude))
-            if transition.isAnimated, let snapshotLayer = self.tintMaskTextPlaceholderNode.layer.snapshotContentTree() {
-                self.tintMaskTextPlaceholderNode.supernode?.layer.insertSublayer(snapshotLayer, above: self.tintMaskTextPlaceholderNode.layer)
-                snapshotLayer.animateAlpha(from: 1.0, to: 0.0, duration: 0.22, removeOnCompletion: false, completion: { [weak snapshotLayer] _ in
-                    snapshotLayer?.removeFromSuperlayer()
-                })
-                self.tintMaskTextPlaceholderNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.18)
             }
             
             textPlaceholderSize = placeholderSize
@@ -2623,13 +2567,11 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             }
         }
         transition.updateFrame(node: self.textPlaceholderNode, frame: textPlaceholderFrame)
-        transition.updateFrame(node: self.tintMaskTextPlaceholderNode, frame: textPlaceholderFrame)
         
-        let textPlaceholderAlpha: CGFloat = audioRecordingItemsAlpha
+        let textPlaceholderAlpha: CGFloat = audioRecordingItemsAlpha * placeholderColor.alpha
         transition.updateAlpha(node: self.textPlaceholderNode, alpha: textPlaceholderAlpha)
-        transition.updateAlpha(node: self.tintMaskTextPlaceholderNode, alpha: textPlaceholderAlpha)
         
-        if let removeAccessoryButtons = removeAccessoryButtons {
+        if let removeAccessoryButtons {
             for button in removeAccessoryButtons {
                 let buttonFrame = CGRect(origin: CGPoint(x: button.frame.origin.x + additionalOffset, y: textInputFrame.maxY - minimalInputHeight), size: button.frame.size)
                 transition.updateFrame(layer: button.layer, frame: buttonFrame)
@@ -2700,7 +2642,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         
         let attachmentButtonFrame = CGRect(origin: CGPoint(x: attachmentButtonX, y: textInputFrame.maxY - 40.0), size: CGSize(width: 40.0, height: 40.0))
         self.attachmentButtonBackground.frame = CGRect(origin: CGPoint(), size: attachmentButtonFrame.size)
-        self.attachmentButtonBackground.update(size: attachmentButtonFrame.size, cornerRadius: attachmentButtonFrame.height * 0.5, isDark: interfaceState.theme.overallDarkAppearance, tintColor: isEditingMedia ? .init(kind: .custom, color: interfaceState.theme.chat.inputPanel.actionControlFillColor) : .init(kind: .panel, color: interfaceState.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7)), transition: ComponentTransition(transition))
+        self.attachmentButtonBackground.update(size: attachmentButtonFrame.size, cornerRadius: attachmentButtonFrame.height * 0.5, isDark: interfaceState.theme.overallDarkAppearance, tintColor: isEditingMedia ? .init(kind: .custom, color: interfaceState.theme.chat.inputPanel.actionControlFillColor) : .init(kind: .panel, color: interfaceState.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7)), isInteractive: true, transition: ComponentTransition(transition))
         
         transition.updateFrame(layer: self.attachmentButton.layer, frame: attachmentButtonFrame)
         transition.updateFrame(node: self.attachmentButtonDisabledNode, frame: self.attachmentButton.frame)
@@ -3667,11 +3609,9 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         if let interfaceState = self.presentationInterfaceState {
             if (interfaceState.slowmodeState != nil && !isScheduledMessages && interfaceState.editMessageState == nil) || interfaceState.inputTextPanelState.contextPlaceholder != nil {
                 self.textPlaceholderNode.isHidden = true
-                self.tintMaskTextPlaceholderNode.isHidden = true
                 self.slowmodePlaceholderNode?.isHidden = inputHasText
             } else {
                 self.textPlaceholderNode.isHidden = inputHasText
-                self.tintMaskTextPlaceholderNode.isHidden = inputHasText
                 self.slowmodePlaceholderNode?.isHidden = true
             }
         }
@@ -4721,7 +4661,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     public func frameForAccessoryButton(_ item: ChatTextInputAccessoryItem) -> CGRect? {
         for (buttonItem, buttonNode) in self.accessoryItemButtons {
             if buttonItem == item {
-                return buttonNode.frame
+                return self.view.convert(buttonNode.bounds.insetBy(dx: 0.0, dy: 6.0), from: buttonNode)
             }
         }
         return nil
@@ -4744,9 +4684,9 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     public func frameForInputActionButton() -> CGRect? {
         if !self.actionButtons.alpha.isZero {
             if self.actionButtons.micButton.alpha.isZero {
-                return self.actionButtons.frame.insetBy(dx: 0.0, dy: 6.0).offsetBy(dx: 4.0, dy: 0.0)
+                return self.actionButtons.frame.insetBy(dx: 0.0, dy: -4.0).offsetBy(dx: 0.0, dy: 0.0)
             } else {
-                return self.actionButtons.frame.insetBy(dx: 0.0, dy: 6.0).offsetBy(dx: 2.0, dy: 0.0)
+                return self.actionButtons.frame.insetBy(dx: 0.0, dy: -4.0).offsetBy(dx: 0.0, dy: 0.0)
             }
         }
         return nil
@@ -4755,7 +4695,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     public func frameForStickersButton() -> CGRect? {
         for (item, button) in self.accessoryItemButtons {
             if case let .input(_, inputMode) = item, case .stickers = inputMode {
-                return button.frame.insetBy(dx: 0.0, dy: 6.0)
+                return self.view.convert(button.bounds.insetBy(dx: 0.0, dy: 6.0), from: button)
             }
         }
         return nil
@@ -4764,7 +4704,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     public func frameForEmojiButton() -> CGRect? {
         for (item, button) in self.accessoryItemButtons {
             if case let .input(_, inputMode) = item, case .emoji = inputMode {
-                return button.frame.insetBy(dx: 0.0, dy: 6.0)
+                return self.view.convert(button.bounds.insetBy(dx: 0.0, dy: 6.0), from: button)
             }
         }
         return nil
@@ -4773,7 +4713,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     public func frameForGiftButton() -> CGRect? {
         for (item, button) in self.accessoryItemButtons {
             if case .gift = item {
-                return button.frame.insetBy(dx: 0.0, dy: 6.0)
+                return self.view.convert(button.bounds.insetBy(dx: 0.0, dy: 6.0), from: button)
             }
         }
         return nil

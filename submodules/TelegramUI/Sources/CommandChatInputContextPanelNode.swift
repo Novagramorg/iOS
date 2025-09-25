@@ -243,7 +243,8 @@ private struct CommandChatInputContextPanelEntry: Comparable, Identifiable {
                             messageCount: shortcut.totalCount,
                             hideSeparator: false,
                             hideDate: true,
-                            hidePeerStatus: true
+                            hidePeerStatus: true,
+                            isInTransparentContainer: true
                         )
                     )),
                     editing: false,

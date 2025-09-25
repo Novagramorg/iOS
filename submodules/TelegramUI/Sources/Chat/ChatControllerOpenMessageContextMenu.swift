@@ -330,12 +330,6 @@ extension ChatControllerImpl {
                     self?.canReadHistory.set(true)
                 }
                 controller.immediateItemsTransitionAnimation = disableTransitionAnimations
-                controller.getOverlayViews = { [weak self] in
-                    guard let self else {
-                        return []
-                    }
-                    return [self.chatDisplayNode.navigateButtons.view]
-                }
                 self.currentContextController = controller
                 
                 controller.premiumReactionsSelected = { [weak self, weak controller] in

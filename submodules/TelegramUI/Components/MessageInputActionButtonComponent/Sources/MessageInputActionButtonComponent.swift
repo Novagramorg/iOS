@@ -529,12 +529,14 @@ public final class MessageInputActionButtonComponent: Component {
                     self.backgroundView = backgroundView
                 }
                 
-                var tintColor = UIColor(rgb: 0x1f1f27)
+                var tintColor = UIColor(rgb: 0x4d4f5c, alpha: 0.6)
+                var tintKind: GlassBackgroundView.TintColor.Kind = .panel
                 if case .send = component.mode {
-                    tintColor = UIColor(rgb: 0x0187ee)
+                    tintColor = UIColor(rgb: 0x029dff)
+                    tintKind = .custom
                 }
                 let buttonSize = CGSize(width: 40.0, height: 40.0)
-                backgroundView.update(size: buttonSize, cornerRadius: buttonSize.height / 2.0, isDark: true, tintColor: .init(kind: .custom, color: tintColor), transition: transition)
+                backgroundView.update(size: buttonSize, cornerRadius: buttonSize.height / 2.0, isDark: false, tintColor: .init(kind: tintKind, color: tintColor), transition: transition)
                 backgroundView.frame = CGRect(origin: .zero, size: buttonSize)
             }
             
