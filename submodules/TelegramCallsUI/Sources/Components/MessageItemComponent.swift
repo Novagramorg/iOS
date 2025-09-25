@@ -217,7 +217,7 @@ final class MessageItemComponent: Component {
                     context: component.context,
                     animationCache: component.context.animationCache,
                     animationRenderer: component.context.animationRenderer,
-                    placeholderColor: .white,
+                    placeholderColor: UIColor(rgb: 0xffffff, alpha: 0.3),
                     text: .plain(attributedText),
                     maximumNumberOfLines: 0,
                     lineSpacing: 0.0
@@ -276,7 +276,7 @@ final class MessageItemComponent: Component {
                             animationCache: component.context.animationCache,
                             reaction: reactionItem,
                             avatarPeers: [],
-                            playHaptic: true,
+                            playHaptic: false,
                             isLarge: false,
                             hideCenterAnimation: true,
                             targetView: emojiTargetView,
