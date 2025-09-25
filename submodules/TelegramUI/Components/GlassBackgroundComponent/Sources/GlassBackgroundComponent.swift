@@ -300,6 +300,7 @@ public class GlassBackgroundView: UIView {
             let glassEffect = UIGlassEffect(style: .regular)
             glassEffect.isInteractive = false
             let nativeView = UIVisualEffectView(effect: glassEffect)
+            //nativeView.layer.anchorPoint = CGPoint()
             self.nativeView = nativeView
             
             let glassContainerEffect = UIGlassContainerEffect()
@@ -367,21 +368,21 @@ public class GlassBackgroundView: UIView {
     }
     
     public func update(size: CGSize, cornerRadius: CGFloat, isDark: Bool, tintColor: TintColor, isInteractive: Bool = false, transition: ComponentTransition) {
-        if let nativeContainerView = self.nativeContainerView, let nativeView = self.nativeView {
-            let previousFrame = nativeView.frame
+        if let nativeContainerView = self.nativeContainerView, let nativeView = self.nativeView, nativeView.bounds.size != size {
+            //let previousFrame = nativeView.frame
             
             if transition.animation.isImmediate {
                 nativeView.layer.cornerRadius = cornerRadius
                 nativeView.frame = CGRect(origin: CGPoint(), size: size)
+                nativeContainerView.frame = CGRect(origin: CGPoint(), size: CGSize(width: size.width, height: max(size.height, 400.0)))
             } else {
                 transition.containedViewLayoutTransition.animateView {
                     nativeView.layer.cornerRadius = cornerRadius
                     nativeView.frame = CGRect(origin: CGPoint(), size: size)
+                    nativeContainerView.frame = CGRect(origin: CGPoint(), size: CGSize(width: size.width, height: max(size.height, 400.0)))
                 }
-                nativeView.layer.animateFrame(from: previousFrame, to: CGRect(origin: CGPoint(), size: size), duration: 0.4, timingFunction: kCAMediaTimingFunctionSpring)
+                //nativeView.layer.animateFrame(from: previousFrame, to: CGRect(origin: CGPoint(), size: size), duration: 0.4, timingFunction: kCAMediaTimingFunctionSpring)
             }
-            
-            transition.setFrame(view: nativeContainerView, frame: CGRect(origin: CGPoint(), size: CGSize(width: size.width, height: max(size.height, 400.0))))
         }
         if let backgroundNode = self.backgroundNode {
             backgroundNode.updateColor(color: .clear, forceKeepBlur: tintColor.color.alpha != 1.0, transition: transition.containedViewLayoutTransition)
