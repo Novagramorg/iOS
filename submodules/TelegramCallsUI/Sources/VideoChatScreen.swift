@@ -235,7 +235,7 @@ final class VideoChatScreenComponent: Component {
         var encryptionKey: ComponentView<Empty>?
         var isEncryptionKeyExpanded: Bool = false
         
-        let videoButton = ComponentView<Empty>()
+        var videoButton: ComponentView<Empty>?
         let videoControlButton = ComponentView<Empty>()
         let leaveButton = ComponentView<Empty>()
         let microphoneButton = ComponentView<Empty>()
@@ -3164,8 +3164,18 @@ final class VideoChatScreenComponent: Component {
             }
             
             if let videoButtonContent {
-                let _ = self.videoButton.update(
-                    transition: transition,
+                var videoButtonTransition = transition
+                let videoButton: ComponentView<Empty>
+                if let current = self.videoButton {
+                    videoButton = current
+                } else {
+                    videoButtonTransition = .immediate
+                    videoButton = ComponentView<Empty>()
+                    self.videoButton = videoButton
+                }
+                
+                let _ = videoButton.update(
+                    transition: videoButtonTransition,
                     component: AnyComponent(PlainButtonComponent(
                         content: AnyComponent(VideoChatActionButtonComponent(
                             strings: environment.strings,
@@ -3189,19 +3199,22 @@ final class VideoChatScreenComponent: Component {
                     environment: {},
                     containerSize: CGSize(width: actionButtonDiameter, height: actionButtonDiameter)
                 )
-                if let videoButtonView = self.videoButton.view {
+                if let videoButtonView = videoButton.view {
                     if videoButtonView.superview == nil {
                         self.containerView.addSubview(videoButtonView)
                     }
-                    transition.setPosition(view: videoButtonView, position: secondActionButtonFrame.center)
-                    transition.setBounds(view: videoButtonView, bounds: CGRect(origin: CGPoint(), size: secondActionButtonFrame.size))
+                    videoButtonTransition.setPosition(view: videoButtonView, position: secondActionButtonFrame.center)
+                    videoButtonTransition.setBounds(view: videoButtonView, bounds: CGRect(origin: CGPoint(), size: secondActionButtonFrame.size))
                 }
-            } else if let videoButtonView = self.videoButton.view {
-                let transition = ComponentTransition(animation: .curve(duration: 0.25, curve: .easeInOut))
-                transition.animateScale(view: videoButtonView, from: 1.0, to: 0.01)
-                transition.animateAlpha(view: videoButtonView, from: 1.0, to: 0.0, completion: { _ in
-                    videoButtonView.removeFromSuperview()
-                })
+            } else if let videoButton = self.videoButton, videoButton.view?.superview != nil {
+                self.videoButton = nil
+                if let videoButtonView = videoButton.view {
+                    let transition = ComponentTransition(animation: .curve(duration: 0.25, curve: .easeInOut))
+                    transition.animateScale(view: videoButtonView, from: 1.0, to: 0.01)
+                    transition.animateAlpha(view: videoButtonView, from: 1.0, to: 0.0, completion: { _ in
+                        videoButtonView.removeFromSuperview()
+                    })
+                }
             }
             
             let _ = self.messageButton.update(
