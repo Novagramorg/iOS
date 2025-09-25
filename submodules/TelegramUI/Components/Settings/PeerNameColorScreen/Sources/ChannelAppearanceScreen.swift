@@ -372,12 +372,12 @@ final class ChannelAppearanceScreenComponent: Component {
             let profileColor: PeerNameColor?
             if case let .some(value) = self.updatedPeerProfileColor {
                 profileColor = value
-            } else if let peerProfileColor = peer.profileColor {
+            } else if let peerProfileColor = peer.effectiveProfileColor {
                 profileColor = peerProfileColor
             } else {
                 profileColor = nil
             }
-            if profileColor != peer.profileColor {
+            if profileColor != peer.effectiveProfileColor {
                 changes.insert(.profileColor)
             }
             

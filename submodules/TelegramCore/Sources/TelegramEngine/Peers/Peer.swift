@@ -543,6 +543,10 @@ public extension EnginePeer {
         return self._asPeer().profileColor
     }
     
+    var effectiveProfileColor: PeerNameColor? {
+        return self._asPeer().effectiveProfileColor
+    }
+    
     var emojiStatus: PeerEmojiStatus? {
         return self._asPeer().emojiStatus
     }

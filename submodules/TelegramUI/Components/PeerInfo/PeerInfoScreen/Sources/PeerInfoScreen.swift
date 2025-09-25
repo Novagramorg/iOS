@@ -1225,7 +1225,7 @@ private func settingsEditingItems(data: PeerInfoScreenData?, state: PeerInfoStat
             }
             colors.append(nameColors)
         }
-        if let profileColor = peer.profileColor.flatMap({ context.peerNameColors.getProfile($0, dark: presentationData.theme.overallDarkAppearance, subject: .palette) }) {
+        if let profileColor = peer.effectiveProfileColor.flatMap({ context.peerNameColors.getProfile($0, dark: presentationData.theme.overallDarkAppearance, subject: .palette) }) {
             colors.append(profileColor)
         }
         let colorImage = generateSettingsMenuPeerColorsLabelIcon(colors: colors)
@@ -12547,7 +12547,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
             let edgeEffectHeight: CGFloat = layout.intrinsicInsets.bottom
             let edgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: layout.size.height - edgeEffectHeight), size: CGSize(width: layout.size.width, height: edgeEffectHeight))
             transition.updateFrame(view: self.edgeEffectView, frame: edgeEffectFrame)
-            self.edgeEffectView.update(content: self.presentationData.theme.list.blocksBackgroundColor, isInverted: false, rect: edgeEffectFrame, edge: .bottom, edgeSize: edgeEffectFrame.height, containerSize: layout.size, transition: ComponentTransition(transition))
+            self.edgeEffectView.update(content: self.presentationData.theme.list.blocksBackgroundColor, rect: edgeEffectFrame, edge: .bottom, edgeSize: edgeEffectFrame.height, transition: ComponentTransition(transition))
         }
         
         let sectionSpacing: CGFloat = 24.0
