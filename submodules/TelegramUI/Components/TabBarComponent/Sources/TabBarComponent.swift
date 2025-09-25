@@ -91,11 +91,18 @@ public final class TabBarComponent: Component {
             
             if #available(iOS 26.0, *) {
                 self.nativeTabBar = UITabBar()
+                self.nativeTabBar?.traitOverrides.verticalSizeClass = .compact
+                self.nativeTabBar?.traitOverrides.horizontalSizeClass = .compact
             } else {
                 self.nativeTabBar = nil
             }
             
             super.init(frame: frame)
+            
+            if #available(iOS 17.0, *) {
+                self.traitOverrides.verticalSizeClass = .compact
+                self.traitOverrides.horizontalSizeClass = .compact
+            }
             
             self.addSubview(self.contextGestureContainerView)
             
