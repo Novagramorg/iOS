@@ -1326,6 +1326,25 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
                             return
                         }
                         let context = self.context
+                        
+                        guard uniqueGift.hostPeerId == nil else {
+                            let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+                            let alertController = textAlertController(
+                                context: context,
+                                title: presentationData.strings.Gift_UnavailableAction_Title,
+                                text: presentationData.strings.Gift_UnavailableAction_Text,
+                                actions: [
+                                    TextAlertAction(type: .defaultAction, title: presentationData.strings.Gift_UnavailableAction_OpenFragment, action: {
+                                        context.sharedContext.openExternalUrl(context: context, urlContext: .generic, url: presentationData.strings.Gift_UnavailableAction_OpenFragment_URL, forceExternal: true, presentationData: presentationData, navigationController: nil, dismissInput: {})
+                                    }),
+                                    TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: {})
+                                ],
+                                actionLayout: .vertical
+                            )
+                            self.parentController?.present(alertController, in: .window(.root))
+                            return
+                        }
+                        
                         let _ = (context.account.stateManager.contactBirthdays
                         |> take(1)
                         |> deliverOnMainQueue).start(next: { [weak self] birthdays in
