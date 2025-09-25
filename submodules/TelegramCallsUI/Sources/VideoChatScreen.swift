@@ -3065,7 +3065,7 @@ final class VideoChatScreenComponent: Component {
                 transition.setBounds(view: microphoneButtonView, bounds: CGRect(origin: CGPoint(), size: microphoneButtonFrame.size))
             }
             
-            let videoButtonContent: VideoChatActionButtonComponent.Content
+            let videoButtonContent: VideoChatActionButtonComponent.Content?
             let videoControlButtonContent: VideoChatActionButtonComponent.Content
 
             var buttonAudio: VideoChatActionButtonComponent.Content.Audio = .speaker
@@ -3097,7 +3097,7 @@ final class VideoChatScreenComponent: Component {
             }
 
             if let callState = self.callState, let muteState = callState.muteState, !muteState.canUnmute {
-                videoButtonContent = .audio(audio: buttonAudio, isEnabled: buttonIsEnabled)
+                videoButtonContent = nil
                 videoControlButtonContent = .audio(audio: buttonAudio, isEnabled: buttonIsEnabled)
             } else {
                 let isVideoActive = self.callState?.isMyVideoActive ?? false
@@ -3109,38 +3109,45 @@ final class VideoChatScreenComponent: Component {
                 }
             }
 
-            let _ = self.videoButton.update(
-                transition: transition,
-                component: AnyComponent(PlainButtonComponent(
-                    content: AnyComponent(VideoChatActionButtonComponent(
-                        strings: environment.strings,
-                        content: videoButtonContent,
-                        microphoneState: actionButtonMicrophoneState,
-                        isCollapsed: areButtonsActuallyCollapsed || buttonsOnTheSide
+            if let videoButtonContent {
+                let _ = self.videoButton.update(
+                    transition: transition,
+                    component: AnyComponent(PlainButtonComponent(
+                        content: AnyComponent(VideoChatActionButtonComponent(
+                            strings: environment.strings,
+                            content: videoButtonContent,
+                            microphoneState: actionButtonMicrophoneState,
+                            isCollapsed: areButtonsActuallyCollapsed || buttonsOnTheSide
+                        )),
+                        effectAlignment: .center,
+                        action: { [weak self] in
+                            guard let self else {
+                                return
+                            }
+                            if let callState = self.callState, let muteState = callState.muteState, !muteState.canUnmute {
+                                self.onAudioRoutePressed()
+                            } else {
+                                self.onCameraPressed()
+                            }
+                        },
+                        animateAlpha: false
                     )),
-                    effectAlignment: .center,
-                    action: { [weak self] in
-                        guard let self else {
-                            return
-                        }
-                        if let callState = self.callState, let muteState = callState.muteState, !muteState.canUnmute {
-                            self.onAudioRoutePressed()
-                        } else {
-                            self.onCameraPressed()
-                        }
-                    },
-                    animateAlpha: false
-                )),
-                environment: {},
-                containerSize: CGSize(width: actionButtonDiameter, height: actionButtonDiameter)
-            )
-
-            if let videoButtonView = self.videoButton.view {
-                if videoButtonView.superview == nil {
-                    self.containerView.addSubview(videoButtonView)
+                    environment: {},
+                    containerSize: CGSize(width: actionButtonDiameter, height: actionButtonDiameter)
+                )
+                if let videoButtonView = self.videoButton.view {
+                    if videoButtonView.superview == nil {
+                        self.containerView.addSubview(videoButtonView)
+                    }
+                    transition.setPosition(view: videoButtonView, position: secondActionButtonFrame.center)
+                    transition.setBounds(view: videoButtonView, bounds: CGRect(origin: CGPoint(), size: secondActionButtonFrame.size))
                 }
-                transition.setPosition(view: videoButtonView, position: secondActionButtonFrame.center)
-                transition.setBounds(view: videoButtonView, bounds: CGRect(origin: CGPoint(), size: secondActionButtonFrame.size))
+            } else if let videoButtonView = self.videoButton.view {
+                let transition = ComponentTransition(animation: .curve(duration: 0.25, curve: .easeInOut))
+                transition.animateScale(view: videoButtonView, from: 1.0, to: 0.01)
+                transition.animateAlpha(view: videoButtonView, from: 1.0, to: 0.0, completion: { _ in
+                    videoButtonView.removeFromSuperview()
+                })
             }
             
             let _ = self.speakerButton.update(
