@@ -1389,12 +1389,12 @@ final class VideoChatScreenComponent: Component {
             
             inputPanelView.clearSendMessageInput(updateState: true)
                         
-            self.currentInputMode = .text
-            if hasFirstResponder(self) {
-                self.endEditing(true)
-            } else {
-                self.state?.updated(transition: .spring(duration: 0.3))
-            }
+//            self.currentInputMode = .text
+//            if hasFirstResponder(self) {
+//                self.endEditing(true)
+//            } else {
+//                self.state?.updated(transition: .spring(duration: 0.3))
+//            }
             (self.environment?.controller() as? VideoChatScreenV2Impl)?.requestLayout(forceUpdate: true, transition: .animated(duration: 0.3, curve: .spring))
         }
         
@@ -3201,7 +3201,9 @@ final class VideoChatScreenComponent: Component {
                 )
                 if let videoButtonView = videoButton.view {
                     if videoButtonView.superview == nil {
-                        self.containerView.addSubview(videoButtonView)
+                        if let speakerButtonView = self.speakerButton.view {
+                            self.containerView.insertSubview(videoButtonView, belowSubview: speakerButtonView)
+                        }
                     }
                     videoButtonTransition.setPosition(view: videoButtonView, position: secondActionButtonFrame.center)
                     videoButtonTransition.setBounds(view: videoButtonView, bounds: CGRect(origin: CGPoint(), size: secondActionButtonFrame.size))
@@ -3425,12 +3427,12 @@ final class VideoChatScreenComponent: Component {
                             guard let self else {
                                 return
                             }
-                            self.inputPanelIsActive = false
                             if self.inputPanelExternalState.hasText {
                                 self.nextSendMessageTransition = transition
-                                
+
                                 self.sendInput()
                             } else {
+                                self.inputPanelIsActive = false
                                 self.deactivateInput()
                             }
                         },
