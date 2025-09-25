@@ -104,7 +104,7 @@ public extension CALayer {
             
             return animation
         } else if timingFunction == kCAMediaTimingFunctionSpring {
-            if #available(iOS 26.0, *) {
+            if #available(iOS 26.0, *), abs(duration - 0.3832) <= 0.0001 {
                 let animation = make26SpringAnimationImpl(keyPath, duration)
                 animation.fromValue = from
                 animation.toValue = to
