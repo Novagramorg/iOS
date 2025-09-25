@@ -450,7 +450,7 @@ final class ContactsControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
         let edgeEffectHeight: CGFloat = layout.intrinsicInsets.bottom
         let edgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: layout.size.height - edgeEffectHeight), size: CGSize(width: layout.size.width, height: edgeEffectHeight))
         transition.updateFrame(view: self.edgeEffectView, frame: edgeEffectFrame)
-        self.edgeEffectView.update(content: self.presentationData.theme.list.plainBackgroundColor, isInverted: false, rect: edgeEffectFrame, edge: .bottom, edgeSize: edgeEffectFrame.height, containerSize: layout.size, transition: ComponentTransition(transition))
+        self.edgeEffectView.update(content: self.presentationData.theme.list.plainBackgroundColor, rect: edgeEffectFrame, edge: .bottom, edgeSize: edgeEffectFrame.height, transition: ComponentTransition(transition))
         
         self.updateNavigationScrolling(transition: transition)
         
