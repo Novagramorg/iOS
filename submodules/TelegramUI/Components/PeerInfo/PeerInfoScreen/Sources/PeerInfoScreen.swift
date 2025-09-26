@@ -6680,7 +6680,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                 }
                 if !headerButtons.contains(.discussion) && hasDiscussion {
                     //TODO:localize
-                    items.append(.action(ContextMenuActionItem(text: "View Discussion", icon: { theme in
+                    items.append(.action(ContextMenuActionItem(text: presentationData.strings.PeerInfo_ViewDiscussion, icon: { theme in
                         generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/MessageBubble"), color: theme.contextMenu.primaryColor)
                     }, action: { [weak self] _, f in
                         f(.dismissWithoutContent)

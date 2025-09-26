@@ -10,17 +10,20 @@ import ReactionSelectionNode
 final class MessageListComponent: Component {
     struct Item: Equatable {
         let id: AnyHashable
-        let peer: EnginePeer
+        let icon: MessageItemComponent.Icon
+        let isNotification: Bool
         let text: String
         let entities: [MessageTextEntity]
     }
     
     class SendActionTransition {
+        public let randomId: Int64
         public let textSnapshotView: UIView
         public let globalFrame: CGRect
         public let cornerRadius: CGFloat
         
-        init(textSnapshotView: UIView, globalFrame: CGRect, cornerRadius: CGFloat) {
+        init(randomId: Int64, textSnapshotView: UIView, globalFrame: CGRect, cornerRadius: CGFloat) {
+            self.randomId = randomId
             self.textSnapshotView = textSnapshotView
             self.globalFrame = globalFrame
             self.cornerRadius = cornerRadius
@@ -141,7 +144,7 @@ final class MessageListComponent: Component {
             let previousContentHeight = self.scrollView.contentSize.height
             let wasAtBottom = self.isAtBottom(tolerance: 1.0)
             
-            let maxWidth: CGFloat = 300.0
+            let maxWidth: CGFloat = 330.0
             
             var measured: [(id: AnyHashable, size: CGSize, item: MessageListComponent.Item, itemTransition: ComponentTransition)] = []
             measured.reserveCapacity(component.items.count)
@@ -160,7 +163,8 @@ final class MessageListComponent: Component {
                     transition: transition,
                     component: AnyComponent(MessageItemComponent(
                         context: component.context,
-                        peer: item.peer,
+                        icon: item.icon,
+                        isNotification: item.isNotification,
                         text: item.text,
                         entities: item.entities,
                         availableReactions: component.availableReactions
@@ -182,7 +186,7 @@ final class MessageListComponent: Component {
                 validKeys.insert(entry.id)
                 if let itemView = self.itemViews[entry.id]?.view {
                     var customAnimation = false
-                    if entry.item.peer.id == component.context.account.peerId, let _ = self.nextSendActionTransition {
+                    if let nextSendActionTransition = self.nextSendActionTransition, entry.id == AnyHashable(nextSendActionTransition.randomId) {
                         customAnimation = true
                     }
                     let itemFrame = CGRect(

@@ -15098,10 +15098,11 @@ Error: %8$@";
 "PeerInfo.NotesInfo" = "only visible to you";
 "PeerInfo.AddNotesPlaceholder" = "Add Notes";
 "PeerInfo.AddNotesInfo" = "Notes are only visible to you.";
-
 "PeerInfo.NoteActionCopy" = "Copy Note";
 "PeerInfo.NoteActionEdit" = "Edit Note";
 "PeerInfo.ToastNoteCopied" = "Note copied to clipboard.";
+
+"PeerInfo.ViewDiscussion" = "View Discussion";
 
 "MESSAGE_SUGGEST_BIRTHDAY" = "%@ suggested you your birthday";
 
@@ -15111,3 +15112,22 @@ Error: %8$@";
 "Gift.UnavailableAction.OpenFragment_URL" = "https://fragment.com";
 
 "Gift.Unique.Telegram" = "Telegram";
+
+"VoiceChat.ContextEnableMessages" = "Enable Messages";
+"VoiceChat.ContextDisableMessages" = "Disable Messages";
+
+"VoiceChat.ToastMessagesEnabled" = "Messages enabled";
+"VoiceChat.ToastMessagesDisabled" = "Messages disabled";
+
+"VoiceChat.Rotate" = "rotate";
+"VoiceChat.Message" = "message";
+"VoiceChat.ShareButton" = "share";
+"VoiceChat.MessagePlaceholder" = "Message";
+"VoiceChat.SubtitleParticipants_1" = " participant";
+"VoiceChat.SubtitleParticipants_any" = " participants";
+"VoiceChat.SubtitleInvited_1" = " invited";
+"VoiceChat.SubtitleInvited_any" = " invited";
+
+"ProfileLevelInfo.NegativeRating" = "Negative rating";
+
+"Notification.StarsGift.Assigned" = "You started displaying %@ on your Telegram profile page.";

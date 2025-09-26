@@ -36,6 +36,7 @@ final class VideoChatActionButtonComponent: Component {
             case video
             case rotateCamera
             case message
+            case share
             case leave
         }
         
@@ -43,6 +44,7 @@ final class VideoChatActionButtonComponent: Component {
         case video(isActive: Bool)
         case rotateCamera
         case message
+        case share
         case leave
         
         fileprivate var iconType: IconType {
@@ -64,6 +66,8 @@ final class VideoChatActionButtonComponent: Component {
                 return .rotateCamera
             case .message:
                 return .message
+            case .share:
+                return .share
             case .leave:
                 return .leave
             }
@@ -142,12 +146,11 @@ final class VideoChatActionButtonComponent: Component {
             
             let alphaTransition: ComponentTransition = transition.animation.isImmediate ? .immediate : .easeInOut(duration: 0.2)
             
-            let genericBackgroundColor = UIColor(rgb: 0x2d2f38, alpha: 0.6)
+            let genericBackgroundColor = UIColor(rgb: 0x25272e, alpha: 0.72)
             let blueColor = UIColor(rgb: 0x21477d)
             
             let titleText: String
             let backgroundColor: UIColor
-            var tintColorKind: GlassBackgroundView.TintColor.Kind = .custom
             let iconDiameter: CGFloat
             var isEnabled: Bool = true
             switch component.content {
@@ -183,9 +186,6 @@ final class VideoChatActionButtonComponent: Component {
                     backgroundColor = genericBackgroundColor
                 case .muted:
                     backgroundColor = !isActive ? genericBackgroundColor : blueColor
-                    if isActive {
-                        tintColorKind = .custom
-                    }
                 case .unmuted:
                     backgroundColor = !isActive ? genericBackgroundColor : UIColor(rgb: 0x34C659)
                 case .raiseHand, .scheduled:
@@ -193,8 +193,7 @@ final class VideoChatActionButtonComponent: Component {
                 }
                 iconDiameter = 58.0
             case .rotateCamera:
-                //TODO:localize
-                titleText = "rotate"
+                titleText = component.strings.VoiceChat_Rotate
                 switch component.microphoneState {
                 case .connecting:
                     backgroundColor = genericBackgroundColor
@@ -207,14 +206,16 @@ final class VideoChatActionButtonComponent: Component {
                 }
                 iconDiameter = 44.0
             case .message:
-                //TODO:localize
-                titleText = "message"
+                titleText = component.strings.VoiceChat_Message
+                backgroundColor = genericBackgroundColor
+                iconDiameter = 56.0
+            case .share:
+                titleText = component.strings.VoiceChat_ShareButton
                 backgroundColor = genericBackgroundColor
                 iconDiameter = 56.0
             case .leave:
                 titleText = component.strings.VoiceChat_Leave
-                backgroundColor = UIColor(rgb: 0x4f1613)
-                tintColorKind = .custom
+                backgroundColor = UIColor(rgb: 0x330d0b)
                 iconDiameter = 22.0
             }
             
@@ -246,6 +247,8 @@ final class VideoChatActionButtonComponent: Component {
                     self.contentImage = UIImage(bundleImageName: "Call/CallSwitchCameraButton")?.precomposed().withRenderingMode(.alwaysTemplate)
                 case .message:
                     self.contentImage = UIImage(bundleImageName: "Call/CallMessageButton")?.precomposed().withRenderingMode(.alwaysTemplate)
+                case .share:
+                    self.contentImage = UIImage(bundleImageName: "Call/CallShareButton")?.precomposed().withRenderingMode(.alwaysTemplate)
                 case .leave:
                     self.contentImage = generateImage(CGSize(width: 28.0, height: 28.0), opaque: false, rotatedContext: { size, context in
                         let bounds = CGRect(origin: CGPoint(), size: size)
@@ -291,7 +294,7 @@ final class VideoChatActionButtonComponent: Component {
                 }
             }
 
-            self.background.update(size: size, cornerRadius: size.width * 0.5, isDark: true, tintColor: .init(kind: tintColorKind, color: backgroundColor), transition: tintTransition)
+            self.background.update(size: size, cornerRadius: size.width * 0.5, isDark: true, tintColor: .init(kind: .custom, color: backgroundColor), transition: tintTransition)
             transition.setFrame(view: self.background, frame: CGRect(origin: CGPoint(), size: size))
             
             let titleFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((size.width - titleSize.width) * 0.5), y: size.height + 5.0), size: titleSize)
