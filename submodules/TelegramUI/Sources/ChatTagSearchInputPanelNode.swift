@@ -332,7 +332,7 @@ final class ChatTagSearchInputPanelNode: ChatInputPanelNode {
                     buttonView.alpha = 0.0
                     self.view.addSubview(buttonView)
                 }
-                let listModeFrame = CGRect(origin: CGPoint(x: size.width - params.rightInset - 20.0 - 8.0 - buttonSize.width, y: floor((size.height - buttonSize.height) * 0.5)), size: buttonSize)
+                let listModeFrame = CGRect(origin: CGPoint(x: params.width - params.rightInset - 20.0 - 8.0 - buttonSize.width, y: floor((size.height - buttonSize.height) * 0.5)), size: buttonSize)
                 listModeButtonFrameValue = listModeFrame
                 listModeButtonTransition.setPosition(view: buttonView, position: CGPoint(x: listModeFrame.minX + listModeFrame.width * buttonView.layer.anchorPoint.x, y: listModeFrame.minY + listModeFrame.height * buttonView.layer.anchorPoint.y))
                 listModeButtonTransition.setBounds(view: buttonView, bounds: CGRect(origin: CGPoint(), size: listModeFrame.size))
@@ -499,7 +499,10 @@ final class ChatTagSearchInputPanelNode: ChatInputPanelNode {
                 environment: {},
                 containerSize: CGSize(width: 200.0, height: 100.0)
             )
-            let resultsTextFrame = CGRect(origin: CGPoint(x: nextLeftX - 3.0, y: floor((size.height - resultsTextSize.height) * 0.5)), size: resultsTextSize)
+            var resultsTextFrame = CGRect(origin: CGPoint(x: nextLeftX - 3.0, y: floor((size.height - resultsTextSize.height) * 0.5)), size: resultsTextSize)
+            if !displaySearchMembers && !(!self.alwaysShowTotalMessagesCount && self.externalSearchResultsCount == nil) {
+                resultsTextFrame.origin.x += 8.0
+            }
             resultsTextFrameValue = resultsTextFrame
             if let resultsTextView = resultsText.view {
                 if resultsTextView.superview == nil {

@@ -118,18 +118,22 @@ final class HashtagChatInputContextPanelNode: ChatInputContextPanelNode {
             guard let self else {
                 return
             }
-            var topOffset: CGFloat = 0.0
+            var topOffset: CGFloat?
             switch offset {
             case let .known(offset):
                 topOffset = max(0.0, -offset + self.listView.insets.top)
             case .unknown:
-                break
+                topOffset = 0.0
             case .none:
                 break
             }
             
-            self.backgroundView.isHidden = false
-            self.backgroundView.layer.position = CGPoint(x: 0.0, y: topOffset)
+            if let topOffset {
+                self.backgroundView.isHidden = false
+                self.backgroundView.layer.position = CGPoint(x: 0.0, y: topOffset)
+            } else {
+                self.backgroundView.isHidden = true
+            }
         }
     }
     
@@ -269,7 +273,7 @@ final class HashtagChatInputContextPanelNode: ChatInputContextPanelNode {
             self.enqueuedTransitions.remove(at: 0)
             
             var options = ListViewDeleteAndInsertOptions()
-            if firstTime {
+            if firstTime || "".isEmpty {
                 //options.insert(.Synchronous)
                 //options.insert(.LowLatency)
             } else {
