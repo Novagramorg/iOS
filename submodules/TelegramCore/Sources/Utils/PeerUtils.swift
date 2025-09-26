@@ -342,6 +342,23 @@ public extension Peer {
         }
     }
     
+    var effectiveProfileColor: PeerNameColor? {
+        switch self.emojiStatus?.content {
+        case let .starGift(_, _, _, _, _, _, outerColor, _, _):
+            return PeerNameColor.other(outerColor)
+        default:
+            break
+        }
+        switch self {
+        case let user as TelegramUser:
+            return user.profileColor
+        case let channel as TelegramChannel:
+            return channel.profileColor
+        default:
+            return nil
+        }
+    }
+    
     var hasCustomNameColor: Bool {
         let defaultNameColor = PeerNameColor(rawValue: Int32(self.id.id._internalGetInt64Value() % 7))
         if self.nameColor != .preset(defaultNameColor) {

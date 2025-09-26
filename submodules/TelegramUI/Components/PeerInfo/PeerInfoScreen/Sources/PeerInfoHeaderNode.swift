@@ -581,7 +581,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             hasBackground = true
         } else if let peer {
             backgroundCoverSubject = .peer(EnginePeer(peer))
-            if peer.profileColor != nil {
+            if peer.effectiveProfileColor != nil {
                 hasBackground = true
             }
         } else {
@@ -660,11 +660,11 @@ final class PeerInfoHeaderNode: ASDisplayNode {
 
         let headerBackgroundColor: UIColor = presentationData.theme.list.blocksBackgroundColor
         
-        let regularNavigationContentsAccentColor: UIColor = peer?.profileColor != nil ? .white : presentationData.theme.list.itemAccentColor
+        let regularNavigationContentsAccentColor: UIColor = peer?.effectiveProfileColor != nil ? .white : presentationData.theme.list.itemAccentColor
         let collapsedHeaderNavigationContentsAccentColor = presentationData.theme.list.itemAccentColor
         let expandedAvatarNavigationContentsAccentColor: UIColor = .white
         
-        let regularNavigationContentsPrimaryColor: UIColor = peer?.profileColor != nil ? .white : presentationData.theme.list.itemPrimaryTextColor
+        let regularNavigationContentsPrimaryColor: UIColor = peer?.effectiveProfileColor != nil ? .white : presentationData.theme.list.itemPrimaryTextColor
         let collapsedHeaderNavigationContentsPrimaryColor = presentationData.theme.list.itemPrimaryTextColor
         let expandedAvatarNavigationContentsPrimaryColor: UIColor = .white
         
@@ -676,7 +676,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         let collapsedHeaderButtonBackgroundColor: UIColor = .clear
         let expandedAvatarHeaderButtonBackgroundColor: UIColor = UIColor(white: 1.0, alpha: 0.1)
         
-        let regularContentButtonForegroundColor: UIColor = peer?.profileColor != nil ? UIColor.white : presentationData.theme.list.itemAccentColor
+        let regularContentButtonForegroundColor: UIColor = peer?.effectiveProfileColor != nil ? UIColor.white : presentationData.theme.list.itemAccentColor
         let collapsedHeaderContentButtonForegroundColor = presentationData.theme.list.itemAccentColor
         let expandedAvatarContentButtonForegroundColor: UIColor = .white
         
@@ -697,7 +697,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             regularHeaderButtonBackgroundColor = baseButtonBackgroundColor.blendOver(background: secondaryColor.mixedWith(mainColor, alpha: 0.1))
             
             hasCoverColor = true
-        } else if let profileColor = peer?.profileColor {
+        } else if let profileColor = peer?.effectiveProfileColor {
             let backgroundColors = self.context.peerNameColors.getProfile(profileColor, dark: presentationData.theme.overallDarkAppearance)
             regularNavigationContentsSecondaryColor = UIColor(white: 1.0, alpha: 0.6).blitOver(backgroundColors.main.withMultiplied(hue: 1.0, saturation: 2.2, brightness: 1.5), alpha: 1.0)
             
@@ -899,7 +899,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                 let patternColor = UIColor(rgb: UInt32(bitPattern: patternColorValue))
                 ratingBorderColor = patternColor.withAlphaComponent(0.1).blendOver(background: backgroundColor).mixedWith(.clear, alpha: effectiveTransitionFraction)
                 ratingForegroundColor = ratingBorderColor.mixedWith(presentationData.theme.list.itemCheckColors.foregroundColor, alpha: effectiveTransitionFraction)
-            } else if let profileColor = peer?.profileColor {
+            } else if let profileColor = peer?.effectiveProfileColor {
                 ratingBackgroundColor = UIColor(white: 1.0, alpha: 1.0).mixedWith(presentationData.theme.list.itemCheckColors.fillColor, alpha: effectiveTransitionFraction)
                 
                 let backgroundColors = self.context.peerNameColors.getProfile(profileColor, dark: presentationData.theme.overallDarkAppearance)

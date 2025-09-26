@@ -326,7 +326,7 @@ final class PeerNameColorProfilePreviewItemNode: ListViewItemNode {
                 let statusColor: UIColor
                 if let status = item.peer?.emojiStatus, case .starGift = status.content {
                     statusColor = .white
-                } else if let peer = item.peer, peer.profileColor != nil {
+                } else if let peer = item.peer, peer.effectiveProfileColor != nil {
                     statusColor = .white
                 } else {
                     statusColor = item.theme.list.itemCheckColors.fillColor
@@ -357,7 +357,7 @@ final class PeerNameColorProfilePreviewItemNode: ListViewItemNode {
                     backgroundColor = UIColor(rgb: UInt32(bitPattern: outerColor))
                     subtitleColor = UIColor(white: 1.0, alpha: 0.6).blitOver(backgroundColor.withMultiplied(hue: 1.0, saturation: 2.2, brightness: 1.5), alpha: 1.0)
                     particleColor = .white
-                } else if let peer = item.peer, let profileColor = peer.profileColor {
+                } else if let peer = item.peer, let profileColor = peer.effectiveProfileColor {
                     titleColor = .white
                     backgroundColor = item.context.peerNameColors.getProfile(profileColor).main
                     subtitleColor = UIColor(white: 1.0, alpha: 0.6).blitOver(backgroundColor.withMultiplied(hue: 1.0, saturation: 2.2, brightness: 1.5), alpha: 1.0)
