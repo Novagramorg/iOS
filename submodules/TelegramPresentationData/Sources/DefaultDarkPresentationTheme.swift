@@ -359,9 +359,9 @@ public func makeDefaultDarkPresentationTheme(extendingThemeReference: Presentati
     let rootTabBar = PresentationThemeRootTabBar(
         backgroundColor: rootNavigationBar.blurredBackgroundColor,
         separatorColor: UIColor(rgb: 0x545458, alpha: 0.55),
-        iconColor: UIColor(rgb: 0x828282),
+        iconColor: UIColor(rgb: 0xffffff),
         selectedIconColor: UIColor(rgb: 0xffffff),
-        textColor: UIColor(rgb: 0x828282),
+        textColor: UIColor(rgb: 0xffffff),
         selectedTextColor: UIColor(rgb: 0xffffff),
         badgeBackgroundColor:  UIColor(rgb: 0xffffff),
         badgeStrokeColor: UIColor(rgb: 0x1c1c1d),
