@@ -44,15 +44,18 @@ public final class TabBarComponent: Component {
     public let theme: PresentationTheme
     public let items: [Item]
     public let selectedId: AnyHashable?
+    public let isTablet: Bool
     
     public init(
         theme: PresentationTheme,
         items: [Item],
-        selectedId: AnyHashable?
+        selectedId: AnyHashable?,
+        isTablet: Bool
     ) {
         self.theme = theme
         self.items = items
         self.selectedId = selectedId
+        self.isTablet = isTablet
     }
     
     public static func ==(lhs: TabBarComponent, rhs: TabBarComponent) -> Bool {
@@ -63,6 +66,9 @@ public final class TabBarComponent: Component {
             return false
         }
         if lhs.selectedId != rhs.selectedId {
+            return false
+        }
+        if lhs.isTablet != rhs.isTablet {
             return false
         }
         return true
@@ -344,6 +350,12 @@ public final class TabBarComponent: Component {
             return self.convert(itemView.bounds, from: itemView)
         }
         
+        public override func didMoveToWindow() {
+            super.didMoveToWindow()
+            
+            self.state?.updated()
+        }
+        
         func update(component: TabBarComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
             let innerInset: CGFloat = 3.0
             
@@ -371,8 +383,7 @@ public final class TabBarComponent: Component {
                     }
                 }
                 
-                let nativeSize = nativeTabBar.sizeThatFits(availableSize)
-                nativeTabBar.bounds = CGRect(origin: CGPoint(), size: CGSize(width: availableSize.width, height: nativeSize.height))
+                nativeTabBar.frame = CGRect(origin: CGPoint(), size: CGSize(width: availableSize.width, height: component.isTablet ? 74.0 : 83.0))
                 nativeTabBar.layoutSubviews()
             }
             
@@ -532,13 +543,9 @@ public final class TabBarComponent: Component {
             transition.setFrame(view: self.backgroundView, frame: CGRect(origin: CGPoint(), size: size))
             self.backgroundView.update(size: size, cornerRadius: size.height * 0.5, isDark: component.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: component.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7)), transition: transition)
             
-            if let nativeTabBar = self.nativeTabBar {
-                transition.setFrame(view: nativeTabBar, frame: CGRect(origin: CGPoint(x: floor((size.width - nativeTabBar.bounds.width) * 0.5), y: 0.0), size: nativeTabBar.bounds.size))
-            }
-            
             transition.setFrame(view: self.contextGestureContainerView, frame: CGRect(origin: CGPoint(), size: size))
             
-            return size
+            return CGSize(width: availableSize.width, height: 62.0)
         }
     }
     
