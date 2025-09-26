@@ -1678,8 +1678,7 @@ private func finalStateWithUpdatesAndServerTime(accountPeerId: PeerId, postbox: 
                     break
                 }
             case let .updateGroupCall(_, channelId, call):
-                updatedState.updateGroupCall(peerId: channelId.flatMap { PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value($0)) }, call: call)
-                updatedState.updateGroupCall(peerId: channelId.flatMap { PeerId(namespace: Namespaces.Peer.CloudGroup, id: PeerId.Id._internalFromInt64Value($0)) }, call: call)
+                updatedState.updateGroupCall(peerId: channelId?.peerId, call: call)
             case let .updateGroupCallChainBlocks(call, subChainId, blocks, nextOffset):
                 if case let .inputGroupCall(id, accessHash) = call {
                     updatedState.updateGroupCallChainBlocks(id: id, accessHash: accessHash, subChainId: subChainId, blocks: blocks.map { $0.makeData() }, nextOffset: nextOffset)
