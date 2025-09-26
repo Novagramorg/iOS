@@ -545,7 +545,11 @@ public final class TabBarComponent: Component {
             
             transition.setFrame(view: self.contextGestureContainerView, frame: CGRect(origin: CGPoint(), size: size))
             
-            return CGSize(width: availableSize.width, height: 62.0)
+            if self.nativeTabBar != nil {
+                return CGSize(width: availableSize.width, height: 62.0)
+            } else {
+                return size
+            }
         }
     }
     
