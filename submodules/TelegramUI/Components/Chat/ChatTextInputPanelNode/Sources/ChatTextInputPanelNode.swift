@@ -1597,13 +1597,13 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 
                 if interfaceState.interfaceState.mediaDraftState != nil {
                     self.attachmentButtonIcon.image = UIImage(bundleImageName: "Chat/Context Menu/Delete")?.withRenderingMode(.alwaysTemplate)
-                    self.attachmentButtonIcon.tintColor = interfaceState.theme.chat.inputPanel.inputControlColor
+                    self.attachmentButtonIcon.tintColor = interfaceState.theme.chat.inputPanel.panelControlColor
                 } else if isEditingMedia {
                     self.attachmentButtonIcon.image = PresentationResourcesChat.chatInputPanelEditAttachmentButtonImage(interfaceState.theme)
-                    self.attachmentButtonIcon.tintColor = interfaceState.theme.chat.inputPanel.inputControlColor
+                    self.attachmentButtonIcon.tintColor = interfaceState.theme.chat.inputPanel.panelControlColor
                 } else {
                     self.attachmentButtonIcon.image = PresentationResourcesChat.chatInputPanelAttachmentButtonImage(interfaceState.theme)
-                    self.attachmentButtonIcon.tintColor = interfaceState.theme.chat.inputPanel.inputControlColor
+                    self.attachmentButtonIcon.tintColor = interfaceState.theme.chat.inputPanel.panelControlColor
                 }
                
                 self.actionButtons.updateTheme(theme: interfaceState.theme, wallpaper: interfaceState.chatWallpaper)
@@ -1630,13 +1630,13 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 if wasEditingMedia != isEditingMedia || hadMediaDraft != hasMediaDraft {
                     if interfaceState.interfaceState.mediaDraftState != nil {
                         self.attachmentButtonIcon.image = UIImage(bundleImageName: "Chat/Context Menu/Delete")?.withRenderingMode(.alwaysTemplate)
-                        self.attachmentButtonIcon.tintColor = interfaceState.theme.chat.inputPanel.inputControlColor
+                        self.attachmentButtonIcon.tintColor = interfaceState.theme.chat.inputPanel.panelControlColor
                     } else if isEditingMedia {
                         self.attachmentButtonIcon.image = PresentationResourcesChat.chatInputPanelEditAttachmentButtonImage(interfaceState.theme)
                         self.attachmentButtonIcon.tintColor = interfaceState.theme.chat.inputPanel.actionControlForegroundColor
                     } else {
                         self.attachmentButtonIcon.image = PresentationResourcesChat.chatInputPanelAttachmentButtonImage(interfaceState.theme)
-                        self.attachmentButtonIcon.tintColor = interfaceState.theme.chat.inputPanel.inputControlColor
+                        self.attachmentButtonIcon.tintColor = interfaceState.theme.chat.inputPanel.panelControlColor
                     }
                 }
             }

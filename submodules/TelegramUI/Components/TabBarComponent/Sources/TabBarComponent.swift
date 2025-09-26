@@ -501,7 +501,7 @@ public final class TabBarComponent: Component {
             let size = CGSize(width: min(availableSize.width, contentWidth), height: contentHeight)
             
             transition.setFrame(view: self.backgroundView, frame: CGRect(origin: CGPoint(), size: size))
-            self.backgroundView.update(size: size, cornerRadius: size.height * 0.5, isDark: component.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: component.theme.list.plainBackgroundColor.withMultipliedAlpha(0.75)), transition: transition)
+            self.backgroundView.update(size: size, cornerRadius: size.height * 0.5, isDark: component.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: component.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7)), transition: transition)
             
             if let nativeTabBar = self.nativeTabBar {
                 transition.setFrame(view: nativeTabBar, frame: CGRect(origin: CGPoint(x: floor((size.width - nativeTabBar.bounds.width) * 0.5), y: 0.0), size: nativeTabBar.bounds.size))

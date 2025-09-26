@@ -149,7 +149,7 @@ private final class GlassButtonView: HighlightTrackingButton {
     func update(theme: PresentationTheme, size: CGSize, transition: ComponentTransition) {
         let params = Params(theme: theme, size: size)
         if self.params != params {
-            self.iconView.tintColor = params.theme.chat.inputPanel.inputControlColor
+            self.iconView.tintColor = params.theme.chat.inputPanel.panelControlColor
             self.params = params
             self.updateImpl(params: params, transition: transition)
         }
