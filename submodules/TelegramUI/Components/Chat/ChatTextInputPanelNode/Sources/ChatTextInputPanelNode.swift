@@ -502,7 +502,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         self.textInputNodeClippingContainer.clipsToBounds = true
         
         self.textInputSeparator = GlassBackgroundView.ContentColorView()
-        self.textInputContainerBackgroundView.contentView.addSubview(self.textInputSeparator)
+        //self.textInputContainerBackgroundView.contentView.addSubview(self.textInputSeparator)
         
         self.textInputBackgroundNode = ASImageNode()
         self.textInputBackgroundNode.displaysAsynchronously = false
