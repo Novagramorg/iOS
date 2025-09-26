@@ -157,11 +157,13 @@ public final class MessageInputPanelComponent: Component {
     }
     
     public final class SendActionTransition {
+        public let randomId: Int64
         public let textSnapshotView: UIView
         public let globalFrame: CGRect
         public let cornerRadius: CGFloat
         
-        init(textSnapshotView: UIView, globalFrame: CGRect, cornerRadius: CGFloat) {
+        init(randomId: Int64, textSnapshotView: UIView, globalFrame: CGRect, cornerRadius: CGFloat) {
+            self.randomId = randomId
             self.textSnapshotView = textSnapshotView
             self.globalFrame = globalFrame
             self.cornerRadius = cornerRadius
@@ -785,6 +787,7 @@ public final class MessageInputPanelComponent: Component {
                 var sendActionTransition: MessageInputPanelComponent.SendActionTransition?
                 if let snapshotView = self.textClippingView.snapshotView(afterScreenUpdates: false), let backgroundView = self.fieldGlassBackgroundView {
                     sendActionTransition = MessageInputPanelComponent.SendActionTransition(
+                        randomId: Int64.random(in: .min ..< .max),
                         textSnapshotView: snapshotView,
                         globalFrame: backgroundView.convert(backgroundView.bounds, to: nil),
                         cornerRadius: baseFieldHeight * 0.5
@@ -1101,7 +1104,7 @@ public final class MessageInputPanelComponent: Component {
                     self.fieldBackgroundTint.isHidden = true
                 }
                 if let fieldGlassBackgroundView = self.fieldGlassBackgroundView {
-                    fieldGlassBackgroundView.update(size: fieldBackgroundFrame.size, cornerRadius: baseFieldHeight * 0.5, isDark: true, tintColor: .init(kind: .panel, color: UIColor(rgb: 0x4d4f5c, alpha: 0.6)), transition: transition)
+                    fieldGlassBackgroundView.update(size: fieldBackgroundFrame.size, cornerRadius: baseFieldHeight * 0.5, isDark: true, tintColor: .init(kind: .custom, color: UIColor(rgb: 0x25272e, alpha: 0.72)), transition: transition)
                     transition.setFrame(view: fieldGlassBackgroundView, frame: fieldBackgroundFrame)
                 }
             default:
@@ -1348,7 +1351,10 @@ public final class MessageInputPanelComponent: Component {
                     environment: {},
                     containerSize: availableTextFieldSize
                 )
-                let counterFrame = CGRect(origin: CGPoint(x: availableSize.width - insets.right + floorToScreenPixels((insets.right - counterSize.width) * 0.5), y: size.height - insets.bottom - baseFieldHeight - counterSize.height - 5.0), size: counterSize)
+                var counterFrame = CGRect(origin: CGPoint(x: availableSize.width - insets.right + floorToScreenPixels((insets.right - counterSize.width) * 0.5), y: size.height - insets.bottom - baseFieldHeight - counterSize.height - 5.0), size: counterSize)
+                if case .glass = component.style {
+                    counterFrame.origin.x -= 7.0
+                }
                 if let counterView = self.counter.view {
                     if counterView.superview == nil {
                         self.addSubview(counterView)

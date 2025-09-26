@@ -13,10 +13,20 @@ import AccountContext
 import TextFormat
 import TelegramPresentationData
 import ReactionSelectionNode
+import BundleIconComponent
+import Markdown
+
+private let glassColor = UIColor(rgb: 0x25272e, alpha: 0.72)
 
 final class MessageItemComponent: Component {
+    public enum Icon: Equatable {
+        case peer(EnginePeer)
+        case icon(String)
+    }
+    
     private let context: AccountContext
-    private let peer: EnginePeer
+    private let icon: Icon
+    private let isNotification: Bool
     private let text: String
     private let entities: [MessageTextEntity]
     private let availableReactions: [ReactionItem]?
@@ -24,14 +34,16 @@ final class MessageItemComponent: Component {
     
     init(
         context: AccountContext,
-        peer: EnginePeer,
+        icon: Icon,
+        isNotification: Bool,
         text: String,
         entities: [MessageTextEntity],
         availableReactions: [ReactionItem]?,
         avatarTapped: @escaping () -> Void = {}
     ) {
         self.context = context
-        self.peer = peer
+        self.icon = icon
+        self.isNotification = isNotification
         self.text = text
         self.entities = entities
         self.availableReactions = availableReactions
@@ -42,7 +54,7 @@ final class MessageItemComponent: Component {
         if lhs.context !== rhs.context {
             return false
         }
-        if lhs.peer != rhs.peer {
+        if lhs.icon != rhs.icon {
             return false
         }
         if lhs.text != rhs.text {
@@ -61,6 +73,7 @@ final class MessageItemComponent: Component {
         private let container: UIView
         private let background: GlassBackgroundView
         private let avatarNode: AvatarNode
+        private let icon: ComponentView<Empty>
         private let text: ComponentView<Empty>
         weak var standaloneReactionAnimation: StandaloneReactionAnimation?
         
@@ -74,6 +87,7 @@ final class MessageItemComponent: Component {
             
             self.avatarNode = AvatarNode(font: avatarPlaceholderFont(size: 12.0))
             
+            self.icon = ComponentView()
             self.text = ComponentView()
             
             super.init(frame: frame)
@@ -107,8 +121,8 @@ final class MessageItemComponent: Component {
             transition.setPosition(view: textSnapshotView, position: CGPoint(x: textSnapshotView.center.x + 71.0, y: textSnapshotView.center.y))
             
             let initialSize = self.background.frame.size
-            self.background.update(size: globalFrame.size, cornerRadius: cornerRadius, isDark: true, tintColor: .init(kind: .panel, color: UIColor(rgb: 0x4d4f5c, alpha: 0.6)), transition: .immediate)
-            self.background.update(size: initialSize, cornerRadius: 18.0, isDark: true, tintColor: .init(kind: .panel, color: UIColor(rgb: 0x4d4f5c, alpha: 0.6)), transition: transition)
+            self.background.update(size: globalFrame.size, cornerRadius: cornerRadius, isDark: true, tintColor: .init(kind: .custom, color: glassColor), transition: .immediate)
+            self.background.update(size: initialSize, cornerRadius: 18.0, isDark: true, tintColor: .init(kind: .custom, color: glassColor), transition: transition)
             
             let deltaX = (globalFrame.width - self.container.frame.width) / 2.0
             let deltaY = (globalFrame.height - self.container.frame.height) / 2.0
@@ -147,45 +161,51 @@ final class MessageItemComponent: Component {
             let textColor: UIColor = .white
             let linkColor: UIColor = UIColor(rgb: 0x59b6fa)
                         
-            let minimalHeight: CGFloat = 36.0
+            let minimalHeight: CGFloat = component.isNotification ? 50.0 : 36.0
             let cornerRadius = minimalHeight * 0.5
-            let avatarInset: CGFloat = 4.0
-            let avatarSize = CGSize(width: minimalHeight - avatarInset * 2.0, height: minimalHeight - avatarInset * 2.0)
+            let avatarInset: CGFloat = component.isNotification ? 10.0 : 4.0
+            let avatarSize = CGSize(width: component.isNotification ? 30.0 : 28.0, height: component.isNotification ? 30.0 : 28.0)
             let avatarSpacing: CGFloat = 10.0
+            let iconSpacing: CGFloat = 10.0
             let rightInset: CGFloat = 13.0
             
             let avatarFrame = CGRect(origin: CGPoint(x: avatarInset, y: avatarInset), size: avatarSize)
-            if component.peer.smallProfileImage != nil {
-                self.avatarNode.setPeerV2(
-                    context: component.context,
-                    theme: theme,
-                    peer: component.peer,
-                    authorOfMessage: nil,
-                    overrideImage: nil,
-                    emptyColor: nil,
-                    clipStyle: .round,
-                    synchronousLoad: true,
-                    displayDimensions: avatarSize
-                )
-            } else {
-                self.avatarNode.setPeer(
-                    context: component.context,
-                    theme: theme,
-                    peer: component.peer,
-                    clipStyle: .round,
-                    synchronousLoad: true,
-                    displayDimensions: avatarSize
-                )
+            if case let .peer(peer) = component.icon {
+                if peer.smallProfileImage != nil {
+                    self.avatarNode.setPeerV2(
+                        context: component.context,
+                        theme: theme,
+                        peer: peer,
+                        authorOfMessage: nil,
+                        overrideImage: nil,
+                        emptyColor: nil,
+                        clipStyle: .round,
+                        synchronousLoad: true,
+                        displayDimensions: avatarSize
+                    )
+                } else {
+                    self.avatarNode.setPeer(
+                        context: component.context,
+                        theme: theme,
+                        peer: peer,
+                        clipStyle: .round,
+                        synchronousLoad: true,
+                        displayDimensions: avatarSize
+                    )
+                }
             }
             if self.avatarNode.bounds.isEmpty {
                 self.avatarNode.frame = avatarFrame
             } else {
                 transition.setFrame(view: self.avatarNode.view, frame: avatarFrame)
             }
-                        
-            var peerName = component.peer.compactDisplayTitle
-            if peerName.count > 40 {
-                peerName = "\(peerName.prefix(40))…"
+            
+            var peerName = ""
+            if !component.isNotification, case let .peer(peer) = component.icon {
+                peerName = peer.compactDisplayTitle
+                if peerName.count > 40 {
+                    peerName = "\(peerName.prefix(40))…"
+                }
             }
             
             let text = component.text
@@ -208,8 +228,32 @@ final class MessageItemComponent: Component {
                 }
             }
                         
-            let attributedText = stringWithAppliedEntities(text, entities: entities, baseColor: textColor, linkColor: linkColor, baseFont: textFont, linkFont: textFont, boldFont: boldTextFont, italicFont: textFont, boldItalicFont: boldTextFont, fixedFont: textFont, blockQuoteFont: textFont, message: nil, entityFiles: self.entityFiles).mutableCopy() as! NSMutableAttributedString
-            attributedText.insert(NSAttributedString(string: peerName + " ", font: boldTextFont, textColor: textColor), at: 0)
+            let attributedText: NSAttributedString
+            if component.isNotification {
+                attributedText = parseMarkdownIntoAttributedString(
+                    text,
+                    attributes: MarkdownAttributes(
+                        body: MarkdownAttributeSet(font: textFont, textColor: textColor),
+                        bold: MarkdownAttributeSet(font: boldTextFont, textColor: textColor),
+                        link: MarkdownAttributeSet(font: textFont, textColor: linkColor),
+                        linkAttribute: { _ in return nil }
+                    )
+                )
+            } else {
+                let textWithAppliedEntities = stringWithAppliedEntities(text, entities: entities, baseColor: textColor, linkColor: linkColor, baseFont: textFont, linkFont: textFont, boldFont: boldTextFont, italicFont: textFont, boldItalicFont: boldTextFont, fixedFont: textFont, blockQuoteFont: textFont, message: nil, entityFiles: self.entityFiles).mutableCopy() as! NSMutableAttributedString
+                if !peerName.isEmpty {
+                    textWithAppliedEntities.insert(NSAttributedString(string: peerName + " ", font: boldTextFont, textColor: textColor), at: 0)
+                }
+                attributedText = textWithAppliedEntities
+            }
+            
+            let spacing: CGFloat
+            switch component.icon {
+            case .peer:
+                spacing = avatarSpacing
+            case .icon:
+                spacing = iconSpacing
+            }
             
             let textSize = self.text.update(
                 transition: transition,
@@ -223,12 +267,28 @@ final class MessageItemComponent: Component {
                     lineSpacing: 0.0
                 )),
                 environment: {},
-                containerSize: CGSize(width: availableSize.width - avatarInset - avatarSize.width - avatarSpacing - rightInset, height: .greatestFiniteMagnitude)
+                containerSize: CGSize(width: availableSize.width - avatarInset - avatarSize.width - spacing - rightInset, height: .greatestFiniteMagnitude)
             )
             
-            let size = CGSize(width: avatarInset + avatarSize.width + avatarSpacing + textSize.width + rightInset, height: max(minimalHeight, textSize.height + 15.0))
+            let size = CGSize(width: avatarInset + avatarSize.width + spacing + textSize.width + rightInset, height: max(minimalHeight, textSize.height + 15.0))
             
-            let textFrame = CGRect(origin: CGPoint(x: avatarInset + avatarSize.width + avatarSpacing, y: floorToScreenPixels((size.height - textSize.height) / 2.0)), size: textSize)
+            if case let .icon(iconName) = component.icon {
+                let iconSize = self.icon.update(
+                    transition: transition,
+                    component: AnyComponent(BundleIconComponent(name: iconName, tintColor: .white)),
+                    environment: {},
+                    containerSize: CGSize(width: 44.0, height: 44.0)
+                )
+                let iconFrame = CGRect(origin: CGPoint(x: avatarInset, y: floorToScreenPixels((size.height - iconSize.height) / 2.0)), size: iconSize)
+                if let iconView = self.icon.view {
+                    if iconView.superview == nil {
+                        self.container.addSubview(iconView)
+                    }
+                    transition.setFrame(view: iconView, frame: iconFrame)
+                }
+            }
+            
+            let textFrame = CGRect(origin: CGPoint(x: avatarInset + avatarSize.width + spacing, y: floorToScreenPixels((size.height - textSize.height) / 2.0)), size: textSize)
             if let textView = self.text.view {
                 if textView.superview == nil {
                     self.container.addSubview(textView)
@@ -238,7 +298,7 @@ final class MessageItemComponent: Component {
             
             transition.setFrame(view: self.container, frame: CGRect(origin: CGPoint(), size: size))
 
-            self.background.update(size: size, cornerRadius: cornerRadius, isDark: true, tintColor: .init(kind: .panel, color: UIColor(rgb: 0x4d4f5c, alpha: 0.6)), transition: transition)
+            self.background.update(size: size, cornerRadius: cornerRadius, isDark: true, tintColor: .init(kind: .custom, color: glassColor), transition: transition)
             transition.setFrame(view: self.background, frame: CGRect(origin: CGPoint(), size: size))
             
             if isFirstTime, let availableReactions = component.availableReactions, let textView = self.text.view {

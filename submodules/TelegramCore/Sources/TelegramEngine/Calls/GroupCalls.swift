@@ -766,7 +766,10 @@ func _internal_joinGroupCall(account: Account, peerId: PeerId?, joinAs: PeerId?,
                                 let isMuted = (flags & (1 << 1)) != 0
                                 let canChange = (flags & (1 << 2)) != 0
                                 let isVideoEnabled = (flags & (1 << 9)) != 0
+                                let messagesEnabled = (flags & (1 << 17)) != 0
+                                let canChangeMessagesEnabled = (flags & (1 << 18)) != 0
                                 state.defaultParticipantsAreMuted = GroupCallParticipantsContext.State.DefaultParticipantsAreMuted(isMuted: isMuted, canChange: canChange)
+                                state.messagesAreEnabled = GroupCallParticipantsContext.State.MessagesAreEnabled(isEnabled: messagesEnabled, canChange: canChangeMessagesEnabled)
                                 state.title = title
                                 state.recordingStartTimestamp = recordStartDate
                                 state.scheduleTimestamp = scheduleDate
@@ -1583,7 +1586,7 @@ public final class GroupCallParticipantsContext {
         }
         
         case state(update: StateUpdate)
-        case call(isTerminated: Bool, defaultParticipantsAreMuted: State.DefaultParticipantsAreMuted, title: String?, recordingStartTimestamp: Int32?, scheduleTimestamp: Int32?, isVideoEnabled: Bool, participantCount: Int?)
+        case call(isTerminated: Bool, defaultParticipantsAreMuted: State.DefaultParticipantsAreMuted, messagesAreEnabled: State.MessagesAreEnabled, title: String?, recordingStartTimestamp: Int32?, scheduleTimestamp: Int32?, isVideoEnabled: Bool, participantCount: Int?)
         case conferenceChainBlocks(subChainId: Int, blocks: [Data], nextOffset: Int)
     }
     
@@ -1961,9 +1964,10 @@ public final class GroupCallParticipantsContext {
         for update in updates {
             if case let .state(update) = update {
                 stateUpdates.append(update)
-            } else if case let .call(_, defaultParticipantsAreMuted, title, recordingStartTimestamp, scheduleTimestamp, isVideoEnabled, participantsCount) = update {
+            } else if case let .call(_, defaultParticipantsAreMuted, messagesAreEnabled, title, recordingStartTimestamp, scheduleTimestamp, isVideoEnabled, participantsCount) = update {
                 var state = self.stateValue.state
                 state.defaultParticipantsAreMuted = defaultParticipantsAreMuted
+                state.messagesAreEnabled = messagesAreEnabled
                 state.recordingStartTimestamp = recordingStartTimestamp
                 state.title = title
                 state.scheduleTimestamp = scheduleTimestamp
@@ -2336,6 +2340,7 @@ public final class GroupCallParticipantsContext {
             state.adminIds = strongSelf.stateValue.state.adminIds
             state.isCreator = strongSelf.stateValue.state.isCreator
             state.defaultParticipantsAreMuted = strongSelf.stateValue.state.defaultParticipantsAreMuted
+            state.messagesAreEnabled = strongSelf.stateValue.state.messagesAreEnabled
             state.title = strongSelf.stateValue.state.title
             state.recordingStartTimestamp = strongSelf.stateValue.state.recordingStartTimestamp
             state.scheduleTimestamp = strongSelf.stateValue.state.scheduleTimestamp
@@ -2583,12 +2588,12 @@ public final class GroupCallParticipantsContext {
     }
     
     public func updateMessagesEnabled(isEnabled: Bool) {
-        if isEnabled == self.stateValue.state.messagesAreEnabled.isEnabled {
-            return
-        }
+//        if isEnabled == self.stateValue.state.messagesAreEnabled.isEnabled {
+//            return
+//        }
         self.stateValue.state.messagesAreEnabled.isEnabled = isEnabled
         
-        self.updateDefaultMuteDisposable.set((self.account.network.request(Api.functions.phone.toggleGroupCallSettings(flags: 1 << 2, call: self.reference.apiInputGroupCall, joinMuted: nil, messagesEnabled: isEnabled ? .boolTrue : .boolFalse))
+        self.updateMessagesEnabledDisposable.set((self.account.network.request(Api.functions.phone.toggleGroupCallSettings(flags: 1 << 2, call: self.reference.apiInputGroupCall, joinMuted: nil, messagesEnabled: isEnabled ? .boolTrue : .boolFalse))
         |> deliverOnMainQueue).start(next: { [weak self] updates in
             guard let strongSelf = self else {
                 return
@@ -3636,7 +3641,7 @@ public final class GroupCallMessagesContext {
             }
         }
         
-        func send(fromId: EnginePeer.Id, text: String, entities: [MessageTextEntity]) {
+        func send(fromId: EnginePeer.Id, randomId: Int64?, text: String, entities: [MessageTextEntity]) {
             let _ = (self.account.postbox.transaction { transaction -> Peer? in
                 return transaction.getPeer(fromId)
             }
@@ -3712,9 +3717,9 @@ public final class GroupCallMessagesContext {
         })
     }
     
-    public func send(fromId: EnginePeer.Id, text: String, entities: [MessageTextEntity]) {
+    public func send(fromId: EnginePeer.Id, randomId: Int64?, text: String, entities: [MessageTextEntity]) {
         self.impl.with { impl in
-            impl.send(fromId: fromId, text: text, entities: entities)
+            impl.send(fromId: fromId, randomId: randomId, text: text, entities: entities)
         }
     }
 }
