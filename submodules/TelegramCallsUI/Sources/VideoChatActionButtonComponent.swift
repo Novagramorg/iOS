@@ -147,7 +147,7 @@ final class VideoChatActionButtonComponent: Component {
             
             let titleText: String
             let backgroundColor: UIColor
-            var tintColorKind: GlassBackgroundView.TintColor.Kind = .panel
+            var tintColorKind: GlassBackgroundView.TintColor.Kind = .custom
             let iconDiameter: CGFloat
             var isEnabled: Bool = true
             switch component.content {

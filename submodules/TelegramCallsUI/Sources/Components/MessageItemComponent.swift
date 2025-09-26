@@ -3,6 +3,7 @@ import Display
 import UIKit
 import ComponentFlow
 import SwiftSignalKit
+import Postbox
 import TelegramCore
 import AvatarNode
 import GlassBackgroundComponent
@@ -71,7 +72,7 @@ final class MessageItemComponent: Component {
             
             self.background = GlassBackgroundView()
             
-            self.avatarNode = AvatarNode(font: avatarPlaceholderFont(size: 10.0))
+            self.avatarNode = AvatarNode(font: avatarPlaceholderFont(size: 12.0))
             
             self.text = ComponentView()
             
@@ -128,6 +129,9 @@ final class MessageItemComponent: Component {
             transition.animateScale(view: self.avatarNode.view, from: 0.01, to: 1.0)
         }
         
+        private var cachedEntities: [MessageTextEntity]?
+        private var entityFiles: [MediaId: TelegramMediaFile] = [:]
+        
         func update(component: MessageItemComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
             let isFirstTime = self.component == nil
             var transition = transition
@@ -183,7 +187,28 @@ final class MessageItemComponent: Component {
             if peerName.count > 40 {
                 peerName = "\(peerName.prefix(40))…"
             }
-            let attributedText = stringWithAppliedEntities(component.text, entities: component.entities, baseColor: textColor, linkColor: linkColor, baseFont: textFont, linkFont: textFont, boldFont: boldTextFont, italicFont: textFont, boldItalicFont: boldTextFont, fixedFont: textFont, blockQuoteFont: textFont, message: nil).mutableCopy() as! NSMutableAttributedString
+            
+            let text = component.text
+            var entities = component.entities
+            if let cachedEntities = self.cachedEntities {
+                entities = cachedEntities
+            } else if let availableReactions = component.availableReactions, text.count == 1 {
+                let emoji = component.text.strippedEmoji
+                var reactionItem: ReactionItem?
+                for item in availableReactions {
+                    if case .builtin(emoji) = item.reaction.rawValue {
+                        reactionItem = item
+                        break
+                    }
+                }
+                if case .builtin = reactionItem?.reaction.rawValue, let item = component.context.animatedEmojiStickersValue[emoji]?.first {
+                    self.entityFiles[item.file.fileId] = item.file._parse()
+                    entities.insert(MessageTextEntity(range: 0 ..< (text as NSString).length, type: .CustomEmoji(stickerPack: nil, fileId: item.file.fileId.id)), at: 0)
+                    self.cachedEntities = entities
+                }
+            }
+                        
+            let attributedText = stringWithAppliedEntities(text, entities: entities, baseColor: textColor, linkColor: linkColor, baseFont: textFont, linkFont: textFont, boldFont: boldTextFont, italicFont: textFont, boldItalicFont: boldTextFont, fixedFont: textFont, blockQuoteFont: textFont, message: nil, entityFiles: self.entityFiles).mutableCopy() as! NSMutableAttributedString
             attributedText.insert(NSAttributedString(string: peerName + " ", font: boldTextFont, textColor: textColor), at: 0)
             
             let textSize = self.text.update(
@@ -192,7 +217,7 @@ final class MessageItemComponent: Component {
                     context: component.context,
                     animationCache: component.context.animationCache,
                     animationRenderer: component.context.animationRenderer,
-                    placeholderColor: .white,
+                    placeholderColor: UIColor(rgb: 0xffffff, alpha: 0.3),
                     text: .plain(attributedText),
                     maximumNumberOfLines: 0,
                     lineSpacing: 0.0
@@ -251,7 +276,7 @@ final class MessageItemComponent: Component {
                             animationCache: component.context.animationCache,
                             reaction: reactionItem,
                             avatarPeers: [],
-                            playHaptic: true,
+                            playHaptic: false,
                             isLarge: false,
                             hideCenterAnimation: true,
                             targetView: emojiTargetView,

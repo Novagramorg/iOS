@@ -222,6 +222,7 @@ public struct PresentationGroupCallState: Equatable {
     public var adminIds: Set<EnginePeer.Id>
     public var muteState: GroupCallParticipantsContext.Participant.MuteState?
     public var defaultParticipantMuteState: DefaultParticipantMuteState?
+    public var messagesAreEnabled: Bool
     public var recordingStartTimestamp: Int32?
     public var title: String?
     public var raisedHand: Bool
@@ -238,6 +239,7 @@ public struct PresentationGroupCallState: Equatable {
         adminIds: Set<EnginePeer.Id>,
         muteState: GroupCallParticipantsContext.Participant.MuteState?,
         defaultParticipantMuteState: DefaultParticipantMuteState?,
+        messagesAreEnabled: Bool,
         recordingStartTimestamp: Int32?,
         title: String?,
         raisedHand: Bool,
@@ -253,6 +255,7 @@ public struct PresentationGroupCallState: Equatable {
         self.adminIds = adminIds
         self.muteState = muteState
         self.defaultParticipantMuteState = defaultParticipantMuteState
+        self.messagesAreEnabled = messagesAreEnabled
         self.recordingStartTimestamp = recordingStartTimestamp
         self.title = title
         self.raisedHand = raisedHand

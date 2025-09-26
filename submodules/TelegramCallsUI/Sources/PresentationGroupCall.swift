@@ -28,6 +28,7 @@ private extension PresentationGroupCallState {
             adminIds: Set(),
             muteState: GroupCallParticipantsContext.Participant.MuteState(canUnmute: true, mutedByYou: false),
             defaultParticipantMuteState: nil,
+            messagesAreEnabled: true,
             recordingStartTimestamp: nil,
             title: title,
             raisedHand: false,
@@ -1537,6 +1538,7 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
                 adminIds: Set(),
                 isCreator: false,
                 defaultParticipantsAreMuted: callInfo.defaultParticipantsAreMuted ?? GroupCallParticipantsContext.State.DefaultParticipantsAreMuted(isMuted: self.stateValue.defaultParticipantMuteState == .muted, canChange: true),
+                messagesAreEnabled: callInfo.messagesAreEnabled ?? GroupCallParticipantsContext.State.MessagesAreEnabled(isEnabled: self.stateValue.messagesAreEnabled, canChange: true),
                 sortAscending: true,
                 recordingStartTimestamp: nil,
                 title: self.stateValue.title,
@@ -1657,6 +1659,7 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
                     recordingStartTimestamp: nil,
                     sortAscending: true,
                     defaultParticipantsAreMuted: callInfo.defaultParticipantsAreMuted ?? state.defaultParticipantsAreMuted,
+                    messagesAreEnabled: callInfo.messagesAreEnabled ?? state.messagesAreEnabled,
                     isVideoEnabled: callInfo.isVideoEnabled,
                     unmutedVideoLimit: callInfo.unmutedVideoLimit,
                     isStream: callInfo.isStream,
@@ -1674,6 +1677,7 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
                     recordingStartTimestamp: state.recordingStartTimestamp,
                     sortAscending: state.sortAscending,
                     defaultParticipantsAreMuted: state.defaultParticipantsAreMuted,
+                    messagesAreEnabled: state.messagesAreEnabled,
                     isVideoEnabled: state.isVideoEnabled,
                     unmutedVideoLimit: state.unmutedVideoLimit,
                     isStream: callInfo.isStream,
@@ -2628,6 +2632,7 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
                         recordingStartTimestamp: state.recordingStartTimestamp,
                         sortAscending: state.sortAscending,
                         defaultParticipantsAreMuted: state.defaultParticipantsAreMuted,
+                        messagesAreEnabled: state.messagesAreEnabled,
                         isVideoEnabled: state.isVideoEnabled,
                         unmutedVideoLimit: state.unmutedVideoLimit,
                         isStream: callInfo.isStream,
@@ -3994,7 +3999,7 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
     
     public func sendMessage(text: String, entities: [MessageTextEntity]) {
         if let messagesContext = self.messagesContext {
-            messagesContext.send(text: text, entities: entities)
+            messagesContext.send(fromId: self.joinAsPeerId, text: text, entities: entities)
         }
     }
 }

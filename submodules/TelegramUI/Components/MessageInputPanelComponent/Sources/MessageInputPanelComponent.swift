@@ -773,6 +773,27 @@ public final class MessageInputPanelComponent: Component {
             return result
         }
         
+        private func sendMessageAction() {
+            guard let component = self.component else {
+                return
+            }
+            if let maxLength = component.maxLength, self.textFieldExternalState.textLength > maxLength {
+                self.animateError()
+                component.presentTextLengthLimitTooltip?()
+            } else {
+                let baseFieldHeight: CGFloat = 40.0
+                var sendActionTransition: MessageInputPanelComponent.SendActionTransition?
+                if let snapshotView = self.textClippingView.snapshotView(afterScreenUpdates: false), let backgroundView = self.fieldGlassBackgroundView {
+                    sendActionTransition = MessageInputPanelComponent.SendActionTransition(
+                        textSnapshotView: snapshotView,
+                        globalFrame: backgroundView.convert(backgroundView.bounds, to: nil),
+                        cornerRadius: baseFieldHeight * 0.5
+                    )
+                }
+                component.sendMessageAction(sendActionTransition)
+            }
+        }
+        
         func update(component: MessageInputPanelComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
             let previousPlaceholder = self.component?.placeholder
             
@@ -882,7 +903,10 @@ public final class MessageInputPanelComponent: Component {
                     },
                     paste: { data in
                         component.paste(data)
-                    }
+                    },
+                    returnKeyAction: component.style == .glass ? { [weak self] in
+                        self?.sendMessageAction()
+                    } : nil
                 )),
                 environment: {},
                 containerSize: availableTextFieldSize
@@ -1564,20 +1588,7 @@ public final class MessageInputPanelComponent: Component {
                                     component.sendMessageAction(nil)
                                 } else if case let .text(string) = self.getSendMessageInput(), string.string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                                 } else {
-                                    if let maxLength = component.maxLength, self.textFieldExternalState.textLength > maxLength {
-                                        self.animateError()
-                                        component.presentTextLengthLimitTooltip?()
-                                    } else {
-                                        var sendActionTransition: MessageInputPanelComponent.SendActionTransition?
-                                        if let snapshotView = self.textClippingView.snapshotView(afterScreenUpdates: false), let backgroundView = self.fieldGlassBackgroundView {
-                                            sendActionTransition = MessageInputPanelComponent.SendActionTransition(
-                                                textSnapshotView: snapshotView,
-                                                globalFrame: backgroundView.convert(backgroundView.bounds, to: nil),
-                                                cornerRadius: baseFieldHeight * 0.5
-                                            )
-                                        }
-                                        component.sendMessageAction(sendActionTransition)
-                                    }
+                                    self.sendMessageAction()
                                 }
                             }
                         case .apply:

@@ -118,7 +118,7 @@ enum AccountStateMutationOperation {
     case UpdateGroupCallParticipants(id: Int64, accessHash: Int64, participants: [Api.GroupCallParticipant], version: Int32)
     case UpdateGroupCall(peerId: PeerId?, call: Api.GroupCall)
     case UpdateGroupCallChainBlocks(id: Int64, accessHash: Int64, subChainId: Int32, blocks: [Data], nextOffset: Int32)
-    case UpdateGroupCallMessage(id: Int64, authorId: PeerId, text: Api.TextWithEntities)
+    case UpdateGroupCallMessage(id: Int64, authorId: PeerId, randomId: Int64, text: Api.TextWithEntities)
     case UpdateGroupCallOpaqueMessage(id: Int64, authorId: PeerId, data: Data)
     case UpdateAutoremoveTimeout(peer: Api.Peer, value: CachedPeerAutoremoveTimeout.Value?)
     case UpdateAttachMenuBots
@@ -411,8 +411,8 @@ struct AccountMutableState {
         self.addOperation(.UpdateGroupCallChainBlocks(id: id, accessHash: accessHash, subChainId: subChainId, blocks: blocks, nextOffset: nextOffset))
     }
     
-    mutating func updateGroupCallMessage(id: Int64, authorId: PeerId, text: Api.TextWithEntities) {
-        self.addOperation(.UpdateGroupCallMessage(id: id, authorId: authorId, text: text))
+    mutating func updateGroupCallMessage(id: Int64, authorId: PeerId, randomId: Int64, text: Api.TextWithEntities) {
+        self.addOperation(.UpdateGroupCallMessage(id: id, authorId: authorId, randomId: randomId, text: text))
     }
     
     mutating func updateGroupCallOpaqueMessage(id: Int64, authorId: PeerId, data: Data) {

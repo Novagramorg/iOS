@@ -10829,12 +10829,13 @@ public extension Api.functions.phone {
                 }
 }
 public extension Api.functions.phone {
-                static func sendGroupCallMessage(call: Api.InputGroupCall, message: Api.TextWithEntities) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Bool>) {
+                static func sendGroupCallMessage(call: Api.InputGroupCall, randomId: Int64, message: Api.TextWithEntities) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Bool>) {
                     let buffer = Buffer()
-                    buffer.appendInt32(-614432696)
+                    buffer.appendInt32(-2021052396)
                     call.serialize(buffer, true)
+                    serializeInt64(randomId, buffer: buffer, boxed: false)
                     message.serialize(buffer, true)
-                    return (FunctionDescription(name: "phone.sendGroupCallMessage", parameters: [("call", String(describing: call)), ("message", String(describing: message))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.Bool? in
+                    return (FunctionDescription(name: "phone.sendGroupCallMessage", parameters: [("call", String(describing: call)), ("randomId", String(describing: randomId)), ("message", String(describing: message))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.Bool? in
                         let reader = BufferReader(buffer)
                         var result: Api.Bool?
                         if let signature = reader.readInt32() {
@@ -10912,13 +10913,14 @@ public extension Api.functions.phone {
                 }
 }
 public extension Api.functions.phone {
-                static func toggleGroupCallSettings(flags: Int32, call: Api.InputGroupCall, joinMuted: Api.Bool?) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Updates>) {
+                static func toggleGroupCallSettings(flags: Int32, call: Api.InputGroupCall, joinMuted: Api.Bool?, messagesEnabled: Api.Bool?) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Updates>) {
                     let buffer = Buffer()
-                    buffer.appendInt32(1958458429)
+                    buffer.appendInt32(-378390524)
                     serializeInt32(flags, buffer: buffer, boxed: false)
                     call.serialize(buffer, true)
                     if Int(flags) & Int(1 << 0) != 0 {joinMuted!.serialize(buffer, true)}
-                    return (FunctionDescription(name: "phone.toggleGroupCallSettings", parameters: [("flags", String(describing: flags)), ("call", String(describing: call)), ("joinMuted", String(describing: joinMuted))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.Updates? in
+                    if Int(flags) & Int(1 << 2) != 0 {messagesEnabled!.serialize(buffer, true)}
+                    return (FunctionDescription(name: "phone.toggleGroupCallSettings", parameters: [("flags", String(describing: flags)), ("call", String(describing: call)), ("joinMuted", String(describing: joinMuted)), ("messagesEnabled", String(describing: messagesEnabled))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.Updates? in
                         let reader = BufferReader(buffer)
                         var result: Api.Updates?
                         if let signature = reader.readInt32() {

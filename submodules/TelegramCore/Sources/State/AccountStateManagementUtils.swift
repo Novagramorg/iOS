@@ -1684,9 +1684,9 @@ private func finalStateWithUpdatesAndServerTime(accountPeerId: PeerId, postbox: 
                 if case let .inputGroupCall(id, accessHash) = call {
                     updatedState.updateGroupCallChainBlocks(id: id, accessHash: accessHash, subChainId: subChainId, blocks: blocks.map { $0.makeData() }, nextOffset: nextOffset)
                 }
-            case let .updateGroupCallMessage(call, fromId, message):
+            case let .updateGroupCallMessage(call, fromId, randomId, message):
                 if case let .inputGroupCall(id, _) = call {
-                    updatedState.updateGroupCallMessage(id: id, authorId: fromId.peerId, text: message)
+                    updatedState.updateGroupCallMessage(id: id, authorId: fromId.peerId, randomId: randomId, text: message)
                 }
             case let .updateGroupCallEncryptedMessage(call, fromId, encryptedMessage):
                 if case let .inputGroupCall(id, _) = call {
@@ -2122,7 +2122,8 @@ func resolveForumThreads(accountPeerId: PeerId, postbox: Postbox, source: FetchM
                                 switch topic {
                                 case let .forum(topic):
                                     switch topic {
-                                    case let .forumTopic(flags, id, date, title, iconColor, iconEmojiId, topMessage, readInboxMaxId, readOutboxMaxId, unreadCount, unreadMentionsCount, unreadReactionsCount, fromId, notifySettings, draft):
+                                    case let .forumTopic(flags, id, date, peer, title, iconColor, iconEmojiId, topMessage, readInboxMaxId, readOutboxMaxId, unreadCount, unreadMentionsCount, unreadReactionsCount, fromId, notifySettings, draft):
+                                        let _ = peer
                                         let _ = draft
                                         
                                         state.operations.append(.ResetForumTopic(
@@ -2286,7 +2287,8 @@ func resolveForumThreads(accountPeerId: PeerId, postbox: Postbox, source: FetchM
                                     switch item {
                                     case let .forum(topic):
                                         switch topic {
-                                        case let .forumTopic(flags, id, date, title, iconColor, iconEmojiId, topMessage, readInboxMaxId, readOutboxMaxId, unreadCount, unreadMentionsCount, unreadReactionsCount, fromId, notifySettings, draft):
+                                        case let .forumTopic(flags, id, date, peer, title, iconColor, iconEmojiId, topMessage, readInboxMaxId, readOutboxMaxId, unreadCount, unreadMentionsCount, unreadReactionsCount, fromId, notifySettings, draft):
+                                            let _ = peer
                                             let _ = draft
                                             
                                             let data = MessageHistoryThreadData(
@@ -2452,7 +2454,8 @@ func resolveForumThreads(accountPeerId: PeerId, postbox: Postbox, source: FetchM
                                 switch item {
                                 case let .forum(topic):
                                     switch topic {
-                                    case let .forumTopic(flags, id, date, title, iconColor, iconEmojiId, topMessage, readInboxMaxId, readOutboxMaxId, unreadCount, unreadMentionsCount, unreadReactionsCount, fromId, notifySettings, draft):
+                                    case let .forumTopic(flags, id, date, peer, title, iconColor, iconEmojiId, topMessage, readInboxMaxId, readOutboxMaxId, unreadCount, unreadMentionsCount, unreadReactionsCount, fromId, notifySettings, draft):
+                                        let _ = peer
                                         let _ = draft
                                         
                                         fetchedChatList.threadInfos[PeerAndBoundThreadId(peerId: peerId, threadId: Int64(id))] = StoreMessageHistoryThreadData(
@@ -4877,10 +4880,10 @@ func replayFinalState(
                     callId,
                     .state(update: GroupCallParticipantsContext.Update.StateUpdate(participants: participants, version: version))
                 ))
-            case let .UpdateGroupCallMessage(callId, authorId, text):
+            case let .UpdateGroupCallMessage(callId, authorId, randomId, text):
                 switch text {
                 case let .textWithEntities(text, entities):
-                    groupCallMessageUpdates.append(GroupCallMessageUpdate(callId: callId, update: .newPlaintextMessage(authorId: authorId, text: text, entities: messageTextEntitiesFromApiEntities(entities))))
+                    groupCallMessageUpdates.append(GroupCallMessageUpdate(callId: callId, update: .newPlaintextMessage(authorId: authorId, randomId: randomId, text: text, entities: messageTextEntitiesFromApiEntities(entities))))
                 }
             case let .UpdateGroupCallOpaqueMessage(callId, authorId, data):
                 groupCallMessageUpdates.append(GroupCallMessageUpdate(callId: callId, update: .newOpaqueMessage(authorId: authorId, data: data)))
