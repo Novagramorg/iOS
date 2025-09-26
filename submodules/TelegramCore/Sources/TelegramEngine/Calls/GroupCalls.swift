@@ -3432,6 +3432,214 @@ struct GroupCallMessageUpdate {
     }
 }
 
+private func serializeGroupCallMessage(text: String, entities: [MessageTextEntity]) -> Data? {
+    var dict: [String: Any] = [:]
+    dict["_"] = "groupCallMessage"
+    
+    var messageDict: [String: Any] = [:]
+    messageDict["_"] = "textWithEntities"
+    messageDict["text"] = text
+    if !entities.isEmpty {
+        messageDict["entities"] = entities.compactMap { entity -> [String: Any]? in
+            var entityDict: [String: Any] = [:]
+            entityDict["offset"] = Int32(entity.range.lowerBound)
+            entityDict["length"] = Int32(entity.range.upperBound - entity.range.lowerBound)
+            switch entity.type {
+            case .Unknown:
+                entityDict["_"] = "messageEntityUnknown"
+            case .Mention:
+                entityDict["_"] = "messageEntityMention"
+            case .Hashtag:
+                entityDict["_"] = "messageEntityHashtag"
+            case .BotCommand:
+                entityDict["_"] = "messageEntityBotCommand"
+            case .Url:
+                entityDict["_"] = "messageEntityUrl"
+            case .Email:
+                entityDict["_"] = "messageEntityEmail"
+            case .Bold:
+                entityDict["_"] = "messageEntityBold"
+            case .Italic:
+                entityDict["_"] = "messageEntityItalic"
+            case .Code:
+                entityDict["_"] = "messageEntityCode"
+            case let .Pre(language):
+                entityDict["_"] = "messageEntityPre"
+                entityDict["language"] = language
+            case .TextUrl(let url):
+                entityDict["_"] = "messageEntityTextUrl"
+                entityDict["url"] = url
+            case let .TextMention(peerId):
+                entityDict["_"] = "messageEntityMentionName"
+                entityDict["user_id"] = peerId.id._internalGetInt64Value()
+            case .PhoneNumber:
+                entityDict["_"] = "messageEntityPhone"
+            case .Strikethrough:
+                entityDict["_"] = "messageEntityStrike"
+            case let .BlockQuote(isCollapsed):
+                entityDict["_"] = "messageEntityBlockquote"
+                entityDict["collapsed"] = isCollapsed
+            case .Underline:
+                entityDict["_"] = "messageEntityUnderline"
+            case .BankCard:
+                entityDict["_"] = "messageEntityBankCard"
+            case .Spoiler:
+                entityDict["_"] = "messageEntitySpoiler"
+            case let .CustomEmoji(_, fileId):
+                entityDict["_"] = "messageEntityCustomEmoji"
+                entityDict["document_id"] = fileId
+            case .Custom:
+                return nil
+            }
+            return entityDict
+        }
+    }
+    dict["message"] = messageDict
+    
+    do {
+        return try JSONSerialization.data(withJSONObject: dict, options: [])
+    } catch {
+        return nil
+    }
+}
+
+private func deserializeGroupCallMessage(data: Data) -> (text: String, entities: [MessageTextEntity])? {
+    guard let jsonObject = try? JSONSerialization.jsonObject(with: data, options: []) as? [String: Any] else {
+        return nil
+    }
+    
+    guard let type = jsonObject["_"] as? String, type == "groupCallMessage" else {
+        return nil
+    }
+    
+    guard let messageDict = jsonObject["message"] as? [String: Any] else {
+        return nil
+    }
+    
+    guard let messageType = messageDict["_"] as? String, messageType == "textWithEntities" else {
+        return nil
+    }
+    
+    guard let text = messageDict["text"] as? String else {
+        return nil
+    }
+    
+    var entities: [MessageTextEntity] = []
+    if let entitiesArray = messageDict["entities"] as? [[String: Any]] {
+        entities = entitiesArray.compactMap { entityDict -> MessageTextEntity? in
+            guard let entityType = entityDict["_"] as? String else {
+                return nil
+            }
+            
+            let offset: Int32
+            if let offsetInt32 = entityDict["offset"] as? Int32 {
+                offset = offsetInt32
+            } else if let offsetInt = entityDict["offset"] as? Int {
+                guard offsetInt >= Int32.min && offsetInt <= Int32.max else {
+                    return nil
+                }
+                offset = Int32(offsetInt)
+            } else if let offsetString = entityDict["offset"] as? String, let offsetInt = Int(offsetString) {
+                guard offsetInt >= Int32.min && offsetInt <= Int32.max else {
+                    return nil
+                }
+                offset = Int32(offsetInt)
+            } else {
+                return nil
+            }
+            
+            let length: Int32
+            if let lengthInt32 = entityDict["length"] as? Int32 {
+                length = lengthInt32
+            } else if let lengthInt = entityDict["length"] as? Int {
+                guard lengthInt >= 0 && lengthInt <= Int32.max else {
+                    return nil
+                }
+                length = Int32(lengthInt)
+            } else if let lengthString = entityDict["length"] as? String, let lengthInt = Int(lengthString) {
+                guard lengthInt >= 0 && lengthInt <= Int32.max else {
+                    return nil
+                }
+                length = Int32(lengthInt)
+            } else {
+                return nil
+            }
+            
+            let range = Int(offset)..<(Int(offset) + Int(length))
+            
+            let messageEntityType: MessageTextEntityType
+            switch entityType {
+            case "messageEntityUnknown":
+                messageEntityType = .Unknown
+            case "messageEntityMention":
+                messageEntityType = .Mention
+            case "messageEntityHashtag":
+                messageEntityType = .Hashtag
+            case "messageEntityBotCommand":
+                messageEntityType = .BotCommand
+            case "messageEntityUrl":
+                messageEntityType = .Url
+            case "messageEntityEmail":
+                messageEntityType = .Email
+            case "messageEntityBold":
+                messageEntityType = .Bold
+            case "messageEntityItalic":
+                messageEntityType = .Italic
+            case "messageEntityCode":
+                messageEntityType = .Code
+            case "messageEntityPre":
+                let language = entityDict["language"] as? String
+                messageEntityType = .Pre(language: language)
+            case "messageEntityTextUrl":
+                guard let url = entityDict["url"] as? String else {
+                    return nil
+                }
+                messageEntityType = .TextUrl(url: url)
+            case "messageEntityMentionName":
+                let userIdValue: Int64
+                if let userIdInt64 = entityDict["user_id"] as? Int64 {
+                    userIdValue = userIdInt64
+                } else if let userIdInt = entityDict["user_id"] as? Int {
+                    userIdValue = Int64(userIdInt)
+                } else {
+                    return nil
+                }
+                let peerId = PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(userIdValue))
+                messageEntityType = .TextMention(peerId: peerId)
+            case "messageEntityPhone":
+                messageEntityType = .PhoneNumber
+            case "messageEntityStrike":
+                messageEntityType = .Strikethrough
+            case "messageEntityBlockquote":
+                let isCollapsed = entityDict["collapsed"] as? Bool ?? false
+                messageEntityType = .BlockQuote(isCollapsed: isCollapsed)
+            case "messageEntityUnderline":
+                messageEntityType = .Underline
+            case "messageEntityBankCard":
+                messageEntityType = .BankCard
+            case "messageEntitySpoiler":
+                messageEntityType = .Spoiler
+            case "messageEntityCustomEmoji":
+                let documentId: Int64
+                if let documentIdInt64 = entityDict["document_id"] as? Int64 {
+                    documentId = documentIdInt64
+                } else if let documentIdInt = entityDict["document_id"] as? Int {
+                    documentId = Int64(documentIdInt)
+                } else {
+                    return nil
+                }
+                messageEntityType = .CustomEmoji(stickerPack: nil, fileId: documentId)
+            default:
+                return nil
+            }
+            
+            return MessageTextEntity(range: range, type: messageEntityType)
+        }
+    }
+    
+    return (text: text, entities: entities)
+}
+
 public final class GroupCallMessagesContext {
     public final class Message: Equatable {
         public let id: Int64
@@ -3567,25 +3775,19 @@ public final class GroupCallMessagesContext {
                                 guard let decryptedMessage else {
                                     continue
                                 }
-                                let buffer = Buffer(data: decryptedMessage)
-                                let bufferReader = BufferReader(buffer)
-                                if bufferReader.readInt32() == 1964978502 {
-                                    if let textWithEntities = Api.TextWithEntities.parse_textWithEntities(bufferReader) {
-                                        switch textWithEntities {
-                                        case let .textWithEntities(text, entities):
-                                            let messageId = self.nextId
-                                            self.nextId += 1
-                                            messages.append(Message(
-                                                id: messageId,
-                                                author: transaction.getPeer(addedOpaqueMessage.authorId).flatMap(EnginePeer.init),
-                                                text: text,
-                                                entities: messageTextEntitiesFromApiEntities(entities),
-                                                date: currentTime,
-                                                lifetime: self.messageLifetime
-                                            ))
-                                        }
-                                    }
+                                guard let (text, entities) = deserializeGroupCallMessage(data: decryptedMessage) else {
+                                    continue
                                 }
+                                let messageId = self.nextId
+                                self.nextId += 1
+                                messages.append(Message(
+                                    id: messageId,
+                                    author: transaction.getPeer(addedOpaqueMessage.authorId).flatMap(EnginePeer.init),
+                                    text: text,
+                                    entities: entities,
+                                    date: currentTime,
+                                    lifetime: self.messageLifetime
+                                ))
                             }
                         } else {
                             for addedMessage in addedMessages {
@@ -3668,10 +3870,7 @@ public final class GroupCallMessagesContext {
                 
                 self.processedIds.insert(messageId)
                 
-                if let e2eContext = self.e2eContext {
-                    let buffer = Buffer()
-                    Api.TextWithEntities.textWithEntities(text: text, entities: apiEntitiesFromMessageTextEntities(entities, associatedPeers: SimpleDictionary())).serialize(buffer, true)
-                    let messageData = buffer.makeData()
+                if let e2eContext = self.e2eContext, let messageData = serializeGroupCallMessage(text: text, entities: entities) {
                     let encryptedMessage = e2eContext.state.with({ state -> Data? in
                         guard let state = state.state else {
                             return nil

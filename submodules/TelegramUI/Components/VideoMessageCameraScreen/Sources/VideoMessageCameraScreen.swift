@@ -601,7 +601,7 @@ private final class VideoMessageCameraScreenComponent: CombinedComponent {
                             component: AnyComponent(
                                 Image(
                                     image: state.image(.flip, theme: environment.theme),
-                                    tintColor: environment.theme.chat.inputPanel.inputControlColor,
+                                    tintColor: environment.theme.chat.inputPanel.panelControlColor,
                                     size: CGSize(width: 30.0, height: 30.0)
                                 )
                             )
@@ -646,7 +646,7 @@ private final class VideoMessageCameraScreenComponent: CombinedComponent {
                         component: AnyComponent(
                             LottieComponent(
                                 content: LottieComponent.AppBundleContent(name: flashIconName),
-                                color: environment.theme.chat.inputPanel.inputControlColor,
+                                color: environment.theme.chat.inputPanel.panelControlColor,
                                 startingPosition: !component.cameraState.flashModeDidChange ? .end : .begin,
                                 size: CGSize(width: 40.0, height: 40.0),
                                 loop: false,
@@ -660,7 +660,7 @@ private final class VideoMessageCameraScreenComponent: CombinedComponent {
                         component: AnyComponent(
                             Image(
                                 image: state.image(.flash, theme: environment.theme),
-                                tintColor: environment.theme.chat.inputPanel.inputControlColor,
+                                tintColor: environment.theme.chat.inputPanel.panelControlColor,
                                 size: CGSize(width: 30.0, height: 30.0)
                             )
                         )
@@ -732,7 +732,7 @@ private final class VideoMessageCameraScreenComponent: CombinedComponent {
                                     component: AnyComponent(
                                         BundleIconComponent(
                                             name: component.cameraState.isViewOnceEnabled ? "Media Gallery/ViewOnceEnabled" : "Media Gallery/ViewOnce",
-                                            tintColor: environment.theme.chat.inputPanel.inputControlColor
+                                            tintColor: environment.theme.chat.inputPanel.panelControlColor
                                         )
                                     )
                                 )
@@ -776,7 +776,7 @@ private final class VideoMessageCameraScreenComponent: CombinedComponent {
                                     component: AnyComponent(
                                         BundleIconComponent(
                                             name: "Chat/Input/Text/IconVideo",
-                                            tintColor: environment.theme.chat.inputPanel.inputControlColor
+                                            tintColor: environment.theme.chat.inputPanel.panelControlColor
                                         )
                                     )
                                 )

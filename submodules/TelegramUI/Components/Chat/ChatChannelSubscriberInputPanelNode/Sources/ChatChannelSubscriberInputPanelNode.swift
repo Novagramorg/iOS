@@ -400,13 +400,13 @@ public final class ChatChannelSubscriberInputPanelNode: ChatInputPanelNode {
             
             if previousState?.theme !== interfaceState.theme {
                 self.helpButtonIconView.image = generateTintedImage(image: UIImage(bundleImageName: "Chat/Input/Accessory Panels/Help"), color: .white)?.withRenderingMode(.alwaysTemplate)
-                self.helpButtonIconView.tintColor = interfaceState.theme.chat.inputPanel.inputControlColor
+                self.helpButtonIconView.tintColor = interfaceState.theme.chat.inputPanel.panelControlColor
                 
                 self.suggestedPostButtonIconView.image = generateTintedImage(image: UIImage(bundleImageName: "Chat/Input/Accessory Panels/SuggestPost"), color: .white)?.withRenderingMode(.alwaysTemplate)
-                self.suggestedPostButtonIconView.tintColor = interfaceState.theme.chat.inputPanel.inputControlColor
+                self.suggestedPostButtonIconView.tintColor = interfaceState.theme.chat.inputPanel.panelControlColor
                 
                 self.giftButtonIconView.image = generateTintedImage(image: UIImage(bundleImageName: "Chat/Input/Accessory Panels/Gift"), color: .white)?.withRenderingMode(.alwaysTemplate)
-                self.giftButtonIconView.tintColor = interfaceState.theme.chat.inputPanel.inputControlColor
+                self.giftButtonIconView.tintColor = interfaceState.theme.chat.inputPanel.panelControlColor
             }
             
             if let context = self.context, let peer = interfaceState.renderedPeer?.peer, previousState?.renderedPeer?.peer == nil || !peer.isEqual(previousState!.renderedPeer!.peer!) || previousState?.theme !== interfaceState.theme || previousState?.strings !== interfaceState.strings || previousState?.peerIsMuted != interfaceState.peerIsMuted || previousState?.pinnedMessage != interfaceState.pinnedMessage || force {
@@ -441,7 +441,7 @@ public final class ChatChannelSubscriberInputPanelNode: ChatInputPanelNode {
                     if case .join = self.action {
                         titleColor = interfaceState.theme.chat.inputPanel.actionControlForegroundColor
                     } else {
-                        titleColor = interfaceState.theme.chat.inputPanel.inputControlColor
+                        titleColor = interfaceState.theme.chat.inputPanel.panelControlColor
                     }
                     self.buttonTitle.attributedText = NSAttributedString(string: title, font: Font.regular(17.0), textColor: titleColor)
                     self.buttonTintTitle.attributedText = NSAttributedString(string: title, font: Font.regular(17.0), textColor: .black)

@@ -44,15 +44,18 @@ public final class TabBarComponent: Component {
     public let theme: PresentationTheme
     public let items: [Item]
     public let selectedId: AnyHashable?
+    public let isTablet: Bool
     
     public init(
         theme: PresentationTheme,
         items: [Item],
-        selectedId: AnyHashable?
+        selectedId: AnyHashable?,
+        isTablet: Bool
     ) {
         self.theme = theme
         self.items = items
         self.selectedId = selectedId
+        self.isTablet = isTablet
     }
     
     public static func ==(lhs: TabBarComponent, rhs: TabBarComponent) -> Bool {
@@ -63,6 +66,9 @@ public final class TabBarComponent: Component {
             return false
         }
         if lhs.selectedId != rhs.selectedId {
+            return false
+        }
+        if lhs.isTablet != rhs.isTablet {
             return false
         }
         return true
@@ -90,9 +96,38 @@ public final class TabBarComponent: Component {
             self.contextGestureContainerView.isGestureEnabled = true
             
             if #available(iOS 26.0, *) {
-                self.nativeTabBar = UITabBar()
-                self.nativeTabBar?.traitOverrides.verticalSizeClass = .compact
-                self.nativeTabBar?.traitOverrides.horizontalSizeClass = .compact
+                let nativeTabBar = UITabBar()
+                self.nativeTabBar = nativeTabBar
+                
+                let itemFont = Font.semibold(10.0)
+                let itemColor: UIColor = .clear
+                
+                nativeTabBar.traitOverrides.verticalSizeClass = .compact
+                nativeTabBar.traitOverrides.horizontalSizeClass = .compact
+                nativeTabBar.standardAppearance.stackedLayoutAppearance.normal.titleTextAttributes = [
+                    .foregroundColor: itemColor,
+                    .font: itemFont
+                ]
+                nativeTabBar.standardAppearance.stackedLayoutAppearance.selected.titleTextAttributes = [
+                    .foregroundColor: itemColor,
+                    .font: itemFont
+                ]
+                nativeTabBar.standardAppearance.inlineLayoutAppearance.normal.titleTextAttributes = [
+                    .foregroundColor: itemColor,
+                    .font: itemFont
+                ]
+                nativeTabBar.standardAppearance.inlineLayoutAppearance.selected.titleTextAttributes = [
+                    .foregroundColor: itemColor,
+                    .font: itemFont
+                ]
+                nativeTabBar.standardAppearance.compactInlineLayoutAppearance.normal.titleTextAttributes = [
+                    .foregroundColor: itemColor,
+                    .font: itemFont
+                ]
+                nativeTabBar.standardAppearance.compactInlineLayoutAppearance.selected.titleTextAttributes = [
+                    .foregroundColor: itemColor,
+                    .font: itemFont
+                ]
             } else {
                 self.nativeTabBar = nil
             }
@@ -315,6 +350,12 @@ public final class TabBarComponent: Component {
             return self.convert(itemView.bounds, from: itemView)
         }
         
+        public override func didMoveToWindow() {
+            super.didMoveToWindow()
+            
+            self.state?.updated()
+        }
+        
         func update(component: TabBarComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
             let innerInset: CGFloat = 3.0
             
@@ -327,9 +368,9 @@ public final class TabBarComponent: Component {
             self.overrideUserInterfaceStyle = component.theme.overallDarkAppearance ? .dark : .light
             
             if let nativeTabBar = self.nativeTabBar {
-                if nativeTabBar.items?.count != component.items.count {
+                if previousComponent?.items.map(\.item.title) != component.items.map(\.item.title) {
                     nativeTabBar.items = (0 ..< component.items.count).map { i in
-                        return UITabBarItem(title: " ", image: nil, tag: i)
+                        return UITabBarItem(title: component.items[i].item.title, image: nil, tag: i)
                     }
                     for (_, itemView) in self.itemViews {
                         itemView.view?.removeFromSuperview()
@@ -342,8 +383,7 @@ public final class TabBarComponent: Component {
                     }
                 }
                 
-                let nativeSize = nativeTabBar.sizeThatFits(availableSize)
-                nativeTabBar.bounds = CGRect(origin: CGPoint(), size: CGSize(width: availableSize.width, height: nativeSize.height))
+                nativeTabBar.frame = CGRect(origin: CGPoint(), size: CGSize(width: availableSize.width, height: component.isTablet ? 74.0 : 83.0))
                 nativeTabBar.layoutSubviews()
             }
             
@@ -501,15 +541,15 @@ public final class TabBarComponent: Component {
             let size = CGSize(width: min(availableSize.width, contentWidth), height: contentHeight)
             
             transition.setFrame(view: self.backgroundView, frame: CGRect(origin: CGPoint(), size: size))
-            self.backgroundView.update(size: size, cornerRadius: size.height * 0.5, isDark: component.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: component.theme.list.plainBackgroundColor.withMultipliedAlpha(0.75)), transition: transition)
-            
-            if let nativeTabBar = self.nativeTabBar {
-                transition.setFrame(view: nativeTabBar, frame: CGRect(origin: CGPoint(x: floor((size.width - nativeTabBar.bounds.width) * 0.5), y: 0.0), size: nativeTabBar.bounds.size))
-            }
+            self.backgroundView.update(size: size, cornerRadius: size.height * 0.5, isDark: component.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: component.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7)), transition: transition)
             
             transition.setFrame(view: self.contextGestureContainerView, frame: CGRect(origin: CGPoint(), size: size))
             
-            return size
+            if self.nativeTabBar != nil {
+                return CGSize(width: availableSize.width, height: 62.0)
+            } else {
+                return size
+            }
         }
     }
     
@@ -718,7 +758,7 @@ private final class ItemComponent: Component {
                 environment: {},
                 containerSize: CGSize(width: availableSize.width, height: 100.0)
             )
-            let titleFrame = CGRect(origin: CGPoint(x: floor((availableSize.width - titleSize.width) * 0.5), y: availableSize.height - 9.0 - titleSize.height), size: titleSize)
+            let titleFrame = CGRect(origin: CGPoint(x: floor((availableSize.width - titleSize.width) * 0.5), y: availableSize.height - 8.0 - titleSize.height), size: titleSize)
             if let titleView = self.title.view {
                 if titleView.superview == nil {
                     self.contextContainerView.contentView.addSubview(titleView)
@@ -749,7 +789,7 @@ private final class ItemComponent: Component {
                     containerSize: CGSize(width: 100.0, height: 100.0)
                 )
                 let contentWidth: CGFloat = 25.0
-                let badgeFrame = CGRect(origin: CGPoint(x: floor(availableSize.width / 2.0) + contentWidth - badgeSize.width - 5.0, y: -1.0), size: badgeSize)
+                let badgeFrame = CGRect(origin: CGPoint(x: floor(availableSize.width / 2.0) + contentWidth - badgeSize.width - 1.0, y: 5.0), size: badgeSize)
                 if let badgeView = badge.view {
                     if badgeView.superview == nil {
                         self.contextContainerView.contentView.addSubview(badgeView)
