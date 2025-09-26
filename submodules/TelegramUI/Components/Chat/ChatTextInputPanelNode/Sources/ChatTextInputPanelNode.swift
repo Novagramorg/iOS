@@ -2459,11 +2459,15 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             } else {
                 slowmodePlaceholderNode = ChatTextInputSlowmodePlaceholderNode(theme: interfaceState.theme)
                 self.slowmodePlaceholderNode = slowmodePlaceholderNode
-                self.clippingNode.insertSubnode(slowmodePlaceholderNode, aboveSubnode: self.textPlaceholderNode)
+                self.textInputContainerBackgroundView.contentView.insertSubview(slowmodePlaceholderNode.view, aboveSubview: self.textPlaceholderNode.view)
             }
-            let placeholderFrame = CGRect(origin: CGPoint(x: leftInset + textFieldInsets.left + self.textInputViewInternalInsets.left, y: textFieldInsets.top + self.textInputViewInternalInsets.top + textInputViewRealInsets.top + UIScreenPixel + textFieldTopContentOffset), size: CGSize(width: width - leftInset - rightInset - textFieldInsets.left - textFieldInsets.right - self.textInputViewInternalInsets.left - self.textInputViewInternalInsets.right - accessoryButtonsWidth, height: 30.0))
+            let placeholderFrame = CGRect(origin: CGPoint(x: self.textInputViewInternalInsets.left, y: textFieldInsets.top + self.textInputViewInternalInsets.top + textInputViewRealInsets.top + UIScreenPixel + textFieldTopContentOffset), size: CGSize(width: width - leftInset - rightInset - textFieldInsets.left - textFieldInsets.right - self.textInputViewInternalInsets.left - self.textInputViewInternalInsets.right - accessoryButtonsWidth, height: 30.0))
             slowmodePlaceholderNode.updateState(slowmodeState)
-            slowmodePlaceholderNode.frame = placeholderFrame
+            if slowmodePlaceholderNode.bounds.isEmpty {
+                slowmodePlaceholderNode.frame = placeholderFrame
+            } else {
+                transition.updateFrame(node: slowmodePlaceholderNode, frame: placeholderFrame)
+            }
             slowmodePlaceholderNode.alpha = audioRecordingItemsAlpha
             slowmodePlaceholderNode.updateLayout(size: placeholderFrame.size)
         } else if let slowmodePlaceholderNode = self.slowmodePlaceholderNode {
