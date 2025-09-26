@@ -265,6 +265,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     
     public var viewOnce = false
     public let viewOnceButton: ChatRecordingViewOnceButtonNode
+    public let recordMoreButton: ChatRecordingViewOnceButtonNode
     
     private var accessoryPanel: (component: AnyComponentWithIdentity<ChatInputAccessoryPanelEnvironment>, view: ComponentView<ChatInputAccessoryPanelEnvironment>)?
     private var contextPanel: (container: UIView, mask: UIImageView, panel: ChatInputContextPanelNode)?
@@ -569,6 +570,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         self.slowModeButton.alpha = 0.0
         
         self.viewOnceButton = ChatRecordingViewOnceButtonNode(icon: .viewOnce)
+        self.recordMoreButton = ChatRecordingViewOnceButtonNode(icon: .recordMore)
         
         super.init()
         
@@ -842,6 +844,9 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         }
         
         self.viewOnceButton.addTarget(self, action: #selector(self.viewOncePressed), forControlEvents: [.touchUpInside])
+        self.recordMoreButton.addTarget(self, action: #selector(self.recordMorePressed), forControlEvents: [.touchUpInside])
+        
+        self.addSubnode(self.recordMoreButton)
     }
 
     required init?(coder aDecoder: NSCoder) {
@@ -2722,12 +2727,16 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         self.actionButtons.micButton.fadeDisabled = mediaInputDisabled
         
         var viewOnceIsVisible = false
+        var recordMoreIsVisible = false
         if let recordingState = interfaceState.inputTextPanelState.mediaRecordingState {
             if case let .audio(_, isLocked) = recordingState {
                 viewOnceIsVisible = isLocked
             } else if case let .video(_, isLocked) = recordingState {
                 viewOnceIsVisible = isLocked
             }
+        }
+        if interfaceState.interfaceState.mediaDraftState != nil {
+            recordMoreIsVisible = true
         }
                 
         var clippingDelta: CGFloat = 0.0
@@ -2745,6 +2754,19 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         if self.viewOnceButton.alpha.isZero && viewOnceIsVisible {
             self.viewOnceButton.update(isSelected: self.viewOnce, animated: false)
         }
+        
+        let recordMoreSize = self.recordMoreButton.update(theme: interfaceState.theme)
+        let recordMoreButtonFrame = CGRect(origin: CGPoint(x: width - rightInset - 50.0 - UIScreenPixel, y: -52.0), size: recordMoreSize)
+        self.recordMoreButton.bounds = CGRect(origin: .zero, size: recordMoreButtonFrame.size)
+        transition.updatePosition(node: self.recordMoreButton, position: recordMoreButtonFrame.center)
+        
+        if self.viewOnceButton.alpha.isZero && viewOnceIsVisible {
+            self.viewOnceButton.update(isSelected: self.viewOnce, animated: false)
+        }
+        if self.recordMoreButton.alpha.isZero && recordMoreIsVisible {
+            self.recordMoreButton.update(isSelected: false, animated: false)
+        }
+        
         transition.updateAlpha(node: self.viewOnceButton, alpha: viewOnceIsVisible ? 1.0 : 0.0)
         transition.updateTransformScale(node: self.viewOnceButton, scale: viewOnceIsVisible ? 1.0 : 0.01)
         if let user = interfaceState.renderedPeer?.peer as? TelegramUser, user.id != interfaceState.accountPeerId && user.botInfo == nil && interfaceState.sendPaidMessageStars == nil {
@@ -2752,6 +2774,9 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         } else {
             self.viewOnceButton.isHidden = true
         }
+        
+        transition.updateAlpha(node: self.recordMoreButton, alpha: recordMoreIsVisible ? 1.0 : 0.0)
+        transition.updateTransformScale(node: self.recordMoreButton, scale: recordMoreIsVisible ? 1.0 : 0.01)
         
         if contextPanelNode !== previousContextPanel?.panel, let previousContextPanel {
             let panelContainer = previousContextPanel.container
@@ -2824,6 +2849,10 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             
             let _ = ApplicationSpecificNotice.incrementVoiceMessagesPlayOnceSuggestion(accountManager: context.sharedContext.accountManager, count: 3).startStandalone()
         }
+    }
+    
+    @objc private func recordMorePressed() {
+        self.interfaceInteraction?.resumeMediaRecording()
     }
     
     private func displayViewOnceTooltip(text: String) {
@@ -4624,6 +4653,12 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     override public func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         if let audioRecordingCancelIndicator = self.audioRecordingCancelIndicator {
             if let result = audioRecordingCancelIndicator.hitTest(point.offsetBy(dx: -audioRecordingCancelIndicator.frame.minX, dy: -audioRecordingCancelIndicator.frame.minY), with: event) {
+                return result
+            }
+        }
+        
+        if !self.recordMoreButton.isHidden && self.recordMoreButton.alpha > 0.0 {
+            if let result = self.recordMoreButton.view.hitTest(self.view.convert(point, to: self.recordMoreButton.view), with: event) {
                 return result
             }
         }
