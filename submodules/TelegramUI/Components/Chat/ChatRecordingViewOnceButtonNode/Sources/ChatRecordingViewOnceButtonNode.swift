@@ -14,7 +14,7 @@ public final class ChatRecordingViewOnceButtonNode: HighlightTrackingButtonNode 
     private let icon: Icon
     
     private let backgroundView: GlassBackgroundView
-    private let iconNode: ASImageNode
+    private let iconView: UIImageView
     
     private var theme: PresentationTheme?
         
@@ -24,13 +24,12 @@ public final class ChatRecordingViewOnceButtonNode: HighlightTrackingButtonNode 
         self.backgroundView = GlassBackgroundView()
         self.backgroundView.isUserInteractionEnabled = false
         
-        self.iconNode = ASImageNode()
-        self.iconNode.isUserInteractionEnabled = false
+        self.iconView = UIImageView()
         
         super.init(pointerStyle: .default)
         
         self.view.addSubview(self.backgroundView)
-        self.addSubnode(self.iconNode)
+        self.view.addSubview(self.iconView)
         
         self.highligthedChanged = { [weak self] highlighted in
             if let self, self.bounds.width > 0.0 {
@@ -63,21 +62,15 @@ public final class ChatRecordingViewOnceButtonNode: HighlightTrackingButtonNode 
             return
         }
         
-        let updated = self.iconNode.image == nil || self.innerIsSelected != isSelected
+        let updated = self.iconView.image == nil || self.innerIsSelected != isSelected
         self.innerIsSelected = isSelected
         
-        if animated, updated && self.iconNode.image != nil, let snapshot = self.iconNode.view.snapshotContentTree() {
-            self.view.addSubview(snapshot)
-            snapshot.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2, removeOnCompletion: false, completion: { _ in
-                snapshot.removeFromSuperview()
-            })
-            
-            self.iconNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
-        }
+        self.iconView.tintColor = theme.chat.inputPanel.panelControlColor
+        self.iconView.setMonochromaticEffect(tintColor: self.iconView.tintColor)
         
         if updated {
             if case .viewOnce = self.icon {
-                self.iconNode.image = generateTintedImage(image: UIImage(bundleImageName: self.innerIsSelected ? "Media Gallery/ViewOnceEnabled" : "Media Gallery/ViewOnce"), color: theme.chat.inputPanel.panelControlAccentColor)
+                self.iconView.image = generateTintedImage(image: UIImage(bundleImageName: self.innerIsSelected ? "Media Gallery/ViewOnceEnabled" : "Media Gallery/ViewOnce"), color: .white)?.withRenderingMode(.alwaysTemplate)
             }
         }
     }
@@ -91,9 +84,9 @@ public final class ChatRecordingViewOnceButtonNode: HighlightTrackingButtonNode 
             
             switch self.icon {
             case .viewOnce:
-                self.iconNode.image = generateTintedImage(image: UIImage(bundleImageName: self.innerIsSelected ? "Media Gallery/ViewOnceEnabled" : "Media Gallery/ViewOnce"), color: theme.chat.inputPanel.panelControlAccentColor)
+                self.iconView.image = generateTintedImage(image: UIImage(bundleImageName: self.innerIsSelected ? "Media Gallery/ViewOnceEnabled" : "Media Gallery/ViewOnce"), color: .white)?.withRenderingMode(.alwaysTemplate)
             case .recordMore:
-                self.iconNode.image = generateTintedImage(image: UIImage(bundleImageName: "Chat/Input/Text/IconMicrophone"), color: theme.chat.inputPanel.panelControlAccentColor)
+                self.iconView.image = generateTintedImage(image: UIImage(bundleImageName: "Chat/Input/Text/IconMicrophone"), color: .white)?.withRenderingMode(.alwaysTemplate)
             }
         }
         
@@ -101,9 +94,9 @@ public final class ChatRecordingViewOnceButtonNode: HighlightTrackingButtonNode 
         self.backgroundView.frame = backgroundFrame
         self.backgroundView.update(size: backgroundFrame.size, cornerRadius: backgroundFrame.height * 0.5, isDark: theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7)), transition: .immediate)
 
-        if let iconImage = self.iconNode.image {
+        if let iconImage = self.iconView.image {
             let iconFrame = CGRect(origin: CGPoint(x: floorToScreenPixels(size.width / 2.0 - iconImage.size.width / 2.0), y: floorToScreenPixels(size.height / 2.0 - iconImage.size.height / 2.0)), size: iconImage.size)
-            self.iconNode.frame = iconFrame
+            self.iconView.frame = iconFrame
         }
         return size
     }
