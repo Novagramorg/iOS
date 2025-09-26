@@ -227,7 +227,8 @@ final class TabBarControllerNode: ASDisplayNode {
                         }
                     )
                 },
-                selectedId: selectedId
+                selectedId: selectedId,
+                isTablet: params.layout.metrics.isTablet
             )),
             environment: {},
             containerSize: CGSize(width: params.layout.size.width - sideInset * 2.0, height: 100.0)
