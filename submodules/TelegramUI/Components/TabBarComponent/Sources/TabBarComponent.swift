@@ -90,9 +90,38 @@ public final class TabBarComponent: Component {
             self.contextGestureContainerView.isGestureEnabled = true
             
             if #available(iOS 26.0, *) {
-                self.nativeTabBar = UITabBar()
-                self.nativeTabBar?.traitOverrides.verticalSizeClass = .compact
-                self.nativeTabBar?.traitOverrides.horizontalSizeClass = .compact
+                let nativeTabBar = UITabBar()
+                self.nativeTabBar = nativeTabBar
+                
+                let itemFont = Font.semibold(10.0)
+                let itemColor: UIColor = .clear
+                
+                nativeTabBar.traitOverrides.verticalSizeClass = .compact
+                nativeTabBar.traitOverrides.horizontalSizeClass = .compact
+                nativeTabBar.standardAppearance.stackedLayoutAppearance.normal.titleTextAttributes = [
+                    .foregroundColor: itemColor,
+                    .font: itemFont
+                ]
+                nativeTabBar.standardAppearance.stackedLayoutAppearance.selected.titleTextAttributes = [
+                    .foregroundColor: itemColor,
+                    .font: itemFont
+                ]
+                nativeTabBar.standardAppearance.inlineLayoutAppearance.normal.titleTextAttributes = [
+                    .foregroundColor: itemColor,
+                    .font: itemFont
+                ]
+                nativeTabBar.standardAppearance.inlineLayoutAppearance.selected.titleTextAttributes = [
+                    .foregroundColor: itemColor,
+                    .font: itemFont
+                ]
+                nativeTabBar.standardAppearance.compactInlineLayoutAppearance.normal.titleTextAttributes = [
+                    .foregroundColor: itemColor,
+                    .font: itemFont
+                ]
+                nativeTabBar.standardAppearance.compactInlineLayoutAppearance.selected.titleTextAttributes = [
+                    .foregroundColor: itemColor,
+                    .font: itemFont
+                ]
             } else {
                 self.nativeTabBar = nil
             }
@@ -327,9 +356,9 @@ public final class TabBarComponent: Component {
             self.overrideUserInterfaceStyle = component.theme.overallDarkAppearance ? .dark : .light
             
             if let nativeTabBar = self.nativeTabBar {
-                if nativeTabBar.items?.count != component.items.count {
+                if previousComponent?.items.map(\.item.title) != component.items.map(\.item.title) {
                     nativeTabBar.items = (0 ..< component.items.count).map { i in
-                        return UITabBarItem(title: " ", image: nil, tag: i)
+                        return UITabBarItem(title: component.items[i].item.title, image: nil, tag: i)
                     }
                     for (_, itemView) in self.itemViews {
                         itemView.view?.removeFromSuperview()
@@ -718,7 +747,7 @@ private final class ItemComponent: Component {
                 environment: {},
                 containerSize: CGSize(width: availableSize.width, height: 100.0)
             )
-            let titleFrame = CGRect(origin: CGPoint(x: floor((availableSize.width - titleSize.width) * 0.5), y: availableSize.height - 9.0 - titleSize.height), size: titleSize)
+            let titleFrame = CGRect(origin: CGPoint(x: floor((availableSize.width - titleSize.width) * 0.5), y: availableSize.height - 8.0 - titleSize.height), size: titleSize)
             if let titleView = self.title.view {
                 if titleView.superview == nil {
                     self.contextContainerView.contentView.addSubview(titleView)
@@ -749,7 +778,7 @@ private final class ItemComponent: Component {
                     containerSize: CGSize(width: 100.0, height: 100.0)
                 )
                 let contentWidth: CGFloat = 25.0
-                let badgeFrame = CGRect(origin: CGPoint(x: floor(availableSize.width / 2.0) + contentWidth - badgeSize.width - 5.0, y: -1.0), size: badgeSize)
+                let badgeFrame = CGRect(origin: CGPoint(x: floor(availableSize.width / 2.0) + contentWidth - badgeSize.width - 1.0, y: 5.0), size: badgeSize)
                 if let badgeView = badge.view {
                     if badgeView.superview == nil {
                         self.contextContainerView.contentView.addSubview(badgeView)
