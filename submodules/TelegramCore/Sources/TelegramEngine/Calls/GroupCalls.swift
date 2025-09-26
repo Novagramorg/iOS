@@ -3209,7 +3209,7 @@ func _internal_getGroupCallStreamCredentials(account: Account, peerId: PeerId, r
             return .fail(.generic)
         }
         
-        return account.network.request(Api.functions.phone.getGroupCallStreamRtmpUrl(peer: inputPeer, revoke: revokePreviousCredentials ? .boolTrue : .boolFalse))
+        return account.network.request(Api.functions.phone.getGroupCallStreamRtmpUrl(flags: 0,peer: inputPeer, revoke: revokePreviousCredentials ? .boolTrue : .boolFalse))
         |> mapError { _ -> GetGroupCallStreamCredentialsError in
             return .generic
         }

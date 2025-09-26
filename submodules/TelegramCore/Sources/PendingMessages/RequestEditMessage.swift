@@ -192,7 +192,7 @@ private func requestEditMessageInternal(accountPeerId: PeerId, postbox: Postbox,
                     flags |= Int32(1 << 17)
                 }
                 
-                return network.request(Api.functions.messages.editMessage(flags: flags, peer: inputPeer, id: messageId.id, message: text, media: inputMedia, replyMarkup: nil, entities: apiEntities, scheduleDate: effectiveScheduleTime, quickReplyShortcutId: quickReplyShortcutId))
+                return network.request(Api.functions.messages.editMessage(flags: flags, peer: inputPeer, id: messageId.id, message: text, media: inputMedia, replyMarkup: nil, entities: apiEntities, scheduleDate: effectiveScheduleTime, scheduleRepeatPeriod: nil, quickReplyShortcutId: quickReplyShortcutId))
                 |> map { result -> Api.Updates? in
                     return result
                 }
@@ -340,7 +340,7 @@ func _internal_requestEditLiveLocation(postbox: Postbox, network: Network, state
             inputMedia = .inputMediaGeoLive(flags: 1 << 0, geoPoint: .inputGeoPoint(flags: 0, lat: media.latitude, long: media.longitude, accuracyRadius: nil), heading: nil, period: nil, proximityNotificationRadius: nil)
         }
 
-        return network.request(Api.functions.messages.editMessage(flags: 1 << 14, peer: inputPeer, id: messageId.id, message: nil, media: inputMedia, replyMarkup: nil, entities: nil, scheduleDate: nil, quickReplyShortcutId: nil))
+        return network.request(Api.functions.messages.editMessage(flags: 1 << 14, peer: inputPeer, id: messageId.id, message: nil, media: inputMedia, replyMarkup: nil, entities: nil, scheduleDate: nil, scheduleRepeatPeriod: nil, quickReplyShortcutId: nil))
         |> map(Optional.init)
         |> `catch` { _ -> Signal<Api.Updates?, NoError> in
             return .single(nil)
