@@ -888,16 +888,12 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
                 return nil
             }
         }, requestSetAlternateIconName: { name, completion in
-            if #available(iOS 10.3, *) {
-                application.setAlternateIconName(name, completionHandler: { error in
-                    if let error = error {
-                       Logger.shared.log("App \(self.episodeId)", "failed to set alternate icon with error \(error.localizedDescription)")
-                    }
-                    completion(error == nil)
-                })
-            } else {
-                completion(false)
-            }
+            application.setAlternateIconName(name, completionHandler: { error in
+                if let error = error {
+                   Logger.shared.log("App \(self.episodeId)", "failed to set alternate icon with error \(error.localizedDescription)")
+                }
+                completion(error == nil)
+            })
         }, forceOrientation: { orientation in
             let value = orientation.rawValue
             if #available(iOSApplicationExtension 16.0, iOS 16.0, *) {

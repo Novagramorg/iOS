@@ -415,7 +415,7 @@ public final class ChatRecordingPreviewInputPanelNodeImpl: ChatInputPanelNode {
                     }
                     
                     if updateWaveform {
-                        self.waveformNode.waveformNode.setup(color: interfaceState.theme.chat.inputPanel.inputControlColor.withMultipliedAlpha(0.4), gravity: .center, waveform: audio.waveform)
+                        self.waveformNode.waveformNode.setup(color: interfaceState.theme.chat.inputPanel.panelControlColor.withMultipliedAlpha(0.4), gravity: .center, waveform: audio.waveform)
                         self.waveformNode.foregroundWaveformNode.setup(color: interfaceState.theme.list.itemCheckColors.foregroundColor.withMultipliedAlpha(0.5), gravity: .center, waveform: audio.waveform)
                         self.tintWaveformNode.setup(color: UIColor(white: 0.0, alpha: 0.5), gravity: .center, waveform: audio.waveform)
                         self.waveformForegroundNode.setup(color: interfaceState.theme.list.itemCheckColors.foregroundColor, gravity: .center, waveform: audio.waveform)

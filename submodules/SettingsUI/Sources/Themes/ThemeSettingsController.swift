@@ -575,7 +575,7 @@ public func themeSettingsController(context: AccountContext, focusOnItemTag: The
                 pushControllerImpl?(controller)
             } else {
                 currentAppIconName.set(icon.name)
-                context.sharedContext.applicationBindings.requestSetAlternateIconName(icon.name, { _ in
+                context.sharedContext.applicationBindings.requestSetAlternateIconName(icon.isDefault ? nil : icon.name, { _ in
                 })
             }
         })

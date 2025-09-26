@@ -420,7 +420,7 @@ public final class ChatTextInputMediaRecordingButton: TGModernConversationInputM
                 animationName = "anim_micToVideo"
         }
 
-        let animationTintColor = self.useDarkTheme ? .white : self.theme.chat.inputPanel.inputControlColor
+        let animationTintColor = self.useDarkTheme ? .white : self.theme.chat.inputPanel.panelControlColor
         let _ = self.animationView.update(
             transition: .immediate,
             component: AnyComponent(LottieComponent(

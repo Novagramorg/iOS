@@ -316,7 +316,7 @@ public class GlassBackgroundView: UIView {
             self.foregroundView = nil
             self.shadowView = nil
         } else {
-            self.backgroundNode = NavigationBackgroundNode(color: .black, enableBlur: true, customBlurRadius: 5.0)
+            self.backgroundNode = NavigationBackgroundNode(color: .black, enableBlur: true, customBlurRadius: 8.0)
             self.nativeView = nil
             self.nativeContainerView = nil
             self.nativeParamsView = nil
@@ -682,9 +682,9 @@ public extension GlassBackgroundView {
                 context.setFillColor(fillColor.cgColor)
                 context.fillEllipse(in: CGRect(origin: CGPoint(), size: size).insetBy(dx: inset, dy: inset))
                 
-                addShadow(false, CGPoint(x: 0.0, y: 0.0), 3.0, 0.0, UIColor(white: 1.0, alpha: 0.5), false)
-                addShadow(false, CGPoint(x: 3.0, y: -3.0), 2.0, 0.0, UIColor(white: 1.0, alpha: 0.25), false)
-                addShadow(false, CGPoint(x: -3.0, y: 3.0), 2.0, 0.0, UIColor(white: 1.0, alpha: 0.25), false)
+                addShadow(false, CGPoint(x: 0.0, y: 0.0), 3.0, 0.0, UIColor(white: 1.0, alpha: 0.25), false)
+                addShadow(false, CGPoint(x: 2.0, y: -2.0), 1.0, 0.0, UIColor(white: 1.0, alpha: 0.125), false)
+                addShadow(false, CGPoint(x: -2.0, y: 2.0), 1.0, 0.0, UIColor(white: 1.0, alpha: 0.125), false)
             } else {
                 addShadow(true, CGPoint(), 16.0, 0.0, UIColor(white: 0.0, alpha: 0.08), false)
                 
@@ -822,7 +822,6 @@ public final class GlassBackgroundComponent: Component {
     public final class View: GlassBackgroundView {
         func update(component: GlassBackgroundComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
             self.update(size: component.size, cornerRadius: component.cornerRadius, isDark: component.isDark, tintColor: component.tintColor, transition: transition)
-            self.frame = CGRect(origin: .zero, size: component.size)
             
             return component.size
         }
