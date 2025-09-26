@@ -87,8 +87,13 @@ final class AccessoryItemIconButton: HighlightTrackingButton, GlassBackgroundVie
         }
         
         self.iconImageView.image = image
-        self.iconImageView.tintColor = theme.chat.inputPanel.inputControlColor
-        self.iconImageView.alpha = alpha
+        if #available(iOS 26.0, *) {
+            self.iconImageView.tintColor = theme.chat.inputPanel.inputControlColor.withAlphaComponent(1.0)
+            self.iconImageView.alpha = alpha * theme.chat.inputPanel.inputControlColor.alpha
+        } else {
+            self.iconImageView.tintColor = theme.chat.inputPanel.inputControlColor
+            self.iconImageView.alpha = alpha
+        }
         
         self.accessibilityLabel = accessibilityLabel
         
@@ -128,8 +133,13 @@ final class AccessoryItemIconButton: HighlightTrackingButton, GlassBackgroundVie
         }
         
         self.iconImageView.image = image
-        self.iconImageView.tintColor = theme.chat.inputPanel.inputControlColor
-        self.iconImageView.alpha = alpha
+        if #available(iOS 26.0, *) {
+            self.iconImageView.tintColor = theme.chat.inputPanel.inputControlColor.withAlphaComponent(1.0)
+            self.iconImageView.alpha = alpha * theme.chat.inputPanel.inputControlColor.alpha
+        } else {
+            self.iconImageView.tintColor = theme.chat.inputPanel.inputControlColor
+            self.iconImageView.alpha = alpha
+        }
         
         self.accessibilityLabel = accessibilityLabel
     }
@@ -308,7 +318,7 @@ final class AccessoryItemIconButton: HighlightTrackingButton, GlassBackgroundVie
                     transition: .immediate,
                     component: AnyComponent(LottieComponent(
                         content: LottieComponent.AppBundleContent(name: animationName),
-                        color: self.theme.chat.inputPanel.inputControlColor
+                        color: self.theme.chat.inputPanel.inputControlColor.withAlphaComponent(1.0)
                     )),
                     environment: {},
                     containerSize: animationFrame.size
@@ -322,7 +332,8 @@ final class AccessoryItemIconButton: HighlightTrackingButton, GlassBackgroundVie
                             self.tintMask.addSubview(tintMaskAnimationView)
                         }
                     }
-                    view.setMonochromaticEffect(tintColor: self.theme.chat.inputPanel.inputControlColor)
+                    view.setMonochromaticEffect(tintColor: self.theme.chat.inputPanel.inputControlColor.withAlphaComponent(1.0))
+                    view.alpha = self.theme.chat.inputPanel.inputControlColor.alpha
                     let animationFrameValue = CGRect(origin: CGPoint(x: animationFrame.minX + floor((animationFrame.width - animationSize.width) / 2.0), y: animationFrame.minY + floor((animationFrame.height - animationSize.height) / 2.0)), size: animationSize)
                     view.frame = animationFrameValue
                     if let tintMaskAnimationView = self.tintMaskAnimationView {

@@ -196,8 +196,8 @@ public final class ChatTextInputActionButtonsNode: ASDisplayNode, ChatSendMessag
         self.expandMediaInputButtonIcon = GlassBackgroundView.ContentImageView()
         self.expandMediaInputButtonBackgroundView.contentView.addSubview(self.expandMediaInputButtonIcon)
         self.expandMediaInputButtonIcon.image = PresentationResourcesChat.chatInputPanelExpandButtonImage(presentationInterfaceState.theme)
-        self.expandMediaInputButtonIcon.tintColor = theme.chat.inputPanel.inputControlColor
-        self.expandMediaInputButtonIcon.setMonochromaticEffect(tintColor: theme.chat.inputPanel.inputControlColor)
+        self.expandMediaInputButtonIcon.tintColor = theme.chat.inputPanel.panelControlColor
+        self.expandMediaInputButtonIcon.setMonochromaticEffect(tintColor: theme.chat.inputPanel.panelControlColor)
         
         super.init()
         
@@ -265,8 +265,8 @@ public final class ChatTextInputActionButtonsNode: ASDisplayNode, ChatSendMessag
     
     public func updateTheme(theme: PresentationTheme, wallpaper: TelegramWallpaper) {
         self.micButton.updateTheme(theme: theme)
-        self.expandMediaInputButtonIcon.tintColor = theme.chat.inputPanel.inputControlColor
-        self.expandMediaInputButtonIcon.setMonochromaticEffect(tintColor: theme.chat.inputPanel.inputControlColor)
+        self.expandMediaInputButtonIcon.tintColor = theme.chat.inputPanel.panelControlColor
+        self.expandMediaInputButtonIcon.setMonochromaticEffect(tintColor: theme.chat.inputPanel.panelControlColor)
     }
     
     private var absoluteRect: (CGRect, CGSize)?

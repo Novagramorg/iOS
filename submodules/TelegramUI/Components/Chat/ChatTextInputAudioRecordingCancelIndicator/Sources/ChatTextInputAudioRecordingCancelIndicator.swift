@@ -27,7 +27,7 @@ public final class ChatTextInputAudioRecordingCancelIndicator: UIView, GlassBack
         
         self.arrowView = GlassBackgroundView.ContentImageView()
         self.arrowView.image = UIImage(bundleImageName: "Chat/Input/Text/AudioRecordingCancelArrow")?.withRenderingMode(.alwaysTemplate)
-        self.arrowView.tintColor = theme.chat.inputPanel.inputControlColor
+        self.arrowView.tintColor = theme.chat.inputPanel.panelControlColor
         
         self.labelNode = TextNode()
         self.labelNode.displaysAsynchronously = false
@@ -56,7 +56,7 @@ public final class ChatTextInputAudioRecordingCancelIndicator: UIView, GlassBack
         
         let makeLayout = TextNode.asyncLayout(self.labelNode)
         let makeTintLayout = TextNode.asyncLayout(self.tintLabelNode)
-        let (labelLayout, labelApply) = makeLayout(TextNodeLayoutArguments(attributedString: NSAttributedString(string: strings.Conversation_SlideToCancel, font: Font.regular(14.0), textColor: theme.chat.inputPanel.inputControlColor), backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .end, constrainedSize: CGSize(width: 200.0, height: 100.0), alignment: .natural, cutout: nil, insets: UIEdgeInsets()))
+        let (labelLayout, labelApply) = makeLayout(TextNodeLayoutArguments(attributedString: NSAttributedString(string: strings.Conversation_SlideToCancel, font: Font.regular(14.0), textColor: theme.chat.inputPanel.panelControlColor), backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .end, constrainedSize: CGSize(width: 200.0, height: 100.0), alignment: .natural, cutout: nil, insets: UIEdgeInsets()))
         let (_, tintLabelApply) = makeTintLayout(TextNodeLayoutArguments(attributedString: NSAttributedString(string: strings.Conversation_SlideToCancel, font: Font.regular(14.0), textColor: .black), backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .end, constrainedSize: CGSize(width: 200.0, height: 100.0), alignment: .natural, cutout: nil, insets: UIEdgeInsets()))
         let _ = labelApply()
         let _ = tintLabelApply
@@ -79,7 +79,7 @@ public final class ChatTextInputAudioRecordingCancelIndicator: UIView, GlassBack
     }
     
     public func updateTheme(theme: PresentationTheme) {
-        self.arrowView.tintColor = theme.chat.inputPanel.inputControlColor
+        self.arrowView.tintColor = theme.chat.inputPanel.panelControlColor
         self.cancelButton.setTitle(self.strings.Common_Cancel, with: cancelFont, with: theme.chat.inputPanel.panelControlAccentColor, for: [])
         let makeLayout = TextNode.asyncLayout(self.labelNode)
         let makeTintLayout = TextNode.asyncLayout(self.tintLabelNode)

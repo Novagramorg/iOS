@@ -308,7 +308,7 @@ final class ChatTagSearchInputPanelNode: ChatInputPanelNode {
                 component: AnyComponent(PlainButtonComponent(
                     content: AnyComponent(AnimatedTextComponent(
                         font: Font.regular(15.0),
-                        color: params.interfaceState.theme.chat.inputPanel.inputControlColor,
+                        color: params.interfaceState.theme.chat.inputPanel.panelControlColor,
                         items: modeButtonTitle
                     )),
                     effectAlignment: .right,
@@ -362,7 +362,7 @@ final class ChatTagSearchInputPanelNode: ChatInputPanelNode {
                 component: AnyComponent(PlainButtonComponent(
                     content: AnyComponent(BundleIconComponent(
                         name: "Chat/Input/Search/Calendar",
-                        tintColor: params.interfaceState.theme.chat.inputPanel.inputControlColor
+                        tintColor: params.interfaceState.theme.chat.inputPanel.panelControlColor
                     )),
                     effectAlignment: .center,
                     minSize: CGSize(width: 40.0, height: 40.0),
@@ -419,7 +419,7 @@ final class ChatTagSearchInputPanelNode: ChatInputPanelNode {
                 component: AnyComponent(PlainButtonComponent(
                     content: AnyComponent(BundleIconComponent(
                         name: "Chat/Input/Search/Members",
-                        tintColor: params.interfaceState.theme.chat.inputPanel.inputControlColor
+                        tintColor: params.interfaceState.theme.chat.inputPanel.panelControlColor
                     )),
                     effectAlignment: .center,
                     minSize: CGSize(width: 40.0, height: 40.0),
