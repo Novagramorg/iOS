@@ -20,7 +20,7 @@ import CallsEmoji
 import TdBinding
 
 private extension PresentationGroupCallState {
-    static func initialValue(myPeerId: PeerId, title: String?, scheduleTimestamp: Int32?, subscribedToScheduled: Bool) -> PresentationGroupCallState {
+    static func initialValue(myPeerId: PeerId, title: String?, scheduleTimestamp: Int32?, subscribedToScheduled: Bool, isChannel: Bool) -> PresentationGroupCallState {
         return PresentationGroupCallState(
             myPeerId: myPeerId,
             networkState: .connecting,
@@ -28,7 +28,7 @@ private extension PresentationGroupCallState {
             adminIds: Set(),
             muteState: GroupCallParticipantsContext.Participant.MuteState(canUnmute: true, mutedByYou: false),
             defaultParticipantMuteState: nil,
-            messagesAreEnabled: true,
+            messagesAreEnabled: !isChannel,
             canEnableMessages: false,
             recordingStartTimestamp: nil,
             title: title,
@@ -875,7 +875,7 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
         self.schedulePending = initialCall == nil
         self.isScheduled = initialCall == nil || initialCall?.description.scheduleTimestamp != nil
         
-        self.stateValue = PresentationGroupCallState.initialValue(myPeerId: self.joinAsPeerId, title: initialCall?.description.title, scheduleTimestamp: initialCall?.description.scheduleTimestamp, subscribedToScheduled: initialCall?.description.subscribedToScheduled ?? false)
+        self.stateValue = PresentationGroupCallState.initialValue(myPeerId: self.joinAsPeerId, title: initialCall?.description.title, scheduleTimestamp: initialCall?.description.scheduleTimestamp, subscribedToScheduled: initialCall?.description.subscribedToScheduled ?? false, isChannel: isChannel)
         self.statePromise = ValuePromise(self.stateValue)
         
         self.temporaryJoinTimestamp = Int32(CFAbsoluteTimeGetCurrent() + NSTimeIntervalSince1970)

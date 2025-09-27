@@ -3869,6 +3869,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                                             horizontalAlignment: .left,
                                             maximumNumberOfLines: 0,
                                             insets: id == "originalInfo" ? UIEdgeInsets(top: 2.0, left: 0.0, bottom: 2.0, right: 0.0) : .zero,
+                                            spoilerColor: tableTextColor,
                                             highlightColor: tableLinkColor.withAlphaComponent(0.1),
                                             handleSpoilers: true,
                                             maxWidth: id == "originalInfo" ? context.availableSize.width - sideInset * 2.0 - 68.0 : nil,

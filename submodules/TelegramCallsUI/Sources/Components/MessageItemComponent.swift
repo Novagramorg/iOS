@@ -264,7 +264,8 @@ final class MessageItemComponent: Component {
                     placeholderColor: UIColor(rgb: 0xffffff, alpha: 0.3),
                     text: .plain(attributedText),
                     maximumNumberOfLines: 0,
-                    lineSpacing: 0.0
+                    lineSpacing: 0.0,
+                    spoilerColor: .white
                 )),
                 environment: {},
                 containerSize: CGSize(width: availableSize.width - avatarInset - avatarSize.width - spacing - rightInset, height: .greatestFiniteMagnitude)
