@@ -15109,7 +15109,6 @@ Error: %8$@";
 "Gift.UnavailableAction.Title" = "Action Locked";
 "Gift.UnavailableAction.Text" = "Transfer this gift to your Telegram account on Fragment to unlock this action.";
 "Gift.UnavailableAction.OpenFragment" = "Open Fragment";
-"Gift.UnavailableAction.OpenFragment_URL" = "https://fragment.com";
 
 "Gift.Unique.Telegram" = "Telegram";
 
@@ -15131,3 +15130,5 @@ Error: %8$@";
 "ProfileLevelInfo.NegativeRating" = "Negative rating";
 
 "Notification.StarsGift.Assigned" = "You started displaying %@ on your Telegram profile page.";
+
+"Gift.View.SenderInfo" = "**%@** sent you this gift on **%@**.";

@@ -114,6 +114,7 @@ import VerifyAlertController
 import GiftViewScreen
 import PeerMessagesMediaPlaylist
 import EdgeEffect
+import Pasteboard
 
 public enum PeerInfoAvatarEditingMode {
     case generic
@@ -8278,8 +8279,10 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
         }
         
         var noteText: String?
+        var noteEntities: [MessageTextEntity]?
         if let cachedData = cachedData as? CachedUserData {
             noteText = cachedData.note?.text
+            noteEntities = cachedData.note?.entities
         }
         
         guard let noteText, !noteText.isEmpty else {
@@ -8290,7 +8293,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
             guard let self else {
                 return
             }
-            UIPasteboard.general.string = noteText
+            storeMessageTextInPasteboard(noteText, entities: noteEntities ?? [])
             
             let toastText = self.presentationData.strings.PeerInfo_ToastNoteCopied
             self.controller?.present(UndoOverlayController(presentationData: self.presentationData, content: .copy(text: toastText), elevatedLayout: false, animateInAsReplacement: false, action: { _ in return false }), in: .current)

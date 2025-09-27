@@ -76,7 +76,7 @@ private final class GiftRemoveInfoAlertContentNode: AlertContentNode {
         self.textNode.maximumNumberOfLines = 0
         
         self.infoBackgroundNode = ASDisplayNode()
-        self.infoBackgroundNode.backgroundColor = ptheme.overallDarkAppearance ? ptheme.list.itemModalBlocksBackgroundColor : ptheme.list.itemInputField.backgroundColor
+        self.infoBackgroundNode.backgroundColor = ptheme.overallDarkAppearance ? ptheme.list.itemModalBlocksBackgroundColor : ptheme.list.itemPrimaryTextColor.withAlphaComponent(0.04)
         self.infoBackgroundNode.cornerRadius = 10.0
         self.infoBackgroundNode.displaysAsynchronously = false
         
@@ -200,27 +200,21 @@ private final class GiftRemoveInfoAlertContentNode: AlertContentNode {
                     let format = senderName != nil ? presentationData.strings.Gift_Unique_OriginalInfoSenderWithText(senderName!, recipientName, dateString, "") : presentationData.strings.Gift_Unique_OriginalInfoWithText(recipientName, dateString, "")
                     let string = NSMutableAttributedString(string: format.string, font: tableFont, textColor: tableTextColor)
                     string.replaceCharacters(in: format.ranges[format.ranges.count - 1].range, with: attributedText)
-                    if let senderPeerId {
+                    if let _ = senderPeerId {
                         string.addAttribute(.foregroundColor, value: tableLinkColor, range: format.ranges[0].range)
-                        string.addAttribute(NSAttributedString.Key(rawValue: TelegramTextAttributes.PeerMention), value: TelegramPeerMention(peerId: senderPeerId, mention: ""), range: format.ranges[0].range)
                         string.addAttribute(.foregroundColor, value: tableLinkColor, range: format.ranges[1].range)
-                        string.addAttribute(NSAttributedString.Key(rawValue: TelegramTextAttributes.PeerMention), value: TelegramPeerMention(peerId: recipientPeerId, mention: ""), range: format.ranges[1].range)
                     } else {
                         string.addAttribute(.foregroundColor, value: tableLinkColor, range: format.ranges[0].range)
-                        string.addAttribute(NSAttributedString.Key(rawValue: TelegramTextAttributes.PeerMention), value: TelegramPeerMention(peerId: recipientPeerId, mention: ""), range: format.ranges[0].range)
                     }
                     value = string
                 } else {
                     let format = senderName != nil ? presentationData.strings.Gift_Unique_OriginalInfoSender(senderName!, recipientName, dateString) : presentationData.strings.Gift_Unique_OriginalInfo(recipientName, dateString)
                     let string = NSMutableAttributedString(string: format.string, font: tableFont, textColor: tableTextColor)
-                    if let senderPeerId {
+                    if let _ = senderPeerId {
                         string.addAttribute(.foregroundColor, value: tableLinkColor, range: format.ranges[0].range)
-                        string.addAttribute(NSAttributedString.Key(rawValue: TelegramTextAttributes.PeerMention), value: TelegramPeerMention(peerId: senderPeerId, mention: ""), range: format.ranges[0].range)
                         string.addAttribute(.foregroundColor, value: tableLinkColor, range: format.ranges[1].range)
-                        string.addAttribute(NSAttributedString.Key(rawValue: TelegramTextAttributes.PeerMention), value: TelegramPeerMention(peerId: recipientPeerId, mention: ""), range: format.ranges[1].range)
                     } else {
                         string.addAttribute(.foregroundColor, value: tableLinkColor, range: format.ranges[0].range)
-                        string.addAttribute(NSAttributedString.Key(rawValue: TelegramTextAttributes.PeerMention), value: TelegramPeerMention(peerId: recipientPeerId, mention: ""), range: format.ranges[0].range)
                     }
                     
                     value = string
@@ -273,7 +267,7 @@ private final class GiftRemoveInfoAlertContentNode: AlertContentNode {
             
             let currentActionWidth: CGFloat
             do {
-                    currentActionWidth = resultSize.width
+                currentActionWidth = resultSize.width
             }
             
             let actionNodeFrame: CGRect

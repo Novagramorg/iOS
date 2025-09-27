@@ -738,6 +738,69 @@ private final class GiftViewSheetContent: CombinedComponent {
                     case let .profileGift(peerId, gift):
                         let updatedAttributes = uniqueGift.attributes.filter { $0.attributeType != .originalInfo }
                         self.subject = .profileGift(peerId, gift.withGift(.unique(uniqueGift.withAttributes(updatedAttributes))))
+                    case let .message(message):
+                        if let action = message.media.first(where: { $0 is TelegramMediaAction }) as? TelegramMediaAction, case let .starGiftUnique(gift, isUpgrade, isTransferred, savedToProfile, canExportDate, transferStars, isRefunded, isPrepaidUpgrade, peerId, senderId, savedId, resaleAmount, canTransferDate, canResaleDate, _, assigned) = action.action, case let .unique(uniqueGift) = gift {
+                            let updatedAttributes = uniqueGift.attributes.filter { $0.attributeType != .originalInfo }
+                            let updatedMedia: [Media] = [
+                                TelegramMediaAction(
+                                    action: .starGiftUnique(
+                                        gift: .unique(uniqueGift.withAttributes(updatedAttributes)),
+                                        isUpgrade: isUpgrade,
+                                        isTransferred: isTransferred,
+                                        savedToProfile: savedToProfile,
+                                        canExportDate: canExportDate,
+                                        transferStars: transferStars,
+                                        isRefunded: isRefunded,
+                                        isPrepaidUpgrade: isPrepaidUpgrade,
+                                        peerId: peerId,
+                                        senderId: senderId,
+                                        savedId: savedId,
+                                        resaleAmount: resaleAmount,
+                                        canTransferDate: canTransferDate,
+                                        canResaleDate: canResaleDate,
+                                        dropOriginalDetailsStars: nil,
+                                        assigned: assigned)
+                                )
+                            ]
+                            
+                            var mappedPeers: [PeerId: EnginePeer] = [:]
+                            for (id, peer) in message.peers {
+                                mappedPeers[id] = EnginePeer(peer)
+                            }
+
+                            var mappedAssociatedMessages: [MessageId: EngineMessage] = [:]
+                            for (id, message) in message.associatedMessages {
+                                mappedAssociatedMessages[id] = EngineMessage(message)
+                            }
+                            
+                            let updatedMessage = EngineMessage(
+                                stableId: message.stableId,
+                                stableVersion: message.stableVersion,
+                                id: message.id,
+                                globallyUniqueId: message.globallyUniqueId,
+                                groupingKey: message.groupingKey,
+                                groupInfo: message.groupInfo,
+                                threadId: message.threadId,
+                                timestamp: message.timestamp,
+                                flags: message.flags,
+                                tags: message.tags,
+                                globalTags: message.globalTags,
+                                localTags: message.localTags,
+                                customTags: message.customTags,
+                                forwardInfo: message.forwardInfo,
+                                author: message.author,
+                                text: message.text,
+                                attributes: message.attributes,
+                                media: updatedMedia.map { EngineMedia($0) },
+                                peers: mappedPeers,
+                                associatedMessages: mappedAssociatedMessages,
+                                associatedMessageIds: message.associatedMessageIds,
+                                associatedMedia: message.associatedMedia,
+                                associatedThreadInfo: message.associatedThreadInfo,
+                                associatedStories: message.associatedStories
+                            )
+                            self.subject = .message(updatedMessage)
+                        }
                     default:
                         break
                     }
@@ -1000,7 +1063,7 @@ private final class GiftViewSheetContent: CombinedComponent {
             }
         }
         
-        func presentActionLockedForHostedGift() {
+        func presentActionLockedForHostedGift(gift: StarGift.UniqueGift) {
             guard let controller = self.getController() as? GiftViewScreen else {
                 return
             }
@@ -1012,7 +1075,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                 text: presentationData.strings.Gift_UnavailableAction_Text,
                 actions: [
                     TextAlertAction(type: .defaultAction, title: presentationData.strings.Gift_UnavailableAction_OpenFragment, action: {
-                        context.sharedContext.openExternalUrl(context: context, urlContext: .generic, url: presentationData.strings.Gift_UnavailableAction_OpenFragment_URL, forceExternal: true, presentationData: presentationData, navigationController: controller.navigationController as? NavigationController, dismissInput: {})
+                        context.sharedContext.openExternalUrl(context: context, urlContext: .generic, url: "https://fragment.com/gift/\(gift.slug)", forceExternal: true, presentationData: presentationData, navigationController: controller.navigationController as? NavigationController, dismissInput: {})
                     }),
                     TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: {})
                 ],
@@ -1027,7 +1090,7 @@ private final class GiftViewSheetContent: CombinedComponent {
             }
             
             guard gift.hostPeerId == nil else {
-                self.presentActionLockedForHostedGift()
+                self.presentActionLockedForHostedGift(gift: gift)
                 return
             }
             
@@ -1092,7 +1155,7 @@ private final class GiftViewSheetContent: CombinedComponent {
             }
             
             guard gift.hostPeerId == nil else {
-                self.presentActionLockedForHostedGift()
+                self.presentActionLockedForHostedGift(gift: gift)
                 return
             }
             
@@ -2332,8 +2395,12 @@ private final class GiftViewSheetContent: CombinedComponent {
                     limitTotal = nil
                     convertStars = nil
                     uniqueGift = gift
-                    if let hostPeerId = gift.hostPeerId, hostPeerId == component.context.account.peerId {
-                        isMyHostedUniqueGift = true
+                    if let hostPeerId = gift.hostPeerId {
+                        if hostPeerId == component.context.account.peerId {
+                            isMyHostedUniqueGift = true
+                        } else if let reference = arguments.reference, case let .peer(peerId, _) = reference, peerId.namespace == Namespaces.Peer.CloudChannel, hostPeerId == peerId {
+                            isMyHostedUniqueGift = true
+                        }
                     }
                 }
                 savedToProfile = arguments.savedToProfile
@@ -4797,10 +4864,13 @@ final class GiftViewSheetComponent: CombinedComponent {
             let controller = environment.controller
             
             var headerContent: AnyComponent<Empty>?
-            if let arguments = context.component.subject.arguments, case .unique = arguments.gift, let fromPeerId = arguments.fromPeerId, let fromPeerName = arguments.fromPeerName, arguments.fromPeerId != context.component.context.account.peerId {
+            if let arguments = context.component.subject.arguments, case .unique = arguments.gift, let fromPeerId = arguments.fromPeerId, var fromPeerName = arguments.fromPeerName, arguments.fromPeerId != context.component.context.account.peerId && !(arguments.fromPeerId?.isTelegramNotifications ?? false) {
                 let dateString = stringForMediumDate(timestamp: arguments.date, strings: environment.strings, dateTimeFormat: environment.dateTimeFormat, withTime: false)
                 
-                let rawString = "**\(fromPeerName)** sent you this gift on **\(dateString)**."
+                if fromPeerName.count > 25 {
+                    fromPeerName = "\(fromPeerName.prefix(25))…"
+                }
+                let rawString = environment.strings.Gift_View_SenderInfo(fromPeerName, dateString).string
                 let attributedString = parseMarkdownIntoAttributedString(rawString, attributes: MarkdownAttributes(body: MarkdownAttributeSet(font: Font.regular(13.0), textColor: .white), bold: MarkdownAttributeSet(font: Font.semibold(13.0), textColor: .white), link: MarkdownAttributeSet(font: Font.regular(13.0), textColor: .white), linkAttribute: { _ in return nil }))
                 
                 let context = context.component.context

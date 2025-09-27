@@ -23,6 +23,7 @@ final class GiftListItemComponent: Component {
     let selectedId: Int64?
     let selectionUpdated: (StarGift.UniqueGift) -> Void
     let tag: AnyObject?
+    let updated: (ComponentTransition) -> Void
     
     init(
         context: AccountContext,
@@ -31,7 +32,8 @@ final class GiftListItemComponent: Component {
         starGifts: [StarGift],
         selectedId: Int64?,
         selectionUpdated: @escaping (StarGift.UniqueGift) -> Void,
-        tag: AnyObject?
+        tag: AnyObject?,
+        updated: @escaping (ComponentTransition) -> Void
     ) {
         self.context = context
         self.theme = theme
@@ -40,6 +42,7 @@ final class GiftListItemComponent: Component {
         self.selectedId = selectedId
         self.selectionUpdated = selectionUpdated
         self.tag = tag
+        self.updated = updated
     }
     
     static func ==(lhs: GiftListItemComponent, rhs: GiftListItemComponent) -> Bool {
@@ -151,16 +154,17 @@ final class GiftListItemComponent: Component {
                         return
                     }
                     self.resaleGiftsState = state
-                    
                     if !self.isUpdating {
-                        self.state?.updated(transition: isFirstTime ? .easeInOut(duration: 0.25) : .immediate)
+                        let transition: ComponentTransition = isFirstTime ? .easeInOut(duration: 0.25) : .immediate
+                        component.updated(transition)
                     }
                     isFirstTime = false
                 }))
             }
             
             if !self.isUpdating {
-                self.state?.updated(transition: .easeInOut(duration: 0.25))
+                let transition: ComponentTransition = .easeInOut(duration: 0.25)
+                component.updated(transition)
             }
         }
                 
