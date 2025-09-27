@@ -2744,15 +2744,14 @@ final class VideoChatScreenComponent: Component {
                         thirdActionButtonFrame.origin.x = microphoneButtonFrame.minX
                         fourthActionButtonFrame.origin.x = microphoneButtonFrame.minX
                         
-                        microphoneButtonFrame.origin.y = availableSize.height * 0.5 - landscapeControlsSpacing * 0.5 - actionButtonDiameter
-                        firstActionButtonFrame.origin.y = microphoneButtonFrame.minY - landscapeControlsSpacing - actionButtonDiameter
-                        thirdActionButtonFrame.origin.y = microphoneButtonFrame.maxY + landscapeControlsSpacing
-                        fourthActionButtonFrame.origin.y = microphoneButtonFrame.maxY + landscapeControlsSpacing + actionButtonDiameter + landscapeControlsSpacing
+                        microphoneButtonFrame.origin.y = availableSize.height * 0.5 + landscapeControlsSpacing * 0.5
+                        firstActionButtonFrame.origin.y = microphoneButtonFrame.minY - landscapeControlsSpacing - actionButtonDiameter - landscapeControlsSpacing - actionButtonDiameter
+                        secondActionButtonFrame.origin.y = microphoneButtonFrame.minY - landscapeControlsSpacing - actionButtonDiameter
+                        fourthActionButtonFrame.origin.y = microphoneButtonFrame.maxY + landscapeControlsSpacing
                     } else {
                         microphoneButtonFrame.origin.x = availableSize.width * 0.5 + actionMicrophoneButtonSpacing * 0.5
                         firstActionButtonFrame.origin.x = microphoneButtonFrame.minX - actionMicrophoneButtonSpacing * 2.0 - actionButtonDiameter * 2.0
                         secondActionButtonFrame.origin.x = microphoneButtonFrame.minX - actionMicrophoneButtonSpacing - actionButtonDiameter
-                        //thirdActionButtonFrame.origin.x = microphoneButtonFrame.maxX + actionMicrophoneButtonSpacing
                         fourthActionButtonFrame.origin.x = microphoneButtonFrame.maxX + actionMicrophoneButtonSpacing
                     }
                 }
