@@ -1262,11 +1262,7 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                 }
             case let .starGiftUnique(gift, isUpgrade, _, _, _, _, _, isPrepaidUpgrade, peerId, senderId, _, resaleStars, _, _, _, assigned):
                 if case let .unique(gift) = gift {
-                    if assigned {
-                        let attributes: [Int: MarkdownAttributeSet] = [0: boldAttributes]
-                        let giftTitle = "\(gift.title) #\(presentationStringsFormattedNumber(gift.number, dateTimeFormat.groupingSeparator))"
-                        attributedString = addAttributesToStringWithRanges(strings.Notification_StarsGift_Assigned(giftTitle)._tuple, body: bodyAttributes, argumentAttributes: attributes)
-                    } else if !forAdditionalServiceMessage && !"".isEmpty {
+                    if !forAdditionalServiceMessage && !"".isEmpty {
                         attributedString = NSAttributedString(string: "\(gift.title) #\(presentationStringsFormattedNumber(gift.number, dateTimeFormat.groupingSeparator))", font: titleFont, textColor: primaryTextColor)
                     } else if let messagePeer = message.peers[message.id.peerId] {
                         var peerName = EnginePeer(messagePeer).compactDisplayTitle
@@ -1292,7 +1288,11 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                                 }
                             }
                         } else {
-                            if message.id.peerId.isTelegramNotifications && senderId == nil {
+                            if message.id.peerId == accountPeerId && assigned {
+                                let attributes: [Int: MarkdownAttributeSet] = [0: boldAttributes]
+                                let giftTitle = "\(gift.title) #\(presentationStringsFormattedNumber(gift.number, dateTimeFormat.groupingSeparator))"
+                                attributedString = addAttributesToStringWithRanges(strings.Notification_StarsGift_Assigned(giftTitle)._tuple, body: bodyAttributes, argumentAttributes: attributes)
+                            } else if message.id.peerId.isTelegramNotifications && senderId == nil {
                                 attributedString = NSAttributedString(string: strings.Notification_StarsGift_SentSomeone, font: titleFont, textColor: primaryTextColor)
                             } else if message.author?.id == accountPeerId {
                                 if let resaleStars {

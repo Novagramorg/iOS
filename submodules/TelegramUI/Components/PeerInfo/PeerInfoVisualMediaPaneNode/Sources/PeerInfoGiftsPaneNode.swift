@@ -1335,7 +1335,7 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
                                 text: presentationData.strings.Gift_UnavailableAction_Text,
                                 actions: [
                                     TextAlertAction(type: .defaultAction, title: presentationData.strings.Gift_UnavailableAction_OpenFragment, action: {
-                                        context.sharedContext.openExternalUrl(context: context, urlContext: .generic, url: presentationData.strings.Gift_UnavailableAction_OpenFragment_URL, forceExternal: true, presentationData: presentationData, navigationController: nil, dismissInput: {})
+                                        context.sharedContext.openExternalUrl(context: context, urlContext: .generic, url: "https://fragment.com/gift/\(uniqueGift.slug)", forceExternal: true, presentationData: presentationData, navigationController: nil, dismissInput: {})
                                     }),
                                     TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: {})
                                 ],

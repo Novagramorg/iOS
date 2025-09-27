@@ -14,6 +14,7 @@ import EmojiTextAttachmentView
 import ComponentFlow
 import ButtonComponent
 import ComponentDisplayAdapters
+import TextNodeWithEntities
 
 enum PeerInfoScreenLabeledValueTextColor {
     case primary
@@ -69,6 +70,7 @@ final class PeerInfoScreenLabeledValueItem: PeerInfoScreenItem {
     let text: String
     let entities: [MessageTextEntity]
     let additionalText: String?
+    let handleSpoilers: Bool
     let textColor: PeerInfoScreenLabeledValueTextColor
     let textBehavior: PeerInfoScreenLabeledValueTextBehavior
     let leftIcon: PeerInfoScreenLabeledValueLeftIcon?
@@ -89,6 +91,7 @@ final class PeerInfoScreenLabeledValueItem: PeerInfoScreenItem {
         text: String,
         entities: [MessageTextEntity] = [],
         additionalText: String? = nil,
+        handleSpoilers: Bool = false,
         textColor: PeerInfoScreenLabeledValueTextColor = .primary,
         textBehavior: PeerInfoScreenLabeledValueTextBehavior = .singleLine,
         leftIcon: PeerInfoScreenLabeledValueLeftIcon? = nil,
@@ -108,6 +111,7 @@ final class PeerInfoScreenLabeledValueItem: PeerInfoScreenItem {
         self.text = text
         self.entities = entities
         self.additionalText = additionalText
+        self.handleSpoilers = handleSpoilers
         self.textColor = textColor
         self.textBehavior = textBehavior
         self.leftIcon = leftIcon
@@ -157,7 +161,8 @@ private final class PeerInfoScreenLabeledValueItemNode: PeerInfoScreenItemNode {
     private let maskNode: ASImageNode
     private let labelNode: ImmediateTextNode
     private let rightLabelNode: ImmediateTextNode
-    private let textNode: ImmediateTextNode
+    private var spoilerTextNode: ImmediateTextNodeWithEntities?
+    private let textNode: ImmediateTextNodeWithEntities
     private let additionalTextNode: ImmediateTextNode
     private let measureTextNode: ImmediateTextNode
     private let bottomSeparatorNode: ASDisplayNode
@@ -211,7 +216,7 @@ private final class PeerInfoScreenLabeledValueItemNode: PeerInfoScreenItemNode {
         self.rightLabelNode.displaysAsynchronously = false
         self.rightLabelNode.isUserInteractionEnabled = false
         
-        self.textNode = ImmediateTextNode()
+        self.textNode = ImmediateTextNodeWithEntities()
         self.textNode.displaysAsynchronously = false
         self.textNode.isUserInteractionEnabled = false
         
@@ -391,7 +396,7 @@ private final class PeerInfoScreenLabeledValueItemNode: PeerInfoScreenItemNode {
         }
         self.view.addGestureRecognizer(recognizer)
     }
-    
+        
     @objc private func tapLongTapOrDoubleTapGesture(_ recognizer: TapLongTapOrDoubleTapGestureRecognizer) {
         switch recognizer.state {
         case .ended:
@@ -522,6 +527,15 @@ private final class PeerInfoScreenLabeledValueItemNode: PeerInfoScreenItemNode {
         
         let additionalSideInset: CGFloat = !self.iconNode.isHidden ? 32.0 : 0.0
         
+        self.textNode.arguments = TextNodeWithEntities.Arguments(
+            context: context,
+            cache: context.animationCache,
+            renderer: context.animationRenderer,
+            placeholderColor: presentationData.theme.list.mediaPlaceholderColor,
+            attemptSynchronous: false
+        )
+        self.textNode.spoilerColor = presentationData.theme.list.itemPrimaryTextColor
+                
         var text = item.text
         let maxNumberOfLines: Int
         switch item.textBehavior {
@@ -587,8 +601,6 @@ private final class PeerInfoScreenLabeledValueItemNode: PeerInfoScreenItemNode {
             if textLayout.numberOfLines == 4 {
                 collapsedNumberOfLines = 4
             }
-            
-
             
             maxNumberOfLines = self.isExpanded ? maxLines : collapsedNumberOfLines
             self.textNode.maximumNumberOfLines = maxNumberOfLines
@@ -682,6 +694,46 @@ private final class PeerInfoScreenLabeledValueItemNode: PeerInfoScreenItemNode {
             textTransition = .immediate
         }
         textTransition.updateFrame(node: self.textNode, frame: textFrame)
+        
+        if item.handleSpoilers {
+            let spoilerTextNode: ImmediateTextNodeWithEntities
+            if let current = self.spoilerTextNode {
+                spoilerTextNode = current
+            } else {
+                spoilerTextNode = ImmediateTextNodeWithEntities()
+                spoilerTextNode.alpha = 0.0
+                self.spoilerTextNode = spoilerTextNode
+                
+                self.textNode.dustNode?.textNode = spoilerTextNode
+            }
+            
+            spoilerTextNode.displaySpoilers = true
+            spoilerTextNode.displaySpoilerEffect = false
+            spoilerTextNode.attributedText = self.textNode.attributedText
+            spoilerTextNode.maximumNumberOfLines = self.textNode.maximumNumberOfLines
+            spoilerTextNode.truncationType = self.textNode.truncationType
+            spoilerTextNode.textAlignment = self.textNode.textAlignment
+            spoilerTextNode.verticalAlignment = self.textNode.verticalAlignment
+            spoilerTextNode.lineSpacing = self.textNode.lineSpacing
+            spoilerTextNode.cutout = self.textNode.cutout
+            spoilerTextNode.insets = self.textNode.insets
+            spoilerTextNode.textShadowColor = self.textNode.textShadowColor
+            spoilerTextNode.textStroke = self.textNode.textStroke
+            spoilerTextNode.isUserInteractionEnabled = false
+            
+            let _ = spoilerTextNode.updateLayout(CGSize(width: width - sideInset * 2.0 - additionalSideInset, height: .greatestFiniteMagnitude))
+            spoilerTextNode.frame = textFrame
+            
+            if spoilerTextNode.supernode == nil {
+                self.contextSourceNode.contentNode.addSubnode(spoilerTextNode)
+            }
+        } else if let spoilerTextNode = self.spoilerTextNode {
+            self.spoilerTextNode = nil
+            spoilerTextNode.removeFromSupernode()
+            
+            self.textNode.dustNode?.textNode = nil
+        }
+        
         
         transition.updateFrame(node: self.additionalTextNode, frame: additionalTextFrame)
         
@@ -820,6 +872,9 @@ private final class PeerInfoScreenLabeledValueItemNode: PeerInfoScreenItemNode {
         if let (index, attributes) = self.textNode.attributesAtPoint(CGPoint(x: point.x - textNodeFrame.minX, y: point.y - textNodeFrame.minY)) {
             var item: TextLinkItem?
             var urlRange: NSRange?
+            if let _ = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.Spoiler)], let dustNode = self.textNode.dustNode, !dustNode.isRevealed {
+                return nil
+            }
             if let url = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.URL)] as? String {
                 item = .url(url: url, concealed: false)
                 
@@ -904,6 +959,14 @@ private final class PeerInfoScreenLabeledValueItemNode: PeerInfoScreenItemNode {
                         rects = self.textNode.attributeRects(name: name, at: index)
                         textNode = self.textNode
                         break
+                    }
+                }
+                if let _ = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.Spoiler)], let dustNode = self.textNode.dustNode, !dustNode.isRevealed {
+                    rects = nil
+                    textNode = nil
+                    
+                    Queue.mainQueue().justDispatch {
+                        dustNode.revealAtLocation(CGPoint(x: point.x - textNodeFrame.minX, y: point.y - textNodeFrame.minY))
                     }
                 }
             }

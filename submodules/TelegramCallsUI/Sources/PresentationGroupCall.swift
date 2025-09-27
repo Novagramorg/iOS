@@ -29,6 +29,7 @@ private extension PresentationGroupCallState {
             muteState: GroupCallParticipantsContext.Participant.MuteState(canUnmute: true, mutedByYou: false),
             defaultParticipantMuteState: nil,
             messagesAreEnabled: true,
+            canEnableMessages: false,
             recordingStartTimestamp: nil,
             title: title,
             raisedHand: false,
@@ -1538,7 +1539,7 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
                 adminIds: Set(),
                 isCreator: false,
                 defaultParticipantsAreMuted: callInfo.defaultParticipantsAreMuted ?? GroupCallParticipantsContext.State.DefaultParticipantsAreMuted(isMuted: self.stateValue.defaultParticipantMuteState == .muted, canChange: true),
-                messagesAreEnabled: callInfo.messagesAreEnabled ?? GroupCallParticipantsContext.State.MessagesAreEnabled(isEnabled: self.stateValue.messagesAreEnabled, canChange: true),
+                messagesAreEnabled: callInfo.messagesAreEnabled ?? GroupCallParticipantsContext.State.MessagesAreEnabled(isEnabled: self.stateValue.messagesAreEnabled, canChange: self.stateValue.canEnableMessages),
                 sortAscending: true,
                 recordingStartTimestamp: nil,
                 title: self.stateValue.title,
@@ -2616,6 +2617,7 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
                         self.stateValue.defaultParticipantMuteState = state.defaultParticipantsAreMuted.isMuted ? .muted : .unmuted
                     }
                     self.stateValue.messagesAreEnabled = state.messagesAreEnabled.isEnabled
+                    self.stateValue.canEnableMessages = state.messagesAreEnabled.canChange
                     self.stateValue.recordingStartTimestamp = state.recordingStartTimestamp
                     self.stateValue.title = state.title
                     self.stateValue.scheduleTimestamp = state.scheduleTimestamp

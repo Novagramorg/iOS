@@ -1199,6 +1199,7 @@ final class VideoChatScreenComponent: Component {
                     muteState: isMuted ? GroupCallParticipantsContext.Participant.MuteState(canUnmute: true, mutedByYou: true) : nil,
                     defaultParticipantMuteState: nil,
                     messagesAreEnabled: true,
+                    canEnableMessages: false,
                     recordingStartTimestamp: nil,
                     title: nil,
                     raisedHand: false,
@@ -1842,7 +1843,6 @@ final class VideoChatScreenComponent: Component {
                             text = environment.strings.VoiceChat_DisplayAsSuccess(peer.displayTitle(strings: environment.strings, displayOrder: groupCall.accountContext.sharedContext.currentPresentationData.with({ $0 }).nameDisplayOrder)).string
                         }
                         self.displayNotification(icon: .peer(peer), text: text, duration: 3)
-                        //self.presentUndoOverlay(content: .invitedToVoiceChat(context: groupCall.accountContext, peer: peer, title: nil, text: text, action: nil, duration: 3), action: { _ in return false })
                     })
                     
                     self.memberEventsDisposable?.dispose()
@@ -1870,7 +1870,6 @@ final class VideoChatScreenComponent: Component {
                                     let text = environment.strings.VoiceChat_PeerJoinedText("**\(event.peer.displayTitle(strings: environment.strings, displayOrder: groupCall.accountContext.sharedContext.currentPresentationData.with({ $0 }).nameDisplayOrder))**").string
                                     
                                     self.displayNotification(icon: .peer(event.peer), text: text, duration: 3)
-                                    //self.presentUndoOverlay(content: .invitedToVoiceChat(context: groupCall.accountContext, peer: event.peer, title: nil, text: text, action: nil, duration: 3), action: { _ in return false })
                                 }
                             }
                         } else {

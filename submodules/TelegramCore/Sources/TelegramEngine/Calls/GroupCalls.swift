@@ -2588,9 +2588,9 @@ public final class GroupCallParticipantsContext {
     }
     
     public func updateMessagesEnabled(isEnabled: Bool) {
-//        if isEnabled == self.stateValue.state.messagesAreEnabled.isEnabled {
-//            return
-//        }
+        if isEnabled == self.stateValue.state.messagesAreEnabled.isEnabled {
+            return
+        }
         self.stateValue.state.messagesAreEnabled.isEnabled = isEnabled
         
         self.updateMessagesEnabledDisposable.set((self.account.network.request(Api.functions.phone.toggleGroupCallSettings(flags: 1 << 2, call: self.reference.apiInputGroupCall, joinMuted: nil, messagesEnabled: isEnabled ? .boolTrue : .boolFalse))

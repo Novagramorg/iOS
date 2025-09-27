@@ -142,7 +142,18 @@ public final class BirthdayPickerContentComponent: Component {
             var contentHeight: CGFloat = 0.0
             
             let titleString = NSMutableAttributedString()
-            titleString.append(NSAttributedString(string: self.peer.flatMap { component.strings.SuggestBirthdate_Suggest_Title($0.compactDisplayTitle).string } ?? component.strings.Birthday_Title, font: Font.semibold(17.0), textColor: component.theme.list.itemPrimaryTextColor))
+            let titleRawString: String
+            if let peer = self.peer {
+                var peerName = peer.compactDisplayTitle
+                if peerName.count > 20 {
+                    peerName = "\(peerName.prefix(20))…"
+                }
+                titleRawString = component.strings.SuggestBirthdate_Suggest_Title(peerName).string
+            } else {
+                titleRawString = component.strings.Birthday_Title
+            }
+            
+            titleString.append(NSAttributedString(string: titleRawString, font: Font.semibold(17.0), textColor: component.theme.list.itemPrimaryTextColor))
         
             let titleSize = self.title.update(
                 transition: .immediate,
