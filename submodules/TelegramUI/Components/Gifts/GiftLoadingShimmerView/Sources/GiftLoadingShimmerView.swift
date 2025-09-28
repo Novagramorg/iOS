@@ -130,6 +130,7 @@ public final class GiftLoadingShimmerView: UIView {
         super.init(frame: frame)
         self.isUserInteractionEnabled = false
         self.backgroundColor = .clear
+        self.layer.allowsGroupOpacity = true
         
         self.addSubview(self.backgroundView)
         self.addSubview(self.effectView)
