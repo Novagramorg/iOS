@@ -577,7 +577,9 @@ public extension GlassBackgroundView {
         size.width += inset * 2.0
         size.height += inset * 2.0
         
-        return generateImage(size, rotatedContext: { size, context in
+        return UIGraphicsImageRenderer(size: size).image { ctx in
+            let context = ctx.cgContext
+            
             context.clear(CGRect(origin: CGPoint(), size: size))
             
             func pathApplyingSpread(_ path: CGPath, spread: CGFloat) -> CGPath {
@@ -606,8 +608,14 @@ public extension GlassBackgroundView {
                 }
                 return result
             }
+            
+            let maskImage = UIGraphicsImageRenderer(size: size).image { ctx in
+                let context = ctx.cgContext
+                context.setFillColor(UIColor.black.cgColor)
+                context.fillEllipse(in: CGRect(origin: CGPoint(x: inset, y: inset), size: innerSize))
+            }
 
-            let addShadow: (Bool, CGPoint, CGFloat, CGFloat, UIColor, Bool) -> Void = { isOuter, position, blur, spread, shadowColor, isMultiply in
+            let addShadow: (Bool, CGPoint, CGFloat, CGFloat, UIColor, CGBlendMode) -> Void = { isOuter, position, blur, spread, shadowColor, blendMode in
                 var blur = blur
                 blur += abs(spread)
                 
@@ -641,72 +649,119 @@ public extension GlassBackgroundView {
                     context.fillPath()
                     context.setBlendMode(.normal)
                 } else {
-                    if let image = generateImage(size, rotatedContext: { size, context in
+                    let image = UIGraphicsImageRenderer(size: size).image(actions: { ctx in
+                        let context = ctx.cgContext
+                        
                         context.clear(CGRect(origin: CGPoint(), size: size))
-                        let spreadRect = CGRect(origin: CGPoint(x: inset, y: inset), size: innerSize).insetBy(dx: -0.25, dy: -0.25)
+                        let spreadRect = CGRect(origin: CGPoint(x: inset, y: inset), size: innerSize).insetBy(dx: -spread - 1.0, dy: -spread - 1.0)
                         let spreadPath = UIBezierPath(
                             roundedRect: spreadRect,
                             cornerRadius: min(spreadRect.width, spreadRect.height) * 0.5
                         ).cgPath
 
                         context.setShadow(offset: CGSize(width: position.x, height: position.y), blur: blur, color: shadowColor.cgColor)
-                        context.setFillColor(UIColor.black.withAlphaComponent(1.0).cgColor)
+                        context.setFillColor(UIColor.red.cgColor)
                         let enclosingRect = spreadRect.insetBy(dx: -10000.0, dy: -10000.0)
                         context.addPath(UIBezierPath(rect: enclosingRect).cgPath)
                         context.addPath(spreadPath)
                         context.fillPath(using: .evenOdd)
                         
-                        let cleanRect = CGRect(origin: CGPoint(x: inset, y: inset), size: innerSize)
-                        let cleanPath = UIBezierPath(
-                            roundedRect: cleanRect,
-                            cornerRadius: min(cleanRect.width, cleanRect.height) * 0.5
-                        ).cgPath
-                        context.setBlendMode(.copy)
-                        context.setFillColor(UIColor.clear.cgColor)
-                        context.addPath(UIBezierPath(rect: enclosingRect).cgPath)
-                        context.addPath(cleanPath)
-                        context.fillPath(using: .evenOdd)
-                        context.setBlendMode(.normal)
-                    }) {
-                        UIGraphicsPushContext(context)
-                        image.draw(in: CGRect(origin: .zero, size: size), blendMode: isMultiply ? .destinationOut : .normal, alpha: 1.0)
-                        UIGraphicsPopContext()
-                    }
+                        maskImage.draw(at: CGPoint(), blendMode: .destinationIn, alpha: 1.0)
+                    })
+                    
+                    UIGraphicsPushContext(context)
+                    image.draw(in: CGRect(origin: .zero, size: size), blendMode: blendMode, alpha: 1.0)
+                    UIGraphicsPopContext()
                 }
             }
             
-            if isDark {
-                addShadow(true, CGPoint(), 16.0, 0.0, UIColor(white: 0.0, alpha: 0.12), false)
-                addShadow(true, CGPoint(), 8.0, 0.0, UIColor(white: 0.0, alpha: 0.1), false)
-                
-                context.setFillColor(fillColor.cgColor)
-                context.fillEllipse(in: CGRect(origin: CGPoint(), size: size).insetBy(dx: inset, dy: inset))
-                
-                addShadow(false, CGPoint(x: 0.0, y: 0.0), 3.0, 0.0, UIColor(white: 1.0, alpha: 0.25), false)
-                addShadow(false, CGPoint(x: 2.0, y: -2.0), 1.0, 0.0, UIColor(white: 1.0, alpha: 0.125), false)
-                addShadow(false, CGPoint(x: -2.0, y: 2.0), 1.0, 0.0, UIColor(white: 1.0, alpha: 0.125), false)
-            } else {
-                addShadow(true, CGPoint(), 16.0, 0.0, UIColor(white: 0.0, alpha: 0.08), false)
-                
-                context.setFillColor(fillColor.cgColor)
-                context.fillEllipse(in: CGRect(origin: CGPoint(), size: size).insetBy(dx: inset, dy: inset))
-                
-                let highlightColor: UIColor
-                if fillColor.hsb.s > 0.5 {
-                    var (h, s, v) = fillColor.hsb
-                    s = max(0.0, min(1.0, s * 0.25))
-                    v = max(v, 0.95)
-                    h = max(0.0, min(1.0, h - 0.1))
-                    
-                    highlightColor = UIColor(hue: h, saturation: s, brightness: v, alpha: fillColor.alpha)
-                } else {
-                    highlightColor = UIColor(white: 1.0, alpha: min(1.0, fillColor.alpha * 1.2))
+            addShadow(true, CGPoint(), 16.0, 0.0, UIColor(white: 0.0, alpha: 0.08), .normal)
+            
+            context.setFillColor(fillColor.cgColor)
+            context.fillEllipse(in: CGRect(origin: CGPoint(), size: size).insetBy(dx: inset, dy: inset).insetBy(dx: 0.1, dy: 0.1))
+            
+            /*
+             case normal = 0
+
+             case multiply = 1
+
+             case screen = 2
+
+             case overlay = 3
+
+             case darken = 4
+
+             case lighten = 5
+
+             case colorDodge = 6
+
+             case colorBurn = 7
+
+             case softLight = 8
+
+             case hardLight = 9
+
+             case difference = 10
+
+             case exclusion = 11
+
+             case hue = 12
+
+             case saturation = 13
+
+             case color = 14
+
+             case luminosity = 15
+
+             case clear = 16
+
+             case copy = 17
+
+             case sourceIn = 18
+
+             case sourceOut = 19
+
+             case sourceAtop = 20
+
+             case destinationOver = 21
+
+             case destinationIn = 22
+
+             case destinationOut = 23
+
+             case destinationAtop = 24
+
+             case xor = 25
+
+             case plusDarker = 26
+
+             case plusLighter = 27
+             */
+            
+            var a: CGFloat = 0.0
+            var b: CGFloat = 0.0
+            fillColor.getHue(nil, saturation: nil, brightness: &b, alpha: &a)
+            
+            addShadow(true, CGPoint(x: 0.0, y: 0.0), 20.0, 0.0, UIColor(white: 0.0, alpha: 0.04), .normal)
+            addShadow(true, CGPoint(x: 0.0, y: 0.0), 5.0, 0.0, UIColor(white: 0.0, alpha: 0.04), .normal)
+            
+            let edgeWidth: CGFloat = 0.5
+            let edgeAlpha: CGFloat = max(0.2, min(0.8, a * a * a))
+            
+            if b >= 0.2 {
+                for _ in 0 ..< 3 {
+                    addShadow(false, CGPoint(x: 0.0, y: 0.0), 1.0, 0.0, UIColor(white: 1.0, alpha: edgeAlpha), .overlay)
+                    addShadow(false, CGPoint(x: edgeWidth, y: edgeWidth), 1.4, 0.0, UIColor(white: 1.0, alpha: edgeAlpha * 0.9), .overlay)
+                    addShadow(false, CGPoint(x: -edgeWidth, y: -edgeWidth), 1.4, 0.0, UIColor(white: 1.0, alpha: edgeAlpha * 0.9), .overlay)
                 }
-                
-                addShadow(false, CGPoint(x: 2.0, y: -2.0), 1.0, 0.0, highlightColor, false)
-                addShadow(false, CGPoint(x: -2.0, y: 2.0), 1.0, 0.0, highlightColor, false)
+            } else {
+                for _ in 0 ..< 3 {
+                    addShadow(false, CGPoint(x: 0.0, y: 0.0), 1.0, 0.0, UIColor(white: 1.0, alpha: edgeAlpha), .normal)
+                    addShadow(false, CGPoint(x: edgeWidth, y: edgeWidth), 1.4, 0.0, UIColor(white: 1.0, alpha: edgeAlpha * 0.9), .normal)
+                    addShadow(false, CGPoint(x: -edgeWidth, y: -edgeWidth), 1.4, 0.0, UIColor(white: 1.0, alpha: edgeAlpha * 0.9), .normal)
+                }
             }
-        })!.stretchableImage(withLeftCapWidth: Int(size.width * 0.5), topCapHeight: Int(size.height * 0.5))
+        }.stretchableImage(withLeftCapWidth: Int(size.width * 0.5), topCapHeight: Int(size.height * 0.5))
     }
     
     static func generateForegroundImage(size: CGSize, isDark: Bool, fillColor: UIColor) -> UIImage {

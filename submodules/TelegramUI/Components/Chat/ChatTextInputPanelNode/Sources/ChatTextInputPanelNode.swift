@@ -66,7 +66,10 @@ public let chatTextInputMinFontSize: CGFloat = 5.0
 private let minInputFontSize = chatTextInputMinFontSize
 
 private func calclulateTextFieldMinHeight(_ presentationInterfaceState: ChatPresentationInterfaceState, metrics: LayoutMetrics) -> CGFloat {
-    let baseFontSize = max(minInputFontSize, presentationInterfaceState.fontSize.baseDisplaySize)
+    var baseFontSize = max(minInputFontSize, presentationInterfaceState.fontSize.baseDisplaySize)
+    if "".isEmpty {
+        baseFontSize = 17.0
+    }
     var result: CGFloat
     if baseFontSize.isEqual(to: 26.0) {
         result = 42.0
@@ -82,15 +85,14 @@ private func calclulateTextFieldMinHeight(_ presentationInterfaceState: ChatPres
         result = 31.0
     }
     
-    if case .regular = metrics.widthClass {
-        result = max(33.0, result)
-    }
-    
     return result
 }
 
 private func calculateTextFieldRealInsets(presentationInterfaceState: ChatPresentationInterfaceState, accessoryButtonsWidth: CGFloat) -> UIEdgeInsets {
-    let baseFontSize = max(minInputFontSize, presentationInterfaceState.fontSize.baseDisplaySize)
+    var baseFontSize = max(minInputFontSize, presentationInterfaceState.fontSize.baseDisplaySize)
+    if "".isEmpty {
+        baseFontSize = 17.0
+    }
     let top: CGFloat
     let bottom: CGFloat
     if baseFontSize.isEqual(to: 14.0) {
@@ -451,6 +453,9 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 if let presentationInterfaceState = self.presentationInterfaceState {
                     textColor = presentationInterfaceState.theme.chat.inputPanel.inputTextColor
                     baseFontSize = max(minInputFontSize, presentationInterfaceState.fontSize.baseDisplaySize)
+                }
+                if "".isEmpty {
+                    baseFontSize = 17.0
                 }
                 textInputNode.attributedText = NSAttributedString(string: value, font: Font.regular(baseFontSize), textColor: textColor)
                 self.chatInputTextNodeDidUpdateText()
@@ -1038,7 +1043,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         
         var accessoryButtonsWidth: CGFloat = 0.0
         var firstButton = true
-        for (_, button) in self.accessoryItemButtons {
+        for (item, button) in self.accessoryItemButtons {
             if firstButton {
                 firstButton = false
                 accessoryButtonsWidth += self.accessoryButtonInset
@@ -1046,6 +1051,12 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 accessoryButtonsWidth += self.accessoryButtonSpacing
             }
             accessoryButtonsWidth += button.buttonWidth
+            switch item {
+            case .input:
+                accessoryButtonsWidth -= 2.0
+            default:
+                break
+            }
         }
         
         var textFieldMinHeight: CGFloat = 35.0
@@ -1081,11 +1092,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     }
     
     private func textFieldInsets(metrics: LayoutMetrics) -> UIEdgeInsets {
-        var insets = UIEdgeInsets(top: 0.0, left: 54.0, bottom: 0.0, right: 54.0)
-        if case .regular = metrics.widthClass, case .regular = metrics.heightClass {
-            insets.top += 1.0
-            insets.bottom += 1.0
-        }
+        let insets = UIEdgeInsets(top: 0.0, left: 54.0, bottom: 0.0, right: 54.0)
         return insets
     }
     
@@ -1097,10 +1104,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     
     override public func minimalHeight(interfaceState: ChatPresentationInterfaceState, metrics: LayoutMetrics) -> CGFloat {
         let textFieldMinHeight = calclulateTextFieldMinHeight(interfaceState, metrics: metrics)
-        var minimalHeight: CGFloat = 14.0 + textFieldMinHeight
-        if case .regular = metrics.widthClass, case .regular = metrics.heightClass {
-            minimalHeight += 2.0
-        }
+        let minimalHeight: CGFloat = 14.0 + textFieldMinHeight
         return minimalHeight
     }
 
@@ -1563,7 +1567,10 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 
                 if self.theme == nil || !self.theme!.chat.inputPanel.inputTextColor.isEqual(interfaceState.theme.chat.inputPanel.inputTextColor) {
                     let textColor = interfaceState.theme.chat.inputPanel.inputTextColor
-                    let baseFontSize = max(minInputFontSize, interfaceState.fontSize.baseDisplaySize)
+                    var baseFontSize = max(minInputFontSize, interfaceState.fontSize.baseDisplaySize)
+                    if "".isEmpty {
+                        baseFontSize = 17.0
+                    }
                     
                     if let textInputNode = self.textInputNode {
                         if let text = textInputNode.attributedText {
@@ -2505,6 +2512,12 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             transition.updateAlpha(layer: button.layer, alpha: audioRecordingItemsAlpha)
             nextButtonTopRight.x -= buttonSize.width
             nextButtonTopRight.x -= accessoryButtonSpacing
+            switch item.key {
+            case .input:
+                nextButtonTopRight.x += 2.0
+            default:
+                break
+            }
         }
         
         let textInputBackgroundFrame = CGRect(x: hideOffset.x + leftInset + textFieldInsets.left, y: hideOffset.y + textFieldInsets.top + textFieldTopContentOffset, width: baseWidth - textFieldInsets.left - textFieldInsets.right, height: panelHeight - textFieldInsets.top - textFieldInsets.bottom + self.textInputViewInternalInsets.top + self.textInputViewInternalInsets.bottom)
@@ -2518,7 +2531,10 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         if (updatedPlaceholder != nil && self.currentPlaceholder != updatedPlaceholder) || themeUpdated {
             let currentPlaceholder = updatedPlaceholder ?? self.currentPlaceholder ?? ""
             self.currentPlaceholder = currentPlaceholder
-            let baseFontSize = max(minInputFontSize, interfaceState.fontSize.baseDisplaySize)
+            var baseFontSize = max(minInputFontSize, interfaceState.fontSize.baseDisplaySize)
+            if "".isEmpty {
+                baseFontSize = 17.0
+            }
             
             let attributedPlaceholder = NSMutableAttributedString(string: currentPlaceholder, font: Font.regular(baseFontSize), textColor: placeholderColor.withAlphaComponent(1.0))
             if placeholderHasStar, let range = attributedPlaceholder.string.range(of: "#") {
@@ -2923,7 +2939,10 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         var rects: [CGRect] = []
         var customEmojiRects: [(CGRect, ChatTextInputTextCustomEmojiAttribute, CGFloat)] = []
         
-        let fontSize = max(minInputFontSize, presentationInterfaceState.fontSize.baseDisplaySize)
+        var fontSize = max(minInputFontSize, presentationInterfaceState.fontSize.baseDisplaySize)
+        if "".isEmpty {
+            fontSize = 17.0
+        }
         
         if let attributedText = textInputNode.attributedText {
             let beginning = textInputNode.textView.beginningOfDocument
@@ -3949,7 +3968,10 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 self.inputMenu.hide()
             }
             
-            let baseFontSize = max(minInputFontSize, presentationInterfaceState.fontSize.baseDisplaySize)
+            var baseFontSize = max(minInputFontSize, presentationInterfaceState.fontSize.baseDisplaySize)
+            if "".isEmpty {
+                baseFontSize = 17.0
+            }
             refreshChatTextInputTypingAttributes(textInputNode.textView, theme: presentationInterfaceState.theme, baseFontSize: baseFontSize)
             
             self.updateSpoilersRevealed()
@@ -4338,6 +4360,9 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 textColor = presentationInterfaceState.theme.chat.inputPanel.inputTextColor
                 accentTextColor = presentationInterfaceState.theme.chat.inputPanel.panelControlAccentColor
                 baseFontSize = max(minInputFontSize, presentationInterfaceState.fontSize.baseDisplaySize)
+                if "".isEmpty {
+                    baseFontSize = 17.0
+                }
             }
             let cleanReplacementString = textAttributedStringForStateText(context: context, stateText: NSAttributedString(string: cleanText), fontSize: baseFontSize, textColor: textColor, accentTextColor: accentTextColor, writingDirection: nil, spoilersRevealed: self.spoilersRevealed, availableEmojis: (self.context?.animatedEmojiStickersValue.keys).flatMap(Set.init) ?? Set(), emojiViewProvider: self.emojiViewProvider, makeCollapsedQuoteAttachment: { text, attributes in
                 return ChatInputTextCollapsedQuoteAttachmentImpl(text: text, attributes: attributes)

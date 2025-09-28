@@ -3784,11 +3784,15 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         }
         self.searchNavigationNode?.deactivate()
         
-        self.view.window?.endEditing(true)
+        if let firstResponder = self.view.window?.findFirstResponder() {
+            firstResponder.resignFirstResponder()
+        }
     }
     
     func dismissTextInput() {
-        self.view.window?.endEditing(true)
+        if let firstResponder = self.view.window?.findFirstResponder() {
+            firstResponder.resignFirstResponder()
+        }
     }
     
     func collapseInput() {
