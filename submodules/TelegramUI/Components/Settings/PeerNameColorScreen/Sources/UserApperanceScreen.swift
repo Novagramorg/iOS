@@ -183,6 +183,7 @@ final class UserAppearanceScreenComponent: Component {
         private let nameGiftsSection = ComponentView<Empty>()
         
         private var isUpdating: Bool = false
+        private var forceNextUpdate = false
         
         private var component: UserAppearanceScreenComponent?
         private(set) weak var state: EmptyComponentState?
@@ -887,6 +888,9 @@ final class UserAppearanceScreenComponent: Component {
                             }
                         } else {
                             self.updatedPeerProfileEmoji = .some(nil)
+                            if case .starGift = resolvedState.emojiStatus?.content {
+                                self.updatedPeerStatus = .some(nil)
+                            }
                         }
                     default:
                         break
@@ -941,6 +945,12 @@ final class UserAppearanceScreenComponent: Component {
             self.isUpdating = true
             defer {
                 self.isUpdating = false
+            }
+            
+            var forceUpdate = false
+            if self.forceNextUpdate {
+                self.forceNextUpdate = false
+                forceUpdate = true
             }
             
             let environment = environment[EnvironmentType.self].value
@@ -1383,7 +1393,6 @@ final class UserAppearanceScreenComponent: Component {
                     selectedGiftId = id
                 }
                 //TODO:localize
-                self.profileGiftsSection.parentState = self.state
                 let giftsSectionSize = self.profileGiftsSection.update(
                     transition: transition,
                     component: AnyComponent(ListSectionComponent(
@@ -1445,13 +1454,22 @@ final class UserAppearanceScreenComponent: Component {
                                             self.state?.updated(transition: .spring(duration: 0.4))
                                         }
                                     },
-                                    tag: giftListTag
+                                    tag: giftListTag,
+                                    updated: { [weak self] transition in
+                                        if let self {
+                                            self.forceNextUpdate = true
+                                            if !self.isUpdating {
+                                                self.state?.updated(transition: transition)
+                                            }
+                                        }
+                                    }
                                 )
                             )),
                         ],
                         displaySeparators: false
                     )),
                     environment: {},
+                    forceUpdate: forceUpdate,
                     containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 10000.0)
                 )
                 let giftsSectionFrame = CGRect(origin: CGPoint(x: sideInset, y: contentHeight), size: giftsSectionSize)
@@ -1638,7 +1656,6 @@ final class UserAppearanceScreenComponent: Component {
                     }
                 }
                 
-                self.nameGiftsSection.parentState = self.state
                 let giftsSectionSize = self.nameGiftsSection.update(
                     transition: transition,
                     component: AnyComponent(ListSectionComponent(
@@ -1674,13 +1691,21 @@ final class UserAppearanceScreenComponent: Component {
                                         self.updatedPeerNameEmoji = peerColor.backgroundEmojiId
                                         self.state?.updated(transition: .spring(duration: 0.4))
                                     },
-                                    tag: giftListTag
+                                    tag: giftListTag,
+                                    updated: { [weak self] transition in
+                                        if let self {
+                                            if !self.isUpdating {
+                                                self.state?.updated(transition: transition)
+                                            }
+                                        }
+                                    }
                                 )
                             )),
                         ],
                         displaySeparators: false
                     )),
                     environment: {},
+                    forceUpdate: forceUpdate,
                     containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 10000.0)
                 )
                 let giftsSectionFrame = CGRect(origin: CGPoint(x: sideInset, y: contentHeight), size: giftsSectionSize)

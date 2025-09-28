@@ -766,7 +766,10 @@ func _internal_joinGroupCall(account: Account, peerId: PeerId?, joinAs: PeerId?,
                                 let isMuted = (flags & (1 << 1)) != 0
                                 let canChange = (flags & (1 << 2)) != 0
                                 let isVideoEnabled = (flags & (1 << 9)) != 0
+                                let messagesEnabled = (flags & (1 << 17)) != 0
+                                let canChangeMessagesEnabled = (flags & (1 << 18)) != 0
                                 state.defaultParticipantsAreMuted = GroupCallParticipantsContext.State.DefaultParticipantsAreMuted(isMuted: isMuted, canChange: canChange)
+                                state.messagesAreEnabled = GroupCallParticipantsContext.State.MessagesAreEnabled(isEnabled: messagesEnabled, canChange: canChangeMessagesEnabled)
                                 state.title = title
                                 state.recordingStartTimestamp = recordStartDate
                                 state.scheduleTimestamp = scheduleDate
@@ -1583,7 +1586,7 @@ public final class GroupCallParticipantsContext {
         }
         
         case state(update: StateUpdate)
-        case call(isTerminated: Bool, defaultParticipantsAreMuted: State.DefaultParticipantsAreMuted, title: String?, recordingStartTimestamp: Int32?, scheduleTimestamp: Int32?, isVideoEnabled: Bool, participantCount: Int?)
+        case call(isTerminated: Bool, defaultParticipantsAreMuted: State.DefaultParticipantsAreMuted, messagesAreEnabled: State.MessagesAreEnabled, title: String?, recordingStartTimestamp: Int32?, scheduleTimestamp: Int32?, isVideoEnabled: Bool, participantCount: Int?)
         case conferenceChainBlocks(subChainId: Int, blocks: [Data], nextOffset: Int)
     }
     
@@ -1961,9 +1964,10 @@ public final class GroupCallParticipantsContext {
         for update in updates {
             if case let .state(update) = update {
                 stateUpdates.append(update)
-            } else if case let .call(_, defaultParticipantsAreMuted, title, recordingStartTimestamp, scheduleTimestamp, isVideoEnabled, participantsCount) = update {
+            } else if case let .call(_, defaultParticipantsAreMuted, messagesAreEnabled, title, recordingStartTimestamp, scheduleTimestamp, isVideoEnabled, participantsCount) = update {
                 var state = self.stateValue.state
                 state.defaultParticipantsAreMuted = defaultParticipantsAreMuted
+                state.messagesAreEnabled = messagesAreEnabled
                 state.recordingStartTimestamp = recordingStartTimestamp
                 state.title = title
                 state.scheduleTimestamp = scheduleTimestamp
@@ -2336,6 +2340,7 @@ public final class GroupCallParticipantsContext {
             state.adminIds = strongSelf.stateValue.state.adminIds
             state.isCreator = strongSelf.stateValue.state.isCreator
             state.defaultParticipantsAreMuted = strongSelf.stateValue.state.defaultParticipantsAreMuted
+            state.messagesAreEnabled = strongSelf.stateValue.state.messagesAreEnabled
             state.title = strongSelf.stateValue.state.title
             state.recordingStartTimestamp = strongSelf.stateValue.state.recordingStartTimestamp
             state.scheduleTimestamp = strongSelf.stateValue.state.scheduleTimestamp
@@ -2588,7 +2593,7 @@ public final class GroupCallParticipantsContext {
         }
         self.stateValue.state.messagesAreEnabled.isEnabled = isEnabled
         
-        self.updateDefaultMuteDisposable.set((self.account.network.request(Api.functions.phone.toggleGroupCallSettings(flags: 1 << 2, call: self.reference.apiInputGroupCall, joinMuted: nil, messagesEnabled: isEnabled ? .boolTrue : .boolFalse))
+        self.updateMessagesEnabledDisposable.set((self.account.network.request(Api.functions.phone.toggleGroupCallSettings(flags: 1 << 2, call: self.reference.apiInputGroupCall, joinMuted: nil, messagesEnabled: isEnabled ? .boolTrue : .boolFalse))
         |> deliverOnMainQueue).start(next: { [weak self] updates in
             guard let strongSelf = self else {
                 return
@@ -3427,10 +3432,12 @@ struct GroupCallMessageUpdate {
     }
 }
 
-private func serializeGroupCallMessage(text: String, entities: [MessageTextEntity]) -> Data? {
+private func serializeGroupCallMessage(randomId: Int64, text: String, entities: [MessageTextEntity]) -> Data? {
     var dict: [String: Any] = [:]
     dict["_"] = "groupCallMessage"
     
+    dict["random_id"] = randomId
+
     var messageDict: [String: Any] = [:]
     messageDict["_"] = "textWithEntities"
     messageDict["text"] = text
@@ -3498,12 +3505,16 @@ private func serializeGroupCallMessage(text: String, entities: [MessageTextEntit
     }
 }
 
-private func deserializeGroupCallMessage(data: Data) -> (text: String, entities: [MessageTextEntity])? {
+private func deserializeGroupCallMessage(data: Data) -> (randomId: Int64, text: String, entities: [MessageTextEntity])? {
     guard let jsonObject = try? JSONSerialization.jsonObject(with: data, options: []) as? [String: Any] else {
         return nil
     }
     
     guard let type = jsonObject["_"] as? String, type == "groupCallMessage" else {
+        return nil
+    }
+    
+    guard let randomId = jsonObject["random_id"] as? Int64 else {
         return nil
     }
     
@@ -3632,7 +3643,7 @@ private func deserializeGroupCallMessage(data: Data) -> (text: String, entities:
         }
     }
     
-    return (text: text, entities: entities)
+    return (randomId: randomId, text: text, entities: entities)
 }
 
 public final class GroupCallMessagesContext {
@@ -3695,8 +3706,6 @@ public final class GroupCallMessagesContext {
         let callId: Int64
         let reference: InternalGroupCallReference
         let e2eContext: ConferenceCallE2EContext?
-        
-        var nextId: Int64 = 1
         
         var state: State {
             didSet {
@@ -3770,13 +3779,11 @@ public final class GroupCallMessagesContext {
                                 guard let decryptedMessage else {
                                     continue
                                 }
-                                guard let (text, entities) = deserializeGroupCallMessage(data: decryptedMessage) else {
+                                guard let (randomId, text, entities) = deserializeGroupCallMessage(data: decryptedMessage) else {
                                     continue
                                 }
-                                let messageId = self.nextId
-                                self.nextId += 1
                                 messages.append(Message(
-                                    id: messageId,
+                                    id: randomId,
                                     author: transaction.getPeer(addedOpaqueMessage.authorId).flatMap(EnginePeer.init),
                                     text: text,
                                     entities: entities,
@@ -3838,7 +3845,7 @@ public final class GroupCallMessagesContext {
             }
         }
         
-        func send(fromId: EnginePeer.Id, text: String, entities: [MessageTextEntity]) {
+        func send(fromId: EnginePeer.Id, randomId requestedRandomId: Int64?, text: String, entities: [MessageTextEntity]) {
             let _ = (self.account.postbox.transaction { transaction -> Peer? in
                 return transaction.getPeer(fromId)
             }
@@ -3849,12 +3856,15 @@ public final class GroupCallMessagesContext {
                 
                 let currentTime = Int32(CFAbsoluteTimeGetCurrent())
                 
-                let messageId = self.nextId
-                self.nextId += 1
-                
+                var randomId: Int64 = 0
+                if let requestedRandomId {
+                    randomId = requestedRandomId
+                } else {
+                    arc4random_buf(&randomId, 8)
+                }
                 var state = self.state
                 state.messages.append(Message(
-                    id: messageId,
+                    id: randomId,
                     author: fromPeer.flatMap(EnginePeer.init),
                     text: text,
                     entities: entities,
@@ -3863,9 +3873,9 @@ public final class GroupCallMessagesContext {
                 ))
                 self.state = state
                 
-                self.processedIds.insert(messageId)
+                self.processedIds.insert(randomId)
                 
-                if let e2eContext = self.e2eContext, let messageData = serializeGroupCallMessage(text: text, entities: entities) {
+                if let e2eContext = self.e2eContext, let messageData = serializeGroupCallMessage(randomId: randomId, text: text, entities: entities) {
                     let encryptedMessage = e2eContext.state.with({ state -> Data? in
                         guard let state = state.state else {
                             return nil
@@ -3880,7 +3890,11 @@ public final class GroupCallMessagesContext {
                     }
                 } else {
                     var randomId: Int64 = 0
-                    arc4random_buf(&randomId, 8)
+                    if let requestedRandomId {
+                        randomId = requestedRandomId
+                    } else {
+                        arc4random_buf(&randomId, 8)
+                    }
                     self.sendMessageDisposables.add(self.account.network.request(Api.functions.phone.sendGroupCallMessage(
                         call: self.reference.apiInputGroupCall,
                         randomId: randomId,
@@ -3911,9 +3925,9 @@ public final class GroupCallMessagesContext {
         })
     }
     
-    public func send(fromId: EnginePeer.Id, text: String, entities: [MessageTextEntity]) {
+    public func send(fromId: EnginePeer.Id, randomId: Int64?, text: String, entities: [MessageTextEntity]) {
         self.impl.with { impl in
-            impl.send(fromId: fromId, text: text, entities: entities)
+            impl.send(fromId: fromId, randomId: randomId, text: text, entities: entities)
         }
     }
 }

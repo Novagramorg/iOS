@@ -602,6 +602,8 @@ public class ChatMessageReplyInfoNode: ASDisplayNode {
                     textCutout = TextNodeCutout(topLeft: CGSize(width: imageTextInset + 6.0, height: 10.0))
                     textCutoutWidth = imageTextInset + 6.0
                 }
+            } else if let _ = giftEmojiFileId {
+                additionalTitleWidth += 16.0
             }
             adjustedConstrainedTextSize.width -= textLeftInset
             

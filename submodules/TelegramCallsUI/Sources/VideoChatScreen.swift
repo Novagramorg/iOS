@@ -158,6 +158,15 @@ extension VideoChatCall {
             conferenceSource.setCurrentAudioOutput(output)
         }
     }
+    
+    func setMessagesEnabled(isEnabled: Bool) {
+        switch self {
+        case let .group(group):
+            group.updateMessagesEnabled(isEnabled: isEnabled)
+        case .conferenceSource:
+            break
+        }
+    }
 }
 
 final class VideoChatScreenComponent: Component {
@@ -239,7 +248,7 @@ final class VideoChatScreenComponent: Component {
         let videoControlButton = ComponentView<Empty>()
         let leaveButton = ComponentView<Empty>()
         let microphoneButton = ComponentView<Empty>()
-        let messageButton = ComponentView<Empty>()
+        var messageButton: ComponentView<Empty>?
         
         let speakerButton = ComponentView<Empty>()
         
@@ -265,6 +274,7 @@ final class VideoChatScreenComponent: Component {
         weak var disappearingReactionContextNode: ReactionContextNode?
         weak var willDismissReactionContextNode: ReactionContextNode?
 
+        var messageNotifications: [(id: Int64, icon: VideoChatNotificationIcon, text: String, expiresOn: Int32)] = []
         let messagesList = ComponentView<Empty>()
         var messagesState: GroupCallMessagesContext.State?
         var messagesStateDisposable: Disposable?
@@ -493,6 +503,9 @@ final class VideoChatScreenComponent: Component {
                                 return false
                             }
                             if let messageListView = self.messagesList.view, view.isDescendant(of: messageListView) {
+                                return false
+                            }
+                            if let inputPanelView = self.inputPanel.view, view.isDescendant(of: inputPanelView) {
                                 return false
                             }
                         }
@@ -1020,9 +1033,13 @@ final class VideoChatScreenComponent: Component {
         }
         
         private func onMessagePressed() {
-            self.inputPanelIsActive = true
-            self.state?.updated()
-            self.activateInput()
+            if let callState = self.callState, callState.messagesAreEnabled {
+                self.inputPanelIsActive = true
+                self.state?.updated()
+                self.activateInput()
+            } else if let inviteLinks = self.inviteLinks {
+                self.presentShare(inviteLinks)
+            }
         }
         
         private func onLeavePressed() {
@@ -1182,6 +1199,7 @@ final class VideoChatScreenComponent: Component {
                     muteState: isMuted ? GroupCallParticipantsContext.Participant.MuteState(canUnmute: true, mutedByYou: true) : nil,
                     defaultParticipantMuteState: nil,
                     messagesAreEnabled: true,
+                    canEnableMessages: false,
                     recordingStartTimestamp: nil,
                     title: nil,
                     raisedHand: false,
@@ -1371,7 +1389,7 @@ final class VideoChatScreenComponent: Component {
             })
         }
         
-        private func sendInput() {
+        private func sendInput(randomId: Int64? = nil) {
             guard let inputPanelView = self.inputPanel.view as? MessageInputPanelComponent.View else {
                 return
             }
@@ -1385,11 +1403,11 @@ final class VideoChatScreenComponent: Component {
                     return
                 }
                 let entities = generateTextEntities(text.string, enabledTypes: [.mention, .hashtag, .allUrl], currentEntities: generateChatInputTextEntities(text))
-                call.sendMessage(text: text.string, entities: entities)
+                call.sendMessage(randomId: randomId, text: text.string, entities: entities)
             }
             
             inputPanelView.clearSendMessageInput(updateState: true)
-                        
+                      
 //            self.currentInputMode = .text
 //            if hasFirstResponder(self) {
 //                self.endEditing(true)
@@ -1824,7 +1842,7 @@ final class VideoChatScreenComponent: Component {
                         } else {
                             text = environment.strings.VoiceChat_DisplayAsSuccess(peer.displayTitle(strings: environment.strings, displayOrder: groupCall.accountContext.sharedContext.currentPresentationData.with({ $0 }).nameDisplayOrder)).string
                         }
-                        self.presentUndoOverlay(content: .invitedToVoiceChat(context: groupCall.accountContext, peer: peer, title: nil, text: text, action: nil, duration: 3), action: { _ in return false })
+                        self.displayNotification(icon: .peer(peer), text: text, duration: 3)
                     })
                     
                     self.memberEventsDisposable?.dispose()
@@ -1849,8 +1867,9 @@ final class VideoChatScreenComponent: Component {
                                 }
                                 
                                 if displayEvent {
-                                    let text = environment.strings.VoiceChat_PeerJoinedText(event.peer.displayTitle(strings: environment.strings, displayOrder: groupCall.accountContext.sharedContext.currentPresentationData.with({ $0 }).nameDisplayOrder)).string
-                                    self.presentUndoOverlay(content: .invitedToVoiceChat(context: groupCall.accountContext, peer: event.peer, title: nil, text: text, action: nil, duration: 3), action: { _ in return false })
+                                    let text = environment.strings.VoiceChat_PeerJoinedText("**\(event.peer.displayTitle(strings: environment.strings, displayOrder: groupCall.accountContext.sharedContext.currentPresentationData.with({ $0 }).nameDisplayOrder))**").string
+                                    
+                                    self.displayNotification(icon: .peer(event.peer), text: text, duration: 3)
                                 }
                             }
                         } else {
@@ -2294,10 +2313,7 @@ final class VideoChatScreenComponent: Component {
                 alphaTransition.setAlpha(view: navigationLeftButtonView, alpha: self.isAnimatedOutFromPrivateCall ? 0.0 : 1.0)
             }
             
-            var navigationRightButtonFrame = CGRect(origin: CGPoint(x: availableSize.width - rightInset - navigationButtonAreaWidth + floor((navigationButtonAreaWidth - navigationRightButtonSize.width) * 0.5) + navigationButtonInset, y: topInset + floor((navigationBarHeight - navigationRightButtonSize.height) * 0.5)), size: navigationRightButtonSize)
-            if buttonsOnTheSide {
-                navigationRightButtonFrame.origin.x += 42.0
-            }
+            let navigationRightButtonFrame = CGRect(origin: CGPoint(x: availableSize.width - rightInset - navigationButtonAreaWidth + floor((navigationButtonAreaWidth - navigationRightButtonSize.width) * 0.5) + navigationButtonInset, y: topInset + floor((navigationBarHeight - navigationRightButtonSize.height) * 0.5)), size: navigationRightButtonSize)
             if let navigationRightButtonView = self.navigationRightButton.view {
                 if navigationRightButtonView.superview == nil {
                     self.containerView.addSubview(navigationRightButtonView)
@@ -2368,16 +2384,15 @@ final class VideoChatScreenComponent: Component {
             var idleTitleStatusText: [AnimatedTextComponent.Item] = []
             if let callState = self.callState {
                 if callState.networkState == .connected, let members = self.members {
-                    //TODO:localize
                     let totalCount = max(1, members.totalCount)
                     idleTitleStatusText.append(AnimatedTextComponent.Item(id: AnyHashable(0), isUnbreakable: false, content: .number(totalCount, minDigits: 0)))
-                    idleTitleStatusText.append(AnimatedTextComponent.Item(id: AnyHashable(1), isUnbreakable: false, content: .text(totalCount == 1 ? " participant" : " participants")))
+                    idleTitleStatusText.append(AnimatedTextComponent.Item(id: AnyHashable(1), isUnbreakable: false, content: .text(environment.strings.VoiceChat_SubtitleParticipants(Int32(totalCount)))))
                     if let lastTitleEvent = self.lastTitleEvent {
                         idleTitleStatusText.append(AnimatedTextComponent.Item(id: AnyHashable(6), isUnbreakable: false, content: .text(", \(lastTitleEvent)")))
                     } else if !self.invitedPeers.isEmpty {
                         idleTitleStatusText.append(AnimatedTextComponent.Item(id: AnyHashable(3), isUnbreakable: true, content: .text(", ")))
                         idleTitleStatusText.append(AnimatedTextComponent.Item(id: AnyHashable(4), isUnbreakable: false, content: .number(self.invitedPeers.count, minDigits: 0)))
-                        idleTitleStatusText.append(AnimatedTextComponent.Item(id: AnyHashable(5), isUnbreakable: false, content: .text(" invited")))
+                        idleTitleStatusText.append(AnimatedTextComponent.Item(id: AnyHashable(5), isUnbreakable: false, content: .text(environment.strings.VoiceChat_SubtitleInvited(Int32(self.invitedPeers.count)))))
                     }
                 } else if callState.scheduleTimestamp != nil {
                     idleTitleStatusText.append(AnimatedTextComponent.Item(id: AnyHashable(0), isUnbreakable: false, content: .text(environment.strings.VoiceChat_Scheduled)))
@@ -2557,6 +2572,7 @@ final class VideoChatScreenComponent: Component {
             
             let videoButtonContent: VideoChatActionButtonComponent.Content?
             let videoControlButtonContent: VideoChatActionButtonComponent.Content
+            let messageButtonContent: VideoChatActionButtonComponent.Content?
 
             var buttonAudio: VideoChatActionButtonComponent.Content.Audio = .speaker
             var buttonIsEnabled = false
@@ -2599,12 +2615,27 @@ final class VideoChatScreenComponent: Component {
                 }
             }
             
-            
+            if let callState = self.callState, !callState.messagesAreEnabled {
+                if let _ = self.inviteLinks {
+                    messageButtonContent = .share
+                } else {
+                    messageButtonContent = nil
+                }
+            } else {
+                messageButtonContent = .message
+            }
+                
             let actionButtonDiameter: CGFloat = 56.0
             let expandedMicrophoneButtonDiameter: CGFloat = actionButtonDiameter
             let collapsedMicrophoneButtonDiameter: CGFloat = actionButtonDiameter // 116.0
             
-            let buttonsCount = videoButtonContent == nil ? 4 : 5
+            var buttonsCount = 3
+            if let _ = videoButtonContent {
+                buttonsCount += 1
+            }
+            if let _ = messageButtonContent {
+                buttonsCount += 1
+            }
             
             let buttonsWidth: CGFloat = actionButtonDiameter * CGFloat(buttonsCount)
             let remainingButtonsSpace: CGFloat
@@ -2688,21 +2719,41 @@ final class VideoChatScreenComponent: Component {
             var thirdActionButtonFrame = CGRect(origin: CGPoint(x: microphoneButtonFrame.maxX + actionMicrophoneButtonSpacing, y: microphoneButtonFrame.minY + floor((microphoneButtonFrame.height - actionButtonDiameter) * 0.5)), size: actionButtonSize)
             
             if buttonsCount == 4 {
-                if buttonsOnTheSide {
-                    firstActionButtonFrame.origin.x = microphoneButtonFrame.minX
-                    secondActionButtonFrame.origin.x = microphoneButtonFrame.minX
-                    thirdActionButtonFrame.origin.x = microphoneButtonFrame.minX
-                    fourthActionButtonFrame.origin.x = microphoneButtonFrame.minX
-                    
-                    microphoneButtonFrame.origin.y = availableSize.height * 0.5 - landscapeControlsSpacing * 0.5 - actionButtonDiameter
-                    firstActionButtonFrame.origin.y = microphoneButtonFrame.minY - landscapeControlsSpacing - actionButtonDiameter
-                    thirdActionButtonFrame.origin.y = microphoneButtonFrame.maxY + landscapeControlsSpacing
-                    fourthActionButtonFrame.origin.y = microphoneButtonFrame.maxY + landscapeControlsSpacing + actionButtonDiameter + landscapeControlsSpacing
-                } else {
-                    microphoneButtonFrame.origin.x = availableSize.width * 0.5 - actionMicrophoneButtonSpacing * 0.5 - actionButtonDiameter
-                    firstActionButtonFrame.origin.x = microphoneButtonFrame.minX - actionMicrophoneButtonSpacing - actionButtonDiameter
-                    thirdActionButtonFrame.origin.x = microphoneButtonFrame.maxX + actionMicrophoneButtonSpacing
-                    fourthActionButtonFrame.origin.x = microphoneButtonFrame.maxX + actionMicrophoneButtonSpacing + actionButtonDiameter + actionMicrophoneButtonSpacing
+                if let _ = messageButtonContent {
+                    if buttonsOnTheSide {
+                        firstActionButtonFrame.origin.x = microphoneButtonFrame.minX
+                        secondActionButtonFrame.origin.x = microphoneButtonFrame.minX
+                        thirdActionButtonFrame.origin.x = microphoneButtonFrame.minX
+                        fourthActionButtonFrame.origin.x = microphoneButtonFrame.minX
+                        
+                        microphoneButtonFrame.origin.y = availableSize.height * 0.5 - landscapeControlsSpacing * 0.5 - actionButtonDiameter
+                        firstActionButtonFrame.origin.y = microphoneButtonFrame.minY - landscapeControlsSpacing - actionButtonDiameter
+                        thirdActionButtonFrame.origin.y = microphoneButtonFrame.maxY + landscapeControlsSpacing
+                        fourthActionButtonFrame.origin.y = microphoneButtonFrame.maxY + landscapeControlsSpacing + actionButtonDiameter + landscapeControlsSpacing
+                    } else {
+                        microphoneButtonFrame.origin.x = availableSize.width * 0.5 - actionMicrophoneButtonSpacing * 0.5 - actionButtonDiameter
+                        firstActionButtonFrame.origin.x = microphoneButtonFrame.minX - actionMicrophoneButtonSpacing - actionButtonDiameter
+                        thirdActionButtonFrame.origin.x = microphoneButtonFrame.maxX + actionMicrophoneButtonSpacing
+                        fourthActionButtonFrame.origin.x = microphoneButtonFrame.maxX + actionMicrophoneButtonSpacing + actionButtonDiameter + actionMicrophoneButtonSpacing
+                    }
+                }
+                if let _ = videoButtonContent {
+                    if buttonsOnTheSide {
+                        firstActionButtonFrame.origin.x = microphoneButtonFrame.minX
+                        secondActionButtonFrame.origin.x = microphoneButtonFrame.minX
+                        thirdActionButtonFrame.origin.x = microphoneButtonFrame.minX
+                        fourthActionButtonFrame.origin.x = microphoneButtonFrame.minX
+                        
+                        microphoneButtonFrame.origin.y = availableSize.height * 0.5 + landscapeControlsSpacing * 0.5
+                        firstActionButtonFrame.origin.y = microphoneButtonFrame.minY - landscapeControlsSpacing - actionButtonDiameter - landscapeControlsSpacing - actionButtonDiameter
+                        secondActionButtonFrame.origin.y = microphoneButtonFrame.minY - landscapeControlsSpacing - actionButtonDiameter
+                        fourthActionButtonFrame.origin.y = microphoneButtonFrame.maxY + landscapeControlsSpacing
+                    } else {
+                        microphoneButtonFrame.origin.x = availableSize.width * 0.5 + actionMicrophoneButtonSpacing * 0.5
+                        firstActionButtonFrame.origin.x = microphoneButtonFrame.minX - actionMicrophoneButtonSpacing * 2.0 - actionButtonDiameter * 2.0
+                        secondActionButtonFrame.origin.x = microphoneButtonFrame.minX - actionMicrophoneButtonSpacing - actionButtonDiameter
+                        fourthActionButtonFrame.origin.x = microphoneButtonFrame.maxX + actionMicrophoneButtonSpacing
+                    }
                 }
             } else if buttonsOnTheSide {
                 firstActionButtonFrame.origin.x = microphoneButtonFrame.minX
@@ -3127,7 +3178,6 @@ final class VideoChatScreenComponent: Component {
                 transition.setPosition(view: microphoneButtonView, position: microphoneButtonFrame.center)
                 transition.setBounds(view: microphoneButtonView, bounds: CGRect(origin: CGPoint(), size: microphoneButtonFrame.size))
             }
-            
 
             let _ = self.speakerButton.update(
                 transition: transition,
@@ -3202,8 +3252,12 @@ final class VideoChatScreenComponent: Component {
                 )
                 if let videoButtonView = videoButton.view {
                     if videoButtonView.superview == nil {
-                        if let speakerButtonView = self.speakerButton.view {
-                            self.containerView.insertSubview(videoButtonView, belowSubview: speakerButtonView)
+                        if let microphoneButtonView = self.microphoneButton.view {
+                            self.containerView.insertSubview(videoButtonView, aboveSubview: microphoneButtonView)
+                        }
+                        if !transition.animation.isImmediate {
+                            transition.animateScale(view: videoButtonView, from: 0.01, to: 1.0)
+                            transition.animateAlpha(view: videoButtonView, from: 0.0, to: 1.0)
                         }
                     }
                     videoButtonTransition.setPosition(view: videoButtonView, position: secondActionButtonFrame.center)
@@ -3213,40 +3267,64 @@ final class VideoChatScreenComponent: Component {
                 self.videoButton = nil
                 if let videoButtonView = videoButton.view {
                     let transition = ComponentTransition(animation: .curve(duration: 0.25, curve: .easeInOut))
-                    transition.animateScale(view: videoButtonView, from: 1.0, to: 0.01)
-                    transition.animateAlpha(view: videoButtonView, from: 1.0, to: 0.0, completion: { _ in
+                    transition.setScale(view: videoButtonView, scale: 0.01)
+                    transition.setAlpha(view: videoButtonView, alpha: 0.0, completion: { _ in
                         videoButtonView.removeFromSuperview()
                     })
                 }
             }
             
-            let _ = self.messageButton.update(
-                transition: transition,
-                component: AnyComponent(PlainButtonComponent(
-                    content: AnyComponent(VideoChatActionButtonComponent(
-                        strings: environment.strings,
-                        content: .message,
-                        microphoneState: actionButtonMicrophoneState,
-                        isCollapsed: areButtonsActuallyCollapsed || buttonsOnTheSide
-                    )),
-                    effectAlignment: .center,
-                    action: { [weak self] in
-                        guard let self else {
-                            return
-                        }
-                        self.onMessagePressed()
-                    },
-                    animateAlpha: false
-                )),
-                environment: {},
-                containerSize: CGSize(width: actionButtonDiameter, height: actionButtonDiameter)
-            )
-            if let messageButtonView = self.messageButton.view {
-                if messageButtonView.superview == nil {
-                    self.containerView.addSubview(messageButtonView)
+            if let messageButtonContent {
+                var messageButtonTransition = transition
+                let messageButton: ComponentView<Empty>
+                if let current = self.messageButton {
+                    messageButton = current
+                } else {
+                    messageButtonTransition = .immediate
+                    messageButton = ComponentView<Empty>()
+                    self.messageButton = messageButton
                 }
-                transition.setPosition(view: messageButtonView, position: thirdActionButtonFrame.center)
-                transition.setBounds(view: messageButtonView, bounds: CGRect(origin: CGPoint(), size: thirdActionButtonFrame.size))
+                
+                let _ = messageButton.update(
+                    transition: messageButtonTransition,
+                    component: AnyComponent(PlainButtonComponent(
+                        content: AnyComponent(VideoChatActionButtonComponent(
+                            strings: environment.strings,
+                            content: messageButtonContent,
+                            microphoneState: actionButtonMicrophoneState,
+                            isCollapsed: areButtonsActuallyCollapsed || buttonsOnTheSide
+                        )),
+                        effectAlignment: .center,
+                        action: { [weak self] in
+                            self?.onMessagePressed()
+                        },
+                        animateAlpha: false
+                    )),
+                    environment: {},
+                    containerSize: CGSize(width: actionButtonDiameter, height: actionButtonDiameter)
+                )
+                if let messageButtonView = messageButton.view {
+                    if messageButtonView.superview == nil {
+                        if let microphoneButtonView = self.microphoneButton.view {
+                            self.containerView.insertSubview(messageButtonView, aboveSubview: microphoneButtonView)
+                        }
+                        if !transition.animation.isImmediate {
+                            transition.animateScale(view: messageButtonView, from: 0.01, to: 1.0)
+                            transition.animateAlpha(view: messageButtonView, from: 0.0, to: 1.0)
+                        }
+                    }
+                    messageButtonTransition.setPosition(view: messageButtonView, position: thirdActionButtonFrame.center)
+                    messageButtonTransition.setBounds(view: messageButtonView, bounds: CGRect(origin: CGPoint(), size: thirdActionButtonFrame.size))
+                }
+            } else if let messageButton = self.messageButton, messageButton.view?.superview != nil {
+                self.messageButton = nil
+                if let messageButtonView = messageButton.view {
+                    let transition = ComponentTransition(animation: .curve(duration: 0.25, curve: .easeInOut))
+                    transition.setScale(view: messageButtonView, scale: 0.01)
+                    transition.setAlpha(view: messageButtonView, alpha: 0.0, completion: { _ in
+                        messageButtonView.removeFromSuperview()
+                    })
+                }
             }
             
             let _ = self.leaveButton.update(
@@ -3399,7 +3477,6 @@ final class VideoChatScreenComponent: Component {
                     characterLimit = Int(value)
                 }
                 
-                //TODO:localize
                 self.inputPanel.parentState = state
                 inputPanelSize = self.inputPanel.update(
                     transition: transition,
@@ -3409,7 +3486,7 @@ final class VideoChatScreenComponent: Component {
                         theme: environment.theme,
                         strings: environment.strings,
                         style: .glass,
-                        placeholder: .plain("Message"),
+                        placeholder: .plain(environment.strings.VoiceChat_MessagePlaceholder),
                         sendPaidMessageStars: nil,
                         maxLength: characterLimit,
                         queryTypes: [.mention, .hashtag],
@@ -3419,10 +3496,8 @@ final class VideoChatScreenComponent: Component {
                         nextInputMode: { _ in  return nextInputMode },
                         areVoiceMessagesAvailable: false,
                         presentController: { c in
-                            //controller.present(c, in: .window(.root))
                         },
                         presentInGlobalOverlay: { c in
-                            //controller.presentInGlobalOverlay(c)
                         },
                         sendMessageAction: { [weak self] transition in
                             guard let self else {
@@ -3431,7 +3506,7 @@ final class VideoChatScreenComponent: Component {
                             if self.inputPanelExternalState.hasText {
                                 self.nextSendMessageTransition = transition
 
-                                self.sendInput()
+                                self.sendInput(randomId: transition?.randomId)
                             } else {
                                 self.inputPanelIsActive = false
                                 self.deactivateInput()
@@ -3783,7 +3858,10 @@ final class VideoChatScreenComponent: Component {
             if let next = self.nextSendMessageTransition {
                 self.nextSendMessageTransition = nil
                 sendActionTransition = MessageListComponent.SendActionTransition(
-                    textSnapshotView: next.textSnapshotView, globalFrame: next.globalFrame, cornerRadius: next.cornerRadius
+                    randomId: next.randomId,
+                    textSnapshotView: next.textSnapshotView,
+                    globalFrame: next.globalFrame,
+                    cornerRadius: next.cornerRadius
                 )
             }
             
@@ -3796,12 +3874,33 @@ final class VideoChatScreenComponent: Component {
                     messageItems.append(
                         MessageListComponent.Item(
                             id: message.id,
-                            peer: author,
+                            icon: .peer(author),
+                            isNotification: false,
                             text: message.text,
                             entities: message.entities
                         )
                     )
                 }
+            }
+            
+            for notification in self.messageNotifications {
+                let icon: MessageItemComponent.Icon
+                switch notification.icon {
+                case let .peer(peer):
+                    icon = .peer(peer)
+                case let .icon(name):
+                    icon = .icon(name)
+                }
+                messageItems.insert(
+                    MessageListComponent.Item(
+                        id: notification.id,
+                        icon: icon,
+                        isNotification: true,
+                        text: notification.text,
+                        entities: []
+                    ),
+                    at: 0
+                )
             }
 
             let normalMessagesBottomInset: CGFloat = buttonsOnTheSide ? 16.0 : availableSize.height - microphoneButtonFrame.minY + 16.0

@@ -1226,6 +1226,46 @@ func _internal_dropStarGiftOriginalDetails(account: Account, reference: StarGift
         |> mapError { _ -> DropStarGiftOriginalDetailsError in
             return .generic
         }
+        |> mapToSignal { result in
+            if case .done = result, case let .message(messageId) = reference {
+                return account.postbox.transaction { transaction in
+                    transaction.updateMessage(messageId, update: { currentMessage in
+                        var storeForwardInfo: StoreMessageForwardInfo?
+                        if let forwardInfo = currentMessage.forwardInfo {
+                            storeForwardInfo = StoreMessageForwardInfo(authorId: forwardInfo.author?.id, sourceId: forwardInfo.source?.id, sourceMessageId: forwardInfo.sourceMessageId, date: forwardInfo.date, authorSignature: forwardInfo.authorSignature, psaType: forwardInfo.psaType, flags: forwardInfo.flags)
+                        }
+                        var media = currentMessage.media
+                        if let action = media.first(where: { $0 is TelegramMediaAction }) as? TelegramMediaAction, case let .starGiftUnique(gift, isUpgrade, isTransferred, savedToProfile, canExportDate, transferStars, isRefunded, isPrepaidUpgrade, peerId, senderId, savedId, resaleAmount, canTransferDate, canResaleDate, _, assigned) = action.action, case let .unique(uniqueGift) = gift {
+                            let updatedAttributes = uniqueGift.attributes.filter { $0.attributeType != .originalInfo }
+                            media = [
+                                TelegramMediaAction(
+                                    action: .starGiftUnique(
+                                        gift: .unique(uniqueGift.withAttributes(updatedAttributes)),
+                                        isUpgrade: isUpgrade,
+                                        isTransferred: isTransferred,
+                                        savedToProfile: savedToProfile,
+                                        canExportDate: canExportDate,
+                                        transferStars: transferStars,
+                                        isRefunded: isRefunded,
+                                        isPrepaidUpgrade: isPrepaidUpgrade,
+                                        peerId: peerId,
+                                        senderId: senderId,
+                                        savedId: savedId,
+                                        resaleAmount: resaleAmount,
+                                        canTransferDate: canTransferDate,
+                                        canResaleDate: canResaleDate,
+                                        dropOriginalDetailsStars: nil,
+                                        assigned: assigned)
+                                )
+                            ]
+                        }
+                        return .update(StoreMessage(id: currentMessage.id, customStableId: nil, globallyUniqueId: currentMessage.globallyUniqueId, groupingKey: currentMessage.groupingKey, threadId: currentMessage.threadId, timestamp: currentMessage.timestamp, flags: StoreMessageFlags(currentMessage.flags), tags: currentMessage.tags, globalTags: currentMessage.globalTags, localTags: currentMessage.localTags, forwardInfo: storeForwardInfo, authorId: currentMessage.author?.id, text: currentMessage.text, attributes: currentMessage.attributes, media: media))
+                    })
+                }
+                |> castError(DropStarGiftOriginalDetailsError.self)
+            }
+            return .complete()
+        }
         |> ignoreValues
     }
 }

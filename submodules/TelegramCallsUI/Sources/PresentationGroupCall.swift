@@ -20,7 +20,7 @@ import CallsEmoji
 import TdBinding
 
 private extension PresentationGroupCallState {
-    static func initialValue(myPeerId: PeerId, title: String?, scheduleTimestamp: Int32?, subscribedToScheduled: Bool) -> PresentationGroupCallState {
+    static func initialValue(myPeerId: PeerId, title: String?, scheduleTimestamp: Int32?, subscribedToScheduled: Bool, isChannel: Bool) -> PresentationGroupCallState {
         return PresentationGroupCallState(
             myPeerId: myPeerId,
             networkState: .connecting,
@@ -28,7 +28,8 @@ private extension PresentationGroupCallState {
             adminIds: Set(),
             muteState: GroupCallParticipantsContext.Participant.MuteState(canUnmute: true, mutedByYou: false),
             defaultParticipantMuteState: nil,
-            messagesAreEnabled: true,
+            messagesAreEnabled: !isChannel,
+            canEnableMessages: false,
             recordingStartTimestamp: nil,
             title: title,
             raisedHand: false,
@@ -874,7 +875,7 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
         self.schedulePending = initialCall == nil
         self.isScheduled = initialCall == nil || initialCall?.description.scheduleTimestamp != nil
         
-        self.stateValue = PresentationGroupCallState.initialValue(myPeerId: self.joinAsPeerId, title: initialCall?.description.title, scheduleTimestamp: initialCall?.description.scheduleTimestamp, subscribedToScheduled: initialCall?.description.subscribedToScheduled ?? false)
+        self.stateValue = PresentationGroupCallState.initialValue(myPeerId: self.joinAsPeerId, title: initialCall?.description.title, scheduleTimestamp: initialCall?.description.scheduleTimestamp, subscribedToScheduled: initialCall?.description.subscribedToScheduled ?? false, isChannel: isChannel)
         self.statePromise = ValuePromise(self.stateValue)
         
         self.temporaryJoinTimestamp = Int32(CFAbsoluteTimeGetCurrent() + NSTimeIntervalSince1970)
@@ -1104,7 +1105,7 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
                                     }
                                 }
                             }
-                        case let .call(isTerminated, _, _, _, _, _, _):
+                        case let .call(isTerminated, _, _, _, _, _, _, _):
                             if isTerminated {
                                 self.markAsCanBeRemoved()
                             }
@@ -1538,7 +1539,7 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
                 adminIds: Set(),
                 isCreator: false,
                 defaultParticipantsAreMuted: callInfo.defaultParticipantsAreMuted ?? GroupCallParticipantsContext.State.DefaultParticipantsAreMuted(isMuted: self.stateValue.defaultParticipantMuteState == .muted, canChange: true),
-                messagesAreEnabled: callInfo.messagesAreEnabled ?? GroupCallParticipantsContext.State.MessagesAreEnabled(isEnabled: self.stateValue.messagesAreEnabled, canChange: true),
+                messagesAreEnabled: callInfo.messagesAreEnabled ?? GroupCallParticipantsContext.State.MessagesAreEnabled(isEnabled: self.stateValue.messagesAreEnabled, canChange: self.stateValue.canEnableMessages),
                 sortAscending: true,
                 recordingStartTimestamp: nil,
                 title: self.stateValue.title,
@@ -2615,6 +2616,8 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
                     if (state.isCreator || self.stateValue.adminIds.contains(self.accountContext.account.peerId)) && state.defaultParticipantsAreMuted.canChange {
                         self.stateValue.defaultParticipantMuteState = state.defaultParticipantsAreMuted.isMuted ? .muted : .unmuted
                     }
+                    self.stateValue.messagesAreEnabled = state.messagesAreEnabled.isEnabled
+                    self.stateValue.canEnableMessages = state.messagesAreEnabled.canChange
                     self.stateValue.recordingStartTimestamp = state.recordingStartTimestamp
                     self.stateValue.title = state.title
                     self.stateValue.scheduleTimestamp = state.scheduleTimestamp
@@ -3907,6 +3910,10 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
         self.participantsContext?.updateDefaultParticipantsAreMuted(isMuted: isMuted)
     }
     
+    public func updateMessagesEnabled(isEnabled: Bool) {
+        self.participantsContext?.updateMessagesEnabled(isEnabled: isEnabled)
+    }
+    
     func video(endpointId: String) -> Signal<OngoingGroupCallContext.VideoFrameData, NoError>? {
         return Signal { [weak self] subscriber in
             guard let self else {
@@ -3997,9 +4004,9 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
         })
     }
     
-    public func sendMessage(text: String, entities: [MessageTextEntity]) {
+    public func sendMessage(randomId: Int64? = nil, text: String, entities: [MessageTextEntity]) {
         if let messagesContext = self.messagesContext {
-            messagesContext.send(fromId: self.joinAsPeerId, text: text, entities: entities)
+            messagesContext.send(fromId: self.joinAsPeerId, randomId: randomId, text: text, entities: entities)
         }
     }
 }

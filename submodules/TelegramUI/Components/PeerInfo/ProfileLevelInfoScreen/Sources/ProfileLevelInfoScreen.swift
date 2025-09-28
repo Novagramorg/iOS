@@ -480,14 +480,13 @@ private final class ProfileLevelInfoScreenComponent: Component {
             
             levelFraction = max(0.0, levelFraction)
             
-            //TODO:localize
             let levelInfoSize = self.levelInfo.update(
                 transition: isChangingPreview ? ComponentTransition.immediate.withUserData(ProfileLevelRatingBarComponent.TransitionHint(animate: true)) : .immediate,
                 component: AnyComponent(ProfileLevelRatingBarComponent(
                     theme: environment.theme,
                     value: levelFraction,
                     leftLabel: currentLevel < 0 ? "" : environment.strings.ProfileLevelInfo_LevelIndex(Int32(currentLevel)),
-                    rightLabel: currentLevel < 0 ? "Negative rating" : nextLevel.flatMap { environment.strings.ProfileLevelInfo_LevelIndex(Int32($0)) } ?? "",
+                    rightLabel: currentLevel < 0 ? environment.strings.ProfileLevelInfo_NegativeRating : nextLevel.flatMap { environment.strings.ProfileLevelInfo_LevelIndex(Int32($0)) } ?? "",
                     badgeValue: badgeText,
                     badgeTotal: badgeTextSuffix,
                     level: Int(currentLevel),

@@ -114,6 +114,7 @@ import VerifyAlertController
 import GiftViewScreen
 import PeerMessagesMediaPlaylist
 import EdgeEffect
+import Pasteboard
 
 public enum PeerInfoAvatarEditingMode {
     case generic
@@ -6680,7 +6681,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                 }
                 if !headerButtons.contains(.discussion) && hasDiscussion {
                     //TODO:localize
-                    items.append(.action(ContextMenuActionItem(text: "View Discussion", icon: { theme in
+                    items.append(.action(ContextMenuActionItem(text: presentationData.strings.PeerInfo_ViewDiscussion, icon: { theme in
                         generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/MessageBubble"), color: theme.contextMenu.primaryColor)
                     }, action: { [weak self] _, f in
                         f(.dismissWithoutContent)
@@ -8278,8 +8279,10 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
         }
         
         var noteText: String?
+        var noteEntities: [MessageTextEntity]?
         if let cachedData = cachedData as? CachedUserData {
             noteText = cachedData.note?.text
+            noteEntities = cachedData.note?.entities
         }
         
         guard let noteText, !noteText.isEmpty else {
@@ -8290,7 +8293,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
             guard let self else {
                 return
             }
-            UIPasteboard.general.string = noteText
+            storeMessageTextInPasteboard(noteText, entities: noteEntities ?? [])
             
             let toastText = self.presentationData.strings.PeerInfo_ToastNoteCopied
             self.controller?.present(UndoOverlayController(presentationData: self.presentationData, content: .copy(text: toastText), elevatedLayout: false, animateInAsReplacement: false, action: { _ in return false }), in: .current)

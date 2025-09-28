@@ -462,12 +462,11 @@ public final class ButtonComponent: Component {
                 if let self, let component = self.component, component.isEnabled {
                     switch component.background.style {
                     case .glass:
-                        let transition = ComponentTransition(animation: .curve(duration: 0.3, curve: .easeInOut))
+                        let transition = ComponentTransition(animation: .curve(duration: highlighted ? 0.25 : 0.35, curve: .spring))
                         if highlighted {
                             let highlightedColor = component.background.color.withMultiplied(hue: 1.0, saturation: 0.77, brightness: 1.01)
                             transition.setBackgroundColor(view: self.containerView, color: highlightedColor)
                             transition.setScale(view: self.containerView, scale: 1.05)
-                            
                         } else {
                             transition.setBackgroundColor(view: self.containerView, color: component.background.color)
                             transition.setScale(view: self.containerView, scale: 1.0)

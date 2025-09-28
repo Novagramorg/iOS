@@ -26,7 +26,6 @@ import GZip
 import BalancedTextComponent
 import Markdown
 import PremiumStarComponent
-import GlassBackgroundComponent
 
 public final class ReactionItem {
     public struct Reaction: Equatable {
