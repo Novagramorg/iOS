@@ -365,7 +365,7 @@ final class VideoChatMicButtonComponent: Component {
                     titleText = component.strings.VoiceChat_Unmute
                 }
             case let .unmuted(isPushToTalk):
-                titleText = isPushToTalk ? component.strings.VoiceChat_Live : component.strings.VoiceChat_Mute
+                titleText = isPushToTalk ? component.strings.VoiceChat_Live : component.strings.VoiceChat_MuteShort
             case let .raiseHand(isRaised):
                 if isRaised {
                     titleText = component.strings.VoiceChat_AskedToSpeak

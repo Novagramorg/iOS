@@ -144,7 +144,7 @@ final class MessageListComponent: Component {
             let previousContentHeight = self.scrollView.contentSize.height
             let wasAtBottom = self.isAtBottom(tolerance: 1.0)
             
-            let maxWidth: CGFloat = 330.0
+            let maxWidth: CGFloat = min(availableSize.width - 16.0, 330.0)
             
             var measured: [(id: AnyHashable, size: CGSize, item: MessageListComponent.Item, itemTransition: ComponentTransition)] = []
             measured.reserveCapacity(component.items.count)

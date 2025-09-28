@@ -1105,7 +1105,7 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
                                     }
                                 }
                             }
-                        case let .call(isTerminated, _, _, _, _, _, _, _):
+                        case let .call(isTerminated, _, _, _, _, _, _, _, _):
                             if isTerminated {
                                 self.markAsCanBeRemoved()
                             }

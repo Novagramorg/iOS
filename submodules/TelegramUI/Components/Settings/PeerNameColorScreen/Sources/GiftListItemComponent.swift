@@ -16,8 +16,14 @@ import BalancedTextComponent
 import GiftLoadingShimmerView
 
 final class GiftListItemComponent: Component {
+    enum Subject {
+        case profile
+        case name
+    }
+    
     let context: AccountContext
     let theme: PresentationTheme
+    let subject: Subject
     let gifts: [StarGift.UniqueGift]
     let starGifts: [StarGift]
     let selectedId: Int64?
@@ -28,6 +34,7 @@ final class GiftListItemComponent: Component {
     init(
         context: AccountContext,
         theme: PresentationTheme,
+        subject: Subject,
         gifts: [StarGift.UniqueGift],
         starGifts: [StarGift],
         selectedId: Int64?,
@@ -37,6 +44,7 @@ final class GiftListItemComponent: Component {
     ) {
         self.context = context
         self.theme = theme
+        self.subject = subject
         self.gifts = gifts
         self.starGifts = starGifts
         self.selectedId = selectedId
@@ -47,6 +55,9 @@ final class GiftListItemComponent: Component {
     
     static func ==(lhs: GiftListItemComponent, rhs: GiftListItemComponent) -> Bool {
         if lhs.theme !== rhs.theme {
+            return false
+        }
+        if lhs.subject != rhs.subject {
             return false
         }
         if lhs.gifts != rhs.gifts {
@@ -156,6 +167,7 @@ final class GiftListItemComponent: Component {
                     self.resaleGiftsState = state
                     if !self.isUpdating {
                         let transition: ComponentTransition = isFirstTime ? .easeInOut(duration: 0.25) : .immediate
+                        self.state?.updated(transition: transition)
                         component.updated(transition)
                     }
                     isFirstTime = false
@@ -164,6 +176,7 @@ final class GiftListItemComponent: Component {
             
             if !self.isUpdating {
                 let transition: ComponentTransition = .easeInOut(duration: 0.25)
+                self.state?.updated(transition: transition)
                 component.updated(transition)
             }
         }
@@ -186,11 +199,10 @@ final class GiftListItemComponent: Component {
             let rowSpacing: CGFloat = 10.0
             let itemsInRow = 3
             
-            //TODO:localize
             var tabSelectorItems: [TabSelectorComponent.Item] = []
             tabSelectorItems.append(TabSelectorComponent.Item(
                 id: AnyHashable(Int64(0)),
-                title: "My Gifts"
+                title: component.strings.ProfileColorSetup_MyGifts
             ))
             
             for gift in component.starGifts {
@@ -257,6 +269,9 @@ final class GiftListItemComponent: Component {
                 var uniqueGifts: [StarGift.UniqueGift] = []
                 for gift in resaleGiftsState.gifts {
                     if case let .unique(uniqueGift) = gift {
+                        if case let .peerId(peerId) = uniqueGift.owner, component.context.account.peerId == peerId {
+                            continue
+                        }
                         uniqueGifts.append(uniqueGift)
                     }
                 }
@@ -288,12 +303,21 @@ final class GiftListItemComponent: Component {
                     environment: {},
                     containerSize: CGSize(width: emptyAnimationHeight, height: emptyAnimationHeight)
                 )
-                //TODO:localize
+                
+ 
+                let emptyText: String
+                switch component.subject {
+                case .profile:
+                    emptyText = component.strings.ProfileColorSetup_NoProfileGiftsPlaceholder
+                case .name:
+                    emptyText = component.strings.ProfileColorSetup_NoNameGiftsPlaceholder
+                }
+                
                 let emptyResultsTextSize = self.emptyResultsText.update(
                     transition: .immediate,
                     component: AnyComponent(
                         BalancedTextComponent(
-                            text: .plain(NSAttributedString(string: "You don't have any gifts you can use as styles for your profile.", font: Font.regular(13.0), textColor: component.theme.list.itemSecondaryTextColor)),
+                            text: .plain(NSAttributedString(string: emptyText, font: Font.regular(13.0), textColor: component.theme.list.itemSecondaryTextColor)),
                             horizontalAlignment: .center,
                             maximumNumberOfLines: 0
                         )
@@ -306,7 +330,7 @@ final class GiftListItemComponent: Component {
                     self.cachedChevronImage = (generateTintedImage(image: UIImage(bundleImageName: "Settings/TextArrowRight"), color: component.theme.list.itemAccentColor)!, component.theme)
                 }
                 
-                let buttonAttributedString = NSMutableAttributedString(string: "Browse gifts available for purchase >", font: Font.regular(15.0), textColor: component.theme.list.itemAccentColor, paragraphAlignment: .center)
+                let buttonAttributedString = NSMutableAttributedString(string: component.strings.ProfileColorSetup_BrowseGiftsForPurchase, font: Font.regular(15.0), textColor: component.theme.list.itemAccentColor, paragraphAlignment: .center)
                 if let range = buttonAttributedString.string.range(of: ">"), let chevronImage = self.cachedChevronImage?.0 {
                     buttonAttributedString.addAttribute(.attachment, value: chevronImage, range: NSRange(range, in: buttonAttributedString.string))
                 }

@@ -763,17 +763,18 @@ func _internal_joinGroupCall(account: Account, peerId: PeerId?, joinAs: PeerId?,
                             
                             switch call {
                             case let .groupCall(flags, _, _, _, title, _, recordStartDate, scheduleDate, _, unmutedVideoLimit, _, _):
+                                let isMin = (flags & (1 << 19)) != 0
                                 let isMuted = (flags & (1 << 1)) != 0
                                 let canChange = (flags & (1 << 2)) != 0
                                 let isVideoEnabled = (flags & (1 << 9)) != 0
                                 let messagesEnabled = (flags & (1 << 17)) != 0
                                 let canChangeMessagesEnabled = (flags & (1 << 18)) != 0
-                                state.defaultParticipantsAreMuted = GroupCallParticipantsContext.State.DefaultParticipantsAreMuted(isMuted: isMuted, canChange: canChange)
-                                state.messagesAreEnabled = GroupCallParticipantsContext.State.MessagesAreEnabled(isEnabled: messagesEnabled, canChange: canChangeMessagesEnabled)
+                                state.defaultParticipantsAreMuted = GroupCallParticipantsContext.State.DefaultParticipantsAreMuted(isMuted: isMuted, canChange: isMin ? state.defaultParticipantsAreMuted.canChange : canChange)
+                                state.messagesAreEnabled = GroupCallParticipantsContext.State.MessagesAreEnabled(isEnabled: messagesEnabled, canChange: isMin ? state.messagesAreEnabled.canChange : canChangeMessagesEnabled)
                                 state.title = title
                                 state.recordingStartTimestamp = recordStartDate
                                 state.scheduleTimestamp = scheduleDate
-                                state.isVideoEnabled = isVideoEnabled
+                                state.isVideoEnabled = isMin ? state.isVideoEnabled : isVideoEnabled
                                 state.unmutedVideoLimit = Int(unmutedVideoLimit)
                             default:
                                 break
@@ -1586,7 +1587,7 @@ public final class GroupCallParticipantsContext {
         }
         
         case state(update: StateUpdate)
-        case call(isTerminated: Bool, defaultParticipantsAreMuted: State.DefaultParticipantsAreMuted, messagesAreEnabled: State.MessagesAreEnabled, title: String?, recordingStartTimestamp: Int32?, scheduleTimestamp: Int32?, isVideoEnabled: Bool, participantCount: Int?)
+        case call(isTerminated: Bool, defaultParticipantsAreMuted: State.DefaultParticipantsAreMuted, messagesAreEnabled: State.MessagesAreEnabled, title: String?, recordingStartTimestamp: Int32?, scheduleTimestamp: Int32?, isVideoEnabled: Bool, participantCount: Int?, isMin: Bool)
         case conferenceChainBlocks(subChainId: Int, blocks: [Data], nextOffset: Int)
     }
     
@@ -1964,14 +1965,14 @@ public final class GroupCallParticipantsContext {
         for update in updates {
             if case let .state(update) = update {
                 stateUpdates.append(update)
-            } else if case let .call(_, defaultParticipantsAreMuted, messagesAreEnabled, title, recordingStartTimestamp, scheduleTimestamp, isVideoEnabled, participantsCount) = update {
+            } else if case let .call(_, defaultParticipantsAreMuted, messagesAreEnabled, title, recordingStartTimestamp, scheduleTimestamp, isVideoEnabled, participantsCount, isMin) = update {
                 var state = self.stateValue.state
-                state.defaultParticipantsAreMuted = defaultParticipantsAreMuted
-                state.messagesAreEnabled = messagesAreEnabled
+                state.defaultParticipantsAreMuted = isMin ? State.DefaultParticipantsAreMuted(isMuted: defaultParticipantsAreMuted.isMuted, canChange: state.defaultParticipantsAreMuted.canChange) : defaultParticipantsAreMuted
+                state.messagesAreEnabled = isMin ? State.MessagesAreEnabled(isEnabled: messagesAreEnabled.isEnabled, canChange: state.messagesAreEnabled.canChange) : messagesAreEnabled
                 state.recordingStartTimestamp = recordingStartTimestamp
                 state.title = title
                 state.scheduleTimestamp = scheduleTimestamp
-                state.isVideoEnabled = isVideoEnabled
+                state.isVideoEnabled = isMin ? state.isVideoEnabled : isVideoEnabled
                 if let participantsCount = participantsCount {
                     state.totalCount = participantsCount
                 }
