@@ -520,8 +520,9 @@ public class Window1 {
         let testView = UIView()
         testView.backgroundColor = .blue
         testView.layer.zPosition = 1000.0
-        #endif
         self.hostView.containerView.addSubview(testView)
+        #endif
+        
         self.keyboardFrameChangeObserver = NotificationCenter.default.addObserver(forName: UIResponder.keyboardWillChangeFrameNotification, object: nil, queue: nil, using: { [weak self] notification in
             if let strongSelf = self {
                 var isTablet = false
