@@ -27,6 +27,7 @@ public final class MultilineTextWithEntitiesComponent: Component {
     public let lineSpacing: CGFloat
     public let cutout: TextNodeCutout?
     public let insets: UIEdgeInsets
+    public let spoilerColor: UIColor
     public let textShadowColor: UIColor?
     public let textStroke: (UIColor, CGFloat)?
     public let highlightColor: UIColor?
@@ -53,6 +54,7 @@ public final class MultilineTextWithEntitiesComponent: Component {
         lineSpacing: CGFloat = 0.0,
         cutout: TextNodeCutout? = nil,
         insets: UIEdgeInsets = UIEdgeInsets(),
+        spoilerColor: UIColor = .black,
         textShadowColor: UIColor? = nil,
         textStroke: (UIColor, CGFloat)? = nil,
         highlightColor: UIColor? = nil,
@@ -78,6 +80,7 @@ public final class MultilineTextWithEntitiesComponent: Component {
         self.lineSpacing = lineSpacing
         self.cutout = cutout
         self.insets = insets
+        self.spoilerColor = spoilerColor
         self.textShadowColor = textShadowColor
         self.textStroke = textStroke
         self.highlightColor = highlightColor
@@ -215,6 +218,7 @@ public final class MultilineTextWithEntitiesComponent: Component {
             self.textNode.highlightAttributeAction = component.highlightAction
             self.textNode.tapAttributeAction = component.tapAction
             self.textNode.longTapAttributeAction = component.longTapAction
+            self.textNode.spoilerColor = component.spoilerColor
             
             self.textNode.resetEmojiToFirstFrameAutomatically = component.resetAnimationsOnVisibilityChange
                                     
