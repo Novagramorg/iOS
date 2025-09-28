@@ -216,10 +216,11 @@ final class EntityKeyboardTopContainerPanelComponent: Component {
                     backgroundSeparatorView = current
                 } else {
                     backgroundSeparatorView = UIView()
+                    self.backgroundSeparatorView = backgroundSeparatorView
                     self.insertSubview(backgroundSeparatorView, aboveSubview: backgroundView)
                 }
                 
-                backgroundView.updateColor(color: component.theme.chat.inputPanel.panelBackgroundColor.withMultipliedAlpha(0.65), transition: .immediate)
+                backgroundView.updateColor(color: component.theme.chat.inputPanel.panelBackgroundColor.withMultipliedAlpha(1.0), transition: .immediate)
                 backgroundView.update(size: CGSize(width: availableSize.width, height: height + component.overflowHeight), transition: transition.containedViewLayoutTransition)
                 transition.setFrame(view: backgroundView, frame: CGRect(origin: CGPoint(x: 0.0, y: -component.overflowHeight), size: CGSize(width: availableSize.width, height: height + component.overflowHeight)))
                 

@@ -466,9 +466,6 @@ public final class GifPagerContentComponent: Component {
         private let shimmerHostView: PortalSourceView
         private let standaloneShimmerEffect: StandaloneShimmerEffect
         
-        private let backgroundView: BlurredBackgroundView
-        private let backgroundTintView: UIView
-        private var vibrancyEffectView: UIView?
         private let mirrorContentScrollView: UIView
         private let scrollView: ContentScrollView
         private let scrollClippingView: UIView
@@ -490,9 +487,6 @@ public final class GifPagerContentComponent: Component {
         private var currentLoadMoreToken: String?
         
         override init(frame: CGRect) {
-            self.backgroundView = BlurredBackgroundView(color: nil)
-            self.backgroundTintView = UIView()
-            
             self.shimmerHostView = PortalSourceView()
             self.standaloneShimmerEffect = StandaloneShimmerEffect()
             
@@ -513,9 +507,6 @@ public final class GifPagerContentComponent: Component {
             self.scrollClippingView.clipsToBounds = true
             
             super.init(frame: frame)
-            
-            self.backgroundView.addSubview(self.backgroundTintView)
-            self.addSubview(self.backgroundView)
             
             self.shimmerHostView.alpha = 0.0
             self.addSubview(self.shimmerHostView)
@@ -877,45 +868,10 @@ public final class GifPagerContentComponent: Component {
         }
         
         public func pagerUpdateBackground(backgroundFrame: CGRect, topPanelHeight: CGFloat, externalTintMaskContainer: UIView?, transition: ComponentTransition) {
-            guard let theme = self.theme else {
-                return
-            }
-            if theme.overallDarkAppearance {
-                if let vibrancyEffectView = self.vibrancyEffectView {
-                    self.vibrancyEffectView = nil
-                    vibrancyEffectView.removeFromSuperview()
+            if let externalTintMaskContainer {
+                if self.mirrorSearchHeaderContainer.superview !== externalTintMaskContainer {
+                    externalTintMaskContainer.addSubview(self.mirrorSearchHeaderContainer)
                 }
-            } else {
-                if self.vibrancyEffectView == nil {
-                    let vibrancyEffectView = UIView()
-                    vibrancyEffectView.backgroundColor = .white
-                    if let filter = CALayer.luminanceToAlpha() {
-                        vibrancyEffectView.layer.filters = [filter]
-                    }
-                    self.vibrancyEffectView = vibrancyEffectView
-                    self.backgroundTintView.mask = vibrancyEffectView
-                    vibrancyEffectView.addSubview(self.mirrorContentScrollView)
-                    vibrancyEffectView.addSubview(self.mirrorSearchHeaderContainer)
-                }
-            }
-            
-            let hideBackground = self.component?.hideBackground ?? false
-            var backgroundColor = theme.chat.inputMediaPanel.backgroundColor
-            if hideBackground {
-                backgroundColor = backgroundColor.withAlphaComponent(0.01)
-            }
-            
-            self.backgroundTintView.backgroundColor = backgroundColor
-            transition.setFrame(view: self.backgroundTintView, frame: CGRect(origin: CGPoint(), size: backgroundFrame.size))
-            
-            self.backgroundView.updateColor(color: .clear, enableBlur: true, forceKeepBlur: true, transition: transition.containedViewLayoutTransition)
-            transition.setFrame(view: self.backgroundView, frame: backgroundFrame)
-            self.backgroundView.update(size: backgroundFrame.size, transition: transition.containedViewLayoutTransition)
-            
-            self.backgroundView.isHidden = hideBackground
-            
-            if let vibrancyEffectView = self.vibrancyEffectView {
-                transition.setFrame(view: vibrancyEffectView, frame: CGRect(origin: CGPoint(x: 0.0, y: -backgroundFrame.minY), size: CGSize(width: backgroundFrame.width, height: backgroundFrame.height + backgroundFrame.minY)))
             }
         }
         
