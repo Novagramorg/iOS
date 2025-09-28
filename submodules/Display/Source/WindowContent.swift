@@ -218,6 +218,18 @@ public extension UIView {
             return nil
         }
     }
+    
+    func findFirstResponder() -> UIView? {
+        if self.isFirstResponder {
+            return self
+        }
+        for subview in self.subviews {
+            if let result = subview.findFirstResponder() {
+                return result
+            }
+        }
+        return nil
+    }
 }
 
 private func layoutMetricsForScreenSize(size: CGSize, orientation: UIInterfaceOrientation?) -> LayoutMetrics {
