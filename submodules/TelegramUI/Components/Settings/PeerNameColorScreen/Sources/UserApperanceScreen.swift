@@ -1410,6 +1410,8 @@ final class UserAppearanceScreenComponent: Component {
                                 GiftListItemComponent(
                                     context: component.context,
                                     theme: environment.theme,
+                                    strings: environment.strings,
+                                    subject: .profile,
                                     gifts: contentsData.gifts,
                                     starGifts: contentsData.starGifts,
                                     selectedId: selectedGiftId,
@@ -1672,6 +1674,8 @@ final class UserAppearanceScreenComponent: Component {
                                 GiftListItemComponent(
                                     context: component.context,
                                     theme: environment.theme,
+                                    strings: environment.strings,
+                                    subject: .name,
                                     gifts: self.starGifts,
                                     starGifts: peerColorStarGifts,
                                     selectedId: selectedGiftId,
