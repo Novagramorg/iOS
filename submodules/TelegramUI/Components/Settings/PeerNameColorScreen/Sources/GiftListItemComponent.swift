@@ -23,6 +23,7 @@ final class GiftListItemComponent: Component {
     
     let context: AccountContext
     let theme: PresentationTheme
+    let strings: PresentationStrings
     let subject: Subject
     let gifts: [StarGift.UniqueGift]
     let starGifts: [StarGift]
@@ -34,6 +35,7 @@ final class GiftListItemComponent: Component {
     init(
         context: AccountContext,
         theme: PresentationTheme,
+        strings: PresentationStrings,
         subject: Subject,
         gifts: [StarGift.UniqueGift],
         starGifts: [StarGift],
@@ -44,6 +46,7 @@ final class GiftListItemComponent: Component {
     ) {
         self.context = context
         self.theme = theme
+        self.strings = strings
         self.subject = subject
         self.gifts = gifts
         self.starGifts = starGifts
@@ -55,6 +58,9 @@ final class GiftListItemComponent: Component {
     
     static func ==(lhs: GiftListItemComponent, rhs: GiftListItemComponent) -> Bool {
         if lhs.theme !== rhs.theme {
+            return false
+        }
+        if lhs.strings !== rhs.strings {
             return false
         }
         if lhs.subject != rhs.subject {
