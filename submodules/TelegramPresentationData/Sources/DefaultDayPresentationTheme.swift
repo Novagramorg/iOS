@@ -941,7 +941,7 @@ public func makeDefaultDayPresentationTheme(extendingThemeReference: Presentatio
     let inputPanel = PresentationThemeChatInputPanel(
         panelBackgroundColor: rootNavigationBar.blurredBackgroundColor,
         panelBackgroundColorNoWallpaper: UIColor(rgb: 0xffffff),
-        panelSeparatorColor: UIColor(white: 1.0, alpha: 0.5),
+        panelSeparatorColor: UIColor(rgb: 0xbec2c6),
         panelControlAccentColor: defaultDayAccentColor,
         panelControlColor: UIColor(rgb: 0x000000, alpha: 1.0),
         panelControlDisabledColor: UIColor(rgb: 0x727b87, alpha: 0.5),

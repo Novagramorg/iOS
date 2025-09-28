@@ -3164,7 +3164,7 @@ public final class EmojiPagerContentComponent: Component {
                     let (groupHeaderSize, centralContentWidth) = groupHeaderView.update(
                         context: component.context,
                         theme: keyboardChildEnvironment.theme,
-                        forceNeedsVibrancy: component.inputInteractionHolder.inputInteraction?.externalBackground != nil,
+                        forceNeedsVibrancy: false,
                         layoutType: itemLayout.layoutType,
                         hasTopSeparator: hasTopSeparator,
                         actionButtonTitle: actionButtonTitle,
@@ -3209,7 +3209,7 @@ public final class EmojiPagerContentComponent: Component {
                         self.mirrorContentScrollView.layer.addSublayer(groupBorderLayer.tintContainerLayer)
                         
                         let borderColor: UIColor
-                        if keyboardChildEnvironment.theme.overallDarkAppearance && component.inputInteractionHolder.inputInteraction?.externalBackground != nil {
+                        if keyboardChildEnvironment.theme.overallDarkAppearance {
                             borderColor = keyboardChildEnvironment.theme.chat.inputMediaPanel.panelContentVibrantOverlayColor.withMultipliedAlpha(0.2)
                         } else {
                             borderColor = keyboardChildEnvironment.theme.chat.inputMediaPanel.panelContentVibrantOverlayColor
@@ -4030,13 +4030,13 @@ public final class EmojiPagerContentComponent: Component {
                 return
             }
             
-            if let effectContainerView = externalTintMaskContainer {
+            if let effectContainerView = externalTintMaskContainer ?? component.inputInteractionHolder.inputInteraction?.externalBackground?.effectContainerView {
                 let mirrorContentClippingView: UIView
                 if let current = self.mirrorContentClippingView {
                     mirrorContentClippingView = current
                 } else {
                     mirrorContentClippingView = UIView()
-                    mirrorContentClippingView.clipsToBounds = true
+                    mirrorContentClippingView.clipsToBounds = false
                     self.mirrorContentClippingView = mirrorContentClippingView
                     
                     if let mirrorContentWarpView = self.mirrorContentWarpView {
@@ -4666,7 +4666,7 @@ public final class EmojiPagerContentComponent: Component {
                 }
                 
                 let searchHeaderFrame = CGRect(origin: CGPoint(x: itemLayout.searchInsets.left, y: itemLayout.searchInsets.top), size: CGSize(width: itemLayout.width - itemLayout.searchInsets.left - itemLayout.searchInsets.right, height: itemLayout.searchHeight))
-                visibleSearchHeader.update(context: component.context, theme: keyboardChildEnvironment.theme, forceNeedsVibrancy: component.inputInteractionHolder.inputInteraction?.externalBackground != nil, strings: keyboardChildEnvironment.strings, text: displaySearchWithPlaceholder, useOpaqueTheme: useOpaqueTheme, isActive: self.isSearchActivated, size: searchHeaderFrame.size, canFocus: !component.searchIsPlaceholderOnly, searchCategories: component.searchCategories, searchState: component.searchState, transition: transition)
+                visibleSearchHeader.update(context: component.context, theme: keyboardChildEnvironment.theme, forceNeedsVibrancy: false, strings: keyboardChildEnvironment.strings, text: displaySearchWithPlaceholder, useOpaqueTheme: useOpaqueTheme, isActive: self.isSearchActivated, size: searchHeaderFrame.size, canFocus: !component.searchIsPlaceholderOnly, searchCategories: component.searchCategories, searchState: component.searchState, transition: transition)
        
                 transition.setFrame(view: visibleSearchHeader, frame: searchHeaderFrame)
                 // Temporary workaround for status selection; use a separate search container (see GIF)

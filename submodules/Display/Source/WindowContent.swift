@@ -272,6 +272,7 @@ public class Window1 {
     private var statusBarChangeObserver: AnyObject?
     private var keyboardRotationChangeObserver: AnyObject?
     private var keyboardFrameChangeObserver: AnyObject?
+    private var keyboardWillHideObserver: AnyObject?
     private var keyboardTypeChangeObserver: AnyObject?
     private var voiceOverStatusObserver: AnyObject?
     
@@ -515,6 +516,12 @@ public class Window1 {
             }
         })
         
+        #if DEBUG
+        let testView = UIView()
+        testView.backgroundColor = .blue
+        testView.layer.zPosition = 1000.0
+        #endif
+        self.hostView.containerView.addSubview(testView)
         self.keyboardFrameChangeObserver = NotificationCenter.default.addObserver(forName: UIResponder.keyboardWillChangeFrameNotification, object: nil, queue: nil, using: { [weak self] notification in
             if let strongSelf = self {
                 var isTablet = false
@@ -526,6 +533,10 @@ public class Window1 {
                 if isTablet && keyboardFrame.isEmpty {
                     return
                 }
+                
+                #if DEBUG
+                testView.frame = keyboardFrame.insetBy(dx: -2.0, dy: -2.0)
+                #endif
                                 
                 if #available(iOSApplicationExtension 14.2, iOS 14.2, *), UIAccessibility.prefersCrossFadeTransitions {
                 } else if let keyboardView = strongSelf.statusBarHost?.keyboardView {
@@ -641,6 +652,12 @@ public class Window1 {
                 strongSelf.updateLayout { $0.update(inputHeight: keyboardHeight.isLessThanOrEqualTo(0.0) ? nil : keyboardHeight, transition: transition, overrideTransition: false) }
             }
         })
+        self.keyboardWillHideObserver = NotificationCenter.default.addObserver(forName: UIResponder.keyboardWillHideNotification, object: nil, queue: nil, using: { [weak self] notification in
+            guard let self else {
+                return
+            }
+            let _ = self
+        })
         
         if #available(iOSApplicationExtension 11.0, iOS 11.0, *) {
             self.keyboardTypeChangeObserver = NotificationCenter.default.addObserver(forName: UITextInputMode.currentInputModeDidChangeNotification, object: nil, queue: OperationQueue.main, using: { [weak self] notification in
@@ -714,6 +731,9 @@ public class Window1 {
         }
         if let keyboardFrameChangeObserver = self.keyboardFrameChangeObserver {
             NotificationCenter.default.removeObserver(keyboardFrameChangeObserver)
+        }
+        if let keyboardWillHideObserver = self.keyboardWillHideObserver {
+            NotificationCenter.default.removeObserver(keyboardWillHideObserver)
         }
         if let keyboardTypeChangeObserver = self.keyboardTypeChangeObserver {
             NotificationCenter.default.removeObserver(keyboardTypeChangeObserver)
@@ -1328,7 +1348,7 @@ public class Window1 {
                 $0.update(upperKeyboardInputPositionBound: self.windowLayout.size.height, transition: transition, overrideTransition: false)
             }
         } else {
-            self.hostView.containerView.endEditing(true)
+            self.hostView.containerView.findFirstResponder()?.resignFirstResponder()
         }
     }
     
