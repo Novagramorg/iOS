@@ -35,6 +35,7 @@ import TextFormat
 import ReactionSelectionNode
 import EntityKeyboard
 import GlassBackgroundComponent
+import EdgeEffect
 
 extension VideoChatCall {
     var myAudioLevelAndSpeaking: Signal<(Float, Bool), NoError> {
@@ -255,6 +256,7 @@ final class VideoChatScreenComponent: Component {
         let participants = ComponentView<Empty>()
         var scheduleInfo: ComponentView<Empty>?
         
+        var inputDimView = UIButton()
         var inputPanelIsActive = false
         let inputPanel = ComponentView<Empty>()
         let inputPanelExternalState = MessageInputPanelComponent.ExternalState()
@@ -274,7 +276,7 @@ final class VideoChatScreenComponent: Component {
         weak var disappearingReactionContextNode: ReactionContextNode?
         weak var willDismissReactionContextNode: ReactionContextNode?
 
-        var messageNotifications: [(id: Int64, icon: VideoChatNotificationIcon, text: String, expiresOn: Int32)] = []
+        var toastMessages: [(id: Int64, icon: VideoChatNotificationIcon, text: String, expiresOn: Int32)] = []
         let messagesList = ComponentView<Empty>()
         var messagesState: GroupCallMessagesContext.State?
         var messagesStateDisposable: Disposable?
@@ -1433,6 +1435,7 @@ final class VideoChatScreenComponent: Component {
             guard let _ = self.inputPanel.view as? MessageInputPanelComponent.View else {
                 return
             }
+            self.inputPanelIsActive = false
             self.currentInputMode = .text
             if hasFirstResponder(self) {
                 if let view = self.inputPanel.view as? MessageInputPanelComponent.View {
@@ -1842,7 +1845,7 @@ final class VideoChatScreenComponent: Component {
                         } else {
                             text = environment.strings.VoiceChat_DisplayAsSuccess(peer.displayTitle(strings: environment.strings, displayOrder: groupCall.accountContext.sharedContext.currentPresentationData.with({ $0 }).nameDisplayOrder)).string
                         }
-                        self.displayNotification(icon: .peer(peer), text: text, duration: 3)
+                        self.displayToast(icon: .peer(peer), text: text, duration: 3)
                     })
                     
                     self.memberEventsDisposable?.dispose()
@@ -1869,7 +1872,7 @@ final class VideoChatScreenComponent: Component {
                                 if displayEvent {
                                     let text = environment.strings.VoiceChat_PeerJoinedText("**\(event.peer.displayTitle(strings: environment.strings, displayOrder: groupCall.accountContext.sharedContext.currentPresentationData.with({ $0 }).nameDisplayOrder))**").string
                                     
-                                    self.displayNotification(icon: .peer(event.peer), text: text, duration: 3)
+                                    self.displayToast(icon: .peer(event.peer), text: text, duration: 3)
                                 }
                             }
                         } else {
@@ -2196,6 +2199,8 @@ final class VideoChatScreenComponent: Component {
                 self.containerView.layer.cornerRadius = containerOffset.isZero ? 0.0 : environment.deviceMetrics.screenCornerRadius
             }
             
+            transition.setFrame(view: self.inputDimView, frame: CGRect(origin: .zero, size: availableSize))
+            
             transition.setFrame(view: self.containerView, frame: CGRect(origin: CGPoint(x: 0.0, y: containerOffset), size: availableSize), completion: { [weak self] completed in
                 guard let self, completed else {
                     return
@@ -2253,7 +2258,7 @@ final class VideoChatScreenComponent: Component {
             let navigationButtonDiameter: CGFloat = 40.0
             let navigationButtonInset: CGFloat = 4.0
             
-            let panelColor = UIColor(rgb: 0x1f1f27)
+            let panelColor = UIColor(rgb: 0x161616, alpha: 0.6)
             
             let navigationLeftButtonSize = self.navigationLeftButton.update(
                 transition: .immediate,
@@ -2266,7 +2271,7 @@ final class VideoChatScreenComponent: Component {
                         size: CGSize(width: 34.0, height: 34.0)
                     )),
                     background: AnyComponent(
-                        GlassBackgroundComponent(size: CGSize(width: navigationButtonDiameter, height: navigationButtonDiameter), cornerRadius: navigationButtonDiameter * 0.5, isDark: true, tintColor: .init(kind: .panel, color: panelColor))
+                        GlassBackgroundComponent(size: CGSize(width: navigationButtonDiameter, height: navigationButtonDiameter), cornerRadius: navigationButtonDiameter * 0.5, isDark: true, tintColor: .init(kind: .custom, color: panelColor))
                     ),
                     effectAlignment: .center,
                     minSize: CGSize(width: navigationButtonDiameter, height: navigationButtonDiameter),
@@ -2289,7 +2294,7 @@ final class VideoChatScreenComponent: Component {
                         contentMode: .center
                     )),
                     background: AnyComponent(
-                        GlassBackgroundComponent(size: CGSize(width: navigationButtonDiameter, height: navigationButtonDiameter), cornerRadius: navigationButtonDiameter * 0.5, isDark: true, tintColor: .init(kind: .panel, color: panelColor))
+                        GlassBackgroundComponent(size: CGSize(width: navigationButtonDiameter, height: navigationButtonDiameter), cornerRadius: navigationButtonDiameter * 0.5, isDark: true, tintColor: .init(kind: .custom, color: panelColor))
                     ),
                     effectAlignment: .center,
                     minSize: CGSize(width: navigationButtonDiameter, height: navigationButtonDiameter),
@@ -2478,7 +2483,7 @@ final class VideoChatScreenComponent: Component {
                 areButtonsCollapsed = true
                 areButtonsActuallyCollapsed = false
                 
-                mainColumnWidth = min(isLandscape ? 340.0 : 320.0, availableSize.width - leftInset - rightInset - 340.0)
+                mainColumnWidth = min(isLandscape ? 356.0 : 320.0, availableSize.width - leftInset - rightInset - 340.0)
                 mainColumnSideInset = 0.0
             } else {
                 areButtonsCollapsed = true //self.expandedParticipantsVideoState != nil
@@ -2520,6 +2525,7 @@ final class VideoChatScreenComponent: Component {
                         theme: environment.theme,
                         strings: environment.strings,
                         emoji: self.encryptionKeyEmoji ?? [],
+                        isShort: isTwoColumnLayout,
                         isExpanded: self.isEncryptionKeyExpanded,
                         tapAction: { [weak self] in
                             guard let self else {
@@ -2961,14 +2967,14 @@ final class VideoChatScreenComponent: Component {
                         self.containerView.addSubview(encryptionKeyView)
                     }
                     
-                    ComponentTransition.immediate.setScale(view: encryptionKeyView, scale: 0.001)
-                    encryptionKeyView.alpha = 0.0
+                    //ComponentTransition.immediate.setScale(view: encryptionKeyView, scale: 0.001)
+         //           encryptionKeyView.alpha = 0.0
                 }
                 
                 encryptionKeyTransition.setPosition(view: encryptionKeyView, position: encryptionKeyFrame.center)
                 encryptionKeyTransition.setBounds(view: encryptionKeyView, bounds: CGRect(origin: CGPoint(), size: encryptionKeyFrame.size))
-                transition.setScale(view: encryptionKeyView, scale: 1.0)
-                alphaTransition.setAlpha(view: encryptionKeyView, alpha: self.isAnimatedOutFromPrivateCall ? 0.0 : 1.0)
+           //     transition.setScale(view: encryptionKeyView, scale: 1.0)
+//                alphaTransition.setAlpha(view: encryptionKeyView, alpha: self.isAnimatedOutFromPrivateCall ? 0.0 : 1.0)
                 
                 transition.setZPosition(layer: encryptionKeyView.layer, zPosition: self.isEncryptionKeyExpanded ? 1.0 : 0.0)
                 
@@ -3359,7 +3365,22 @@ final class VideoChatScreenComponent: Component {
             var inputPanelBottomInset: CGFloat = 0.0
             var inputPanelSize: CGSize = .zero
             if self.inputPanelIsActive {
-                let inputPanelAvailableWidth = availableSize.width - environment.safeInsets.left - environment.safeInsets.right
+                if self.inputDimView.superview == nil {
+                    self.inputDimView.backgroundColor = UIColor(rgb: 0x000000, alpha: 0.4)
+                    self.inputDimView.addTarget(self, action: #selector(self.deactivateInput), for: .touchUpInside)
+                    self.inputDimView.alpha = 0.0
+                    
+                    if let messageListView = self.messagesList.view, messageListView.superview != nil {
+                        self.containerView.insertSubview(self.inputDimView, belowSubview: messageListView)
+                    } else {
+                        self.containerView.addSubview(self.inputDimView)
+                    }
+                }
+                
+                ComponentTransition.easeInOut(duration: 0.25).setAlpha(view: self.inputDimView, alpha: 1.0)
+                
+                let inputPanelInnerInset: CGFloat = 8.0
+                let inputPanelAvailableWidth = isTwoColumnLayout ? mainColumnWidth + inputPanelInnerInset * 2.0 : min(440.0 + inputPanelInnerInset * 2.0, availableSize.width - environment.safeInsets.left - environment.safeInsets.right)
                 var inputPanelAvailableHeight = 103.0
 
                 let keyboardWasHidden = self.inputPanelExternalState.isKeyboardHidden
@@ -3508,7 +3529,6 @@ final class VideoChatScreenComponent: Component {
 
                                 self.sendInput(randomId: transition?.randomId)
                             } else {
-                                self.inputPanelIsActive = false
                                 self.deactivateInput()
                             }
                         },
@@ -3588,7 +3608,17 @@ final class VideoChatScreenComponent: Component {
                         inputPanelBottomInset = -inputPanelSize.height - environment.safeInsets.bottom
                     }
                 }
-                let inputPanelFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((availableSize.width - inputPanelSize.width) / 2.0), y: availableSize.height - environment.safeInsets.bottom - inputPanelBottomInset - inputPanelSize.height - 3.0), size: inputPanelSize)
+                let inputPanelOriginX: CGFloat
+                if isTwoColumnLayout {
+                    if buttonsOnTheSide {
+                        inputPanelOriginX = availableSize.width - landscapeControlsWidth - mainColumnWidth - inputPanelInnerInset
+                    } else {
+                        inputPanelOriginX = availableSize.width - mainColumnWidth - inputPanelInnerInset - rightInset
+                    }
+                } else {
+                    inputPanelOriginX = floorToScreenPixels((availableSize.width - inputPanelSize.width) / 2.0)
+                }
+                let inputPanelFrame = CGRect(origin: CGPoint(x: inputPanelOriginX, y: availableSize.height - environment.safeInsets.bottom - inputPanelBottomInset - inputPanelSize.height - 3.0), size: inputPanelSize)
                 if let inputPanelView = self.inputPanel.view {
                     if inputPanelView.superview == nil {
                         self.containerView.addSubview(inputPanelView)
@@ -3597,6 +3627,8 @@ final class VideoChatScreenComponent: Component {
                 }
             } else {
                 self.inputPanelExternalState.isEditing = false
+                
+                transition.setAlpha(view: self.inputDimView, alpha: 0.0)
                 
                 if let inputPanelView = self.inputPanel.view {
                     var inputPanelFrame = inputPanelView.frame
@@ -3645,6 +3677,16 @@ final class VideoChatScreenComponent: Component {
                 effectiveDisplayReactions = true
             }
             
+            let reactionContextNodeOriginX: CGFloat
+            if isTwoColumnLayout {
+                if buttonsOnTheSide {
+                    reactionContextNodeOriginX = availableSize.width - landscapeControlsWidth - mainColumnWidth * 0.5 - availableSize.width * 0.5
+                } else {
+                    reactionContextNodeOriginX = availableSize.width - mainColumnWidth * 0.5 - availableSize.width * 0.5 - rightInset
+                }
+            } else {
+                reactionContextNodeOriginX = 0.0
+            }
             let reactionsAnchorRect: CGRect = CGRect(origin: CGPoint(x: availableSize.width - 44.0, y: availableSize.height - inputPanelBottomInset - inputPanelSize.height - 18.0), size: CGSize(width: 44.0, height: 44.0))
             if let reactionItems = self.reactionItems, effectiveDisplayReactions {
                 reactionsInset += 48.0
@@ -3724,7 +3766,17 @@ final class VideoChatScreenComponent: Component {
                             }
                             
                             let targetSize = CGSize(width: 24.0, height: 24.0)
-                            let targetView = UIView(frame: CGRect(origin: CGPoint(x: 230.0, y: self.bounds.height - targetSize.height - 133.0), size: targetSize))
+                            let targetViewOriginX: CGFloat
+                            if isTwoColumnLayout {
+                                if buttonsOnTheSide {
+                                    targetViewOriginX = availableSize.width - landscapeControlsWidth - mainColumnWidth * 0.5
+                                } else {
+                                    targetViewOriginX = availableSize.width - mainColumnWidth * 0.5
+                                }
+                            } else {
+                                targetViewOriginX = availableSize.width * 0.5
+                            }
+                            let targetView = UIView(frame: CGRect(origin: CGPoint(x: targetViewOriginX + 20.0, y: self.bounds.height - targetSize.height - 133.0), size: targetSize))
                             targetView.isUserInteractionEnabled = false
                             self.addSubview(targetView)
                             
@@ -3740,6 +3792,7 @@ final class VideoChatScreenComponent: Component {
                                 })
                             }
                             
+                            self.inputPanelIsActive = false
                             if hasFirstResponder(self) {
                                 self.currentInputMode = .text
                                 self.endEditing(true)
@@ -3825,8 +3878,7 @@ final class VideoChatScreenComponent: Component {
                     animateReactionsIn = true
                     self.containerView.addSubview(reactionContextNode.view)
                 }
-                
-                reactionContextNodeTransition.setFrame(view: reactionContextNode.view, frame: CGRect(origin: CGPoint(), size: availableSize))
+                reactionContextNodeTransition.setFrame(view: reactionContextNode.view, frame: CGRect(origin: CGPoint(x: reactionContextNodeOriginX, y: 0.0), size: availableSize))
                 reactionContextNode.updateLayout(size: availableSize, insets: UIEdgeInsets(), anchorRect: reactionsAnchorRect, centerAligned: true, isCoveredByInput: false, isAnimatingOut: false, transition: reactionContextNodeTransition.containedViewLayoutTransition)
                 
                 if animateReactionsIn {
@@ -3848,7 +3900,7 @@ final class VideoChatScreenComponent: Component {
             }
             if let reactionContextNode = self.disappearingReactionContextNode {
                 if !reactionContextNode.isAnimatingOutToReaction {
-                    transition.setFrame(view: reactionContextNode.view, frame: CGRect(origin: CGPoint(), size: availableSize))
+                    transition.setFrame(view: reactionContextNode.view, frame: CGRect(origin: CGPoint(x: reactionContextNodeOriginX, y: 0.0), size: availableSize))
                     reactionContextNode.updateLayout(size: availableSize, insets: UIEdgeInsets(), anchorRect: reactionsAnchorRect, centerAligned: reactionContextNode.centerAligned, isCoveredByInput: false, isAnimatingOut: false, transition: transition.containedViewLayoutTransition)
                 }
             }
@@ -3883,7 +3935,7 @@ final class VideoChatScreenComponent: Component {
                 }
             }
             
-            for notification in self.messageNotifications {
+            for notification in self.toastMessages {
                 let icon: MessageItemComponent.Icon
                 switch notification.icon {
                 case let .peer(peer):
@@ -3914,9 +3966,19 @@ final class VideoChatScreenComponent: Component {
                     sendActionTransition: sendActionTransition
                 )),
                 environment: {},
-                containerSize: CGSize(width: availableSize.width - environment.safeInsets.left - environment.safeInsets.right, height: availableSize.height - messagesBottomInset)
+                containerSize: CGSize(width: isTwoColumnLayout ? mainColumnWidth : min(440.0, availableSize.width - environment.safeInsets.left - environment.safeInsets.right), height: availableSize.height - messagesBottomInset)
             )
-            let messagesListFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((availableSize.width - messagesListSize.width) / 2.0), y: availableSize.height - messagesListSize.height - messagesBottomInset), size: messagesListSize)
+            let messageListOriginX: CGFloat
+            if isTwoColumnLayout {
+                if buttonsOnTheSide {
+                    messageListOriginX = availableSize.width - landscapeControlsWidth - mainColumnWidth
+                } else {
+                    messageListOriginX = availableSize.width - mainColumnWidth - rightInset
+                }
+            } else {
+                messageListOriginX = floorToScreenPixels((availableSize.width - messagesListSize.width) / 2.0)
+            }
+            let messagesListFrame = CGRect(origin: CGPoint(x: messageListOriginX, y: availableSize.height - messagesListSize.height - messagesBottomInset), size: messagesListSize)
             if let messagesListView = self.messagesList.view {
                 if messagesListView.superview == nil {
                     messagesListView.isUserInteractionEnabled = false
