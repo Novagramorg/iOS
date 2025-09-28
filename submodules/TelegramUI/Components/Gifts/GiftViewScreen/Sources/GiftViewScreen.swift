@@ -4792,8 +4792,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                 if state.cachedSmallChevronImage == nil || state.cachedSmallChevronImage?.1 !== environment.theme {
                     state.cachedSmallChevronImage = (generateTintedImage(image: UIImage(bundleImageName: "Item List/InlineTextRightArrow"), color: theme.actionSheet.controlAccentColor)!, theme)
                 }
-                //TODO:localize
-                let attributedString = NSMutableAttributedString(string: "See how price will decrease >", font: Font.regular(13.0), textColor: theme.actionSheet.controlAccentColor)
+                let attributedString = NSMutableAttributedString(string: strings.Gift_Upgrade_SeePriceDecrease, font: Font.regular(13.0), textColor: theme.actionSheet.controlAccentColor)
                 if let range = attributedString.string.range(of: ">"), let chevronImage = state.cachedSmallChevronImage?.0 {
                     attributedString.addAttribute(.attachment, value: chevronImage, range: NSRange(range, in: attributedString.string))
                 }

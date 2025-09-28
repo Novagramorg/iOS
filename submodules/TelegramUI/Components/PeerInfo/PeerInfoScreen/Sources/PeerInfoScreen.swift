@@ -1503,17 +1503,10 @@ private func infoItems(data: PeerInfoScreenData?, context: AccountContext, prese
                 
                 if let note = cachedData.note, !note.text.isEmpty {
                     var entities = note.entities
-                    if !context.isPremium {
-                        entities = entities.filter { entity in
-                            switch entity.type {
-                            case .Url, .TextUrl:
-                                return false
-                            default:
-                                return true
-                            }
-                        }
+                    if context.isPremium {
+                        entities = generateTextEntities(note.text, enabledTypes: [.mention, .hashtag, .allUrl], currentEntities: entities)
                     }
-                    items[currentPeerInfoSection]!.append(PeerInfoScreenLabeledValueItem(id: 0, label: presentationData.strings.PeerInfo_Notes, rightLabel: presentationData.strings.PeerInfo_NotesInfo, text: note.text, entities: entities, textColor: .primary, textBehavior: .multiLine(maxLines: 100, enabledEntities: []), action: nil, linkItemAction: bioLinkAction, button: nil, contextAction: noteContextAction, requestLayout: { animated in
+                    items[currentPeerInfoSection]!.append(PeerInfoScreenLabeledValueItem(id: 0, label: presentationData.strings.PeerInfo_Notes, rightLabel: presentationData.strings.PeerInfo_NotesInfo, text: note.text, entities: entities, handleSpoilers: true, textColor: .primary, textBehavior: .multiLine(maxLines: 100, enabledEntities: []), action: nil, linkItemAction: bioLinkAction, button: nil, contextAction: noteContextAction, requestLayout: { animated in
                         interaction.requestLayout(animated)
                     }))
                 }
@@ -4589,7 +4582,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
 
                                     let noteUpdateSignal: Signal<Never, ContactUpdateError>
                                     if noteUpdated, let note {
-                                        let entities = generateTextEntities(note.string, enabledTypes: [.mention, .hashtag, .allUrl], currentEntities: generateChatInputTextEntities(note))
+                                        let entities = generateChatInputTextEntities(note)
                                         noteUpdateSignal = context.engine.contacts.updateContactNote(peerId: peer.id, text: note.string, entities: entities)
                                         |> mapError { _ -> ContactUpdateError in
                                             return .generic
@@ -6680,7 +6673,6 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                     }
                 }
                 if !headerButtons.contains(.discussion) && hasDiscussion {
-                    //TODO:localize
                     items.append(.action(ContextMenuActionItem(text: presentationData.strings.PeerInfo_ViewDiscussion, icon: { theme in
                         generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/MessageBubble"), color: theme.contextMenu.primaryColor)
                     }, action: { [weak self] _, f in

@@ -291,7 +291,7 @@ public enum DeviceMetrics: CaseIterable, Equatable {
             case .iPhone16Pro, .iPhone16ProMax:
                 return 54.0
             case .iPhoneAir:
-                return 54.0
+                return 57.0
             case .iPhoneX, .iPhoneXSMax, .iPhoneXr, .iPhone12Mini, .iPhone12, .iPhone12ProMax, .iPhone13Mini, .iPhone13, .iPhone13Pro, .iPhone13ProMax:
                 return 44.0
             case .iPadPro11Inch, .iPadPro3rdGen, .iPadMini, .iPadMini6thGen:

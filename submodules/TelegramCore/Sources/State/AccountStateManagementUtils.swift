@@ -4905,6 +4905,7 @@ func replayFinalState(
                         
                         switch call {
                         case let .groupCall(flags, _, _, participantsCount, title, _, recordStartDate, scheduleDate, _, _, _, _):
+                            let isMin = (flags & (1 << 19)) != 0
                             let isMuted = (flags & (1 << 1)) != 0
                             let canChange = (flags & (1 << 2)) != 0
                             let isVideoEnabled = (flags & (1 << 9)) != 0
@@ -4914,7 +4915,7 @@ func replayFinalState(
                             let messagesAreEnabled = GroupCallParticipantsContext.State.MessagesAreEnabled(isEnabled: messagesEnabled, canChange: canChangeMessagesEnabled)
                             updatedGroupCallParticipants.append((
                                 info.id,
-                                .call(isTerminated: false, defaultParticipantsAreMuted: defaultParticipantsAreMuted, messagesAreEnabled: messagesAreEnabled, title: title, recordingStartTimestamp: recordStartDate, scheduleTimestamp: scheduleDate, isVideoEnabled: isVideoEnabled, participantCount: Int(participantsCount))
+                                .call(isTerminated: false, defaultParticipantsAreMuted: defaultParticipantsAreMuted, messagesAreEnabled: messagesAreEnabled, title: title, recordingStartTimestamp: recordStartDate, scheduleTimestamp: scheduleDate, isVideoEnabled: isVideoEnabled, participantCount: Int(participantsCount), isMin: isMin)
                             ))
                         default:
                             break
@@ -4923,7 +4924,7 @@ func replayFinalState(
                 case let .groupCallDiscarded(callId, _, _):
                     updatedGroupCallParticipants.append((
                         callId,
-                        .call(isTerminated: true, defaultParticipantsAreMuted: GroupCallParticipantsContext.State.DefaultParticipantsAreMuted(isMuted: false, canChange: false), messagesAreEnabled: GroupCallParticipantsContext.State.MessagesAreEnabled(isEnabled: false, canChange: false), title: nil, recordingStartTimestamp: nil, scheduleTimestamp: nil, isVideoEnabled: false, participantCount: nil)
+                        .call(isTerminated: true, defaultParticipantsAreMuted: GroupCallParticipantsContext.State.DefaultParticipantsAreMuted(isMuted: false, canChange: false), messagesAreEnabled: GroupCallParticipantsContext.State.MessagesAreEnabled(isEnabled: false, canChange: false), title: nil, recordingStartTimestamp: nil, scheduleTimestamp: nil, isVideoEnabled: false, participantCount: nil, isMin: false)
                     ))
                     
                     if let peerId {

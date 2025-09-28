@@ -15132,3 +15132,19 @@ Error: %8$@";
 "Notification.StarsGift.Assigned" = "You started displaying %@ on your Telegram profile page.";
 
 "Gift.View.SenderInfo" = "**%@** sent you this gift on **%@**.";
+
+"VideoChat.EncryptionKeyLabelShort" = "E2EE";
+"VoiceChat.MuteShort" = "mute";
+
+"Stars.Intro.Transaction.GiftDropOriginalDetails" = "Gift Description Removal";
+"Stars.Intro.Transaction.PrepaidGiftUpgrade" = "Gift Upgrade";
+
+"Gift.Upgrade.SeePriceDecrease" = "See how price will decrease >";
+
+"ProfileColorSetup.ProfileColorPreviewInfo" = "You can also change color of your name and customize replies to you. [Change >]()";
+"ProfileColorSetup.ApplyStyle" = "Apply Style";
+
+"ProfileColorSetup.MyGifts" = "My Gifts";
+"ProfileColorSetup.NoProfileGiftsPlaceholder" = "You don't have any gifts you can use as styles for your profile.";
+"ProfileColorSetup.NoNameGiftsPlaceholder" = "You don't have any gifts you can use as styles for your name.";
+"ProfileColorSetup.BrowseGiftsForPurchase" = "Browse gifts available for purchase >";

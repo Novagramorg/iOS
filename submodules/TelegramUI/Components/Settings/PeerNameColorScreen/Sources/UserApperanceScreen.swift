@@ -1221,7 +1221,6 @@ final class UserAppearanceScreenComponent: Component {
                     maximumNumberOfLines: 0
                 ))))
                 
-                //TODO:localize
                 let footerAttributes = MarkdownAttributes(
                     body: MarkdownAttributeSet(font: Font.regular(13.0), textColor: environment.theme.list.freeTextColor),
                     bold: MarkdownAttributeSet(font: Font.semibold(13.0), textColor: environment.theme.list.freeTextColor),
@@ -1230,7 +1229,7 @@ final class UserAppearanceScreenComponent: Component {
                         return (TelegramTextAttributes.URL, contents)
                     }
                 )
-                let previewFooterText = NSMutableAttributedString(attributedString: parseMarkdownIntoAttributedString("You can also change color of your name and customize replies to you. [Change >]()", attributes: footerAttributes))
+                let previewFooterText = NSMutableAttributedString(attributedString: parseMarkdownIntoAttributedString(environment.strings.ProfileColorSetup_ProfileColorPreviewInfo, attributes: footerAttributes))
                 if let range = previewFooterText.string.range(of: ">"), let chevronImage = self.cachedChevronImage?.0 {
                     previewFooterText.addAttribute(.attachment, value: chevronImage, range: NSRange(range, in: previewFooterText.string))
                 }
@@ -1392,7 +1391,6 @@ final class UserAppearanceScreenComponent: Component {
                 if let status = resolvedState.emojiStatus, case let .starGift(id, _, _, _, _, _, _, _, _) = status.content {
                     selectedGiftId = id
                 }
-                //TODO:localize
                 let giftsSectionSize = self.profileGiftsSection.update(
                     transition: transition,
                     component: AnyComponent(ListSectionComponent(
@@ -1400,7 +1398,7 @@ final class UserAppearanceScreenComponent: Component {
                         style: .glass,
                         header: AnyComponent(MultilineTextComponent(
                             text: .plain(NSAttributedString(
-                                string: "Your Gifts".uppercased(),
+                                string: environment.strings.NameColor_GiftTitle.uppercased(),
                                 font: Font.regular(presentationData.listsFontSize.itemListBaseHeaderFontSize),
                                 textColor: environment.theme.list.freeTextColor
                             )),
@@ -1412,6 +1410,8 @@ final class UserAppearanceScreenComponent: Component {
                                 GiftListItemComponent(
                                     context: component.context,
                                     theme: environment.theme,
+                                    strings: environment.strings,
+                                    subject: .profile,
                                     gifts: contentsData.gifts,
                                     starGifts: contentsData.starGifts,
                                     selectedId: selectedGiftId,
@@ -1647,7 +1647,6 @@ final class UserAppearanceScreenComponent: Component {
                 if case let .collectible(collectibleColor) = resolvedState.nameColor {
                     selectedGiftId = collectibleColor.collectibleId
                 }
-                //TODO:localize
                 
                 var peerColorStarGifts: [StarGift] = []
                 for gift in contentsData.starGifts {
@@ -1663,7 +1662,7 @@ final class UserAppearanceScreenComponent: Component {
                         style: .glass,
                         header: AnyComponent(MultilineTextComponent(
                             text: .plain(NSAttributedString(
-                                string: "Your Gifts".uppercased(),
+                                string: environment.strings.NameColor_GiftTitle.uppercased(),
                                 font: Font.regular(presentationData.listsFontSize.itemListBaseHeaderFontSize),
                                 textColor: environment.theme.list.freeTextColor
                             )),
@@ -1675,6 +1674,8 @@ final class UserAppearanceScreenComponent: Component {
                                 GiftListItemComponent(
                                     context: component.context,
                                     theme: environment.theme,
+                                    strings: environment.strings,
+                                    subject: .name,
                                     gifts: self.starGifts,
                                     starGifts: peerColorStarGifts,
                                     selectedId: selectedGiftId,
@@ -1721,9 +1722,8 @@ final class UserAppearanceScreenComponent: Component {
                     
             contentHeight += bottomContentInset
             
-            //TODO:localize
             let buttonSideInset: CGFloat = environment.safeInsets.left + 36.0
-            var buttonTitle = "Apply Style" // environment.strings.Channel_Appearance_ApplyButton
+            var buttonTitle = environment.strings.ProfileColorSetup_ApplyStyle
             var buttonAttributedSubtitleString: NSMutableAttributedString?
             
             if let gift = self.selectedProfileGift, let resellAmounts = gift.resellAmounts, let starsAmount = resellAmounts.first(where: { $0.currency == .stars }) {

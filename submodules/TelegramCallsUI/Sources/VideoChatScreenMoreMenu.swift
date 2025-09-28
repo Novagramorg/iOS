@@ -249,7 +249,7 @@ extension VideoChatScreenComponent.View {
                         iconName = "Call/ToastMessagesDisabled"
                         text = environment.strings.VoiceChat_ToastMessagesDisabled
                     }
-                    self.displayNotification(icon: .icon(iconName), text: text, duration: 3)
+                    self.displayToast(icon: .icon(iconName), text: text, duration: 3)
                 })))
             }
 
