@@ -1404,18 +1404,12 @@ final class VideoChatScreenComponent: Component {
                 guard !text.string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                     return
                 }
-                let entities = generateTextEntities(text.string, enabledTypes: [.mention, .hashtag, .allUrl], currentEntities: generateChatInputTextEntities(text))
+                let entities = generateTextEntities(text.string, enabledTypes: [.mention, .hashtag], currentEntities: generateChatInputTextEntities(text))
                 call.sendMessage(randomId: randomId, text: text.string, entities: entities)
             }
             
             inputPanelView.clearSendMessageInput(updateState: true)
                       
-//            self.currentInputMode = .text
-//            if hasFirstResponder(self) {
-//                self.endEditing(true)
-//            } else {
-//                self.state?.updated(transition: .spring(duration: 0.3))
-//            }
             (self.environment?.controller() as? VideoChatScreenV2Impl)?.requestLayout(forceUpdate: true, transition: .animated(duration: 0.3, curve: .spring))
         }
         
@@ -3596,13 +3590,13 @@ final class VideoChatScreenComponent: Component {
                 )
                 
                 if inputHeight > 0.0 {
-                    inputPanelBottomInset = inputHeight - environment.safeInsets.bottom
+                    inputPanelBottomInset = inputHeight
                 } else {
                     if self.inputPanelExternalState.isEditing {
                         if buttonsOnTheSide {
                             inputPanelBottomInset = 16.0
                         } else {
-                            inputPanelBottomInset = availableSize.height - microphoneButtonFrame.minY
+                            inputPanelBottomInset = availableSize.height - microphoneButtonFrame.minY + 20.0
                         }
                     } else {
                         inputPanelBottomInset = -inputPanelSize.height - environment.safeInsets.bottom
@@ -3618,7 +3612,7 @@ final class VideoChatScreenComponent: Component {
                 } else {
                     inputPanelOriginX = floorToScreenPixels((availableSize.width - inputPanelSize.width) / 2.0)
                 }
-                let inputPanelFrame = CGRect(origin: CGPoint(x: inputPanelOriginX, y: availableSize.height - environment.safeInsets.bottom - inputPanelBottomInset - inputPanelSize.height - 3.0), size: inputPanelSize)
+                let inputPanelFrame = CGRect(origin: CGPoint(x: inputPanelOriginX, y: availableSize.height - inputPanelBottomInset - inputPanelSize.height - 3.0), size: inputPanelSize)
                 if let inputPanelView = self.inputPanel.view {
                     if inputPanelView.superview == nil {
                         self.containerView.addSubview(inputPanelView)
@@ -3687,9 +3681,9 @@ final class VideoChatScreenComponent: Component {
             } else {
                 reactionContextNodeOriginX = 0.0
             }
-            let reactionsAnchorRect: CGRect = CGRect(origin: CGPoint(x: availableSize.width - 44.0, y: availableSize.height - inputPanelBottomInset - inputPanelSize.height - 18.0), size: CGSize(width: 44.0, height: 44.0))
+            let reactionsAnchorRect: CGRect = CGRect(origin: CGPoint(x: availableSize.width - 44.0, y: availableSize.height - inputPanelBottomInset - inputPanelSize.height + 2.0), size: CGSize(width: 44.0, height: 44.0))
             if let reactionItems = self.reactionItems, effectiveDisplayReactions {
-                reactionsInset += 48.0
+                reactionsInset += 62.0
                 
                 let reactionContextNode: ReactionContextNode
                 var reactionContextNodeTransition = transition
@@ -3956,7 +3950,7 @@ final class VideoChatScreenComponent: Component {
             }
 
             let normalMessagesBottomInset: CGFloat = buttonsOnTheSide ? 16.0 : availableSize.height - microphoneButtonFrame.minY + 16.0
-            let messagesBottomInset: CGFloat = max(inputPanelBottomInset + inputPanelSize.height + 31.0, normalMessagesBottomInset) + reactionsInset
+            let messagesBottomInset: CGFloat = max(inputPanelBottomInset + inputPanelSize.height - 3.0, normalMessagesBottomInset) + reactionsInset
             let messagesListSize = self.messagesList.update(
                 transition: transition,
                 component: AnyComponent(MessageListComponent(

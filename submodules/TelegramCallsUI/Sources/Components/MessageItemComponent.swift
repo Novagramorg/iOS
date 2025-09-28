@@ -158,6 +158,9 @@ final class MessageItemComponent: Component {
                         
             let textFont = Font.regular(14.0)
             let boldTextFont = Font.semibold(14.0)
+            let italicFont = Font.italic(14.0)
+            let boldItalicTextFont = Font.semiboldItalic(14.0)
+            let monospaceFont = Font.monospace(14.0)
             let textColor: UIColor = .white
             let linkColor: UIColor = UIColor(rgb: 0x59b6fa)
                         
@@ -240,7 +243,7 @@ final class MessageItemComponent: Component {
                     )
                 )
             } else {
-                let textWithAppliedEntities = stringWithAppliedEntities(text, entities: entities, baseColor: textColor, linkColor: linkColor, baseFont: textFont, linkFont: textFont, boldFont: boldTextFont, italicFont: textFont, boldItalicFont: boldTextFont, fixedFont: textFont, blockQuoteFont: textFont, message: nil, entityFiles: self.entityFiles).mutableCopy() as! NSMutableAttributedString
+                let textWithAppliedEntities = stringWithAppliedEntities(text, entities: entities, baseColor: textColor, linkColor: linkColor, baseFont: textFont, linkFont: textFont, boldFont: boldTextFont, italicFont: italicFont, boldItalicFont: boldItalicTextFont, fixedFont: monospaceFont, blockQuoteFont: textFont, message: nil, entityFiles: self.entityFiles).mutableCopy() as! NSMutableAttributedString
                 if !peerName.isEmpty {
                     textWithAppliedEntities.insert(NSAttributedString(string: peerName + " ", font: boldTextFont, textColor: textColor), at: 0)
                 }
