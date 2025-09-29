@@ -3761,12 +3761,6 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             return
         }
         
-        if let view, let location {
-            if context.sharedContext.immediateExperimentalUISettings.rippleEffect {
-                self.wrappingNode.triggerRipple(at: self.contentContainerNode.view.convert(location, from: view))
-            }
-        }
-        
         switch self.chatPresentationInterfaceState.inputMode {
         case .none:
             break
