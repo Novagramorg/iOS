@@ -15148,3 +15148,5 @@ Error: %8$@";
 "ProfileColorSetup.NoProfileGiftsPlaceholder" = "You don't have any gifts you can use as styles for your profile.";
 "ProfileColorSetup.NoNameGiftsPlaceholder" = "You don't have any gifts you can use as styles for your name.";
 "ProfileColorSetup.BrowseGiftsForPurchase" = "Browse gifts available for purchase >";
+
+"VoiceChat.RemovedConferencePeerText" = "You removed %@ from this call. They will no longer be able to join using the invite link.";

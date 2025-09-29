@@ -249,7 +249,7 @@ extension VideoChatScreenComponent.View {
                         iconName = "Call/ToastMessagesDisabled"
                         text = environment.strings.VoiceChat_ToastMessagesDisabled
                     }
-                    self.displayToast(icon: .icon(iconName), text: text, duration: 3)
+                    self.presentToast(icon: .icon(iconName), text: text, duration: 3)
                 })))
             }
 
@@ -483,7 +483,7 @@ extension VideoChatScreenComponent.View {
                                     text = environment.strings.VoiceChat_RecordingStarted
                                 }
 
-                                self.presentUndoOverlay(content: .voiceChatRecording(text: text), action: { _ in return false })
+                                self.presentToast(icon: .animation("anim_vcrecord"), text: text, duration: 3)
                                 groupCall.playTone(.recordingStarted)
                             })
                             environment.controller()?.present(controller, in: .window(.root))

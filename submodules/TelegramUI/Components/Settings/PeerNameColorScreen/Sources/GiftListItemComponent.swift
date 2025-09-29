@@ -29,6 +29,7 @@ final class GiftListItemComponent: Component {
     let starGifts: [StarGift]
     let selectedId: Int64?
     let selectionUpdated: (StarGift.UniqueGift) -> Void
+    let onTabChange: () -> Void
     let tag: AnyObject?
     let updated: (ComponentTransition) -> Void
     
@@ -41,6 +42,7 @@ final class GiftListItemComponent: Component {
         starGifts: [StarGift],
         selectedId: Int64?,
         selectionUpdated: @escaping (StarGift.UniqueGift) -> Void,
+        onTabChange: @escaping () -> Void,
         tag: AnyObject?,
         updated: @escaping (ComponentTransition) -> Void
     ) {
@@ -52,6 +54,7 @@ final class GiftListItemComponent: Component {
         self.starGifts = starGifts
         self.selectedId = selectedId
         self.selectionUpdated = selectionUpdated
+        self.onTabChange = onTabChange
         self.tag = tag
         self.updated = updated
     }
@@ -150,12 +153,17 @@ final class GiftListItemComponent: Component {
                 return
             }
             
+            let previousGiftId = self.selectedGiftId
             self.selectedGiftId = id
             
             if id == 0 {
                 self.resaleGiftsState = nil
                 self.resaleGiftsDisposable.set(nil)
             } else {
+                if previousGiftId == 0 {
+                    component.onTabChange()
+                }
+                
                 let resaleGiftsContext: ResaleGiftsContext
                 if let current = self.resaleGiftsContexts[id] {
                     resaleGiftsContext = current
@@ -173,7 +181,6 @@ final class GiftListItemComponent: Component {
                     self.resaleGiftsState = state
                     if !self.isUpdating {
                         let transition: ComponentTransition = isFirstTime ? .easeInOut(duration: 0.25) : .immediate
-                        self.state?.updated(transition: transition)
                         component.updated(transition)
                     }
                     isFirstTime = false
@@ -182,7 +189,6 @@ final class GiftListItemComponent: Component {
             
             if !self.isUpdating {
                 let transition: ComponentTransition = .easeInOut(duration: 0.25)
-                self.state?.updated(transition: transition)
                 component.updated(transition)
             }
         }
