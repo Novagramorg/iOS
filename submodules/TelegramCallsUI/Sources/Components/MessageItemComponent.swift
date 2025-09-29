@@ -91,6 +91,7 @@ final class MessageItemComponent: Component {
             self.background = GlassBackgroundView()
             
             self.avatarNode = AvatarNode(font: avatarPlaceholderFont(size: 12.0))
+            self.avatarNode.hitTestSlop = UIEdgeInsets(top: -5.0, left: -5.0, bottom: -5.0, right: -8.0)
             
             self.icon = ComponentView()
             self.text = ComponentView()
@@ -156,19 +157,7 @@ final class MessageItemComponent: Component {
             transition.animateAlpha(view: self.avatarNode.view, from: 0.0, to: 1.0)
             transition.animateScale(view: self.avatarNode.view, from: 0.01, to: 1.0)
         }
-        
-        override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
-            if !self.avatarNode.isHidden, self.avatarNode.frame.contains(point) {
-                return true
-            }
-            if let textView = self.text.view as? MultilineTextWithEntitiesComponent.View, let (_, attributes) = textView.attributes(at: self.convert(point, to: textView)) {
-                if let _ = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.Spoiler)], textView.isSpoilerConcealed {
-                    return true
-                }
-            }
-            return false
-        }
-        
+                
         func update(component: MessageItemComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
             let isFirstTime = self.component == nil
             var transition = transition
@@ -207,6 +196,7 @@ final class MessageItemComponent: Component {
             
             let text = component.text
             var entities = component.entities
+            
             if let cachedEntities = self.cachedEntities {
                 entities = cachedEntities
             } else if let availableReactions = component.availableReactions, text.count == 1 {
@@ -223,6 +213,21 @@ final class MessageItemComponent: Component {
                     entities.insert(MessageTextEntity(range: 0 ..< (text as NSString).length, type: .CustomEmoji(stickerPack: nil, fileId: item.file.fileId.id)), at: 0)
                     self.cachedEntities = entities
                 }
+            } else {
+                entities = entities.filter { entity in
+                    switch entity.type {
+                    case .Bold, .Italic, .Strikethrough, .Underline, .Spoiler:
+                        return true
+                    case .CustomEmoji:
+                        if case let .peer(peer) = component.icon, peer.isPremium {
+                            return true
+                        }
+                        return false
+                    default:
+                        return false
+                    }
+                }
+                self.cachedEntities = entities
             }
                         
             let attributedText: NSAttributedString
@@ -263,7 +268,7 @@ final class MessageItemComponent: Component {
                     placeholderColor: UIColor(rgb: 0xffffff, alpha: 0.3),
                     text: .plain(attributedText),
                     maximumNumberOfLines: 0,
-                    lineSpacing: 0.0,
+                    lineSpacing: 0.1,
                     spoilerColor: .white,
                     handleSpoilers: true
                 )),

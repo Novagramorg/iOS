@@ -482,6 +482,19 @@ final class VideoChatScreenComponent: Component {
             return result
         }
         
+        override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+            if let gestureRecognizer = gestureRecognizer as? UIPanGestureRecognizer {
+                let location = gestureRecognizer.location(in: self)
+                if let inputPanelView = self.inputPanel.view {
+                    let mappedLocation = self.convert(location, to: inputPanelView)
+                    if inputPanelView.bounds.contains(mappedLocation) {
+                        return false
+                    }
+                }
+            }
+            return true
+        }
+        
         @objc func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRequireFailureOf otherGestureRecognizer: UIGestureRecognizer) -> Bool {
             if gestureRecognizer is UITapGestureRecognizer {
                 if otherGestureRecognizer is UIPanGestureRecognizer {
@@ -751,7 +764,7 @@ final class VideoChatScreenComponent: Component {
                             switch result {
                             case .linkCopied:
                                 let presentationData = groupCall.accountContext.sharedContext.currentPresentationData.with { $0 }
-                                self.presentToast(icon: .icon("anim_linkcopied"), text: presentationData.strings.CallList_ToastCallLinkCopied_Text, duration: 3)
+                                self.presentToast(icon: .animation("anim_linkcopied"), text: presentationData.strings.CallList_ToastCallLinkCopied_Text, duration: 3)
                             case .openCall:
                                 break
                             }
@@ -838,7 +851,7 @@ final class VideoChatScreenComponent: Component {
                             } else {
                                 text = ""
                             }
-                            self.presentToast(icon: .icon(isSavedMessages ? "anim_savedmessages" : "anim_forward"), text: text, duration: 3)
+                            self.presentToast(icon: .animation(isSavedMessages ? "anim_savedmessages" : "anim_forward"), text: text, duration: 3)
                         })
                     }
                     shareController.actionCompleted = { [weak self] in
@@ -846,7 +859,7 @@ final class VideoChatScreenComponent: Component {
                             return
                         }
                         let presentationData = groupCall.accountContext.sharedContext.currentPresentationData.with({ $0 }).withUpdated(theme: environment.theme)
-                        self.presentToast(icon: .icon("anim_linkcopied"), text: presentationData.strings.VoiceChat_InviteLinkCopiedText, duration: 3)
+                        self.presentToast(icon: .animation("anim_linkcopied"), text: presentationData.strings.VoiceChat_InviteLinkCopiedText, duration: 3)
                     }
                     environment.controller()?.present(shareController, in: .window(.root))
                 })
@@ -889,7 +902,7 @@ final class VideoChatScreenComponent: Component {
                         } else {
                             text = ""
                         }
-                        self.presentToast(icon: .icon(isSavedMessages ? "anim_savedmessages" : "anim_forward"), text: text, duration: 3)
+                        self.presentToast(icon: .animation(isSavedMessages ? "anim_savedmessages" : "anim_forward"), text: text, duration: 3)
                     })
                 }
                 shareController.actionCompleted = { [weak self] in
@@ -897,7 +910,7 @@ final class VideoChatScreenComponent: Component {
                         return
                     }
                     let presentationData = groupCall.accountContext.sharedContext.currentPresentationData.with({ $0 }).withUpdated(theme: environment.theme)
-                    self.presentToast(icon: .icon("anim_linkcopied"), text: presentationData.strings.VoiceChat_InviteLinkCopiedText, duration: 3)
+                    self.presentToast(icon: .animation("anim_linkcopied"), text: presentationData.strings.VoiceChat_InviteLinkCopiedText, duration: 3)
                 }
                 environment.controller()?.present(shareController, in: .window(.root))
             }
@@ -2472,10 +2485,17 @@ final class VideoChatScreenComponent: Component {
                 areButtonsCollapsed = true
                 areButtonsActuallyCollapsed = false
                 
-                mainColumnWidth = min(isLandscape ? 356.0 : 320.0, availableSize.width - leftInset - rightInset - 340.0)
+                let landscapeColumnWidth: CGFloat
+                if environment.metrics.isTablet {
+                    landscapeColumnWidth = 356.0
+                } else {
+                    landscapeColumnWidth = 340.0
+                }
+                
+                mainColumnWidth = min(isLandscape ? landscapeColumnWidth : 320.0, availableSize.width - leftInset - rightInset - 340.0)
                 mainColumnSideInset = 0.0
             } else {
-                areButtonsCollapsed = true //self.expandedParticipantsVideoState != nil
+                areButtonsCollapsed = true
                 areButtonsActuallyCollapsed = self.expandedParticipantsVideoState != nil
                 
                 if availableSize.width > maxSingleColumnWidth {
@@ -2692,7 +2712,7 @@ final class VideoChatScreenComponent: Component {
             if buttonsOnTheSide {
                 collapsedParticipantsClippingY = availableSize.height
             } else {
-                collapsedParticipantsClippingY = collapsedMicrophoneButtonFrame.minY - 16.0
+                collapsedParticipantsClippingY = expandedMicrophoneButtonFrame.minY - 70.0
             }
             
             let expandedParticipantsClippingY: CGFloat
@@ -2703,7 +2723,7 @@ final class VideoChatScreenComponent: Component {
                     expandedParticipantsClippingY = availableSize.height - max(14.0, environment.safeInsets.bottom)
                 }
             } else {
-                expandedParticipantsClippingY = expandedMicrophoneButtonFrame.minY - 24.0
+                expandedParticipantsClippingY = expandedMicrophoneButtonFrame.minY - 28.0
             }
 
             
@@ -3429,7 +3449,7 @@ final class VideoChatScreenComponent: Component {
                     )
                     
                     let availableInputMediaWidth = availableSize.width
-                    let heightAndOverflow = inputMediaNode.updateLayout(width: availableInputMediaWidth, leftInset: 0.0, rightInset: 0.0, bottomInset: environment.safeInsets.bottom, standardInputHeight: environment.deviceMetrics.standardInputHeight(inLandscape: false), inputHeight: environment.inputHeight, maximumHeight: availableSize.height, inputPanelHeight: 0.0, transition: .immediate, interfaceState: presentationInterfaceState, layoutMetrics: environment.metrics, deviceMetrics: environment.deviceMetrics, isVisible: true, isExpanded: false)
+                    let heightAndOverflow = inputMediaNode.updateLayout(width: availableInputMediaWidth, leftInset: environment.safeInsets.left, rightInset: environment.safeInsets.right, bottomInset: environment.safeInsets.bottom, standardInputHeight: environment.deviceMetrics.standardInputHeight(inLandscape: false), inputHeight: environment.inputHeight, maximumHeight: availableSize.height, inputPanelHeight: 0.0, transition: .immediate, interfaceState: presentationInterfaceState, layoutMetrics: environment.metrics, deviceMetrics: environment.deviceMetrics, isVisible: true, isExpanded: false)
                     let inputNodeHeight = heightAndOverflow.0
                     let inputNodeFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((availableSize.width - availableInputMediaWidth) / 2.0), y: availableSize.height - inputNodeHeight), size: CGSize(width: availableInputMediaWidth, height: inputNodeHeight))
                     transition.setFrame(layer: inputMediaNode.layer, frame: inputNodeFrame)
@@ -3499,7 +3519,7 @@ final class VideoChatScreenComponent: Component {
                         placeholder: .plain(environment.strings.VoiceChat_MessagePlaceholder),
                         sendPaidMessageStars: nil,
                         maxLength: characterLimit,
-                        queryTypes: [.mention, .hashtag],
+                        queryTypes: [],
                         alwaysDarkWhenHasText: false,
                         useGrayBackground: false,
                         resetInputContents: nil,
@@ -3609,6 +3629,7 @@ final class VideoChatScreenComponent: Component {
                 }
                 let inputPanelFrame = CGRect(origin: CGPoint(x: inputPanelOriginX, y: availableSize.height - inputPanelBottomInset - inputPanelSize.height - 3.0), size: inputPanelSize)
                 if let inputPanelView = self.inputPanel.view {
+                    inputPanelView.disablesInteractiveKeyboardGestureRecognizer = true
                     if inputPanelView.superview == nil {
                         self.containerView.addSubview(inputPanelView)
                     }
