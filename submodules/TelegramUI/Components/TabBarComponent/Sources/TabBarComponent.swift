@@ -89,7 +89,7 @@ public final class TabBarComponent: Component {
         private weak var state: EmptyComponentState?
         
         public override init(frame: CGRect) {
-            self.backgroundView = GlassBackgroundView(frame: CGRect())
+            self.backgroundView = GlassBackgroundView()
             self.selectionView = GlassBackgroundView.ContentImageView()
             
             self.contextGestureContainerView = ContextControllerSourceView()
