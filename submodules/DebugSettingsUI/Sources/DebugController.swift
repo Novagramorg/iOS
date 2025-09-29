@@ -95,7 +95,7 @@ private enum DebugControllerEntry: ItemListNodeEntry {
     case knockoutWallpaper(PresentationTheme, Bool)
     case experimentalCompatibility(Bool)
     case enableDebugDataDisplay(Bool)
-    case rippleEffect(Bool)
+    case fakeGlass(Bool)
     case browserExperiment(Bool)
     case allForumsHaveTabs(Bool)
     case enableReactionOverrides(Bool)
@@ -135,7 +135,7 @@ private enum DebugControllerEntry: ItemListNodeEntry {
             return DebugControllerSection.web.rawValue
         case .keepChatNavigationStack, .skipReadHistory, .alwaysDisplayTyping, .debugRatingLayout, .crashOnSlowQueries, .crashOnMemoryPressure:
             return DebugControllerSection.experiments.rawValue
-        case .clearTips, .resetNotifications, .crash, .fillLocalSavedMessageCache, .resetDatabase, .resetDatabaseAndCache, .resetHoles, .resetTagHoles, .reindexUnread, .resetCacheIndex, .reindexCache, .resetBiometricsData, .optimizeDatabase, .photoPreview, .knockoutWallpaper, .compressedEmojiCache, .storiesJpegExperiment, .checkSerializedData, .enableQuickReactionSwitch, .experimentalCompatibility, .enableDebugDataDisplay, .rippleEffect, .browserExperiment, .allForumsHaveTabs, .enableReactionOverrides, .restorePurchases, .disableReloginTokens, .liveStreamV2, .experimentalCallMute, .playerV2, .devRequests, .enableUpdates, .fakeAds, .enableLocalTranslation:
+        case .clearTips, .resetNotifications, .crash, .fillLocalSavedMessageCache, .resetDatabase, .resetDatabaseAndCache, .resetHoles, .resetTagHoles, .reindexUnread, .resetCacheIndex, .reindexCache, .resetBiometricsData, .optimizeDatabase, .photoPreview, .knockoutWallpaper, .compressedEmojiCache, .storiesJpegExperiment, .checkSerializedData, .enableQuickReactionSwitch, .experimentalCompatibility, .enableDebugDataDisplay, .fakeGlass, .browserExperiment, .allForumsHaveTabs, .enableReactionOverrides, .restorePurchases, .disableReloginTokens, .liveStreamV2, .experimentalCallMute, .playerV2, .devRequests, .enableUpdates, .fakeAds, .enableLocalTranslation:
             return DebugControllerSection.experiments.rawValue
         case .logTranslationRecognition, .resetTranslationStates:
             return DebugControllerSection.translation.rawValue
@@ -226,7 +226,7 @@ private enum DebugControllerEntry: ItemListNodeEntry {
             return 37
         case .enableDebugDataDisplay:
             return 38
-        case .rippleEffect:
+        case .fakeGlass:
             return 39
         case .browserExperiment:
             return 40
@@ -1258,12 +1258,12 @@ private enum DebugControllerEntry: ItemListNodeEntry {
                     })
                 }).start()
             })
-        case let .rippleEffect(value):
-            return ItemListSwitchItem(presentationData: presentationData, title: "Ripple", value: value, sectionId: self.section, style: .blocks, updated: { value in
+        case let .fakeGlass(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Fake glass", value: value, sectionId: self.section, style: .blocks, updated: { value in
                 let _ = arguments.sharedContext.accountManager.transaction ({ transaction in
                     transaction.updateSharedData(ApplicationSpecificSharedDataKeys.experimentalUISettings, { settings in
                         var settings = settings?.get(ExperimentalUISettings.self) ?? ExperimentalUISettings.defaultSettings
-                        settings.rippleEffect = value
+                        settings.fakeGlass = value
                         return PreferencesEntry(settings)
                     })
                 }).start()
@@ -1543,7 +1543,7 @@ private func debugControllerEntries(sharedContext: SharedAccountContext, present
         entries.append(.knockoutWallpaper(presentationData.theme, experimentalSettings.knockoutWallpaper))
         entries.append(.experimentalCompatibility(experimentalSettings.experimentalCompatibility))
         entries.append(.enableDebugDataDisplay(experimentalSettings.enableDebugDataDisplay))
-        entries.append(.rippleEffect(experimentalSettings.rippleEffect))
+        entries.append(.fakeGlass(experimentalSettings.fakeGlass))
         #if DEBUG
         entries.append(.browserExperiment(experimentalSettings.browserExperiment))
         #else
