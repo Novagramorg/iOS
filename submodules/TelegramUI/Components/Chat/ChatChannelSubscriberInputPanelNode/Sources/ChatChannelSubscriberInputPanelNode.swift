@@ -335,7 +335,7 @@ public final class ChatChannelSubscriberInputPanelNode: ChatInputPanelNode {
                 
                 Queue.mainQueue().after(0.4, {
                     let absoluteFrame = self.giftButton.convert(self.giftButton.bounds, to: parentController.view)
-                    let location = CGRect(origin: CGPoint(x: absoluteFrame.midX, y: absoluteFrame.minY + 11.0), size: CGSize())
+                    let location = CGRect(origin: CGPoint(x: absoluteFrame.midX, y: absoluteFrame.minY), size: CGSize())
                     
                     let presentationData = context.sharedContext.currentPresentationData.with { $0 }
                     let text: String = presentationData.strings.Chat_SendGiftTooltip
@@ -362,7 +362,7 @@ public final class ChatChannelSubscriberInputPanelNode: ChatInputPanelNode {
                 
                 Queue.mainQueue().after(0.4, {
                     let absoluteFrame = self.suggestedPostButton.convert(self.suggestedPostButton.bounds, to: parentController.view)
-                    let location = CGRect(origin: CGPoint(x: absoluteFrame.midX, y: absoluteFrame.minY + 11.0), size: CGSize())
+                    let location = CGRect(origin: CGPoint(x: absoluteFrame.midX, y: absoluteFrame.minY), size: CGSize())
                     
                     let presentationData = context.sharedContext.currentPresentationData.with { $0 }
                     let _ = presentationData
