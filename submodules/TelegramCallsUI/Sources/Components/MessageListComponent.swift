@@ -34,17 +34,20 @@ final class MessageListComponent: Component {
     private let items: [Item]
     private let availableReactions: [ReactionItem]?
     private let sendActionTransition: SendActionTransition?
+    private let openPeer: (EnginePeer) -> Void
     
     init(
         context: AccountContext,
         items: [Item],
         availableReactions: [ReactionItem]?,
-        sendActionTransition: SendActionTransition?
+        sendActionTransition: SendActionTransition?,
+        openPeer: @escaping (EnginePeer) -> Void
     ) {
         self.context = context
         self.items = items
         self.availableReactions = availableReactions
         self.sendActionTransition = sendActionTransition
+        self.openPeer = openPeer
     }
     
     static func == (lhs: MessageListComponent, rhs: MessageListComponent) -> Bool {
@@ -130,6 +133,15 @@ final class MessageListComponent: Component {
             }
         }
         
+        override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+            for (_, itemView) in self.itemViews {
+                if let view = itemView.view, view.point(inside: self.convert(point, to: view), with: event) {
+                    return true
+                }
+            }
+            return false
+        }
+        
         func update(component: MessageListComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
             self.component = component
             self.state = state
@@ -167,7 +179,8 @@ final class MessageListComponent: Component {
                         isNotification: item.isNotification,
                         text: item.text,
                         entities: item.entities,
-                        availableReactions: component.availableReactions
+                        availableReactions: component.availableReactions,
+                        openPeer: component.openPeer
                     )),
                     environment: {},
                     containerSize: CGSize(width: maxWidth, height: .greatestFiniteMagnitude)

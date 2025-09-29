@@ -693,8 +693,7 @@ final class VideoChatScreenComponent: Component {
                     } else {
                         text = title.isEmpty ? environment.strings.VoiceChat_EditTitleRemoveSuccess : environment.strings.VoiceChat_EditTitleSuccess(title).string
                     }
-
-                    self.presentUndoOverlay(content: .voiceChatFlag(text: text), action: { _ in return false })
+                    self.presentToast(icon: .animation("anim_vcflag"), text: text, duration: 3)
                 })
                 environment.controller()?.present(controller, in: .window(.root))
             })
@@ -752,9 +751,7 @@ final class VideoChatScreenComponent: Component {
                             switch result {
                             case .linkCopied:
                                 let presentationData = groupCall.accountContext.sharedContext.currentPresentationData.with { $0 }
-                                self.environment?.controller()?.present(UndoOverlayController(presentationData: presentationData, content: .universal(animation: "anim_linkcopied", scale: 0.08, colors: ["info1.info1.stroke": UIColor.clear, "info2.info2.Fill": UIColor.clear], title: nil, text: presentationData.strings.CallList_ToastCallLinkCopied_Text, customUndoText: presentationData.strings.CallList_ToastCallLinkCopied_Action, timeout: nil), elevatedLayout: false, animateInAsReplacement: false, action: { action in
-                                    return false
-                                }), in: .current)
+                                self.presentToast(icon: .icon("anim_linkcopied"), text: presentationData.strings.CallList_ToastCallLinkCopied_Text, duration: 3)
                             case .openCall:
                                 break
                             }
@@ -841,8 +838,7 @@ final class VideoChatScreenComponent: Component {
                             } else {
                                 text = ""
                             }
-                            
-                            environment.controller()?.present(UndoOverlayController(presentationData: presentationData, content: .forward(savedMessages: isSavedMessages, text: text), elevatedLayout: false, animateInAsReplacement: true, action: { _ in return false }), in: .current)
+                            self.presentToast(icon: .icon(isSavedMessages ? "anim_savedmessages" : "anim_forward"), text: text, duration: 3)
                         })
                     }
                     shareController.actionCompleted = { [weak self] in
@@ -850,7 +846,7 @@ final class VideoChatScreenComponent: Component {
                             return
                         }
                         let presentationData = groupCall.accountContext.sharedContext.currentPresentationData.with({ $0 }).withUpdated(theme: environment.theme)
-                        environment.controller()?.present(UndoOverlayController(presentationData: presentationData, content: .linkCopied(title: nil, text: presentationData.strings.VoiceChat_InviteLinkCopiedText), elevatedLayout: false, animateInAsReplacement: false, action: { _ in return false }), in: .window(.root))
+                        self.presentToast(icon: .icon("anim_linkcopied"), text: presentationData.strings.VoiceChat_InviteLinkCopiedText, duration: 3)
                     }
                     environment.controller()?.present(shareController, in: .window(.root))
                 })
@@ -893,8 +889,7 @@ final class VideoChatScreenComponent: Component {
                         } else {
                             text = ""
                         }
-                        
-                        environment.controller()?.present(UndoOverlayController(presentationData: presentationData, content: .forward(savedMessages: isSavedMessages, text: text), elevatedLayout: false, animateInAsReplacement: true, action: { _ in return false }), in: .current)
+                        self.presentToast(icon: .icon(isSavedMessages ? "anim_savedmessages" : "anim_forward"), text: text, duration: 3)
                     })
                 }
                 shareController.actionCompleted = { [weak self] in
@@ -902,7 +897,7 @@ final class VideoChatScreenComponent: Component {
                         return
                     }
                     let presentationData = groupCall.accountContext.sharedContext.currentPresentationData.with({ $0 }).withUpdated(theme: environment.theme)
-                    environment.controller()?.present(UndoOverlayController(presentationData: presentationData, content: .linkCopied(title: nil, text: presentationData.strings.VoiceChat_InviteLinkCopiedText), elevatedLayout: false, animateInAsReplacement: false, action: { _ in return false }), in: .window(.root))
+                    self.presentToast(icon: .icon("anim_linkcopied"), text: presentationData.strings.VoiceChat_InviteLinkCopiedText, duration: 3)
                 }
                 environment.controller()?.present(shareController, in: .window(.root))
             }
@@ -1839,7 +1834,7 @@ final class VideoChatScreenComponent: Component {
                         } else {
                             text = environment.strings.VoiceChat_DisplayAsSuccess(peer.displayTitle(strings: environment.strings, displayOrder: groupCall.accountContext.sharedContext.currentPresentationData.with({ $0 }).nameDisplayOrder)).string
                         }
-                        self.displayToast(icon: .peer(peer), text: text, duration: 3)
+                        self.presentToast(icon: .peer(peer), text: text, duration: 3)
                     })
                     
                     self.memberEventsDisposable?.dispose()
@@ -1866,7 +1861,7 @@ final class VideoChatScreenComponent: Component {
                                 if displayEvent {
                                     let text = environment.strings.VoiceChat_PeerJoinedText("**\(event.peer.displayTitle(strings: environment.strings, displayOrder: groupCall.accountContext.sharedContext.currentPresentationData.with({ $0 }).nameDisplayOrder))**").string
                                     
-                                    self.displayToast(icon: .peer(event.peer), text: text, duration: 3)
+                                    self.presentToast(icon: .peer(event.peer), text: text, duration: 3)
                                 }
                             }
                         } else {
@@ -3936,6 +3931,8 @@ final class VideoChatScreenComponent: Component {
                     icon = .peer(peer)
                 case let .icon(name):
                     icon = .icon(name)
+                case let .animation(name):
+                    icon = .animation(name)
                 }
                 messageItems.insert(
                     MessageListComponent.Item(
@@ -3957,7 +3954,13 @@ final class VideoChatScreenComponent: Component {
                     context: call.accountContext,
                     items: messageItems,
                     availableReactions: self.reactionItems,
-                    sendActionTransition: sendActionTransition
+                    sendActionTransition: sendActionTransition,
+                    openPeer: { [weak self] peer in
+                        guard let self else {
+                            return
+                        }
+                        self.openPeer(peer)
+                    }
                 )),
                 environment: {},
                 containerSize: CGSize(width: isTwoColumnLayout ? mainColumnWidth : min(440.0, availableSize.width - environment.safeInsets.left - environment.safeInsets.right), height: availableSize.height - messagesBottomInset)
@@ -3975,7 +3978,6 @@ final class VideoChatScreenComponent: Component {
             let messagesListFrame = CGRect(origin: CGPoint(x: messageListOriginX, y: availableSize.height - messagesListSize.height - messagesBottomInset), size: messagesListSize)
             if let messagesListView = self.messagesList.view {
                 if messagesListView.superview == nil {
-                    messagesListView.isUserInteractionEnabled = false
                     self.containerView.addSubview(messagesListView)
                 }
                 transition.setFrame(view: messagesListView, frame: messagesListFrame)

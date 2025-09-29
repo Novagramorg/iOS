@@ -14,6 +14,7 @@ import TextFormat
 import TelegramPresentationData
 import ReactionSelectionNode
 import BundleIconComponent
+import LottieComponent
 import Markdown
 
 private let glassColor = UIColor(rgb: 0x25272e, alpha: 0.72)
@@ -22,6 +23,7 @@ final class MessageItemComponent: Component {
     public enum Icon: Equatable {
         case peer(EnginePeer)
         case icon(String)
+        case animation(String)
     }
     
     private let context: AccountContext
@@ -30,7 +32,7 @@ final class MessageItemComponent: Component {
     private let text: String
     private let entities: [MessageTextEntity]
     private let availableReactions: [ReactionItem]?
-    private let avatarTapped: () -> Void
+    private let openPeer: ((EnginePeer) -> Void)?
     
     init(
         context: AccountContext,
@@ -39,7 +41,7 @@ final class MessageItemComponent: Component {
         text: String,
         entities: [MessageTextEntity],
         availableReactions: [ReactionItem]?,
-        avatarTapped: @escaping () -> Void = {}
+        openPeer: ((EnginePeer) -> Void)?
     ) {
         self.context = context
         self.icon = icon
@@ -47,7 +49,7 @@ final class MessageItemComponent: Component {
         self.text = text
         self.entities = entities
         self.availableReactions = availableReactions
-        self.avatarTapped = avatarTapped
+        self.openPeer = openPeer
     }
     
     static func == (lhs: MessageItemComponent, rhs: MessageItemComponent) -> Bool {
@@ -77,6 +79,9 @@ final class MessageItemComponent: Component {
         private let text: ComponentView<Empty>
         weak var standaloneReactionAnimation: StandaloneReactionAnimation?
         
+        private var cachedEntities: [MessageTextEntity]?
+        private var entityFiles: [MediaId: TelegramMediaFile] = [:]
+        
         private var component: MessageItemComponent?
         
         override init(frame: CGRect) {
@@ -95,10 +100,19 @@ final class MessageItemComponent: Component {
             self.addSubview(self.container)
             self.container.addSubview(self.background)
             self.container.addSubview(self.avatarNode.view)
+            
+            self.avatarNode.view.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(self.avatarTapped)))
         }
         
         required init?(coder: NSCoder) {
             fatalError("init(coder:) has not been implemented")
+        }
+        
+        @objc private func avatarTapped() {
+            guard let component = self.component, case let .peer(peer) = component.icon else {
+                return
+            }
+            component.openPeer?(peer)
         }
         
         func animateFrom(globalFrame: CGRect, cornerRadius: CGFloat, textSnapshotView: UIView, transition: ComponentTransition) {
@@ -143,8 +157,17 @@ final class MessageItemComponent: Component {
             transition.animateScale(view: self.avatarNode.view, from: 0.01, to: 1.0)
         }
         
-        private var cachedEntities: [MessageTextEntity]?
-        private var entityFiles: [MediaId: TelegramMediaFile] = [:]
+        override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+            if !self.avatarNode.isHidden, self.avatarNode.frame.contains(point) {
+                return true
+            }
+            if let textView = self.text.view as? MultilineTextWithEntitiesComponent.View, let (_, attributes) = textView.attributes(at: self.convert(point, to: textView)) {
+                if let _ = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.Spoiler)], textView.isSpoilerConcealed {
+                    return true
+                }
+            }
+            return false
+        }
         
         func update(component: MessageItemComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
             let isFirstTime = self.component == nil
@@ -170,38 +193,9 @@ final class MessageItemComponent: Component {
             let avatarSize = CGSize(width: component.isNotification ? 30.0 : 28.0, height: component.isNotification ? 30.0 : 28.0)
             let avatarSpacing: CGFloat = 10.0
             let iconSpacing: CGFloat = 10.0
-            let rightInset: CGFloat = 13.0
+            let rightInset: CGFloat = component.isNotification ? 15.0 : 13.0
             
             let avatarFrame = CGRect(origin: CGPoint(x: avatarInset, y: avatarInset), size: avatarSize)
-            if case let .peer(peer) = component.icon {
-                if peer.smallProfileImage != nil {
-                    self.avatarNode.setPeerV2(
-                        context: component.context,
-                        theme: theme,
-                        peer: peer,
-                        authorOfMessage: nil,
-                        overrideImage: nil,
-                        emptyColor: nil,
-                        clipStyle: .round,
-                        synchronousLoad: true,
-                        displayDimensions: avatarSize
-                    )
-                } else {
-                    self.avatarNode.setPeer(
-                        context: component.context,
-                        theme: theme,
-                        peer: peer,
-                        clipStyle: .round,
-                        synchronousLoad: true,
-                        displayDimensions: avatarSize
-                    )
-                }
-            }
-            if self.avatarNode.bounds.isEmpty {
-                self.avatarNode.frame = avatarFrame
-            } else {
-                transition.setFrame(view: self.avatarNode.view, frame: avatarFrame)
-            }
             
             var peerName = ""
             if !component.isNotification, case let .peer(peer) = component.icon {
@@ -256,6 +250,8 @@ final class MessageItemComponent: Component {
                 spacing = avatarSpacing
             case .icon:
                 spacing = iconSpacing
+            case .animation:
+                spacing = iconSpacing
             }
             
             let textSize = self.text.update(
@@ -268,7 +264,8 @@ final class MessageItemComponent: Component {
                     text: .plain(attributedText),
                     maximumNumberOfLines: 0,
                     lineSpacing: 0.0,
-                    spoilerColor: .white
+                    spoilerColor: .white,
+                    handleSpoilers: true
                 )),
                 environment: {},
                 containerSize: CGSize(width: availableSize.width - avatarInset - avatarSize.width - spacing - rightInset, height: .greatestFiniteMagnitude)
@@ -276,7 +273,37 @@ final class MessageItemComponent: Component {
             
             let size = CGSize(width: avatarInset + avatarSize.width + spacing + textSize.width + rightInset, height: max(minimalHeight, textSize.height + 15.0))
             
-            if case let .icon(iconName) = component.icon {
+            switch component.icon {
+            case let .peer(peer):
+                if peer.smallProfileImage != nil {
+                    self.avatarNode.setPeerV2(
+                        context: component.context,
+                        theme: theme,
+                        peer: peer,
+                        authorOfMessage: nil,
+                        overrideImage: nil,
+                        emptyColor: nil,
+                        clipStyle: .round,
+                        synchronousLoad: true,
+                        displayDimensions: avatarSize
+                    )
+                } else {
+                    self.avatarNode.setPeer(
+                        context: component.context,
+                        theme: theme,
+                        peer: peer,
+                        clipStyle: .round,
+                        synchronousLoad: true,
+                        displayDimensions: avatarSize
+                    )
+                }
+                if self.avatarNode.bounds.isEmpty {
+                    self.avatarNode.frame = avatarFrame
+                } else {
+                    transition.setFrame(view: self.avatarNode.view, frame: avatarFrame)
+                }
+                self.avatarNode.isHidden = false
+            case let .icon(iconName):
                 let iconSize = self.icon.update(
                     transition: transition,
                     component: AnyComponent(BundleIconComponent(name: iconName, tintColor: .white)),
@@ -290,6 +317,31 @@ final class MessageItemComponent: Component {
                     }
                     transition.setFrame(view: iconView, frame: iconFrame)
                 }
+                self.avatarNode.isHidden = true
+            case let .animation(animationName):
+                let iconSize = self.icon.update(
+                    transition: transition,
+                    component: AnyComponent(LottieComponent(
+                        content: LottieComponent.AppBundleContent(
+                            name: animationName
+                        ),
+                        placeholderColor: nil,
+                        startingPosition: .end,
+                        size: CGSize(width: 40.0, height: 40.0),
+                        loop: false
+                    )),
+                    environment: {},
+                    containerSize: CGSize(width: 40.0, height: 40.0)
+                )
+                let iconFrame = CGRect(origin: CGPoint(x: avatarInset - 3.0, y: floorToScreenPixels((size.height - iconSize.height) / 2.0)), size: iconSize)
+                if let iconView = self.icon.view as? LottieComponent.View {
+                    if iconView.superview == nil {
+                        self.container.addSubview(iconView)
+                        iconView.playOnce()
+                    }
+                    transition.setFrame(view: iconView, frame: iconFrame)
+                }
+                self.avatarNode.isHidden = true
             }
             
             let textFrame = CGRect(origin: CGPoint(x: avatarInset + avatarSize.width + spacing, y: floorToScreenPixels((size.height - textSize.height) / 2.0)), size: textSize)
@@ -365,8 +417,6 @@ final class MessageItemComponent: Component {
                     }
                 }
             }
-            
-            
             return size
         }
     }
