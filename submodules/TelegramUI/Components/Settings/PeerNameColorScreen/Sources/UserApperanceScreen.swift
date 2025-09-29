@@ -1215,7 +1215,7 @@ final class UserAppearanceScreenComponent: Component {
                 }
                 contentHeight += profilePreviewSize.height - 38.0
                 
-                transition.setFrame(view: self.previewShadowView, frame: profilePreviewFrame.insetBy(dx: -30.0, dy: -30.0))
+                transition.setFrame(view: self.previewShadowView, frame: profilePreviewFrame.insetBy(dx: -45.0, dy: -45.0))
                 previewTransition.setAlpha(view: self.previewShadowView, alpha: !self.scrolledUp ? 1.0 : 0.0)
                 
                 var profileLogoContents: [AnyComponentWithIdentity<Empty>] = []
@@ -1587,7 +1587,7 @@ final class UserAppearanceScreenComponent: Component {
                 }
                 contentHeight += namePreviewSize.height - 38.0
                 
-                transition.setFrame(view: self.previewShadowView, frame: namePreviewFrame.insetBy(dx: -30.0, dy: -30.0))
+                transition.setFrame(view: self.previewShadowView, frame: namePreviewFrame.insetBy(dx: -45.0, dy: -45.0))
                 previewTransition.setAlpha(view: self.previewShadowView, alpha: !self.scrolledUp ? 1.0 : 0.0)
                 
                 let nameColorSectionSize = self.nameColorSection.update(
@@ -2073,7 +2073,7 @@ final class TopBottomCornersComponent: Component {
 
 private func generatePreviewShadowImage() -> UIImage {
     let cornerRadius: CGFloat = 26.0
-    let shadowInset: CGFloat = 30.0
+    let shadowInset: CGFloat = 45.0
     
     let side = (cornerRadius + 5.0) * 2.0
     let fullSide = shadowInset * 2.0 + side
@@ -2089,12 +2089,11 @@ private func generatePreviewShadowImage() -> UIImage {
         
         let drawShadow = {
             context.addPath(path)
-            context.setShadow(offset: CGSize(), blur: 65.0, color: UIColor.black.cgColor)
+            context.setShadow(offset: CGSize(), blur: 80.0, color: UIColor.black.cgColor)
             context.setFillColor(UIColor.black.cgColor)
             context.fillPath()
         }
         
-        drawShadow()
         drawShadow()
         drawShadow()
     })!.stretchableImage(withLeftCapWidth: Int(shadowInset + cornerRadius + 5), topCapHeight: Int(shadowInset + cornerRadius + 5)).withRenderingMode(.alwaysTemplate)

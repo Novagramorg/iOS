@@ -3490,7 +3490,7 @@ private func serializeGroupCallMessage(randomId: Int64, text: String, entities: 
                 entityDict["_"] = "messageEntitySpoiler"
             case let .CustomEmoji(_, fileId):
                 entityDict["_"] = "messageEntityCustomEmoji"
-                entityDict["document_id"] = fileId
+                entityDict["document_id"] = "\(fileId)"
             case .Custom:
                 return nil
             }
@@ -3515,7 +3515,29 @@ private func deserializeGroupCallMessage(data: Data) -> (randomId: Int64, text: 
         return nil
     }
     
-    guard let randomId = jsonObject["random_id"] as? Int64 else {
+    func readInt32(_ value: Any?) -> Int32? {
+        if let int32 = value as? Int32 {
+            return int32
+        } else if let int = value as? Int {
+            return Int32(int)
+        } else if let string = value as? String, let int = Int32(string) {
+            return int
+        }
+        return nil
+    }
+    
+    func readInt64(_ value: Any?) -> Int64? {
+        if let int64 = value as? Int64 {
+            return int64
+        } else if let int = value as? Int {
+            return Int64(int)
+        } else if let string = value as? String, let int = Int64(string) {
+            return int
+        }
+        return nil
+    }
+    
+    guard let randomId = readInt64(jsonObject["random_id"]) else {
         return nil
     }
     
@@ -3538,37 +3560,10 @@ private func deserializeGroupCallMessage(data: Data) -> (randomId: Int64, text: 
                 return nil
             }
             
-            let offset: Int32
-            if let offsetInt32 = entityDict["offset"] as? Int32 {
-                offset = offsetInt32
-            } else if let offsetInt = entityDict["offset"] as? Int {
-                guard offsetInt >= Int32.min && offsetInt <= Int32.max else {
-                    return nil
-                }
-                offset = Int32(offsetInt)
-            } else if let offsetString = entityDict["offset"] as? String, let offsetInt = Int(offsetString) {
-                guard offsetInt >= Int32.min && offsetInt <= Int32.max else {
-                    return nil
-                }
-                offset = Int32(offsetInt)
-            } else {
+            guard let offset = readInt32(entityDict["offset"]) else {
                 return nil
             }
-            
-            let length: Int32
-            if let lengthInt32 = entityDict["length"] as? Int32 {
-                length = lengthInt32
-            } else if let lengthInt = entityDict["length"] as? Int {
-                guard lengthInt >= 0 && lengthInt <= Int32.max else {
-                    return nil
-                }
-                length = Int32(lengthInt)
-            } else if let lengthString = entityDict["length"] as? String, let lengthInt = Int(lengthString) {
-                guard lengthInt >= 0 && lengthInt <= Int32.max else {
-                    return nil
-                }
-                length = Int32(lengthInt)
-            } else {
+            guard let length = readInt32(entityDict["length"]) else {
                 return nil
             }
             
@@ -3603,15 +3598,10 @@ private func deserializeGroupCallMessage(data: Data) -> (randomId: Int64, text: 
                 }
                 messageEntityType = .TextUrl(url: url)
             case "messageEntityMentionName":
-                let userIdValue: Int64
-                if let userIdInt64 = entityDict["user_id"] as? Int64 {
-                    userIdValue = userIdInt64
-                } else if let userIdInt = entityDict["user_id"] as? Int {
-                    userIdValue = Int64(userIdInt)
-                } else {
+                guard let userId = readInt64(entityDict["user_id"]) else {
                     return nil
                 }
-                let peerId = PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(userIdValue))
+                let peerId = PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(userId))
                 messageEntityType = .TextMention(peerId: peerId)
             case "messageEntityPhone":
                 messageEntityType = .PhoneNumber
@@ -3627,12 +3617,7 @@ private func deserializeGroupCallMessage(data: Data) -> (randomId: Int64, text: 
             case "messageEntitySpoiler":
                 messageEntityType = .Spoiler
             case "messageEntityCustomEmoji":
-                let documentId: Int64
-                if let documentIdInt64 = entityDict["document_id"] as? Int64 {
-                    documentId = documentIdInt64
-                } else if let documentIdInt = entityDict["document_id"] as? Int {
-                    documentId = Int64(documentIdInt)
-                } else {
+                guard let documentId = readInt64(entityDict["document_id"]) else {
                     return nil
                 }
                 messageEntityType = .CustomEmoji(stickerPack: nil, fileId: documentId)
