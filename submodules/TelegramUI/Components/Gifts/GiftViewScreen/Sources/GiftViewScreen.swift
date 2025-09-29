@@ -1549,9 +1549,11 @@ private final class GiftViewSheetContent: CombinedComponent {
         private(set) var nextUpgradePrice: StarGiftUpgradePreview.Price?
         
         func upgradePreviewTimerTick() {
-            guard let upgradePreview = self.upgradePreview else {
+            guard let upgradePreview = self.upgradePreview, let gift = self.subject.arguments?.gift, case let .generic(gift) = gift else {
                 return
             }
+            let context = self.context
+            var transition: ComponentTransition = .immediate
             let currentTime = Int32(CFAbsoluteTimeGetCurrent() + kCFAbsoluteTimeIntervalSince1970)
             if let currentPrice = self.effectiveUpgradePrice {
                 if let price = upgradePreview.nextPrices.reversed().first(where: { currentTime >= $0.date  }) {
@@ -1559,7 +1561,20 @@ private final class GiftViewSheetContent: CombinedComponent {
                         self.effectiveUpgradePrice = price
                         if let nextPrice = upgradePreview.nextPrices.first(where: { $0.stars < price.stars }) {
                             self.nextUpgradePrice = nextPrice
+                        } else {
+                            transition = .spring(duration: 0.4)
+                            self.nextUpgradePrice = nil
                         }
+                        if upgradePreview.nextPrices[upgradePreview.nextPrices.count - 2] == price {
+                            self.upgradePreviewDisposable.add((context.engine.payments.starGiftUpgradePreview(giftId: gift.id)
+                            |> deliverOnMainQueue).start(next: { [weak self] nextUpgradePreview in
+                                guard let self, let nextUpgradePreview else {
+                                    return
+                                }
+                                self.upgradePreview = nextUpgradePreview.withAttributes(upgradePreview.attributes)
+                            }))
+                        }
+                        
                         self.fetchUpgradeForm()
                     }
                 } else {
@@ -1573,7 +1588,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                 }
             }
                         
-            self.updated()
+            self.updated(transition: transition)
         }
         
         func requestUpgradePreview() {
@@ -4483,7 +4498,15 @@ private final class GiftViewSheetContent: CombinedComponent {
                 var buttonTitleItems: [AnyComponentWithIdentity<Empty>] = []
                 var upgradeString = strings.Gift_Upgrade_Upgrade
                 if !incoming {
-                    if let gift = state.starGiftsMap[giftId], let upgradeStars = gift.upgradeStars {
+                    let upgradeStars: Int64?
+                    if let stars = state.effectiveUpgradePrice?.stars {
+                        upgradeStars = stars
+                    } else if let gift = state.starGiftsMap[giftId], let stars = gift.upgradeStars {
+                        upgradeStars = stars
+                    } else {
+                        upgradeStars = nil
+                    }
+                    if let upgradeStars {
                         let priceString = presentationStringsFormattedNumber(Int32(clamping: upgradeStars), environment.dateTimeFormat.groupingSeparator)
                         upgradeString = strings.Gift_Upgrade_GiftUpgrade(" # \(priceString)").string
                     }
@@ -4507,7 +4530,75 @@ private final class GiftViewSheetContent: CombinedComponent {
                     let currentTime = Int32(CFAbsoluteTimeGetCurrent() + kCFAbsoluteTimeIntervalSince1970)
                     let upgradeTimeout = nextUpgradePrice.date - currentTime
                     
-                    buttonTitleItems.append(AnyComponentWithIdentity(id: "static_label", component: AnyComponent(MultilineTextComponent(text: .plain(buttonAttributedString)))))
+                    if let hashIndex = buttonTitle.firstIndex(of: "#") {
+                        var buttonAnimatedTitleItems: [AnimatedTextComponent.Item] = []
+                        
+                        var prefix = String(buttonTitle[..<hashIndex])
+                        if !prefix.isEmpty {
+                            prefix.removeLast()
+                            buttonAnimatedTitleItems.append(
+                                AnimatedTextComponent.Item(
+                                    id: AnyHashable(buttonAnimatedTitleItems.count),
+                                    content: .text(prefix)
+                                )
+                            )
+                        }
+                        
+                        buttonAnimatedTitleItems.append(
+                            AnimatedTextComponent.Item(
+                                id: AnyHashable(buttonAnimatedTitleItems.count),
+                                content: .icon("Item List/PremiumIcon", offset: CGPoint(x: 1.0, y: 2.0 + UIScreenPixel))
+                            )
+                        )
+                        
+                        let suffixStart = buttonTitle.index(after: hashIndex)
+                        let suffix = buttonTitle[suffixStart...]
+                        
+                        var i = suffix.startIndex
+                        while i < suffix.endIndex {
+                            if suffix[i].isNumber {
+                                var j = i
+                                while j < suffix.endIndex, suffix[j].isNumber {
+                                    j = suffix.index(after: j)
+                                }
+                                if let value = Int(suffix[i..<j]) {
+                                    buttonAnimatedTitleItems.append(
+                                        AnimatedTextComponent.Item(
+                                            id: AnyHashable(buttonAnimatedTitleItems.count),
+                                            content: .number(value, minDigits: 1)
+                                        )
+                                    )
+                                }
+                                i = j
+                            } else {
+                                var j = i
+                                while j < suffix.endIndex, !suffix[j].isNumber {
+                                    j = suffix.index(after: j)
+                                }
+                                let textRun = String(suffix[i..<j])
+                                if !textRun.isEmpty {
+                                    buttonAnimatedTitleItems.append(
+                                        AnimatedTextComponent.Item(
+                                            id: AnyHashable(buttonAnimatedTitleItems.count),
+                                            content: .text(textRun)
+                                        )
+                                    )
+                                }
+                                i = j
+                            }
+                        }
+                        
+                        buttonTitleItems.append(AnyComponentWithIdentity(id: "animated_label", component: AnyComponent(AnimatedTextComponent(
+                            font: Font.with(size: 17.0, weight: .semibold, traits: .monospacedNumbers),
+                            color: theme.list.itemCheckColors.foregroundColor,
+                            items: buttonAnimatedTitleItems,
+                            noDelay: true,
+                            blur: true
+                        ))))
+                    } else {
+                        buttonTitleItems.append(AnyComponentWithIdentity(id: "static_label", component: AnyComponent(MultilineTextComponent(text: .plain(buttonAttributedString)))))
+                    }
+
                     
                     let minutes = Int(upgradeTimeout / 60)
                     let seconds = Int(upgradeTimeout % 60)

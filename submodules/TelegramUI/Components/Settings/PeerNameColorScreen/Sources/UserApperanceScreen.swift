@@ -46,9 +46,11 @@ final class UserAppearanceScreenComponent: Component {
     
     public final class TransitionHint {
         public let animateTabChange: Bool
+        public let forceGiftsUpdate: Bool
         
-        public init(animateTabChange: Bool) {
+        public init(animateTabChange: Bool = false, forceGiftsUpdate: Bool = false) {
             self.animateTabChange = animateTabChange
+            self.forceGiftsUpdate = forceGiftsUpdate
         }
     }
     
@@ -173,6 +175,8 @@ final class UserAppearanceScreenComponent: Component {
         }
         private var currentSection: Section = .profile
                 
+        private let previewShadowView = UIImageView(image: generatePreviewShadowImage())
+        
         private let profilePreview = ComponentView<Empty>()
         private let profileColorSection = ComponentView<Empty>()
         private let profileResetColorSection = ComponentView<Empty>()
@@ -183,7 +187,6 @@ final class UserAppearanceScreenComponent: Component {
         private let nameGiftsSection = ComponentView<Empty>()
         
         private var isUpdating: Bool = false
-        private var forceNextUpdate = false
         
         private var component: UserAppearanceScreenComponent?
         private(set) weak var state: EmptyComponentState?
@@ -246,6 +249,7 @@ final class UserAppearanceScreenComponent: Component {
             self.scrollView.alwaysBounceVertical = true
             
             self.edgeEffectView = EdgeEffectView()
+            self.edgeEffectView.isUserInteractionEnabled = false
             
             super.init(frame: frame)
             
@@ -255,6 +259,8 @@ final class UserAppearanceScreenComponent: Component {
             self.containerView.addSubview(self.scrollView)
             
             self.scrollView.layer.addSublayer(self.topOverscrollLayer)
+            
+            self.containerView.addSubview(self.previewShadowView)
             
             self.addSubview(self.edgeEffectView)
                         
@@ -946,13 +952,7 @@ final class UserAppearanceScreenComponent: Component {
             defer {
                 self.isUpdating = false
             }
-            
-            var forceUpdate = false
-            if self.forceNextUpdate {
-                self.forceNextUpdate = false
-                forceUpdate = true
-            }
-            
+                        
             let environment = environment[EnvironmentType.self].value
             let themeUpdated = self.environment?.theme !== environment.theme
             self.environment = environment
@@ -963,8 +963,10 @@ final class UserAppearanceScreenComponent: Component {
             let theme = environment.theme
             
             var animateTabChange = false
+            var forceGiftsUpdate = false
             if let hint = transition.userData(TransitionHint.self) {
                 animateTabChange = hint.animateTabChange
+                forceGiftsUpdate = hint.forceGiftsUpdate
             }
             
             let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
@@ -1130,11 +1132,11 @@ final class UserAppearanceScreenComponent: Component {
                                             self.selectedProfileGift = nil
                                             self.updatedPeerProfileColor = nil
                                             self.updatedPeerProfileEmoji = nil
+                                            self.updatedPeerStatus = nil
                                         }
-                                    } else {
-                                        self.currentSection = updatedSection
-                                        self.state?.updated(transition: .easeInOut(duration: 0.3).withUserData(TransitionHint(animateTabChange: true)))
                                     }
+                                    self.currentSection = updatedSection
+                                    self.state?.updated(transition: .easeInOut(duration: 0.3).withUserData(TransitionHint(animateTabChange: true)))
                                 }
                             }
                         }
@@ -1161,6 +1163,8 @@ final class UserAppearanceScreenComponent: Component {
             var contentHeight: CGFloat = 0.0
                          
             let itemCornerRadius: CGFloat = 26.0
+            
+            transition.setTintColor(view: self.previewShadowView, color: environment.theme.list.itemBlocksBackgroundColor)
             
             switch self.currentSection {
             case .profile:
@@ -1209,7 +1213,10 @@ final class UserAppearanceScreenComponent: Component {
                     }
                     transition.setFrame(view: profilePreviewView, frame: profilePreviewFrame)
                 }
-                contentHeight += profilePreviewSize.height - 18.0
+                contentHeight += profilePreviewSize.height - 38.0
+                
+                transition.setFrame(view: self.previewShadowView, frame: profilePreviewFrame.insetBy(dx: -45.0, dy: -45.0))
+                previewTransition.setAlpha(view: self.previewShadowView, alpha: !self.scrolledUp ? 1.0 : 0.0)
                 
                 var profileLogoContents: [AnyComponentWithIdentity<Empty>] = []
                 profileLogoContents.append(AnyComponentWithIdentity(id: 0, component: AnyComponent(MultilineTextComponent(
@@ -1257,11 +1264,13 @@ final class UserAppearanceScreenComponent: Component {
                                     return
                                 }
                                 if self.selectedProfileGift != nil {
-                                    
-                                } else {
-                                    self.currentSection = .name
-                                    self.state?.updated(transition: .easeInOut(duration: 0.3).withUserData(TransitionHint(animateTabChange: true)))
+                                    self.selectedProfileGift = nil
+                                    self.updatedPeerProfileColor = nil
+                                    self.updatedPeerProfileEmoji = nil
+                                    self.updatedPeerStatus = nil
                                 }
+                                self.currentSection = .name
+                                self.state?.updated(transition: .easeInOut(duration: 0.3).withUserData(TransitionHint(animateTabChange: true)))
                             }
                         )),
                         items: [
@@ -1391,8 +1400,10 @@ final class UserAppearanceScreenComponent: Component {
                 if let status = resolvedState.emojiStatus, case let .starGift(id, _, _, _, _, _, _, _, _) = status.content {
                     selectedGiftId = id
                 }
+                
+                let listTransition = transition.withUserData(ListSectionComponent.TransitionHint(forceUpdate: forceGiftsUpdate))
                 let giftsSectionSize = self.profileGiftsSection.update(
-                    transition: transition,
+                    transition: listTransition,
                     component: AnyComponent(ListSectionComponent(
                         theme: environment.theme,
                         style: .glass,
@@ -1454,13 +1465,18 @@ final class UserAppearanceScreenComponent: Component {
                                             self.state?.updated(transition: .spring(duration: 0.4))
                                         }
                                     },
+                                    onTabChange: { [weak self] in
+                                        guard let self else {
+                                            return
+                                        }
+                                        if let sectionView = self.profileGiftsSection.view {
+                                            self.scrollView.setContentOffset(CGPoint(x: 0.0, y: sectionView.frame.minY - 240.0), animated: true)
+                                        }
+                                    },
                                     tag: giftListTag,
                                     updated: { [weak self] transition in
-                                        if let self {
-                                            self.forceNextUpdate = true
-                                            if !self.isUpdating {
-                                                self.state?.updated(transition: transition)
-                                            }
+                                        if let self, !self.isUpdating {
+                                            self.state?.updated(transition: transition.withUserData(TransitionHint(forceGiftsUpdate: true)))
                                         }
                                     }
                                 )
@@ -1469,8 +1485,8 @@ final class UserAppearanceScreenComponent: Component {
                         displaySeparators: false
                     )),
                     environment: {},
-                    forceUpdate: forceUpdate,
-                    containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 10000.0)
+                    forceUpdate: forceGiftsUpdate,
+                    containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: .greatestFiniteMagnitude)
                 )
                 let giftsSectionFrame = CGRect(origin: CGPoint(x: sideInset, y: contentHeight), size: giftsSectionSize)
                 if let giftsSectionView = self.profileGiftsSection.view {
@@ -1569,7 +1585,10 @@ final class UserAppearanceScreenComponent: Component {
                     }
                     transition.setFrame(view: namePreviewView, frame: namePreviewFrame)
                 }
-                contentHeight += namePreviewSize.height - 18.0
+                contentHeight += namePreviewSize.height - 38.0
+                
+                transition.setFrame(view: self.previewShadowView, frame: namePreviewFrame.insetBy(dx: -45.0, dy: -45.0))
+                previewTransition.setAlpha(view: self.previewShadowView, alpha: !self.scrolledUp ? 1.0 : 0.0)
                 
                 let nameColorSectionSize = self.nameColorSection.update(
                     transition: transition,
@@ -1655,8 +1674,9 @@ final class UserAppearanceScreenComponent: Component {
                     }
                 }
                 
+                let listTransition = transition.withUserData(ListSectionComponent.TransitionHint(forceUpdate: forceGiftsUpdate))
                 let giftsSectionSize = self.nameGiftsSection.update(
-                    transition: transition,
+                    transition: listTransition,
                     component: AnyComponent(ListSectionComponent(
                         theme: environment.theme,
                         style: .glass,
@@ -1692,12 +1712,18 @@ final class UserAppearanceScreenComponent: Component {
                                         self.updatedPeerNameEmoji = peerColor.backgroundEmojiId
                                         self.state?.updated(transition: .spring(duration: 0.4))
                                     },
+                                    onTabChange: { [weak self] in
+                                        guard let self else {
+                                            return
+                                        }
+                                        if let sectionView = self.nameGiftsSection.view {
+                                            self.scrollView.setContentOffset(CGPoint(x: 0.0, y: sectionView.frame.minY - 240.0), animated: true)
+                                        }
+                                    },
                                     tag: giftListTag,
                                     updated: { [weak self] transition in
-                                        if let self {
-                                            if !self.isUpdating {
-                                                self.state?.updated(transition: transition)
-                                            }
+                                        if let self, !self.isUpdating {
+                                            self.state?.updated(transition: transition.withUserData(TransitionHint(forceGiftsUpdate: true)))
                                         }
                                     }
                                 )
@@ -1706,8 +1732,8 @@ final class UserAppearanceScreenComponent: Component {
                         displaySeparators: false
                     )),
                     environment: {},
-                    forceUpdate: forceUpdate,
-                    containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 10000.0)
+                    forceUpdate: forceGiftsUpdate,
+                    containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: .greatestFiniteMagnitude)
                 )
                 let giftsSectionFrame = CGRect(origin: CGPoint(x: sideInset, y: contentHeight), size: giftsSectionSize)
                 if let giftsSectionView = self.nameGiftsSection.view {
@@ -1830,14 +1856,14 @@ final class UserAppearanceScreenComponent: Component {
                 transition.setAlpha(view: buttonView, alpha: 1.0)
             }
             
-            let edgeEffectHeight: CGFloat = availableSize.height - buttonY + 24.0
+            let edgeEffectHeight: CGFloat = availableSize.height - buttonY + 36.0
             let edgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: availableSize.height - edgeEffectHeight), size: CGSize(width: availableSize.width, height: edgeEffectHeight))
             transition.setFrame(view: self.edgeEffectView, frame: edgeEffectFrame)
-            self.edgeEffectView.update(content: environment.theme.list.blocksBackgroundColor, rect: edgeEffectFrame, edge: .bottom, edgeSize: edgeEffectFrame.height, transition: transition)
+            self.edgeEffectView.update(content: environment.theme.list.blocksBackgroundColor, alpha: 1.0, rect: edgeEffectFrame, edge: .bottom, edgeSize: edgeEffectFrame.height, transition: transition)
               
             let previousBounds = self.scrollView.bounds
             let contentSize = CGSize(width: availableSize.width, height: contentHeight)
-            let scrollViewFrame = CGRect(origin: CGPoint(x: 0.0, y: environment.navigationHeight + 30.0), size: CGSize(width: availableSize.width, height: availableSize.height - environment.navigationHeight - 30.0))
+            let scrollViewFrame = CGRect(origin: CGPoint(x: 0.0, y: environment.navigationHeight + 50.0), size: CGSize(width: availableSize.width, height: availableSize.height - environment.navigationHeight - 50.0))
             if self.scrollView.frame != scrollViewFrame {
                 self.scrollView.frame = scrollViewFrame
             }
@@ -1856,7 +1882,7 @@ final class UserAppearanceScreenComponent: Component {
             }
             
             self.topOverscrollLayer.backgroundColor = environment.theme.list.itemBlocksBackgroundColor.cgColor
-            self.topOverscrollLayer.frame = CGRect(origin: CGPoint(x: sideInset, y: -1000.0), size: CGSize(width: availableSize.width - sideInset * 2.0, height: 1315.0))
+            self.topOverscrollLayer.frame = CGRect(origin: CGPoint(x: sideInset, y: -1000.0), size: CGSize(width: availableSize.width - sideInset * 2.0, height: 1340.0))
             
             self.updateScrolling(transition: transition)
             
@@ -2043,4 +2069,32 @@ final class TopBottomCornersComponent: Component {
     public func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<EnvironmentType>, transition: ComponentTransition) -> CGSize {
         return view.update(component: self, availableSize: availableSize, state: state, environment: environment, transition: transition)
     }
+}
+
+private func generatePreviewShadowImage() -> UIImage {
+    let cornerRadius: CGFloat = 26.0
+    let shadowInset: CGFloat = 45.0
+    
+    let side = (cornerRadius + 5.0) * 2.0
+    let fullSide = shadowInset * 2.0 + side
+    
+    return generateImage(CGSize(width: fullSide, height: fullSide), rotatedContext: { size, context in
+        context.clear(CGRect(origin: CGPoint(), size: size))
+        
+        let edgeHeight = shadowInset + cornerRadius + 11.0
+        context.clip(to: CGRect(x: shadowInset, y: size.height - edgeHeight, width: side, height: edgeHeight))
+        
+        let rect = CGRect(origin: .zero, size: CGSize(width: fullSide, height: fullSide)).insetBy(dx: shadowInset + 1.0, dy: shadowInset + 2.0)
+        let path = CGPath(roundedRect: rect, cornerWidth: cornerRadius, cornerHeight: cornerRadius, transform: nil)
+        
+        let drawShadow = {
+            context.addPath(path)
+            context.setShadow(offset: CGSize(), blur: 80.0, color: UIColor.black.cgColor)
+            context.setFillColor(UIColor.black.cgColor)
+            context.fillPath()
+        }
+        
+        drawShadow()
+        drawShadow()
+    })!.stretchableImage(withLeftCapWidth: Int(shadowInset + cornerRadius + 5), topCapHeight: Int(shadowInset + cornerRadius + 5)).withRenderingMode(.alwaysTemplate)
 }
