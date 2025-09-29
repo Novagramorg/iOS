@@ -294,8 +294,10 @@ public class GlassBackgroundView: UIView {
     
     private var params: Params?
     
+    public static var useCustomGlassImpl: Bool = false
+    
     public override init(frame: CGRect) {
-        if #available(iOS 26.0, *) {
+        if #available(iOS 26.0, *), !GlassBackgroundView.useCustomGlassImpl {
             self.backgroundNode = nil
             
             let glassEffect = UIGlassEffect(style: .regular)
@@ -407,7 +409,7 @@ public class GlassBackgroundView: UIView {
                     context.clear(CGRect(origin: CGPoint(), size: size))
                     
                     context.setFillColor(UIColor.black.cgColor)
-                    context.setShadow(offset: CGSize(width: 0.0, height: 1.0), blur: 40.0, color: UIColor(white: 0.0, alpha: 0.065).cgColor)
+                    context.setShadow(offset: CGSize(width: 0.0, height: 1.0), blur: 40.0, color: UIColor(white: 0.0, alpha: 0.04).cgColor)
                     context.fillEllipse(in: CGRect(origin: CGPoint(x: shadowInset + shadowInnerInset, y: shadowInset + shadowInnerInset), size: CGSize(width: size.width - shadowInset * 2.0 - shadowInnerInset * 2.0, height: size.height - shadowInset * 2.0 - shadowInnerInset * 2.0)))
                     
                     context.setFillColor(UIColor.clear.cgColor)
@@ -684,7 +686,8 @@ public extension GlassBackgroundView {
                 }
             }
             
-            addShadow(context, true, CGPoint(), 6.0, 0.0, UIColor(white: 0.0, alpha: 0.08), .normal)
+            addShadow(context, true, CGPoint(), 10.0, 0.0, UIColor(white: 0.0, alpha: 0.06), .normal)
+            addShadow(context, true, CGPoint(), 20.0, 0.0, UIColor(white: 0.0, alpha: 0.06), .normal)
             
             let innerImage = UIGraphicsImageRenderer(size: size).image { ctx in
                 let context = ctx.cgContext
@@ -710,7 +713,7 @@ public extension GlassBackgroundView {
                         addShadow(context, false, CGPoint(x: 0.64, y: 0.64), 0.8, 0.0, UIColor(white: 1.0, alpha: edgeAlpha), .normal)
                     }
                 } else if b >= 0.2 {
-                    let edgeAlpha: CGFloat = max(0.2, min(isDark ? 0.7 : 0.8, a * a * a))
+                    let edgeAlpha: CGFloat = max(0.2, min(isDark ? 0.7 : 0.7, a * a * a))
                     
                     addShadow(context, false, CGPoint(x: -0.64, y: -0.64), 0.5, 0.0, UIColor(white: 1.0, alpha: edgeAlpha), .plusLighter)
                     addShadow(context, false, CGPoint(x: 0.64, y: 0.64), 0.5, 0.0, UIColor(white: 1.0, alpha: edgeAlpha), .plusLighter)

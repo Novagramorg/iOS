@@ -1994,6 +1994,9 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         if interfaceState.interfaceState.mediaDraftState != nil {
             audioRecordingItemsAlpha = 0.0
         }
+        
+        transition.updateAlpha(layer: self.actionButtons.micButtonBackgroundView.layer, alpha: mediaRecordingState != nil ? 0.01 : 1.0)
+        
         if let mediaRecordingState {
             audioRecordingItemsAlpha = 0.0
         
@@ -2755,7 +2758,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 viewOnceIsVisible = isLocked
             }
         }
-        if interfaceState.interfaceState.mediaDraftState != nil {
+        if let mediaDraftState = interfaceState.interfaceState.mediaDraftState, case .audio = mediaDraftState.contentType {
             recordMoreIsVisible = true
         }
                 
