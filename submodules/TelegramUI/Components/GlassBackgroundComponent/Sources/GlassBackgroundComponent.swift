@@ -4,6 +4,7 @@ import Display
 import ComponentFlow
 import ComponentDisplayAdapters
 import UIKitRuntimeUtils
+import CoreImage
 
 private final class ContentContainer: UIView {
     private let maskContentView: UIView
@@ -406,7 +407,7 @@ public class GlassBackgroundView: UIView {
                     context.clear(CGRect(origin: CGPoint(), size: size))
                     
                     context.setFillColor(UIColor.black.cgColor)
-                    context.setShadow(offset: CGSize(width: 0.0, height: 1.0), blur: 40.0, color: UIColor(white: 0.0, alpha: 0.09).cgColor)
+                    context.setShadow(offset: CGSize(width: 0.0, height: 1.0), blur: 40.0, color: UIColor(white: 0.0, alpha: 0.065).cgColor)
                     context.fillEllipse(in: CGRect(origin: CGPoint(x: shadowInset + shadowInnerInset, y: shadowInset + shadowInnerInset), size: CGSize(width: size.width - shadowInset * 2.0 - shadowInnerInset * 2.0, height: size.height - shadowInset * 2.0 - shadowInnerInset * 2.0)))
                     
                     context.setFillColor(UIColor.clear.cgColor)
@@ -567,11 +568,57 @@ public final class VariableBlurView: UIVisualEffectView {
     }
 }
 
+private extension CGContext {
+    func addBadgePath(in rect: CGRect) {
+        saveGState()
+        translateBy(x: rect.minX, y: rect.minY)
+        scaleBy(x: rect.width / 78.0, y: rect.height / 78.0)
+        
+        // M 0 39
+        move(to: CGPoint(x: 0, y: 39))
+        
+        // C 0 17.4609 17.4609 0 39 0
+        addCurve(to: CGPoint(x: 39, y: 0),
+                 control1: CGPoint(x: 0,       y: 17.4609),
+                 control2: CGPoint(x: 17.4609, y: 0))
+        
+        // H 42
+        addLine(to: CGPoint(x: 42, y: 0))
+        
+        // C 61.8823 0 78 16.1177 78 36
+        addCurve(to: CGPoint(x: 78, y: 36),
+                 control1: CGPoint(x: 61.8823, y: 0),
+                 control2: CGPoint(x: 78,      y: 16.1177))
+        
+        // V 39
+        addLine(to: CGPoint(x: 78, y: 39))
+        
+        // C 78 60.5391 60.5391 78 39 78
+        addCurve(to: CGPoint(x: 39, y: 78),
+                 control1: CGPoint(x: 78,      y: 60.5391),
+                 control2: CGPoint(x: 60.5391, y: 78))
+        
+        // H 36
+        addLine(to: CGPoint(x: 36, y: 78))
+        
+        // C 16.1177 78 0 61.8823 0 42
+        addCurve(to: CGPoint(x: 0, y: 42),
+                 control1: CGPoint(x: 16.1177, y: 78),
+                 control2: CGPoint(x: 0,       y: 61.8823))
+        
+        // V 39 / Z
+        addLine(to: CGPoint(x: 0, y: 39))
+        closePath()
+        
+        restoreGState()
+    }
+}
+
 public extension GlassBackgroundView {
     static func generateLegacyGlassImage(size: CGSize, inset: CGFloat, isDark: Bool, fillColor: UIColor) -> UIImage {
         var size = size
         if size == .zero {
-            size = CGSize(width: 1.0, height: 1.0)
+            size = CGSize(width: 2.0, height: 2.0)
         }
         let innerSize = size
         size.width += inset * 2.0
@@ -581,45 +628,13 @@ public extension GlassBackgroundView {
             let context = ctx.cgContext
             
             context.clear(CGRect(origin: CGPoint(), size: size))
-            
-            func pathApplyingSpread(_ path: CGPath, spread: CGFloat) -> CGPath {
-                guard spread != 0 else { return path }
-                let result = CGMutablePath()
-                result.addPath(path)
 
-                // Copy a stroked outline centered on the original path boundary.
-                // Filling it plus the original path approximates an outward "spread".
-                let outline = path.copy(
-                    strokingWithWidth: abs(spread) * 2,
-                    lineCap: .butt,
-                    lineJoin: .miter,
-                    miterLimit: 10,
-                    transform: .identity
-                )
-                result.addPath(outline)
-
-                // For negative spread (tighten), use even-odd to carve inside:
-                if spread < 0 {
-                    let carve = CGMutablePath()
-                    carve.addPath(path)
-                    carve.addPath(outline)
-                    // even-odd: outline - original ≈ outer ring; union with original earlier keeps overall stable
-                    // For "tightening" effect we rely on clipping in inner shadow branch below.
-                }
-                return result
-            }
-            
-            let maskImage = UIGraphicsImageRenderer(size: size).image { ctx in
-                let context = ctx.cgContext
-                context.setFillColor(UIColor.black.cgColor)
-                context.fillEllipse(in: CGRect(origin: CGPoint(x: inset, y: inset), size: innerSize))
-            }
-
-            let addShadow: (Bool, CGPoint, CGFloat, CGFloat, UIColor, CGBlendMode) -> Void = { isOuter, position, blur, spread, shadowColor, blendMode in
+            let addShadow: (CGContext, Bool, CGPoint, CGFloat, CGFloat, UIColor, CGBlendMode) -> Void = { context, isOuter, position, blur, spread, shadowColor, blendMode in
                 var blur = blur
-                blur += abs(spread)
                 
                 if isOuter {
+                    blur += abs(spread)
+                    
                     context.beginTransparencyLayer(auxiliaryInfo: nil)
                     context.saveGState()
                     defer {
@@ -653,20 +668,14 @@ public extension GlassBackgroundView {
                         let context = ctx.cgContext
                         
                         context.clear(CGRect(origin: CGPoint(), size: size))
-                        let spreadRect = CGRect(origin: CGPoint(x: inset, y: inset), size: innerSize).insetBy(dx: -spread - 1.0, dy: -spread - 1.0)
-                        let spreadPath = UIBezierPath(
-                            roundedRect: spreadRect,
-                            cornerRadius: min(spreadRect.width, spreadRect.height) * 0.5
-                        ).cgPath
+                        let spreadRect = CGRect(origin: CGPoint(x: inset, y: inset), size: innerSize).insetBy(dx: -spread - 0.33, dy: -spread - 0.33)
 
                         context.setShadow(offset: CGSize(width: position.x, height: position.y), blur: blur, color: shadowColor.cgColor)
-                        context.setFillColor(UIColor.red.cgColor)
+                        context.setFillColor(shadowColor.cgColor)
                         let enclosingRect = spreadRect.insetBy(dx: -10000.0, dy: -10000.0)
                         context.addPath(UIBezierPath(rect: enclosingRect).cgPath)
-                        context.addPath(spreadPath)
+                        context.addBadgePath(in: spreadRect)
                         context.fillPath(using: .evenOdd)
-                        
-                        maskImage.draw(at: CGPoint(), blendMode: .destinationIn, alpha: 1.0)
                     })
                     
                     UIGraphicsPushContext(context)
@@ -675,92 +684,47 @@ public extension GlassBackgroundView {
                 }
             }
             
-            addShadow(true, CGPoint(), 16.0, 0.0, UIColor(white: 0.0, alpha: 0.08), .normal)
+            addShadow(context, true, CGPoint(), 6.0, 0.0, UIColor(white: 0.0, alpha: 0.08), .normal)
             
-            context.setFillColor(fillColor.cgColor)
-            context.fillEllipse(in: CGRect(origin: CGPoint(), size: size).insetBy(dx: inset, dy: inset).insetBy(dx: 0.1, dy: 0.1))
-            
-            /*
-             case normal = 0
-
-             case multiply = 1
-
-             case screen = 2
-
-             case overlay = 3
-
-             case darken = 4
-
-             case lighten = 5
-
-             case colorDodge = 6
-
-             case colorBurn = 7
-
-             case softLight = 8
-
-             case hardLight = 9
-
-             case difference = 10
-
-             case exclusion = 11
-
-             case hue = 12
-
-             case saturation = 13
-
-             case color = 14
-
-             case luminosity = 15
-
-             case clear = 16
-
-             case copy = 17
-
-             case sourceIn = 18
-
-             case sourceOut = 19
-
-             case sourceAtop = 20
-
-             case destinationOver = 21
-
-             case destinationIn = 22
-
-             case destinationOut = 23
-
-             case destinationAtop = 24
-
-             case xor = 25
-
-             case plusDarker = 26
-
-             case plusLighter = 27
-             */
-            
-            var a: CGFloat = 0.0
-            var b: CGFloat = 0.0
-            fillColor.getHue(nil, saturation: nil, brightness: &b, alpha: &a)
-            
-            addShadow(true, CGPoint(x: 0.0, y: 0.0), 20.0, 0.0, UIColor(white: 0.0, alpha: 0.04), .normal)
-            addShadow(true, CGPoint(x: 0.0, y: 0.0), 5.0, 0.0, UIColor(white: 0.0, alpha: 0.04), .normal)
-            
-            let edgeWidth: CGFloat = 0.5
-            let edgeAlpha: CGFloat = max(0.2, min(0.8, a * a * a))
-            
-            if b >= 0.2 {
-                for _ in 0 ..< 3 {
-                    addShadow(false, CGPoint(x: 0.0, y: 0.0), 1.0, 0.0, UIColor(white: 1.0, alpha: edgeAlpha), .overlay)
-                    addShadow(false, CGPoint(x: edgeWidth, y: edgeWidth), 1.4, 0.0, UIColor(white: 1.0, alpha: edgeAlpha * 0.9), .overlay)
-                    addShadow(false, CGPoint(x: -edgeWidth, y: -edgeWidth), 1.4, 0.0, UIColor(white: 1.0, alpha: edgeAlpha * 0.9), .overlay)
-                }
-            } else {
-                for _ in 0 ..< 3 {
-                    addShadow(false, CGPoint(x: 0.0, y: 0.0), 1.0, 0.0, UIColor(white: 1.0, alpha: edgeAlpha), .normal)
-                    addShadow(false, CGPoint(x: edgeWidth, y: edgeWidth), 1.4, 0.0, UIColor(white: 1.0, alpha: edgeAlpha * 0.9), .normal)
-                    addShadow(false, CGPoint(x: -edgeWidth, y: -edgeWidth), 1.4, 0.0, UIColor(white: 1.0, alpha: edgeAlpha * 0.9), .normal)
+            let innerImage = UIGraphicsImageRenderer(size: size).image { ctx in
+                let context = ctx.cgContext
+                
+                context.setFillColor(fillColor.cgColor)
+                context.fill(CGRect(origin: CGPoint(), size: size).insetBy(dx: inset, dy: inset).insetBy(dx: 0.1, dy: 0.1))
+                
+                var a: CGFloat = 0.0
+                var b: CGFloat = 0.0
+                var s: CGFloat = 0.0
+                fillColor.getHue(nil, saturation: &s, brightness: &b, alpha: &a)
+                
+                addShadow(context, true, CGPoint(x: 0.0, y: 0.0), 20.0, 0.0, UIColor(white: 0.0, alpha: 0.04), .normal)
+                addShadow(context, true, CGPoint(x: 0.0, y: 0.0), 5.0, 0.0, UIColor(white: 0.0, alpha: 0.04), .normal)
+                
+                if s <= 0.3 && !isDark {
+                    addShadow(context, false, CGPoint(x: 0.0, y: 0.0), 8.0, 0.0, UIColor(white: 0.0, alpha: 0.4), .overlay)
+                    
+                    let edgeAlpha: CGFloat = max(0.8, min(1.0, a))
+                    
+                    for _ in 0 ..< 2 {
+                        addShadow(context, false, CGPoint(x: -0.64, y: -0.64), 0.8, 0.0, UIColor(white: 1.0, alpha: edgeAlpha), .normal)
+                        addShadow(context, false, CGPoint(x: 0.64, y: 0.64), 0.8, 0.0, UIColor(white: 1.0, alpha: edgeAlpha), .normal)
+                    }
+                } else if b >= 0.2 {
+                    let edgeAlpha: CGFloat = max(0.2, min(isDark ? 0.7 : 0.8, a * a * a))
+                    
+                    addShadow(context, false, CGPoint(x: -0.64, y: -0.64), 0.5, 0.0, UIColor(white: 1.0, alpha: edgeAlpha), .plusLighter)
+                    addShadow(context, false, CGPoint(x: 0.64, y: 0.64), 0.5, 0.0, UIColor(white: 1.0, alpha: edgeAlpha), .plusLighter)
+                } else {
+                    let edgeAlpha: CGFloat = max(0.4, min(1.0, a * a * a))
+                    
+                    addShadow(context, false, CGPoint(x: -0.64, y: -0.64), 1.2, 0.0, UIColor(white: 1.0, alpha: edgeAlpha), .normal)
+                    addShadow(context, false, CGPoint(x: 0.64, y: 0.64), 1.2, 0.0, UIColor(white: 1.0, alpha: edgeAlpha), .normal)
                 }
             }
+            
+            context.addEllipse(in: CGRect(origin: CGPoint(x: inset, y: inset), size: innerSize))
+            context.clip()
+            innerImage.draw(in: CGRect(origin: CGPoint(), size: size))
         }.stretchableImage(withLeftCapWidth: Int(size.width * 0.5), topCapHeight: Int(size.height * 0.5))
     }
     
