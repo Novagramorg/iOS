@@ -35,7 +35,7 @@ import TextFormat
 import ReactionSelectionNode
 import EntityKeyboard
 import GlassBackgroundComponent
-import EdgeEffect
+import PremiumUI
 
 extension VideoChatCall {
     var myAudioLevelAndSpeaking: Signal<(Float, Bool), NoError> {
@@ -3815,50 +3815,40 @@ final class VideoChatScreenComponent: Component {
                     }
                     
                     reactionContextNode.premiumReactionsSelected = { [weak self] file in
-                        guard let self, let component = self.component else {
+                        guard let self, let component = self.component, let environment = self.environment, let controller = environment.controller() else {
+                            return
+                        }
+                        let context = component.initialCall.accountContext
+                        
+                        guard let file else {
+                            var replaceImpl: ((ViewController) -> Void)?
+                            let demoController = PremiumDemoScreen(context: context, subject: .uniqueReactions, forceDark: true, action: {
+                                let introController = PremiumIntroScreen(context: context, source: .reactions)
+                                replaceImpl?(introController)
+                            })
+                            replaceImpl = { [weak demoController] c in
+                                demoController?.replace(with: c)
+                            }
+                            controller.push(demoController)
                             return
                         }
                         
-                        let _ = component
-                        
-//                        guard let file else {
-//                            let context = component.context
-//                            var replaceImpl: ((ViewController) -> Void)?
-//                            let controller = PremiumDemoScreen(context: context, subject: .uniqueReactions, forceDark: true, action: {
-//                                let controller = PremiumIntroScreen(context: context, source: .reactions)
-//                                replaceImpl?(controller)
-//                            })
-//                            controller.disposed = { [weak self] in
-//                                self?.updateIsProgressPaused()
-//                            }
-//                            replaceImpl = { [weak controller] c in
-//                                controller?.replace(with: c)
-//                            }
-//                            component.controller()?.push(controller)
-//                            return
-//                        }
-//                        
-//                        let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
-//                        let undoController = UndoOverlayController(presentationData: presentationData, content: .sticker(context: component.context, file: file, loop: true, title: nil, text: presentationData.strings.Chat_PremiumReactionToastTitle, undoText: presentationData.strings.Chat_PremiumReactionToastAction, customAction: { [weak self] in
-//                            guard let self, let component = self.component else {
-//                                return
-//                            }
-//                            
-//                            let context = component.context
-//                            var replaceImpl: ((ViewController) -> Void)?
-//                            let controller = PremiumDemoScreen(context: context, subject: .uniqueReactions, forceDark: true, action: {
-//                                let controller = PremiumIntroScreen(context: context, source: .reactions)
-//                                replaceImpl?(controller)
-//                            })
-//                            controller.disposed = { [weak self] in
-//                                self?.updateIsProgressPaused()
-//                            }
-//                            replaceImpl = { [weak controller] c in
-//                                controller?.replace(with: c)
-//                            }
-//                            component.controller()?.push(controller)
-//                        }), elevatedLayout: false, animateInAsReplacement: false, appearance: UndoOverlayController.Appearance(isBlurred: true), action: { _ in true })
-//                        component.controller()?.present(undoController, in: .current)
+                        let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+                        let undoController = UndoOverlayController(presentationData: presentationData, content: .sticker(context: context, file: file, loop: true, title: nil, text: presentationData.strings.Chat_PremiumReactionToastTitle, undoText: presentationData.strings.Chat_PremiumReactionToastAction, customAction: { [weak controller] in
+                            guard let controller else {
+                                return
+                            }
+                            var replaceImpl: ((ViewController) -> Void)?
+                            let demoController = PremiumDemoScreen(context: context, subject: .uniqueReactions, forceDark: true, action: {
+                                let introController = PremiumIntroScreen(context: context, source: .reactions)
+                                replaceImpl?(introController)
+                            })
+                            replaceImpl = { [weak demoController] c in
+                                demoController?.replace(with: c)
+                            }
+                            controller.push(demoController)
+                        }), elevatedLayout: false, animateInAsReplacement: false, appearance: UndoOverlayController.Appearance(isBlurred: true), action: { _ in true })
+                        controller.present(undoController, in: .current)
                     }
                 }
                 
