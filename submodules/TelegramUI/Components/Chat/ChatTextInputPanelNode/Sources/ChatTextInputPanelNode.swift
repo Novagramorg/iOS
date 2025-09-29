@@ -2758,7 +2758,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 viewOnceIsVisible = isLocked
             }
         }
-        if interfaceState.interfaceState.mediaDraftState != nil {
+        if let mediaDraftState = interfaceState.interfaceState.mediaDraftState, case .audio = mediaDraftState.contentType {
             recordMoreIsVisible = true
         }
                 
