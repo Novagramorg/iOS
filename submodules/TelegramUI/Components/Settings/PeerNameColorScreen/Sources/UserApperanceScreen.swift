@@ -1891,7 +1891,7 @@ final class UserAppearanceScreenComponent: Component {
                     size: availableSize,
                     metrics: environment.metrics,
                     deviceMetrics: environment.deviceMetrics,
-                    intrinsicInsets: UIEdgeInsets(top: 0.0, left: 0.0, bottom: edgeEffectHeight, right: 0.0),
+                    intrinsicInsets: UIEdgeInsets(top: 0.0, left: 0.0, bottom: availableSize.height - buttonFrame.minY, right: 0.0),
                     safeInsets: UIEdgeInsets(top: 0.0, left: environment.safeInsets.left, bottom: 0.0, right: environment.safeInsets.right),
                     additionalInsets: .zero,
                     statusBarHeight: environment.statusBarHeight,
@@ -2094,6 +2094,7 @@ private func generatePreviewShadowImage() -> UIImage {
             context.fillPath()
         }
         
+        drawShadow()
         drawShadow()
         drawShadow()
     })!.stretchableImage(withLeftCapWidth: Int(shadowInset + cornerRadius + 5), topCapHeight: Int(shadowInset + cornerRadius + 5)).withRenderingMode(.alwaysTemplate)
