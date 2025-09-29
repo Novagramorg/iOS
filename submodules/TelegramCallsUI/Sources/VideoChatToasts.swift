@@ -5,10 +5,11 @@ import TelegramCore
 enum VideoChatNotificationIcon {
     case peer(EnginePeer)
     case icon(String)
+    case animation(String)
 }
 
 extension VideoChatScreenComponent.View {
-    func displayToast(icon: VideoChatNotificationIcon, text: String, duration: Int32) {
+    func presentToast(icon: VideoChatNotificationIcon, text: String, duration: Int32) {
         let id = Int64.random(in: 0 ..< .max)
                 
         let expiresOn = Int32(CFAbsoluteTimeGetCurrent()) + duration

@@ -186,6 +186,20 @@ public final class MultilineTextWithEntitiesComponent: Component {
             fatalError("init(coder:) has not been implemented")
         }
         
+        public func attributes(at point: CGPoint) -> (Int, [NSAttributedString.Key: Any])? {
+            if let result = self.textNode.attributesAtPoint(CGPoint(x: point.x - self.textNode.frame.minX, y: point.y - self.textNode.frame.minY)) {
+                return result
+            }
+            return nil
+        }
+        
+        public var isSpoilerConcealed: Bool {
+            if let dustNode = self.textNode.dustNode, !dustNode.isRevealed {
+                return true
+            }
+            return false
+        }
+        
         public func updateVisibility(_ isVisible: Bool) {
             self.textNode.visibility = isVisible
         }

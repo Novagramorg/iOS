@@ -193,11 +193,12 @@ public final class ListSectionContentView: UIView {
                     }
                 }
                 var separatorInset: CGFloat = 0.0
+                let separatorRightInset: CGFloat = configuration.style == .glass ? 16.0 : 0.0
                 if let itemComponentView = itemComponentView as? ListSectionComponentChildView {
                     separatorInset = itemComponentView.separatorInset
                 }
                 
-                let itemSeparatorFrame = CGRect(origin: CGPoint(x: separatorInset, y: itemFrame.maxY - UIScreenPixel), size: CGSize(width: width - separatorInset, height: UIScreenPixel))
+                let itemSeparatorFrame = CGRect(origin: CGPoint(x: separatorInset, y: itemFrame.maxY - UIScreenPixel), size: CGSize(width: width - separatorInset - separatorRightInset, height: UIScreenPixel))
                 
                 if isAdded && itemComponentView is ListSubSectionComponent.View {
                     readyItem.itemView.frame = itemFrame
@@ -311,6 +312,14 @@ public final class ListSectionContentView: UIView {
 public final class ListSectionComponent: Component {
     public typealias ChildView = ListSectionComponentChildView
     
+    public final class TransitionHint {
+        public let forceUpdate: Bool
+        
+        public init(forceUpdate: Bool) {
+            self.forceUpdate = forceUpdate
+        }
+    }
+    
     public enum Background: Equatable {
         case none(clipped: Bool)
         case all
@@ -417,6 +426,11 @@ public final class ListSectionComponent: Component {
         func update(component: ListSectionComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
             self.component = component
             
+            var forceUpdate = false
+            if let hint = transition.userData(TransitionHint.self) {
+                forceUpdate = hint.forceUpdate
+            }
+            
             let headerSideInset: CGFloat = 16.0
             
             var contentHeight: CGFloat = 0.0
@@ -472,6 +486,7 @@ public final class ListSectionComponent: Component {
                     transition: itemTransition,
                     component: item.component,
                     environment: {},
+                    forceUpdate: forceUpdate,
                     containerSize: CGSize(width: availableSize.width, height: availableSize.height)
                 )
                 

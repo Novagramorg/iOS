@@ -1410,6 +1410,16 @@ public struct StarGiftUpgradePreview: Equatable {
     public let attributes: [StarGift.UniqueGift.Attribute]
     public let prices: [Price]
     public let nextPrices: [Price]
+    
+    public init(attributes: [StarGift.UniqueGift.Attribute], prices: [Price], nextPrices: [Price]) {
+        self.attributes = attributes
+        self.prices = prices
+        self.nextPrices = nextPrices
+    }
+    
+    public func withAttributes(_ attributes: [StarGift.UniqueGift.Attribute]) -> StarGiftUpgradePreview {
+        return StarGiftUpgradePreview(attributes: attributes, prices: self.prices, nextPrices: self.nextPrices)
+    }
 }
 
 func _internal_starGiftUpgradePreview(account: Account, giftId: Int64) -> Signal<StarGiftUpgradePreview?, NoError> {
