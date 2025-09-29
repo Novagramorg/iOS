@@ -1994,6 +1994,9 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         if interfaceState.interfaceState.mediaDraftState != nil {
             audioRecordingItemsAlpha = 0.0
         }
+        
+        transition.updateAlpha(layer: self.actionButtons.micButtonBackgroundView.layer, alpha: mediaRecordingState != nil ? 0.01 : 1.0)
+        
         if let mediaRecordingState {
             audioRecordingItemsAlpha = 0.0
         
