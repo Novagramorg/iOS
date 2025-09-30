@@ -1390,6 +1390,8 @@ public final class EmojiPagerContentComponent: Component {
         private let backgroundTintView: UIView
         private var fadingMaskLayer: FadingMaskLayer?
         private var tintFadingMaskLayer: FadingMaskLayer?
+        private var topPanelSeparator: (colorLayer: SimpleLayer, tintLayer: SimpleLayer)?
+        private var topPanelHeight: CGFloat = 0.0
         private var vibrancyClippingView: UIView
         private var vibrancyEffectView: UIView?
         public private(set) var mirrorContentClippingView: UIView?
@@ -4016,6 +4018,23 @@ public final class EmojiPagerContentComponent: Component {
             }
             if let tintFadingMaskLayer = self.tintFadingMaskLayer {
                 tintFadingMaskLayer.internalAlpha = max(0.0, min(1.0, self.scrollView.contentOffset.y / 30.0))
+                
+                self.updateTopPanelSeparator(transition: transition)
+            }
+        }
+        
+        private func updateTopPanelSeparator(transition: ComponentTransition) {
+            if let topPanelSeparator = self.topPanelSeparator {
+                var offset = self.scrollView.contentOffset.y
+                let startOffset: CGFloat = 40.0 - self.topPanelHeight
+                let endOffset: CGFloat = startOffset + 10.0
+                
+                offset = min(max(offset, startOffset), endOffset)
+                offset = (endOffset - offset) / (endOffset - startOffset)
+                let alpha = 1.0 - offset
+                
+                transition.setAlpha(layer: topPanelSeparator.colorLayer, alpha: alpha)
+                transition.setAlpha(layer: topPanelSeparator.tintLayer, alpha: alpha)
             }
         }
         
@@ -4102,14 +4121,41 @@ public final class EmojiPagerContentComponent: Component {
                         self.tintFadingMaskLayer = tintFadingMaskLayer
                     }
                     
+                    if case .clip = component.maskEdge {
+                        let topPanelSeparator: (colorLayer: SimpleLayer, tintLayer: SimpleLayer)
+                        if let current = self.topPanelSeparator {
+                            topPanelSeparator = current
+                        } else {
+                            topPanelSeparator = (SimpleLayer(), SimpleLayer())
+                            self.topPanelSeparator = topPanelSeparator
+                            self.layer.addSublayer(topPanelSeparator.colorLayer)
+                            if let effectContainerView = externalTintMaskContainer ?? component.inputInteractionHolder.inputInteraction?.externalBackground?.effectContainerView {
+                                effectContainerView.layer.addSublayer(topPanelSeparator.tintLayer)
+                            }
+                        }
+                        
+                        topPanelSeparator.colorLayer.backgroundColor = keyboardChildEnvironment.theme.list.itemPlainSeparatorColor.withMultipliedAlpha(0.5).cgColor
+                        topPanelSeparator.tintLayer.backgroundColor = UIColor(white: 0.0, alpha: 0.7).cgColor
+                        
+                        let separatorFrame = CGRect(origin: CGPoint(x: 0.0, y: topPanelHeight - UIScreenPixel), size: CGSize(width: backgroundFrame.width, height: UIScreenPixel))
+                        transition.setFrame(layer: topPanelSeparator.colorLayer, frame: separatorFrame)
+                        transition.setFrame(layer: topPanelSeparator.tintLayer, frame: separatorFrame)
+                        
+                        self.topPanelHeight = topPanelHeight
+                        self.updateTopPanelSeparator(transition: transition)
+                    }
+                    
                     if self.layer.mask == nil {
                         self.layer.mask = maskLayer
                     }
                     if self.mirrorContentClippingView?.layer.mask != tintFadingMaskLayer {
                         self.mirrorContentClippingView?.layer.mask = tintFadingMaskLayer
                     }
-                    maskLayer.frame = CGRect(origin: CGPoint(x: 0.0, y: topPanelHeight - 40.0), size: backgroundFrame.size)
-                    tintFadingMaskLayer.frame = maskLayer.frame
+                    let maskFrame = CGRect(origin: CGPoint(x: 0.0, y: topPanelHeight - 40.0), size: backgroundFrame.size)
+                    transition.setFrame(layer: maskLayer, frame: maskFrame)
+                    transition.setFrame(layer: tintFadingMaskLayer, frame: maskLayer.frame)
+                    maskLayer.update(size: maskFrame.size, transition: transition)
+                    tintFadingMaskLayer.update(size: maskFrame.size, transition: transition)
                 }
             } else if component.warpContentsOnEdges {
                 self.backgroundView.isHidden = true
@@ -4955,7 +5001,7 @@ private final class FadingMaskLayer: SimpleLayer {
         fatalError("init(coder:) has not been implemented")
     }
     
-    override func layoutSublayers() {
+    func update(size: CGSize, transition: ComponentTransition) {
         let gradientHeight: CGFloat = 66.0
         if self.gradientLayer.contents == nil {
             if !self.isHard {
@@ -4973,13 +5019,13 @@ private final class FadingMaskLayer: SimpleLayer {
             self.gradientFillLayer.backgroundColor = UIColor.white.cgColor
         }
         
-        self.gradientLayer.frame = CGRect(origin: .zero, size: CGSize(width: self.bounds.width, height: gradientHeight))
-        self.gradientFillLayer.frame = self.gradientLayer.frame
+        transition.setFrame(layer: self.gradientLayer, frame: CGRect(origin: .zero, size: CGSize(width: size.width, height: gradientHeight)))
+        transition.setFrame(layer: self.gradientFillLayer, frame: self.gradientLayer.frame)
         if self.isHard {
             let hardHeight: CGFloat = 40.0
-            self.fillLayer.frame = CGRect(origin: CGPoint(x: 0.0, y: hardHeight), size: CGSize(width: self.bounds.width, height: self.bounds.height - hardHeight))
+            transition.setFrame(layer: self.fillLayer, frame: CGRect(origin: CGPoint(x: 0.0, y: hardHeight), size: CGSize(width: size.width, height: size.height - hardHeight)))
         } else {
-            self.fillLayer.frame = CGRect(origin: CGPoint(x: 0.0, y: gradientHeight), size: CGSize(width: self.bounds.width, height: self.bounds.height - gradientHeight))
+            transition.setFrame(layer: self.fillLayer, frame: CGRect(origin: CGPoint(x: 0.0, y: gradientHeight), size: CGSize(width: size.width, height: size.height - gradientHeight)))
         }
     }
 }
