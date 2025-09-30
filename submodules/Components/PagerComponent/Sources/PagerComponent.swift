@@ -14,7 +14,7 @@ open class PagerExternalTopPanelContainer: SparseContainerView {
 }
 
 public protocol PagerContentViewWithBackground: UIView {
-    func pagerUpdateBackground(backgroundFrame: CGRect, topPanelHeight: CGFloat, externalTintMaskContainer: UIView?, transition: ComponentTransition)
+    func pagerUpdateBackground(backgroundFrame: CGRect, topPanelHeight: CGFloat, bottomPanelHeight: CGFloat, externalTintMaskContainer: UIView?, transition: ComponentTransition)
 }
 
 public protocol PagerTopPanelView: UIView {
@@ -721,6 +721,7 @@ public final class PagerComponent<ChildEnvironmentType: Equatable, TopPanelEnvir
             }
             
             var bottomPanelOffset: CGFloat = 0.0
+            var bottomPanelHeight: CGFloat = 0.0
             if let bottomPanel = component.bottomPanel {
                 let bottomPanelView: ComponentHostView<PagerComponentPanelEnvironment<TopPanelEnvironment>>
                 var bottomPanelTransition = panelStateTransition
@@ -767,14 +768,27 @@ public final class PagerComponent<ChildEnvironmentType: Equatable, TopPanelEnvir
                     bottomPanelOffset = bottomPanelSize.height
                 }
                 
-                panelStateTransition.setFrame(view: bottomPanelView, frame: CGRect(origin: CGPoint(x: 0.0, y: availableSize.height - bottomPanelSize.height + bottomPanelOffset), size: bottomPanelSize))
+                let bottomPanelFrame = CGRect(origin: CGPoint(x: 0.0, y: availableSize.height - bottomPanelSize.height + bottomPanelOffset), size: bottomPanelSize)
+                
+                panelStateTransition.setFrame(view: bottomPanelView, frame: bottomPanelFrame)
+                
+                if let externalTintMaskContainer = component.externalTintMaskContainer, let bottomPanelView = bottomPanelView.componentView as? PagerTopPanelView {
+                    if bottomPanelView.tintContentMask !== externalTintMaskContainer {
+                        externalTintMaskContainer.addSubview(bottomPanelView.tintContentMask)
+                    }
+                    panelStateTransition.setFrame(view: bottomPanelView.tintContentMask, frame: bottomPanelFrame)
+                }
                 
                 contentInsets.bottom += bottomPanelSize.height
+                bottomPanelHeight = max(0.0, bottomPanelSize.height - bottomPanelOffset)
             } else {
                 if let bottomPanelView = self.bottomPanelView {
                     self.bottomPanelView = nil
                     
                     bottomPanelView.removeFromSuperview()
+                    if let bottomPanelView = bottomPanelView.componentView as? PagerTopPanelView {
+                        bottomPanelView.tintContentMask.removeFromSuperview()
+                    }
                 }
                 
                 self.bottomPanelHeight = 0.0
@@ -961,7 +975,7 @@ public final class PagerComponent<ChildEnvironmentType: Equatable, TopPanelEnvir
                         }
                         
                         if let contentViewWithBackground = contentView.view.componentView as? PagerContentViewWithBackground {
-                            contentViewWithBackground.pagerUpdateBackground(backgroundFrame: backgroundFrame, topPanelHeight: topPanelHeight, externalTintMaskContainer: component.externalTintMaskContainer == nil ? nil : contentView.tintMaskContainer, transition: contentTransition)
+                            contentViewWithBackground.pagerUpdateBackground(backgroundFrame: CGRect(origin: CGPoint(), size: CGSize(width: backgroundFrame.width, height: availableSize.height)), topPanelHeight: topPanelHeight, bottomPanelHeight: bottomPanelHeight, externalTintMaskContainer: component.externalTintMaskContainer == nil ? nil : contentView.tintMaskContainer, transition: contentTransition)
                         }
                     }
                 }
