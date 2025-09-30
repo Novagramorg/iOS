@@ -3579,7 +3579,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                                         HeaderButtonComponent(
                                             title: strings.Gift_View_Header_Transfer,
                                             iconName: "Premium/Collectible/Transfer",
-                                            isLocked: !isMyOwnedUniqueGift
+                                            isLocked: isMyHostedUniqueGift
                                         )
                                     ),
                                     effectAlignment: .center,
@@ -3671,7 +3671,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                                         HeaderButtonComponent(
                                             title: (uniqueGift.resellAmounts ?? []).isEmpty ? strings.Gift_View_Sell : strings.Gift_View_Unlist,
                                             iconName: (uniqueGift.resellAmounts ?? []).isEmpty ? "Premium/Collectible/Sell" : "Premium/Collectible/Unlist",
-                                            isLocked: !isMyOwnedUniqueGift
+                                            isLocked: isMyHostedUniqueGift
                                         )
                                     ),
                                     effectAlignment: .center,
