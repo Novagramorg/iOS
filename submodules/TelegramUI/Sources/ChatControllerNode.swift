@@ -3856,6 +3856,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                     areCustomEmojiEnabled: self.chatPresentationInterfaceState.customEmojiAvailable,
                     hasEdit: true,
                     hideBackground: true,
+                    maskEdge: .clip,
                     sendGif: { [weak self] fileReference, sourceView, sourceRect, silentPosting, schedule in
                         if let self {
                             return self.controllerInteraction.sendGif(fileReference, sourceView, sourceRect, silentPosting, schedule)
@@ -5172,7 +5173,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
     }
     
     func prepareSwitchToChatLocation(chatLocation: ChatLocation, historyNode: ChatHistoryListNodeImpl, animationDirection: ChatControllerAnimateInnerChatSwitchDirection?) {
-        self.chatLocation = historyNode.chatLocation
+        self.chatLocation = chatLocation
         if historyNode === self.historyNode {
             historyNode.updateChatLocation(chatLocation: chatLocation)
         } else {

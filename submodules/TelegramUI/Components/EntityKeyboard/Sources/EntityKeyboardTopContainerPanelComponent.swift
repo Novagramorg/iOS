@@ -72,11 +72,12 @@ final class EntityKeyboardTopContainerPanelComponent: Component {
     
     private final class PanelView {
         let view = ComponentHostView<EntityKeyboardTopContainerPanelEnvironment>()
+        let tintContentView = UIView()
         let visibilityFractionUpdated = ActionSlot<(CGFloat, ComponentTransition)>()
         var isExpanded: Bool = false
     }
     
-    final class View: UIView {
+    final class View: UIView, PagerTopPanelView {
         private var backgroundView: BlurredBackgroundView?
         private var backgroundSeparatorView: UIView?
         
@@ -88,7 +89,11 @@ final class EntityKeyboardTopContainerPanelComponent: Component {
         
         private var visibilityFraction: CGFloat = 1.0
         
+        public let tintContentMask: UIView
+        
         override init(frame: CGRect) {
+            self.tintContentMask = UIView()
+            
             super.init(frame: frame)
             
             self.disablesInteractiveKeyboardGestureRecognizer = true
@@ -150,6 +155,7 @@ final class EntityKeyboardTopContainerPanelComponent: Component {
                             panelView = PanelView()
                             self.panelViews[panel.id] = panelView
                             self.addSubview(panelView.view)
+                            self.tintContentMask.addSubview(panelView.tintContentView)
                         }
                         
                         let panelId = panel.id
@@ -172,12 +178,20 @@ final class EntityKeyboardTopContainerPanelComponent: Component {
                         )
                         if isInBounds {
                             transition.animatePosition(view: panelView.view, from: CGPoint(x: transitionOffsetFraction * availableSize.width, y: 0.0), to: CGPoint(), additive: true, completion: nil)
+                            transition.animatePosition(view: panelView.tintContentView, from: CGPoint(x: transitionOffsetFraction * availableSize.width, y: 0.0), to: CGPoint(), additive: true, completion: nil)
                         }
                         panelTransition.setFrame(view: panelView.view, frame: panelFrame, completion: { [weak self] completed in
                             if isPartOfTransition && completed {
                                 self?.state?.updated(transition: .immediate)
                             }
                         })
+                        panelTransition.setFrame(view: panelView.tintContentView, frame: panelFrame)
+                        if let panelViewImpl = panelView.view.componentView as? PagerTopPanelView {
+                            if panelViewImpl.tintContentMask.superview == nil {
+                                panelView.tintContentView.addSubview(panelViewImpl.tintContentMask)
+                            }
+                            panelTransition.setFrame(view: panelViewImpl.tintContentMask, frame: CGRect(origin: CGPoint(), size: panelFrame.size))
+                        }
                     }
                 }
             }
@@ -186,6 +200,7 @@ final class EntityKeyboardTopContainerPanelComponent: Component {
                 if !validPanelIds.contains(id) {
                     removedPanelIds.append(id)
                     panelView.view.removeFromSuperview()
+                    panelView.tintContentView.removeFromSuperview()
                 }
             }
             for id in removedPanelIds {

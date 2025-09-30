@@ -696,20 +696,25 @@ public extension GlassBackgroundView {
             fillColor.getHue(nil, saturation: &s, brightness: &b, alpha: &a)
             
             let innerImage: UIImage
-            if size == CGSize(width: 40.0 + inset * 2.0, height: 40.0 + inset * 2.0) {
+            if size == CGSize(width: 40.0 + inset * 2.0, height: 40.0 + inset * 2.0), b >= 0.2 {
                 innerImage = UIGraphicsImageRenderer(size: size).image { ctx in
                     let context = ctx.cgContext
                     
                     context.setFillColor(fillColor.cgColor)
-                    context.fill(CGRect(origin: CGPoint(), size: size).insetBy(dx: inset, dy: inset).insetBy(dx: 0.1, dy: 0.1))
+                    context.fill(CGRect(origin: CGPoint(), size: size))
                     
                     if let image = UIImage(bundleImageName: "Item List/GlassEdge40x40") {
-                        if s <= 0.3 && !isDark {
-                            image.draw(in: CGRect(origin: CGPoint(), size: size).insetBy(dx: inset, dy: inset), blendMode: .normal, alpha: 0.7)
+                        let imageInset = (image.size.width - 40.0) * 0.5
+                        
+                        if s == 0.0 && abs(a - 0.7) < 0.1 && !isDark {
+                            image.draw(in: CGRect(origin: CGPoint(), size: size).insetBy(dx: inset - imageInset, dy: inset - imageInset), blendMode: .normal, alpha: 1.0)
+                        } else if s <= 0.3 && !isDark {
+                            image.draw(in: CGRect(origin: CGPoint(), size: size).insetBy(dx: inset - imageInset, dy: inset - imageInset), blendMode: .normal, alpha: 0.7)
                         } else if b >= 0.2 {
-                            image.draw(in: CGRect(origin: CGPoint(), size: size).insetBy(dx: inset, dy: inset), blendMode: .plusLighter, alpha: 0.7)
+                            let maxAlpha: CGFloat = isDark ? 0.7 : 0.8
+                            image.draw(in: CGRect(origin: CGPoint(), size: size).insetBy(dx: inset - imageInset, dy: inset - imageInset), blendMode: .overlay, alpha: max(0.5, min(1.0, maxAlpha * s)))
                         } else {
-                            image.draw(in: CGRect(origin: CGPoint(), size: size).insetBy(dx: inset, dy: inset), blendMode: .normal, alpha: 0.5)
+                            image.draw(in: CGRect(origin: CGPoint(), size: size).insetBy(dx: inset - imageInset, dy: inset - imageInset), blendMode: .normal, alpha: 0.5)
                         }
                     }
                 }
