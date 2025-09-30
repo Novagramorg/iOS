@@ -169,7 +169,7 @@ public final class ChatEntityKeyboardInputNode: ChatInputNode {
         hasStickers: Bool = true,
         hasGifs: Bool = true,
         hideBackground: Bool = false,
-        maskEdge: Bool = false,
+        maskEdge: EmojiPagerContentComponent.MaskEdgeMode = .none,
         forceHasPremium: Bool = false,
         sendGif: ((FileMediaReference, UIView, CGRect, Bool, Bool) -> Bool)?
     ) -> Signal<InputData, NoError> {
@@ -213,7 +213,8 @@ public final class ChatEntityKeyboardInputNode: ChatInputNode {
                 hasEdit: hasEdit,
                 hasAdd: hasEdit,
                 subject: .chatStickers,
-                hideBackground: hideBackground
+                hideBackground: hideBackground,
+                maskEdge: maskEdge
             )
             |> map(Optional.init)
         } else {
@@ -1915,7 +1916,7 @@ public final class ChatEntityKeyboardInputNode: ChatInputNode {
                 externalTopPanelContainer: self.externalTopPanelContainerImpl,
                 externalBottomPanelContainer: nil,
                 externalTintMaskContainer: self.backgroundTintMaskContentView,
-                displayTopPanelBackground: self.opaqueTopPanelBackground ? .opaque : .blur,
+                displayTopPanelBackground: self.opaqueTopPanelBackground ? .opaque : .none,
                 topPanelExtensionUpdated: { [weak self] topPanelExtension, transition in
                     guard let strongSelf = self else {
                         return

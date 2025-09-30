@@ -696,7 +696,7 @@ public extension GlassBackgroundView {
             fillColor.getHue(nil, saturation: &s, brightness: &b, alpha: &a)
             
             let innerImage: UIImage
-            if size == CGSize(width: 40.0 + inset * 2.0, height: 40.0 + inset * 2.0) {
+            if size == CGSize(width: 40.0 + inset * 2.0, height: 40.0 + inset * 2.0), b >= 0.2 {
                 innerImage = UIGraphicsImageRenderer(size: size).image { ctx in
                     let context = ctx.cgContext
                     

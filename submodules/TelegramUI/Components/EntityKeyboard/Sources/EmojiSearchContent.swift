@@ -469,7 +469,7 @@ public final class EmojiSearchContent: ASDisplayNode, EntitySearchContainerNode 
             searchState: .empty(hasResults: false),
             warpContentsOnEdges: false,
             hideBackground: false,
-            maskEdge: false,
+            maskEdge: .none,
             displaySearchWithPlaceholder: self.presentationData.strings.EmojiSearch_SearchEmojiPlaceholder,
             searchCategories: nil,
             searchInitiallyHidden: false,
