@@ -54,6 +54,7 @@ final class AccessoryItemIconButton: HighlightTrackingButton, GlassBackgroundVie
         switch item {
         case .input, .botInput, .silentPost:
             self.iconImageView.isHidden = true
+            self.iconImageView.tintMask.isHidden = true
             self.animationView = ComponentView<Empty>()
             self.tintMaskAnimationView = UIImageView()
         default:
@@ -211,6 +212,7 @@ final class AccessoryItemIconButton: HighlightTrackingButton, GlassBackgroundVie
                 imageFrame.origin.y += 1.0
             }
             self.iconImageView.frame = imageFrame
+            self.iconImageView.tintMask.frame = imageFrame
             
             if let animationView = self.animationView {
                 let width = AccessoryItemIconButton.calculateWidth(item: item, image: image, text: "", strings: self.strings)
