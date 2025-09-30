@@ -5,6 +5,7 @@ import ComponentFlow
 import ComponentDisplayAdapters
 import UIKitRuntimeUtils
 import CoreImage
+import AppBundle
 
 private final class ContentContainer: UIView {
     private let maskContentView: UIView
@@ -689,39 +690,59 @@ public extension GlassBackgroundView {
             addShadow(context, true, CGPoint(), 10.0, 0.0, UIColor(white: 0.0, alpha: 0.06), .normal)
             addShadow(context, true, CGPoint(), 20.0, 0.0, UIColor(white: 0.0, alpha: 0.06), .normal)
             
-            let innerImage = UIGraphicsImageRenderer(size: size).image { ctx in
-                let context = ctx.cgContext
-                
-                context.setFillColor(fillColor.cgColor)
-                context.fill(CGRect(origin: CGPoint(), size: size).insetBy(dx: inset, dy: inset).insetBy(dx: 0.1, dy: 0.1))
-                
-                var a: CGFloat = 0.0
-                var b: CGFloat = 0.0
-                var s: CGFloat = 0.0
-                fillColor.getHue(nil, saturation: &s, brightness: &b, alpha: &a)
-                
-                addShadow(context, true, CGPoint(x: 0.0, y: 0.0), 20.0, 0.0, UIColor(white: 0.0, alpha: 0.04), .normal)
-                addShadow(context, true, CGPoint(x: 0.0, y: 0.0), 5.0, 0.0, UIColor(white: 0.0, alpha: 0.04), .normal)
-                
-                if s <= 0.3 && !isDark {
-                    addShadow(context, false, CGPoint(x: 0.0, y: 0.0), 8.0, 0.0, UIColor(white: 0.0, alpha: 0.4), .overlay)
+            var a: CGFloat = 0.0
+            var b: CGFloat = 0.0
+            var s: CGFloat = 0.0
+            fillColor.getHue(nil, saturation: &s, brightness: &b, alpha: &a)
+            
+            let innerImage: UIImage
+            if size == CGSize(width: 40.0 + inset * 2.0, height: 40.0 + inset * 2.0) {
+                innerImage = UIGraphicsImageRenderer(size: size).image { ctx in
+                    let context = ctx.cgContext
                     
-                    let edgeAlpha: CGFloat = max(0.8, min(1.0, a))
+                    context.setFillColor(fillColor.cgColor)
+                    context.fill(CGRect(origin: CGPoint(), size: size).insetBy(dx: inset, dy: inset).insetBy(dx: 0.1, dy: 0.1))
                     
-                    for _ in 0 ..< 2 {
-                        addShadow(context, false, CGPoint(x: -0.64, y: -0.64), 0.8, 0.0, UIColor(white: 1.0, alpha: edgeAlpha), .normal)
-                        addShadow(context, false, CGPoint(x: 0.64, y: 0.64), 0.8, 0.0, UIColor(white: 1.0, alpha: edgeAlpha), .normal)
+                    if let image = UIImage(bundleImageName: "Item List/GlassEdge40x40") {
+                        if s <= 0.3 && !isDark {
+                            image.draw(in: CGRect(origin: CGPoint(), size: size).insetBy(dx: inset, dy: inset), blendMode: .normal, alpha: 0.7)
+                        } else if b >= 0.2 {
+                            image.draw(in: CGRect(origin: CGPoint(), size: size).insetBy(dx: inset, dy: inset), blendMode: .plusLighter, alpha: 0.7)
+                        } else {
+                            image.draw(in: CGRect(origin: CGPoint(), size: size).insetBy(dx: inset, dy: inset), blendMode: .normal, alpha: 0.5)
+                        }
                     }
-                } else if b >= 0.2 {
-                    let edgeAlpha: CGFloat = max(0.2, min(isDark ? 0.7 : 0.7, a * a * a))
+                }
+            } else {
+                innerImage = UIGraphicsImageRenderer(size: size).image { ctx in
+                    let context = ctx.cgContext
                     
-                    addShadow(context, false, CGPoint(x: -0.64, y: -0.64), 0.5, 0.0, UIColor(white: 1.0, alpha: edgeAlpha), .plusLighter)
-                    addShadow(context, false, CGPoint(x: 0.64, y: 0.64), 0.5, 0.0, UIColor(white: 1.0, alpha: edgeAlpha), .plusLighter)
-                } else {
-                    let edgeAlpha: CGFloat = max(0.4, min(1.0, a * a * a))
+                    context.setFillColor(fillColor.cgColor)
+                    context.fill(CGRect(origin: CGPoint(), size: size).insetBy(dx: inset, dy: inset).insetBy(dx: 0.1, dy: 0.1))
                     
-                    addShadow(context, false, CGPoint(x: -0.64, y: -0.64), 1.2, 0.0, UIColor(white: 1.0, alpha: edgeAlpha), .normal)
-                    addShadow(context, false, CGPoint(x: 0.64, y: 0.64), 1.2, 0.0, UIColor(white: 1.0, alpha: edgeAlpha), .normal)
+                    addShadow(context, true, CGPoint(x: 0.0, y: 0.0), 20.0, 0.0, UIColor(white: 0.0, alpha: 0.04), .normal)
+                    addShadow(context, true, CGPoint(x: 0.0, y: 0.0), 5.0, 0.0, UIColor(white: 0.0, alpha: 0.04), .normal)
+                    
+                    if s <= 0.3 && !isDark {
+                        addShadow(context, false, CGPoint(x: 0.0, y: 0.0), 8.0, 0.0, UIColor(white: 0.0, alpha: 0.4), .overlay)
+                        
+                        let edgeAlpha: CGFloat = max(0.8, min(1.0, a))
+                        
+                        for _ in 0 ..< 2 {
+                            addShadow(context, false, CGPoint(x: -0.64, y: -0.64), 0.8, 0.0, UIColor(white: 1.0, alpha: edgeAlpha), .normal)
+                            addShadow(context, false, CGPoint(x: 0.64, y: 0.64), 0.8, 0.0, UIColor(white: 1.0, alpha: edgeAlpha), .normal)
+                        }
+                    } else if b >= 0.2 {
+                        let edgeAlpha: CGFloat = max(0.2, min(isDark ? 0.7 : 0.7, a * a * a))
+                        
+                        addShadow(context, false, CGPoint(x: -0.64, y: -0.64), 0.5, 0.0, UIColor(white: 1.0, alpha: edgeAlpha), .plusLighter)
+                        addShadow(context, false, CGPoint(x: 0.64, y: 0.64), 0.5, 0.0, UIColor(white: 1.0, alpha: edgeAlpha), .plusLighter)
+                    } else {
+                        let edgeAlpha: CGFloat = max(0.4, min(1.0, a * a * a))
+                        
+                        addShadow(context, false, CGPoint(x: -0.64, y: -0.64), 1.2, 0.0, UIColor(white: 1.0, alpha: edgeAlpha), .normal)
+                        addShadow(context, false, CGPoint(x: 0.64, y: 0.64), 1.2, 0.0, UIColor(white: 1.0, alpha: edgeAlpha), .normal)
+                    }
                 }
             }
             
