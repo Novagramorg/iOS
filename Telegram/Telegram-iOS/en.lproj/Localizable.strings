@@ -15133,7 +15133,7 @@ Error: %8$@";
 
 "Gift.View.SenderInfo" = "**%@** sent you this gift on **%@**.";
 
-"VideoChat.EncryptionKeyLabelShort" = "E2EE";
+"VideoChat.EncryptionKeyLabelShort" = "Encrypted";
 "VoiceChat.MuteShort" = "mute";
 
 "Stars.Intro.Transaction.GiftDropOriginalDetails" = "Gift Description Removal";
