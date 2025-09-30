@@ -1093,6 +1093,17 @@ public final class ChatHistoryListNodeImpl: ListView, ChatHistoryNode, ChatHisto
                         }
                         
                         if matches {
+                            for (message, _) in item.content {
+                                if strongSelf.chatLocation.threadId != nil {
+                                    if message.id.namespace != Namespaces.Message.Cloud {
+                                        matches = false
+                                        break
+                                    }
+                                }
+                            }
+                        }
+                        
+                        if matches {
                             var maxItemIndex: MessageIndex?
                             for (message, _) in item.content {
                                 if let maxItemIndexValue = maxItemIndex {
@@ -1235,6 +1246,9 @@ public final class ChatHistoryListNodeImpl: ListView, ChatHistoryNode, ChatHisto
             return
         }
         self.chatLocation = chatLocation
+        
+        self.interactiveReadActionDisposable?.dispose()
+        self.interactiveReadActionDisposable = nil
         
         self.beginChatHistoryTransitions(resetScrolling: true, switchedToAnotherSource: false)
         self.beginReadHistoryManagement()

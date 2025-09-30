@@ -5173,7 +5173,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
     }
     
     func prepareSwitchToChatLocation(chatLocation: ChatLocation, historyNode: ChatHistoryListNodeImpl, animationDirection: ChatControllerAnimateInnerChatSwitchDirection?) {
-        self.chatLocation = historyNode.chatLocation
+        self.chatLocation = chatLocation
         if historyNode === self.historyNode {
             historyNode.updateChatLocation(chatLocation: chatLocation)
         } else {
