@@ -14,6 +14,7 @@ swift_library(
         "//submodules/ComponentFlow",
         "//submodules/Components/ComponentDisplayAdapters",
         "//submodules/UIKitRuntimeUtils",
+        "//submodules/AppBundle",
     ],
     visibility = [
         "//visibility:public",
