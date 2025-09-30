@@ -88,13 +88,9 @@ final class AccessoryItemIconButton: HighlightTrackingButton, GlassBackgroundVie
         }
         
         self.iconImageView.image = image
-        if #available(iOS 26.0, *) {
-            self.iconImageView.tintColor = theme.chat.inputPanel.inputControlColor.withAlphaComponent(1.0)
-            self.iconImageView.alpha = alpha * theme.chat.inputPanel.inputControlColor.alpha
-        } else {
-            self.iconImageView.tintColor = theme.chat.inputPanel.inputControlColor
-            self.iconImageView.alpha = alpha
-        }
+        self.iconImageView.tintColor = theme.chat.inputPanel.inputControlColor.withAlphaComponent(1.0)
+        self.iconImageView.alpha = alpha * theme.chat.inputPanel.inputControlColor.alpha
+        self.iconImageView.tintMask.alpha = alpha * theme.chat.inputPanel.inputControlColor.alpha
         
         self.accessibilityLabel = accessibilityLabel
         
@@ -134,13 +130,8 @@ final class AccessoryItemIconButton: HighlightTrackingButton, GlassBackgroundVie
         }
         
         self.iconImageView.image = image
-        if #available(iOS 26.0, *) {
-            self.iconImageView.tintColor = theme.chat.inputPanel.inputControlColor.withAlphaComponent(1.0)
-            self.iconImageView.alpha = alpha * theme.chat.inputPanel.inputControlColor.alpha
-        } else {
-            self.iconImageView.tintColor = theme.chat.inputPanel.inputControlColor
-            self.iconImageView.alpha = alpha
-        }
+        self.iconImageView.tintColor = theme.chat.inputPanel.inputControlColor.withAlphaComponent(1.0)
+        self.iconImageView.alpha = alpha * theme.chat.inputPanel.inputControlColor.alpha
         
         self.accessibilityLabel = accessibilityLabel
     }
