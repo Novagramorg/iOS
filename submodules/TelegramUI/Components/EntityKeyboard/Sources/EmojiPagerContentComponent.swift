@@ -610,6 +610,12 @@ public final class EmojiPagerContentComponent: Component {
         }
     }
     
+    public enum MaskEdgeMode {
+        case none
+        case fade
+        case clip
+    }
+    
     public let id: AnyHashable
     public let context: AccountContext
     public let avatarPeer: EnginePeer?
@@ -623,7 +629,7 @@ public final class EmojiPagerContentComponent: Component {
     public let searchState: SearchState
     public let warpContentsOnEdges: Bool
     public let hideBackground: Bool
-    public let maskEdge: Bool
+    public let maskEdge: MaskEdgeMode
     public let displaySearchWithPlaceholder: String?
     public let searchCategories: EmojiSearchCategories?
     public let searchInitiallyHidden: Bool
@@ -649,7 +655,7 @@ public final class EmojiPagerContentComponent: Component {
         searchState: SearchState,
         warpContentsOnEdges: Bool,
         hideBackground: Bool,
-        maskEdge: Bool,
+        maskEdge: MaskEdgeMode,
         displaySearchWithPlaceholder: String?,
         searchCategories: EmojiSearchCategories?,
         searchInitiallyHidden: Bool,
@@ -1383,6 +1389,9 @@ public final class EmojiPagerContentComponent: Component {
         private let backgroundView: BlurredBackgroundView
         private let backgroundTintView: UIView
         private var fadingMaskLayer: FadingMaskLayer?
+        private var tintFadingMaskLayer: FadingMaskLayer?
+        private var topPanelSeparator: (colorLayer: SimpleLayer, tintLayer: SimpleLayer)?
+        private var topPanelHeight: CGFloat = 0.0
         private var vibrancyClippingView: UIView
         private var vibrancyEffectView: UIView?
         public private(set) var mirrorContentClippingView: UIView?
@@ -4007,6 +4016,26 @@ public final class EmojiPagerContentComponent: Component {
             if let fadingMaskLayer = self.fadingMaskLayer {
                 fadingMaskLayer.internalAlpha = max(0.0, min(1.0, self.scrollView.contentOffset.y / 30.0))
             }
+            if let tintFadingMaskLayer = self.tintFadingMaskLayer {
+                tintFadingMaskLayer.internalAlpha = max(0.0, min(1.0, self.scrollView.contentOffset.y / 30.0))
+                
+                self.updateTopPanelSeparator(transition: transition)
+            }
+        }
+        
+        private func updateTopPanelSeparator(transition: ComponentTransition) {
+            if let topPanelSeparator = self.topPanelSeparator {
+                var offset = self.scrollView.contentOffset.y
+                let startOffset: CGFloat = 40.0 - self.topPanelHeight
+                let endOffset: CGFloat = startOffset + 10.0
+                
+                offset = min(max(offset, startOffset), endOffset)
+                offset = (endOffset - offset) / (endOffset - startOffset)
+                let alpha = 1.0 - offset
+                
+                transition.setAlpha(layer: topPanelSeparator.colorLayer, alpha: alpha)
+                transition.setAlpha(layer: topPanelSeparator.tintLayer, alpha: alpha)
+            }
         }
         
         private func updateShimmerIfNeeded() {
@@ -4075,18 +4104,58 @@ public final class EmojiPagerContentComponent: Component {
             if component.hideBackground {
                 self.backgroundView.isHidden = true
                 
-                if component.maskEdge {
+                if component.maskEdge != .none {
                     let maskLayer: FadingMaskLayer
                     if let current = self.fadingMaskLayer {
                         maskLayer = current
                     } else {
-                        maskLayer = FadingMaskLayer()
+                        maskLayer = FadingMaskLayer(isHard: component.maskEdge == .clip)
                         self.fadingMaskLayer = maskLayer
                     }
+                    
+                    let tintFadingMaskLayer: FadingMaskLayer
+                    if let current = self.tintFadingMaskLayer {
+                        tintFadingMaskLayer = current
+                    } else {
+                        tintFadingMaskLayer = FadingMaskLayer(isHard: component.maskEdge == .clip)
+                        self.tintFadingMaskLayer = tintFadingMaskLayer
+                    }
+                    
+                    if case .clip = component.maskEdge {
+                        let topPanelSeparator: (colorLayer: SimpleLayer, tintLayer: SimpleLayer)
+                        if let current = self.topPanelSeparator {
+                            topPanelSeparator = current
+                        } else {
+                            topPanelSeparator = (SimpleLayer(), SimpleLayer())
+                            self.topPanelSeparator = topPanelSeparator
+                            self.layer.addSublayer(topPanelSeparator.colorLayer)
+                            if let effectContainerView = externalTintMaskContainer ?? component.inputInteractionHolder.inputInteraction?.externalBackground?.effectContainerView {
+                                effectContainerView.layer.addSublayer(topPanelSeparator.tintLayer)
+                            }
+                        }
+                        
+                        topPanelSeparator.colorLayer.backgroundColor = keyboardChildEnvironment.theme.list.itemPlainSeparatorColor.withMultipliedAlpha(0.5).cgColor
+                        topPanelSeparator.tintLayer.backgroundColor = UIColor(white: 0.0, alpha: 0.7).cgColor
+                        
+                        let separatorFrame = CGRect(origin: CGPoint(x: 0.0, y: topPanelHeight - UIScreenPixel), size: CGSize(width: backgroundFrame.width, height: UIScreenPixel))
+                        transition.setFrame(layer: topPanelSeparator.colorLayer, frame: separatorFrame)
+                        transition.setFrame(layer: topPanelSeparator.tintLayer, frame: separatorFrame)
+                        
+                        self.topPanelHeight = topPanelHeight
+                        self.updateTopPanelSeparator(transition: transition)
+                    }
+                    
                     if self.layer.mask == nil {
                         self.layer.mask = maskLayer
                     }
-                    maskLayer.frame = CGRect(origin: CGPoint(x: 0.0, y: floorToScreenPixels((topPanelHeight - 34.0) * 0.75)), size: backgroundFrame.size)
+                    if self.mirrorContentClippingView?.layer.mask != tintFadingMaskLayer {
+                        self.mirrorContentClippingView?.layer.mask = tintFadingMaskLayer
+                    }
+                    let maskFrame = CGRect(origin: CGPoint(x: 0.0, y: topPanelHeight - 40.0), size: backgroundFrame.size)
+                    transition.setFrame(layer: maskLayer, frame: maskFrame)
+                    transition.setFrame(layer: tintFadingMaskLayer, frame: maskLayer.frame)
+                    maskLayer.update(size: maskFrame.size, transition: transition)
+                    tintFadingMaskLayer.update(size: maskFrame.size, transition: transition)
                 }
             } else if component.warpContentsOnEdges {
                 self.backgroundView.isHidden = true
@@ -4910,18 +4979,38 @@ private final class FadingMaskLayer: SimpleLayer {
     let fillLayer = SimpleLayer()
     let gradientFillLayer = SimpleLayer()
     
+    private let isHard: Bool
+    
     var internalAlpha: CGFloat = 1.0 {
         didSet {
             self.gradientFillLayer.opacity = Float(1.0 - self.internalAlpha)
         }
     }
     
-    override func layoutSublayers() {
+    init(isHard: Bool) {
+        self.isHard = isHard
+        super.init()
+    }
+    
+    override init(layer: Any) {
+        self.isHard = false
+        super.init(layer: layer)
+    }
+    
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+    
+    func update(size: CGSize, transition: ComponentTransition) {
         let gradientHeight: CGFloat = 66.0
         if self.gradientLayer.contents == nil {
-            self.addSublayer(self.gradientLayer)
+            if !self.isHard {
+                self.addSublayer(self.gradientLayer)
+            }
             self.addSublayer(self.fillLayer)
-            self.addSublayer(self.gradientFillLayer)
+            if !self.isHard {
+                self.addSublayer(self.gradientFillLayer)
+            }
             
             let gradientImage = generateGradientImage(size: CGSize(width: 1.0, height: gradientHeight), colors: [UIColor.white.withAlphaComponent(0.0), UIColor.white.withAlphaComponent(0.0), UIColor.white, UIColor.white], locations: [0.0, 0.4, 0.9, 1.0], direction: .vertical)
             self.gradientLayer.contents = gradientImage?.cgImage
@@ -4930,9 +5019,14 @@ private final class FadingMaskLayer: SimpleLayer {
             self.gradientFillLayer.backgroundColor = UIColor.white.cgColor
         }
         
-        self.gradientLayer.frame = CGRect(origin: .zero, size: CGSize(width: self.bounds.width, height: gradientHeight))
-        self.gradientFillLayer.frame = self.gradientLayer.frame
-        self.fillLayer.frame = CGRect(origin: CGPoint(x: 0.0, y: gradientHeight), size: CGSize(width: self.bounds.width, height: self.bounds.height - gradientHeight))
+        transition.setFrame(layer: self.gradientLayer, frame: CGRect(origin: .zero, size: CGSize(width: size.width, height: gradientHeight)))
+        transition.setFrame(layer: self.gradientFillLayer, frame: self.gradientLayer.frame)
+        if self.isHard {
+            let hardHeight: CGFloat = 40.0
+            transition.setFrame(layer: self.fillLayer, frame: CGRect(origin: CGPoint(x: 0.0, y: hardHeight), size: CGSize(width: size.width, height: size.height - hardHeight)))
+        } else {
+            transition.setFrame(layer: self.fillLayer, frame: CGRect(origin: CGPoint(x: 0.0, y: gradientHeight), size: CGSize(width: size.width, height: size.height - gradientHeight)))
+        }
     }
 }
 

@@ -338,6 +338,8 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         }
     }
     
+    public var ignoreInputStateUpdates: Bool = false
+    
     override public var context: AccountContext? {
         didSet {
             self.actionButtons.micButton.statusBarHost = self.context?.sharedContext.mainWindow?.statusBarHost
@@ -362,6 +364,10 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     }
             
     public func updateInputTextState(_ state: ChatTextInputState, keepSendButtonEnabled: Bool, extendedSearchLayout: Bool, accessoryItems: [ChatTextInputAccessoryItem], animated: Bool) {
+        if self.ignoreInputStateUpdates {
+            return
+        }
+        
         if let currentState = self.presentationInterfaceState {
             var updateAccessoryButtons = false
             if accessoryItems.count == self.accessoryItemButtons.count {
@@ -1958,7 +1964,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             }
         }
         
-        self.updateActionButtons(hasText: inputHasText, hideMicButton: hideMicButton, animated: transition.isAnimated)
+        self.updateActionButtons(hasText: inputHasText, hideMicButton: hideMicButton, hideMicButtonBackground: mediaRecordingState != nil, animated: transition.isAnimated)
         
         var actionButtonsSize = CGSize(width: 40.0, height: 40.0)
         if let presentationInterfaceState = self.presentationInterfaceState {
@@ -1994,8 +2000,6 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         if interfaceState.interfaceState.mediaDraftState != nil {
             audioRecordingItemsAlpha = 0.0
         }
-        
-        transition.updateAlpha(layer: self.actionButtons.micButtonBackgroundView.layer, alpha: mediaRecordingState != nil ? 0.01 : 1.0)
         
         if let mediaRecordingState {
             audioRecordingItemsAlpha = 0.0
@@ -3675,7 +3679,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         self.updateTextHeight(animated: animated)
     }
     
-    private func updateActionButtons(hasText: Bool, hideMicButton: Bool, animated: Bool) {
+    private func updateActionButtons(hasText: Bool, hideMicButton: Bool, hideMicButtonBackground: Bool, animated: Bool) {
         var hideMicButton = hideMicButton
         
         var mediaInputIsActive = false
@@ -3832,19 +3836,15 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             }
         }
         
+        let alphaTransition: ContainedViewLayoutTransition = .animated(duration: 0.2, curve: .easeInOut)
+        
         if hideMicButton {
             if !self.actionButtons.micButton.alpha.isZero {
-                self.actionButtons.micButton.alpha = 0.0
-                if animated {
-                    self.actionButtons.micButton.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2)
-                }
-                
-                self.actionButtons.micButtonBackgroundView.alpha = 0.0
-                if animated {
-                    self.actionButtons.micButtonBackgroundView.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2)
-                }
+                alphaTransition.updateAlpha(layer: self.actionButtons.micButton.layer, alpha: 0.0)
             }
+            alphaTransition.updateAlpha(layer: self.actionButtons.micButtonBackgroundView.layer, alpha: 0.0)
         } else {
+            alphaTransition.updateAlpha(layer: self.actionButtons.micButtonBackgroundView.layer, alpha: hideMicButtonBackground ? 0.0 : 1.0)
             let micAlpha: CGFloat = self.actionButtons.micButton.fadeDisabled ? 0.5 : 1.0
             if !self.actionButtons.micButton.alpha.isEqual(to: micAlpha) {
                 self.actionButtons.micButton.alpha = micAlpha

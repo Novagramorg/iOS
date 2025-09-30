@@ -707,7 +707,7 @@ final class ComposePollScreenComponent: Component {
                         hasStickers: false,
                         hasGifs: false,
                         hideBackground: true,
-                        maskEdge: true,
+                        maskEdge: .fade,
                         sendGif: nil
                     )
                 )

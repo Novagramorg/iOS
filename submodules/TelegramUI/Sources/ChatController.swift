@@ -10190,6 +10190,8 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             
             var clearInputState = false
             if transferInputState {
+                self.chatDisplayNode.textInputPanelNode?.ignoreInputStateUpdates = true
+                
                 var peerId: PeerId
                 var currentThreadId: Int64?
                 switch self.chatLocation {
@@ -10293,6 +10295,8 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                 
                 self.currentChatSwitchDirection = nil
                 self.isUpdatingChatLocationThread = false
+                
+                self.chatDisplayNode.textInputPanelNode?.ignoreInputStateUpdates = false
                 
                 if clearInputState {
                     //DispatchQueue.main.async { [weak self] in
