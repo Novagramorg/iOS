@@ -338,6 +338,8 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         }
     }
     
+    public var ignoreInputStateUpdates: Bool = false
+    
     override public var context: AccountContext? {
         didSet {
             self.actionButtons.micButton.statusBarHost = self.context?.sharedContext.mainWindow?.statusBarHost
@@ -362,6 +364,10 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     }
             
     public func updateInputTextState(_ state: ChatTextInputState, keepSendButtonEnabled: Bool, extendedSearchLayout: Bool, accessoryItems: [ChatTextInputAccessoryItem], animated: Bool) {
+        if self.ignoreInputStateUpdates {
+            return
+        }
+        
         if let currentState = self.presentationInterfaceState {
             var updateAccessoryButtons = false
             if accessoryItems.count == self.accessoryItemButtons.count {
