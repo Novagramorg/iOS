@@ -4054,7 +4054,7 @@ public final class EmojiPagerContentComponent: Component {
             self.state?.updated(transition: ComponentTransition(animation: .curve(duration: 0.4, curve: .spring)).withUserData(ContentAnimation(type: .groupExpanded(id: groupId))))
         }
         
-        public func pagerUpdateBackground(backgroundFrame: CGRect, topPanelHeight: CGFloat, externalTintMaskContainer: UIView?, transition: ComponentTransition) {
+        public func pagerUpdateBackground(backgroundFrame: CGRect, topPanelHeight: CGFloat, bottomPanelHeight: CGFloat, externalTintMaskContainer: UIView?, transition: ComponentTransition) {
             guard let component = self.component, let keyboardChildEnvironment = self.keyboardChildEnvironment, let pagerEnvironment = self.pagerEnvironment else {
                 return
             }
@@ -4151,11 +4151,11 @@ public final class EmojiPagerContentComponent: Component {
                     if self.mirrorContentClippingView?.layer.mask != tintFadingMaskLayer {
                         self.mirrorContentClippingView?.layer.mask = tintFadingMaskLayer
                     }
-                    let maskFrame = CGRect(origin: CGPoint(x: 0.0, y: topPanelHeight - 40.0), size: backgroundFrame.size)
+                    let maskFrame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: backgroundFrame.size)
                     transition.setFrame(layer: maskLayer, frame: maskFrame)
                     transition.setFrame(layer: tintFadingMaskLayer, frame: maskLayer.frame)
-                    maskLayer.update(size: maskFrame.size, transition: transition)
-                    tintFadingMaskLayer.update(size: maskFrame.size, transition: transition)
+                    maskLayer.update(size: maskFrame.size, topPanelHeight: topPanelHeight, bottomPanelHeight: bottomPanelHeight, transition: transition)
+                    tintFadingMaskLayer.update(size: maskFrame.size, topPanelHeight: topPanelHeight, bottomPanelHeight: bottomPanelHeight, transition: transition)
                 }
             } else if component.warpContentsOnEdges {
                 self.backgroundView.isHidden = true
@@ -5001,7 +5001,7 @@ private final class FadingMaskLayer: SimpleLayer {
         fatalError("init(coder:) has not been implemented")
     }
     
-    func update(size: CGSize, transition: ComponentTransition) {
+    func update(size: CGSize, topPanelHeight: CGFloat, bottomPanelHeight: CGFloat, transition: ComponentTransition) {
         let gradientHeight: CGFloat = 66.0
         if self.gradientLayer.contents == nil {
             if !self.isHard {
@@ -5022,10 +5022,9 @@ private final class FadingMaskLayer: SimpleLayer {
         transition.setFrame(layer: self.gradientLayer, frame: CGRect(origin: .zero, size: CGSize(width: size.width, height: gradientHeight)))
         transition.setFrame(layer: self.gradientFillLayer, frame: self.gradientLayer.frame)
         if self.isHard {
-            let hardHeight: CGFloat = 40.0
-            transition.setFrame(layer: self.fillLayer, frame: CGRect(origin: CGPoint(x: 0.0, y: hardHeight), size: CGSize(width: size.width, height: size.height - hardHeight)))
+            transition.setFrame(layer: self.fillLayer, frame: CGRect(origin: CGPoint(x: 0.0, y: topPanelHeight), size: CGSize(width: size.width, height: size.height - topPanelHeight - bottomPanelHeight)))
         } else {
-            transition.setFrame(layer: self.fillLayer, frame: CGRect(origin: CGPoint(x: 0.0, y: gradientHeight), size: CGSize(width: size.width, height: size.height - gradientHeight)))
+            transition.setFrame(layer: self.fillLayer, frame: CGRect(origin: CGPoint(x: 0.0, y: gradientHeight + topPanelHeight - 40.0), size: CGSize(width: size.width, height: size.height - gradientHeight)))
         }
     }
 }
