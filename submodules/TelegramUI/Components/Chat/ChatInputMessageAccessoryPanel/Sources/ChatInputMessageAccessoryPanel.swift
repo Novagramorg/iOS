@@ -402,7 +402,7 @@ public final class ChatInputMessageAccessoryPanel: Component {
             }
             self.closeButtonIcon.tintColor = environment.theme.chat.inputPanel.inputControlColor
             
-            let secondaryTextColor = environment.theme.chat.inputPanel.inputControlColor.withMultipliedBrightnessBy(0.5)
+            let secondaryTextColor = environment.theme.chat.inputPanel.inputPlaceholderColor
             
             var textString: NSAttributedString
             var isPhoto = false
@@ -492,7 +492,7 @@ public final class ChatInputMessageAccessoryPanel: Component {
                     isMedia = false
                     isText = true
                 default:
-                    isMedia = true
+                    isMedia = effectiveMessage.text.isEmpty
                     isText = false
                 }
                 
