@@ -701,15 +701,19 @@ public extension GlassBackgroundView {
                     let context = ctx.cgContext
                     
                     context.setFillColor(fillColor.cgColor)
-                    context.fill(CGRect(origin: CGPoint(), size: size).insetBy(dx: inset, dy: inset).insetBy(dx: 0.1, dy: 0.1))
+                    context.fill(CGRect(origin: CGPoint(), size: size))
                     
                     if let image = UIImage(bundleImageName: "Item List/GlassEdge40x40") {
-                        if s <= 0.3 && !isDark {
-                            image.draw(in: CGRect(origin: CGPoint(), size: size).insetBy(dx: inset, dy: inset), blendMode: .normal, alpha: 0.7)
+                        let imageInset = (image.size.width - 40.0) * 0.5
+                        
+                        if s == 0.0 && abs(a - 0.7) < 0.1 && !isDark {
+                            image.draw(in: CGRect(origin: CGPoint(), size: size).insetBy(dx: inset - imageInset, dy: inset - imageInset), blendMode: .normal, alpha: 1.0)
+                        } else if s <= 0.3 && !isDark {
+                            image.draw(in: CGRect(origin: CGPoint(), size: size).insetBy(dx: inset - imageInset, dy: inset - imageInset), blendMode: .normal, alpha: 0.7)
                         } else if b >= 0.2 {
-                            image.draw(in: CGRect(origin: CGPoint(), size: size).insetBy(dx: inset, dy: inset), blendMode: .plusLighter, alpha: 0.7)
+                            image.draw(in: CGRect(origin: CGPoint(), size: size).insetBy(dx: inset - imageInset, dy: inset - imageInset), blendMode: .plusLighter, alpha: 0.7)
                         } else {
-                            image.draw(in: CGRect(origin: CGPoint(), size: size).insetBy(dx: inset, dy: inset), blendMode: .normal, alpha: 0.5)
+                            image.draw(in: CGRect(origin: CGPoint(), size: size).insetBy(dx: inset - imageInset, dy: inset - imageInset), blendMode: .normal, alpha: 0.5)
                         }
                     }
                 }
