@@ -28,7 +28,7 @@ final class SendButton: HighlightTrackingButton {
     private let kind: Kind
     
     private let containerView: UIView
-    private let backgroundView: GlassBackgroundView
+    private let backgroundView: UIImageView
     private let iconView: UIImageView
     private var activityIndicator: RadialStatusNode?
     
@@ -41,7 +41,8 @@ final class SendButton: HighlightTrackingButton {
         self.containerView = UIView()
         self.containerView.isUserInteractionEnabled = false
         
-        self.backgroundView = GlassBackgroundView()
+        self.backgroundView = UIImageView()
+        self.backgroundView.image = generateStretchableFilledCircleImage(diameter: 34.0, color: .white)?.withRenderingMode(.alwaysTemplate)
         
         self.iconView = UIImageView()
         self.iconView.isUserInteractionEnabled = false
@@ -69,12 +70,12 @@ final class SendButton: HighlightTrackingButton {
         size: CGSize,
         transition: ComponentTransition
     ) {
-        let innerSize = CGSize(width: size.width, height: size.height)
+        let innerSize = CGSize(width: size.width - 3.0 * 2.0, height: size.height - 3.0 * 2.0)
         let containerFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((size.width - innerSize.width) * 0.5), y: floorToScreenPixels((size.height - innerSize.height) * 0.5)), size: innerSize)
         transition.setFrame(view: self.containerView, frame: containerFrame)
         transition.setCornerRadius(layer: self.containerView.layer, cornerRadius: innerSize.height * 0.5)
         
-        self.backgroundView.update(size: innerSize, cornerRadius: innerSize.height * 0.5, isDark: presentationData.theme.overallDarkAppearance, tintColor: .init(kind: .custom, color: presentationData.theme.chat.inputPanel.actionControlFillColor), transition: .immediate)
+        self.backgroundView.tintColor = presentationData.theme.chat.inputPanel.actionControlFillColor
         transition.setFrame(view: self.backgroundView, frame: CGRect(origin: CGPoint(), size: innerSize))
         
         if self.previousIsAnimatedIn != isAnimatedIn {

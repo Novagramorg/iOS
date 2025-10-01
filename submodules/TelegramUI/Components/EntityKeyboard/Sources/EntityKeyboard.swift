@@ -401,16 +401,13 @@ public final class EntityKeyboardComponent: Component {
                 ))))
                 contentIcons.append(PagerComponentContentIcon(id: "masks", imageName: "Chat/Input/Media/EntityInputMasksIcon", title: component.strings.EmojiInput_TabMasks))
                 if let _ = component.maskContent?.inputInteractionHolder.inputInteraction?.openStickerSettings {
-                    contentAccessoryRightButtons.append(AnyComponentWithIdentity(id: "masks", component: AnyComponent(Button(
-                        content: AnyComponent(BundleIconComponent(
-                            name: "Chat/Input/Media/EntityInputSettingsIcon",
-                            tintColor: component.theme.chat.inputMediaPanel.panelIconColor,
-                            maxSize: nil
-                        )),
+                    contentAccessoryRightButtons.append(AnyComponentWithIdentity(id: "masks", component: AnyComponent(EntityKeyboardBottomPanelButton(
+                        icon: "Chat/Input/Media/EntityInputSettingsIcon",
+                        color: component.theme.chat.inputPanel.inputControlColor,
                         action: {
                             maskContent.inputInteractionHolder.inputInteraction?.openStickerSettings?()
                         }
-                    ).minSize(CGSize(width: 38.0, height: 38.0)))))
+                    ))))
                 }
             }
             
@@ -418,16 +415,13 @@ public final class EntityKeyboardComponent: Component {
                 contents.append(AnyComponentWithIdentity(id: "gifs", component: AnyComponent(gifContent)))
                 contentIcons.append(PagerComponentContentIcon(id: "gifs", imageName: "Chat/Input/Media/EntityInputGifsIcon", title: component.strings.EmojiInput_TabGifs))
                 if let addImage = component.stickerContent?.inputInteractionHolder.inputInteraction?.addImage {
-                    contentAccessoryLeftButtons.append(AnyComponentWithIdentity(id: "gifs", component: AnyComponent(Button(
-                        content: AnyComponent(BundleIconComponent(
-                            name: "Media Editor/AddImage",
-                            tintColor: component.theme.chat.inputMediaPanel.panelIconColor,
-                            maxSize: nil
-                        )),
+                    contentAccessoryLeftButtons.append(AnyComponentWithIdentity(id: "gifs", component: AnyComponent(EntityKeyboardBottomPanelButton(
+                        icon: "Media Editor/AddImage",
+                        color: component.theme.chat.inputPanel.inputControlColor,
                         action: {
                             addImage()
                         }
-                    ).minSize(CGSize(width: 38.0, height: 38.0)))))
+                    ))))
                 }
             }
             
@@ -541,28 +535,22 @@ public final class EntityKeyboardComponent: Component {
                 ))))
                 contentIcons.append(PagerComponentContentIcon(id: "stickers", imageName: "Chat/Input/Media/EntityInputStickersIcon", title: component.strings.EmojiInput_TabStickers))
                 if let _ = component.stickerContent?.inputInteractionHolder.inputInteraction?.openStickerSettings {
-                    contentAccessoryRightButtons.append(AnyComponentWithIdentity(id: "stickers", component: AnyComponent(Button(
-                        content: AnyComponent(BundleIconComponent(
-                            name: "Chat/Input/Media/EntityInputSettingsIcon",
-                            tintColor: component.theme.chat.inputMediaPanel.panelIconColor,
-                            maxSize: nil
-                        )),
+                    contentAccessoryRightButtons.append(AnyComponentWithIdentity(id: "stickers", component: AnyComponent(EntityKeyboardBottomPanelButton(
+                        icon: "Chat/Input/Media/EntityInputSettingsIcon",
+                        color: component.theme.chat.inputPanel.inputControlColor,
                         action: {
                             stickerContent.inputInteractionHolder.inputInteraction?.openStickerSettings?()
                         }
-                    ).minSize(CGSize(width: 38.0, height: 38.0)))))
+                    ))))
                 }
                 if let addImage = component.stickerContent?.inputInteractionHolder.inputInteraction?.addImage {
-                    contentAccessoryLeftButtons.append(AnyComponentWithIdentity(id: "stickers", component: AnyComponent(Button(
-                        content: AnyComponent(BundleIconComponent(
-                            name: "Media Editor/AddImage",
-                            tintColor: component.theme.chat.inputMediaPanel.panelIconColor,
-                            maxSize: nil
-                        )),
+                    contentAccessoryLeftButtons.append(AnyComponentWithIdentity(id: "stickers", component: AnyComponent(EntityKeyboardBottomPanelButton(
+                        icon: "Media Editor/AddImage",
+                        color: component.theme.chat.inputPanel.inputControlColor,
                         action: {
                             addImage()
                         }
-                    ).minSize(CGSize(width: 38.0, height: 38.0)))))
+                    ))))
                 }
             }
             
@@ -659,48 +647,40 @@ public final class EntityKeyboardComponent: Component {
                 ))))
                 contentIcons.append(PagerComponentContentIcon(id: "emoji", imageName: "Chat/Input/Media/EntityInputEmojiIcon", title: component.strings.EmojiInput_TabEmoji))
                 if let _ = deleteBackwards {
-                    contentAccessoryLeftButtons.append(AnyComponentWithIdentity(id: "emoji", component: AnyComponent(Button(
-                        content: AnyComponent(BundleIconComponent(
-                            name: "Chat/Input/Media/EntityInputGlobeIcon",
-                            tintColor: component.theme.chat.inputMediaPanel.panelIconColor,
-                            maxSize: nil
-                        )),
+                    contentAccessoryLeftButtons.append(AnyComponentWithIdentity(id: "emoji", component: AnyComponent(EntityKeyboardBottomPanelButton(
+                        icon: "Chat/Input/Media/EntityInputGlobeIcon",
+                        color: component.theme.chat.inputPanel.inputControlColor,
                         action: { [weak self] in
                             guard let strongSelf = self, let component = strongSelf.component else {
                                 return
                             }
                             component.switchToTextInput()
                         }
-                    ).minSize(CGSize(width: 38.0, height: 38.0)))))
+                    ))))
                 } else if let addImage = component.emojiContent?.inputInteractionHolder.inputInteraction?.addImage {
-                    contentAccessoryLeftButtons.append(AnyComponentWithIdentity(id: "emoji", component: AnyComponent(Button(
-                        content: AnyComponent(BundleIconComponent(
-                            name: "Media Editor/AddImage",
-                            tintColor: component.theme.chat.inputMediaPanel.panelIconColor,
-                            maxSize: nil
-                        )),
+                    contentAccessoryLeftButtons.append(AnyComponentWithIdentity(id: "emoji", component: AnyComponent(EntityKeyboardBottomPanelButton(
+                        icon: "Media Editor/AddImage",
+                        color: component.theme.chat.inputPanel.inputControlColor,
                         action: {
                             addImage()
                         }
-                    ).minSize(CGSize(width: 38.0, height: 38.0)))))
+                    ))))
                 }
             }
                             
             if let _ = deleteBackwards {
-                contentAccessoryRightButtons.append(AnyComponentWithIdentity(id: "emoji", component: AnyComponent(Button(
-                    content: AnyComponent(BundleIconComponent(
-                        name: "Chat/Input/Media/EntityInputClearIcon",
-                        tintColor: component.theme.chat.inputMediaPanel.panelIconColor,
-                        maxSize: nil
-                    )),
+                contentAccessoryRightButtons.append(AnyComponentWithIdentity(id: "emoji", component: AnyComponent(EntityKeyboardBottomPanelButton(
+                    icon: "Chat/Input/Media/EntityInputClearIcon",
+                    color: component.theme.chat.inputPanel.inputControlColor,
                     action: {
                         deleteBackwards?()
                         AudioServicesPlaySystemSound(1155)
+                    },
+                    holdAction: {
+                        deleteBackwards?()
+                        AudioServicesPlaySystemSound(1155)
                     }
-                ).withHoldAction({ _ in
-                    deleteBackwards?()
-                    AudioServicesPlaySystemSound(1155)
-                }).minSize(CGSize(width: 38.0, height: 38.0)))))
+                ))))
             }
             
             let panelHideBehavior: PagerComponentPanelHideBehavior

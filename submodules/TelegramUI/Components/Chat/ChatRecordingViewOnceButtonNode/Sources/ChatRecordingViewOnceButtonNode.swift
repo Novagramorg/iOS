@@ -88,6 +88,8 @@ public final class ChatRecordingViewOnceButtonNode: HighlightTrackingButtonNode 
             case .recordMore:
                 self.iconView.image = generateTintedImage(image: UIImage(bundleImageName: "Chat/Input/Text/IconMicrophone"), color: .white)?.withRenderingMode(.alwaysTemplate)
             }
+            
+            self.iconView.tintColor = theme.chat.inputPanel.panelControlColor
         }
         
         let backgroundFrame = CGRect(origin: CGPoint(x: floorToScreenPixels(size.width / 2.0 - innerSize.width / 2.0), y: floorToScreenPixels(size.height / 2.0 - innerSize.height / 2.0)), size: innerSize)
