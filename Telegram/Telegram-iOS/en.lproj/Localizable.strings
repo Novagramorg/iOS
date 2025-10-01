@@ -15150,3 +15150,10 @@ Error: %8$@";
 "ProfileColorSetup.BrowseGiftsForPurchase" = "Browse gifts available for purchase >";
 
 "VoiceChat.RemovedConferencePeerText" = "You removed %@ from this call. They will no longer be able to join using the invite link.";
+
+"Chat.MessageHeaderBotNewThread" = "New Thread";
+"Chat.MessageContinueLastThread" = "Continue Last Thread";
+"Chat.NewThreadInfo.Title" = "New Thread";
+"Chat.NewThreadInfo.Text" = "Type any message to\ncreate a new thread.";
+"Chat.InlineTopicMenu.NewForumThreadTab" = "New Chat";
+"Chat.GenericForuThreadStatus" = "thread";
