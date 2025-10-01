@@ -129,13 +129,18 @@ final class MessageItemComponent: Component {
             self.container.transform = .identity
             superview.addSubview(self.container)
             
+            let hasRTL = (self.text.view as? MultilineTextWithEntitiesComponent.View)?.hasRTL ?? false
+            let direction: CGFloat = hasRTL ? -1.0 : 1.0
+            let initialSize = self.background.frame.size
+            
             self.container.addSubview(textSnapshotView)
             transition.setAlpha(view: textSnapshotView, alpha: 0.0, completion: { _ in
                 textSnapshotView.removeFromSuperview()
             })
-            transition.setPosition(view: textSnapshotView, position: CGPoint(x: textSnapshotView.center.x + 71.0, y: textSnapshotView.center.y))
             
-            let initialSize = self.background.frame.size
+            let additionalOffset = hasRTL ? globalFrame.size.width - initialSize.width : 0.0
+            transition.setPosition(view: textSnapshotView, position: CGPoint(x: textSnapshotView.center.x + 71.0 * direction - additionalOffset, y: textSnapshotView.center.y))
+            
             self.background.update(size: globalFrame.size, cornerRadius: cornerRadius, isDark: true, tintColor: .init(kind: .custom, color: glassColor), transition: .immediate)
             self.background.update(size: initialSize, cornerRadius: 18.0, isDark: true, tintColor: .init(kind: .custom, color: glassColor), transition: transition)
             
@@ -151,7 +156,7 @@ final class MessageItemComponent: Component {
             })
             
             if let textView = self.text.view {
-                transition.animatePosition(view: textView, from: CGPoint(x: -71.0, y: 0.0), to: .zero, additive: true)
+                transition.animatePosition(view: textView, from: CGPoint(x: -71.0 * direction, y: 0.0), to: .zero, additive: true)
                 transition.animateAlpha(view: textView, from: 0.0, to: 1.0)
             }
             transition.animateAlpha(view: self.avatarNode.view, from: 0.0, to: 1.0)
@@ -183,9 +188,7 @@ final class MessageItemComponent: Component {
             let avatarSpacing: CGFloat = 10.0
             let iconSpacing: CGFloat = 10.0
             let rightInset: CGFloat = component.isNotification ? 15.0 : 13.0
-            
-            let avatarFrame = CGRect(origin: CGPoint(x: avatarInset, y: avatarInset), size: avatarSize)
-            
+                        
             var peerName = ""
             if !component.isNotification, case let .peer(peer) = component.icon {
                 peerName = peer.compactDisplayTitle
@@ -244,7 +247,7 @@ final class MessageItemComponent: Component {
             } else {
                 let textWithAppliedEntities = stringWithAppliedEntities(text, entities: entities, baseColor: textColor, linkColor: linkColor, baseFont: textFont, linkFont: textFont, boldFont: boldTextFont, italicFont: italicFont, boldItalicFont: boldItalicTextFont, fixedFont: monospaceFont, blockQuoteFont: textFont, message: nil, entityFiles: self.entityFiles).mutableCopy() as! NSMutableAttributedString
                 if !peerName.isEmpty {
-                    textWithAppliedEntities.insert(NSAttributedString(string: peerName + " ", font: boldTextFont, textColor: textColor), at: 0)
+                    textWithAppliedEntities.insert(NSAttributedString(string: "\u{2066}\(peerName)\u{2069} ", font: boldTextFont, textColor: textColor), at: 0)
                 }
                 attributedText = textWithAppliedEntities
             }
@@ -276,7 +279,12 @@ final class MessageItemComponent: Component {
                 containerSize: CGSize(width: availableSize.width - avatarInset - avatarSize.width - spacing - rightInset, height: .greatestFiniteMagnitude)
             )
             
-            let size = CGSize(width: avatarInset + avatarSize.width + spacing + textSize.width + rightInset, height: max(minimalHeight, textSize.height + 15.0))
+            let hasRTL = (self.text.view as? MultilineTextWithEntitiesComponent.View)?.hasRTL ?? false
+            
+            let size = CGSize(
+                width: avatarInset + avatarSize.width + spacing + textSize.width + rightInset,
+                height: max(minimalHeight, textSize.height + 15.0)
+            )
             
             switch component.icon {
             case let .peer(peer):
@@ -302,10 +310,11 @@ final class MessageItemComponent: Component {
                         displayDimensions: avatarSize
                     )
                 }
+                let avatarFrame = CGRect(origin: CGPoint(x: avatarInset, y: avatarInset), size: avatarSize)
                 if self.avatarNode.bounds.isEmpty {
-                    self.avatarNode.frame = avatarFrame
+                    self.avatarNode.frame = mappedFrame(avatarFrame, containerSize: size, hasRTL: hasRTL)
                 } else {
-                    transition.setFrame(view: self.avatarNode.view, frame: avatarFrame)
+                    transition.setFrame(view: self.avatarNode.view, frame: mappedFrame(avatarFrame, containerSize: size, hasRTL: hasRTL))
                 }
                 self.avatarNode.isHidden = false
             case let .icon(iconName):
@@ -315,12 +324,18 @@ final class MessageItemComponent: Component {
                     environment: {},
                     containerSize: CGSize(width: 44.0, height: 44.0)
                 )
-                let iconFrame = CGRect(origin: CGPoint(x: avatarInset, y: floorToScreenPixels((size.height - iconSize.height) / 2.0)), size: iconSize)
+                let iconFrame = CGRect(
+                    origin: CGPoint(
+                        x: avatarInset,
+                        y: floorToScreenPixels((size.height - iconSize.height) / 2.0)
+                    ),
+                    size: iconSize
+                )
                 if let iconView = self.icon.view {
                     if iconView.superview == nil {
                         self.container.addSubview(iconView)
                     }
-                    transition.setFrame(view: iconView, frame: iconFrame)
+                    transition.setFrame(view: iconView, frame: mappedFrame(iconFrame, containerSize: size, hasRTL: hasRTL))
                 }
                 self.avatarNode.isHidden = true
             case let .animation(animationName):
@@ -338,23 +353,42 @@ final class MessageItemComponent: Component {
                     environment: {},
                     containerSize: CGSize(width: 40.0, height: 40.0)
                 )
-                let iconFrame = CGRect(origin: CGPoint(x: avatarInset - 3.0, y: floorToScreenPixels((size.height - iconSize.height) / 2.0)), size: iconSize)
+                let iconFrame = CGRect(
+                    origin: CGPoint(
+                        x: avatarInset - 3.0,
+                        y: floorToScreenPixels((size.height - iconSize.height) / 2.0)
+                    ),
+                    size: iconSize
+                )
                 if let iconView = self.icon.view as? LottieComponent.View {
                     if iconView.superview == nil {
                         self.container.addSubview(iconView)
                         iconView.playOnce()
                     }
-                    transition.setFrame(view: iconView, frame: iconFrame)
+                    transition.setFrame(view: iconView, frame: mappedFrame(iconFrame, containerSize: size, hasRTL: hasRTL))
                 }
                 self.avatarNode.isHidden = true
             }
             
-            let textFrame = CGRect(origin: CGPoint(x: avatarInset + avatarSize.width + spacing, y: floorToScreenPixels((size.height - textSize.height) / 2.0)), size: textSize)
+            func mappedFrame(_ frame: CGRect, containerSize: CGSize, hasRTL: Bool) -> CGRect {
+                return CGRect(
+                    origin: CGPoint(x: hasRTL ? containerSize.width - frame.minX - frame.width : frame.minX, y: frame.origin.y),
+                    size: frame.size
+                )
+            }
+            
+            let textFrame = CGRect(
+                origin: CGPoint(
+                    x: avatarInset + avatarSize.width + spacing,
+                    y: floorToScreenPixels((size.height - textSize.height) / 2.0)
+                ),
+                size: textSize
+            )
             if let textView = self.text.view {
                 if textView.superview == nil {
                     self.container.addSubview(textView)
                 }
-                transition.setFrame(view: textView, frame: textFrame)
+                transition.setFrame(view: textView, frame: mappedFrame(textFrame, containerSize: size, hasRTL: hasRTL))
             }
             
             transition.setFrame(view: self.container, frame: CGRect(origin: CGPoint(), size: size))

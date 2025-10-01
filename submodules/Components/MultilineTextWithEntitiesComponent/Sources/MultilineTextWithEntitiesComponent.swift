@@ -200,6 +200,10 @@ public final class MultilineTextWithEntitiesComponent: Component {
             return false
         }
         
+        public var hasRTL: Bool {
+            return self.textNode.cachedLayout?.hasRTL ?? false
+        }
+        
         public func updateVisibility(_ isVisible: Bool) {
             self.textNode.visibility = isVisible
         }
