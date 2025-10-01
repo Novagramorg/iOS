@@ -88,7 +88,7 @@ private func calclulateTextFieldMinHeight(_ presentationInterfaceState: ChatPres
     return result
 }
 
-private func calculateTextFieldRealInsets(presentationInterfaceState: ChatPresentationInterfaceState, accessoryButtonsWidth: CGFloat) -> UIEdgeInsets {
+private func calculateTextFieldRealInsets(presentationInterfaceState: ChatPresentationInterfaceState, accessoryButtonsWidth: CGFloat, actionControlsWidth: CGFloat) -> UIEdgeInsets {
     var baseFontSize = max(minInputFontSize, presentationInterfaceState.fontSize.baseDisplaySize)
     if "".isEmpty {
         baseFontSize = 17.0
@@ -111,6 +111,9 @@ private func calculateTextFieldRealInsets(presentationInterfaceState: ChatPresen
     
     var right: CGFloat = 0.0
     right += max(0.0, accessoryButtonsWidth - 14.0)
+    if actionControlsWidth != 0.0 {
+        right += actionControlsWidth
+    }
     
     return UIEdgeInsets(top: 4.5 + top, left: 0.0, bottom: 5.5 + bottom, right: right)
 }
@@ -201,7 +204,7 @@ private func makeTextInputTheme(context: AccountContext, interfaceState: ChatPre
     } else {
         codeBackgroundColor = UIColor(white: 0.0, alpha: 0.05)
     }
-        
+    
     return ChatInputTextView.Theme(
         quote: ChatInputTextView.Theme.Quote(
             background: authorNameColor.withMultipliedAlpha(interfaceState.theme.overallDarkAppearance ? 0.2 : 0.1),
@@ -939,7 +942,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         
         if let presentationInterfaceState = self.presentationInterfaceState {
             refreshChatTextInputTypingAttributes(textInputNode.textView, theme: presentationInterfaceState.theme, baseFontSize: baseFontSize)
-            textInputNode.textContainerInset = calculateTextFieldRealInsets(presentationInterfaceState: presentationInterfaceState, accessoryButtonsWidth: accessoryButtonsWidth)
+            textInputNode.textContainerInset = calculateTextFieldRealInsets(presentationInterfaceState: presentationInterfaceState, accessoryButtonsWidth: accessoryButtonsWidth, actionControlsWidth: self.actionButtons.frame.width)
         }
         
         if let textInputNodeLayout = self.textInputNodeLayout {
@@ -1037,13 +1040,10 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         return max(33.0, maxHeight - (textFieldInsets.top + textFieldInsets.bottom + self.textInputViewInternalInsets.top + self.textInputViewInternalInsets.bottom))
     }
     
-    private func calculateTextFieldMetrics(width: CGFloat, maxHeight: CGFloat, metrics: LayoutMetrics) -> (accessoryButtonsWidth: CGFloat, textFieldHeight: CGFloat, isOverflow: Bool) {
+    private func calculateTextFieldMetrics(width: CGFloat, actionControlsWidth: CGFloat, maxHeight: CGFloat, metrics: LayoutMetrics) -> (accessoryButtonsWidth: CGFloat, textFieldHeight: CGFloat, isOverflow: Bool) {
         let maxHeight = max(maxHeight, 40.0)
         
-        var textFieldInsets = self.textFieldInsets(metrics: metrics)
-        if self.actionButtons.frame.width > 40.0 {
-            textFieldInsets.right = self.actionButtons.frame.width - 2.0
-        }
+        let textFieldInsets = self.textFieldInsets(metrics: metrics)
         
         let fieldMaxHeight = textFieldMaxHeight(maxHeight, metrics: metrics)
         
@@ -1072,7 +1072,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         }
         
         if let presentationInterfaceState = self.presentationInterfaceState {
-            textInputViewRealInsets = calculateTextFieldRealInsets(presentationInterfaceState: presentationInterfaceState, accessoryButtonsWidth: accessoryButtonsWidth)
+            textInputViewRealInsets = calculateTextFieldRealInsets(presentationInterfaceState: presentationInterfaceState, accessoryButtonsWidth: accessoryButtonsWidth, actionControlsWidth: actionControlsWidth)
         }
         
         var textFieldHeight: CGFloat
@@ -1098,7 +1098,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     }
     
     private func textFieldInsets(metrics: LayoutMetrics) -> UIEdgeInsets {
-        let insets = UIEdgeInsets(top: 0.0, left: 54.0, bottom: 0.0, right: 54.0)
+        let insets = UIEdgeInsets(top: 0.0, left: 54.0, bottom: 0.0, right: 8.0)
         return insets
     }
     
@@ -1882,8 +1882,48 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             attachmentButtonX = -48.0
         }
         
+        self.actionButtons.micButton.updateMode(mode: interfaceState.interfaceState.mediaRecordingMode, animated: transition.isAnimated)
+        
+        var hideMicButton = false
+        if inputHasText || self.extendedSearchLayout {
+            hideMicButton = true
+        }
+        if let mediaRecordingState {
+            switch mediaRecordingState {
+            case .audio:
+                break
+            case let .video(status, _):
+                switch status {
+                case .recording:
+                    break
+                case .editing:
+                    hideMicButton = true
+                }
+            case .waitingForPreview:
+                break
+            }
+        }
+        
+        self.updateActionButtons(hasText: inputHasText, hideMicButton: hideMicButton, animated: transition.isAnimated)
+        
+        var actionButtonsSize = CGSize(width: 40.0, height: 40.0)
+        if let presentationInterfaceState = self.presentationInterfaceState {
+            var showTitle = false
+            if !self.actionButtons.sendContainerNode.alpha.isZero {
+                if let _ = presentationInterfaceState.sendPaidMessageStars {
+                    showTitle = true
+                } else if case let .customChatContents(customChatContents) = interfaceState.subject {
+                    switch customChatContents.kind {
+                    default:
+                        break
+                    }
+                }
+            }
+            actionButtonsSize = self.actionButtons.updateLayout(size: CGSize(width: 40.0, height: minimalHeight), isMediaInputExpanded: isMediaInputExpanded, showTitle: showTitle, currentMessageEffectId: presentationInterfaceState.interfaceState.sendMessageEffect, transition: transition, interfaceState: presentationInterfaceState)
+        }
+        
         let baseWidth = width - leftInset - leftMenuInset - rightInset - rightSlowModeInset
-        let (accessoryButtonsWidth, textFieldHeight, isTextFieldOverflow) = self.calculateTextFieldMetrics(width: baseWidth, maxHeight: maxHeight, metrics: metrics)
+        let (accessoryButtonsWidth, textFieldHeight, isTextFieldOverflow) = self.calculateTextFieldMetrics(width: baseWidth, actionControlsWidth: actionButtonsSize.width, maxHeight: maxHeight, metrics: metrics)
         var panelHeight = self.panelHeight(textFieldHeight: textFieldHeight, metrics: metrics)
         if displayBotStartButton {
             panelHeight += 27.0
@@ -1941,56 +1981,10 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         }
         self.menuButton.isUserInteractionEnabled = hasMenuButton
         self.sendAsAvatarButtonNode.isUserInteractionEnabled = hasMenuButton && isSendAsButton
-                    
-        self.actionButtons.micButton.updateMode(mode: interfaceState.interfaceState.mediaRecordingMode, animated: transition.isAnimated)
-        
-        var hideMicButton = false
-        if inputHasText || self.extendedSearchLayout {
-            hideMicButton = true
-        }
-        if let mediaRecordingState {
-            switch mediaRecordingState {
-            case .audio:
-                break
-            case let .video(status, _):
-                switch status {
-                case .recording:
-                    break
-                case .editing:
-                    hideMicButton = true
-                }
-            case .waitingForPreview:
-                break
-            }
-        }
-        
-        self.updateActionButtons(hasText: inputHasText, hideMicButton: hideMicButton, hideMicButtonBackground: mediaRecordingState != nil, animated: transition.isAnimated)
-        
-        var actionButtonsSize = CGSize(width: 40.0, height: 40.0)
-        if let presentationInterfaceState = self.presentationInterfaceState {
-            var showTitle = false
-            if !self.actionButtons.sendContainerNode.alpha.isZero {
-                if let _ = presentationInterfaceState.sendPaidMessageStars {
-                    showTitle = true
-                } else if case let .customChatContents(customChatContents) = interfaceState.subject {
-                    switch customChatContents.kind {
-                    default:
-                        break
-                    }
-                }
-            }
-            actionButtonsSize = self.actionButtons.updateLayout(size: CGSize(width: 40.0, height: minimalHeight), isMediaInputExpanded: isMediaInputExpanded, showTitle: showTitle, currentMessageEffectId: presentationInterfaceState.interfaceState.sendMessageEffect, transition: transition, interfaceState: presentationInterfaceState)
-        }
         
         var textFieldInsets = self.textFieldInsets(metrics: metrics)
-        if actionButtonsSize.width > 40.0 {
-            textFieldInsets.right = actionButtonsSize.width + 14.0
-        }
         if additionalSideInsets.right > 0.0 {
             textFieldInsets.right += additionalSideInsets.right / 3.0
-        }
-        if self.extendedSearchLayout {
-            textFieldInsets.right = 8.0
         }
         if mediaRecordingState != nil {
             textFieldInsets.left = 8.0
@@ -2257,7 +2251,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
 
         var textInputViewRealInsets = UIEdgeInsets()
         if let presentationInterfaceState = self.presentationInterfaceState {
-            textInputViewRealInsets = calculateTextFieldRealInsets(presentationInterfaceState: presentationInterfaceState, accessoryButtonsWidth: accessoryButtonsWidth)
+            textInputViewRealInsets = calculateTextFieldRealInsets(presentationInterfaceState: presentationInterfaceState, accessoryButtonsWidth: accessoryButtonsWidth, actionControlsWidth: actionButtonsSize.width)
         }
         
         var contentHeight: CGFloat = 0.0
@@ -2337,7 +2331,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         }
         
         if let _ = interfaceState.interfaceState.mediaDraftState {
-            let mediaPreviewPanelFrame = CGRect(origin: CGPoint(x: 0.0, y: contentHeight), size: CGSize(width: textInputWidth, height: 40.0))
+            let mediaPreviewPanelFrame = CGRect(origin: CGPoint(x: 0.0, y: contentHeight), size: CGSize(width: textInputWidth - actionButtonsSize.width - 8.0, height: 40.0))
             var mediaPreviewPanelTransition = transition
             
             let mediaPreviewPanelNode: ChatRecordingPreviewInputPanelNodeImpl
@@ -2497,7 +2491,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             self.slowmodePlaceholderNode?.isHidden = true
         }
         
-        var nextButtonTopRight = CGPoint(x: textInputContainerBackgroundFrame.width - accessoryButtonInset - rightSlowModeInset, y: textInputContainerBackgroundFrame.height - minimalInputHeight)
+        var nextButtonTopRight = CGPoint(x: textInputContainerBackgroundFrame.width - accessoryButtonInset - rightSlowModeInset - actionButtonsSize.width + (inputHasText ? 4.0 : (8.0 + 1.0)), y: textInputContainerBackgroundFrame.height - minimalInputHeight)
         if self.extendedSearchLayout {
             nextButtonTopRight.x -= 26.0
         }
@@ -2662,7 +2656,6 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         
         let searchLayoutClearButtonSize = CGSize(width: 40.0, height: 40.0)
         self.actionButtons.micButton.isHidden = additionalSideInsets.right > 0.0
-        self.actionButtons.micButtonBackgroundView.isHidden = self.actionButtons.micButton.isHidden
 
         let clearButtonFrame = CGRect(origin: CGPoint(x: textInputContainerBackgroundFrame.width - searchLayoutClearButtonSize.width, y: floor((textInputContainerBackgroundFrame.height - searchLayoutClearButtonSize.height) * 0.5)), size: searchLayoutClearButtonSize)
         transition.updateFrame(layer: self.searchLayoutClearButton.layer, frame: clearButtonFrame)
@@ -3383,7 +3376,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 composeButtonsOffset = 40.0
             }
             
-            let (_, textFieldHeight, _) = self.calculateTextFieldMetrics(width: width - leftInset - rightInset - self.leftMenuInset - self.rightSlowModeInset + self.currentTextInputBackgroundWidthOffset, maxHeight: maxHeight, metrics: metrics)
+            let (_, textFieldHeight, _) = self.calculateTextFieldMetrics(width: width - leftInset - rightInset - self.leftMenuInset - self.rightSlowModeInset + self.currentTextInputBackgroundWidthOffset, actionControlsWidth: self.actionButtons.bounds.width, maxHeight: maxHeight, metrics: metrics)
             let panelHeight = self.panelHeight(textFieldHeight: textFieldHeight, metrics: metrics)
             var textFieldMinHeight: CGFloat = 33.0
             if let presentationInterfaceState = self.presentationInterfaceState {
@@ -3679,7 +3672,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         self.updateTextHeight(animated: animated)
     }
     
-    private func updateActionButtons(hasText: Bool, hideMicButton: Bool, hideMicButtonBackground: Bool, animated: Bool) {
+    private func updateActionButtons(hasText: Bool, hideMicButton: Bool, animated: Bool) {
         var hideMicButton = hideMicButton
         
         var mediaInputIsActive = false
@@ -3842,22 +3835,16 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             if !self.actionButtons.micButton.alpha.isZero {
                 alphaTransition.updateAlpha(layer: self.actionButtons.micButton.layer, alpha: 0.0)
             }
-            alphaTransition.updateAlpha(layer: self.actionButtons.micButtonBackgroundView.layer, alpha: 0.0)
         } else {
-            alphaTransition.updateAlpha(layer: self.actionButtons.micButtonBackgroundView.layer, alpha: hideMicButtonBackground ? 0.0 : 1.0)
             let micAlpha: CGFloat = self.actionButtons.micButton.fadeDisabled ? 0.5 : 1.0
             if !self.actionButtons.micButton.alpha.isEqual(to: micAlpha) {
                 self.actionButtons.micButton.alpha = micAlpha
-                self.actionButtons.micButtonBackgroundView.alpha = micAlpha
                 if animated {
                     self.actionButtons.micButton.layer.animateAlpha(from: 0.0, to: micAlpha, duration: 0.1)
-                    self.actionButtons.micButtonBackgroundView.layer.animateAlpha(from: 0.0, to: micAlpha, duration: 0.1)
                     if animateWithBounce {
                         self.actionButtons.micButton.layer.animateSpring(from: NSNumber(value: Float(0.1)), to: NSNumber(value: Float(1.0)), keyPath: "transform.scale", duration: 0.6)
-                        self.actionButtons.micButtonBackgroundView.layer.animateSpring(from: NSNumber(value: Float(0.1)), to: NSNumber(value: Float(1.0)), keyPath: "transform.scale", duration: 0.6)
                     } else {
                         self.actionButtons.micButton.layer.animateScale(from: 0.2, to: 1.0, duration: 0.25)
-                        self.actionButtons.micButtonBackgroundView.layer.animateScale(from: 0.2, to: 1.0, duration: 0.25)
                     }
                 }
             }
@@ -3889,7 +3876,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     
     private func updateTextHeight(animated: Bool) {
         if let (width, leftInset, rightInset, _, additionalSideInsets, maxHeight, _, metrics, _, _) = self.validLayout {
-            let (_, textFieldHeight, _) = self.calculateTextFieldMetrics(width: width - leftInset - rightInset - additionalSideInsets.right - self.leftMenuInset - self.rightSlowModeInset + self.currentTextInputBackgroundWidthOffset, maxHeight: maxHeight, metrics: metrics)
+            let (_, textFieldHeight, _) = self.calculateTextFieldMetrics(width: width - leftInset - rightInset - additionalSideInsets.right - self.leftMenuInset - self.rightSlowModeInset + self.currentTextInputBackgroundWidthOffset, actionControlsWidth: self.actionButtons.bounds.width, maxHeight: maxHeight, metrics: metrics)
             let panelHeight = self.panelHeight(textFieldHeight: textFieldHeight, metrics: metrics)
             if !self.bounds.size.height.isEqual(to: panelHeight) {
                 self.updateHeight(animated)

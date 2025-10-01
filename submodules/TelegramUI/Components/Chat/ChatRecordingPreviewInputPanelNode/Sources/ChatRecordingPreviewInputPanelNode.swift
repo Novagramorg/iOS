@@ -388,7 +388,7 @@ public final class ChatRecordingPreviewInputPanelNodeImpl: ChatInputPanelNode {
     }
     
     override public func updateLayout(width: CGFloat, leftInset: CGFloat, rightInset: CGFloat, bottomInset: CGFloat, additionalSideInsets: UIEdgeInsets, maxHeight: CGFloat, maxOverlayHeight: CGFloat, isSecondary: Bool, transition: ContainedViewLayoutTransition, interfaceState: ChatPresentationInterfaceState, metrics: LayoutMetrics, isMediaInputExpanded: Bool) -> CGFloat {
-        let waveformBackgroundFrame = CGRect(origin: CGPoint(x: 2.0, y: 2.0), size: CGSize(width: width - 2.0 * 2.0, height: 40.0 - 2.0 * 2.0))
+        let waveformBackgroundFrame = CGRect(origin: CGPoint(x: 3.0, y: 3.0), size: CGSize(width: width - 3.0 * 2.0, height: 40.0 - 3.0 * 2.0))
         
         if self.presentationInterfaceState != interfaceState {
             var updateWaveform = false
@@ -479,7 +479,7 @@ public final class ChatRecordingPreviewInputPanelNodeImpl: ChatInputPanelNode {
                         transition: .immediate
                     )
                     
-                    let waveformForegroundFrame = CGRect(origin: CGPoint(x: 2.0 + leftHandleFrame.minX, y: 2.0), size: CGSize(width: rightHandleFrame.maxX - leftHandleFrame.minX, height: 40.0 - 2.0 * 2.0))
+                    let waveformForegroundFrame = CGRect(origin: CGPoint(x: 3.0 + leftHandleFrame.minX, y: 3.0), size: CGSize(width: rightHandleFrame.maxX - leftHandleFrame.minX, height: 40.0 - 3.0 * 2.0))
                     transition.updateFrame(node: self.waveformBackgroundNodeImpl, frame: waveformForegroundFrame)
                     
                     self.waveformNode.updateClipping(minX: leftHandleFrame.minX - 19.0, maxX: rightHandleFrame.maxX - 19.0, transition: transition)
@@ -563,7 +563,7 @@ public final class ChatRecordingPreviewInputPanelNodeImpl: ChatInputPanelNode {
                         if view.superview == nil {
                             self.view.addSubview(view)
                         }
-                        view.frame = CGRect(origin: CGPoint(x: 2.0, y: 2.0), size: scrubberSize)
+                        view.frame = CGRect(origin: CGPoint(x: 3.0, y: 3.0), size: scrubberSize)
                     }
                 }
             }
