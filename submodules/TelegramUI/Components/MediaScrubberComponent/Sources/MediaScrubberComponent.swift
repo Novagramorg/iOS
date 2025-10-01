@@ -750,7 +750,7 @@ public final class MediaScrubberComponent: Component {
             case .editor, .cover:
                 fullTrackHeight = trackHeight
             case .videoMessage, .voiceMessage:
-                fullTrackHeight = 36.0
+                fullTrackHeight = 34.0
             }
             let scrubberSize = CGSize(width: availableSize.width, height: fullTrackHeight)
             
@@ -873,7 +873,7 @@ public final class MediaScrubberComponent: Component {
             transition.setFrame(view: self.cursorImageView, frame: CGRect(origin: .zero, size: self.cursorView.frame.size))
             
             if let (coverPosition, coverImage) = component.cover {
-                let imageSize = CGSize(width: 36.0, height: 36.0)
+                let imageSize = CGSize(width: 34.0, height: 34.0)
                 var animateFrame = false
                 if previousComponent?.cover?.position != coverPosition {
                     self.coverDotWrapper.isHidden = false
@@ -1135,9 +1135,9 @@ private class TrackView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelega
             if case .cover = params.style {
                 fullTrackHeight = trackHeight
             } else if case .voiceMessage = params.style {
-                fullTrackHeight = 36.0
+                fullTrackHeight = 34.0
             } else if case .videoMessage = params.style {
-                fullTrackHeight = 36.0
+                fullTrackHeight = 34.0
             } else {
                 fullTrackHeight = 33.0
             }
@@ -1213,7 +1213,7 @@ private class TrackView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelega
             framesCornerRadius = 9.0
             self.videoTransparentFramesContainer.alpha = 0.35
         case .videoMessage, .voiceMessage:
-            fullTrackHeight = 36.0
+            fullTrackHeight = 34.0
             framesCornerRadius = fullTrackHeight / 2.0
             self.videoTransparentFramesContainer.alpha = 0.5
         }
