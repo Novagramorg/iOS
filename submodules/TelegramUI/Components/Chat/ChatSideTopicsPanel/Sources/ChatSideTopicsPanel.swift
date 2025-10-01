@@ -1250,8 +1250,7 @@ public final class ChatSideTopicsPanel: Component {
                 
                 let titleText: String
                 if case .botForum = component.kind {
-                    //TODO:localize
-                    titleText = "New Chat"
+                    titleText = component.strings.Chat_InlineTopicMenu_NewForumThreadTab
                 } else {
                     titleText = component.strings.Chat_InlineTopicMenu_AllTab
                 }
@@ -1388,8 +1387,7 @@ public final class ChatSideTopicsPanel: Component {
                 
                 let titleText: String
                 if case .botForum = component.kind {
-                    //TODO:localize
-                    titleText = "New Chat"
+                    titleText = component.strings.Chat_InlineTopicMenu_NewForumThreadTab
                 } else {
                     titleText = component.strings.Chat_InlineTopicMenu_AllTab
                 }

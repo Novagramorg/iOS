@@ -1526,8 +1526,7 @@ extension ChatControllerImpl {
                             var customSubtitle: String?
                             if messageAndTopic.messageCount == 0, let peer = peerView.peers[peerView.peerId] as? TelegramUser {
                                 if peer.isForum {
-                                    //TODO:localize
-                                    customSubtitle = "topic"
+                                    customSubtitle = strongSelf.presentationData.strings.Chat_GenericForuThreadStatus
                                 }
                             }
                             
@@ -1550,8 +1549,7 @@ extension ChatControllerImpl {
                             }
                             strongSelf.state.infoAvatar = .emojiStatus(content: avatarContent, contextActionIsEnabled: infoContextActionIsEnabled)
                         } else if chatLocation.threadId == EngineMessage.newTopicThreadId {
-                            //TODO:localize
-                            strongSelf.state.chatTitleContent = .custom("New Chat", nil, false)
+                            strongSelf.state.chatTitleContent = .custom(strongSelf.presentationData.strings.Chat_MessageHeaderBotNewThread, nil, false)
                             strongSelf.state.infoAvatar = nil
                         } else {
                             strongSelf.state.chatTitleContent = .replyThread(type: replyThreadType, count: count)

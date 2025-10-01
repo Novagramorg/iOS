@@ -339,8 +339,7 @@ extension ChatControllerImpl {
         
         var items: [ContextMenuItem] = []
         
-        //TODO:localize
-        items.append(.action(ContextMenuActionItem(text: "Open Profile", icon: { theme in
+        items.append(.action(ContextMenuActionItem(text: strings.Conversation_ContextMenuOpenProfile, icon: { theme in
             return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Info"), color: theme.contextMenu.primaryColor)
         }, action: { [weak self] _, f in
             f(.default)

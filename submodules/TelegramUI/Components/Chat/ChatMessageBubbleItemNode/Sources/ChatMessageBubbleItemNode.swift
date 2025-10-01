@@ -2887,7 +2887,6 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                 ),
             ]
             
-            //TODO:localize
             let (minWidth, buttonsLayout) = actionButtonsLayout(
                 item.context,
                 item.presentationData.theme,
@@ -2897,7 +2896,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                 ReplyMarkupMessageAttribute(
                     rows: [
                         ReplyMarkupRow(buttons: [
-                            ReplyMarkupButton(title: "Continue last thread", titleWhenForwarded: nil, action: .callback(requiresPassword: false, data: button))
+                            ReplyMarkupButton(title: item.presentationData.strings.Chat_MessageContinueLastThread, titleWhenForwarded: nil, action: .callback(requiresPassword: false, data: button))
                         ])
                     ],
                     flags: [],
