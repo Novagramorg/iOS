@@ -2145,8 +2145,8 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             if case let .media(_, expanded, _) = self.chatPresentationInterfaceState.inputMode, expanded != nil {
                 additionalOffset = 80.0
             }
-            if let inputPanelSize = inputPanelSize {
-                inputPanelHideOffset += -inputPanelSize.height - additionalOffset
+            if let _ = inputPanelSize {
+                inputPanelHideOffset += -40.0 - additionalOffset
             }
             if let accessoryPanelSize = accessoryPanelSize {
                 inputPanelHideOffset += -accessoryPanelSize.height - additionalOffset

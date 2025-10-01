@@ -70,7 +70,12 @@ final class SendButton: HighlightTrackingButton {
         size: CGSize,
         transition: ComponentTransition
     ) {
-        let innerSize = CGSize(width: size.width - 3.0 * 2.0, height: size.height - 3.0 * 2.0)
+        let innerSize: CGSize
+        if size.height == 40.0 {
+            innerSize = CGSize(width: size.width - 3.0 * 2.0, height: size.height - 3.0 * 2.0)
+        } else {
+            innerSize = CGSize(width: isAnimatedIn ? 38.0 : size.width - 5.0 * 2.0, height: 33.0)
+        }
         let containerFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((size.width - innerSize.width) * 0.5), y: floorToScreenPixels((size.height - innerSize.height) * 0.5)), size: innerSize)
         transition.setFrame(view: self.containerView, frame: containerFrame)
         transition.setCornerRadius(layer: self.containerView.layer, cornerRadius: innerSize.height * 0.5)
