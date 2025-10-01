@@ -463,6 +463,8 @@ public final class GifPagerContentComponent: Component {
             }
         }
         
+        private let clippingView: UIView
+        
         private let shimmerHostView: PortalSourceView
         private let standaloneShimmerEffect: StandaloneShimmerEffect
         
@@ -487,6 +489,9 @@ public final class GifPagerContentComponent: Component {
         private var currentLoadMoreToken: String?
         
         override init(frame: CGRect) {
+            self.clippingView = UIView()
+            self.clippingView.clipsToBounds = true
+            
             self.shimmerHostView = PortalSourceView()
             self.standaloneShimmerEffect = StandaloneShimmerEffect()
             
@@ -508,8 +513,10 @@ public final class GifPagerContentComponent: Component {
             
             super.init(frame: frame)
             
+            self.addSubview(self.clippingView)
+            
             self.shimmerHostView.alpha = 0.0
-            self.addSubview(self.shimmerHostView)
+            self.clippingView.addSubview(self.shimmerHostView)
             
             self.scrollView.delaysContentTouches = false
             if #available(iOSApplicationExtension 11.0, iOS 11.0, *) {
@@ -524,10 +531,10 @@ public final class GifPagerContentComponent: Component {
             self.scrollView.delegate = self
             
             self.scrollClippingView.addSubview(self.scrollView)
-            self.addSubview(self.scrollClippingView)
+            self.clippingView.addSubview(self.scrollClippingView)
             
             self.scrollView.addSubview(self.placeholdersContainerView)
-            self.addSubview(self.searchHeaderContainer)
+            self.clippingView.addSubview(self.searchHeaderContainer)
             
             self.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(self.tapGesture(_:))))
             
@@ -873,6 +880,8 @@ public final class GifPagerContentComponent: Component {
                     externalTintMaskContainer.addSubview(self.mirrorSearchHeaderContainer)
                 }
             }
+            
+            transition.setFrame(view: self.clippingView, frame: CGRect(origin: CGPoint(), size: CGSize(width: backgroundFrame.width, height: max(0.0, backgroundFrame.height - bottomPanelHeight))))
         }
         
         func update(component: GifPagerContentComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<EnvironmentType>, transition: ComponentTransition) -> CGSize {

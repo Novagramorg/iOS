@@ -112,7 +112,7 @@ private func calculateTextFieldRealInsets(presentationInterfaceState: ChatPresen
     var right: CGFloat = 0.0
     right += max(0.0, accessoryButtonsWidth - 14.0)
     if actionControlsWidth != 0.0 {
-        right += actionControlsWidth
+        right += actionControlsWidth - 14.0
     }
     
     return UIEdgeInsets(top: 4.5 + top, left: 0.0, bottom: 5.5 + bottom, right: right)
@@ -1876,7 +1876,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         
         var leftInset = leftInset
         
-        var textInputBackgroundWidthOffset: CGFloat = 0.0
+        let textInputBackgroundWidthOffset: CGFloat = 0.0
         var attachmentButtonX: CGFloat = hideOffset.x + leftInset + leftMenuInset + 8.0
         if !displayMediaButton || mediaRecordingState != nil {
             attachmentButtonX = -48.0
@@ -2241,11 +2241,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         
         leftInset += leftMenuInset
         
-        var composeButtonsOffset: CGFloat = 0.0
-        if self.extendedSearchLayout {
-            composeButtonsOffset = 40.0
-            textInputBackgroundWidthOffset = 36.0
-        }
+        let composeButtonsOffset: CGFloat = 0.0
         
         self.updateCounterTextNode(transition: transition)
 
@@ -2493,7 +2489,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         
         var nextButtonTopRight = CGPoint(x: textInputContainerBackgroundFrame.width - accessoryButtonInset - rightSlowModeInset - actionButtonsSize.width + (inputHasText ? 4.0 : (8.0 + 1.0)), y: textInputContainerBackgroundFrame.height - minimalInputHeight)
         if self.extendedSearchLayout {
-            nextButtonTopRight.x -= 26.0
+            nextButtonTopRight.x += 8.0 + 1.0
         }
         for (item, button) in self.accessoryItemButtons.reversed() {
             let buttonSize = CGSize(width: button.buttonWidth, height: minimalInputHeight)
