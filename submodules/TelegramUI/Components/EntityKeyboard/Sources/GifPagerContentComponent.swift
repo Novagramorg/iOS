@@ -867,7 +867,7 @@ public final class GifPagerContentComponent: Component {
             }
         }
         
-        public func pagerUpdateBackground(backgroundFrame: CGRect, topPanelHeight: CGFloat, externalTintMaskContainer: UIView?, transition: ComponentTransition) {
+        public func pagerUpdateBackground(backgroundFrame: CGRect, topPanelHeight: CGFloat, bottomPanelHeight: CGFloat, externalTintMaskContainer: UIView?, transition: ComponentTransition) {
             if let externalTintMaskContainer {
                 if self.mirrorSearchHeaderContainer.superview !== externalTintMaskContainer {
                     externalTintMaskContainer.addSubview(self.mirrorSearchHeaderContainer)
