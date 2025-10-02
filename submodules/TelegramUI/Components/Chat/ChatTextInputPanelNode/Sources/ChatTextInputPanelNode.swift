@@ -234,7 +234,8 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     
     public let textInputBackgroundNode: ASImageNode
     public var textInputBackgroundTapRecognizer: TouchDownGestureRecognizer?
-    public let actionButtons: ChatTextInputActionButtonsNode
+    public let mediaActionButtons: ChatTextInputActionButtonsNode
+    public let sendActionButtons: ChatTextInputActionButtonsNode
     private let slowModeButton: BoostSlowModeButton
     public var mediaRecordingAccessibilityArea: AccessibilityAreaNode?
     private let counterTextNode: ImmediateTextNode
@@ -345,12 +346,13 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     
     override public var context: AccountContext? {
         didSet {
-            self.actionButtons.micButton.statusBarHost = self.context?.sharedContext.mainWindow?.statusBarHost
+            self.sendActionButtons.micButton.statusBarHost = self.context?.sharedContext.mainWindow?.statusBarHost
+            self.mediaActionButtons.micButton.statusBarHost = self.context?.sharedContext.mainWindow?.statusBarHost
         }
     }
 
     public var micButton: ChatTextInputMediaRecordingButton? {
-        return self.actionButtons.micButton
+        return self.mediaActionButtons.micButton
     }
     
     private let statusDisposable = MetaDisposable()
@@ -474,7 +476,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     
     private let textInputViewInternalInsets: UIEdgeInsets
     private let accessoryButtonSpacing: CGFloat = 0.0
-    private let accessoryButtonInset: CGFloat = 6.0
+    private let accessoryButtonInset: CGFloat = 4.0
     
     private var spoilersRevealed = false
     
@@ -492,7 +494,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         self.presentationInterfaceState = presentationInterfaceState
         self.presentationContext = presentationContext
         
-        self.textInputViewInternalInsets = UIEdgeInsets(top: 5.0, left: 16.0, bottom: 4.0, right: 15.0)
+        self.textInputViewInternalInsets = UIEdgeInsets(top: 5.0, left: 12.0, bottom: 4.0, right: 11.0)
 
         var hasSpoilers = true
         var hasQuotes = true
@@ -576,7 +578,15 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         self.searchLayoutClearButton = HighlightTrackingButton()
         self.searchLayoutClearButtonIcon = GlassBackgroundView.ContentImageView()
         
-        self.actionButtons = ChatTextInputActionButtonsNode(context: context, presentationInterfaceState: presentationInterfaceState, presentationContext: presentationContext, presentController: presentController)
+        self.sendActionButtons = ChatTextInputActionButtonsNode(context: context, presentationInterfaceState: presentationInterfaceState, presentationContext: presentationContext, presentController: presentController)
+        self.sendActionButtons.micButtonBackgroundView.alpha = 0.0
+        self.sendActionButtons.micButton.alpha = 0.0
+        self.sendActionButtons.micButtonTintMaskView.alpha = 0.0
+        self.sendActionButtons.expandMediaInputButton.alpha = 0.0
+        
+        self.mediaActionButtons = ChatTextInputActionButtonsNode(context: context, presentationInterfaceState: presentationInterfaceState, presentationContext: presentationContext, presentController: presentController)
+        self.mediaActionButtons.sendContainerNode.alpha = 0.0
+        
         self.counterTextNode = ImmediateTextNode()
         self.counterTextNode.textAlignment = .center
         
@@ -685,11 +695,11 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         }
         self.attachmentButtonDisabledNode.addTarget(self, action: #selector(self.attachmentButtonPressed), forControlEvents: .touchUpInside)
   
-        self.actionButtons.sendButtonLongPressed = { [weak self] node, gesture in
+        self.sendActionButtons.sendButtonLongPressed = { [weak self] node, gesture in
             self?.interfaceInteraction?.displaySendMessageOptions(node, gesture)
         }
         
-        self.actionButtons.micButton.recordingDisabled = { [weak self] in
+        self.mediaActionButtons.micButton.recordingDisabled = { [weak self] in
             if let strongSelf = self {
                 if strongSelf.presentationInterfaceState?.voiceMessagesAvailable == false {
                     self?.interfaceInteraction?.displayRestrictedInfo(.premiumVoiceMessages, .tooltip)
@@ -699,7 +709,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             }
         }
         
-        self.actionButtons.micButton.beginRecording = { [weak self] in
+        self.mediaActionButtons.micButton.beginRecording = { [weak self] in
             if let strongSelf = self, let presentationInterfaceState = strongSelf.presentationInterfaceState, let interfaceInteraction = strongSelf.interfaceInteraction {
                 let isVideo: Bool
                 switch presentationInterfaceState.interfaceState.mediaRecordingMode {
@@ -711,7 +721,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 interfaceInteraction.beginMediaRecording(isVideo)
             }
         }
-        self.actionButtons.micButton.endRecording = { [weak self] sendMedia in
+        self.mediaActionButtons.micButton.endRecording = { [weak self] sendMedia in
             if let strongSelf = self, let interfaceState = strongSelf.presentationInterfaceState, let interfaceInteraction = strongSelf.interfaceInteraction {
                 if let _ = interfaceState.inputTextPanelState.mediaRecordingState {
                     if sendMedia {
@@ -726,44 +736,45 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 strongSelf.tooltipController?.dismiss()
             }
         }
-        self.actionButtons.micButton.offsetRecordingControls = { [weak self] in
+        self.mediaActionButtons.micButton.offsetRecordingControls = { [weak self] in
             if let strongSelf = self, let presentationInterfaceState = strongSelf.presentationInterfaceState {
                 if let (width, leftInset, rightInset, bottomInset, additionalSideInsets, maxHeight, maxOverlayHeight, metrics, isSecondary, isMediaInputExpanded) = strongSelf.validLayout {
                     let _ = strongSelf.updateLayout(width: width, leftInset: leftInset, rightInset: rightInset, bottomInset: bottomInset, additionalSideInsets: additionalSideInsets, maxHeight: maxHeight, maxOverlayHeight: maxOverlayHeight, isSecondary: isSecondary, transition: .immediate, interfaceState: presentationInterfaceState, metrics: metrics, isMediaInputExpanded: isMediaInputExpanded)
                 }
             }
         }
-        self.actionButtons.micButton.updateCancelTranslation = { [weak self] in
+        self.mediaActionButtons.micButton.updateCancelTranslation = { [weak self] in
             if let strongSelf = self, let presentationInterfaceState = strongSelf.presentationInterfaceState {
                 if let (width, leftInset, rightInset, bottomInset, additionalSideInsets, maxHeight, maxOverlayHeight, metrics, isSecondary, isMediaInputExpanded) = strongSelf.validLayout {
                     let _ = strongSelf.updateLayout(width: width, leftInset: leftInset, rightInset: rightInset, bottomInset: bottomInset, additionalSideInsets: additionalSideInsets, maxHeight: maxHeight, maxOverlayHeight: maxOverlayHeight, isSecondary: isSecondary, transition: .immediate, interfaceState: presentationInterfaceState, metrics: metrics, isMediaInputExpanded: isMediaInputExpanded)
                 }
             }
         }
-        self.actionButtons.micButton.stopRecording = { [weak self] in
+        self.mediaActionButtons.micButton.stopRecording = { [weak self] in
             if let strongSelf = self, let interfaceInteraction = strongSelf.interfaceInteraction {
                 interfaceInteraction.stopMediaRecording()
                 
                 strongSelf.tooltipController?.dismiss()
             }
         }
-        self.actionButtons.micButton.updateLocked = { [weak self] _ in
+        self.mediaActionButtons.micButton.updateLocked = { [weak self] _ in
             if let strongSelf = self, let interfaceInteraction = strongSelf.interfaceInteraction {
                 interfaceInteraction.lockMediaRecording()
             }
         }
-        self.actionButtons.micButton.switchMode = { [weak self] in
+        self.mediaActionButtons.micButton.switchMode = { [weak self] in
             if let strongSelf = self, let interfaceInteraction = strongSelf.interfaceInteraction {
                 interfaceInteraction.switchMediaRecordingMode()
             }
         }
         
-        self.actionButtons.sendButton.addTarget(self, action: #selector(self.sendButtonPressed), forControlEvents: .touchUpInside)
-        self.actionButtons.sendContainerNode.alpha = 0.0
-        self.actionButtons.updateAccessibility()
+        self.sendActionButtons.sendButton.addTarget(self, action: #selector(self.sendButtonPressed), forControlEvents: .touchUpInside)
+        self.sendActionButtons.sendContainerNode.alpha = 0.0
+        self.sendActionButtons.updateAccessibility()
+        self.mediaActionButtons.updateAccessibility()
         
-        self.actionButtons.expandMediaInputButton.addTarget(self, action: #selector(self.expandButtonPressed), for: .touchUpInside)
-        self.actionButtons.expandMediaInputButton.alpha = 0.0
+        self.mediaActionButtons.expandMediaInputButton.addTarget(self, action: #selector(self.expandButtonPressed), for: .touchUpInside)
+        self.mediaActionButtons.expandMediaInputButton.alpha = 0.0
         
         self.searchLayoutClearButton.highligthedChanged = { [weak self] highlighted in
             guard let self else {
@@ -802,7 +813,8 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         
         self.clippingNode.addSubnode(self.startButton)
           
-        self.clippingNode.addSubnode(self.actionButtons)
+        self.clippingNode.addSubnode(self.sendActionButtons)
+        self.clippingNode.addSubnode(self.mediaActionButtons)
         self.clippingNode.addSubnode(self.counterTextNode)
         
         self.clippingNode.addSubnode(self.slowModeButton)
@@ -942,7 +954,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         
         if let presentationInterfaceState = self.presentationInterfaceState {
             refreshChatTextInputTypingAttributes(textInputNode.textView, theme: presentationInterfaceState.theme, baseFontSize: baseFontSize)
-            textInputNode.textContainerInset = calculateTextFieldRealInsets(presentationInterfaceState: presentationInterfaceState, accessoryButtonsWidth: accessoryButtonsWidth, actionControlsWidth: self.actionButtons.frame.width)
+            textInputNode.textContainerInset = calculateTextFieldRealInsets(presentationInterfaceState: presentationInterfaceState, accessoryButtonsWidth: accessoryButtonsWidth, actionControlsWidth: self.sendActionButtons.frame.width)
         }
         
         if let textInputNodeLayout = self.textInputNodeLayout {
@@ -1040,7 +1052,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         return max(33.0, maxHeight - (textFieldInsets.top + textFieldInsets.bottom + self.textInputViewInternalInsets.top + self.textInputViewInternalInsets.bottom))
     }
     
-    private func calculateTextFieldMetrics(width: CGFloat, actionControlsWidth: CGFloat, maxHeight: CGFloat, metrics: LayoutMetrics) -> (accessoryButtonsWidth: CGFloat, textFieldHeight: CGFloat, isOverflow: Bool) {
+    private func calculateTextFieldMetrics(width: CGFloat, sendActionControlsWidth: CGFloat, maxHeight: CGFloat, metrics: LayoutMetrics) -> (accessoryButtonsWidth: CGFloat, textFieldHeight: CGFloat, isOverflow: Bool) {
         let maxHeight = max(maxHeight, 40.0)
         
         let textFieldInsets = self.textFieldInsets(metrics: metrics)
@@ -1072,7 +1084,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         }
         
         if let presentationInterfaceState = self.presentationInterfaceState {
-            textInputViewRealInsets = calculateTextFieldRealInsets(presentationInterfaceState: presentationInterfaceState, accessoryButtonsWidth: accessoryButtonsWidth, actionControlsWidth: actionControlsWidth)
+            textInputViewRealInsets = calculateTextFieldRealInsets(presentationInterfaceState: presentationInterfaceState, accessoryButtonsWidth: accessoryButtonsWidth, actionControlsWidth: sendActionControlsWidth)
         }
         
         var textFieldHeight: CGFloat
@@ -1221,8 +1233,8 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     override public func updateAbsoluteRect(_ rect: CGRect, within containerSize: CGSize, transition: ContainedViewLayoutTransition) {
         self.absoluteRect = (rect, containerSize)
 
-        if !self.actionButtons.frame.width.isZero {
-            self.actionButtons.updateAbsoluteRect(CGRect(origin: rect.origin.offsetBy(dx: self.actionButtons.frame.minX, dy: self.actionButtons.frame.minY), size: self.actionButtons.frame.size), within: containerSize, transition: transition)
+        if !self.sendActionButtons.frame.width.isZero {
+            self.sendActionButtons.updateAbsoluteRect(CGRect(origin: rect.origin.offsetBy(dx: self.sendActionButtons.frame.minX, dy: self.sendActionButtons.frame.minY), size: self.sendActionButtons.frame.size), within: containerSize, transition: transition)
         }
         
         let absoluteFrame = self.startButton.view.convert(self.startButton.bounds, to: nil)
@@ -1624,7 +1636,8 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                     self.attachmentButtonIcon.tintColor = interfaceState.theme.chat.inputPanel.panelControlColor
                 }
                
-                self.actionButtons.updateTheme(theme: interfaceState.theme, wallpaper: interfaceState.chatWallpaper)
+                self.sendActionButtons.updateTheme(theme: interfaceState.theme, wallpaper: interfaceState.chatWallpaper)
+                self.mediaActionButtons.updateTheme(theme: interfaceState.theme, wallpaper: interfaceState.chatWallpaper)
                 
                 self.searchLayoutClearButtonIcon.image = PresentationResourcesChat.chatInputTextFieldClearImage(interfaceState.theme)
                 self.searchLayoutClearButtonIcon.tintColor = interfaceState.theme.chat.inputPanel.inputControlColor
@@ -1742,7 +1755,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 
                 updatedPlaceholder = placeholder
                 
-                self.actionButtons.sendButtonLongPressEnabled = !isScheduledMessages
+                self.sendActionButtons.sendButtonLongPressEnabled = !isScheduledMessages
             }
             
             var sendButtonHasApplyIcon = interfaceState.interfaceState.editMessage != nil
@@ -1760,12 +1773,12 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             }
             
             if updateSendButtonIcon {
-                if !self.actionButtons.animatingSendButton {
-                    let imageNode = self.actionButtons.sendButton.imageNode
+                if !self.sendActionButtons.animatingSendButton {
+                    let imageNode = self.sendActionButtons.sendButton.imageNode
                     
-                    if transition.isAnimated && !self.actionButtons.sendContainerNode.alpha.isZero && self.actionButtons.sendButton.layer.animation(forKey: "opacity") == nil, let previousImage = imageNode.image {
+                    if transition.isAnimated && !self.sendActionButtons.sendContainerNode.alpha.isZero && self.sendActionButtons.sendButton.layer.animation(forKey: "opacity") == nil, let previousImage = imageNode.image {
                         let tempView = UIImageView(image: previousImage)
-                        self.actionButtons.sendButton.view.addSubview(tempView)
+                        self.sendActionButtons.sendButton.view.addSubview(tempView)
                         tempView.frame = imageNode.frame
                         tempView.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2, removeOnCompletion: false, completion: { [weak tempView] _ in
                             tempView?.removeFromSuperview()
@@ -1775,14 +1788,14 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                         imageNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
                         imageNode.layer.animateScale(from: 0.2, to: 1.0, duration: 0.2)
                     }
-                    self.actionButtons.sendButtonHasApplyIcon = sendButtonHasApplyIcon
-                    if self.actionButtons.sendButtonHasApplyIcon {
-                        self.actionButtons.sendButton.setImage(PresentationResourcesChat.chatInputPanelApplyIconImage(interfaceState.theme), for: [])
+                    self.sendActionButtons.sendButtonHasApplyIcon = sendButtonHasApplyIcon
+                    if self.sendActionButtons.sendButtonHasApplyIcon {
+                        self.sendActionButtons.sendButton.setImage(PresentationResourcesChat.chatInputPanelApplyIconImage(interfaceState.theme), for: [])
                     } else {
                         if isScheduledMessages {
-                            self.actionButtons.sendButton.setImage(PresentationResourcesChat.chatInputPanelScheduleButtonImage(interfaceState.theme), for: [])
+                            self.sendActionButtons.sendButton.setImage(PresentationResourcesChat.chatInputPanelScheduleButtonImage(interfaceState.theme), for: [])
                         } else {
-                            self.actionButtons.sendButton.setImage(PresentationResourcesChat.chatInputPanelSendIconImage(interfaceState.theme), for: [])
+                            self.sendActionButtons.sendButton.setImage(PresentationResourcesChat.chatInputPanelSendIconImage(interfaceState.theme), for: [])
                         }
                     }
                 }
@@ -1882,34 +1895,15 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             attachmentButtonX = -48.0
         }
         
-        self.actionButtons.micButton.updateMode(mode: interfaceState.interfaceState.mediaRecordingMode, animated: transition.isAnimated)
+        self.mediaActionButtons.micButton.updateMode(mode: interfaceState.interfaceState.mediaRecordingMode, animated: transition.isAnimated)
         
-        var hideMicButton = false
-        if inputHasText || self.extendedSearchLayout {
-            hideMicButton = true
-        }
-        if let mediaRecordingState {
-            switch mediaRecordingState {
-            case .audio:
-                break
-            case let .video(status, _):
-                switch status {
-                case .recording:
-                    break
-                case .editing:
-                    hideMicButton = true
-                }
-            case .waitingForPreview:
-                break
-            }
-        }
-        
-        self.updateActionButtons(hasText: inputHasText, hideMicButton: hideMicButton, animated: transition.isAnimated)
+        self.updateActionButtons(hasText: inputHasText, transition: transition)
         
         var actionButtonsSize = CGSize(width: 40.0, height: 40.0)
+        var sendActionButtonsSize = CGSize(width: 40.0, height: 40.0)
         if let presentationInterfaceState = self.presentationInterfaceState {
             var showTitle = false
-            if !self.actionButtons.sendContainerNode.alpha.isZero {
+            if !self.sendActionButtons.sendContainerNode.alpha.isZero {
                 if let _ = presentationInterfaceState.sendPaidMessageStars {
                     showTitle = true
                 } else if case let .customChatContents(customChatContents) = interfaceState.subject {
@@ -1919,11 +1913,12 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                     }
                 }
             }
-            actionButtonsSize = self.actionButtons.updateLayout(size: CGSize(width: 40.0, height: minimalHeight), isMediaInputExpanded: isMediaInputExpanded, showTitle: showTitle, currentMessageEffectId: presentationInterfaceState.interfaceState.sendMessageEffect, transition: transition, interfaceState: presentationInterfaceState)
+            sendActionButtonsSize = self.sendActionButtons.updateLayout(size: CGSize(width: 40.0, height: minimalHeight), isMediaInputExpanded: isMediaInputExpanded, showTitle: showTitle, currentMessageEffectId: presentationInterfaceState.interfaceState.sendMessageEffect, transition: transition, interfaceState: presentationInterfaceState)
+            actionButtonsSize = self.mediaActionButtons.updateLayout(size: CGSize(width: 40.0, height: minimalHeight), isMediaInputExpanded: isMediaInputExpanded, showTitle: false, currentMessageEffectId: presentationInterfaceState.interfaceState.sendMessageEffect, transition: transition, interfaceState: presentationInterfaceState)
         }
         
         let baseWidth = width - leftInset - leftMenuInset - rightInset - rightSlowModeInset
-        let (accessoryButtonsWidth, textFieldHeight, isTextFieldOverflow) = self.calculateTextFieldMetrics(width: baseWidth, actionControlsWidth: actionButtonsSize.width, maxHeight: maxHeight, metrics: metrics)
+        let (accessoryButtonsWidth, textFieldHeight, isTextFieldOverflow) = self.calculateTextFieldMetrics(width: baseWidth, sendActionControlsWidth: sendActionButtonsSize.width, maxHeight: maxHeight, metrics: metrics)
         var panelHeight = self.panelHeight(textFieldHeight: textFieldHeight, metrics: metrics)
         if displayBotStartButton {
             panelHeight += 27.0
@@ -1986,6 +1981,10 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         if additionalSideInsets.right > 0.0 {
             textFieldInsets.right += additionalSideInsets.right / 3.0
         }
+        if inputHasText || self.extendedSearchLayout || hasMediaDraft {
+        } else {
+            textFieldInsets.right = 54.0
+        }
         if mediaRecordingState != nil {
             textFieldInsets.left = 8.0
         }
@@ -2042,29 +2041,29 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             
             switch mediaRecordingState {
             case let .audio(recorder, isLocked):
-                let hadAudioRecorder = self.actionButtons.micButton.audioRecorder != nil
+                let hadAudioRecorder = self.mediaActionButtons.micButton.audioRecorder != nil
                 if !hadAudioRecorder, isLocked {
-                    self.actionButtons.micButton.lock()
+                    self.mediaActionButtons.micButton.lock()
                 }
-                self.actionButtons.micButton.audioRecorder = recorder
+                self.mediaActionButtons.micButton.audioRecorder = recorder
                 audioRecordingTimeNode.audioRecorder = recorder
             case let .video(status, _):
-                let hadVideoRecorder = self.actionButtons.micButton.videoRecordingStatus != nil
+                let hadVideoRecorder = self.mediaActionButtons.micButton.videoRecordingStatus != nil
                 if !hadVideoRecorder, isLocked {
-                    self.actionButtons.micButton.lock()
+                    self.mediaActionButtons.micButton.lock()
                 }
                 switch status {
                 case let .recording(recordingStatus):
                     audioRecordingTimeNode.videoRecordingStatus = recordingStatus
-                    self.actionButtons.micButton.videoRecordingStatus = recordingStatus
+                    self.mediaActionButtons.micButton.videoRecordingStatus = recordingStatus
                 case .editing:
                     audioRecordingTimeNode.videoRecordingStatus = nil
-                    self.actionButtons.micButton.videoRecordingStatus = nil
+                    self.mediaActionButtons.micButton.videoRecordingStatus = nil
                     hideInfo = true
                 }
             case .waitingForPreview:
                 Queue.mainQueue().after(0.5, {
-                    self.actionButtons.micButton.audioRecorder = nil
+                    self.mediaActionButtons.micButton.audioRecorder = nil
                 })
             }
             
@@ -2075,7 +2074,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             
             let cancelTransformThreshold: CGFloat = 8.0
             
-            let indicatorTranslation = max(0.0, self.actionButtons.micButton.cancelTranslation - cancelTransformThreshold)
+            let indicatorTranslation = max(0.0, self.mediaActionButtons.micButton.cancelTranslation - cancelTransformThreshold)
             
             let audioRecordingCancelIndicatorFrame = CGRect(
                 origin: CGPoint(
@@ -2083,7 +2082,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                     y: (accessoryPanel != nil ? 52.0 : 0.0) + panelHeight - minimalHeight + floor((minimalHeight - audioRecordingCancelIndicator.bounds.size.height) / 2.0)),
                 size: audioRecordingCancelIndicator.bounds.size)
             audioRecordingCancelIndicator.frame = audioRecordingCancelIndicatorFrame
-            if self.actionButtons.micButton.cancelTranslation > cancelTransformThreshold {
+            if self.mediaActionButtons.micButton.cancelTranslation > cancelTransformThreshold {
                 let progress: CGFloat = max(0.0, min(1.0, (audioRecordingCancelIndicatorFrame.minX - 100.0) / 10.0))
                 audioRecordingCancelIndicator.alpha = progress
             } else {
@@ -2097,7 +2096,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             
             audioRecordingCancelIndicator.updateIsDisplayingCancel(isLocked, animated: !animateCancelSlideIn)
             
-            if isLocked || self.actionButtons.micButton.cancelTranslation > cancelTransformThreshold {
+            if isLocked || self.mediaActionButtons.micButton.cancelTranslation > cancelTransformThreshold {
                 var deltaOffset: CGFloat = 0.0
                 if audioRecordingCancelIndicator.layer.animation(forKey: "slide_juggle") != nil, let presentationLayer = audioRecordingCancelIndicator.layer.presentation() {
                     let translation = CGPoint(x: presentationLayer.transform.m41, y: presentationLayer.transform.m42)
@@ -2187,8 +2186,8 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 audioRecordingCancelIndicator.layer.animateAlpha(from: CGFloat(audioRecordingCancelIndicator.layer.presentation()?.opacity ?? 1), to: 0, duration: 0.15, delay: 0, removeOnCompletion: false)
             }
         } else if self.audioRecordingInfoContainerNode != nil {
-            self.actionButtons.micButton.audioRecorder = nil
-            self.actionButtons.micButton.videoRecordingStatus = nil
+            self.mediaActionButtons.micButton.audioRecorder = nil
+            self.mediaActionButtons.micButton.videoRecordingStatus = nil
             transition.updateAlpha(layer: self.textInputBackgroundNode.layer, alpha: 1.0)
             
             if let audioRecordingInfoContainerNode = self.audioRecordingInfoContainerNode {
@@ -2487,9 +2486,11 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             self.slowmodePlaceholderNode?.isHidden = true
         }
         
-        var nextButtonTopRight = CGPoint(x: textInputContainerBackgroundFrame.width - accessoryButtonInset - rightSlowModeInset - actionButtonsSize.width + (inputHasText ? 4.0 : (8.0 + 1.0)), y: textInputContainerBackgroundFrame.height - minimalInputHeight)
+        var nextButtonTopRight = CGPoint(x: textInputContainerBackgroundFrame.width - accessoryButtonInset, y: textInputContainerBackgroundFrame.height - minimalInputHeight)
         if self.extendedSearchLayout {
-            nextButtonTopRight.x += 8.0 + 1.0
+            nextButtonTopRight.x -= 46.0
+        } else if inputHasText || hasMediaDraft {
+            nextButtonTopRight.x -= sendActionButtonsSize.width
         }
         for (item, button) in self.accessoryItemButtons.reversed() {
             let buttonSize = CGSize(width: button.buttonWidth, height: minimalInputHeight)
@@ -2604,10 +2605,26 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             }
         }
         
-        let actionButtonsFrame = CGRect(origin: CGPoint(x: hideOffset.x + width - rightInset - 8.0 - actionButtonsSize.width + composeButtonsOffset, y: textInputContainerBackgroundFrame.maxY - actionButtonsSize.height), size: actionButtonsSize)
-        transition.updateFrame(node: self.actionButtons, frame: actionButtonsFrame)
+        var actionButtonsFrame = CGRect(origin: CGPoint(x: textInputContainerBackgroundFrame.maxX + 6.0, y: textInputContainerBackgroundFrame.maxY - actionButtonsSize.height), size: actionButtonsSize)
+        if inputHasText || self.extendedSearchLayout {
+            actionButtonsFrame.origin.x = width + 8.0
+        }
+        transition.updateFrame(node: self.mediaActionButtons, frame: actionButtonsFrame)
         if let (rect, containerSize) = self.absoluteRect {
-            self.actionButtons.updateAbsoluteRect(CGRect(x: rect.origin.x + actionButtonsFrame.origin.x, y: rect.origin.y + actionButtonsFrame.origin.y, width: actionButtonsFrame.width, height: actionButtonsFrame.height), within: containerSize, transition: transition)
+            self.mediaActionButtons.updateAbsoluteRect(CGRect(x: rect.origin.x + actionButtonsFrame.origin.x, y: rect.origin.y + actionButtonsFrame.origin.y, width: actionButtonsFrame.width, height: actionButtonsFrame.height), within: containerSize, transition: transition)
+        }
+        
+        var sendActionButtonsFrame = CGRect(origin: CGPoint(x: textInputContainerBackgroundFrame.maxX - sendActionButtonsSize.width, y: textInputContainerBackgroundFrame.maxY - sendActionButtonsSize.height), size: sendActionButtonsSize)
+        if inputHasText || hasMediaDraft {
+            transition.updateTransformScale(node: self.sendActionButtons, scale: CGPoint(x: 1.0, y: 1.0))
+        } else {
+            sendActionButtonsFrame.origin.x += (sendActionButtonsSize.width - 3.0 * 2.0) * 0.5 - 3.0
+            transition.updateTransformScale(node: self.sendActionButtons, scale: CGPoint(x: 0.001, y: 0.001))
+        }
+        transition.updatePosition(node: self.sendActionButtons, position: sendActionButtonsFrame.center)
+        transition.updateBounds(node: self.sendActionButtons, bounds: CGRect(origin: CGPoint(), size: sendActionButtonsFrame.size))
+        if let (rect, containerSize) = self.absoluteRect {
+            self.sendActionButtons.updateAbsoluteRect(CGRect(x: rect.origin.x + sendActionButtonsFrame.origin.x, y: rect.origin.y + sendActionButtonsFrame.origin.y, width: sendActionButtonsFrame.width, height: sendActionButtonsFrame.height), within: containerSize, transition: transition)
         }
         
         let slowModeButtonFrame = CGRect(origin: CGPoint(x: hideOffset.x + width - rightInset - 5.0 - slowModeButtonSize.width + composeButtonsOffset, y: hideOffset.y + panelHeight - minimalHeight + 6.0), size: slowModeButtonSize)
@@ -2631,9 +2648,9 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                     }
                     return true
                 }
-                self.clippingNode.insertSubnode(mediaRecordingAccessibilityArea, aboveSubnode: self.actionButtons)
+                self.clippingNode.insertSubnode(mediaRecordingAccessibilityArea, aboveSubnode: self.mediaActionButtons)
             }
-            self.actionButtons.isAccessibilityElement = false
+            self.mediaActionButtons.isAccessibilityElement = false
             let size: CGFloat = 120.0
             mediaRecordingAccessibilityArea.frame = CGRect(origin: CGPoint(x: actionButtonsFrame.midX - size / 2.0, y: actionButtonsFrame.midY - size / 2.0), size: CGSize(width: size, height: size))
             if added {
@@ -2643,17 +2660,18 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 })
             }
         } else {
-            self.actionButtons.isAccessibilityElement = true
+            self.mediaActionButtons.isAccessibilityElement = true
             if let mediaRecordingAccessibilityArea = self.mediaRecordingAccessibilityArea {
                 self.mediaRecordingAccessibilityArea = nil
                 mediaRecordingAccessibilityArea.removeFromSupernode()
             }
         }
         
-        let searchLayoutClearButtonSize = CGSize(width: 40.0, height: 40.0)
-        self.actionButtons.micButton.isHidden = additionalSideInsets.right > 0.0
+        let searchLayoutClearButtonSize = CGSize(width: 46.0, height: 40.0)
+        self.mediaActionButtons.micButton.isHidden = additionalSideInsets.right > 0.0
+        self.mediaActionButtons.micButtonTintMaskView.isHidden = self.mediaActionButtons.micButton.isHidden
 
-        let clearButtonFrame = CGRect(origin: CGPoint(x: textInputContainerBackgroundFrame.width - searchLayoutClearButtonSize.width, y: floor((textInputContainerBackgroundFrame.height - searchLayoutClearButtonSize.height) * 0.5)), size: searchLayoutClearButtonSize)
+        let clearButtonFrame = CGRect(origin: CGPoint(x: textInputContainerBackgroundFrame.width - searchLayoutClearButtonSize.width, y: textInputFrame.maxY - 40.0 + floor((40.0 - searchLayoutClearButtonSize.height) * 0.5)), size: searchLayoutClearButtonSize)
         transition.updateFrame(layer: self.searchLayoutClearButton.layer, frame: clearButtonFrame)
         if let image = self.searchLayoutClearButtonIcon.image {
             let clearIconFrame = CGRect(origin: CGPoint(x: floor((searchLayoutClearButtonSize.width - image.size.width) / 2.0), y: floor((searchLayoutClearButtonSize.height - image.size.height) / 2.0)), size: image.size)
@@ -2740,7 +2758,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             mediaInputDisabled = false
         }
         
-        self.actionButtons.micButton.fadeDisabled = mediaInputDisabled
+        self.mediaActionButtons.micButton.fadeDisabled = mediaInputDisabled
         
         var viewOnceIsVisible = false
         var recordMoreIsVisible = false
@@ -3372,7 +3390,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 composeButtonsOffset = 40.0
             }
             
-            let (_, textFieldHeight, _) = self.calculateTextFieldMetrics(width: width - leftInset - rightInset - self.leftMenuInset - self.rightSlowModeInset + self.currentTextInputBackgroundWidthOffset, actionControlsWidth: self.actionButtons.bounds.width, maxHeight: maxHeight, metrics: metrics)
+            let (_, textFieldHeight, _) = self.calculateTextFieldMetrics(width: width - leftInset - rightInset - self.leftMenuInset - self.rightSlowModeInset + self.currentTextInputBackgroundWidthOffset, sendActionControlsWidth: self.sendActionButtons.bounds.width, maxHeight: maxHeight, metrics: metrics)
             let panelHeight = self.panelHeight(textFieldHeight: textFieldHeight, metrics: metrics)
             var textFieldMinHeight: CGFloat = 33.0
             if let presentationInterfaceState = self.presentationInterfaceState {
@@ -3643,10 +3661,8 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     
     private func updateTextNodeText(animated: Bool) {
         var inputHasText = false
-        var hideMicButton = false
         if let textInputNode = self.textInputNode, let attributedText = textInputNode.attributedText, attributedText.length != 0 {
             inputHasText = true
-            hideMicButton = true
         }
         
         var isScheduledMessages = false
@@ -3664,21 +3680,17 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             }
         }
         
-        let _ = hideMicButton
         self.updateTextHeight(animated: animated)
     }
     
-    private func updateActionButtons(hasText: Bool, hideMicButton: Bool, animated: Bool) {
-        var hideMicButton = hideMicButton
+    private func updateActionButtons(hasText: Bool, transition: ContainedViewLayoutTransition) {
+        let alphaTransition: ContainedViewLayoutTransition = transition.isAnimated ? .animated(duration: 0.2, curve: .easeInOut) : .immediate
+        
+        var hideMicButton = false
         
         var mediaInputIsActive = false
         var keepSendButtonEnabled = self.keepSendButtonEnabled
         if let presentationInterfaceState = self.presentationInterfaceState {
-            if let mediaRecordingState = presentationInterfaceState.inputTextPanelState.mediaRecordingState {
-                if case .video(.editing, false) = mediaRecordingState {
-                    hideMicButton = true
-                }
-            }
             if case .media = presentationInterfaceState.inputMode {
                 mediaInputIsActive = true
             }
@@ -3699,114 +3711,71 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             }
         }
         
-        var animateWithBounce = false
         if self.extendedSearchLayout {
             hideMicButton = true
             
-            if !self.actionButtons.sendContainerNode.alpha.isZero {
-                self.actionButtons.sendContainerNode.alpha = 0.0
-                self.actionButtons.sendButtonRadialStatusNode?.alpha = 0.0
-                self.actionButtons.updateAccessibility()
-                if animated {
-                    self.actionButtons.animatingSendButton = true
-                    self.actionButtons.sendContainerNode.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2, completion: { [weak self] _ in
-                        if let strongSelf = self {
-                            strongSelf.actionButtons.animatingSendButton = false
-                            strongSelf.applyUpdateSendButtonIcon()
-                        }
-                    })
-                    self.actionButtons.sendContainerNode.layer.animateScale(from: 1.0, to: 0.2, duration: 0.2)
-                    
-                    self.actionButtons.sendButtonRadialStatusNode?.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2)
-                    self.actionButtons.sendButtonRadialStatusNode?.layer.animateScale(from: 1.0, to: 0.2, duration: 0.2)
+            if !self.sendActionButtons.sendContainerNode.alpha.isZero {
+                self.sendActionButtons.updateAccessibility()
+                
+                self.sendActionButtons.animatingSendButton = true
+                alphaTransition.updateAlpha(node: self.sendActionButtons.sendContainerNode, alpha: 0.0, completion: { [weak self] _ in
+                    if let strongSelf = self {
+                        strongSelf.sendActionButtons.animatingSendButton = false
+                        strongSelf.applyUpdateSendButtonIcon()
+                    }
+                })
+                
+                if let sendButtonRadialStatusNode = self.sendActionButtons.sendButtonRadialStatusNode {
+                    alphaTransition.updateAlpha(node: sendButtonRadialStatusNode, alpha: 0.0)
                 }
             }
             if self.searchLayoutClearButton.alpha.isZero {
-                self.searchLayoutClearButton.alpha = 1.0
-                self.searchLayoutClearButtonIcon.alpha = 1.0
-                if animated {
-                    self.searchLayoutClearButton.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.1)
-                    self.searchLayoutClearButton.layer.animateScale(from: 0.8, to: 1.0, duration: 0.2)
-                    self.searchLayoutClearButtonIcon.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.1)
-                    self.searchLayoutClearButtonIcon.layer.animateScale(from: 0.8, to: 1.0, duration: 0.2)
-                }
+                alphaTransition.updateAlpha(layer: self.searchLayoutClearButton.layer, alpha: 1.0)
+                alphaTransition.updateAlpha(layer: self.searchLayoutClearButtonIcon.layer, alpha: 1.0)
             }
         } else {
-            animateWithBounce = true
             if !self.searchLayoutClearButton.alpha.isZero {
-                animateWithBounce = false
-                self.searchLayoutClearButton.alpha = 0.0
-                self.searchLayoutClearButtonIcon.alpha = 0.0
-                if animated {
-                    self.searchLayoutClearButton.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2)
-                    self.searchLayoutClearButton.layer.animateScale(from: 1.0, to: 0.8, duration: 0.2)
-                    self.searchLayoutClearButtonIcon.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2)
-                    self.searchLayoutClearButtonIcon.layer.animateScale(from: 1.0, to: 0.8, duration: 0.2)
-                }
+                alphaTransition.updateAlpha(layer: self.searchLayoutClearButton.layer, alpha: 0.0)
+                alphaTransition.updateAlpha(layer: self.searchLayoutClearButtonIcon.layer, alpha: 0.0)
             }
             
             let hasSlowModeButton = self.rightSlowModeInset > 0.0
             if hasSlowModeButton {
                 hideMicButton = true
                 if self.slowModeButton.alpha.isZero {
-                    self.slowModeButton.alpha = 1.0
-                    if animated {
-                        self.slowModeButton.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.1)
-                        if animateWithBounce {
-                            self.slowModeButton.layer.animateSpring(from: NSNumber(value: Float(0.1)), to: NSNumber(value: Float(1.0)), keyPath: "transform.scale", duration: 0.6)
-                        } else {
-                            self.slowModeButton.layer.animateScale(from: 0.2, to: 1.0, duration: 0.25)
-                        }
-                    }
+                    alphaTransition.updateAlpha(node: self.slowModeButton, alpha: 1.0)
                 }
             } else {
                 if !self.slowModeButton.alpha.isZero {
-                    self.slowModeButton.alpha = 0.0
-                    if animated {
-                        self.slowModeButton.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2)
-                    }
+                    alphaTransition.updateAlpha(node: self.slowModeButton, alpha: 0.0)
                 }
             }
             
             if (hasText || keepSendButtonEnabled && !mediaInputIsActive && !hasSlowModeButton) {
-                hideMicButton = true
-                
-                if self.actionButtons.sendContainerNode.alpha.isZero && self.rightSlowModeInset.isZero {
-                    self.actionButtons.sendContainerNode.alpha = 1.0
-                    self.actionButtons.sendButtonRadialStatusNode?.alpha = 1.0
-                    self.actionButtons.updateAccessibility()
-                    if animated {
-                        self.actionButtons.sendContainerNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.1)
-                        self.actionButtons.sendButtonRadialStatusNode?.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.1)
-                        if animateWithBounce {
-                            self.actionButtons.sendContainerNode.layer.animateSpring(from: NSNumber(value: Float(0.1)), to: NSNumber(value: Float(1.0)), keyPath: "transform.scale", duration: 0.6)
-                            self.actionButtons.sendButtonRadialStatusNode?.layer.animateSpring(from: NSNumber(value: Float(0.1)), to: NSNumber(value: Float(1.0)), keyPath: "transform.scale", duration: 0.6)
-                        } else {
-                            self.actionButtons.sendContainerNode.layer.animateScale(from: 0.2, to: 1.0, duration: 0.25)
-                            self.actionButtons.sendButtonRadialStatusNode?.layer.animateScale(from: 0.2, to: 1.0, duration: 0.25)
-                        }
+                if self.sendActionButtons.sendContainerNode.alpha.isZero && self.rightSlowModeInset.isZero {
+                    alphaTransition.updateAlpha(node: self.sendActionButtons.sendContainerNode, alpha: 1.0)
+                    if let sendButtonRadialStatusNode = self.sendActionButtons.sendButtonRadialStatusNode {
+                        alphaTransition.updateAlpha(node: sendButtonRadialStatusNode, alpha: 1.0)
                     }
                 }
             } else {
-                if !self.actionButtons.sendContainerNode.alpha.isZero {
-                    self.actionButtons.sendContainerNode.alpha = 0.0
-                    self.actionButtons.sendButtonRadialStatusNode?.alpha = 0.0
-                    self.actionButtons.updateAccessibility()
-                    if animated {
-                        self.actionButtons.animatingSendButton = true
-                        self.actionButtons.sendContainerNode.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2, completion: { [weak self] _ in
-                            if let strongSelf = self {
-                                strongSelf.actionButtons.animatingSendButton = false
-                                strongSelf.applyUpdateSendButtonIcon()
-                            }
-                        })
-                        self.actionButtons.sendButtonRadialStatusNode?.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2)
+                if !self.sendActionButtons.sendContainerNode.alpha.isZero {
+                    self.sendActionButtons.animatingSendButton = true
+                    alphaTransition.updateAlpha(node: self.sendActionButtons.sendContainerNode, alpha: 0.0, completion: { [weak self] _ in
+                        if let strongSelf = self {
+                            strongSelf.sendActionButtons.animatingSendButton = false
+                            strongSelf.applyUpdateSendButtonIcon()
+                        }
+                    })
+                    if let sendButtonRadialStatusNode = self.sendActionButtons.sendButtonRadialStatusNode {
+                        alphaTransition.updateAlpha(node: sendButtonRadialStatusNode, alpha: 0.0)
                     }
+                    self.sendActionButtons.updateAccessibility()
                 }
             }
         }
         
-        let hideExpandMediaInput = hideMicButton
+        let hideExpandMediaInput = false
         
         if mediaInputIsActive {
             hideMicButton = true
@@ -3825,54 +3794,38 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             }
         }
         
-        let alphaTransition: ContainedViewLayoutTransition = .animated(duration: 0.2, curve: .easeInOut)
-        
-        if hideMicButton {
-            if !self.actionButtons.micButton.alpha.isZero {
-                alphaTransition.updateAlpha(layer: self.actionButtons.micButton.layer, alpha: 0.0)
+        if hideMicButton || (mediaInputIsActive && !hideExpandMediaInput) {
+            if !self.mediaActionButtons.micButton.alpha.isZero {
+                alphaTransition.updateAlpha(layer: self.mediaActionButtons.micButton.layer, alpha: 0.0)
+                alphaTransition.updateAlpha(layer: self.mediaActionButtons.micButtonBackgroundView.layer, alpha: 0.0)
+                alphaTransition.updateAlpha(layer: self.mediaActionButtons.micButtonTintMaskView.layer, alpha: 0.0)
             }
         } else {
-            let micAlpha: CGFloat = self.actionButtons.micButton.fadeDisabled ? 0.5 : 1.0
-            if !self.actionButtons.micButton.alpha.isEqual(to: micAlpha) {
-                self.actionButtons.micButton.alpha = micAlpha
-                if animated {
-                    self.actionButtons.micButton.layer.animateAlpha(from: 0.0, to: micAlpha, duration: 0.1)
-                    if animateWithBounce {
-                        self.actionButtons.micButton.layer.animateSpring(from: NSNumber(value: Float(0.1)), to: NSNumber(value: Float(1.0)), keyPath: "transform.scale", duration: 0.6)
-                    } else {
-                        self.actionButtons.micButton.layer.animateScale(from: 0.2, to: 1.0, duration: 0.25)
-                    }
-                }
+            let micAlpha: CGFloat = self.mediaActionButtons.micButton.fadeDisabled ? 0.5 : 1.0
+            if !self.mediaActionButtons.micButton.alpha.isEqual(to: micAlpha) {
+                alphaTransition.updateAlpha(layer: self.mediaActionButtons.micButton.layer, alpha: micAlpha)
+                alphaTransition.updateAlpha(layer: self.mediaActionButtons.micButtonBackgroundView.layer, alpha: micAlpha)
+                alphaTransition.updateAlpha(layer: self.mediaActionButtons.micButtonTintMaskView.layer, alpha: micAlpha)
             }
         }
         
         if mediaInputIsActive && !hideExpandMediaInput {
-            if self.actionButtons.expandMediaInputButton.alpha.isZero {
-                self.actionButtons.expandMediaInputButton.alpha = 1.0
-                if animated {
-                    self.actionButtons.expandMediaInputButton.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.1)
-                    if animateWithBounce {
-                        self.actionButtons.expandMediaInputButton.layer.animateSpring(from: NSNumber(value: Float(0.1)), to: NSNumber(value: Float(1.0)), keyPath: "transform.scale", duration: 0.6)
-                    } else {
-                        self.actionButtons.expandMediaInputButton.layer.animateScale(from: 0.2, to: 1.0, duration: 0.25)
-                    }
-                }
+            if self.mediaActionButtons.expandMediaInputButton.alpha.isZero {
+                alphaTransition.updateAlpha(layer: self.mediaActionButtons.expandMediaInputButton.layer, alpha: 1.0)
             }
         } else {
-            if !self.actionButtons.expandMediaInputButton.alpha.isZero {
-                self.actionButtons.expandMediaInputButton.alpha = 0.0
-                if animated {
-                    self.actionButtons.expandMediaInputButton.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2)
-                }
+            if !self.mediaActionButtons.expandMediaInputButton.alpha.isZero {
+                alphaTransition.updateAlpha(layer: self.mediaActionButtons.expandMediaInputButton.layer, alpha: 0.0)
             }
         }
         
-        self.actionButtons.updateAccessibility()
+        self.sendActionButtons.updateAccessibility()
+        self.mediaActionButtons.updateAccessibility()
     }
     
     private func updateTextHeight(animated: Bool) {
         if let (width, leftInset, rightInset, _, additionalSideInsets, maxHeight, _, metrics, _, _) = self.validLayout {
-            let (_, textFieldHeight, _) = self.calculateTextFieldMetrics(width: width - leftInset - rightInset - additionalSideInsets.right - self.leftMenuInset - self.rightSlowModeInset + self.currentTextInputBackgroundWidthOffset, actionControlsWidth: self.actionButtons.bounds.width, maxHeight: maxHeight, metrics: metrics)
+            let (_, textFieldHeight, _) = self.calculateTextFieldMetrics(width: width - leftInset - rightInset - additionalSideInsets.right - self.leftMenuInset - self.rightSlowModeInset + self.currentTextInputBackgroundWidthOffset, sendActionControlsWidth: self.sendActionButtons.bounds.width, maxHeight: maxHeight, metrics: metrics)
             let panelHeight = self.panelHeight(textFieldHeight: textFieldHeight, metrics: metrics)
             if !self.bounds.size.height.isEqual(to: panelHeight) {
                 self.updateHeight(animated)
@@ -3904,7 +3857,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     }
     
     public func chatInputTextNodeShouldReturn() -> Bool {
-        if self.actionButtons.sendButton.supernode != nil && !self.actionButtons.sendButton.isHidden && !self.actionButtons.sendContainerNode.alpha.isZero {
+        if self.sendActionButtons.sendButton.supernode != nil && !self.sendActionButtons.sendButton.isHidden && !self.sendActionButtons.sendContainerNode.alpha.isZero {
             self.sendButtonPressed()
         }
         return false
@@ -3928,15 +3881,15 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 }
             }
             
-            if sendButtonHasApplyIcon != self.actionButtons.sendButtonHasApplyIcon {
-                self.actionButtons.sendButtonHasApplyIcon = sendButtonHasApplyIcon
-                if self.actionButtons.sendButtonHasApplyIcon {
-                    self.actionButtons.sendButton.setImage(PresentationResourcesChat.chatInputPanelApplyIconImage(interfaceState.theme), for: [])
+            if sendButtonHasApplyIcon != self.sendActionButtons.sendButtonHasApplyIcon {
+                self.sendActionButtons.sendButtonHasApplyIcon = sendButtonHasApplyIcon
+                if self.sendActionButtons.sendButtonHasApplyIcon {
+                    self.sendActionButtons.sendButton.setImage(PresentationResourcesChat.chatInputPanelApplyIconImage(interfaceState.theme), for: [])
                 } else {
                     if case .scheduledMessages = interfaceState.subject {
-                        self.actionButtons.sendButton.setImage(PresentationResourcesChat.chatInputPanelScheduleIconImage(interfaceState.theme), for: [])
+                        self.sendActionButtons.sendButton.setImage(PresentationResourcesChat.chatInputPanelScheduleIconImage(interfaceState.theme), for: [])
                     } else {
-                        self.actionButtons.sendButton.setImage(PresentationResourcesChat.chatInputPanelSendIconImage(interfaceState.theme), for: [])
+                        self.sendActionButtons.sendButton.setImage(PresentationResourcesChat.chatInputPanelSendIconImage(interfaceState.theme), for: [])
                     }
                 }
             }
@@ -4732,11 +4685,11 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     }
     
     public func frameForInputActionButton() -> CGRect? {
-        if !self.actionButtons.alpha.isZero {
-            if self.actionButtons.micButton.alpha.isZero {
-                return self.actionButtons.frame.insetBy(dx: 0.0, dy: -4.0).offsetBy(dx: 0.0, dy: 0.0)
+        if !self.mediaActionButtons.alpha.isZero {
+            if self.mediaActionButtons.micButton.alpha.isZero {
+                return self.mediaActionButtons.frame.insetBy(dx: 0.0, dy: -4.0).offsetBy(dx: -3.0, dy: 0.0)
             } else {
-                return self.actionButtons.frame.insetBy(dx: 0.0, dy: -4.0).offsetBy(dx: 0.0, dy: 0.0)
+                return self.mediaActionButtons.frame.insetBy(dx: 0.0, dy: -4.0).offsetBy(dx: -3.0, dy: 0.0)
             }
         }
         return nil

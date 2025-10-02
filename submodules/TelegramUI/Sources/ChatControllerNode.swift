@@ -3876,7 +3876,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
     }
     
     func sendButtonFrame() -> CGRect? {
-        if let frame = self.textInputPanelNode?.actionButtons.frame {
+        if let frame = self.textInputPanelNode?.sendActionButtons.frame {
             return self.textInputPanelNode?.convert(frame, to: self)
         } else {
             return nil

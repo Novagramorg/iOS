@@ -385,7 +385,7 @@ public final class ChatInputMessageAccessoryPanel: Component {
             
             let size = CGSize(width: availableSize.width, height: 52.0)
             
-            let containerInsets = UIEdgeInsets(top: 8.0, left: 16.0, bottom: 6.0, right: 0.0)
+            let containerInsets = UIEdgeInsets(top: 8.0, left: 12.0, bottom: 6.0, right: 0.0)
             
             let lineSize = CGSize(width: 2.0, height: size.height - containerInsets.top - containerInsets.bottom)
             let lineFrame = CGRect(origin: CGPoint(x: containerInsets.left, y: containerInsets.top), size: lineSize)
