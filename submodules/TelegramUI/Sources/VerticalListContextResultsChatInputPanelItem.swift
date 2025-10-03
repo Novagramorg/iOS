@@ -275,7 +275,7 @@ final class VerticalListContextResultsChatInputPanelItemNode: ListViewItemNode {
             
             let nodeLayout = ListViewItemNodeLayout(contentSize: CGSize(width: params.width, height: VerticalListContextResultsChatInputPanelItemNode.itemHeight), insets: UIEdgeInsets())
             
-            return (nodeLayout, { _ in
+            return (nodeLayout, { animation in
                 if let strongSelf = self {
                     strongSelf.item = item
                     
@@ -333,7 +333,7 @@ final class VerticalListContextResultsChatInputPanelItemNode: ListViewItemNode {
                     
                     strongSelf.separatorNode.isHidden = !mergedBottom
                     
-                    strongSelf.separatorNode.frame = CGRect(origin: CGPoint(x: leftInset, y: nodeLayout.contentSize.height - UIScreenPixel), size: CGSize(width: params.width - leftInset, height: UIScreenPixel))
+                    animation.animator.updateFrame(layer: strongSelf.separatorNode.layer, frame: CGRect(origin: CGPoint(x: leftInset, y: nodeLayout.contentSize.height - UIScreenPixel), size: CGSize(width: params.width - leftInset, height: UIScreenPixel)), completion: nil)
                     
                     strongSelf.highlightedBackgroundNode.frame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: params.width, height: nodeLayout.size.height + UIScreenPixel))
                     

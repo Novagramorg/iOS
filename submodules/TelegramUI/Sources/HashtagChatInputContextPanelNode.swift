@@ -370,11 +370,10 @@ final class HashtagChatInputContextPanelNode: ChatInputContextPanelNode {
         if let topItemOffset = topItemOffset {
             let offset = (self.listView.bounds.size.height - topItemOffset)
             
-            let position = self.listView.layer.position
-            self.listView.layer.animatePosition(from: position, to: CGPoint(x: position.x, y: position.y + offset), duration: 0.3, timingFunction: kCAMediaTimingFunctionSpring, removeOnCompletion: false, completion: { _ in
+            self.listView.layer.animatePosition(from: CGPoint(), to: CGPoint(x: 0.0, y: offset), duration: 0.3, timingFunction: kCAMediaTimingFunctionSpring, removeOnCompletion: false, additive: true, completion: { _ in
                 completion()
             })
-            self.backgroundView.layer.animatePosition(from: self.backgroundView.layer.position, to: CGPoint(x: self.backgroundView.layer.position.x, y: self.backgroundView.layer.position.y + offset), duration: 0.3, timingFunction: kCAMediaTimingFunctionSpring, removeOnCompletion: false)
+            self.backgroundView.layer.animatePosition(from: CGPoint(), to: CGPoint(x: 0.0, y: offset), duration: 0.3, timingFunction: kCAMediaTimingFunctionSpring, removeOnCompletion: false, additive: true)
         } else {
             completion()
         }

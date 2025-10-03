@@ -146,7 +146,7 @@ final class VerticalListContextResultsChatInputPanelButtonItemNode: ListViewItem
             
             let nodeLayout = ListViewItemNodeLayout(contentSize: CGSize(width: params.width, height: VerticalListContextResultsChatInputPanelButtonItemNode.itemHeight(style: item.style)), insets: UIEdgeInsets())
             
-            return (nodeLayout, { _ in
+            return (nodeLayout, { animation in
                 if let strongSelf = self {
                     strongSelf.item = item
                     
@@ -164,11 +164,13 @@ final class VerticalListContextResultsChatInputPanelButtonItemNode: ListViewItem
                     
                     let _ = titleApply()
                     
-                    strongSelf.titleNode.frame = CGRect(origin: CGPoint(x: floor((params.width - titleLayout.size.width) / 2.0), y: floor((nodeLayout.contentSize.height - titleLayout.size.height) / 2.0) + titleOffsetY), size: titleLayout.size)
+                    let titleFrame = CGRect(origin: CGPoint(x: floor((params.width - titleLayout.size.width) / 2.0), y: floor((nodeLayout.contentSize.height - titleLayout.size.height) / 2.0) + titleOffsetY), size: titleLayout.size)
+                    animation.animator.updatePosition(layer: strongSelf.titleNode.layer, position: titleFrame.center, completion: nil)
+                    strongSelf.titleNode.bounds = CGRect(origin: CGPoint(), size: titleFrame.size)
                     
-                    strongSelf.separatorNode.frame = CGRect(origin: CGPoint(x: 0.0, y: nodeLayout.contentSize.height - UIScreenPixel), size: CGSize(width: params.width, height: UIScreenPixel))
+                    animation.animator.updateFrame(layer: strongSelf.separatorNode.layer, frame: CGRect(origin: CGPoint(x: 0.0, y: nodeLayout.contentSize.height - UIScreenPixel), size: CGSize(width: params.width, height: UIScreenPixel)), completion: nil)
                     
-                    strongSelf.buttonNode.frame = CGRect(origin: CGPoint(), size: nodeLayout.contentSize)
+                    animation.animator.updateFrame(layer: strongSelf.buttonNode.layer, frame: CGRect(origin: CGPoint(), size: nodeLayout.contentSize), completion: nil)
                 }
             })
         }

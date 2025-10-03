@@ -272,7 +272,7 @@ final class MentionChatInputContextPanelNode: ChatInputContextPanelNode {
             }
         }
         
-        self.backgroundView.bounds = CGRect(origin: CGPoint(), size: CGSize(width: size.width, height: size.height + 32.0))
+        transition.updateBounds(layer: self.backgroundView.layer, bounds: CGRect(origin: CGPoint(), size: CGSize(width: size.width, height: size.height + 32.0)))
         self.backgroundView.update(
             size: self.backgroundView.bounds.size,
             cornerRadius: 20.0,
@@ -290,7 +290,7 @@ final class MentionChatInputContextPanelNode: ChatInputContextPanelNode {
         transition.updateFrame(node: self.listView, frame: CGRect(x: 0.0, y: 0.0, width: size.width, height: size.height))
         
         let (duration, curve) = listViewAnimationDurationAndCurve(transition: transition)
-        let updateSizeAndInsets = ListViewUpdateSizeAndInsets(size: size, insets: insets, duration: duration, curve: curve)
+        let updateSizeAndInsets = ListViewUpdateSizeAndInsets(size: size, insets: insets, duration: duration, curve: curve, customAnimationTransition: nil)
         
         self.listView.transaction(deleteIndices: [], insertIndicesAndItems: [], updateIndicesAndItems: [], options: [.Synchronous, .LowLatency], scrollToItem: nil, updateSizeAndInsets: updateSizeAndInsets, stationaryItemRange: nil, updateOpaqueState: nil, completion: { _ in })
         
@@ -312,11 +312,10 @@ final class MentionChatInputContextPanelNode: ChatInputContextPanelNode {
         if let topItemOffset {
             let offset = (self.listView.bounds.size.height - topItemOffset)
             
-            let position = self.listView.layer.position
-            self.listView.layer.animatePosition(from: position, to: CGPoint(x: position.x, y: position.y + offset), duration: 0.3, timingFunction: kCAMediaTimingFunctionSpring, removeOnCompletion: false, completion: { _ in
+            self.listView.layer.animatePosition(from: CGPoint(), to: CGPoint(x: 0.0, y: offset), duration: 0.3, timingFunction: kCAMediaTimingFunctionSpring, removeOnCompletion: false, additive: true, completion: { _ in
                 completion()
             })
-            self.backgroundView.layer.animatePosition(from: self.backgroundView.layer.position, to: CGPoint(x: self.backgroundView.layer.position.x, y: self.backgroundView.layer.position.y + offset), duration: 0.3, timingFunction: kCAMediaTimingFunctionSpring, removeOnCompletion: false)
+            self.backgroundView.layer.animatePosition(from: CGPoint(), to: CGPoint(x: 0.0, y: offset), duration: 0.3, timingFunction: kCAMediaTimingFunctionSpring, removeOnCompletion: false, additive: true)
         } else {
             completion()
         }
