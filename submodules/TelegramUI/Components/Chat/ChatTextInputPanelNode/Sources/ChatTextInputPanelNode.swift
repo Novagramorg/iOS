@@ -2374,6 +2374,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         contentHeight += textInputHeight
         contentHeight += textFieldInsets.bottom
         
+        let previousTextInputContainerBackgroundFrame = self.textInputContainer.frame
         let textInputContainerBackgroundFrame = CGRect(x: hideOffset.x + leftInset + textFieldInsets.left, y: hideOffset.y + textFieldInsets.top, width: textInputWidth, height: contentHeight)
         let textInputFrame = textInputContainerBackgroundFrame
         
@@ -2815,8 +2816,26 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         transition.updateAlpha(node: self.recordMoreButton, alpha: recordMoreIsVisible ? 1.0 : 0.0)
         transition.updateTransformScale(node: self.recordMoreButton, scale: recordMoreIsVisible ? 1.0 : 0.01)
         
+        let contextPanelMaskInset: CGFloat = 32.0
+        let contextPanelBottomInset = floor(minimalInputHeight * 0.5)
+        let contextPanelFrame = CGRect(origin: CGPoint(x: textInputContainerBackgroundFrame.minX, y: contentHeight - maxOverlayHeight), size: CGSize(width: textInputContainerBackgroundFrame.width, height: max(0.0, maxOverlayHeight - contentHeight + contextPanelBottomInset)))
+        
         if contextPanelNode !== previousContextPanel?.panel, let previousContextPanel {
             let panelContainer = previousContextPanel.container
+            
+            transition.updateFrame(view: previousContextPanel.container, frame: contextPanelFrame)
+            transition.updateFrame(view: previousContextPanel.panel.view, frame: CGRect(origin: CGPoint(), size: contextPanelFrame.size))
+            transition.updateFrame(view: previousContextPanel.mask, frame: CGRect(origin: CGPoint(), size: contextPanelFrame.size).insetBy(dx: -contextPanelMaskInset, dy: -contextPanelMaskInset))
+            
+            previousContextPanel.panel.updateLayout(
+                size: contextPanelFrame.size,
+                leftInset: 0.0,
+                rightInset: 0.0,
+                bottomInset: contextPanelBottomInset,
+                transition: transition,
+                interfaceState: interfaceState
+            )
+            
             previousContextPanel.panel.animateOut(completion: { [weak panelContainer] in
                 panelContainer?.removeFromSuperview()
             })
@@ -2829,37 +2848,46 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         }
         
         if let contextPanel = self.contextPanel {
-            let maskInset: CGFloat = 32.0
-            var contextPanelTransition = transition
+            let previousContextPanelFrame = CGRect(origin: CGPoint(x: previousTextInputContainerBackgroundFrame.minX, y: contentHeight - maxOverlayHeight), size: CGSize(width: previousTextInputContainerBackgroundFrame.width, height: max(0.0, maxOverlayHeight - contentHeight + contextPanelBottomInset)))
+            
             if contextPanel.container.superview == nil {
-                contextPanelTransition = .immediate
                 self.view.insertSubview(contextPanel.container, belowSubview: self.clippingNode.view)
                 contextPanel.container.addSubview(contextPanel.panel.view)
                 contextPanel.container.mask = contextPanel.mask
-                //contextPanel.container.addSubview(contextPanel.mask)
                 let maskSize = floor(minimalInputHeight)
-                contextPanel.mask.image = generateImage(CGSize(width: maskSize + maskInset * 2.0, height: maskSize + maskInset * 2.0), rotatedContext: { size, context in
+                contextPanel.mask.image = generateImage(CGSize(width: maskSize + contextPanelMaskInset * 2.0, height: maskSize + contextPanelMaskInset * 2.0), rotatedContext: { size, context in
                     context.setFillColor(UIColor.black.cgColor)
                     context.fill(CGRect(origin: CGPoint(), size: size))
                     context.setBlendMode(.copy)
                     context.setFillColor(UIColor.clear.cgColor)
-                    context.fillEllipse(in: CGRect(origin: CGPoint(x: maskInset, y: maskInset + maskSize * 0.5), size: CGSize(width: maskSize, height: maskSize)))
-                    context.fill(CGRect(origin: CGPoint(x: 0.0, y: maskInset + maskSize), size: CGSize(width: maskSize + maskInset * 2.0, height: maskSize + maskInset)))
-                })?.stretchableImage(withLeftCapWidth: Int(maskInset) + Int(maskSize) / 2, topCapHeight: Int(maskInset) + 1)
+                    context.fillEllipse(in: CGRect(origin: CGPoint(x: contextPanelMaskInset, y: contextPanelMaskInset + maskSize * 0.5), size: CGSize(width: maskSize, height: maskSize)))
+                    context.fill(CGRect(origin: CGPoint(x: 0.0, y: contextPanelMaskInset + maskSize), size: CGSize(width: maskSize + contextPanelMaskInset * 2.0, height: maskSize + contextPanelMaskInset)))
+                })?.stretchableImage(withLeftCapWidth: Int(contextPanelMaskInset) + Int(maskSize) / 2, topCapHeight: Int(contextPanelMaskInset) + 1)
+                
+                contextPanel.container.frame = previousContextPanelFrame
+                contextPanel.panel.view.frame = CGRect(origin: CGPoint(), size: previousContextPanelFrame.size)
+                contextPanel.mask.frame = CGRect(origin: CGPoint(), size: previousContextPanelFrame.size).insetBy(dx: -contextPanelMaskInset, dy: -contextPanelMaskInset)
+                
+                contextPanel.panel.updateLayout(
+                    size: previousContextPanelFrame.size,
+                    leftInset: 0.0,
+                    rightInset: 0.0,
+                    bottomInset: contextPanelBottomInset,
+                    transition: .immediate,
+                    interfaceState: interfaceState
+                )
             }
-            let contextPanelBottomInset = floor(minimalInputHeight * 0.5)
-            let contextPanelFrame = CGRect(origin: CGPoint(x: textInputContainerBackgroundFrame.minX, y: contentHeight - maxOverlayHeight), size: CGSize(width: textInputContainerBackgroundFrame.width, height: max(0.0, maxOverlayHeight - contentHeight + contextPanelBottomInset)))
             
-            contextPanelTransition.updateFrame(view: contextPanel.container, frame: contextPanelFrame)
-            contextPanelTransition.updateFrame(view: contextPanel.panel.view, frame: CGRect(origin: CGPoint(), size: contextPanelFrame.size))
-            contextPanelTransition.updateFrame(view: contextPanel.mask, frame: CGRect(origin: CGPoint(), size: contextPanelFrame.size).insetBy(dx: -maskInset, dy: -maskInset))
+            transition.updateFrame(view: contextPanel.container, frame: contextPanelFrame)
+            transition.updateFrame(view: contextPanel.panel.view, frame: CGRect(origin: CGPoint(), size: contextPanelFrame.size))
+            transition.updateFrame(view: contextPanel.mask, frame: CGRect(origin: CGPoint(), size: contextPanelFrame.size).insetBy(dx: -contextPanelMaskInset, dy: -contextPanelMaskInset))
             
             contextPanel.panel.updateLayout(
                 size: contextPanelFrame.size,
                 leftInset: 0.0,
                 rightInset: 0.0,
                 bottomInset: contextPanelBottomInset,
-                transition: contextPanelTransition,
+                transition: transition,
                 interfaceState: interfaceState
             )
         }
