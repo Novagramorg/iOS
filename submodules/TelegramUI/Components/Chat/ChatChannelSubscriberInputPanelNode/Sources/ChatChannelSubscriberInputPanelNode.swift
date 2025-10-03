@@ -418,33 +418,14 @@ public final class ChatChannelSubscriberInputPanelNode: ChatInputPanelNode {
                     
                     let _ = previousAction
                     
-                    /*var offset: CGFloat = 30.0
-                    
-                    if let previousAction = previousAction, [.join, .muteNotifications].contains(previousAction) && action == .unmuteNotifications || [.join, .unmuteNotifications].contains(previousAction) && action == .muteNotifications {
-                        if [.join, .muteNotifications].contains(previousAction) {
-                            offset *= -1.0
-                        }
-                        if let snapshotView = self.button.view.snapshotContentTree() {
-                            snapshotView.frame = self.button.frame
-                            self.button.supernode?.view.addSubview(snapshotView)
-                            
-                            snapshotView.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2, removeOnCompletion: false, completion: { [weak snapshotView] _ in
-                                snapshotView?.removeFromSuperview()
-                            })
-                            snapshotView.layer.animatePosition(from: CGPoint(), to: CGPoint(x: 0.0, y: offset), duration: 0.2,  removeOnCompletion: false, additive: true)
-                            self.button.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
-                            self.button.layer.animatePosition(from: CGPoint(x: 0.0, y: -offset), to: CGPoint(), duration: 0.2, additive: true)
-                        }
-                    }*/
-                    
                     let titleColor: UIColor
                     if case .join = self.action {
                         titleColor = interfaceState.theme.chat.inputPanel.actionControlForegroundColor
                     } else {
                         titleColor = interfaceState.theme.chat.inputPanel.panelControlColor
                     }
-                    self.buttonTitle.attributedText = NSAttributedString(string: title, font: Font.regular(17.0), textColor: titleColor)
-                    self.buttonTintTitle.attributedText = NSAttributedString(string: title, font: Font.regular(17.0), textColor: .black)
+                    self.buttonTitle.attributedText = NSAttributedString(string: title, font: Font.semibold(16.0), textColor: titleColor)
+                    self.buttonTintTitle.attributedText = NSAttributedString(string: title, font: Font.semibold(16.0), textColor: .black)
                     self.button.accessibilityLabel = title
                 } else {
                     self.action = nil
@@ -493,7 +474,7 @@ public final class ChatChannelSubscriberInputPanelNode: ChatInputPanelNode {
         transition.updateFrame(view: self.buttonBackgroundView, frame: CGRect(origin: CGPoint(), size: buttonFrame.size))
         let buttonTintColor: GlassBackgroundView.TintColor
         if case .join = self.action {
-            buttonTintColor = .init(kind: .custom, color: interfaceState.theme.chat.inputPanel.actionControlFillColor)
+            buttonTintColor = .init(kind: .custom, color: interfaceState.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7), innerColor: interfaceState.theme.chat.inputPanel.actionControlFillColor)
         } else {
             buttonTintColor = .init(kind: .panel, color: interfaceState.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7))
         }
