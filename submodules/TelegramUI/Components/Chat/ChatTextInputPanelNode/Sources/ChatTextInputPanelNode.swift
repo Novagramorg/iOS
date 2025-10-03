@@ -225,6 +225,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     public var slowmodePlaceholderNode: ChatTextInputSlowmodePlaceholderNode?
     public let textInputContainerBackgroundView: GlassBackgroundView
     public let textInputContainer: ASDisplayNode
+    private let accessoryPanelContainer: UIView
     public let textInputNodeClippingContainer: ASDisplayNode
     public let textInputSeparator: GlassBackgroundView.ContentColorView
     public var textInputNode: ChatInputTextNode?
@@ -516,6 +517,10 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         self.textInputContainer = ASDisplayNode()
         self.textInputContainer.view.addSubview(self.textInputContainerBackgroundView)
         self.textInputContainer.clipsToBounds = false
+        
+        self.accessoryPanelContainer = UIView()
+        self.accessoryPanelContainer.clipsToBounds = true
+        self.textInputContainer.view.addSubview(self.accessoryPanelContainer)
         
         self.textInputNodeClippingContainer = ASDisplayNode()
         self.textInputNodeClippingContainer.clipsToBounds = true
@@ -1335,6 +1340,8 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         }
         hasMediaDraft = interfaceState.interfaceState.mediaDraftState != nil
         
+        let hasForward = interfaceState.interfaceState.forwardMessageIds != nil
+        
         var isRecording = false
         if let _ = interfaceState.inputTextPanelState.mediaRecordingState {
             isRecording = true
@@ -1984,7 +1991,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         if additionalSideInsets.right > 0.0 {
             textFieldInsets.right += additionalSideInsets.right / 3.0
         }
-        if inputHasText || self.extendedSearchLayout || hasMediaDraft {
+        if inputHasText || self.extendedSearchLayout || hasMediaDraft || hasForward {
         } else {
             textFieldInsets.right = 54.0
         }
@@ -2300,7 +2307,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             let accessoryPanelFrame = CGRect(origin: CGPoint(x: 0.0, y: contentHeight), size: accessoryPanelSize)
             if let accessoryPanelComponentView = accessoryPanelView.view {
                 if accessoryPanelComponentView.superview == nil {
-                    self.textInputContainer.view.addSubview(accessoryPanelComponentView)
+                    self.accessoryPanelContainer.addSubview(accessoryPanelComponentView)
                     accessoryPanelComponentView.frame = accessoryPanelFrame.offsetBy(dx: 0.0, dy: self.textInputNodeClippingContainer.frame.minY - accessoryPanelFrame.height)
                     accessoryPanelComponentView.alpha = 0.0
                     
@@ -2371,6 +2378,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         let textInputFrame = textInputContainerBackgroundFrame
         
         transition.updateFrame(node: self.textInputContainer, frame: textInputContainerBackgroundFrame)
+        transition.updateFrame(view: self.accessoryPanelContainer, frame: CGRect(origin: CGPoint(), size: textInputContainerBackgroundFrame.size))
         transition.updateFrame(view: self.textInputContainerBackgroundView, frame: CGRect(origin: CGPoint(), size: textInputContainerBackgroundFrame.size))
         
         self.textInputContainerBackgroundView.update(size: textInputContainerBackgroundFrame.size, cornerRadius: floor(minimalInputHeight * 0.5), isDark: interfaceState.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: interfaceState.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7)), transition: ComponentTransition(transition))
@@ -2487,7 +2495,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         var nextButtonTopRight = CGPoint(x: textInputContainerBackgroundFrame.width - accessoryButtonInset, y: textInputContainerBackgroundFrame.height - minimalInputHeight)
         if self.extendedSearchLayout {
             nextButtonTopRight.x -= 46.0
-        } else if inputHasText || hasMediaDraft {
+        } else if inputHasText || hasMediaDraft || hasForward {
             nextButtonTopRight.x -= sendActionButtonsSize.width
         }
         for (item, button) in self.accessoryItemButtons.reversed() {
@@ -2610,7 +2618,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         }
         
         var sendActionButtonsFrame = CGRect(origin: CGPoint(x: textInputContainerBackgroundFrame.maxX - sendActionButtonsSize.width, y: textInputContainerBackgroundFrame.maxY - sendActionButtonsSize.height), size: sendActionButtonsSize)
-        if inputHasText || hasMediaDraft {
+        if inputHasText || hasMediaDraft || hasForward {
             transition.updateTransformScale(node: self.sendActionButtons, scale: CGPoint(x: 1.0, y: 1.0))
         } else {
             sendActionButtonsFrame.origin.x += (sendActionButtonsSize.width - 3.0 * 2.0) * 0.5 - 3.0
@@ -3685,6 +3693,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         
         var mediaInputIsActive = false
         var keepSendButtonEnabled = self.keepSendButtonEnabled
+        var hasForward = false
         if let presentationInterfaceState = self.presentationInterfaceState {
             if case .media = presentationInterfaceState.inputMode {
                 mediaInputIsActive = true
@@ -3704,6 +3713,10 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             if presentationInterfaceState.interfaceState.mediaDraftState != nil {
                 keepSendButtonEnabled = true
             }
+            hasForward = presentationInterfaceState.interfaceState.forwardMessageIds != nil
+        }
+        if hasForward {
+            keepSendButtonEnabled = true
         }
         
         if self.extendedSearchLayout {
