@@ -404,33 +404,33 @@ public class GlassBackgroundView: UIView {
         
         let shadowInset: CGFloat = 32.0
         
+        if let innerColor = tintColor.innerColor {
+            let innerBackgroundFrame = CGRect(origin: CGPoint(), size: size).insetBy(dx: 3.0, dy: 3.0)
+            let innerBackgroundRadius = min(innerBackgroundFrame.width, innerBackgroundFrame.height) * 0.5
+            
+            let innerBackgroundView: UIView
+            if let current = self.innerBackgroundView {
+                innerBackgroundView = current
+            } else {
+                innerBackgroundView = UIView()
+                self.innerBackgroundView = innerBackgroundView
+                self.contentView.insertSubview(innerBackgroundView, at: 0)
+                
+                innerBackgroundView.frame = innerBackgroundFrame
+                innerBackgroundView.layer.cornerRadius = innerBackgroundRadius
+            }
+            
+            innerBackgroundView.backgroundColor = innerColor
+            transition.setFrame(view: innerBackgroundView, frame: innerBackgroundFrame)
+            transition.setCornerRadius(layer: innerBackgroundView.layer, cornerRadius: innerBackgroundRadius)
+        } else if let innerBackgroundView = self.innerBackgroundView {
+            self.innerBackgroundView = nil
+            innerBackgroundView.removeFromSuperview()
+        }
+        
         let params = Params(cornerRadius: cornerRadius, isDark: isDark, tintColor: tintColor, isInteractive: isInteractive)
         if self.params != params {
             self.params = params
-            
-            if let innerColor = params.tintColor.innerColor {
-                let innerBackgroundFrame = CGRect(origin: CGPoint(), size: size).insetBy(dx: 3.0, dy: 3.0)
-                let innerBackgroundRadius = min(innerBackgroundFrame.width, innerBackgroundFrame.height) * 0.5
-                
-                let innerBackgroundView: UIView
-                if let current = self.innerBackgroundView {
-                    innerBackgroundView = current
-                } else {
-                    innerBackgroundView = UIView()
-                    self.innerBackgroundView = innerBackgroundView
-                    self.contentView.insertSubview(innerBackgroundView, at: 0)
-                    
-                    innerBackgroundView.frame = innerBackgroundFrame
-                    innerBackgroundView.layer.cornerRadius = innerBackgroundRadius
-                }
-                
-                innerBackgroundView.backgroundColor = innerColor
-                transition.setFrame(view: innerBackgroundView, frame: innerBackgroundFrame)
-                transition.setCornerRadius(layer: innerBackgroundView.layer, cornerRadius: innerBackgroundRadius)
-            } else if let innerBackgroundView = self.innerBackgroundView {
-                self.innerBackgroundView = nil
-                innerBackgroundView.removeFromSuperview()
-            }
             
             if let shadowView = self.shadowView {
                 let shadowInnerInset: CGFloat = 0.5
