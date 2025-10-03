@@ -58,18 +58,18 @@ private let groupIcon: UIImage = {
 
 public class ChatMessageReplyInfoNode: ASDisplayNode {
     public final class TransitionReplyPanel {
-        public let titleNode: ASDisplayNode
-        public let textNode: ASDisplayNode
-        public let lineNode: ASDisplayNode
-        public let imageNode: ASDisplayNode
+        public let titleView: UIView
+        public let textView: UIView
+        public let lineView: UIView
+        public let imageView: UIView?
         public let relativeSourceRect: CGRect
         public let relativeTargetRect: CGRect
         
-        public init(titleNode: ASDisplayNode, textNode: ASDisplayNode, lineNode: ASDisplayNode, imageNode: ASDisplayNode, relativeSourceRect: CGRect, relativeTargetRect: CGRect) {
-            self.titleNode = titleNode
-            self.textNode = textNode
-            self.lineNode = lineNode
-            self.imageNode = imageNode
+        public init(titleView: UIView, textView: UIView, lineView: UIView, imageView: UIView?, relativeSourceRect: CGRect, relativeTargetRect: CGRect) {
+            self.titleView = titleView
+            self.textView = textView
+            self.lineView = lineView
+            self.imageView = imageView
             self.relativeSourceRect = relativeSourceRect
             self.relativeTargetRect = relativeTargetRect
         }
@@ -971,84 +971,88 @@ public class ChatMessageReplyInfoNode: ASDisplayNode {
 
         if let titleNode = self.titleNode {
             let offset = CGPoint(
-                x: localRect.minX + sourceReplyPanel.titleNode.frame.minX - titleNode.frame.minX,
-                y: localRect.minY + sourceReplyPanel.titleNode.frame.midY - titleNode.frame.midY
+                x: localRect.minX + sourceReplyPanel.titleView.frame.minX - titleNode.frame.minX,
+                y: localRect.minY + sourceReplyPanel.titleView.frame.midY - titleNode.frame.midY
             )
 
             transition.horizontal.animatePositionAdditive(node: titleNode, offset: CGPoint(x: offset.x, y: 0.0))
             transition.vertical.animatePositionAdditive(node: titleNode, offset: CGPoint(x: 0.0, y: offset.y))
 
-            sourceParentNode.addSubnode(sourceReplyPanel.titleNode)
+            sourceParentNode.view.addSubview(sourceReplyPanel.titleView)
 
             titleNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.1)
 
-            sourceReplyPanel.titleNode.frame = sourceReplyPanel.titleNode.frame
+            sourceReplyPanel.titleView.frame = sourceReplyPanel.titleView.frame
                 .offsetBy(dx: sourceParentOffset.x, dy: sourceParentOffset.y)
                 .offsetBy(dx: localRect.minX - offset.x, dy: localRect.minY - offset.y)
-            transition.horizontal.animatePositionAdditive(node: sourceReplyPanel.titleNode, offset: CGPoint(x: offset.x, y: 0.0), removeOnCompletion: false)
-            transition.vertical.animatePositionAdditive(node: sourceReplyPanel.titleNode, offset: CGPoint(x: 0.0, y: offset.y), removeOnCompletion: false)
+            transition.horizontal.animatePositionAdditive(layer: sourceReplyPanel.titleView.layer, offset: CGPoint(x: offset.x, y: 0.0), removeOnCompletion: false)
+            transition.vertical.animatePositionAdditive(layer: sourceReplyPanel.titleView.layer, offset: CGPoint(x: 0.0, y: offset.y), removeOnCompletion: false)
         }
 
         if let textNode = self.textNode {
             let offset = CGPoint(
-                x: localRect.minX + sourceReplyPanel.textNode.frame.minX - textNode.textNode.frame.minX,
-                y: localRect.minY + sourceReplyPanel.textNode.frame.midY - textNode.textNode.frame.midY
+                x: localRect.minX + sourceReplyPanel.textView.frame.minX - textNode.textNode.frame.minX,
+                y: localRect.minY + sourceReplyPanel.textView.frame.midY - textNode.textNode.frame.midY
             )
 
             transition.horizontal.animatePositionAdditive(node: textNode.textNode, offset: CGPoint(x: offset.x, y: 0.0))
             transition.vertical.animatePositionAdditive(node: textNode.textNode, offset: CGPoint(x: 0.0, y: offset.y))
 
-            sourceParentNode.addSubnode(sourceReplyPanel.textNode)
+            sourceParentNode.view.addSubview(sourceReplyPanel.textView)
 
             textNode.textNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.1)
 
-            sourceReplyPanel.textNode.frame = sourceReplyPanel.textNode.frame
+            sourceReplyPanel.textView.frame = sourceReplyPanel.textView.frame
                 .offsetBy(dx: sourceParentOffset.x, dy: sourceParentOffset.y)
                 .offsetBy(dx: localRect.minX - offset.x, dy: localRect.minY - offset.y)
-            transition.horizontal.animatePositionAdditive(node: sourceReplyPanel.textNode, offset: CGPoint(x: offset.x, y: 0.0), removeOnCompletion: false)
-            transition.vertical.animatePositionAdditive(node: sourceReplyPanel.textNode, offset: CGPoint(x: 0.0, y: offset.y), removeOnCompletion: false)
+            transition.horizontal.animatePositionAdditive(layer: sourceReplyPanel.textView.layer, offset: CGPoint(x: offset.x, y: 0.0), removeOnCompletion: false)
+            transition.vertical.animatePositionAdditive(layer: sourceReplyPanel.textView.layer, offset: CGPoint(x: 0.0, y: offset.y), removeOnCompletion: false)
         }
 
         if let imageNode = self.imageNode {
-            let offset = CGPoint(
-                x: localRect.minX + sourceReplyPanel.imageNode.frame.midX - imageNode.frame.midX,
-                y: localRect.minY + sourceReplyPanel.imageNode.frame.midY - imageNode.frame.midY
-            )
-
-            transition.horizontal.animatePositionAdditive(node: imageNode, offset: CGPoint(x: offset.x, y: 0.0))
-            transition.vertical.animatePositionAdditive(node: imageNode, offset: CGPoint(x: 0.0, y: offset.y))
-
-            sourceParentNode.addSubnode(sourceReplyPanel.imageNode)
-
-            imageNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.1)
-
-            sourceReplyPanel.imageNode.frame = sourceReplyPanel.imageNode.frame
-                .offsetBy(dx: sourceParentOffset.x, dy: sourceParentOffset.y)
-                .offsetBy(dx: localRect.minX - offset.x, dy: localRect.minY - offset.y)
-            transition.horizontal.animatePositionAdditive(node: sourceReplyPanel.imageNode, offset: CGPoint(x: offset.x, y: 0.0), removeOnCompletion: false)
-            transition.vertical.animatePositionAdditive(node: sourceReplyPanel.imageNode, offset: CGPoint(x: 0.0, y: offset.y), removeOnCompletion: false)
+            if let sourceImageView = sourceReplyPanel.imageView {
+                let offset = CGPoint(
+                    x: localRect.minX + sourceImageView.frame.midX - imageNode.frame.midX,
+                    y: localRect.minY + sourceImageView.frame.midY - imageNode.frame.midY
+                )
+                
+                transition.horizontal.animatePositionAdditive(node: imageNode, offset: CGPoint(x: offset.x, y: 0.0))
+                transition.vertical.animatePositionAdditive(node: imageNode, offset: CGPoint(x: 0.0, y: offset.y))
+                
+                sourceParentNode.view.addSubview(sourceImageView)
+                
+                imageNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.1)
+                
+                sourceImageView.frame = sourceImageView.frame
+                    .offsetBy(dx: sourceParentOffset.x, dy: sourceParentOffset.y)
+                    .offsetBy(dx: localRect.minX - offset.x, dy: localRect.minY - offset.y)
+                transition.horizontal.animatePositionAdditive(layer: sourceImageView.layer, offset: CGPoint(x: offset.x, y: 0.0), removeOnCompletion: false)
+                transition.vertical.animatePositionAdditive(layer: sourceImageView.layer, offset: CGPoint(x: 0.0, y: offset.y), removeOnCompletion: false)
+            } else {
+                imageNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.1)
+            }
         }
 
         do {
             let backgroundView = self.backgroundView
 
             let offset = CGPoint(
-                x: localRect.minX + sourceReplyPanel.lineNode.frame.minX - backgroundView.frame.minX,
-                y: localRect.minY + sourceReplyPanel.lineNode.frame.minY - backgroundView.frame.minY
+                x: localRect.minX + sourceReplyPanel.lineView.frame.minX - backgroundView.frame.minX,
+                y: localRect.minY + sourceReplyPanel.lineView.frame.minY - backgroundView.frame.minY
             )
 
             transition.horizontal.animatePositionAdditive(layer: backgroundView.layer, offset: CGPoint(x: offset.x, y: 0.0))
             transition.vertical.animatePositionAdditive(layer: backgroundView.layer, offset: CGPoint(x: 0.0, y: offset.y))
 
-            sourceParentNode.addSubnode(sourceReplyPanel.lineNode)
+            sourceParentNode.view.addSubview(sourceReplyPanel.lineView)
 
             backgroundView.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.1)
 
-            sourceReplyPanel.lineNode.frame = sourceReplyPanel.lineNode.frame
+            sourceReplyPanel.lineView.frame = sourceReplyPanel.lineView.frame
                 .offsetBy(dx: sourceParentOffset.x, dy: sourceParentOffset.y)
                 .offsetBy(dx: localRect.minX - offset.x, dy: localRect.minY - offset.y)
-            transition.horizontal.animatePositionAdditive(node: sourceReplyPanel.lineNode, offset: CGPoint(x: offset.x, y: 0.0), removeOnCompletion: false)
-            transition.vertical.animatePositionAdditive(node: sourceReplyPanel.lineNode, offset: CGPoint(x: 0.0, y: offset.y), removeOnCompletion: false)
+            transition.horizontal.animatePositionAdditive(layer: sourceReplyPanel.lineView.layer, offset: CGPoint(x: offset.x, y: 0.0), removeOnCompletion: false)
+            transition.vertical.animatePositionAdditive(layer: sourceReplyPanel.lineView.layer, offset: CGPoint(x: 0.0, y: offset.y), removeOnCompletion: false)
 
             return offset
         }

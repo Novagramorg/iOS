@@ -49,6 +49,7 @@ import ChatSideTopicsPanel
 import GlassBackgroundComponent
 import ChatThemeScreen
 import ChatTextInputPanelNode
+import ChatInputAccessoryPanel
 
 final class VideoNavigationControllerDropContentItem: NavigationControllerDropContentItem {
     let itemNode: OverlayMediaItemNode
@@ -4660,11 +4661,10 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                         let correlationId = Int64.random(in: 0 ..< Int64.max)
                         messages[messages.count - 1] = messages[messages.count - 1].withUpdatedCorrelationId(correlationId)
                         
-                        var replyPanel: ReplyAccessoryPanelNode?
-                        if let accessoryPanelNode = self.accessoryPanelNode as? ReplyAccessoryPanelNode {
-                            replyPanel = accessoryPanelNode
-                        }
+                        var replyPanel: ChatInputAccessoryPanelView?
                         if self.shouldAnimateMessageTransition, let inputPanelNode = self.inputPanelNode as? ChatTextInputPanelNode, let textInput = inputPanelNode.makeSnapshotForTransition() {
+                            replyPanel = inputPanelNode.accessoryPanelView
+                            
                             usedCorrelationId = correlationId
                             let source: ChatMessageTransitionNodeImpl.Source = .textInput(textInput: ChatMessageTransitionNodeImpl.Source.TextInput(
                                 backgroundView: textInput.backgroundView,

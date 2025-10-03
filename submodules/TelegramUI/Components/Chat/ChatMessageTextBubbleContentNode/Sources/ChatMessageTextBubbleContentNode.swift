@@ -1633,6 +1633,7 @@ public class ChatMessageTextBubbleContentNode: ChatMessageBubbleContentNode {
     }
 
     public func animateFrom(sourceView: UIView, scrollOffset: CGFloat, widthDifference: CGFloat, transition: CombinedTransition) {
+        self.containerNode.clipsToBounds = false
         self.containerNode.view.addSubview(sourceView)
 
         sourceView.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.1, removeOnCompletion: false, completion: { [weak sourceView] _ in
@@ -1645,7 +1646,12 @@ public class ChatMessageTextBubbleContentNode: ChatMessageBubbleContentNode {
             y: sourceView.frame.minY - (self.textNode.textNode.frame.minY - 3.0) - scrollOffset
         )
 
-        transition.vertical.animatePositionAdditive(node: self.textNode.textNode, offset: offset)
+        transition.vertical.animatePositionAdditive(layer: self.textNode.textNode.layer, offset: offset, completion: { [weak self] _ in
+            guard let self else {
+                return
+            }
+            self.containerNode.clipsToBounds = true
+        })
         transition.updatePosition(layer: sourceView.layer, position: CGPoint(x: sourceView.layer.position.x - offset.x, y: sourceView.layer.position.y - offset.y))
 
         if let statusNode = self.statusNode {
