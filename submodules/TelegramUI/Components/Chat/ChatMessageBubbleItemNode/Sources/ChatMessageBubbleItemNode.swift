@@ -6883,11 +6883,11 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         }
         
         if item.message.adAttribute != nil {
-            let transition: ContainedViewLayoutTransition = isScroll ? .animated(duration: 0.4, curve: .spring) : .immediate
+            let transition: ContainedViewLayoutTransition = isScroll ? .animated(duration: 0.25, curve: .easeInOut) : .immediate
             if case let .visible(_, rect) = self.visibility, rect.height >= 1.0 {
-                transition.updateSublayerTransformOffset(layer: self.layer, offset: CGPoint(x: 0.0, y: 0.0))
+                transition.updateAlpha(layer: self.layer, alpha: 1.0)
             } else {
-                transition.updateSublayerTransformOffset(layer: self.layer, offset: CGPoint(x: 0.0, y: 200.0))
+                transition.updateAlpha(layer: self.layer, alpha: 0.0)
             }
         }
     }

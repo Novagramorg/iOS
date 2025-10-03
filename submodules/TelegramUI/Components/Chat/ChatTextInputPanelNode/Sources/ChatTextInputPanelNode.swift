@@ -1857,13 +1857,15 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 updatedButtons.append(itemAndButton!)
             }
             for (_, button) in self.accessoryItemButtons {
-                if animatedTransition {
-                    if removeAccessoryButtons == nil {
-                        removeAccessoryButtons = []
+                if !updatedButtons.contains(where: { $0.1 === button }) {
+                    if animatedTransition {
+                        if removeAccessoryButtons == nil {
+                            removeAccessoryButtons = []
+                        }
+                        removeAccessoryButtons!.append(button)
+                    } else {
+                        button.removeFromSuperview()
                     }
-                    removeAccessoryButtons!.append(button)
-                } else {
-                    button.removeFromSuperview()
                 }
             }
             self.accessoryItemButtons = updatedButtons
@@ -2602,9 +2604,14 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             for button in removeAccessoryButtons {
                 let buttonFrame = CGRect(origin: CGPoint(x: button.frame.origin.x + additionalOffset, y: textInputFrame.maxY - minimalInputHeight), size: button.frame.size)
                 transition.updateFrame(layer: button.layer, frame: buttonFrame)
+                let alphaTransition: ContainedViewLayoutTransition = .animated(duration: 0.25, curve: .easeInOut)
                 button.layer.animateScale(from: 1.0, to: 0.2, duration: 0.25, removeOnCompletion: false)
-                button.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.25, removeOnCompletion: false, completion: { [weak button] _ in
-                    button?.removeFromSuperview()
+                alphaTransition.updateAlpha(layer: button.layer, alpha: 0.0)
+                DispatchQueue.main.asyncAfter(deadline: DispatchTime.now() + 0.25 * UIView.animationDurationFactor(), execute: { [weak button] in
+                    if let button {
+                        button.removeFromSuperview()
+                        button.tintMask.removeFromSuperview()
+                    }
                 })
             }
         }
@@ -3799,7 +3806,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 if self.sendActionButtons.sendContainerNode.alpha.isZero && self.rightSlowModeInset.isZero {
                     alphaTransition.updateAlpha(node: self.sendActionButtons.sendContainerNode, alpha: 1.0)
                     blurTransitionIn.animateBlur(layer: self.sendActionButtons.sendContainerNode.layer, fromRadius: sendButtonBlurOut, toRadius: 0.0)
-                    transition.animatePositionAdditive(layer: self.sendActionButtons.sendButton.imageNode.layer, offset: CGPoint(x: -14.0, y: 10.0))
+                    transition.animatePositionAdditive(layer: self.sendActionButtons.sendButton.imageNode.layer, offset: CGPoint(x: -18.0, y: 14.0))
                     if let sendButtonRadialStatusNode = self.sendActionButtons.sendButtonRadialStatusNode {
                         alphaTransition.updateAlpha(node: sendButtonRadialStatusNode, alpha: 1.0)
                     }
@@ -3863,7 +3870,10 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         
         if mediaInputIsActive && !hideExpandMediaInput {
             if self.mediaActionButtons.expandMediaInputButton.alpha.isZero {
-                alphaTransition.updateAlpha(layer: self.mediaActionButtons.expandMediaInputButton.layer, alpha: 1.0)
+                self.mediaActionButtons.expandMediaInputButton.alpha = 1.0
+                if alphaTransition.isAnimated {
+                    self.mediaActionButtons.expandMediaInputButton.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
+                }
             }
         } else {
             if !self.mediaActionButtons.expandMediaInputButton.alpha.isZero {
