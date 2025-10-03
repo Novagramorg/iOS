@@ -274,6 +274,9 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     public let recordMoreButton: ChatRecordingViewOnceButtonNode
     
     private var accessoryPanel: (component: AnyComponentWithIdentity<ChatInputAccessoryPanelEnvironment>, view: ComponentView<ChatInputAccessoryPanelEnvironment>)?
+    public var accessoryPanelView: ChatInputAccessoryPanelView? {
+        return self.accessoryPanel?.view.view as? ChatInputAccessoryPanelView
+    }
     private var contextPanel: (container: UIView, mask: UIImageView, panel: ChatInputContextPanelNode)?
     private var mediaPreviewPanelNode: ChatRecordingPreviewInputPanelNodeImpl?
     
@@ -2254,10 +2257,12 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         let alphaTransitionIn: ContainedViewLayoutTransition = transition.isAnimated ? ContainedViewLayoutTransition.animated(duration: 0.15, curve: .easeInOut) : .immediate
         let alphaTransitionOut: ContainedViewLayoutTransition = transition.isAnimated ? ContainedViewLayoutTransition.animated(duration: 0.2, curve: .easeInOut) : .immediate
         
-        let accessoryPanelAnimationBlurRadius: CGFloat = 20.0
         var removedAccessoryPanelView: UIView?
         
         if let currentAccessoryPanel = self.accessoryPanel, currentAccessoryPanel.component.id != accessoryPanel?.id {
+            if let panelView = currentAccessoryPanel.view.view as? ChatInputAccessoryPanelView {
+                panelView.storedFrameBeforeDismissed = panelView.convert(panelView.bounds, to: nil)
+            }
             self.accessoryPanel = nil
             if let accessoryPanelView = currentAccessoryPanel.view.view {
                 removedAccessoryPanelView = accessoryPanelView
@@ -2299,18 +2304,10 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                     accessoryPanelComponentView.frame = accessoryPanelFrame.offsetBy(dx: 0.0, dy: self.textInputNodeClippingContainer.frame.minY - accessoryPanelFrame.height)
                     accessoryPanelComponentView.alpha = 0.0
                     
-                    if transition.isAnimated {
-                        ComponentTransition(alphaTransitionIn).animateBlur(layer: accessoryPanelComponentView.layer, fromRadius: accessoryPanelAnimationBlurRadius, toRadius: 0.0)
-                    }
-                    
                     if let accessoryPanelComponentView = accessoryPanelComponentView as? ChatInputAccessoryPanelView {
                         self.textInputContainerBackgroundView.maskContentView.addSubview(accessoryPanelComponentView.contentTintView)
                         accessoryPanelComponentView.contentTintView.frame = accessoryPanelFrame.offsetBy(dx: 0.0, dy: self.textInputNodeClippingContainer.frame.minY - accessoryPanelFrame.height)
                         accessoryPanelComponentView.contentTintView.alpha = 0.0
-                        
-                        if transition.isAnimated {
-                            ComponentTransition(alphaTransitionIn).animateBlur(layer: accessoryPanelComponentView.contentTintView.layer, fromRadius: accessoryPanelAnimationBlurRadius, toRadius: 0.0)
-                        }
                     }
                 }
                 transition.updateFrame(view: accessoryPanelComponentView, frame: accessoryPanelFrame)
@@ -2378,16 +2375,17 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         
         self.textInputContainerBackgroundView.update(size: textInputContainerBackgroundFrame.size, cornerRadius: floor(minimalInputHeight * 0.5), isDark: interfaceState.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: interfaceState.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7)), transition: ComponentTransition(transition))
         
+        transition.updateFrame(layer: self.textInputBackgroundNode.layer, frame: textInputContainerBackgroundFrame)
+        transition.updateAlpha(node: self.textInputBackgroundNode, alpha: audioRecordingItemsAlpha)
+        
         if let removedAccessoryPanelView {
             if let removedAccessoryPanelView = removedAccessoryPanelView as? ChatInputAccessoryPanelView {
                 let contentTintView = removedAccessoryPanelView.contentTintView
-                ComponentTransition(alphaTransitionOut).animateBlur(layer: contentTintView.layer, fromRadius: 0.0, toRadius: accessoryPanelAnimationBlurRadius, removeOnCompletion: false)
                 transition.updateFrame(view: contentTintView, frame: CGRect(origin: CGPoint(x: contentTintView.frame.minX, y: textFieldTopContentOffset - contentTintView.bounds.height), size: contentTintView.bounds.size))
                 alphaTransitionOut.updateAlpha(layer: contentTintView.layer, alpha: 0.0, completion: { [weak contentTintView] _ in
                     contentTintView?.removeFromSuperview()
                 })
             }
-            ComponentTransition(alphaTransitionOut).animateBlur(layer: removedAccessoryPanelView.layer, fromRadius: 0.0, toRadius: accessoryPanelAnimationBlurRadius, removeOnCompletion: false)
             transition.updateFrame(view: removedAccessoryPanelView, frame: CGRect(origin: CGPoint(x: removedAccessoryPanelView.frame.minX, y: textFieldTopContentOffset - removedAccessoryPanelView.bounds.height), size: removedAccessoryPanelView.bounds.size))
             alphaTransitionOut.updateAlpha(layer: removedAccessoryPanelView.layer, alpha: 0.0, completion: { [weak removedAccessoryPanelView] _ in
                 removedAccessoryPanelView?.removeFromSuperview()
@@ -2518,10 +2516,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             }
         }
         
-        let textInputBackgroundFrame = CGRect(x: hideOffset.x + leftInset + textFieldInsets.left, y: hideOffset.y + textFieldInsets.top + textFieldTopContentOffset, width: baseWidth - textFieldInsets.left - textFieldInsets.right, height: panelHeight - textFieldInsets.top - textFieldInsets.bottom + self.textInputViewInternalInsets.top + self.textInputViewInternalInsets.bottom)
         self.currentTextInputBackgroundWidthOffset = textInputBackgroundWidthOffset
-        transition.updateFrame(layer: self.textInputBackgroundNode.layer, frame: textInputBackgroundFrame)
-        transition.updateAlpha(node: self.textInputBackgroundNode, alpha: audioRecordingItemsAlpha)
         
         let textPlaceholderSize: CGSize
         let textPlaceholderMaxWidth: CGFloat = max(1.0, nextButtonTopRight.x - 12.0)
@@ -2563,7 +2558,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         
         let textPlaceholderFrame: CGRect
         if sendingTextDisabled {
-            textPlaceholderFrame = CGRect(origin: CGPoint(x: floor((textInputBackgroundFrame.width - textPlaceholderSize.width) / 2.0), y: self.textInputViewInternalInsets.top + textInputViewRealInsets.top + UIScreenPixel + textFieldTopContentOffset), size: textPlaceholderSize)
+            textPlaceholderFrame = CGRect(origin: CGPoint(x: floor((textInputContainerBackgroundFrame.width - textPlaceholderSize.width) / 2.0), y: self.textInputViewInternalInsets.top + textInputViewRealInsets.top + UIScreenPixel + textFieldTopContentOffset), size: textPlaceholderSize)
             
             let textLockIconNode: ASImageNode
             var textLockIconTransition = transition
@@ -4672,7 +4667,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     
     public func frameForAttachmentButton() -> CGRect? {
         if !self.attachmentButton.alpha.isZero {
-            return self.attachmentButton.frame.insetBy(dx: 0.0, dy: 6.0).offsetBy(dx: 2.0, dy: 0.0)
+            return self.attachmentButton.frame.insetBy(dx: 0.0, dy: -4.0).offsetBy(dx: 0.0, dy: 0.0)
         }
         return nil
     }
@@ -4727,9 +4722,8 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             return nil
         }
 
-        //TODO
         let backgroundView = UIImageView()
-        backgroundView.frame = self.textInputBackgroundNode.frame
+        backgroundView.frame = self.textInputBackgroundNode.view.convert(self.textInputBackgroundNode.bounds, to: self.view)
 
         let caretColor = textInputNode.textView.tintColor
         textInputNode.textView.tintColor = .clear
@@ -4741,7 +4735,10 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
 
         textInputNode.textView.tintColor = caretColor
 
-        contentView.frame = textInputNode.frame
+        if let textInputNodeSuperview = textInputNode.view.superview {
+            let _ = textInputNodeSuperview
+            contentView.frame = textInputNode.frame.offsetBy(dx: 0.0, dy: self.textInputNodeClippingContainer.frame.minY)
+        }
 
         return (
             backgroundView: backgroundView,

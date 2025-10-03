@@ -39,6 +39,22 @@ public final class ChatInputAccessoryPanelEnvironment: Equatable {
     }
 }
 
+public final class ChatInputAccessoryPanelTransitionData {
+    public let titleView: UIView
+    public let textView: UIView
+    public let lineView: UIView
+    public let imageView: UIView?
+    
+    public init(titleView: UIView, textView: UIView, lineView: UIView, imageView: UIView?) {
+        self.titleView = titleView
+        self.textView = textView
+        self.lineView = lineView
+        self.imageView = imageView
+    }
+}
+
 public protocol ChatInputAccessoryPanelView: UIView {
     var contentTintView: UIView { get }
+    var storedFrameBeforeDismissed: CGRect? { get set }
+    var transitionData: ChatInputAccessoryPanelTransitionData? { get }
 }

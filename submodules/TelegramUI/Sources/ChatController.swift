@@ -142,6 +142,8 @@ import AVFoundation
 import BalanceNeededScreen
 import FaceScanScreen
 import ChatThemeScreen
+import ChatTextInputPanelNode
+import ChatInputAccessoryPanel
 
 public final class ChatControllerOverlayPresentationData {
     public let expandData: (ASDisplayNode?, () -> Void)
@@ -2178,9 +2180,9 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
 
             let correlationId = Int64.random(in: 0 ..< Int64.max)
 
-            var replyPanel: ReplyAccessoryPanelNode?
-            if let accessoryPanelNode = strongSelf.chatDisplayNode.accessoryPanelNode as? ReplyAccessoryPanelNode {
-                replyPanel = accessoryPanelNode
+            var replyPanel: ChatInputAccessoryPanelView?
+            if let inputPanelNode = strongSelf.chatDisplayNode.inputPanelNode as? ChatTextInputPanelNode {
+                replyPanel = inputPanelNode.accessoryPanelView
             }
 
             var shouldAnimateMessageTransition = strongSelf.chatDisplayNode.shouldAnimateMessageTransition
@@ -2188,8 +2190,8 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                 shouldAnimateMessageTransition = true
             }
             
-            strongSelf.presentPaidMessageAlertIfNeeded(completion: { [weak self] postpone in
-                guard let strongSelf = self else {
+            strongSelf.presentPaidMessageAlertIfNeeded(completion: { [weak strongSelf] postpone in
+                guard let strongSelf else {
                     return
                 }
                 strongSelf.chatDisplayNode.setupSendActionOnViewUpdate({

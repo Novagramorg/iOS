@@ -276,6 +276,20 @@ public final class ChatInputMessageAccessoryPanel: Component {
         private var inlineTextStarImage: UIImage?
         private var inlineTextTonImage: (UIImage, UIColor)?
         
+        public var transitionData: ChatInputAccessoryPanelTransitionData? {
+            guard let textView = self.text.view else {
+                return nil
+            }
+            return ChatInputAccessoryPanelTransitionData(
+                titleView: self.titleNode.view,
+                textView: textView,
+                lineView: self.lineView,
+                imageView: nil
+            )
+        }
+        
+        public var storedFrameBeforeDismissed: CGRect?
+        
         override public init(frame: CGRect) {
             self.contentTintView = UIView()
             
