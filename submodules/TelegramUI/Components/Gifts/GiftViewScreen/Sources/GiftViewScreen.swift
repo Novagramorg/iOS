@@ -5631,17 +5631,22 @@ final class HeaderContentComponent: Component {
         func update(component: HeaderContentComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
             self.component = component
                         
+            let padding: CGFloat = 10.0
+            
             let titleSize = self.title.update(
                 transition: transition,
                 component: AnyComponent(
-                    MultilineTextComponent(text: .plain(component.attributedText), horizontalAlignment: .center)
+                    MultilineTextComponent(
+                        text: .plain(component.attributedText),
+                        horizontalAlignment: .center,
+                        maximumNumberOfLines: 2
+                    )
                 ),
                 environment: {},
-                containerSize: availableSize
+                containerSize: CGSize(width: availableSize.width - padding * 4.0, height: availableSize.height)
             )
             
-            let padding: CGFloat = 10.0
-            let size = CGSize(width: titleSize.width + padding * 2.0, height: 19.0)
+            let size = CGSize(width: titleSize.width + padding * 2.0, height: titleSize.height + 4.0)
                         
             let titleFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((size.width - titleSize.width) / 2.0), y: floorToScreenPixels((size.height - titleSize.height) / 2.0) - UIScreenPixel), size: titleSize)
             if let titleView = self.title.view {
@@ -5651,7 +5656,7 @@ final class HeaderContentComponent: Component {
                 transition.setFrame(view: titleView, frame: titleFrame)
             }
             
-            self.backgroundView.update(size: size, cornerRadius: size.height / 2.0, transition: transition.containedViewLayoutTransition)
+            self.backgroundView.update(size: size, cornerRadius: 9.5, transition: transition.containedViewLayoutTransition)
             transition.setFrame(view: self.backgroundView, frame: CGRect(origin: .zero, size: size))
                         
             return size
