@@ -48,6 +48,11 @@ private final class ContentContainer: UIView {
 }
 
 public class GlassBackgroundView: UIView {
+    public final class TransitionFlagBounce {
+        public init() {
+        }
+    }
+    
     public protocol ContentView: UIView {
         var tintMask: UIView { get }
     }
@@ -377,23 +382,27 @@ public class GlassBackgroundView: UIView {
     
     public func update(size: CGSize, cornerRadius: CGFloat, isDark: Bool, tintColor: TintColor, isInteractive: Bool = false, transition: ComponentTransition) {
         if let nativeContainerView = self.nativeContainerView, let nativeView = self.nativeView, nativeView.bounds.size != size {
-            //let previousFrame = nativeView.frame
             
             if transition.animation.isImmediate {
                 nativeView.layer.cornerRadius = cornerRadius
                 nativeView.frame = CGRect(origin: CGPoint(), size: size)
                 nativeContainerView.frame = CGRect(origin: CGPoint(), size: CGSize(width: size.width, height: max(size.height, 400.0)))
             } else {
-                /*transition.containedViewLayoutTransition.animateView {
-                    nativeView.layer.cornerRadius = cornerRadius
-                    nativeView.frame = CGRect(origin: CGPoint(), size: size)
-                    nativeContainerView.frame = CGRect(origin: CGPoint(), size: CGSize(width: size.width, height: max(size.height, 400.0)))
-                }*/
                 nativeView.layer.cornerRadius = cornerRadius
-                transition.setFrame(view: nativeView, frame: CGRect(origin: CGPoint(), size: size))
-                transition.setFrame(view: nativeContainerView, frame: CGRect(origin: CGPoint(), size: CGSize(width: size.width, height: max(size.height, 400.0))))
                 
-                //nativeView.layer.animateFrame(from: previousFrame, to: CGRect(origin: CGPoint(), size: size), duration: 0.4, timingFunction: kCAMediaTimingFunctionSpring)
+                let nativeFrame = CGRect(origin: CGPoint(), size: size)
+                let nativeContainerFrame = CGRect(origin: CGPoint(), size: CGSize(width: size.width, height: max(size.height, 400.0)))
+                
+                if transition.userData(TransitionFlagBounce.self) != nil {
+                    transition.containedViewLayoutTransition.updatePositionSpring(layer: nativeView.layer, position: nativeFrame.center)
+                    transition.containedViewLayoutTransition.updateBoundsSpring(layer: nativeView.layer, bounds: CGRect(origin: CGPoint(), size: nativeFrame.size))
+                    
+                    transition.containedViewLayoutTransition.updatePositionSpring(layer: nativeContainerView.layer, position: nativeContainerFrame.center)
+                    transition.containedViewLayoutTransition.updateBoundsSpring(layer: nativeContainerView.layer, bounds: CGRect(origin: CGPoint(), size: nativeContainerFrame.size))
+                } else {
+                    transition.setFrame(view: nativeView, frame: nativeFrame)
+                    transition.setFrame(view: nativeContainerView, frame: nativeContainerFrame)
+                }
             }
         }
         if let backgroundNode = self.backgroundNode {

@@ -288,6 +288,8 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     private var rightSlowModeInset: CGFloat = 0.0
     private var currentTextInputBackgroundWidthOffset: CGFloat = 0.0
     
+    private var enableBounceAnimations: Bool = false
+    
     public var displayAttachmentMenu: () -> Void = { }
     public var sendMessage: () -> Void = { }
     public var paste: (ChatTextInputPanelPasteData) -> Void = { _ in }
@@ -319,6 +321,8 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     private var strings: PresentationStrings?
     
     private let hapticFeedback = HapticFeedback()
+    
+    private var currentInputHasText: Bool = false
     
     public var inputTextState: ChatTextInputState {
         if let textInputNode = self.textInputNode {
@@ -635,6 +639,11 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         )
         
         self.context = context
+        
+        self.enableBounceAnimations = true
+        if let data = context.currentAppConfiguration.with({ $0 }).data, data["ios_killswitch_input_bounce"] != nil {
+            self.enableBounceAnimations = false
+        }
         
         self.addSubnode(self.clippingNode)
         
@@ -1416,6 +1425,16 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         if let textInputNode = self.textInputNode, let attributedText = textInputNode.attributedText, attributedText.length != 0 {
             inputHasText = true
         }
+        let inputHadText = self.currentInputHasText
+        self.currentInputHasText = inputHasText
+        
+        var useBounceAnimation = inputHasText && !inputHadText
+        if accessoryPanel != nil || self.accessoryPanel != nil {
+            useBounceAnimation = false
+        }
+        if !self.enableBounceAnimations {
+            useBounceAnimation = false
+        }
         
         var hasMenuButton = false
         var menuButtonExpanded = false
@@ -1957,7 +1976,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         }
         menuButtonTitleTransition.updateFrame(node: self.menuButtonTextNode, frame: CGRect(origin: CGPoint(x: 16.0, y: 11.0), size: menuTextSize))
         transition.updateAlpha(node: self.menuButtonTextNode, alpha: menuButtonExpanded ? 1.0 : 0.0)
-        transition.updateFrame(node: self.menuButtonIconNode, frame: CGRect(x: 5.0, y: isSendAsButton ? 5.0 : (5.0 - UIScreenPixel), width: 30.0, height: 30.0))
+        transition.updateFrame(node: self.menuButtonIconNode, frame: CGRect(x: 7.0, y: 7.0, width: 26.0, height: 26.0))
         
         transition.updateFrame(node: self.sendAsAvatarButtonNode, frame: menuButtonFrame)
         transition.updateFrame(node: self.sendAsAvatarContainerNode, frame: CGRect(origin: CGPoint(), size: menuButtonFrame.size))
@@ -2384,7 +2403,11 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         transition.updateFrame(view: self.accessoryPanelContainer, frame: CGRect(origin: CGPoint(), size: textInputContainerBackgroundFrame.size))
         transition.updateFrame(view: self.textInputContainerBackgroundView, frame: CGRect(origin: CGPoint(), size: textInputContainerBackgroundFrame.size))
         
-        self.textInputContainerBackgroundView.update(size: textInputContainerBackgroundFrame.size, cornerRadius: floor(minimalInputHeight * 0.5), isDark: interfaceState.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: interfaceState.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7)), transition: ComponentTransition(transition))
+        var textInputContainerBackgroundTransition = ComponentTransition(transition)
+        if useBounceAnimation, case let .animated(_, curve) = transition, case .spring = curve {
+            textInputContainerBackgroundTransition = textInputContainerBackgroundTransition.withUserData(GlassBackgroundView.TransitionFlagBounce())
+        }
+        self.textInputContainerBackgroundView.update(size: textInputContainerBackgroundFrame.size, cornerRadius: floor(minimalInputHeight * 0.5), isDark: interfaceState.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: interfaceState.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7)), transition: textInputContainerBackgroundTransition)
         
         transition.updateFrame(layer: self.textInputBackgroundNode.layer, frame: textInputContainerBackgroundFrame)
         transition.updateAlpha(node: self.textInputBackgroundNode, alpha: audioRecordingItemsAlpha)
@@ -2626,13 +2649,22 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         }
         
         var sendActionButtonsFrame = CGRect(origin: CGPoint(x: textInputContainerBackgroundFrame.maxX - sendActionButtonsSize.width, y: textInputContainerBackgroundFrame.maxY - sendActionButtonsSize.height), size: sendActionButtonsSize)
+        
+        let sendActionsScale: CGFloat
         if inputHasText || hasMediaDraft || hasForward {
-            transition.updateTransformScale(node: self.sendActionButtons, scale: CGPoint(x: 1.0, y: 1.0))
+            sendActionsScale = 1.0
         } else {
+            sendActionsScale = 0.001
             sendActionButtonsFrame.origin.x += (sendActionButtonsSize.width - 3.0 * 2.0) * 0.5 - 3.0
-            transition.updateTransformScale(node: self.sendActionButtons, scale: CGPoint(x: 0.001, y: 0.001))
         }
-        transition.updatePosition(node: self.sendActionButtons, position: sendActionButtonsFrame.center)
+        
+        if useBounceAnimation, case let .animated(duration, curve) = transition, case .spring = curve {
+            ContainedViewLayoutTransition.animated(duration: duration, curve: curve).updateScaleSpring(layer: self.sendActionButtons.layer, scale: sendActionsScale)
+            ContainedViewLayoutTransition.animated(duration: duration, curve: curve).updatePositionSpring(layer: self.sendActionButtons.layer, position: sendActionButtonsFrame.center)
+        } else {
+            transition.updateTransformScale(node: self.sendActionButtons, scale: CGPoint(x: sendActionsScale, y: sendActionsScale))
+            transition.updatePosition(node: self.sendActionButtons, position: sendActionButtonsFrame.center)
+        }
         transition.updateBounds(node: self.sendActionButtons, bounds: CGRect(origin: CGPoint(), size: sendActionButtonsFrame.size))
         if let (rect, containerSize) = self.absoluteRect {
             self.sendActionButtons.updateAbsoluteRect(CGRect(x: rect.origin.x + sendActionButtonsFrame.origin.x, y: rect.origin.y + sendActionButtonsFrame.origin.y, width: sendActionButtonsFrame.width, height: sendActionButtonsFrame.height), within: containerSize, transition: transition)
@@ -3806,7 +3838,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 if self.sendActionButtons.sendContainerNode.alpha.isZero && self.rightSlowModeInset.isZero {
                     alphaTransition.updateAlpha(node: self.sendActionButtons.sendContainerNode, alpha: 1.0)
                     blurTransitionIn.animateBlur(layer: self.sendActionButtons.sendContainerNode.layer, fromRadius: sendButtonBlurOut, toRadius: 0.0)
-                    transition.animatePositionAdditive(layer: self.sendActionButtons.sendButton.imageNode.layer, offset: CGPoint(x: -18.0, y: 14.0))
+                    transition.animatePositionAdditive(layer: self.sendActionButtons.sendButton.imageNode.layer, offset: CGPoint(x: -22.0, y: 18.0))
                     if let sendButtonRadialStatusNode = self.sendActionButtons.sendButtonRadialStatusNode {
                         alphaTransition.updateAlpha(node: sendButtonRadialStatusNode, alpha: 1.0)
                     }

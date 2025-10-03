@@ -12,7 +12,7 @@ public func makeSpringAnimation(_ keyPath: String, duration: Double) -> CABasicA
     return makeSpringAnimationImpl(keyPath, duration)
 }
 
-public func makeSpringBounceAnimation(_ keyPath: String, _ initialVelocity: CGFloat, _ damping: CGFloat) -> CABasicAnimation {
+public func makeSpringBounceAnimation(_ keyPath: String, _ initialVelocity: CGFloat, _ damping: CGFloat) -> CASpringAnimation {
     return makeSpringBounceAnimationImpl(keyPath, initialVelocity, damping)
 }
 

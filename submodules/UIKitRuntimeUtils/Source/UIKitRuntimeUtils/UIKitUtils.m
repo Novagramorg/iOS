@@ -83,7 +83,7 @@ CABasicAnimation * _Nonnull make26SpringAnimationImpl(NSString * _Nonnull keyPat
     return springAnimation;
 }
 
-CABasicAnimation * _Nonnull makeSpringBounceAnimationImpl(NSString * _Nonnull keyPath, CGFloat initialVelocity, CGFloat damping) {
+CASpringAnimation * _Nonnull makeSpringBounceAnimationImpl(NSString * _Nonnull keyPath, CGFloat initialVelocity, CGFloat damping) {
     CASpringAnimation *springAnimation = [CASpringAnimation animationWithKeyPath:keyPath];
     springAnimation.mass = 5.0f;
     springAnimation.stiffness = 900.0f;
