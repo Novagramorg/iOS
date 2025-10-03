@@ -424,8 +424,8 @@ public final class ChatChannelSubscriberInputPanelNode: ChatInputPanelNode {
                     } else {
                         titleColor = interfaceState.theme.chat.inputPanel.panelControlColor
                     }
-                    self.buttonTitle.attributedText = NSAttributedString(string: title, font: Font.semibold(16.0), textColor: titleColor)
-                    self.buttonTintTitle.attributedText = NSAttributedString(string: title, font: Font.semibold(16.0), textColor: .black)
+                    self.buttonTitle.attributedText = NSAttributedString(string: title, font: Font.semibold(15.0), textColor: titleColor)
+                    self.buttonTintTitle.attributedText = NSAttributedString(string: title, font: Font.semibold(15.0), textColor: .black)
                     self.button.accessibilityLabel = title
                 } else {
                     self.action = nil
