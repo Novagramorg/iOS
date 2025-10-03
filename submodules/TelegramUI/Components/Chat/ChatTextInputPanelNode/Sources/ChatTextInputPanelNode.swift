@@ -112,7 +112,7 @@ private func calculateTextFieldRealInsets(presentationInterfaceState: ChatPresen
     var right: CGFloat = 0.0
     right += max(0.0, accessoryButtonsWidth - 14.0)
     if actionControlsWidth != 0.0 {
-        right += actionControlsWidth - 14.0
+        right += actionControlsWidth - 10.0
     }
     
     return UIEdgeInsets(top: 4.5 + top, left: 0.0, bottom: 5.5 + bottom, right: right)
