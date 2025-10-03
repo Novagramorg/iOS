@@ -1566,14 +1566,14 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             
             let buttonTitle: String
             if case let .webView(title, _) = interfaceState.botMenuButton {
-                buttonTitle = title.uppercased()
+                buttonTitle = title
             } else {
-                buttonTitle = interfaceState.strings.Conversation_InputMenu.uppercased()
+                buttonTitle = interfaceState.strings.Conversation_InputMenu
             }
             
             buttonTitleUpdated = self.menuButtonTextNode.attributedText != nil && self.menuButtonTextNode.attributedText?.string != buttonTitle
             
-            self.menuButtonTextNode.attributedText = NSAttributedString(string: buttonTitle, font: Font.with(size: 16.0, design: .round, weight: .medium, traits: []), textColor: interfaceState.theme.chat.inputPanel.actionControlForegroundColor)
+            self.menuButtonTextNode.attributedText = NSAttributedString(string: buttonTitle, font: Font.with(size: 16.0, design: .round, weight: .semibold, traits: []), textColor: interfaceState.theme.chat.inputPanel.actionControlForegroundColor)
             self.menuButton.accessibilityLabel = self.menuButtonTextNode.attributedText?.string
             
             if buttonTitleUpdated, let buttonTextSnapshotView = self.menuButtonTextNode.view.snapshotView(afterScreenUpdates: false) {
@@ -1949,7 +1949,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         let menuButtonFrame = CGRect(x: leftInset + 8.0, y: menuButtonOriginY, width: menuButtonExpanded ? menuButtonWidth : menuCollapsedButtonWidth, height: menuButtonHeight)
         transition.updateFrameAsPositionAndBounds(node: self.menuButton, frame: menuButtonFrame)
         transition.updateFrame(view: self.menuButtonBackgroundView, frame: CGRect(origin: CGPoint(), size: menuButtonFrame.size))
-        self.menuButtonBackgroundView.update(size: menuButtonFrame.size, cornerRadius: menuButtonFrame.height * 0.5, isDark: interfaceState.theme.overallDarkAppearance, tintColor: .init(kind: .custom, color: interfaceState.theme.chat.inputPanel.actionControlFillColor), transition: ComponentTransition(transition))
+        self.menuButtonBackgroundView.update(size: menuButtonFrame.size, cornerRadius: menuButtonFrame.height * 0.5, isDark: interfaceState.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: interfaceState.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7), innerColor: interfaceState.theme.chat.inputPanel.actionControlFillColor), transition: ComponentTransition(transition))
         transition.updateFrame(node: self.menuButtonClippingNode, frame: CGRect(origin: CGPoint(x: 19.0, y: 0.0), size: CGSize(width: menuButtonWidth - 19.0, height: menuButtonFrame.height)))
         var menuButtonTitleTransition = transition
         if buttonTitleUpdated {
