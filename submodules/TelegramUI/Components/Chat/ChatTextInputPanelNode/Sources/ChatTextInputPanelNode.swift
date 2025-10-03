@@ -640,10 +640,10 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         
         self.context = context
         
-        self.enableBounceAnimations = true
+        /*self.enableBounceAnimations = true
         if let data = context.currentAppConfiguration.with({ $0 }).data, data["ios_killswitch_input_bounce"] != nil {
             self.enableBounceAnimations = false
-        }
+        }*/
         
         self.addSubnode(self.clippingNode)
         

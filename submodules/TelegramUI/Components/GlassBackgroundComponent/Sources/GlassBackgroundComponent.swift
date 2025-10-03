@@ -803,18 +803,18 @@ public extension GlassBackgroundView {
         return generateImage(size, rotatedContext: { size, context in
             context.clear(CGRect(origin: CGPoint(), size: size))
             
-            let maxColor = UIColor(white: 1.0, alpha: isDark ? 0.25 : 0.9)
+            let maxColor = UIColor(white: 1.0, alpha: isDark ? 0.2 : 0.9)
             let minColor = UIColor(white: 1.0, alpha: 0.0)
             
             context.setFillColor(fillColor.cgColor)
             context.fillEllipse(in: CGRect(origin: CGPoint(), size: size))
             
-            let lineWidth: CGFloat = isDark ? 0.66 : 0.66
+            let lineWidth: CGFloat = isDark ? 0.33 : 0.66
             
             context.saveGState()
             
-            let darkShadeColor = UIColor(white: isDark ? 1.0 : 0.0, alpha: 0.035)
-            let lightShadeColor = UIColor(white: isDark ? 0.0 : 1.0, alpha: 0.035)
+            let darkShadeColor = UIColor(white: isDark ? 1.0 : 0.0, alpha: isDark ? 0.0 : 0.035)
+            let lightShadeColor = UIColor(white: isDark ? 0.0 : 1.0, alpha: isDark ? 0.0 : 0.035)
             let innerShadowBlur: CGFloat = 24.0
             
             context.resetClip()
