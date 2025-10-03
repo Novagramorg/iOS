@@ -1955,7 +1955,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         if buttonTitleUpdated {
             menuButtonTitleTransition = .immediate
         }
-        menuButtonTitleTransition.updateFrame(node: self.menuButtonTextNode, frame: CGRect(origin: CGPoint(x: 16.0, y: 10.0), size: menuTextSize))
+        menuButtonTitleTransition.updateFrame(node: self.menuButtonTextNode, frame: CGRect(origin: CGPoint(x: 16.0, y: 11.0), size: menuTextSize))
         transition.updateAlpha(node: self.menuButtonTextNode, alpha: menuButtonExpanded ? 1.0 : 0.0)
         transition.updateFrame(node: self.menuButtonIconNode, frame: CGRect(x: isSendAsButton ? 4.0 + UIScreenPixel : (4.0 + UIScreenPixel), y: isSendAsButton ? 5.0 : (5.0 - UIScreenPixel), width: 30.0, height: 30.0))
         
