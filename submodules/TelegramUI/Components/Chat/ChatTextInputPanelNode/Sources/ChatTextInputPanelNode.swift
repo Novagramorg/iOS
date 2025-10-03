@@ -3688,8 +3688,12 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     
     private func updateActionButtons(hasText: Bool, transition: ContainedViewLayoutTransition) {
         let alphaTransition: ContainedViewLayoutTransition = transition.isAnimated ? .animated(duration: 0.2, curve: .easeInOut) : .immediate
+        let blurTransitionIn: ComponentTransition = transition.isAnimated ? .easeInOut(duration: 0.18) : .immediate
+        let blurTransitionOut: ComponentTransition = transition.isAnimated ? .easeInOut(duration: 0.18) : .immediate
+        let sendButtonBlurOut: CGFloat = 4.0
         
         var hideMicButton = false
+        var hideMicButtonBackground = false
         
         var mediaInputIsActive = false
         var keepSendButtonEnabled = self.keepSendButtonEnabled
@@ -3714,6 +3718,8 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 keepSendButtonEnabled = true
             }
             hasForward = presentationInterfaceState.interfaceState.forwardMessageIds != nil
+            
+            hideMicButtonBackground = presentationInterfaceState.inputTextPanelState.mediaRecordingState != nil
         }
         if hasForward {
             keepSendButtonEnabled = true
@@ -3732,6 +3738,8 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                         strongSelf.applyUpdateSendButtonIcon()
                     }
                 })
+                
+                blurTransitionOut.animateBlur(layer: self.sendActionButtons.sendContainerNode.layer, fromRadius: 0.0, toRadius: sendButtonBlurOut)
                 
                 if let sendButtonRadialStatusNode = self.sendActionButtons.sendButtonRadialStatusNode {
                     alphaTransition.updateAlpha(node: sendButtonRadialStatusNode, alpha: 0.0)
@@ -3762,6 +3770,8 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             if (hasText || keepSendButtonEnabled && !mediaInputIsActive && !hasSlowModeButton) {
                 if self.sendActionButtons.sendContainerNode.alpha.isZero && self.rightSlowModeInset.isZero {
                     alphaTransition.updateAlpha(node: self.sendActionButtons.sendContainerNode, alpha: 1.0)
+                    blurTransitionIn.animateBlur(layer: self.sendActionButtons.sendContainerNode.layer, fromRadius: sendButtonBlurOut, toRadius: 0.0)
+                    transition.animatePositionAdditive(layer: self.sendActionButtons.sendButton.imageNode.layer, offset: CGPoint(x: -14.0, y: 10.0))
                     if let sendButtonRadialStatusNode = self.sendActionButtons.sendButtonRadialStatusNode {
                         alphaTransition.updateAlpha(node: sendButtonRadialStatusNode, alpha: 1.0)
                     }
@@ -3775,6 +3785,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                             strongSelf.applyUpdateSendButtonIcon()
                         }
                     })
+                    blurTransitionOut.animateBlur(layer: self.sendActionButtons.sendContainerNode.layer, fromRadius: 0.0, toRadius: sendButtonBlurOut)
                     if let sendButtonRadialStatusNode = self.sendActionButtons.sendButtonRadialStatusNode {
                         alphaTransition.updateAlpha(node: sendButtonRadialStatusNode, alpha: 0.0)
                     }
@@ -3812,8 +3823,13 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             let micAlpha: CGFloat = self.mediaActionButtons.micButton.fadeDisabled ? 0.5 : 1.0
             if !self.mediaActionButtons.micButton.alpha.isEqual(to: micAlpha) {
                 alphaTransition.updateAlpha(layer: self.mediaActionButtons.micButton.layer, alpha: micAlpha)
-                alphaTransition.updateAlpha(layer: self.mediaActionButtons.micButtonBackgroundView.layer, alpha: micAlpha)
                 alphaTransition.updateAlpha(layer: self.mediaActionButtons.micButtonTintMaskView.layer, alpha: micAlpha)
+            }
+            
+            if hideMicButtonBackground {
+                alphaTransition.updateAlpha(layer: self.mediaActionButtons.micButtonBackgroundView.layer, alpha: 0.0)
+            } else {
+                alphaTransition.updateAlpha(layer: self.mediaActionButtons.micButtonBackgroundView.layer, alpha: 1.0)
             }
         }
         
