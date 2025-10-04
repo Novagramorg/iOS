@@ -1346,23 +1346,23 @@ private func infoItems(data: PeerInfoScreenData?, context: AccountContext, prese
         let ItemAffiliateInfo = 4001
         let ItemBusinessHours = 5000
         let ItemLocation = 5001
-        let ItemSendMessage = 5000
-        let ItemReport = 5001
-        let ItemAddToContacts = 5002
-        let ItemBlock = 5003
-        let ItemEncryptionKey = 5004
-        let ItemBalanceHeader = 6001
-        let ItemBalanceTon = 6001
-        let ItemBalanceStars = 6002
-        let ItemBotPermissionsHeader = 7000
-        let ItemBotPermissionsEmojiStatus = 7001
-        let ItemBotPermissionsLocation = 7002
-        let ItemBotPermissionsBiometry = 7003
-        let ItemBotSettings = 8000
-        let ItemBotReport = 8001
-        let ItemBotAddToChat = 8002
-        let ItemBotAddToChatInfo = 8003
-        let ItemVerification = 8004
+        let ItemSendMessage = 6000
+        let ItemReport = 6001
+        let ItemAddToContacts = 6002
+        let ItemBlock = 6003
+        let ItemEncryptionKey = 6004
+        let ItemBalanceHeader = 7000
+        let ItemBalanceTon = 7001
+        let ItemBalanceStars = 7002
+        let ItemBotPermissionsHeader = 8000
+        let ItemBotPermissionsEmojiStatus = 8001
+        let ItemBotPermissionsLocation = 8002
+        let ItemBotPermissionsBiometry = 8003
+        let ItemBotSettings = 9000
+        let ItemBotReport = 9001
+        let ItemBotAddToChat = 9002
+        let ItemBotAddToChatInfo = 9003
+        let ItemVerification = 9004
         
         if !callMessages.isEmpty {
             items[.calls]!.append(PeerInfoScreenCallListItem(id: ItemCallList, messages: callMessages))
