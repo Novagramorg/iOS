@@ -282,7 +282,6 @@ public class GlassBackgroundView: UIView {
     
     private let backgroundNode: NavigationBackgroundNode?
     private let nativeView: UIVisualEffectView?
-    private let nativeContainerView: UIVisualEffectView?
     private let nativeParamsView: EffectSettingsContainerView?
     
     private let foregroundView: UIImageView?
@@ -313,25 +312,18 @@ public class GlassBackgroundView: UIView {
             let glassEffect = UIGlassEffect(style: .regular)
             glassEffect.isInteractive = false
             let nativeView = UIVisualEffectView(effect: glassEffect)
-            //nativeView.layer.anchorPoint = CGPoint()
             self.nativeView = nativeView
-            
-            let glassContainerEffect = UIGlassContainerEffect()
-            let nativeContainerView = UIVisualEffectView(effect: glassContainerEffect)
-            self.nativeContainerView = nativeContainerView
-            nativeContainerView.contentView.addSubview(nativeView)
             
             let nativeParamsView = EffectSettingsContainerView(frame: CGRect())
             self.nativeParamsView = nativeParamsView
             
-            nativeParamsView.addSubview(nativeContainerView)
+            nativeParamsView.addSubview(nativeView)
             
             self.foregroundView = nil
             self.shadowView = nil
         } else {
             self.backgroundNode = NavigationBackgroundNode(color: .black, enableBlur: true, customBlurRadius: 8.0)
             self.nativeView = nil
-            self.nativeContainerView = nil
             self.nativeParamsView = nil
             self.foregroundView = UIImageView()
             
@@ -372,36 +364,30 @@ public class GlassBackgroundView: UIView {
     }
     
     override public func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
-        /*if let nativeContainerView = self.nativeContainerView {
-            if let result = nativeContainerView.hitTest(self.convert(point, to: nativeContainerView), with: event) {
+        if let nativeView = self.nativeView {
+            if let result = nativeView.hitTest(self.convert(point, to: nativeView), with: event) {
                 return result
             }
-        }*/
+        }
         return nil
     }
     
     public func update(size: CGSize, cornerRadius: CGFloat, isDark: Bool, tintColor: TintColor, isInteractive: Bool = false, transition: ComponentTransition) {
-        if let nativeContainerView = self.nativeContainerView, let nativeView = self.nativeView, nativeView.bounds.size != size {
+        if let nativeView = self.nativeView, nativeView.bounds.size != size {
             
             if transition.animation.isImmediate {
                 nativeView.layer.cornerRadius = cornerRadius
                 nativeView.frame = CGRect(origin: CGPoint(), size: size)
-                nativeContainerView.frame = CGRect(origin: CGPoint(), size: CGSize(width: size.width, height: max(size.height, 400.0)))
             } else {
                 nativeView.layer.cornerRadius = cornerRadius
                 
                 let nativeFrame = CGRect(origin: CGPoint(), size: size)
-                let nativeContainerFrame = CGRect(origin: CGPoint(), size: CGSize(width: size.width, height: max(size.height, 400.0)))
                 
                 if transition.userData(TransitionFlagBounce.self) != nil {
                     transition.containedViewLayoutTransition.updatePositionSpring(layer: nativeView.layer, position: nativeFrame.center)
                     transition.containedViewLayoutTransition.updateBoundsSpring(layer: nativeView.layer, bounds: CGRect(origin: CGPoint(), size: nativeFrame.size))
-                    
-                    transition.containedViewLayoutTransition.updatePositionSpring(layer: nativeContainerView.layer, position: nativeContainerFrame.center)
-                    transition.containedViewLayoutTransition.updateBoundsSpring(layer: nativeContainerView.layer, bounds: CGRect(origin: CGPoint(), size: nativeContainerFrame.size))
                 } else {
                     transition.setFrame(view: nativeView, frame: nativeFrame)
-                    transition.setFrame(view: nativeContainerView, frame: nativeContainerFrame)
                 }
             }
         }
@@ -459,7 +445,7 @@ public class GlassBackgroundView: UIView {
             if let foregroundView = self.foregroundView {
                 foregroundView.image = GlassBackgroundView.generateLegacyGlassImage(size: CGSize(width: cornerRadius * 2.0, height: cornerRadius * 2.0), inset: shadowInset, isDark: isDark, fillColor: tintColor.color)
             } else {
-                if let nativeParamsView = self.nativeParamsView, let nativeContainerView = self.nativeContainerView, let nativeView {
+                if let nativeParamsView = self.nativeParamsView, let nativeView = self.nativeView {
                     if #available(iOS 26.0, *) {
                         let glassEffect = UIGlassEffect(style: .regular)
                         switch tintColor.kind {
@@ -480,7 +466,7 @@ public class GlassBackgroundView: UIView {
                             nativeParamsView.lumaMax = 1.0
                         }
                         
-                        nativeContainerView.overrideUserInterfaceStyle = isDark ? .dark : .light
+                        nativeView.overrideUserInterfaceStyle = isDark ? .dark : .light
                     }
                 }
             }
@@ -500,22 +486,64 @@ public class GlassBackgroundView: UIView {
 
 public final class GlassBackgroundContainerView: UIView {
     private final class ContentView: UIView {
-        
     }
     
-    private let contentViewImpl: ContentView
+    private let legacyView: ContentView?
+    private let nativeView: UIVisualEffectView?
+    
     public var contentView: UIView {
-        return self.contentViewImpl
+        if let nativeView = self.nativeView {
+            return nativeView.contentView
+        } else {
+            return self.legacyView!
+        }
     }
     
     public override init(frame: CGRect) {
-        self.contentViewImpl = ContentView()
+        if #available(iOS 26.0, *) {
+            let effect = UIGlassContainerEffect()
+            effect.spacing = 7.0
+            self.nativeView = UIVisualEffectView(effect: effect)
+            self.legacyView = nil
+        } else {
+            self.nativeView = nil
+            self.legacyView = ContentView()
+        }
         
         super.init(frame: frame)
+        
+        if let nativeView = self.nativeView {
+            self.addSubview(nativeView)
+        } else if let legacyView = self.legacyView {
+            self.addSubview(legacyView)
+        }
     }
     
     required public init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+    
+    override public func didAddSubview(_ subview: UIView) {
+        super.didAddSubview(subview)
+        
+        if subview !== self.nativeView && subview !== self.legacyView {
+            assertionFailure()
+        }
+    }
+    
+    override public func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        guard let result = self.contentView.hitTest(point, with: event) else {
+            return nil
+        }
+        return result
+    }
+    
+    public func update(size: CGSize, transition: ComponentTransition) {
+        if let nativeView = self.nativeView {
+            transition.setFrame(view: nativeView, frame: CGRect(origin: CGPoint(), size: size))
+        } else if let legacyView = self.legacyView {
+            transition.setFrame(view: legacyView, frame: CGRect(origin: CGPoint(), size: size))
+        }
     }
 }
 
