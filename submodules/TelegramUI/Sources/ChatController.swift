@@ -5114,9 +5114,6 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             if strongSelf.navigationBar?.contentNode != nil {
                 return false
             }
-            if strongSelf.chatDisplayNode.leftPanel != nil {
-                return false
-            }
             return true
         }
         
