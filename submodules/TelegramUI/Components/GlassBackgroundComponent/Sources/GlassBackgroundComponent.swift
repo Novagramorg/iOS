@@ -368,6 +368,10 @@ public class GlassBackgroundView: UIView {
             if let result = nativeView.hitTest(self.convert(point, to: nativeView), with: event) {
                 return result
             }
+        } else {
+            if let result = self.contentContainer.hitTest(self.convert(point, to: self.contentContainer), with: event) {
+                return result
+            }
         }
         return nil
     }
@@ -534,6 +538,9 @@ public final class GlassBackgroundContainerView: UIView {
     override public func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         guard let result = self.contentView.hitTest(point, with: event) else {
             return nil
+        }
+        if result === self.contentView {
+            //return nil
         }
         return result
     }
