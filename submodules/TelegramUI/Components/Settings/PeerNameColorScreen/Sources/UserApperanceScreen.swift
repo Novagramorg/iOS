@@ -1752,7 +1752,16 @@ final class UserAppearanceScreenComponent: Component {
             var buttonTitle = environment.strings.ProfileColorSetup_ApplyStyle
             var buttonAttributedSubtitleString: NSMutableAttributedString?
             
-            if let gift = self.selectedProfileGift, let resellAmounts = gift.resellAmounts, let starsAmount = resellAmounts.first(where: { $0.currency == .stars }) {
+            let selectedGift: StarGift.UniqueGift?
+            if let gift = self.selectedProfileGift {
+                selectedGift = gift
+            } else if let gift = self.selectedNameGift {
+                selectedGift = gift
+            } else {
+                selectedGift = nil
+            }
+            
+            if let gift = selectedGift, let resellAmounts = gift.resellAmounts, let starsAmount = resellAmounts.first(where: { $0.currency == .stars }) {
                 let resellAmount: CurrencyAmount
                 if gift.resellForTonOnly {
                     resellAmount = resellAmounts.first(where: { $0.currency == .ton }) ?? starsAmount
