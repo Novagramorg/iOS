@@ -2251,7 +2251,8 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                                 stats: EngineChatList.StoryStats(
                                     totalCount: rawStoryArchiveSubscriptions.items.count,
                                     unseenCount: unseenCount,
-                                    hasUnseenCloseFriends: hasUnseenCloseFriends
+                                    hasUnseenCloseFriends: hasUnseenCloseFriends,
+                                    hasLiveItems: false
                                 ),
                                 hasUnseenCloseFriends: hasUnseenCloseFriends
                             )

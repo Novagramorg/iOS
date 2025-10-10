@@ -1678,13 +1678,12 @@ private func finalStateWithUpdatesAndServerTime(accountPeerId: PeerId, postbox: 
                     break
                 }
             case let .updateGroupCall(_, channelId, call):
-                updatedState.updateGroupCall(peerId: channelId.flatMap { PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value($0)) }, call: call)
-                updatedState.updateGroupCall(peerId: channelId.flatMap { PeerId(namespace: Namespaces.Peer.CloudGroup, id: PeerId.Id._internalFromInt64Value($0)) }, call: call)
+                updatedState.updateGroupCall(peerId: channelId?.peerId, call: call)
             case let .updateGroupCallChainBlocks(call, subChainId, blocks, nextOffset):
                 if case let .inputGroupCall(id, accessHash) = call {
                     updatedState.updateGroupCallChainBlocks(id: id, accessHash: accessHash, subChainId: subChainId, blocks: blocks.map { $0.makeData() }, nextOffset: nextOffset)
                 }
-            case let .updateGroupCallMessage(call, fromId, randomId, message):
+            case let .updateGroupCallMessage(_, call, fromId, randomId, message, _):
                 if case let .inputGroupCall(id, _) = call {
                     updatedState.updateGroupCallMessage(id: id, authorId: fromId.peerId, randomId: randomId, text: message)
                 }
@@ -5156,12 +5155,12 @@ func replayFinalState(
                     if let currentIndex = updatedPeerEntries.firstIndex(where: { $0.id == storedItem.id }) {
                         if case .item = storedItem {
                             if let codedEntry = CodableEntry(storedItem) {
-                                updatedPeerEntries[currentIndex] = StoryItemsTableEntry(value: codedEntry, id: storedItem.id, expirationTimestamp: storedItem.expirationTimestamp, isCloseFriends: storedItem.isCloseFriends)
+                                updatedPeerEntries[currentIndex] = StoryItemsTableEntry(value: codedEntry, id: storedItem.id, expirationTimestamp: storedItem.expirationTimestamp, isCloseFriends: storedItem.isCloseFriends, isLiveStream: storedItem.isLiveStream)
                             }
                         }
                     } else {
                         if let codedEntry = CodableEntry(storedItem) {
-                            updatedPeerEntries.append(StoryItemsTableEntry(value: codedEntry, id: storedItem.id, expirationTimestamp: storedItem.expirationTimestamp, isCloseFriends: storedItem.isCloseFriends))
+                            updatedPeerEntries.append(StoryItemsTableEntry(value: codedEntry, id: storedItem.id, expirationTimestamp: storedItem.expirationTimestamp, isCloseFriends: storedItem.isCloseFriends, isLiveStream: storedItem.isLiveStream))
                         }
                     }
                     if case .item = storedItem {
@@ -5246,7 +5245,7 @@ func replayFinalState(
                             folderIds: item.folderIds
                         ))
                         if let entry = CodableEntry(updatedItem) {
-                            updatedPeerEntries[index] = StoryItemsTableEntry(value: entry, id: item.id, expirationTimestamp: item.expirationTimestamp, isCloseFriends: item.isCloseFriends)
+                            updatedPeerEntries[index] = StoryItemsTableEntry(value: entry, id: item.id, expirationTimestamp: item.expirationTimestamp, isCloseFriends: item.isCloseFriends, isLiveStream: item.isLiveStream)
                         }
                     }
                 }

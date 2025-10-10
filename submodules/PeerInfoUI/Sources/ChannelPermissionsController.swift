@@ -1027,7 +1027,7 @@ public func channelPermissionsController(context: AccountContext, updatedPresent
         |> take(1)
         |> deliverOnMainQueue).start(next: { peerId, _ in
             var dismissController: (() -> Void)?
-            let controller = ChannelMembersSearchController(context: context, peerId: peerId, mode: .ban, filters: [.disable([context.account.peerId])], openPeer: { peer, participant in
+            let controller = ChannelMembersSearchControllerImpl(params: ChannelMembersSearchControllerParams(context: context, peerId: peerId, mode: .ban, filters: [.disable([context.account.peerId])], openPeer: { peer, participant in
                 if let participant = participant {
                     let presentationData = updatedPresentationData?.initial ?? context.sharedContext.currentPresentationData.with { $0 }
                     switch participant.participant {
@@ -1048,7 +1048,7 @@ public func channelPermissionsController(context: AccountContext, updatedPresent
                         upgradedToSupergroupImpl?(upgradedPeerId, f)
                     }), ViewControllerPresentationArguments(presentationAnimation: .modalSheet))
                 })
-            })
+            }))
             dismissController = { [weak controller] in
                 controller?.dismiss()
             }

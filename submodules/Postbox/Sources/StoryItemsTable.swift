@@ -5,17 +5,20 @@ public final class StoryItemsTableEntry: Equatable {
     public let id: Int32
     public let expirationTimestamp: Int32?
     public let isCloseFriends: Bool
+    public let isLiveStream: Bool
     
     public init(
         value: CodableEntry,
         id: Int32,
         expirationTimestamp: Int32?,
-        isCloseFriends: Bool
+        isCloseFriends: Bool,
+        isLiveStream: Bool
     ) {
         self.value = value
         self.id = id
         self.expirationTimestamp = expirationTimestamp
         self.isCloseFriends = isCloseFriends
+        self.isLiveStream = isLiveStream
     }
     
     public static func ==(lhs: StoryItemsTableEntry, rhs: StoryItemsTableEntry) -> Bool {
@@ -32,6 +35,9 @@ public final class StoryItemsTableEntry: Equatable {
             return false
         }
         if lhs.isCloseFriends != rhs.isCloseFriends {
+            return false
+        }
+        if lhs.isLiveStream != rhs.isLiveStream {
             return false
         }
         return true
@@ -139,10 +145,11 @@ final class StoryItemsTable: Table {
         return key.successor
     }
     
-    public func getStats(peerId: PeerId, maxSeenId: Int32) -> (total: Int, unseen: Int, hasUnseenCloseFriends: Bool) {
+    public func getStats(peerId: PeerId, maxSeenId: Int32) -> (total: Int, unseen: Int, hasUnseenCloseFriends: Bool, hasLiveItems: Bool) {
         var total = 0
         var unseen = 0
         var hasUnseenCloseFriends = false
+        var hasLiveItems = false
         
         self.valueBox.range(self.table, start: self.lowerBound(peerId: peerId), end: self.upperBound(peerId: peerId), values: { key, value in
             let id = key.getInt32(8)
@@ -152,6 +159,7 @@ final class StoryItemsTable: Table {
                 unseen += 1
                 
                 var isCloseFriends = false
+                var isLiveStream = false
                 let readBuffer = ReadBuffer(data: value.makeData())
                 var magic: UInt32 = 0
                 readBuffer.read(&magic, offset: 0, length: 4)
@@ -168,6 +176,7 @@ final class StoryItemsTable: Table {
                                 var flags: UInt8 = 0
                                 readBuffer.read(&flags, offset: 0, length: 1)
                                 isCloseFriends = (flags & (1 << 0)) != 0
+                                isLiveStream = (flags & (1 << 1)) != 0
                             }
                         }
                     } else {
@@ -180,12 +189,15 @@ final class StoryItemsTable: Table {
                 if isCloseFriends {
                     hasUnseenCloseFriends = true
                 }
+                if isLiveStream {
+                    hasLiveItems = true
+                }
             }
             
             return true
         }, limit: 10000)
         
-        return (total, unseen, hasUnseenCloseFriends)
+        return (total, unseen, hasUnseenCloseFriends, hasLiveItems)
     }
     
     public func get(peerId: PeerId) -> [StoryItemsTableEntry] {
@@ -199,6 +211,7 @@ final class StoryItemsTable: Table {
             let entry: CodableEntry
             var expirationTimestamp: Int32?
             var isCloseFriends = false
+            var isLiveStream = false
             
             let readBuffer = ReadBuffer(data: value.makeData())
             var magic: UInt32 = 0
@@ -234,6 +247,7 @@ final class StoryItemsTable: Table {
                             var flags: UInt8 = 0
                             readBuffer.read(&flags, offset: 0, length: 1)
                             isCloseFriends = (flags & (1 << 0)) != 0
+                            isLiveStream = (flags & (1 << 1)) != 0
                         }
                     }
                 } else {
@@ -245,7 +259,7 @@ final class StoryItemsTable: Table {
                 entry = CodableEntry(data: value.makeData())
             }
             
-            result.append(StoryItemsTableEntry(value: entry, id: id, expirationTimestamp: expirationTimestamp, isCloseFriends: isCloseFriends))
+            result.append(StoryItemsTableEntry(value: entry, id: id, expirationTimestamp: expirationTimestamp, isCloseFriends: isCloseFriends, isLiveStream: isLiveStream))
             
             return true
         }, limit: 10000)
@@ -385,6 +399,9 @@ final class StoryItemsTable: Table {
             var flags: UInt8 = 0
             if entry.isCloseFriends {
                 flags |= (1 << 0)
+            }
+            if entry.isLiveStream {
+                flags |= (1 << 1)
             }
             buffer.write(&flags, length: 1)
             

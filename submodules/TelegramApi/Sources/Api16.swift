@@ -725,6 +725,7 @@ public extension Api {
         case messageMediaToDo(flags: Int32, todo: Api.TodoList, completions: [Api.TodoCompletion]?)
         case messageMediaUnsupported
         case messageMediaVenue(geo: Api.GeoPoint, title: String, address: String, provider: String, venueId: String, venueType: String)
+        case messageMediaVideoStream(call: Api.InputGroupCall)
         case messageMediaWebPage(flags: Int32, webpage: Api.WebPage)
     
     public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
@@ -908,6 +909,12 @@ public extension Api {
                     serializeString(venueId, buffer: buffer, boxed: false)
                     serializeString(venueType, buffer: buffer, boxed: false)
                     break
+                case .messageMediaVideoStream(let call):
+                    if boxed {
+                        buffer.appendInt32(1059290001)
+                    }
+                    call.serialize(buffer, true)
+                    break
                 case .messageMediaWebPage(let flags, let webpage):
                     if boxed {
                         buffer.appendInt32(-571405253)
@@ -954,6 +961,8 @@ public extension Api {
                 return ("messageMediaUnsupported", [])
                 case .messageMediaVenue(let geo, let title, let address, let provider, let venueId, let venueType):
                 return ("messageMediaVenue", [("geo", geo as Any), ("title", title as Any), ("address", address as Any), ("provider", provider as Any), ("venueId", venueId as Any), ("venueType", venueType as Any)])
+                case .messageMediaVideoStream(let call):
+                return ("messageMediaVideoStream", [("call", call as Any)])
                 case .messageMediaWebPage(let flags, let webpage):
                 return ("messageMediaWebPage", [("flags", flags as Any), ("webpage", webpage as Any)])
     }
@@ -1324,6 +1333,19 @@ public extension Api {
             let _c6 = _6 != nil
             if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 {
                 return Api.MessageMedia.messageMediaVenue(geo: _1!, title: _2!, address: _3!, provider: _4!, venueId: _5!, venueType: _6!)
+            }
+            else {
+                return nil
+            }
+        }
+        public static func parse_messageMediaVideoStream(_ reader: BufferReader) -> MessageMedia? {
+            var _1: Api.InputGroupCall?
+            if let signature = reader.readInt32() {
+                _1 = Api.parse(reader, signature: signature) as? Api.InputGroupCall
+            }
+            let _c1 = _1 != nil
+            if _c1 {
+                return Api.MessageMedia.messageMediaVideoStream(call: _1!)
             }
             else {
                 return nil

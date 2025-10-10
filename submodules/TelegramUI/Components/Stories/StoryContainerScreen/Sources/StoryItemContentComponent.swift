@@ -14,6 +14,7 @@ import HierarchyTrackingLayer
 import ButtonComponent
 import MultilineTextComponent
 import TelegramPresentationData
+import TelegramCallsUI
 
 final class StoryItemContentComponent: Component {
     typealias EnvironmentType = StoryContentItem.Environment
@@ -92,6 +93,8 @@ final class StoryItemContentComponent: Component {
         private let imageView: StoryItemImageView
         private let overlaysView: StoryItemOverlaysView
         private var videoNode: UniversalVideoNode?
+        private var mediaStreamCall: PresentationGroupCallImpl?
+        private var mediaStream: ComponentView<Empty>?
         private var loadingEffectView: StoryItemLoadingEffectView?
         private var loadingEffectAppearanceTimer: SwiftSignalKit.Timer?
         
@@ -385,6 +388,10 @@ final class StoryItemContentComponent: Component {
                                 if !self.isSeeking {
                                     self.updateVideoPlaybackProgress()
                                 }
+                            } else if case .liveStream = self.currentMessageMedia {
+                                if !self.isSeeking {
+                                    self.updateVideoPlaybackProgress()
+                                }
                             } else {
                                 if !self.markedAsSeen {
                                     self.markedAsSeen = true
@@ -599,7 +606,10 @@ final class StoryItemContentComponent: Component {
             
             let selectedMedia: EngineMedia
             var messageMedia: EngineMedia?
-            if !component.preferHighQuality, !component.item.isMy, let alternativeMediaValue = component.item.alternativeMediaList.first {
+            if case .liveStream = component.item.media {
+                selectedMedia = component.item.media
+                messageMedia = selectedMedia
+            } else if !component.preferHighQuality, !component.item.isMy, let alternativeMediaValue = component.item.alternativeMediaList.first {
                 selectedMedia = alternativeMediaValue
                 
                 switch alternativeMediaValue {
@@ -628,7 +638,7 @@ final class StoryItemContentComponent: Component {
             }
             
             var reloadMedia = false
-            if self.currentMessageMedia?.id != messageMedia?.id {
+            if self.currentMessageMedia?.id != messageMedia?.id || (self.currentMessageMedia == nil) != (messageMedia == nil) {
                 self.currentMessageMedia = messageMedia
                 reloadMedia = true
                 
@@ -707,47 +717,154 @@ final class StoryItemContentComponent: Component {
                 }
             }
             
-            if let messageMedia {
-                var applyState = false
-                self.imageView.didLoadContents = { [weak self] in
-                    guard let self else {
-                        return
-                    }
-                    self.contentLoaded = true
-                    if applyState {
-                        self.state?.updated(transition: .immediate)
-                    }
+            if case let .liveStream(liveStream) = messageMedia {
+                var mediaStreamTransition = transition
+                let mediaStream: ComponentView<Empty>
+                if let current = self.mediaStream {
+                    mediaStream = current
+                } else {
+                    mediaStreamTransition = mediaStreamTransition.withAnimation(.none)
+                    mediaStream = ComponentView()
+                    self.mediaStream = mediaStream
                 }
-                self.imageView.update(
-                    context: component.context,
-                    strings: component.strings,
-                    peer: component.peer,
-                    storyId: component.item.id,
-                    media: messageMedia,
-                    size: availableSize,
-                    isCaptureProtected: component.item.isForwardingDisabled,
-                    attemptSynchronous: synchronousLoad,
-                    transition: transition
-                )
-                self.updateOverlays(component: component, size: availableSize, synchronousLoad: synchronousLoad, transition: transition)
-                applyState = true
-                if self.imageView.isContentLoaded {
-                    self.contentLoaded = true
-                }
-                transition.setFrame(view: self.imageView, frame: CGRect(origin: CGPoint(), size: availableSize))
-                transition.setFrame(view: self.overlaysView, frame: CGRect(origin: CGPoint(), size: availableSize))
                 
-                var dimensions: CGSize?
-                switch messageMedia {
-                case let .image(image):
-                    dimensions = image.representations.last?.dimensions.cgSize
-                case let .file(file):
-                    dimensions = file.dimensions?.cgSize
-                default:
-                    break
+                let mediaStreamCall: PresentationGroupCallImpl
+                if let current = self.mediaStreamCall {
+                    mediaStreamCall = current
+                } else {
+                    let initialCall = EngineGroupCallDescription(
+                        id: liveStream.call.id,
+                        accessHash: liveStream.call.accessHash,
+                        title: nil,
+                        scheduleTimestamp: nil,
+                        subscribedToScheduled: false,
+                        isStream: true
+                    )
+                    let presentationData = component.context.sharedContext.currentPresentationData.with({ $0 })
+                    mediaStreamCall = PresentationGroupCallImpl(
+                        accountContext: component.context,
+                        audioSession: component.context.sharedContext.mediaManager.audioSession,
+                        callKitIntegration: nil,
+                        getDeviceAccessData: {
+                            (
+                                presentationData: presentationData,
+                                present: { c, a in
+                                    
+                                },
+                                openSettings: {
+                                    
+                                }
+                            )
+                        },
+                        initialCall: (initialCall, .id(id: liveStream.call.id, accessHash: liveStream.call.accessHash)),
+                        internalId: CallSessionInternalId(),
+                        peerId: nil,
+                        isChannel: false,
+                        invite: nil,
+                        joinAsPeerId: nil,
+                        isStream: true,
+                        keyPair: nil,
+                        conferenceSourceId: nil,
+                        isConference: false,
+                        beginWithVideo: false,
+                        sharedAudioContext: nil,
+                        unmuteByDefault: false
+                    )
+                    self.mediaStreamCall = mediaStreamCall
+                    
+                    let _ = mediaStreamCall.accountContext.engine.calls.getGroupCallStreamCredentials(peerId: mediaStreamCall.accountContext.account.peerId, isLiveStream: true, revokePreviousCredentials: false).startStandalone(next: { params in
+                        print("url: \(params.url), streamKey: \(params.streamKey)")
+                    })
                 }
-                if dimensions == nil {
-                    switch component.item.media {
+                
+                let _ = mediaStream.update(
+                    transition: mediaStreamTransition,
+                    component: AnyComponent(MediaStreamVideoComponent(
+                        call: mediaStreamCall,
+                        hasVideo: true,
+                        isVisible: true,
+                        isAdmin: false,
+                        peerTitle: "",
+                        addInset: false,
+                        isFullscreen: false,
+                        videoLoading: false,
+                        callPeer: nil,
+                        activatePictureInPicture: ActionSlot(),
+                        deactivatePictureInPicture: ActionSlot(),
+                        bringBackControllerForPictureInPictureDeactivation: { f in
+                            f()
+                        },
+                        pictureInPictureClosed: {
+                        },
+                        onVideoSizeRetrieved: { _ in
+                        },
+                        onVideoPlaybackLiveChange: { [weak self] isLive in
+                            guard let self else {
+                                return
+                            }
+                            self.videoPlaybackStatus = MediaPlayerStatus(
+                                generationTimestamp: CACurrentMediaTime(),
+                                duration: .infinity,
+                                dimensions: CGSize(),
+                                timestamp: 0.0,
+                                baseRate: 1.0,
+                                seekId: 0,
+                                status: isLive ? .playing : .buffering(initial: false, whilePlaying: true, progress: 0.0, display: true),
+                                soundEnabled: true
+                            )
+                            if !self.isSeeking {
+                                self.updateVideoPlaybackProgress()
+                            }
+                        }
+                    )),
+                    environment: {},
+                    containerSize: availableSize
+                )
+                let mediaStreamFrame = CGRect(origin: CGPoint(), size: availableSize)
+                if let mediaStreamView = mediaStream.view {
+                    if mediaStreamView.superview == nil {
+                        self.insertSubview(mediaStreamView, aboveSubview: self.imageView)
+                    }
+                    mediaStreamTransition.setFrame(view: mediaStreamView, frame: mediaStreamFrame)
+                }
+            } else {
+                if let mediaStream = self.mediaStream {
+                    self.mediaStream = nil
+                    mediaStream.view?.removeFromSuperview()
+                }
+                
+                if let messageMedia {
+                    var applyState = false
+                    self.imageView.didLoadContents = { [weak self] in
+                        guard let self else {
+                            return
+                        }
+                        self.contentLoaded = true
+                        if applyState {
+                            self.state?.updated(transition: .immediate)
+                        }
+                    }
+                    self.imageView.update(
+                        context: component.context,
+                        strings: component.strings,
+                        peer: component.peer,
+                        storyId: component.item.id,
+                        media: messageMedia,
+                        size: availableSize,
+                        isCaptureProtected: component.item.isForwardingDisabled,
+                        attemptSynchronous: synchronousLoad,
+                        transition: transition
+                    )
+                    self.updateOverlays(component: component, size: availableSize, synchronousLoad: synchronousLoad, transition: transition)
+                    applyState = true
+                    if self.imageView.isContentLoaded {
+                        self.contentLoaded = true
+                    }
+                    transition.setFrame(view: self.imageView, frame: CGRect(origin: CGPoint(), size: availableSize))
+                    transition.setFrame(view: self.overlaysView, frame: CGRect(origin: CGPoint(), size: availableSize))
+                    
+                    var dimensions: CGSize?
+                    switch messageMedia {
                     case let .image(image):
                         dimensions = image.representations.last?.dimensions.cgSize
                     case let .file(file):
@@ -755,28 +872,38 @@ final class StoryItemContentComponent: Component {
                     default:
                         break
                     }
-                }
-                
-                if let dimensions {
-                    var imageSize = dimensions.aspectFilled(availableSize)
-                    if imageSize.width < availableSize.width && imageSize.width >= availableSize.width - 5.0 {
-                        imageSize.width = availableSize.width
+                    if dimensions == nil {
+                        switch component.item.media {
+                        case let .image(image):
+                            dimensions = image.representations.last?.dimensions.cgSize
+                        case let .file(file):
+                            dimensions = file.dimensions?.cgSize
+                        default:
+                            break
+                        }
                     }
-                    if imageSize.height < availableSize.height && imageSize.height >= availableSize.height - 5.0 {
-                        imageSize.height = availableSize.height
-                    }
-                    let _ = imageSize
                     
-                    if let videoNode = self.videoNode {
-                        let videoSize = dimensions.aspectFilled(availableSize)
-                        videoNode.frame = CGRect(origin: CGPoint(x: floor((availableSize.width - videoSize.width) * 0.5), y: floor((availableSize.height - videoSize.height) * 0.5)), size: videoSize)
-                        videoNode.updateLayout(size: videoSize, transition: .immediate)
+                    if let dimensions {
+                        var imageSize = dimensions.aspectFilled(availableSize)
+                        if imageSize.width < availableSize.width && imageSize.width >= availableSize.width - 5.0 {
+                            imageSize.width = availableSize.width
+                        }
+                        if imageSize.height < availableSize.height && imageSize.height >= availableSize.height - 5.0 {
+                            imageSize.height = availableSize.height
+                        }
+                        let _ = imageSize
+                        
+                        if let videoNode = self.videoNode {
+                            let videoSize = dimensions.aspectFilled(availableSize)
+                            videoNode.frame = CGRect(origin: CGPoint(x: floor((availableSize.width - videoSize.width) * 0.5), y: floor((availableSize.height - videoSize.height) * 0.5)), size: videoSize)
+                            videoNode.updateLayout(size: videoSize, transition: .immediate)
+                        }
                     }
                 }
             }
             
             switch selectedMedia {
-            case .image, .file:
+            case .image, .file, .liveStream:
                 if let unsupportedText = self.unsupportedText {
                     self.unsupportedText = nil
                     unsupportedText.view?.removeFromSuperview()

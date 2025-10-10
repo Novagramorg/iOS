@@ -621,7 +621,7 @@ public class JoinGroupCallE2E {
     }
 }
 
-func _internal_joinGroupCall(account: Account, peerId: PeerId?, joinAs: PeerId?, callId: Int64, reference: InternalGroupCallReference, preferMuted: Bool, joinPayload: String, peerAdminIds: Signal<[PeerId], NoError>, inviteHash: String? = nil, generateE2E: ((Data?) -> JoinGroupCallE2E?)?) -> Signal<JoinGroupCallResult, JoinGroupCallError> {
+func _internal_joinGroupCall(account: Account, peerId: PeerId?, joinAs: PeerId?, callId: Int64, reference: InternalGroupCallReference, isStream: Bool, preferMuted: Bool, joinPayload: String, peerAdminIds: Signal<[PeerId], NoError>, inviteHash: String? = nil, generateE2E: ((Data?) -> JoinGroupCallE2E?)?) -> Signal<JoinGroupCallResult, JoinGroupCallError> {
     enum InternalJoinError {
         case error(JoinGroupCallError)
         case restart
@@ -719,9 +719,31 @@ func _internal_joinGroupCall(account: Account, peerId: PeerId?, joinAs: PeerId?,
                 }
             }
             
-            let getParticipantsRequest = _internal_getGroupCallParticipants(account: account, reference: reference, offset: "", ssrcs: [], limit: 100, sortAscending: true)
-            |> mapError { _ -> InternalJoinError in
-                return .error(.generic)
+            let getParticipantsRequest: Signal<GroupCallParticipantsContext.State, InternalJoinError>
+            if isStream {
+                getParticipantsRequest = .single(GroupCallParticipantsContext.State(
+                    participants: [],
+                    nextParticipantsFetchOffset: nil,
+                    adminIds: Set(),
+                    isCreator: false,
+                    defaultParticipantsAreMuted: .init(isMuted: true, canChange: false),
+                    messagesAreEnabled: .init(isEnabled: true, canChange: false),
+                    sortAscending: true,
+                    recordingStartTimestamp: nil,
+                    title: nil,
+                    scheduleTimestamp: nil,
+                    subscribedToScheduled: false,
+                    totalCount: 0,
+                    isVideoEnabled: false,
+                    unmutedVideoLimit: 0,
+                    isStream: true,
+                    version: 0
+                ))
+            } else {
+                getParticipantsRequest = _internal_getGroupCallParticipants(account: account, reference: reference, offset: "", ssrcs: [], limit: 100, sortAscending: true)
+                |> mapError { _ -> InternalJoinError in
+                    return .error(.generic)
+                }
             }
             
             return combineLatest(
@@ -835,7 +857,7 @@ func _internal_joinGroupCall(account: Account, peerId: PeerId?, joinAs: PeerId?,
                             case let .updateGroupCallParticipants(_, participants, _):
                                 loop: for participant in participants {
                                     switch participant {
-                                    case let .groupCallParticipant(flags, apiPeerId, date, activeDate, source, volume, about, raiseHandRating, video, presentation):
+                                    case let .groupCallParticipant(flags, apiPeerId, date, activeDate, source, volume, about, raiseHandRating, video, presentation, paidStarsTotal):
                                         let peerId: PeerId = apiPeerId.peerId
                                         let ssrc = UInt32(bitPattern: source)
                                         guard let peer = transaction.getPeer(peerId) else {
@@ -872,7 +894,8 @@ func _internal_joinGroupCall(account: Account, peerId: PeerId?, joinAs: PeerId?,
                                                 muteState: muteState,
                                                 volume: volume,
                                                 about: about,
-                                                joinedVideo: joinedVideo
+                                                joinedVideo: joinedVideo,
+                                                paidStarsTotal: paidStarsTotal
                                             ))
                                         }
                                     }
@@ -1233,6 +1256,7 @@ public final class GroupCallParticipantsContext {
         public var volume: Int32?
         public var about: String?
         public var joinedVideo: Bool
+        public var paidStarsTotal: Int64?
         
         public init(
             id: Id,
@@ -1248,7 +1272,8 @@ public final class GroupCallParticipantsContext {
             muteState: MuteState?,
             volume: Int32?,
             about: String?,
-            joinedVideo: Bool
+            joinedVideo: Bool,
+            paidStarsTotal: Int64?
         ) {
             self.id = id
             self.peer = peer
@@ -1264,6 +1289,7 @@ public final class GroupCallParticipantsContext {
             self.volume = volume
             self.about = about
             self.joinedVideo = joinedVideo
+            self.paidStarsTotal = paidStarsTotal
         }
 
         public var description: String {
@@ -1318,6 +1344,9 @@ public final class GroupCallParticipantsContext {
                 return false
             }
             if lhs.raiseHandRating != rhs.raiseHandRating {
+                return false
+            }
+            if lhs.paidStarsTotal != rhs.paidStarsTotal {
                 return false
             }
             return true
@@ -1547,6 +1576,7 @@ public final class GroupCallParticipantsContext {
                 public var volume: Int32?
                 public var about: String?
                 public var joinedVideo: Bool
+                public var paidStarsTotal: Int64?
                 public var isMin: Bool
                 
                 init(
@@ -1562,6 +1592,7 @@ public final class GroupCallParticipantsContext {
                     volume: Int32?,
                     about: String?,
                     joinedVideo: Bool,
+                    paidStarsTotal: Int64?,
                     isMin: Bool
                 ) {
                     self.peerId = peerId
@@ -1576,6 +1607,7 @@ public final class GroupCallParticipantsContext {
                     self.volume = volume
                     self.about = about
                     self.joinedVideo = joinedVideo
+                    self.paidStarsTotal = paidStarsTotal
                     self.isMin = isMin
                 }
             }
@@ -1679,7 +1711,8 @@ public final class GroupCallParticipantsContext {
                         muteState: nil,
                         volume: nil,
                         about: nil,
-                        joinedVideo: false
+                        joinedVideo: false,
+                        paidStarsTotal: nil
                     ))
                 }
             }
@@ -2266,7 +2299,8 @@ public final class GroupCallParticipantsContext {
                         muteState: muteState,
                         volume: volume,
                         about: participantUpdate.about,
-                        joinedVideo: participantUpdate.joinedVideo
+                        joinedVideo: participantUpdate.joinedVideo,
+                        paidStarsTotal: participantUpdate.paidStarsTotal
                     )
                     updatedParticipants.append(participant)
                 }
@@ -2579,7 +2613,7 @@ public final class GroupCallParticipantsContext {
         }
         self.stateValue.state.defaultParticipantsAreMuted.isMuted = isMuted
         
-        self.updateDefaultMuteDisposable.set((self.account.network.request(Api.functions.phone.toggleGroupCallSettings(flags: 1 << 0, call: self.reference.apiInputGroupCall, joinMuted: isMuted ? .boolTrue : .boolFalse, messagesEnabled: nil))
+        self.updateDefaultMuteDisposable.set((self.account.network.request(Api.functions.phone.toggleGroupCallSettings(flags: 1 << 0, call: self.reference.apiInputGroupCall, joinMuted: isMuted ? .boolTrue : .boolFalse, messagesEnabled: nil, sendPaidMessagesStars: nil))
         |> deliverOnMainQueue).start(next: { [weak self] updates in
             guard let strongSelf = self else {
                 return
@@ -2594,7 +2628,7 @@ public final class GroupCallParticipantsContext {
         }
         self.stateValue.state.messagesAreEnabled.isEnabled = isEnabled
         
-        self.updateMessagesEnabledDisposable.set((self.account.network.request(Api.functions.phone.toggleGroupCallSettings(flags: 1 << 2, call: self.reference.apiInputGroupCall, joinMuted: nil, messagesEnabled: isEnabled ? .boolTrue : .boolFalse))
+        self.updateMessagesEnabledDisposable.set((self.account.network.request(Api.functions.phone.toggleGroupCallSettings(flags: 1 << 2, call: self.reference.apiInputGroupCall, joinMuted: nil, messagesEnabled: isEnabled ? .boolTrue : .boolFalse, sendPaidMessagesStars: nil))
         |> deliverOnMainQueue).start(next: { [weak self] updates in
             guard let strongSelf = self else {
                 return
@@ -2604,7 +2638,7 @@ public final class GroupCallParticipantsContext {
     }
     
     public func resetInviteLinks() {
-        self.resetInviteLinksDisposable.set((self.account.network.request(Api.functions.phone.toggleGroupCallSettings(flags: 1 << 1, call: self.reference.apiInputGroupCall, joinMuted: nil, messagesEnabled: nil))
+        self.resetInviteLinksDisposable.set((self.account.network.request(Api.functions.phone.toggleGroupCallSettings(flags: 1 << 1, call: self.reference.apiInputGroupCall, joinMuted: nil, messagesEnabled: nil, sendPaidMessagesStars: nil))
         |> deliverOnMainQueue).start(next: { [weak self] updates in
             guard let strongSelf = self else {
                 return
@@ -2662,7 +2696,7 @@ public final class GroupCallParticipantsContext {
 extension GroupCallParticipantsContext.Update.StateUpdate.ParticipantUpdate {
     init(_ apiParticipant: Api.GroupCallParticipant) {
         switch apiParticipant {
-        case let .groupCallParticipant(flags, apiPeerId, date, activeDate, source, volume, about, raiseHandRating, video, presentation):
+        case let .groupCallParticipant(flags, apiPeerId, date, activeDate, source, volume, about, raiseHandRating, video, presentation, paidStarsTotal):
             let peerId: PeerId = apiPeerId.peerId
             let ssrc = UInt32(bitPattern: source)
             let muted = (flags & (1 << 0)) != 0
@@ -2707,6 +2741,7 @@ extension GroupCallParticipantsContext.Update.StateUpdate.ParticipantUpdate {
                 volume: volume,
                 about: about,
                 joinedVideo: joinedVideo,
+                paidStarsTotal: paidStarsTotal,
                 isMin: isMin
             )
         }
@@ -3135,7 +3170,7 @@ func _internal_getVideoBroadcastPart(dataSource: AudioBroadcastDataSource, callI
 extension GroupCallParticipantsContext.Participant {
      init?(_ apiParticipant: Api.GroupCallParticipant, transaction: Transaction) {
         switch apiParticipant {
-            case let .groupCallParticipant(flags, apiPeerId, date, activeDate, source, volume, about, raiseHandRating, video, presentation):
+            case let .groupCallParticipant(flags, apiPeerId, date, activeDate, source, volume, about, raiseHandRating, video, presentation, paidStarsTotal):
                 let peerId: PeerId = apiPeerId.peerId
                 let ssrc = UInt32(bitPattern: source)
                 guard let peer = transaction.getPeer(peerId) else {
@@ -3173,7 +3208,8 @@ extension GroupCallParticipantsContext.Participant {
                     muteState: muteState,
                     volume: volume,
                     about: about,
-                    joinedVideo: joinedVideo
+                    joinedVideo: joinedVideo,
+                    paidStarsTotal: paidStarsTotal
                 )
         }
     }
@@ -3205,7 +3241,7 @@ public enum GetGroupCallStreamCredentialsError {
     case generic
 }
 
-func _internal_getGroupCallStreamCredentials(account: Account, peerId: PeerId, revokePreviousCredentials: Bool) -> Signal<GroupCallStreamCredentials, GetGroupCallStreamCredentialsError> {
+func _internal_getGroupCallStreamCredentials(account: Account, peerId: PeerId, isLiveStream: Bool, revokePreviousCredentials: Bool) -> Signal<GroupCallStreamCredentials, GetGroupCallStreamCredentialsError> {
     return account.postbox.transaction { transaction -> Api.InputPeer? in
         return transaction.getPeer(peerId).flatMap(apiInputPeer)
     }
@@ -3215,7 +3251,11 @@ func _internal_getGroupCallStreamCredentials(account: Account, peerId: PeerId, r
             return .fail(.generic)
         }
         
-        return account.network.request(Api.functions.phone.getGroupCallStreamRtmpUrl(peer: inputPeer, revoke: revokePreviousCredentials ? .boolTrue : .boolFalse))
+        var flags: Int32 = 0
+        if isLiveStream {
+            flags |= 1 << 0
+        }
+        return account.network.request(Api.functions.phone.getGroupCallStreamRtmpUrl(flags: flags, peer: inputPeer, revoke: revokePreviousCredentials ? .boolTrue : .boolFalse))
         |> mapError { _ -> GetGroupCallStreamCredentialsError in
             return .generic
         }
@@ -3295,7 +3335,7 @@ public enum RevokeConferenceInviteLinkError {
 }
 
 func _internal_revokeConferenceInviteLink(account: Account, reference: InternalGroupCallReference, link: String) -> Signal<GroupCallInviteLinks, RevokeConferenceInviteLinkError> {
-    return account.network.request(Api.functions.phone.toggleGroupCallSettings(flags: 1 << 1, call: reference.apiInputGroupCall, joinMuted: .boolFalse, messagesEnabled: nil))
+    return account.network.request(Api.functions.phone.toggleGroupCallSettings(flags: 1 << 1, call: reference.apiInputGroupCall, joinMuted: .boolFalse, messagesEnabled: nil, sendPaidMessagesStars: nil))
     |> mapError { _ -> RevokeConferenceInviteLinkError in
         return .generic
     }
@@ -3882,12 +3922,14 @@ public final class GroupCallMessagesContext {
                         arc4random_buf(&randomId, 8)
                     }
                     self.sendMessageDisposables.add(self.account.network.request(Api.functions.phone.sendGroupCallMessage(
+                        flags: 0,
                         call: self.reference.apiInputGroupCall,
                         randomId: randomId,
                         message: .textWithEntities(
                             text: text,
                             entities: apiEntitiesFromMessageTextEntities(entities, associatedPeers: SimpleDictionary())
-                        )
+                        ),
+                        allowPaidStars: nil
                     )).startStrict())
                 }
             })

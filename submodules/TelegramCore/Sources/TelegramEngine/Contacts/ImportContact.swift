@@ -6,7 +6,7 @@ import SwiftSignalKit
 func _internal_importContact(account: Account, firstName: String, lastName: String, phoneNumber: String) -> Signal<PeerId?, NoError> {
     let accountPeerId = account.peerId
     
-    let input = Api.InputContact.inputPhoneContact(clientId: 1, phone: phoneNumber, firstName: firstName, lastName: lastName)
+    let input = Api.InputContact.inputPhoneContact(flags: 0, clientId: 1, phone: phoneNumber, firstName: firstName, lastName: lastName, note: nil)
     
     return account.network.request(Api.functions.contacts.importContacts(contacts: [input]))
     |> map(Optional.init)

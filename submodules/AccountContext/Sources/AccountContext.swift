@@ -1134,6 +1134,51 @@ public enum StarsWithdrawalScreenSubject {
     case postSuggestionModification(current: CurrencyAmount, timestamp: Int32?, completion: (CurrencyAmount, Int32?) -> Void)
 }
 
+public enum ChannelMembersSearchControllerMode {
+    case promote
+    case ban
+    case inviteToCall
+}
+
+public enum ChannelMembersSearchFilter {
+    case exclude([EnginePeer.Id])
+    case disable([EnginePeer.Id])
+    case excludeNonMembers
+    case excludeBots
+}
+
+public final class ChannelMembersSearchControllerParams {
+    public let context: AccountContext
+    public let updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)?
+    public let peerId: EnginePeer.Id
+    public let forceTheme: PresentationTheme?
+    public let mode: ChannelMembersSearchControllerMode
+    public let filters: [ChannelMembersSearchFilter]
+    public let openPeer: (EnginePeer, RenderedChannelParticipant?) -> Void
+    
+    public init(
+        context: AccountContext,
+        updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)? = nil,
+        peerId: EnginePeer.Id,
+        forceTheme: PresentationTheme? = nil,
+        mode: ChannelMembersSearchControllerMode,
+        filters: [ChannelMembersSearchFilter] = [],
+        openPeer: @escaping (EnginePeer, RenderedChannelParticipant?) -> Void
+    ) {
+        self.context = context
+        self.updatedPresentationData = updatedPresentationData
+        self.peerId = peerId
+        self.forceTheme = forceTheme
+        self.mode = mode
+        self.filters = filters
+        self.openPeer = openPeer
+    }
+}
+
+public protocol ChannelMembersSearchController: ViewController {
+    var copyInviteLink: (() -> Void)? { get set }
+}
+
 public protocol SharedAccountContext: AnyObject {
     var sharedContainerPath: String { get }
     var basePath: String { get }
@@ -1364,6 +1409,8 @@ public protocol SharedAccountContext: AnyObject {
     func makeBirthdayPickerScreen(context: AccountContext, settings: Promise<AccountPrivacySettings?>, openSettings: @escaping () -> Void, completion: @escaping (TelegramBirthday) -> Void) -> ViewController
     func makeBirthdaySuggestionScreen(context: AccountContext, peerId: EnginePeer.Id, completion: @escaping (TelegramBirthday) -> Void) -> ViewController
     func makeBirthdayAcceptSuggestionScreen(context: AccountContext, birthday: TelegramBirthday, settings: Promise<AccountPrivacySettings?>, openSettings: @escaping () -> Void, completion: @escaping (TelegramBirthday) -> Void) -> ViewController
+    
+    func makeChannelMembersSearchController(params: ChannelMembersSearchControllerParams) -> ChannelMembersSearchController
     
     func makeDebugSettingsController(context: AccountContext?) -> ViewController?
     

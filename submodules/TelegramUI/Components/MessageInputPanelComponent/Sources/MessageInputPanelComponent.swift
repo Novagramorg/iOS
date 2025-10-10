@@ -809,18 +809,16 @@ public final class MessageInputPanelComponent: Component {
                 insets.left = 41.0
             }
             if let _ = component.setMediaRecordingActive {
-                insets.right = 41.0
+                insets.right = 40.0 + 8.0 * 2.0
             }
             
-            let textFieldSideInset: CGFloat
-            switch component.style {
-            case .media, .glass:
-                textFieldSideInset = 8.0
-            default:
-                textFieldSideInset = 9.0
+            var textFieldSideInset: CGFloat = 8.0
+            if component.bottomInset <= 32.0 && !component.forceIsEditing && !component.hideKeyboard && !self.textFieldExternalState.isEditing {
+                textFieldSideInset += 18.0
+                insets.right += 18.0
             }
             
-            var mediaInsets = UIEdgeInsets(top: insets.top, left: textFieldSideInset, bottom: insets.bottom, right: 41.0)
+            var mediaInsets = UIEdgeInsets(top: insets.top, left: textFieldSideInset, bottom: insets.bottom, right: 40.0 + 8.0)
             if case .glass = component.style {
                 mediaInsets.right = 54.0
             }
@@ -1095,7 +1093,7 @@ public final class MessageInputPanelComponent: Component {
             //transition.setFrame(view: self.vibrancyEffectView, frame: CGRect(origin: CGPoint(), size: fieldBackgroundFrame.size))
             
             switch component.style {
-            case .glass:
+            case .glass, .story:
                 if self.fieldGlassBackgroundView == nil {
                     let fieldGlassBackgroundView = GlassBackgroundView(frame: fieldBackgroundFrame)
                     self.insertSubview(fieldGlassBackgroundView, aboveSubview: self.fieldBackgroundView)
@@ -1105,7 +1103,7 @@ public final class MessageInputPanelComponent: Component {
                     self.fieldBackgroundTint.isHidden = true
                 }
                 if let fieldGlassBackgroundView = self.fieldGlassBackgroundView {
-                    fieldGlassBackgroundView.update(size: fieldBackgroundFrame.size, cornerRadius: baseFieldHeight * 0.5, isDark: true, tintColor: .init(kind: .custom, color: UIColor(rgb: 0x25272e, alpha: 0.72)), transition: transition)
+                    fieldGlassBackgroundView.update(size: fieldBackgroundFrame.size, cornerRadius: baseFieldHeight * 0.5, isDark: true, tintColor: component.style == .story ? .init(kind: .panel, color: defaultDarkPresentationTheme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7)) : .init(kind: .custom, color: UIColor(rgb: 0x25272e, alpha: 0.72)), transition: transition)
                     transition.setFrame(view: fieldGlassBackgroundView, frame: fieldBackgroundFrame)
                 }
             default:
@@ -1551,6 +1549,9 @@ public final class MessageInputPanelComponent: Component {
                     inputActionButtonMode = .close
                 }
             } else {
+                if case .story = component.style {
+                    inputActionButtonAvailableSize = CGSize(width: 40.0, height: 40.0)
+                }
                 if hasMediaEditing {
                     inputActionButtonMode = .send
                 } else {
@@ -1571,11 +1572,19 @@ public final class MessageInputPanelComponent: Component {
                     }
                 }
             }
+            let inputActionButtonStyle: MessageInputActionButtonComponent.Style
+            if component.style == .glass {
+                inputActionButtonStyle = .glass(isTinted: true)
+            } else if component.style == .story {
+                inputActionButtonStyle = .glass(isTinted: false)
+            } else {
+                inputActionButtonStyle = .legacy
+            }
             let inputActionButtonSize = self.inputActionButton.update(
                 transition: transition,
                 component: AnyComponent(MessageInputActionButtonComponent(
                     mode: inputActionButtonMode,
-                    style: component.style == .glass ? .glass : .legacy,
+                    style: inputActionButtonStyle,
                     storyId: component.storyItem?.id,
                     action: { [weak self] mode, action, sendAction in
                         guard let self, let component = self.component else {
@@ -1690,25 +1699,21 @@ public final class MessageInputPanelComponent: Component {
             if rightButtonsOffsetX != 0.0 {
                 inputActionButtonOriginX = availableSize.width - 3.0 + rightButtonsOffsetX
                 if displayLikeAction {
-                    inputActionButtonOriginX -= 39.0
+                    inputActionButtonOriginX -= 40.0 + 8.0
                 }
                 if component.forwardAction != nil {
-                    inputActionButtonOriginX -= 46.0
+                    inputActionButtonOriginX -= 40.0 + 8.0
                 }
             } else {
                 if component.setMediaRecordingActive != nil || isEditing || component.style == .glass {
                     switch component.style {
-                    case .glass:
-                        inputActionButtonOriginX = fieldBackgroundFrame.maxX + 6.0
+                    case .glass, .story:
+                        inputActionButtonOriginX = fieldBackgroundFrame.maxX + 8.0
                     default:
                         inputActionButtonOriginX = fieldBackgroundFrame.maxX + floorToScreenPixels((41.0 - inputActionButtonSize.width) * 0.5)
                     }
                 } else {
                     inputActionButtonOriginX = size.width
-                }
-                
-                if hasLikeAction {
-                    inputActionButtonOriginX += 3.0
                 }
             }
             
@@ -1727,21 +1732,27 @@ public final class MessageInputPanelComponent: Component {
                 transition.setBounds(view: inputActionButtonView, bounds: CGRect(origin: CGPoint(), size: inputActionButtonFrame.size))
                 transition.setAlpha(view: inputActionButtonView, alpha: likeActionReplacesInputAction ? 0.0 : inputActionButtonAlpha)
                 
-                if rightButtonsOffsetX != 0.0 {
-                    if hasLikeAction {
-                        inputActionButtonOriginX += 46.0
-                    }
-                } else {
-                    if hasLikeAction {
-                        inputActionButtonOriginX += 41.0
-                    }
+                if hasLikeAction {
+                    inputActionButtonOriginX += 40.0 + 8.0
                 }
             }
             
+            let likeActionButtonStyle: MessageInputActionButtonComponent.Style
+            var likeButtonContainerSize = CGSize(width: 33.0, height: 33.0)
+            if component.style == .glass {
+                likeActionButtonStyle = .glass(isTinted: true)
+                likeButtonContainerSize = CGSize(width: 40.0, height: 40.0)
+            } else if component.style == .story {
+                likeActionButtonStyle = .glass(isTinted: false)
+                likeButtonContainerSize = CGSize(width: 40.0, height: 40.0)
+            } else {
+                likeActionButtonStyle = .legacy
+            }
             let likeButtonSize = self.likeButton.update(
                 transition: transition,
                 component: AnyComponent(MessageInputActionButtonComponent(
                     mode: .like(reaction: component.myReaction?.reaction, file: component.myReaction?.file, animationFileId: component.myReaction?.animationFileId),
+                    style: likeActionButtonStyle,
                     storyId: component.storyItem?.id,
                     action: { [weak self] _, action, _ in
                         guard let self, let component = self.component else {
@@ -1770,7 +1781,7 @@ public final class MessageInputPanelComponent: Component {
                     videoRecordingStatus: nil
                 )),
                 environment: {},
-                containerSize: CGSize(width: 33.0, height: 33.0)
+                containerSize: likeButtonContainerSize
             )
             if let likeButtonView = self.likeButton.view {
                 if likeButtonView.superview == nil {
@@ -1783,7 +1794,7 @@ public final class MessageInputPanelComponent: Component {
                 transition.setPosition(view: likeButtonView, position: likeButtonFrame.center)
                 transition.setBounds(view: likeButtonView, bounds: CGRect(origin: CGPoint(), size: likeButtonFrame.size))
                 transition.setAlpha(view: likeButtonView, alpha: displayLikeAction ? 1.0 : 0.0)
-                inputActionButtonOriginX += 41.0
+                inputActionButtonOriginX += 40.0 + 8.0
             }
         
             var fieldIconNextX = fieldBackgroundFrame.maxX - 4.0
@@ -1855,7 +1866,7 @@ public final class MessageInputPanelComponent: Component {
                 component: AnyComponent(Button(
                     content: AnyComponent(LottieComponent(
                         content: LottieComponent.AppBundleContent(name: animationName),
-                        color: .white
+                        color: defaultDarkPresentationTheme.chat.inputPanel.inputControlColor
                     )),
                     action: { [weak self] in
                         guard let self else {

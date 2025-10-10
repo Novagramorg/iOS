@@ -207,7 +207,7 @@ public class ContactsPeerItem: ItemListItem, ListViewItemWithHeader {
     let arrowAction: (() -> Void)?
     let animationCache: AnimationCache?
     let animationRenderer: MultiAnimationRenderer?
-    let storyStats: (total: Int, unseen: Int, hasUnseenCloseFriends: Bool)?
+    let storyStats: (total: Int, unseen: Int, hasUnseenCloseFriends: Bool, hasLiveItems: Bool)?
     let openStories: ((ContactsPeerItemPeer, ASDisplayNode) -> Void)?
     let adButtonAction: ((ASDisplayNode) -> Void)?
     let visibilityUpdated: ((Bool) -> Void)?
@@ -253,7 +253,7 @@ public class ContactsPeerItem: ItemListItem, ListViewItemWithHeader {
         contextAction: ((ASDisplayNode, ContextGesture?, CGPoint?) -> Void)? = nil, arrowAction: (() -> Void)? = nil,
         animationCache: AnimationCache? = nil,
         animationRenderer: MultiAnimationRenderer? = nil,
-        storyStats: (total: Int, unseen: Int, hasUnseenCloseFriends: Bool)? = nil,
+        storyStats: (total: Int, unseen: Int, hasUnseenCloseFriends: Bool, hasLiveItems: Bool)? = nil,
         openStories: ((ContactsPeerItemPeer, ASDisplayNode) -> Void)? = nil,
         adButtonAction: ((ASDisplayNode) -> Void)? = nil,
         visibilityUpdated: ((Bool) -> Void)? = nil
@@ -1286,7 +1286,8 @@ public class ContactsPeerItemNode: ItemListRevealOptionsItemNode {
                                     return AvatarNode.StoryStats(
                                         totalCount: stats.total,
                                         unseenCount: stats.unseen,
-                                        hasUnseenCloseFriendsItems: stats.hasUnseenCloseFriends
+                                        hasUnseenCloseFriendsItems: stats.hasUnseenCloseFriends,
+                                        hasLiveItems: stats.hasLiveItems
                                     )
                                 },
                                 presentationParams: AvatarNode.StoryPresentationParams(

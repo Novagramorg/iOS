@@ -1688,7 +1688,11 @@ public final class StoryItemSetContainerComponent: Component {
                                 }
                             }
                         } else if component.slice.effectivePeer.id == component.context.account.peerId {
-                            displayFooter = true
+                            if case .liveStream = component.slice.item.storyItem.media {
+                                displayFooter = false
+                            } else {
+                                displayFooter = true
+                            }
                         } else if component.slice.item.storyItem.isPending {
                             displayFooter = true
                         } else if case let .user(user) = component.slice.peer, let botInfo = user.botInfo, botInfo.flags.contains(.canEdit) {
@@ -1926,7 +1930,9 @@ public final class StoryItemSetContainerComponent: Component {
             }
             
             var displayViewLists = false
-            if component.slice.effectivePeer.id == component.context.account.peerId {
+            if case .liveStream = component.slice.item.storyItem.media {
+                displayViewLists = false
+            } else if component.slice.effectivePeer.id == component.context.account.peerId {
                 displayViewLists = true
             } else if case let .channel(channel) = component.slice.effectivePeer, channel.flags.contains(.isCreator) || component.slice.additionalPeerData.canViewStats {
                 displayViewLists = true
@@ -1941,7 +1947,9 @@ public final class StoryItemSetContainerComponent: Component {
                 return true
             } else {
                 var canReply = false
-                if case .user = component.slice.effectivePeer {
+                if case .liveStream = component.slice.item.storyItem.media {
+                    canReply = true
+                } else if case .user = component.slice.effectivePeer {
                     canReply = true
                     
                     if component.slice.effectivePeer.id == component.context.account.peerId {
@@ -1969,7 +1977,9 @@ public final class StoryItemSetContainerComponent: Component {
             }
             
             var canReply = false
-            if case .user = component.slice.effectivePeer {
+            if case .liveStream = component.slice.item.storyItem.media {
+                canReply = true
+            } else if case .user = component.slice.effectivePeer {
                 canReply = true
                 
                 if component.slice.effectivePeer.id == component.context.account.peerId {
@@ -2760,7 +2770,11 @@ public final class StoryItemSetContainerComponent: Component {
                 switch channel.info {
                 case .broadcast:
                     isChannel = true
-                    showMessageInputPanel = false
+                    if case .liveStream = component.slice.item.storyItem.media {
+                        showMessageInputPanel = true
+                    } else {
+                        showMessageInputPanel = false
+                    }
                 case .group:
                     if let bannedSendText = channel.hasBannedPermission(.banSendText, ignoreDefault: canBypassRestrictions) {
                         if bannedSendText.1 || component.slice.additionalPeerData.boostsToUnrestrict == nil {
@@ -2772,7 +2786,11 @@ public final class StoryItemSetContainerComponent: Component {
                     isGroup = true
                 }
             } else {
-                showMessageInputPanel = component.slice.effectivePeer.id != component.context.account.peerId
+                if case .liveStream = component.slice.item.storyItem.media {
+                    showMessageInputPanel = true
+                } else {
+                    showMessageInputPanel = component.slice.effectivePeer.id != component.context.account.peerId
+                }
             }
             if case let .user(user) = component.slice.peer, let _ = user.botInfo {
                 showMessageInputPanel = false
@@ -2834,6 +2852,9 @@ public final class StoryItemSetContainerComponent: Component {
                 if let sendPaidMessageStars = component.slice.additionalPeerData.sendPaidMessageStars {
                     let dateTimeFormat = component.context.sharedContext.currentPresentationData.with { $0 }.dateTimeFormat
                     inputPlaceholder = .plain(component.strings.Chat_InputTextPaidMessagePlaceholder(" # \(presentationStringsFormattedNumber(Int32(sendPaidMessageStars.value), dateTimeFormat.groupingSeparator))").string)
+                } else if case .liveStream = component.slice.item.storyItem.media {
+                    //TODO:localize
+                    inputPlaceholder = .plain("Comment")
                 } else {
                     inputPlaceholder = .plain(isGroup ? component.strings.Story_InputPlaceholderReplyInGroup : component.strings.Story_InputPlaceholderReplyPrivately)
                 }
@@ -2859,6 +2880,8 @@ public final class StoryItemSetContainerComponent: Component {
             self.inputPanel.parentState = state
             var inputPanelSize: CGSize?
             
+            let _ = inputNodeVisible
+            
             let startTime23 = CFAbsoluteTimeGetCurrent()
                         
             if showMessageInputPanel {
@@ -2869,6 +2892,14 @@ public final class StoryItemSetContainerComponent: Component {
                     if component.slice.effectivePeer.isService {
                         haveLikeOptions = false
                     }
+                }
+                
+                var displayAttachmentAction = true
+                if case .liveStream = component.slice.item.storyItem.media {
+                    displayAttachmentAction = false
+                }
+                if component.slice.effectivePeer.isService {
+                    displayAttachmentAction = false
                 }
                 
                 inputPanelSize = self.inputPanel.update(
@@ -2949,13 +2980,13 @@ public final class StoryItemSetContainerComponent: Component {
                             self.sendMessageContext.videoRecorderValue?.dismissVideo()
                             self.sendMessageContext.discardMediaRecordingPreview(view: self)
                         },
-                        attachmentAction: component.slice.effectivePeer.isService ? nil : { [weak self] in
+                        attachmentAction: !displayAttachmentAction ? nil : { [weak self] in
                             guard let self else {
                                 return
                             }
                             self.sendMessageContext.presentAttachmentMenu(view: self, subject: .default)
                         },
-                        attachmentButtonMode: component.slice.effectivePeer.isService ? nil : .attach,
+                        attachmentButtonMode: !displayAttachmentAction ? nil : .attach,
                         myReaction: component.slice.item.storyItem.myReaction.flatMap { value -> MessageInputPanelComponent.MyReaction? in
                             var centerAnimation: TelegramMediaFile?
                             var animationFileId: Int64?
@@ -3082,7 +3113,7 @@ public final class StoryItemSetContainerComponent: Component {
                         timeoutValue: nil,
                         timeoutSelected: false,
                         displayGradient: false,
-                        bottomInset: component.inputHeight != 0.0 || inputNodeVisible ? 0.0 : bottomContentInset,
+                        bottomInset: max(bottomContentInset, component.inputHeight),
                         isFormattingLocked: false,
                         hideKeyboard: self.sendMessageContext.currentInputMode == .media,
                         customInputView: nil,
@@ -3176,7 +3207,7 @@ public final class StoryItemSetContainerComponent: Component {
                 inputPanelIsOverlay = false
             } else {
                 bottomContentInset += 44.0
-                inputPanelBottomInset = inputHeight - inputPanelInset
+                inputPanelBottomInset = inputHeight - inputPanelInset + 3.0
                 inputPanelIsOverlay = true
             }
             
@@ -3191,7 +3222,9 @@ public final class StoryItemSetContainerComponent: Component {
             var validViewListIds: [StoryId] = []
             
             var displayViewLists = false
-            if component.slice.effectivePeer.id == component.context.account.peerId {
+            if case .liveStream = component.slice.item.storyItem.media {
+                displayViewLists = false
+            } else if component.slice.effectivePeer.id == component.context.account.peerId {
                 displayViewLists = true
             } else if case let .channel(channel) = component.slice.effectivePeer, channel.flags.contains(.isCreator) || component.slice.additionalPeerData.canViewStats {
                 displayViewLists = true
@@ -4028,9 +4061,14 @@ public final class StoryItemSetContainerComponent: Component {
             
             let focusedItem: StoryContentItem? = component.slice.item
             
+            var isLiveStream = false
+            if case .liveStream = component.slice.item.storyItem.media {
+                isLiveStream = true
+            }
+            
             var currentLeftInfoItem: InfoItem?
             if focusedItem != nil {
-                let leftInfoComponent = AnyComponent(StoryAvatarInfoComponent(context: component.context, peer: component.slice.effectivePeer))
+                let leftInfoComponent = AnyComponent(StoryAvatarInfoComponent(context: component.context, peer: component.slice.effectivePeer, isLiveStream: isLiveStream))
                 if let leftInfoItem = self.leftInfoItem, leftInfoItem.component == leftInfoComponent {
                     currentLeftInfoItem = leftInfoItem
                 } else {
@@ -4066,7 +4104,8 @@ public final class StoryItemSetContainerComponent: Component {
                     author: component.slice.item.storyItem.author,
                     timestamp: component.slice.item.storyItem.timestamp,
                     counters: counters,
-                    isEdited: component.slice.item.storyItem.isEdited
+                    isEdited: component.slice.item.storyItem.isEdited,
+                    isLiveStream: isLiveStream
                 ))
                 if let centerInfoItem = self.centerInfoItem, centerInfoItem.component == centerInfoComponent {
                     currentCenterInfoItem = centerInfoItem
@@ -4176,7 +4215,13 @@ public final class StoryItemSetContainerComponent: Component {
             if let inputPanelSize {
                 let inputPanelFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((availableSize.width - inputPanelSize.width) / 2.0), y: availableSize.height - inputPanelBottomInset - inputPanelSize.height), size: inputPanelSize)
                 inputPanelFrameValue = inputPanelFrame
-                var inputPanelAlpha: CGFloat = (component.slice.effectivePeer.id == component.context.account.peerId || component.hideUI || self.isEditingStory || component.slice.item.storyItem.isPending) ? 0.0 : 1.0
+                
+                var inputPanelAlpha: CGFloat = (component.hideUI || self.isEditingStory || component.slice.item.storyItem.isPending) ? 0.0 : 1.0
+                if case .liveStream = component.slice.item.storyItem.media {
+                } else if component.slice.effectivePeer.id == component.context.account.peerId {
+                    inputPanelAlpha = 0.0
+                }
+                
                 if case .regular = component.metrics.widthClass {
                     inputPanelAlpha *= component.visibilityFraction
                 }
@@ -4465,14 +4510,21 @@ public final class StoryItemSetContainerComponent: Component {
                 if let current = self.reactionContextNode {
                     reactionContextNode = current
                 } else {
+                    var reactionAdditionalTitle: String?
+                    if case .liveStream = component.slice.item.storyItem.media {
+                    } else {
+                        reactionAdditionalTitle = self.displayLikeReactions ? nil : (isGroup ? component.strings.Story_SendReactionAsGroupMessage : component.strings.Story_SendReactionAsMessage)
+                    }
+                    
                     reactionContextNodeTransition = .immediate
                     reactionContextNode = ReactionContextNode(
                         context: component.context,
                         animationCache: component.context.animationCache,
                         presentationData: component.context.sharedContext.currentPresentationData.with({ $0 }).withUpdated(theme: component.theme),
+                        style: .glass(isTinted: false),
                         items: reactionItems.map { ReactionContextItem.reaction(item: $0, icon: .none) },
                         selectedItems: component.slice.item.storyItem.myReaction.flatMap { Set([$0]) } ?? Set(),
-                        title: self.displayLikeReactions ? nil : (isGroup ? component.strings.Story_SendReactionAsGroupMessage : component.strings.Story_SendReactionAsMessage),
+                        title: reactionAdditionalTitle,
                         reactionsLocked: false,
                         alwaysAllowPremiumReactions: false,
                         allPresetReactionsAreAvailable: false,
@@ -4982,12 +5034,21 @@ public final class StoryItemSetContainerComponent: Component {
             }
             
             component.externalState.derivedMediaSize = contentFrame.size
-            if component.slice.effectivePeer.id == component.context.account.peerId {
-                component.externalState.derivedBottomInset = availableSize.height - itemsContainerFrame.maxY
-            } else if let inputPanelFrameValue {
-                component.externalState.derivedBottomInset = availableSize.height - min(inputPanelFrameValue.minY, contentFrame.maxY)
+            
+            if case .liveStream = component.slice.item.storyItem.media {
+                if let inputPanelFrameValue {
+                    component.externalState.derivedBottomInset = availableSize.height - min(inputPanelFrameValue.minY, contentFrame.maxY)
+                } else {
+                    component.externalState.derivedBottomInset = availableSize.height - itemsContainerFrame.maxY
+                }
             } else {
-                component.externalState.derivedBottomInset = availableSize.height - itemsContainerFrame.maxY
+                if component.slice.effectivePeer.id == component.context.account.peerId {
+                    component.externalState.derivedBottomInset = availableSize.height - itemsContainerFrame.maxY
+                } else if let inputPanelFrameValue {
+                    component.externalState.derivedBottomInset = availableSize.height - min(inputPanelFrameValue.minY, contentFrame.maxY)
+                } else {
+                    component.externalState.derivedBottomInset = availableSize.height - itemsContainerFrame.maxY
+                }
             }
             
             if !"".isEmpty {

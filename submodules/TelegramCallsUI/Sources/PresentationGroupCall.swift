@@ -838,7 +838,7 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
     
     private var lastErrorAlertTimestamp: Double = 0.0
     
-    init(
+    public init(
         accountContext: AccountContext,
         audioSession: ManagedAudioSession,
         callKitIntegration: CallKitIntegration?,
@@ -1356,7 +1356,8 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
                             muteState: self.temporaryMuteState ?? GroupCallParticipantsContext.Participant.MuteState(canUnmute: true, mutedByYou: false),
                             volume: nil,
                             about: about,
-                            joinedVideo: self.temporaryJoinedVideo
+                            joinedVideo: self.temporaryJoinedVideo,
+                            paidStarsTotal: nil
                         ))
                         participants.sort(by: { GroupCallParticipantsContext.Participant.compare(lhs: $0, rhs: $1, sortAscending: state.sortAscending) })
                     }
@@ -1437,7 +1438,8 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
                         muteState: self.temporaryMuteState ?? GroupCallParticipantsContext.Participant.MuteState(canUnmute: true, mutedByYou: false),
                         volume: nil,
                         about: about,
-                        joinedVideo: self.temporaryJoinedVideo
+                        joinedVideo: self.temporaryJoinedVideo,
+                        paidStarsTotal: nil
                     ))
                 }
 
@@ -1625,7 +1627,8 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
                     muteState: self.temporaryMuteState ?? GroupCallParticipantsContext.Participant.MuteState(canUnmute: canManageCall || !state.defaultParticipantsAreMuted.isMuted, mutedByYou: false),
                     volume: nil,
                     about: about,
-                    joinedVideo: self.temporaryJoinedVideo
+                    joinedVideo: self.temporaryJoinedVideo,
+                    paidStarsTotal: nil
                 ))
             }
 
@@ -1743,7 +1746,30 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
                     shouldJoin = callInfo.scheduleTimestamp == nil
                     activeCallInfo = callInfo
                 } else {
-                    activeCallInfo = nil
+                    if case let .id(id, accessHash) = self.initialCall?.reference, case .requesting = internalState, self.isStream {
+                        if self.genericCallContext == nil {
+                            shouldJoin = true
+                        }
+                        activeCallInfo = GroupCallInfo(
+                            id: id,
+                            accessHash: accessHash,
+                            participantCount: 0,
+                            streamDcId: nil,
+                            title: nil,
+                            scheduleTimestamp: nil,
+                            subscribedToScheduled: false,
+                            recordingStartTimestamp: nil,
+                            sortAscending: false,
+                            defaultParticipantsAreMuted: nil,
+                            messagesAreEnabled: nil,
+                            isVideoEnabled: false,
+                            unmutedVideoLimit: 0,
+                            isStream: true,
+                            isCreator: false
+                        )
+                    } else {
+                        activeCallInfo = nil
+                    }
                 }
         }
         if self.leaving {
@@ -2003,6 +2029,7 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
                     joinAs: self.joinAsPeerId,
                     callId: callInfo.id,
                     reference: reference,
+                    isStream: self.isStream,
                     preferMuted: isEffectivelyMuted,
                     joinPayload: joinPayload,
                     peerAdminIds: peerAdminIds,
@@ -2460,7 +2487,8 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
                                 muteState: self.temporaryMuteState ?? GroupCallParticipantsContext.Participant.MuteState(canUnmute: true, mutedByYou: false),
                                 volume: nil,
                                 about: about,
-                                joinedVideo: self.temporaryJoinedVideo
+                                joinedVideo: self.temporaryJoinedVideo,
+                                paidStarsTotal: nil
                             ))
                             participants.sort(by: { GroupCallParticipantsContext.Participant.compare(lhs: $0, rhs: $1, sortAscending: state.sortAscending) })
                         }
@@ -3649,7 +3677,7 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
                 return
             }
             
-            if let value = value {
+            if let value {
                 var reference: InternalGroupCallReference = .id(id: value.id, accessHash: value.accessHash)
                 if let current = self.initialCall {
                     switch current.reference {

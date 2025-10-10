@@ -65,7 +65,7 @@ private final class CreateExternalMediaStreamScreenComponent: CombinedComponent 
             if let credentialsPromise = credentialsPromise {
                 credentialsSignal = credentialsPromise.get()
             } else {
-                credentialsSignal = context.engine.calls.getGroupCallStreamCredentials(peerId: peerId, revokePreviousCredentials: false)
+                credentialsSignal = context.engine.calls.getGroupCallStreamCredentials(peerId: peerId, isLiveStream: false, revokePreviousCredentials: false)
                 |> `catch` { _ -> Signal<GroupCallStreamCredentials, NoError> in
                     return .never()
                 }

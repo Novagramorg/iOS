@@ -1330,13 +1330,13 @@ public extension Api {
 }
 public extension Api {
     enum GroupCallParticipant: TypeConstructorDescription {
-        case groupCallParticipant(flags: Int32, peer: Api.Peer, date: Int32, activeDate: Int32?, source: Int32, volume: Int32?, about: String?, raiseHandRating: Int64?, video: Api.GroupCallParticipantVideo?, presentation: Api.GroupCallParticipantVideo?)
+        case groupCallParticipant(flags: Int32, peer: Api.Peer, date: Int32, activeDate: Int32?, source: Int32, volume: Int32?, about: String?, raiseHandRating: Int64?, video: Api.GroupCallParticipantVideo?, presentation: Api.GroupCallParticipantVideo?, paidStarsTotal: Int64?)
     
     public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
     switch self {
-                case .groupCallParticipant(let flags, let peer, let date, let activeDate, let source, let volume, let about, let raiseHandRating, let video, let presentation):
+                case .groupCallParticipant(let flags, let peer, let date, let activeDate, let source, let volume, let about, let raiseHandRating, let video, let presentation, let paidStarsTotal):
                     if boxed {
-                        buffer.appendInt32(-341428482)
+                        buffer.appendInt32(708691884)
                     }
                     serializeInt32(flags, buffer: buffer, boxed: false)
                     peer.serialize(buffer, true)
@@ -1348,14 +1348,15 @@ public extension Api {
                     if Int(flags) & Int(1 << 13) != 0 {serializeInt64(raiseHandRating!, buffer: buffer, boxed: false)}
                     if Int(flags) & Int(1 << 6) != 0 {video!.serialize(buffer, true)}
                     if Int(flags) & Int(1 << 14) != 0 {presentation!.serialize(buffer, true)}
+                    if Int(flags) & Int(1 << 16) != 0 {serializeInt64(paidStarsTotal!, buffer: buffer, boxed: false)}
                     break
     }
     }
     
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
-                case .groupCallParticipant(let flags, let peer, let date, let activeDate, let source, let volume, let about, let raiseHandRating, let video, let presentation):
-                return ("groupCallParticipant", [("flags", flags as Any), ("peer", peer as Any), ("date", date as Any), ("activeDate", activeDate as Any), ("source", source as Any), ("volume", volume as Any), ("about", about as Any), ("raiseHandRating", raiseHandRating as Any), ("video", video as Any), ("presentation", presentation as Any)])
+                case .groupCallParticipant(let flags, let peer, let date, let activeDate, let source, let volume, let about, let raiseHandRating, let video, let presentation, let paidStarsTotal):
+                return ("groupCallParticipant", [("flags", flags as Any), ("peer", peer as Any), ("date", date as Any), ("activeDate", activeDate as Any), ("source", source as Any), ("volume", volume as Any), ("about", about as Any), ("raiseHandRating", raiseHandRating as Any), ("video", video as Any), ("presentation", presentation as Any), ("paidStarsTotal", paidStarsTotal as Any)])
     }
     }
     
@@ -1386,6 +1387,8 @@ public extension Api {
             if Int(_1!) & Int(1 << 14) != 0 {if let signature = reader.readInt32() {
                 _10 = Api.parse(reader, signature: signature) as? Api.GroupCallParticipantVideo
             } }
+            var _11: Int64?
+            if Int(_1!) & Int(1 << 16) != 0 {_11 = reader.readInt64() }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
@@ -1396,8 +1399,9 @@ public extension Api {
             let _c8 = (Int(_1!) & Int(1 << 13) == 0) || _8 != nil
             let _c9 = (Int(_1!) & Int(1 << 6) == 0) || _9 != nil
             let _c10 = (Int(_1!) & Int(1 << 14) == 0) || _10 != nil
-            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 && _c10 {
-                return Api.GroupCallParticipant.groupCallParticipant(flags: _1!, peer: _2!, date: _3!, activeDate: _4, source: _5!, volume: _6, about: _7, raiseHandRating: _8, video: _9, presentation: _10)
+            let _c11 = (Int(_1!) & Int(1 << 16) == 0) || _11 != nil
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 && _c10 && _c11 {
+                return Api.GroupCallParticipant.groupCallParticipant(flags: _1!, peer: _2!, date: _3!, activeDate: _4, source: _5!, volume: _6, about: _7, raiseHandRating: _8, video: _9, presentation: _10, paidStarsTotal: _11)
             }
             else {
                 return nil

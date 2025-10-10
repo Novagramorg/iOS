@@ -2446,6 +2446,9 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         
         let navigateButtonsSize = self.navigateButtons.updateLayout(transition: transition)
         var navigateButtonsFrame = CGRect(origin: CGPoint(x: layout.size.width - layout.safeInsets.right - navigateButtonsSize.width - 8.0, y: layout.size.height - containerInsets.bottom - inputPanelsHeight - navigateButtonsSize.height - 20.0), size: navigateButtonsSize)
+        if containerInsets.bottom <= 32.0 {
+            navigateButtonsFrame.origin.x -= 18.0
+        }
         if case .overlay = self.chatPresentationInterfaceState.mode {
             navigateButtonsFrame = navigateButtonsFrame.offsetBy(dx: -8.0, dy: -8.0)
         }

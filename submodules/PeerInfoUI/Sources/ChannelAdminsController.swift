@@ -754,7 +754,7 @@ public func channelAdminsController(context: AccountContext, updatedPresentation
             |> deliverOnMainQueue).start(next: { peerView in
                 updateState { current in
                     var dismissController: (() -> Void)?
-                    let controller = ChannelMembersSearchController(context: context, peerId: peerId, mode: .promote, filters: [], openPeer: { peer, participant in
+                    let controller = ChannelMembersSearchControllerImpl(params: ChannelMembersSearchControllerParams(context: context, peerId: peerId, mode: .promote, filters: [], openPeer: { peer, participant in
                         dismissController?()
                         let presentationData = context.sharedContext.currentPresentationData.with { $0 }
                         if peer.id == context.account.peerId {
@@ -784,7 +784,7 @@ public func channelAdminsController(context: AccountContext, updatedPresentation
                         }
                         pushControllerImpl?(channelAdminController(context: context, updatedPresentationData: updatedPresentationData, peerId: peerId, adminId: peer.id, initialParticipant: participant?.participant, updated: { _ in
                         }, upgradedToSupergroup: upgradedToSupergroup, transferedOwnership: transferedOwnership))
-                    })
+                    }))
                     dismissController = { [weak controller] in
                         controller?.dismiss()
                     }

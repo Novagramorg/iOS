@@ -999,6 +999,7 @@ public extension TelegramEngine {
                             peer: EnginePeer(accountPeer),
                             hasUnseen: false,
                             hasUnseenCloseFriends: false,
+                            hasLiveItems: false,
                             hasPending: accountPendingItemCount != 0,
                             storyCount: accountPendingItemCount,
                             unseenCount: 0,
@@ -1015,8 +1016,9 @@ public extension TelegramEngine {
                                     let peerState: Stories.PeerState? = stateView.value?.get(Stories.PeerState.self)
                                     var hasUnseen = false
                                     var hasUnseenCloseFriends = false
+                                    var hasLiveItems = false
                                     var unseenCount = 0
-                                    if let peerState = peerState {
+                                    if let peerState {
                                         hasUnseen = peerState.maxReadId < lastEntry.id
                                         
                                         for item in itemsView.items {
@@ -1030,6 +1032,9 @@ public extension TelegramEngine {
                                                         hasUnseenCloseFriends = true
                                                     }
                                                 }
+                                                if item.media is TelegramMediaLiveStream {
+                                                    hasLiveItems = true
+                                                }
                                             }
                                         }
                                     }
@@ -1038,6 +1043,7 @@ public extension TelegramEngine {
                                         peer: EnginePeer(accountPeer),
                                         hasUnseen: hasUnseen,
                                         hasUnseenCloseFriends: hasUnseenCloseFriends,
+                                        hasLiveItems: hasLiveItems,
                                         hasPending: accountPendingItemCount != 0,
                                         storyCount: itemsView.items.count + accountPendingItemCount,
                                         unseenCount: unseenCount,
@@ -1079,6 +1085,7 @@ public extension TelegramEngine {
                             let peerState: Stories.PeerState? = stateView.value?.get(Stories.PeerState.self)
                             var hasUnseen = false
                             var hasUnseenCloseFriends = false
+                            var hasLiveItems = false
                             var unseenCount = 0
                             if let peerState = peerState {
                                 hasUnseen = peerState.maxReadId < lastEntry.id
@@ -1090,6 +1097,9 @@ public extension TelegramEngine {
                                         if case let .item(item) = item.value.get(Stories.StoredItem.self) {
                                             if item.isCloseFriends {
                                                 hasUnseenCloseFriends = true
+                                            }
+                                            if item.media is TelegramMediaLiveStream {
+                                                hasLiveItems = true
                                             }
                                         }
                                     }
@@ -1116,6 +1126,7 @@ public extension TelegramEngine {
                                 peer: EnginePeer(peer),
                                 hasUnseen: hasUnseen,
                                 hasUnseenCloseFriends: hasUnseenCloseFriends,
+                                hasLiveItems: hasLiveItems,
                                 hasPending: maxPendingTimestamp != nil,
                                 storyCount: itemsView.items.count,
                                 unseenCount: unseenCount,
@@ -1153,6 +1164,7 @@ public extension TelegramEngine {
                                         peer: EnginePeer(peer),
                                         hasUnseen: false,
                                         hasUnseenCloseFriends: false,
+                                        hasLiveItems: false,
                                         hasPending: true,
                                         storyCount: 0,
                                         unseenCount: 0,
@@ -1387,7 +1399,7 @@ public extension TelegramEngine {
                                     folderIds: item.folderIds
                                 ))
                                 if let entry = CodableEntry(updatedItem) {
-                                    currentItems[i] = StoryItemsTableEntry(value: entry, id: updatedItem.id, expirationTimestamp: updatedItem.expirationTimestamp, isCloseFriends: updatedItem.isCloseFriends)
+                                    currentItems[i] = StoryItemsTableEntry(value: entry, id: updatedItem.id, expirationTimestamp: updatedItem.expirationTimestamp, isCloseFriends: updatedItem.isCloseFriends, isLiveStream: updatedItem.isLiveStream)
                                 }
                             }
                         }
@@ -1400,6 +1412,10 @@ public extension TelegramEngine {
         
         public func uploadStory(target: Stories.PendingTarget, media: EngineStoryInputMedia, mediaAreas: [MediaArea], text: String, entities: [MessageTextEntity], pin: Bool, privacy: EngineStoryPrivacy, isForwardingDisabled: Bool, period: Int, randomId: Int64, forwardInfo: Stories.PendingForwardInfo?, folders: [Int64], uploadInfo: StoryUploadInfo? = nil) -> Signal<Int32, NoError> {
             return _internal_uploadStory(account: self.account, target: target, media: media, mediaAreas: mediaAreas, text: text, entities: entities, pin: pin, privacy: privacy, isForwardingDisabled: isForwardingDisabled, period: period, randomId: randomId, forwardInfo: forwardInfo, folders: folders, uploadInfo: uploadInfo)
+        }
+        
+        public func beginStoryLivestream() -> Signal<Never, NoError> {
+            return _internal_beginStoryLivestream(account: self.account)
         }
         
         public func allStoriesUploadEvents() -> Signal<(Int32, Int32), NoError> {

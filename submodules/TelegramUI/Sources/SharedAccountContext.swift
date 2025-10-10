@@ -3967,6 +3967,10 @@ public final class SharedAccountContextImpl: SharedAccountContext {
             completion: completion
         )
     }
+    
+    public func makeChannelMembersSearchController(params: ChannelMembersSearchControllerParams) -> ChannelMembersSearchController {
+        return ChannelMembersSearchControllerImpl(params: params)
+    }
 }
 
 private func peerInfoControllerImpl(context: AccountContext, updatedPresentationData: (PresentationData, Signal<PresentationData, NoError>)?, peer: Peer, mode: PeerInfoControllerMode, avatarInitiallyExpanded: Bool, isOpenedFromChat: Bool, requestsContext: PeerInvitationImportersContext? = nil) -> ViewController? {

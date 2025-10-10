@@ -5352,7 +5352,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                         }
                     }
                     
-                    self.headerNode.avatarListNode.avatarContainerNode.storyData = (totalCount, unseenCount, state.hasUnseenCloseFriends && peer.id != self.context.account.peerId)
+                    self.headerNode.avatarListNode.avatarContainerNode.storyData = (totalCount, unseenCount, state.hasUnseenCloseFriends && peer.id != self.context.account.peerId, state.hasLiveItems)
                     self.headerNode.avatarListNode.listContainerNode.storyParams = (peer, state.items.prefix(3).compactMap { item -> EngineStoryItem? in
                         switch item {
                         case let .item(item):
@@ -8997,7 +8997,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                 if channel.hasPermission(.manageCalls) {
                     canCreateStream = true
                     credentialsPromise = Promise()
-                    credentialsPromise?.set(context.engine.calls.getGroupCallStreamCredentials(peerId: peerId, revokePreviousCredentials: false) |> `catch` { _ -> Signal<GroupCallStreamCredentials, NoError> in return .never() })
+                    credentialsPromise?.set(context.engine.calls.getGroupCallStreamCredentials(peerId: peerId, isLiveStream: false, revokePreviousCredentials: false) |> `catch` { _ -> Signal<GroupCallStreamCredentials, NoError> in return .never() })
                 }
             default:
                 break
