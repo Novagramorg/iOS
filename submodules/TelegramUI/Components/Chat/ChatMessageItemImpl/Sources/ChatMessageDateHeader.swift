@@ -1224,7 +1224,7 @@ public final class ChatMessageAvatarHeaderNodeImpl: ListViewItemHeaderNode, Chat
     }
 
     override public func updateLayout(size: CGSize, leftInset: CGFloat, rightInset: CGFloat, transition: ContainedViewLayoutTransition) {
-        transition.updateFrame(node: self.containerNode, frame: CGRect(origin: CGPoint(x: leftInset + 8.0, y: -3.0), size: CGSize(width: avatarHeaderSize(), height: avatarHeaderSize())))
+        transition.updateFrame(node: self.containerNode, frame: CGRect(origin: CGPoint(x: leftInset + 7.0, y: -3.0), size: CGSize(width: avatarHeaderSize(), height: avatarHeaderSize())))
         let avatarFrame = CGRect(origin: CGPoint(), size: CGSize(width: avatarHeaderSize(), height: avatarHeaderSize()))
         self.avatarNode.position = avatarFrame.center
         self.avatarNode.bounds = CGRect(origin: CGPoint(), size: avatarFrame.size)
