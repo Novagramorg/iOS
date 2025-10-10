@@ -4561,11 +4561,12 @@ private final class GiftViewSheetContent: CombinedComponent {
                                 while j < suffix.endIndex, suffix[j].isNumber {
                                     j = suffix.index(after: j)
                                 }
-                                if let value = Int(suffix[i..<j]) {
+                                let string = suffix[i..<j]
+                                if let value = Int(string) {
                                     buttonAnimatedTitleItems.append(
                                         AnimatedTextComponent.Item(
                                             id: AnyHashable(buttonAnimatedTitleItems.count),
-                                            content: .number(value, minDigits: 1)
+                                            content: .number(value, minDigits: string.count)
                                         )
                                     )
                                 }
