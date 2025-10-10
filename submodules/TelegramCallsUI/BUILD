@@ -84,7 +84,6 @@ swift_library(
         "//submodules/AnimatedAvatarSetNode:AnimatedAvatarSetNode",
         "//submodules/AlertUI:AlertUI",
         "//submodules/DirectionalPanGesture:DirectionalPanGesture",
-        "//submodules/PeerInfoUI:PeerInfoUI",
         "//submodules/AnimatedCountLabelNode:AnimatedCountLabelNode",
         "//submodules/DeviceProximity:DeviceProximity",
         "//submodules/ManagedAnimationNode:ManagedAnimationNode",

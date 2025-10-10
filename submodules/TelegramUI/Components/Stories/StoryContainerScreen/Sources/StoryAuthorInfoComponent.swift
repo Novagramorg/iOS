@@ -23,8 +23,9 @@ final class StoryAuthorInfoComponent: Component {
     let timestamp: Int32
     let counters: Counters?
     let isEdited: Bool
+    let isLiveStream: Bool
     
-    init(context: AccountContext, strings: PresentationStrings, peer: EnginePeer?, forwardInfo: EngineStoryItem.ForwardInfo?, author: EnginePeer?, timestamp: Int32, counters: Counters?, isEdited: Bool) {
+    init(context: AccountContext, strings: PresentationStrings, peer: EnginePeer?, forwardInfo: EngineStoryItem.ForwardInfo?, author: EnginePeer?, timestamp: Int32, counters: Counters?, isEdited: Bool, isLiveStream: Bool) {
         self.context = context
         self.strings = strings
         self.peer = peer
@@ -33,6 +34,7 @@ final class StoryAuthorInfoComponent: Component {
         self.timestamp = timestamp
         self.counters = counters
         self.isEdited = isEdited
+        self.isLiveStream = isLiveStream
     }
 
 	static func ==(lhs: StoryAuthorInfoComponent, rhs: StoryAuthorInfoComponent) -> Bool {
@@ -60,6 +62,9 @@ final class StoryAuthorInfoComponent: Component {
         if lhs.isEdited != rhs.isEdited {
             return false
         }
+        if lhs.isLiveStream != rhs.isLiveStream {
+            return false
+        }
 		return true
 	}
 
@@ -68,6 +73,7 @@ final class StoryAuthorInfoComponent: Component {
         private var repostIconView: UIImageView?
         private var avatarNode: AvatarNode?
 		private let subtitle = ComponentView<Empty>()
+        private var liveBadgeView: UIImageView?
         private var counterLabel: ComponentView<Empty>?
 
         private var component: StoryAuthorInfoComponent?
@@ -238,7 +244,43 @@ final class StoryAuthorInfoComponent: Component {
                 avatarNode.view.removeFromSuperview()
             }
             
-            let subtitleFrame = CGRect(origin: CGPoint(x: leftInset + subtitleOffset, y: titleFrame.maxY + spacing + UIScreenPixel), size: subtitleSize)
+            var subtitleFrame = CGRect(origin: CGPoint(x: leftInset + subtitleOffset, y: titleFrame.maxY + spacing + UIScreenPixel), size: subtitleSize)
+            
+            if component.isLiveStream {
+                let liveBadgeView: UIImageView
+                if let current = self.liveBadgeView {
+                    liveBadgeView = current
+                } else {
+                    liveBadgeView = UIImageView()
+                    self.liveBadgeView = liveBadgeView
+                    self.addSubview(liveBadgeView)
+                    //TODO:localize
+                    let liveString = NSAttributedString(string: "LIVE", font: Font.semibold(10.0), textColor: .white)
+                    let liveStringBounds = liveString.boundingRect(with: CGSize(width: 100.0, height: 100.0), options: .usesLineFragmentOrigin, context: nil)
+                    let liveBadgeSize = CGSize(width: ceil(liveStringBounds.width) + 3.0 * 2.0, height: ceil(liveStringBounds.height) + 1.0 * 2.0)
+                    liveBadgeView.image = generateImage(liveBadgeSize, rotatedContext: { size, context in
+                        UIGraphicsPushContext(context)
+                        defer {
+                            UIGraphicsPopContext()
+                        }
+                        
+                        context.clear(CGRect(origin: CGPoint(), size: size))
+                        context.setFillColor(UIColor(rgb: 0xFF2D55).cgColor)
+                        context.addPath(UIBezierPath(roundedRect: CGRect(origin: CGPoint(), size: size), cornerRadius: size.height * 0.5).cgPath)
+                        context.fillPath()
+                        
+                        liveString.draw(at: CGPoint(x: floorToScreenPixels((size.width - liveStringBounds.width) * 0.5), y: floorToScreenPixels((size.height - liveStringBounds.height) * 0.5)))
+                    })
+                }
+                if let image = liveBadgeView.image {
+                    let liveBadgeFrame = CGRect(origin: CGPoint(x: subtitleFrame.minX, y: subtitleFrame.minY), size: image.size)
+                    liveBadgeView.frame = liveBadgeFrame
+                    subtitleFrame.origin.x += image.size.width + 3.0
+                }
+            } else if let liveBadgeView = self.liveBadgeView {
+                self.liveBadgeView = nil
+                liveBadgeView.removeFromSuperview()
+            }
             
             if let titleView = self.title.view {
                 if titleView.superview == nil {

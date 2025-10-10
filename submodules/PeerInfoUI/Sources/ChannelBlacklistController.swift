@@ -300,7 +300,7 @@ public func channelBlacklistController(context: AccountContext, updatedPresentat
         }
     }, addPeer: {
         var dismissController: (() -> Void)?
-        let controller = ChannelMembersSearchController(context: context, updatedPresentationData: updatedPresentationData, peerId: peerId, mode: .ban, openPeer: { peer, participant in
+        let controller = ChannelMembersSearchControllerImpl(params: ChannelMembersSearchControllerParams(context: context, updatedPresentationData: updatedPresentationData, peerId: peerId, mode: .ban, openPeer: { peer, participant in
             if let participant = participant {
                 let presentationData = context.sharedContext.currentPresentationData.with { $0 }
                 switch participant.participant {
@@ -329,7 +329,7 @@ public func channelBlacklistController(context: AccountContext, updatedPresentat
                         dismissController?()
                     }))
             })
-        })
+        }))
         dismissController = { [weak controller] in
             controller?.dismiss()
         }

@@ -1054,6 +1054,7 @@ public final class StoryPeerListComponent: Component {
                 }
                 
                 var hasUnseenCloseFriendsItems = itemSet.hasUnseenCloseFriends
+                let hasLiveItems = itemSet.hasLiveItems
                 
                 var hasItems = true
                 var itemRingAnimation: StoryPeerListItemComponent.RingAnimation?
@@ -1139,6 +1140,7 @@ public final class StoryPeerListComponent: Component {
                         totalCount: totalCount,
                         unseenCount: unseenCount,
                         hasUnseenCloseFriendsItems: hasUnseenCloseFriendsItems,
+                        hasLiveItems: hasLiveItems,
                         hasItems: hasItems,
                         ringAnimation: itemRingAnimation,
                         scale: itemScale,
@@ -1278,6 +1280,7 @@ public final class StoryPeerListComponent: Component {
                         totalCount: 1,
                         unseenCount: itemSet.unseenCount != 0 ? 1 : 0,
                         hasUnseenCloseFriendsItems: hasUnseenCloseFriendsItems,
+                        hasLiveItems: itemSet.hasLiveItems,
                         hasItems: hasItems,
                         ringAnimation: itemRingAnimation,
                         scale: itemScale,

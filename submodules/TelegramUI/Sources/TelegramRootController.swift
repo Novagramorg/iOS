@@ -726,6 +726,12 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
                 }
                 
                 if let media {
+                    #if DEBUG
+                    if "".isEmpty {
+                        let _ = context.engine.messages.beginStoryLivestream().startStandalone()
+                    }
+                    #endif
+                    
                     let _ = (context.engine.messages.uploadStory(
                         target: target,
                         media: media,

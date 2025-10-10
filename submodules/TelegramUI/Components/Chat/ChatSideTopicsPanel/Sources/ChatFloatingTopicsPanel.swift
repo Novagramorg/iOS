@@ -273,7 +273,7 @@ public final class ChatFloatingTopicsPanel: Component {
             }
             
             transition.setFrame(view: self.containerView, frame: CGRect(origin: CGPoint(), size: availableSize))
-            self.containerView.update(size: availableSize, transition: transition)
+            self.containerView.update(size: availableSize, isDark: component.theme.overallDarkAppearance, transition: transition)
             
             return availableSize
         }

@@ -1263,7 +1263,8 @@ final class VideoChatScreenComponent: Component {
                         muteState: nil,
                         volume: nil,
                         about: nil,
-                        joinedVideo: false
+                        joinedVideo: false,
+                        paidStarsTotal: nil
                     ))
                 }
                 if let remotePeer {
@@ -1289,7 +1290,8 @@ final class VideoChatScreenComponent: Component {
                         muteState: nil,
                         volume: nil,
                         about: nil,
-                        joinedVideo: false
+                        joinedVideo: false,
+                        paidStarsTotal: nil
                     ))
                 }
                 let members = PresentationGroupCallMembers(
@@ -3712,7 +3714,7 @@ final class VideoChatScreenComponent: Component {
                         context: call.accountContext,
                         animationCache: call.accountContext.animationCache,
                         presentationData: call.accountContext.sharedContext.currentPresentationData.with({ $0 }).withUpdated(theme: defaultDarkPresentationTheme),
-                        style: .glass,
+                        style: .glass(isTinted: true),
                         items: reactionItems.map { ReactionContextItem.reaction(item: $0, icon: .none) },
                         selectedItems: Set(),
                         title: nil,

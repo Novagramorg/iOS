@@ -572,44 +572,54 @@ public extension Api {
 }
 public extension Api {
     enum InputContact: TypeConstructorDescription {
-        case inputPhoneContact(clientId: Int64, phone: String, firstName: String, lastName: String)
+        case inputPhoneContact(flags: Int32, clientId: Int64, phone: String, firstName: String, lastName: String, note: Api.TextWithEntities?)
     
     public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
     switch self {
-                case .inputPhoneContact(let clientId, let phone, let firstName, let lastName):
+                case .inputPhoneContact(let flags, let clientId, let phone, let firstName, let lastName, let note):
                     if boxed {
-                        buffer.appendInt32(-208488460)
+                        buffer.appendInt32(1780335806)
                     }
+                    serializeInt32(flags, buffer: buffer, boxed: false)
                     serializeInt64(clientId, buffer: buffer, boxed: false)
                     serializeString(phone, buffer: buffer, boxed: false)
                     serializeString(firstName, buffer: buffer, boxed: false)
                     serializeString(lastName, buffer: buffer, boxed: false)
+                    if Int(flags) & Int(1 << 0) != 0 {note!.serialize(buffer, true)}
                     break
     }
     }
     
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
-                case .inputPhoneContact(let clientId, let phone, let firstName, let lastName):
-                return ("inputPhoneContact", [("clientId", clientId as Any), ("phone", phone as Any), ("firstName", firstName as Any), ("lastName", lastName as Any)])
+                case .inputPhoneContact(let flags, let clientId, let phone, let firstName, let lastName, let note):
+                return ("inputPhoneContact", [("flags", flags as Any), ("clientId", clientId as Any), ("phone", phone as Any), ("firstName", firstName as Any), ("lastName", lastName as Any), ("note", note as Any)])
     }
     }
     
         public static func parse_inputPhoneContact(_ reader: BufferReader) -> InputContact? {
-            var _1: Int64?
-            _1 = reader.readInt64()
-            var _2: String?
-            _2 = parseString(reader)
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: Int64?
+            _2 = reader.readInt64()
             var _3: String?
             _3 = parseString(reader)
             var _4: String?
             _4 = parseString(reader)
+            var _5: String?
+            _5 = parseString(reader)
+            var _6: Api.TextWithEntities?
+            if Int(_1!) & Int(1 << 0) != 0 {if let signature = reader.readInt32() {
+                _6 = Api.parse(reader, signature: signature) as? Api.TextWithEntities
+            } }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
             let _c4 = _4 != nil
-            if _c1 && _c2 && _c3 && _c4 {
-                return Api.InputContact.inputPhoneContact(clientId: _1!, phone: _2!, firstName: _3!, lastName: _4!)
+            let _c5 = _5 != nil
+            let _c6 = (Int(_1!) & Int(1 << 0) == 0) || _6 != nil
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 {
+                return Api.InputContact.inputPhoneContact(flags: _1!, clientId: _2!, phone: _3!, firstName: _4!, lastName: _5!, note: _6)
             }
             else {
                 return nil

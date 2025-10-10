@@ -101,6 +101,7 @@ swift_library(
         "//submodules/TelegramUI/Components/Chat/ChatMessagePaymentAlertController",
         "//submodules/DirectMediaImageCache",
         "//submodules/PromptUI",
+        "//submodules/TelegramCallsUI",
     ],
     visibility = [
         "//visibility:public",

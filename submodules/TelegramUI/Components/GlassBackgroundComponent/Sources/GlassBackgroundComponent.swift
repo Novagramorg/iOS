@@ -545,8 +545,10 @@ public final class GlassBackgroundContainerView: UIView {
         return result
     }
     
-    public func update(size: CGSize, transition: ComponentTransition) {
+    public func update(size: CGSize, isDark: Bool, transition: ComponentTransition) {
         if let nativeView = self.nativeView {
+            nativeView.overrideUserInterfaceStyle = isDark ? .dark : .light
+            
             transition.setFrame(view: nativeView, frame: CGRect(origin: CGPoint(), size: size))
         } else if let legacyView = self.legacyView {
             transition.setFrame(view: legacyView, frame: CGRect(origin: CGPoint(), size: size))

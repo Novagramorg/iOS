@@ -290,6 +290,10 @@ public enum Stories {
         public let authorId: PeerId?
         public let folderIds: [Int64]?
         
+        public var isLiveStream: Bool {
+            return self.media is TelegramMediaLiveStream
+        }
+        
         public init(
             id: Int32,
             timestamp: Int32,
@@ -620,6 +624,15 @@ public enum Stories {
             }
         }
         
+        public var isLiveStream: Bool {
+            switch self {
+            case let .item(item):
+                return item.media is TelegramMediaLiveStream
+            case .placeholder:
+                return false
+            }
+        }
+        
         public init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             
@@ -759,6 +772,7 @@ public final class EngineStorySubscriptions: Equatable {
         public let peer: EnginePeer
         public let hasUnseen: Bool
         public let hasUnseenCloseFriends: Bool
+        public let hasLiveItems: Bool
         public let hasPending: Bool
         public let storyCount: Int
         public let unseenCount: Int
@@ -768,6 +782,7 @@ public final class EngineStorySubscriptions: Equatable {
             peer: EnginePeer,
             hasUnseen: Bool,
             hasUnseenCloseFriends: Bool,
+            hasLiveItems: Bool,
             hasPending: Bool,
             storyCount: Int,
             unseenCount: Int,
@@ -776,6 +791,7 @@ public final class EngineStorySubscriptions: Equatable {
             self.peer = peer
             self.hasUnseen = hasUnseen
             self.hasUnseenCloseFriends = hasUnseenCloseFriends
+            self.hasLiveItems = hasLiveItems
             self.hasPending = hasPending
             self.storyCount = storyCount
             self.unseenCount = unseenCount
@@ -793,6 +809,9 @@ public final class EngineStorySubscriptions: Equatable {
                 return false
             }
             if lhs.hasUnseenCloseFriends != rhs.hasUnseenCloseFriends {
+                return false
+            }
+            if lhs.hasLiveItems != rhs.hasLiveItems {
                 return false
             }
             if lhs.storyCount != rhs.storyCount {
@@ -1093,6 +1112,22 @@ func _internal_cancelStoryUpload(account: Account, stableId: Int32) {
     }).start()
 }
 
+func _internal_beginStoryLivestream(account: Account) -> Signal<Never, NoError> {
+    var flags: Int32 = 0
+    flags |= 1 << 5
+    return account.network.request(Api.functions.stories.startLive(flags: flags, peer: .inputPeerSelf, caption: nil, entities: nil, privacyRules: [.inputPrivacyValueAllowAll], randomId: Int64.random(in: Int64.min ... Int64.max)))
+    |> map(Optional.init)
+    |> `catch` { _ -> Signal<Api.Updates?, NoError> in
+        return .single(nil)
+    }
+    |> mapToSignal { updates -> Signal<Never, NoError> in
+        if let updates {
+            account.stateManager.addUpdates(updates)
+        }
+        return .complete()
+    }
+}
+
 private struct PendingStoryIdMappingKey: Hashable {
     var peerId: PeerId
     var stableId: Int32
@@ -1307,7 +1342,7 @@ func _internal_uploadStoryImpl(
                                                             folderIds: item.folderIds
                                                         )
                                                         if let entry = CodableEntry(Stories.StoredItem.item(updatedItem)) {
-                                                            items.append(StoryItemsTableEntry(value: entry, id: item.id, expirationTimestamp: updatedItem.expirationTimestamp, isCloseFriends: updatedItem.isCloseFriends))
+                                                            items.append(StoryItemsTableEntry(value: entry, id: item.id, expirationTimestamp: updatedItem.expirationTimestamp, isCloseFriends: updatedItem.isCloseFriends, isLiveStream: updatedItem.isLiveStream))
                                                         }
                                                         updatedItems.append(updatedItem)
                                                     }
@@ -1749,7 +1784,7 @@ func _internal_editStoryPrivacy(account: Account, id: Int32, privacy: EngineStor
                 folderIds: item.folderIds
             )
             if let entry = CodableEntry(Stories.StoredItem.item(updatedItem)) {
-                items[index] = StoryItemsTableEntry(value: entry, id: item.id, expirationTimestamp: updatedItem.expirationTimestamp, isCloseFriends: updatedItem.isCloseFriends)
+                items[index] = StoryItemsTableEntry(value: entry, id: item.id, expirationTimestamp: updatedItem.expirationTimestamp, isCloseFriends: updatedItem.isCloseFriends, isLiveStream: updatedItem.isLiveStream)
             }
             
             updatedItems.append(updatedItem)
@@ -1946,7 +1981,7 @@ func _internal_updateStoriesArePinned(account: Account, peerId: PeerId, ids: [In
                     folderIds: item.folderIds
                 )
                 if let entry = CodableEntry(Stories.StoredItem.item(updatedItem)) {
-                    items[index] = StoryItemsTableEntry(value: entry, id: item.id, expirationTimestamp: updatedItem.expirationTimestamp, isCloseFriends: updatedItem.isCloseFriends)
+                    items[index] = StoryItemsTableEntry(value: entry, id: item.id, expirationTimestamp: updatedItem.expirationTimestamp, isCloseFriends: updatedItem.isCloseFriends, isLiveStream: updatedItem.isLiveStream)
                 }
                 
                 updatedItems.append(updatedItem)
@@ -2490,7 +2525,7 @@ func _internal_refreshStories(account: Account, peerId: PeerId, ids: [Int32]) ->
                 if let updatedItem = result.first(where: { $0.id == currentItems[i].id }) {
                     if case .item = updatedItem {
                         if let entry = CodableEntry(updatedItem) {
-                            currentItems[i] = StoryItemsTableEntry(value: entry, id: updatedItem.id, expirationTimestamp: updatedItem.expirationTimestamp, isCloseFriends: updatedItem.isCloseFriends)
+                            currentItems[i] = StoryItemsTableEntry(value: entry, id: updatedItem.id, expirationTimestamp: updatedItem.expirationTimestamp, isCloseFriends: updatedItem.isCloseFriends, isLiveStream: updatedItem.isLiveStream)
                         }
                     }
                 }
@@ -2772,7 +2807,7 @@ func _internal_setStoryReaction(account: Account, peerId: EnginePeer.Id, id: Int
                     ))
                     updatedItemValue = updatedItem
                     if let entry = CodableEntry(updatedItem) {
-                        currentItems[i] = StoryItemsTableEntry(value: entry, id: updatedItem.id, expirationTimestamp: updatedItem.expirationTimestamp, isCloseFriends: updatedItem.isCloseFriends)
+                        currentItems[i] = StoryItemsTableEntry(value: entry, id: updatedItem.id, expirationTimestamp: updatedItem.expirationTimestamp, isCloseFriends: updatedItem.isCloseFriends, isLiveStream: updatedItem.isLiveStream)
                     }
                 }
             }

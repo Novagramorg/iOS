@@ -1601,6 +1601,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
         
         self.avatarContainerNode = ASDisplayNode()
         self.avatarNode = AvatarNode(font: avatarPlaceholderFont(size: 26.0))
+        self.avatarNode.displayLiveBadge = true
         
         self.highlightedBackgroundNode = ASDisplayNode()
         self.highlightedBackgroundNode.isLayerBacked = true
@@ -1791,7 +1792,8 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
             return AvatarNode.StoryStats(
                 totalCount: storyState.stats.totalCount,
                 unseenCount: storyState.stats.unseenCount,
-                hasUnseenCloseFriendsItems: storyState.hasUnseenCloseFriends
+                hasUnseenCloseFriendsItems: storyState.hasUnseenCloseFriends,
+                hasLiveItems: storyState.stats.hasLiveItems
             )
         }, presentationParams: AvatarNode.StoryPresentationParams(
             colors: AvatarNode.Colors(theme: item.presentationData.theme),
