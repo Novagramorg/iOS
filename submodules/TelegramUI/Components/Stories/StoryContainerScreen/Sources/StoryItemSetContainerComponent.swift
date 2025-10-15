@@ -278,6 +278,7 @@ public final class StoryItemSetContainerComponent: Component {
     struct ItemLayout {
         var containerSize: CGSize
         var contentFrame: CGRect
+        var contentInsets: UIEdgeInsets
         var contentMinScale: CGFloat
         var contentScaleFraction: CGFloat
         var contentOverflowFraction: CGFloat
@@ -292,12 +293,14 @@ public final class StoryItemSetContainerComponent: Component {
         init(
             containerSize: CGSize,
             contentFrame: CGRect,
+            contentInsets: UIEdgeInsets,
             contentMinScale: CGFloat,
             contentScaleFraction: CGFloat,
             contentOverflowFraction: CGFloat
         ) {
             self.containerSize = containerSize
             self.contentFrame = contentFrame
+            self.contentInsets = contentInsets
             self.contentMinScale = contentMinScale
             self.contentScaleFraction = contentScaleFraction
             self.contentOverflowFraction = contentOverflowFraction
@@ -1527,6 +1530,7 @@ public final class StoryItemSetContainerComponent: Component {
                         externalState: visibleItem.externalState,
                         sharedState: component.storyItemSharedState,
                         theme: component.theme,
+                        containerInsets: itemLayout.contentInsets,
                         presentationProgressUpdated: { [weak self, weak visibleItem] progress, isBuffering, canSwitch in
                             guard let self, let component = self.component else {
                                 return
@@ -2575,8 +2579,6 @@ public final class StoryItemSetContainerComponent: Component {
             }
             
             let isFirstTime = self.component == nil
-            
-            let startTime1 = CFAbsoluteTimeGetCurrent()
                         
             if self.component == nil {
                 self.sendMessageContext.setup(context: component.context, view: self, inputPanelExternalState: self.inputPanelExternalState, keyboardInputData: component.keyboardInputData)
@@ -2704,6 +2706,11 @@ public final class StoryItemSetContainerComponent: Component {
             self.component = component
             self.state = state
             
+            var isLiveStream = false
+            if case .liveStream = component.slice.item.storyItem.media {
+                isLiveStream = true
+            }
+            
             var dismissPanOffset: CGFloat = 0.0
             var dismissPanScale: CGFloat = 1.0
             var verticalPanFraction: CGFloat = 0.0
@@ -2719,8 +2726,6 @@ public final class StoryItemSetContainerComponent: Component {
             
             component.externalState.dismissFraction = dismissFraction
             
-            let startTime2 = CFAbsoluteTimeGetCurrent()
-            
             transition.setPosition(view: self.componentContainerView, position: CGPoint(x: availableSize.width * 0.5, y: availableSize.height * 0.5 + dismissPanOffset))
             transition.setBounds(view: self.componentContainerView, bounds: CGRect(origin: CGPoint(), size: availableSize))
             transition.setScale(view: self.componentContainerView, scale: dismissPanScale)
@@ -2731,8 +2736,6 @@ public final class StoryItemSetContainerComponent: Component {
             transition.setPosition(view: self.overlayContainerView, position: CGPoint(x: availableSize.width * 0.5, y: availableSize.height * 0.5 + dismissPanOffset))
             transition.setBounds(view: self.overlayContainerView, bounds: CGRect(origin: CGPoint(), size: availableSize))
             transition.setScale(view: self.overlayContainerView, scale: dismissPanScale)
-            
-            let startTime21 = CFAbsoluteTimeGetCurrent()
             
             var bottomContentInset: CGFloat
             if !component.safeInsets.bottom.isZero {
@@ -2860,8 +2863,6 @@ public final class StoryItemSetContainerComponent: Component {
                 }
             }
             
-            let startTime22 = CFAbsoluteTimeGetCurrent()
-            
             var currentHasFirstResponder = false
             if let reactionContextNode = self.reactionContextNode {
                 if hasFirstResponder(reactionContextNode.view) {
@@ -2881,8 +2882,6 @@ public final class StoryItemSetContainerComponent: Component {
             var inputPanelSize: CGSize?
             
             let _ = inputNodeVisible
-            
-            let startTime23 = CFAbsoluteTimeGetCurrent()
                         
             if showMessageInputPanel {
                 var haveLikeOptions = false
@@ -2902,6 +2901,11 @@ public final class StoryItemSetContainerComponent: Component {
                     displayAttachmentAction = false
                 }
                 
+                var maxInputLength = 4096
+                if isLiveStream {
+                    maxInputLength = GroupCallMessagesContext.getStarAmountParamMapping(value: self.sendMessageContext.currentLiveStreamMessageStars?.value ?? 0).maxLength
+                }
+                
                 inputPanelSize = self.inputPanel.update(
                     transition: inputPanelTransition,
                     component: AnyComponent(MessageInputPanelComponent(
@@ -2911,8 +2915,8 @@ public final class StoryItemSetContainerComponent: Component {
                         strings: component.strings,
                         style: .story,
                         placeholder: inputPlaceholder,
-                        sendPaidMessageStars: component.slice.additionalPeerData.sendPaidMessageStars,
-                        maxLength: 4096,
+                        sendPaidMessageStars: isLiveStream ? self.sendMessageContext.currentLiveStreamMessageStars : component.slice.additionalPeerData.sendPaidMessageStars,
+                        maxLength: maxInputLength,
                         queryTypes: [.mention, .hashtag, .emoji],
                         alwaysDarkWhenHasText: component.metrics.widthClass == .regular,
                         resetInputContents: resetInputContents,
@@ -3020,7 +3024,7 @@ public final class StoryItemSetContainerComponent: Component {
                             
                             return MessageInputPanelComponent.MyReaction(reaction: value, file: centerAnimation, animationFileId: animationFileId)
                         },
-                        likeAction: component.slice.effectivePeer.isService ? nil : { [weak self] in
+                        likeAction: (component.slice.effectivePeer.isService || isLiveStream) ? nil : { [weak self] in
                             guard let self else {
                                 return
                             }
@@ -3045,11 +3049,17 @@ public final class StoryItemSetContainerComponent: Component {
                             }
                         },
                         timeoutAction: nil,
-                        forwardAction: component.slice.item.storyItem.isPublic && !component.slice.item.storyItem.isForwardingDisabled ? { [weak self] in
+                        forwardAction: (!isLiveStream && component.slice.item.storyItem.isPublic && !component.slice.item.storyItem.isForwardingDisabled) ? { [weak self] in
                             guard let self else {
                                 return
                             }
                             self.sendMessageContext.performShareAction(view: self)
+                        } : nil,
+                        paidMessageAction: (isLiveStream && self.sendMessageContext.currentLiveStreamMessageStars == nil) ? { [weak self] in
+                            guard let self else {
+                                return
+                            }
+                            self.sendMessageContext.performPaidMessageAction(view: self)
                         } : nil,
                         moreAction: { [weak self] sourceView, gesture in
                             guard let self else {
@@ -3128,8 +3138,6 @@ public final class StoryItemSetContainerComponent: Component {
                     containerSize: CGSize(width: inputPanelAvailableWidth, height: 200.0)
                 )
             }
-            
-            let startTime3 = CFAbsoluteTimeGetCurrent()
             
             var inputPanelInset: CGFloat = component.containerInsets.bottom
             var inputHeight = component.inputHeight
@@ -3211,13 +3219,17 @@ public final class StoryItemSetContainerComponent: Component {
                 inputPanelIsOverlay = true
             }
             
+            var inputPanelFrameValue: CGRect?
+            if let inputPanelSize {
+                let inputPanelFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((availableSize.width - inputPanelSize.width) / 2.0), y: availableSize.height - inputPanelBottomInset - inputPanelSize.height), size: inputPanelSize)
+                inputPanelFrameValue = inputPanelFrame
+            }
+            
             var minimizedBottomContentHeight: CGFloat = 0.0
             var maximizedBottomContentHeight: CGFloat = 0.0
             
             let minimizedHeight = max(100.0, availableSize.height - (325.0 + 12.0))
             let defaultHeight = 60.0 + component.safeInsets.bottom + 1.0
-            
-            let startTime4 = CFAbsoluteTimeGetCurrent()
             
             var validViewListIds: [StoryId] = []
             
@@ -3717,8 +3729,6 @@ public final class StoryItemSetContainerComponent: Component {
                 self.viewLists.removeValue(forKey: id)
             }
             
-            let startTime5 = CFAbsoluteTimeGetCurrent()
-            
             let itemSize = CGSize(width: availableSize.width, height: ceil(availableSize.width * 1.77778))
             let contentDefaultBottomInset: CGFloat = bottomContentInset
             
@@ -3751,6 +3761,10 @@ public final class StoryItemSetContainerComponent: Component {
             }
             
             let contentFrame = CGRect(origin: CGPoint(x: 0.0, y: component.containerInsets.top - (contentSize.height - contentVisualHeight) * 0.5 - contentBottomInsetOverflow), size: contentSize)
+            var contentInsets = UIEdgeInsets(top: 54.0, left: 0.0, bottom: 0.0, right: 0.0)
+            if let inputPanelFrameValue {
+                contentInsets.bottom = max(0.0, contentFrame.maxY - (inputPanelFrameValue.minY + 8.0))
+            }
             
             transition.setFrame(view: self.viewListsContainer, frame: CGRect(origin: CGPoint(x: contentFrame.minX, y: 0.0), size: CGSize(width: contentSize.width, height: availableSize.height)))
             let viewListsRadius: CGFloat
@@ -3766,6 +3780,7 @@ public final class StoryItemSetContainerComponent: Component {
             let itemLayout = ItemLayout(
                 containerSize: availableSize,
                 contentFrame: contentFrame,
+                contentInsets: contentInsets,
                 contentMinScale: contentMinScale,
                 contentScaleFraction: contentScaleFraction,
                 contentOverflowFraction: contentOverflowFraction
@@ -3881,8 +3896,6 @@ public final class StoryItemSetContainerComponent: Component {
                     }
                 }
             }
-            
-            let startTime6 = CFAbsoluteTimeGetCurrent()
             
             let soundButtonState = isSilentVideo || component.isAudioMuted
             let soundButtonSize = self.soundButton.update(
@@ -4061,11 +4074,6 @@ public final class StoryItemSetContainerComponent: Component {
             
             let focusedItem: StoryContentItem? = component.slice.item
             
-            var isLiveStream = false
-            if case .liveStream = component.slice.item.storyItem.media {
-                isLiveStream = true
-            }
-            
             var currentLeftInfoItem: InfoItem?
             if focusedItem != nil {
                 let leftInfoComponent = AnyComponent(StoryAvatarInfoComponent(context: component.context, peer: component.slice.effectivePeer, isLiveStream: isLiveStream))
@@ -4204,18 +4212,12 @@ public final class StoryItemSetContainerComponent: Component {
                 }
             }
             
-            let startTime7 = CFAbsoluteTimeGetCurrent()
-            
             let topGradientHeight: CGFloat = 90.0
             let topContentGradientRect = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: contentFrame.width, height: topGradientHeight))
             transition.setPosition(view: self.topContentGradientView, position: topContentGradientRect.center)
             transition.setBounds(view: self.topContentGradientView, bounds: CGRect(origin: CGPoint(), size: topContentGradientRect.size))
             
-            var inputPanelFrameValue: CGRect?
-            if let inputPanelSize {
-                let inputPanelFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((availableSize.width - inputPanelSize.width) / 2.0), y: availableSize.height - inputPanelBottomInset - inputPanelSize.height), size: inputPanelSize)
-                inputPanelFrameValue = inputPanelFrame
-                
+            if let inputPanelFrame = inputPanelFrameValue {
                 var inputPanelAlpha: CGFloat = (component.hideUI || self.isEditingStory || component.slice.item.storyItem.isPending) ? 0.0 : 1.0
                 if case .liveStream = component.slice.item.storyItem.media {
                 } else if component.slice.effectivePeer.id == component.context.account.peerId {
@@ -4462,7 +4464,7 @@ public final class StoryItemSetContainerComponent: Component {
                     captionItemTransition.setAlpha(view: captionItemView, alpha: captionAlpha)
                 }
             }
-            
+    
             let reactionsAnchorRect: CGRect
             
             if self.inputPanelExternalState.isEditing, let inputPanelFrameValue {
@@ -4497,6 +4499,9 @@ public final class StoryItemSetContainerComponent: Component {
                 effectiveDisplayReactions = false
             }
             if self.sendMessageContext.currentInputMode != .text {
+                effectiveDisplayReactions = false
+            }
+            if case .liveStream = component.slice.item.storyItem.media {
                 effectiveDisplayReactions = false
             }
             
@@ -4925,6 +4930,9 @@ public final class StoryItemSetContainerComponent: Component {
                 }
             }
             var dimAlpha: CGFloat = (inputPanelIsOverlay || self.inputPanelExternalState.isEditing) ? 1.0 : normalDimAlpha
+            if case .liveStream = component.slice.item.storyItem.media {
+                dimAlpha = normalDimAlpha
+            }
             if component.hideUI || self.viewListDisplayState != .hidden || self.isEditingStory {
                 dimAlpha = 0.0
             }
@@ -4964,13 +4972,9 @@ public final class StoryItemSetContainerComponent: Component {
                 }
             }
             
-            let startTime8 = CFAbsoluteTimeGetCurrent()
-            
             self.ignoreScrolling = false
             
             self.updateScrolling(transition: itemsTransition)
-            
-            let startTime9 = CFAbsoluteTimeGetCurrent()
             
             let navigationStripSideInset: CGFloat = 8.0
             let navigationStripTopInset: CGFloat = 8.0
@@ -5049,23 +5053,6 @@ public final class StoryItemSetContainerComponent: Component {
                 } else {
                     component.externalState.derivedBottomInset = availableSize.height - itemsContainerFrame.maxY
                 }
-            }
-            
-            if !"".isEmpty {
-                print("inner update time:\n" +
-                      "  1: \((CFAbsoluteTimeGetCurrent() - startTime1) * 1000.0) ms\n" +
-                      "  2: \((CFAbsoluteTimeGetCurrent() - startTime2) * 1000.0) ms\n" +
-                      "  2.1: \((CFAbsoluteTimeGetCurrent() - startTime21) * 1000.0) ms\n" +
-                      "  2.2: \((CFAbsoluteTimeGetCurrent() - startTime22) * 1000.0) ms\n" +
-                      "  2.3: \((CFAbsoluteTimeGetCurrent() - startTime23) * 1000.0) ms\n" +
-                      "  3: \((CFAbsoluteTimeGetCurrent() - startTime3) * 1000.0) ms\n" +
-                      "  4: \((CFAbsoluteTimeGetCurrent() - startTime4) * 1000.0) ms\n" +
-                      "  5: \((CFAbsoluteTimeGetCurrent() - startTime5) * 1000.0) ms\n" +
-                      "  6: \((CFAbsoluteTimeGetCurrent() - startTime6) * 1000.0) ms\n" +
-                      "  7: \((CFAbsoluteTimeGetCurrent() - startTime7) * 1000.0) ms\n" +
-                      "  8: \((CFAbsoluteTimeGetCurrent() - startTime8) * 1000.0) ms\n" +
-                      "  9: \((CFAbsoluteTimeGetCurrent() - startTime9) * 1000.0) ms\n"
-                )
             }
             
             if let scheduledStoryUnpinnedUndoOverlay = self.scheduledStoryUnpinnedUndoOverlay {

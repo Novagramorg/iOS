@@ -303,6 +303,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[-29248689] = { return Api.GlobalPrivacySettings.parse_globalPrivacySettings($0) }
     dict[1429932961] = { return Api.GroupCall.parse_groupCall($0) }
     dict[2004925620] = { return Api.GroupCall.parse_groupCallDiscarded($0) }
+    dict[-2018173984] = { return Api.GroupCallMessage.parse_groupCallMessage($0) }
     dict[708691884] = { return Api.GroupCallParticipant.parse_groupCallParticipant($0) }
     dict[1735736008] = { return Api.GroupCallParticipantVideo.parse_groupCallParticipantVideo($0) }
     dict[-592373577] = { return Api.GroupCallParticipantVideoSourceGroup.parse_groupCallParticipantVideoSourceGroup($0) }
@@ -1112,7 +1113,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[-1535694705] = { return Api.Update.parse_updateGroupCallChainBlocks($0) }
     dict[192428418] = { return Api.Update.parse_updateGroupCallConnection($0) }
     dict[-917002394] = { return Api.Update.parse_updateGroupCallEncryptedMessage($0) }
-    dict[-964095818] = { return Api.Update.parse_updateGroupCallMessage($0) }
+    dict[-667783411] = { return Api.Update.parse_updateGroupCallMessage($0) }
     dict[-219423922] = { return Api.Update.parse_updateGroupCallParticipants($0) }
     dict[1763610706] = { return Api.Update.parse_updateInlineBotCallbackQuery($0) }
     dict[1442983757] = { return Api.Update.parse_updateLangPack($0) }
@@ -1815,6 +1816,8 @@ public extension Api {
             case let _1 as Api.GlobalPrivacySettings:
                 _1.serialize(buffer, boxed)
             case let _1 as Api.GroupCall:
+                _1.serialize(buffer, boxed)
+            case let _1 as Api.GroupCallMessage:
                 _1.serialize(buffer, boxed)
             case let _1 as Api.GroupCallParticipant:
                 _1.serialize(buffer, boxed)

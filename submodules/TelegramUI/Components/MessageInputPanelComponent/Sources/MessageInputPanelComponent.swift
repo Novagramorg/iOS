@@ -201,6 +201,7 @@ public final class MessageInputPanelComponent: Component {
     public let inputModeAction: (() -> Void)?
     public let timeoutAction: ((UIView, ContextGesture?) -> Void)?
     public let forwardAction: (() -> Void)?
+    public let paidMessageAction: (() -> Void)?
     public let moreAction: ((UIView, ContextGesture?) -> Void)?
     public let presentCaptionPositionTooltip: ((UIView) -> Void)?
     public let presentVoiceMessagesUnavailableTooltip: ((UIView) -> Void)?
@@ -260,6 +261,7 @@ public final class MessageInputPanelComponent: Component {
         inputModeAction: (() -> Void)?,
         timeoutAction: ((UIView, ContextGesture?) -> Void)?,
         forwardAction: (() -> Void)?,
+        paidMessageAction: (() -> Void)?,
         moreAction: ((UIView, ContextGesture?) -> Void)?,
         presentCaptionPositionTooltip: ((UIView) -> Void)?,
         presentVoiceMessagesUnavailableTooltip: ((UIView) -> Void)?,
@@ -318,6 +320,7 @@ public final class MessageInputPanelComponent: Component {
         self.inputModeAction = inputModeAction
         self.timeoutAction = timeoutAction
         self.forwardAction = forwardAction
+        self.paidMessageAction = paidMessageAction
         self.moreAction = moreAction
         self.presentCaptionPositionTooltip = presentCaptionPositionTooltip
         self.presentVoiceMessagesUnavailableTooltip = presentVoiceMessagesUnavailableTooltip
@@ -501,6 +504,7 @@ public final class MessageInputPanelComponent: Component {
         private let inputActionButton = ComponentView<Empty>()
         private let likeButton = ComponentView<Empty>()
         private let stickerButton = ComponentView<Empty>()
+        private var paidMessageButton: ComponentView<Empty>?
         private let timeoutButton = ComponentView<Empty>()
         
         private var mediaRecordingVibrancyContainer: UIView
@@ -816,6 +820,11 @@ public final class MessageInputPanelComponent: Component {
             if component.bottomInset <= 32.0 && !component.forceIsEditing && !component.hideKeyboard && !self.textFieldExternalState.isEditing {
                 textFieldSideInset += 18.0
                 insets.right += 18.0
+            } else {
+                #if DEBUG
+                textFieldSideInset += 8.0
+                insets.right += 8.0
+                #endif
             }
             
             var mediaInsets = UIEdgeInsets(top: insets.top, left: textFieldSideInset, bottom: insets.bottom, right: 40.0 + 8.0)
@@ -1078,6 +1087,10 @@ public final class MessageInputPanelComponent: Component {
             } else if isEditing || component.style == .editor || component.style == .media {
                 fieldBackgroundFrame = fieldFrame
             } else {
+                #if DEBUG
+                fieldBackgroundFrame = fieldFrame
+                fieldBackgroundFrame.size.width += 16.0
+                #else
                 if component.forwardAction != nil && component.likeAction != nil {
                     fieldBackgroundFrame = CGRect(origin: CGPoint(x: mediaInsets.left, y: insets.top), size: CGSize(width: availableSize.width - mediaInsets.left - insets.right - 49.0, height: textFieldSize.height))
                 } else if component.forwardAction != nil {
@@ -1085,6 +1098,7 @@ public final class MessageInputPanelComponent: Component {
                 } else {
                     fieldBackgroundFrame = CGRect(origin: CGPoint(x: mediaInsets.left, y: insets.top), size: CGSize(width: availableSize.width - mediaInsets.left - 50.0, height: textFieldSize.height))
                 }
+                #endif
             }
             
             let rawFieldBackgroundFrame = fieldBackgroundFrame
@@ -1103,7 +1117,7 @@ public final class MessageInputPanelComponent: Component {
                     self.fieldBackgroundTint.isHidden = true
                 }
                 if let fieldGlassBackgroundView = self.fieldGlassBackgroundView {
-                    fieldGlassBackgroundView.update(size: fieldBackgroundFrame.size, cornerRadius: baseFieldHeight * 0.5, isDark: true, tintColor: component.style == .story ? .init(kind: .panel, color: defaultDarkPresentationTheme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7)) : .init(kind: .custom, color: UIColor(rgb: 0x25272e, alpha: 0.72)), transition: transition)
+                    fieldGlassBackgroundView.update(size: fieldBackgroundFrame.size, cornerRadius: baseFieldHeight * 0.5, isDark: true, tintColor: component.style == .story ? .init(kind: .panel, color: defaultDarkPresentationTheme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7)) : .init(kind: .custom, color: UIColor(rgb: 0x25272e, alpha: 0.72)), isInteractive: true, transition: transition)
                     transition.setFrame(view: fieldGlassBackgroundView, frame: fieldBackgroundFrame)
                 }
             default:
@@ -1552,22 +1566,35 @@ public final class MessageInputPanelComponent: Component {
                 if case .story = component.style {
                     inputActionButtonAvailableSize = CGSize(width: 40.0, height: 40.0)
                 }
-                if hasMediaEditing {
-                    inputActionButtonMode = .send
-                } else {
+                
+                if let storyItem = component.storyItem, case .liveStream = storyItem.media {
                     if self.textFieldExternalState.hasText {
                         if let sendPaidMessageStars = component.sendPaidMessageStars, !"".isEmpty {
                             inputActionButtonMode = .stars(sendPaidMessageStars.value)
                         } else {
                             inputActionButtonMode = .send
                         }
-                    } else if !isEditing && component.forwardAction != nil {
-                        inputActionButtonMode = .forward
                     } else {
-                        if component.areVoiceMessagesAvailable {
-                            inputActionButtonMode = self.currentMediaInputIsVoice ? .voiceInput : .videoInput
+                        inputActionButtonMode = .stars(123)
+                    }
+                } else {
+                    if hasMediaEditing {
+                        inputActionButtonMode = .send
+                    } else {
+                        if self.textFieldExternalState.hasText {
+                            if let sendPaidMessageStars = component.sendPaidMessageStars, !"".isEmpty {
+                                inputActionButtonMode = .stars(sendPaidMessageStars.value)
+                            } else {
+                                inputActionButtonMode = .send
+                            }
+                        } else if !isEditing && component.forwardAction != nil {
+                            inputActionButtonMode = .forward
                         } else {
-                            inputActionButtonMode = .unavailableVoiceInput
+                            if component.areVoiceMessagesAvailable {
+                                inputActionButtonMode = self.currentMediaInputIsVoice ? .voiceInput : .videoInput
+                            } else {
+                                inputActionButtonMode = .unavailableVoiceInput
+                            }
                         }
                     }
                 }
@@ -1803,6 +1830,13 @@ public final class MessageInputPanelComponent: Component {
             if isEditing {
                 inputModeVisible = true
             }
+            var isLiveStream = false
+            if let storyItem = component.storyItem, case .liveStream = storyItem.media {
+                isLiveStream = true
+            }
+            if isLiveStream && component.sendPaidMessageStars == nil {
+                inputModeVisible = false
+            }
             
             let animationName: String
             var animationPlay = false
@@ -1896,6 +1930,58 @@ public final class MessageInputPanelComponent: Component {
                         if animationPlay {
                             animationView.playOnce()
                         }
+                    }
+                }
+            }
+            
+            if let _ = component.paidMessageAction {
+                let paidMessageButton: ComponentView<Empty>
+                var paidMessageButtonTransition = transition
+                if let current = self.paidMessageButton {
+                    paidMessageButton = current
+                } else {
+                    paidMessageButton = ComponentView()
+                    self.paidMessageButton = paidMessageButton
+                    paidMessageButtonTransition = paidMessageButtonTransition.withAnimation(.none)
+                }
+                
+                let paidMessageButtonSize = paidMessageButton.update(
+                    transition: transition,
+                    component: AnyComponent(Button(
+                        content: AnyComponent(BundleIconComponent(
+                            name: "Chat/Input/Text/AccessoryIconSuggestPost",
+                            tintColor: defaultDarkPresentationTheme.chat.inputPanel.inputControlColor
+                        )),
+                        action: { [weak self] in
+                            guard let self else {
+                                return
+                            }
+                            self.component?.paidMessageAction?()
+                        }
+                    ).minSize(CGSize(width: 32.0, height: 32.0))),
+                    environment: {},
+                    containerSize: CGSize(width: 32.0, height: 32.0)
+                )
+                if let paidMessageButtonView = paidMessageButton.view as? Button.View {
+                    if paidMessageButtonView.superview == nil {
+                        paidMessageButtonView.alpha = 0.0
+                        self.addSubview(paidMessageButtonView)
+                    }
+                    let paidMessageButtonFrame = CGRect(origin: CGPoint(x: fieldIconNextX - paidMessageButtonSize.width, y: fieldBackgroundFrame.maxY - 4.0 - paidMessageButtonSize.height), size: paidMessageButtonSize)
+                    transition.setPosition(view: paidMessageButtonView, position: paidMessageButtonFrame.center)
+                    transition.setBounds(view: paidMessageButtonView, bounds: CGRect(origin: CGPoint(), size: paidMessageButtonFrame.size))
+                    
+                    transition.setAlpha(view: paidMessageButtonView, alpha: 1.0)
+                    
+                    fieldIconNextX -= paidMessageButtonSize.width + 2.0
+                }
+            } else {
+                if let paidMessageButton = self.paidMessageButton {
+                    self.paidMessageButton = nil
+                    if let paidMessageButtonView = paidMessageButton.view {
+                        transition.setAlpha(view: paidMessageButtonView, alpha: 0.0, completion: { [weak paidMessageButtonView] _ in
+                            paidMessageButtonView?.removeFromSuperview()
+                        })
                     }
                 }
             }

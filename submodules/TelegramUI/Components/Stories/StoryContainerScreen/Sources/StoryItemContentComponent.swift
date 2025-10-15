@@ -93,10 +93,12 @@ final class StoryItemContentComponent: Component {
         private let imageView: StoryItemImageView
         private let overlaysView: StoryItemOverlaysView
         private var videoNode: UniversalVideoNode?
-        private var mediaStreamCall: PresentationGroupCallImpl?
+        private(set) var mediaStreamCall: PresentationGroupCallImpl?
         private var mediaStream: ComponentView<Empty>?
         private var loadingEffectView: StoryItemLoadingEffectView?
         private var loadingEffectAppearanceTimer: SwiftSignalKit.Timer?
+        
+        private var liveChat: ComponentView<Empty>?
         
         private var mediaAreasEffectView: StoryItemLoadingEffectView?
         
@@ -544,6 +546,11 @@ final class StoryItemContentComponent: Component {
         }
         
         override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+            if let liveChatView = self.liveChat?.view {
+                if let result = liveChatView.hitTest(self.convert(point, to: liveChatView), with: event) {
+                    return result
+                }
+            }
             if let unsupportedButtonView = self.unsupportedButton?.view {
                 if let result = unsupportedButtonView.hitTest(self.convert(point, to: unsupportedButtonView), with: event) {
                     return result
@@ -777,6 +784,34 @@ final class StoryItemContentComponent: Component {
                     })
                 }
                 
+                let liveChat: ComponentView<Empty>
+                if let current = self.liveChat {
+                    liveChat = current
+                } else {
+                    liveChat = ComponentView()
+                    self.liveChat = liveChat
+                }
+                
+                let _ = liveChat.update(
+                    transition: mediaStreamTransition,
+                    component: AnyComponent(StoryContentLiveChatComponent(
+                        context: component.context,
+                        strings: component.strings,
+                        theme: environment.theme,
+                        call: mediaStreamCall,
+                        insets: environment.containerInsets
+                    )),
+                    environment: {},
+                    containerSize: availableSize
+                )
+                let liveChatFrame = CGRect(origin: CGPoint(), size: availableSize)
+                if let liveChatView = liveChat.view {
+                    if liveChatView.superview == nil {
+                        self.insertSubview(liveChatView, aboveSubview: self.imageView)
+                    }
+                    mediaStreamTransition.setFrame(view: liveChatView, frame: liveChatFrame)
+                }
+                
                 let _ = mediaStream.update(
                     transition: mediaStreamTransition,
                     component: AnyComponent(MediaStreamVideoComponent(
@@ -831,6 +866,11 @@ final class StoryItemContentComponent: Component {
                 if let mediaStream = self.mediaStream {
                     self.mediaStream = nil
                     mediaStream.view?.removeFromSuperview()
+                }
+                
+                if let liveChat = self.liveChat {
+                    self.liveChat = nil
+                    liveChat.view?.removeFromSuperview()
                 }
                 
                 if let messageMedia {

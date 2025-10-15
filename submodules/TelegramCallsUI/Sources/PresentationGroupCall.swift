@@ -930,11 +930,15 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
             if let data = accountContext.currentAppConfiguration.with({ $0 }).data, let value = data["group_call_message_ttl"] as? Double {
                 messageLifetime = Int32(value)
             }
+            if isStream {
+                messageLifetime = Int32.max
+            }
             self.messagesContext = accountContext.engine.messages.groupCallMessages(
                 callId: initialCall.description.id,
                 reference: .id(id: initialCall.description.id, accessHash: initialCall.description.accessHash),
                 e2eContext: self.e2eContext,
-                messageLifetime: messageLifetime
+                messageLifetime: messageLifetime,
+                isLiveStream: isStream
             )
             self.messagesStatePromise.set(self.messagesContext!.state)
         }
@@ -4032,9 +4036,9 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
         })
     }
     
-    public func sendMessage(randomId: Int64? = nil, text: String, entities: [MessageTextEntity]) {
+    public func sendMessage(randomId: Int64? = nil, text: String, entities: [MessageTextEntity], paidStars: Int64?) {
         if let messagesContext = self.messagesContext {
-            messagesContext.send(fromId: self.joinAsPeerId, randomId: randomId, text: text, entities: entities)
+            messagesContext.send(fromId: self.joinAsPeerId, randomId: randomId, text: text, entities: entities, paidStars: paidStars)
         }
     }
 }

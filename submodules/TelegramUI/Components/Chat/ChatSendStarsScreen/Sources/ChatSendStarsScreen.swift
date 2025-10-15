@@ -135,13 +135,16 @@ private final class BalanceComponent: CombinedComponent {
 private final class BadgeComponent: Component {
     let theme: PresentationTheme
     let title: String
+    let color: UIColor
     
     init(
         theme: PresentationTheme,
-        title: String
+        title: String,
+        color: UIColor
     ) {
         self.theme = theme
         self.title = title
+        self.color = color
     }
     
     static func ==(lhs: BadgeComponent, rhs: BadgeComponent) -> Bool {
@@ -149,6 +152,9 @@ private final class BadgeComponent: Component {
             return false
         }
         if lhs.title != rhs.title {
+            return false
+        }
+        if lhs.color != rhs.color {
             return false
         }
         return true
@@ -242,6 +248,7 @@ private final class BadgeComponent: Component {
                 self.badgeIcon.image = UIImage(bundleImageName: "Premium/SendStarsStarSliderIcon")?.withRenderingMode(.alwaysTemplate)
             }
              
+            let previousComponent = self.component
             self.component = component
             self.badgeIcon.tintColor = .white
             
@@ -268,12 +275,12 @@ private final class BadgeComponent: Component {
             let size = badgeSize
             transition.setFrame(view: self.badgeLabel, frame: CGRect(origin: CGPoint(x: 14.0 + floorToScreenPixels((badgeFullSize.width - badgeLabelSize.width) / 2.0), y: 5.0), size: badgeLabelSize))
             
-            if self.previousAvailableSize != availableSize {
+            if self.previousAvailableSize != availableSize || previousComponent?.color != component.color {
                 self.previousAvailableSize = availableSize
                 
                 let activeColors: [UIColor] = [
-                    UIColor(rgb: 0xFFAB03),
-                    UIColor(rgb: 0xFFCB37)
+                    component.color,
+                    component.color
                 ]
                 
                 var locations: [CGFloat] = []
@@ -421,7 +428,7 @@ private final class PeerBadgeComponent: Component {
             let contentSize = CGSize(width: iconSize.width + titleSpacing + titleSize.width, height: titleSize.height)
             let size = CGSize(width: contentSize.width + sideInset * 2.0, height: contentSize.height + 3.0 * 2.0)
             
-            self.backgroundMaskLayer.backgroundColor = component.theme.list.plainBackgroundColor.cgColor
+            self.backgroundMaskLayer.backgroundColor = component.theme.overallDarkAppearance ? component.theme.list.blocksBackgroundColor.cgColor : component.theme.list.plainBackgroundColor.cgColor
             self.backgroundLayer.backgroundColor = UIColor(rgb: 0xFFB10D).cgColor
             
             let backgroundFrame = CGRect(origin: CGPoint(), size: size)
@@ -599,17 +606,20 @@ private final class SliderBackgroundComponent: Component {
     let strings: PresentationStrings
     let value: CGFloat
     let topCutoff: CGFloat?
+    let color: UIColor
     
     init(
         theme: PresentationTheme,
         strings: PresentationStrings,
         value: CGFloat,
-        topCutoff: CGFloat?
+        topCutoff: CGFloat?,
+        color: UIColor
     ) {
         self.theme = theme
         self.strings = strings
         self.value = value
         self.topCutoff = topCutoff
+        self.color = color
     }
     
     static func ==(lhs: SliderBackgroundComponent, rhs: SliderBackgroundComponent) -> Bool {
@@ -623,6 +633,9 @@ private final class SliderBackgroundComponent: Component {
             return false
         }
         if lhs.topCutoff != rhs.topCutoff {
+            return false
+        }
+        if lhs.color != rhs.color {
             return false
         }
         return true
@@ -692,7 +705,7 @@ private final class SliderBackgroundComponent: Component {
         
         func update(component: SliderBackgroundComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
             self.sliderBackground.backgroundColor = component.theme.list.itemPrimaryTextColor.withMultipliedAlpha(component.theme.overallDarkAppearance ? 0.2 : 0.07)
-            self.sliderForeground.backgroundColor = UIColor(rgb: 0xFFB10D)
+            self.sliderForeground.backgroundColor = component.color
             self.topForegroundLine.backgroundColor = component.theme.list.plainBackgroundColor.cgColor
             self.topBackgroundLine.backgroundColor = component.theme.list.plainBackgroundColor.cgColor
             
@@ -1429,6 +1442,8 @@ private final class ChatSendStarsScreenComponent: Component {
                             switch component.initialData.subjectInitialData {
                             case let .react(reactData):
                                 targetPeerId = reactData.peer.id
+                            case let .liveStreamMessage(liveStreamMessageData):
+                                targetPeerId = liveStreamMessageData.peer.id
                             }
                             
                             let _ = (context.engine.payments.starsTopUpOptions()
@@ -1502,6 +1517,11 @@ private final class ChatSendStarsScreenComponent: Component {
                             }
                         }
                     })
+                case let .liveStreamMessage(liveStreamMessageData):
+                    self.currentMyPeer = nil
+                    self.amount = Amount(realValue: 50, maxRealValue: liveStreamMessageData.maxAmount, maxSliderValue: 999, isLogarithmic: true)
+                    
+                    self.privacyPeer = .account
                 }
                 
                 if let starsContext = component.context.starsContext {
@@ -1559,6 +1579,8 @@ private final class ChatSendStarsScreenComponent: Component {
                             switch component.initialData.subjectInitialData {
                             case let .react(reactData):
                                 maxAmount = reactData.maxAmount
+                            case let .liveStreamMessage(liveStreamMessageData):
+                                maxAmount = liveStreamMessageData.maxAmount
                             }
                             
                             self.amount = self.amount.withSliderValue(value)
@@ -1612,6 +1634,7 @@ private final class ChatSendStarsScreenComponent: Component {
             var topCutoffFraction: CGFloat?
             
             var topCount: Int?
+            var sliderColor: UIColor = UIColor(rgb: 0xFFB10D)
             switch component.initialData.subjectInitialData {
             case let .react(reactData):
                 let topOthersCount: Int? = reactData.topPeers.filter({ !$0.isMy }).max(by: { $0.count < $1.count })?.count
@@ -1638,6 +1661,8 @@ private final class ChatSendStarsScreenComponent: Component {
                 } else {
                     self.isPastTopCutoff = nil
                 }
+            case .liveStreamMessage:
+                sliderColor = getLiveStreamStarAmountColorMapping(value: Int64(self.amount.realValue))
             }
             
             let _ = self.sliderBackground.update(
@@ -1646,7 +1671,8 @@ private final class ChatSendStarsScreenComponent: Component {
                     theme: environment.theme,
                     strings: environment.strings,
                     value: progressFraction,
-                    topCutoff: topCutoffFraction
+                    topCutoff: topCutoffFraction,
+                    color: sliderColor
                 )),
                 environment: {},
                 containerSize: sliderBackgroundFrame.size
@@ -1666,7 +1692,8 @@ private final class ChatSendStarsScreenComponent: Component {
                     transition: transition,
                     component: AnyComponent(BadgeComponent(
                         theme: environment.theme,
-                        title: "\(self.amount.realValue)"
+                        title: "\(self.amount.realValue)",
+                        color: sliderColor
                     )),
                     environment: {},
                     containerSize: CGSize(width: 200.0, height: 200.0)
@@ -1761,6 +1788,8 @@ private final class ChatSendStarsScreenComponent: Component {
                     transition.setFrame(view: peerSelectorButtonView, frame: peerSelectorButtonFrame)
                     peerSelectorButtonView.isHidden = sendAsPeers.count <= 1
                 }
+            case .liveStreamMessage:
+                break
             }
             
             if themeUpdated {
@@ -1812,6 +1841,8 @@ private final class ChatSendStarsScreenComponent: Component {
             case let .react(reactData):
                 let currentMyPeer = self.currentMyPeer ?? reactData.myPeer
                 subtitleText = environment.strings.SendStarReactions_SubtitleFrom(currentMyPeer.compactDisplayTitle).string
+            case .liveStreamMessage:
+                subtitleText = nil
             }
             
             var subtitleSize: CGSize?
@@ -1830,6 +1861,9 @@ private final class ChatSendStarsScreenComponent: Component {
             switch component.initialData.subjectInitialData {
             case .react:
                 titleText = environment.strings.SendStarReactions_Title
+            case .liveStreamMessage:
+                //TODO:localize
+                titleText = "Highlight and Pin"
             }
             
             let titleSize = title.update(
@@ -1877,6 +1911,9 @@ private final class ChatSendStarsScreenComponent: Component {
                 } else {
                     text = environment.strings.SendStarReactions_TextGeneric(reactData.peer.debugDisplayTitle).string
                 }
+            case let .liveStreamMessage(liveStreamMessageData):
+                //TODO:localize
+                text = "Highlight and pin a message\nby adding Stars for **\(liveStreamMessageData.peer.displayTitle(strings: environment.strings, displayOrder: .firstLast))**."
             }
             
             let body = MarkdownAttributeSet(font: Font.regular(15.0), textColor: environment.theme.list.itemPrimaryTextColor)
@@ -2242,6 +2279,8 @@ private final class ChatSendStarsScreenComponent: Component {
                 }
                 
                 contentHeight += anonymousContentsSize.height + 27.0
+            case .liveStreamMessage:
+                break
             }
             
             initialContentHeight = contentHeight
@@ -2254,11 +2293,14 @@ private final class ChatSendStarsScreenComponent: Component {
             switch component.initialData.subjectInitialData {
             case .react:
                 buttonString = environment.strings.SendStarReactions_SendButtonTitle("\(self.amount.realValue)").string
+            case .liveStreamMessage:
+                //TODO:localize
+                buttonString = "Add  # \(self.amount.realValue)"
             }
-            let buttonAttributedString = NSMutableAttributedString(string: buttonString, font: Font.semibold(17.0), textColor: .white, paragraphAlignment: .center)
+            let buttonAttributedString = NSMutableAttributedString(string: buttonString, font: Font.semibold(17.0), textColor: environment.theme.list.itemCheckColors.foregroundColor, paragraphAlignment: .center)
             if let range = buttonAttributedString.string.range(of: "#"), let starImage = self.cachedStarImage?.0 {
                 buttonAttributedString.addAttribute(.attachment, value: starImage, range: NSRange(range, in: buttonAttributedString.string))
-                buttonAttributedString.addAttribute(.foregroundColor, value: UIColor(rgb: 0xffffff), range: NSRange(range, in: buttonAttributedString.string))
+                buttonAttributedString.addAttribute(.foregroundColor, value: environment.theme.list.itemCheckColors.foregroundColor, range: NSRange(range, in: buttonAttributedString.string))
                 buttonAttributedString.addAttribute(.baselineOffset, value: 1.0, range: NSRange(range, in: buttonAttributedString.string))
             }
             
@@ -2300,6 +2342,9 @@ private final class ChatSendStarsScreenComponent: Component {
                                 switch component.initialData.subjectInitialData {
                                 case let .react(reactData):
                                     purchasePurpose = .reactions(peerId: reactData.peer.id, requiredStars: Int64(self.amount.realValue))
+                                case let .liveStreamMessage(liveStreamMessageData):
+                                    //TODO:localize
+                                    purchasePurpose = .reactions(peerId: liveStreamMessageData.peer.id, requiredStars: Int64(self.amount.realValue))
                                 }
                                 
                                 let purchaseScreen = component.context.sharedContext.makeStarsPurchaseScreen(context: component.context, starsContext: starsContext, options: options, purpose: purchasePurpose, targetPeerId: nil, completion: { result in
@@ -2339,6 +2384,13 @@ private final class ChatSendStarsScreenComponent: Component {
                                 Int64(self.amount.realValue),
                                 mappedPrivacy,
                                 isBecomingTop,
+                                ChatSendStarsScreen.TransitionOut(
+                                    sourceView: badgeView.badgeIcon
+                                )
+                            )
+                        case let .liveStreamMessage(liveStreamMessageData):
+                            liveStreamMessageData.completion(
+                                Int64(self.amount.realValue),
                                 ChatSendStarsScreen.TransitionOut(
                                     sourceView: badgeView.badgeIcon
                                 )
@@ -2486,7 +2538,20 @@ public class ChatSendStarsScreen: ViewControllerComponentContainer {
             }
         }
         
+        final class LiveStreamMessage {
+            let peer: EnginePeer
+            let maxAmount: Int
+            let completion: (Int64, ChatSendStarsScreen.TransitionOut) -> Void
+            
+            init(peer: EnginePeer, maxAmount: Int, completion: @escaping (Int64, ChatSendStarsScreen.TransitionOut) -> Void) {
+                self.peer = peer
+                self.maxAmount = maxAmount
+                self.completion = completion
+            }
+        }
+        
         case react(React)
+        case liveStreamMessage(LiveStreamMessage)
     }
     
     public final class InitialData {
@@ -2565,15 +2630,15 @@ public class ChatSendStarsScreen: ViewControllerComponentContainer {
     private var didPlayAppearAnimation: Bool = false
     private var isDismissed: Bool = false
     
-    private var presenceDisposable: Disposable?
-    
-    public init(context: AccountContext, initialData: InitialData) {
+    public init(context: AccountContext, initialData: InitialData, theme: PresentationTheme? = nil) {
         self.context = context
         
         super.init(context: context, component: ChatSendStarsScreenComponent(
             context: context,
             initialData: initialData
-        ), navigationBarAppearance: .none)
+        ), navigationBarAppearance: .none, theme: theme.flatMap {
+            return .custom($0)
+        } ?? .default)
         
         self.statusBar.statusBarStyle = .Ignore
         self.navigationPresentation = .flatModal
@@ -2585,7 +2650,6 @@ public class ChatSendStarsScreen: ViewControllerComponentContainer {
     }
     
     deinit {
-        self.presenceDisposable?.dispose()
     }
     
     override public func viewDidAppear(_ animated: Bool) {
@@ -2731,6 +2795,45 @@ public class ChatSendStarsScreen: ViewControllerComponentContainer {
                             count: Int(topPeer.count)
                         )
                     },
+                    maxAmount: maxAmount,
+                    completion: completion
+                )),
+                balance: balance
+            )
+        }
+    }
+    
+    public static func initialDataLiveStreamMessage(context: AccountContext, peerId: EnginePeer.Id, completion: @escaping (Int64, TransitionOut) -> Void) -> Signal<InitialData?, NoError> {
+        let balance: Signal<StarsAmount?, NoError>
+        if let starsContext = context.starsContext {
+            balance = starsContext.state
+            |> map { state in
+                return state?.balance
+            }
+            |> take(1)
+        } else {
+            balance = .single(nil)
+        }
+        
+        var maxAmount = 10000
+        if let data = context.currentAppConfiguration.with({ $0 }).data, let value = data["stars_live_stream_pin_amount_max"] as? Double {
+            maxAmount = Int(value)
+        }
+        
+        return combineLatest(
+            context.engine.data.get(
+                TelegramEngine.EngineData.Item.Peer.Peer(id: peerId),
+            ),
+            balance
+        )
+        |> map { peer, balance -> InitialData? in
+            guard let peer else {
+                return nil
+            }
+            
+            return InitialData(
+                subjectInitialData: .liveStreamMessage(SubjectInitialData.LiveStreamMessage(
+                    peer: peer,
                     maxAmount: maxAmount,
                     completion: completion
                 )),
@@ -3137,4 +3240,26 @@ final class HeaderContextReferenceContentSource: ContextReferenceContentSource {
     func transitionInfo() -> ContextControllerReferenceViewInfo? {
         return ContextControllerReferenceViewInfo(referenceView: self.sourceView, contentAreaInScreenSpace: UIScreen.main.bounds, actionsPosition: self.actionsOnTop ? .top : .bottom)
     }
+}
+
+private func getLiveStreamStarAmountColorMapping(value: Int64) -> UIColor {
+    if value >= 10000 {
+        return UIColor(rgb: 0x7C8695)
+    }
+    if value >= 2000 {
+        return UIColor(rgb: 0xE6514E)
+    }
+    if value >= 500 {
+        return UIColor(rgb: 0xEE7E20)
+    }
+    if value >= 250 {
+        return UIColor(rgb: 0xE4A20A)
+    }
+    if value >= 100 {
+        return UIColor(rgb: 0x5AB03D)
+    }
+    if value >= 50 {
+        return UIColor(rgb: 0x3E9CDF)
+    }
+    return UIColor(rgb: 0x985FDC)
 }

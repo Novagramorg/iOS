@@ -492,10 +492,6 @@ public final class MediaStreamVideoComponent: Component {
                 } else if !self.hadVideo {
                     aspect = 16.0 / 9
                 }
-                                
-                #if DEBUG
-                aspect = 9.0 / 16.0
-                #endif
                 
                 if component.isFullscreen || !component.addInset {
                     videoSize = CGSize(width: aspect * 100.0, height: 100.0).aspectFitted(.init(width: availableSize.width - videoInset * 2, height: availableSize.height))

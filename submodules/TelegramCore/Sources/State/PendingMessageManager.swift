@@ -488,15 +488,21 @@ public final class PendingMessageManager {
                             let disposable = MetaDisposable()
                             strongSelf.newTopicDisposables[messagePeerId] = disposable
                             
+                            var topicName = "New Thread"
+                            if !message.text.isEmpty {
+                                topicName = String(message.text.prefix(16))
+                            }
+                            
                             disposable.set(_internal_createForumChannelTopic(
                                 postbox: strongSelf.postbox,
                                 network: strongSelf.network,
                                 stateManager: strongSelf.stateManager,
                                 accountPeerId: strongSelf.accountPeerId,
                                 peerId: message.id.peerId,
-                                title: "New Thread",
+                                title: topicName,
                                 iconColor: 0,
-                                iconFileId: nil
+                                iconFileId: nil,
+                                isTitleMissing: true
                             ).startStrict(next: { [weak strongSelf] topicId in
                                 guard let strongSelf else {
                                     return

@@ -1329,6 +1329,66 @@ public extension Api {
     }
 }
 public extension Api {
+    enum GroupCallMessage: TypeConstructorDescription {
+        case groupCallMessage(flags: Int32, fromId: Api.Peer, date: Int32, randomId: Int64, message: Api.TextWithEntities, paidMessageStars: Int64?)
+    
+    public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+    switch self {
+                case .groupCallMessage(let flags, let fromId, let date, let randomId, let message, let paidMessageStars):
+                    if boxed {
+                        buffer.appendInt32(-2018173984)
+                    }
+                    serializeInt32(flags, buffer: buffer, boxed: false)
+                    fromId.serialize(buffer, true)
+                    serializeInt32(date, buffer: buffer, boxed: false)
+                    serializeInt64(randomId, buffer: buffer, boxed: false)
+                    message.serialize(buffer, true)
+                    if Int(flags) & Int(1 << 0) != 0 {serializeInt64(paidMessageStars!, buffer: buffer, boxed: false)}
+                    break
+    }
+    }
+    
+    public func descriptionFields() -> (String, [(String, Any)]) {
+        switch self {
+                case .groupCallMessage(let flags, let fromId, let date, let randomId, let message, let paidMessageStars):
+                return ("groupCallMessage", [("flags", flags as Any), ("fromId", fromId as Any), ("date", date as Any), ("randomId", randomId as Any), ("message", message as Any), ("paidMessageStars", paidMessageStars as Any)])
+    }
+    }
+    
+        public static func parse_groupCallMessage(_ reader: BufferReader) -> GroupCallMessage? {
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: Api.Peer?
+            if let signature = reader.readInt32() {
+                _2 = Api.parse(reader, signature: signature) as? Api.Peer
+            }
+            var _3: Int32?
+            _3 = reader.readInt32()
+            var _4: Int64?
+            _4 = reader.readInt64()
+            var _5: Api.TextWithEntities?
+            if let signature = reader.readInt32() {
+                _5 = Api.parse(reader, signature: signature) as? Api.TextWithEntities
+            }
+            var _6: Int64?
+            if Int(_1!) & Int(1 << 0) != 0 {_6 = reader.readInt64() }
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            let _c3 = _3 != nil
+            let _c4 = _4 != nil
+            let _c5 = _5 != nil
+            let _c6 = (Int(_1!) & Int(1 << 0) == 0) || _6 != nil
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 {
+                return Api.GroupCallMessage.groupCallMessage(flags: _1!, fromId: _2!, date: _3!, randomId: _4!, message: _5!, paidMessageStars: _6)
+            }
+            else {
+                return nil
+            }
+        }
+    
+    }
+}
+public extension Api {
     enum GroupCallParticipant: TypeConstructorDescription {
         case groupCallParticipant(flags: Int32, peer: Api.Peer, date: Int32, activeDate: Int32?, source: Int32, volume: Int32?, about: String?, raiseHandRating: Int64?, video: Api.GroupCallParticipantVideo?, presentation: Api.GroupCallParticipantVideo?, paidStarsTotal: Int64?)
     
@@ -1402,60 +1462,6 @@ public extension Api {
             let _c11 = (Int(_1!) & Int(1 << 16) == 0) || _11 != nil
             if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 && _c10 && _c11 {
                 return Api.GroupCallParticipant.groupCallParticipant(flags: _1!, peer: _2!, date: _3!, activeDate: _4, source: _5!, volume: _6, about: _7, raiseHandRating: _8, video: _9, presentation: _10, paidStarsTotal: _11)
-            }
-            else {
-                return nil
-            }
-        }
-    
-    }
-}
-public extension Api {
-    enum GroupCallParticipantVideo: TypeConstructorDescription {
-        case groupCallParticipantVideo(flags: Int32, endpoint: String, sourceGroups: [Api.GroupCallParticipantVideoSourceGroup], audioSource: Int32?)
-    
-    public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-    switch self {
-                case .groupCallParticipantVideo(let flags, let endpoint, let sourceGroups, let audioSource):
-                    if boxed {
-                        buffer.appendInt32(1735736008)
-                    }
-                    serializeInt32(flags, buffer: buffer, boxed: false)
-                    serializeString(endpoint, buffer: buffer, boxed: false)
-                    buffer.appendInt32(481674261)
-                    buffer.appendInt32(Int32(sourceGroups.count))
-                    for item in sourceGroups {
-                        item.serialize(buffer, true)
-                    }
-                    if Int(flags) & Int(1 << 1) != 0 {serializeInt32(audioSource!, buffer: buffer, boxed: false)}
-                    break
-    }
-    }
-    
-    public func descriptionFields() -> (String, [(String, Any)]) {
-        switch self {
-                case .groupCallParticipantVideo(let flags, let endpoint, let sourceGroups, let audioSource):
-                return ("groupCallParticipantVideo", [("flags", flags as Any), ("endpoint", endpoint as Any), ("sourceGroups", sourceGroups as Any), ("audioSource", audioSource as Any)])
-    }
-    }
-    
-        public static func parse_groupCallParticipantVideo(_ reader: BufferReader) -> GroupCallParticipantVideo? {
-            var _1: Int32?
-            _1 = reader.readInt32()
-            var _2: String?
-            _2 = parseString(reader)
-            var _3: [Api.GroupCallParticipantVideoSourceGroup]?
-            if let _ = reader.readInt32() {
-                _3 = Api.parseVector(reader, elementSignature: 0, elementType: Api.GroupCallParticipantVideoSourceGroup.self)
-            }
-            var _4: Int32?
-            if Int(_1!) & Int(1 << 1) != 0 {_4 = reader.readInt32() }
-            let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            let _c3 = _3 != nil
-            let _c4 = (Int(_1!) & Int(1 << 1) == 0) || _4 != nil
-            if _c1 && _c2 && _c3 && _c4 {
-                return Api.GroupCallParticipantVideo.groupCallParticipantVideo(flags: _1!, endpoint: _2!, sourceGroups: _3!, audioSource: _4)
             }
             else {
                 return nil
