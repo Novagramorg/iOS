@@ -1648,8 +1648,8 @@ public extension TelegramEngine {
             return _internal_refreshGlobalPostSearchState(account: self.account)
         }
         
-        public func groupCallMessages(callId: Int64, reference: InternalGroupCallReference, e2eContext: ConferenceCallE2EContext?, messageLifetime: Int32) -> GroupCallMessagesContext {
-            return GroupCallMessagesContext(account: self.account, callId: callId, reference: reference, e2eContext: e2eContext, messageLifetime: messageLifetime)
+        public func groupCallMessages(callId: Int64, reference: InternalGroupCallReference, e2eContext: ConferenceCallE2EContext?, messageLifetime: Int32, isLiveStream: Bool) -> GroupCallMessagesContext {
+            return GroupCallMessagesContext(account: self.account, callId: callId, reference: reference, e2eContext: e2eContext, messageLifetime: messageLifetime, isLiveStream: isLiveStream)
         }
     }
 }

@@ -102,6 +102,11 @@ swift_library(
         "//submodules/DirectMediaImageCache",
         "//submodules/PromptUI",
         "//submodules/TelegramCallsUI",
+        "//submodules/TelegramUI/Components/AsyncListComponent",
+        "//submodules/Components/MultilineTextWithEntitiesComponent",
+        "//submodules/Components/MultilineTextComponent",
+        "//submodules/TelegramUI/Components/Chat/ChatSendStarsScreen",
+        "//submodules/TelegramUI/Components/GlassBackgroundComponent",
     ],
     visibility = [
         "//visibility:public",

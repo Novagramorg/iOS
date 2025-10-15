@@ -261,6 +261,8 @@ public final class MessageInputActionButtonComponent: Component {
         private var backgroundView: GlassBackgroundView?
         private let sendIconView: UIImageView
         private var reactionHeartView: UIImageView?
+        private var starsIconView: UIImageView?
+        private var starsTextView: ComponentView<Empty>?
         private var moreButton: MoreHeaderButton?
         private var animation: ComponentView<Empty>?
         private var reactionIconView: ReactionIconView?
@@ -681,6 +683,42 @@ public final class MessageInputActionButtonComponent: Component {
                     } else {
                         reactionHeartView.removeFromSuperview()
                     }
+                }
+            }
+            
+            if case let .stars(amount) = component.mode {
+                let _ = amount
+                var starsTransition = transition
+                
+                let starsIconView: UIImageView
+                if let current = self.starsIconView {
+                    starsIconView = current
+                } else {
+                    starsTransition = starsTransition.withAnimation(.none)
+                    starsIconView = UIImageView()
+                    self.starsIconView = starsIconView
+                    starsIconView.image = UIImage(bundleImageName: "Premium/Stars/ButtonStar")?.withRenderingMode(.alwaysTemplate)
+                    starsIconView.tintColor = .white
+                    self.addSubview(starsIconView)
+                    
+                    if !transition.animation.isImmediate {
+                        starsIconView.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.18)
+                    }
+                }
+                
+                if let image = starsIconView.image {
+                    let iconFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((availableSize.width - image.size.width) * 0.5), y: floorToScreenPixels((availableSize.height - image.size.height) * 0.5)), size: image.size)
+                    starsTransition.setPosition(view: starsIconView, position: iconFrame.center)
+                    starsTransition.setBounds(view: starsIconView, bounds: CGRect(origin: CGPoint(), size: iconFrame.size))
+                }
+            } else {
+                if let starsIconView = self.starsIconView {
+                    self.starsIconView = nil
+                    starsIconView.removeFromSuperview()
+                }
+                if let starsTextView = self.starsTextView {
+                    self.starsTextView = nil
+                    starsTextView.view?.removeFromSuperview()
                 }
             }
             

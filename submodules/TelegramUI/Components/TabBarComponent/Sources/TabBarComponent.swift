@@ -369,9 +369,11 @@ public final class TabBarComponent: Component {
             
             if let nativeTabBar = self.nativeTabBar {
                 if previousComponent?.items.map(\.item.title) != component.items.map(\.item.title) {
-                    nativeTabBar.items = (0 ..< component.items.count).map { i in
+                    let items: [UITabBarItem] = (0 ..< component.items.count).map { i in
                         return UITabBarItem(title: component.items[i].item.title, image: nil, tag: i)
                     }
+                    //items.append(UITabBarItem(tabBarSystemItem: .search, tag: 100))
+                    nativeTabBar.items = items
                     for (_, itemView) in self.itemViews {
                         itemView.view?.removeFromSuperview()
                     }

@@ -51,6 +51,7 @@ import ReactionSelectionNode
 import StoryQualityUpgradeSheetScreen
 import AudioWaveform
 import ChatMessagePaymentAlertController
+import ChatSendStarsScreen
 
 private var ObjCKey_DeinitWatcher: Int?
 
@@ -100,6 +101,8 @@ final class StoryItemSetContainerSendMessage {
     let resolvePeerByNameDisposable = MetaDisposable()
     
     var currentSpeechHolder: SpeechSynthesizerHolder?
+    
+    var currentLiveStreamMessageStars: StarsAmount?
     
     private(set) var isMediaRecordingLocked: Bool = false
     var wasRecordingDismissed: Bool = false
@@ -581,6 +584,43 @@ final class StoryItemSetContainerSendMessage {
         silentPosting: Bool = false,
         scheduleTime: Int32? = nil
     ) {
+        guard let component = view.component else {
+            return
+        }
+        if case .liveStream = component.slice.item.storyItem.media {
+            if let visibleItem = view.visibleItems[component.slice.item.id], let itemView = visibleItem.view.view as? StoryItemContentComponent.View {
+                if let call = itemView.mediaStreamCall {
+                    let focusedItem = component.slice.item
+                    guard let peerId = focusedItem.peerId else {
+                        return
+                    }
+                    guard let inputPanelView = view.inputPanel.view as? MessageInputPanelComponent.View else {
+                        return
+                    }
+                    
+                    switch inputPanelView.getSendMessageInput() {
+                    case let .text(text):
+                        if !text.string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            let entities = generateChatInputTextEntities(text)
+                            
+                            call.sendMessage(text: text.string, entities: entities, paidStars: self.currentLiveStreamMessageStars?.value)
+                            
+                            component.storyItemSharedState.replyDrafts.removeValue(forKey: StoryId(peerId: peerId, id: focusedItem.storyItem.id))
+                            inputPanelView.clearSendMessageInput(updateState: true)
+                            
+                            self.currentInputMode = .text
+                            self.currentLiveStreamMessageStars = nil
+                            view.state?.updated(transition: .spring(duration: 0.3))
+                            
+                            let controller = component.controller() as? StoryContainerScreen
+                            controller?.requestLayout(forceUpdate: true, transition: .animated(duration: 0.3, curve: .spring))
+                        }
+                    }
+                }
+            }
+            return
+        }
+        
         self.performWithPossibleStealthModeConfirmation(view: view, action: { [weak self, weak view] in
             guard let self, let view else {
                 return
@@ -1198,6 +1238,40 @@ final class StoryItemSetContainerSendMessage {
             }
             
             controller.present(shareController, in: .window(.root))
+        }
+    }
+    
+    func performPaidMessageAction(view: StoryItemSetContainerComponent.View) {
+        Task { @MainActor [weak view] in
+            guard let view else {
+                return
+            }
+            guard let component = view.component else {
+                return
+            }
+            guard let controller = component.controller() else {
+                return
+            }
+            let focusedItem = component.slice.item
+            guard let peerId = focusedItem.peerId else {
+                return
+            }
+            
+            let initialData = await ChatSendStarsScreen.initialDataLiveStreamMessage(context: component.context, peerId: peerId, completion: { [weak self, weak view] amount, _ in
+                guard let self, let view else {
+                    return
+                }
+                
+                self.currentLiveStreamMessageStars = StarsAmount(value: amount, nanos: 0)
+                view.state?.updated(transition: .spring(duration: 0.4))
+            }).get()
+            if let initialData {
+                controller.push(ChatSendStarsScreen(
+                    context: component.context,
+                    initialData: initialData,
+                    theme: component.theme
+                ))
+            }
         }
     }
     

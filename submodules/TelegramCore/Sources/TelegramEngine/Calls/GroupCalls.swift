@@ -3460,7 +3460,7 @@ func _internal_refreshInlineGroupCall(account: Account, messageId: MessageId) ->
 
 struct GroupCallMessageUpdate {
     enum Update {
-        case newPlaintextMessage(authorId: PeerId, randomId: Int64, text: String, entities: [MessageTextEntity])
+        case newPlaintextMessage(authorId: PeerId, randomId: Int64, text: String, entities: [MessageTextEntity], timestamp: Int32, paidMessageStars: Int64?)
         case newOpaqueMessage(authorId: PeerId, data: Data)
     }
     
@@ -3680,14 +3680,16 @@ public final class GroupCallMessagesContext {
         public let entities: [MessageTextEntity]
         public let date: Int32
         public let lifetime: Int32
+        public let paidStars: Int64?
         
-        public init(id: Int64, author: EnginePeer?, text: String, entities: [MessageTextEntity], date: Int32, lifetime: Int32) {
+        public init(id: Int64, author: EnginePeer?, text: String, entities: [MessageTextEntity], date: Int32, lifetime: Int32, paidStars: Int64?) {
             self.id = id
             self.author = author
             self.text = text
             self.entities = entities
             self.date = date
             self.lifetime = lifetime
+            self.paidStars = paidStars
         }
         
         public static func ==(lhs: Message, rhs: Message) -> Bool {
@@ -3712,6 +3714,9 @@ public final class GroupCallMessagesContext {
             if lhs.lifetime != rhs.lifetime {
                 return false
             }
+            if lhs.paidStars != rhs.paidStars {
+                return false
+            }
             return true
         }
     }
@@ -3726,6 +3731,7 @@ public final class GroupCallMessagesContext {
     
     private final class Impl {
         private let messageLifetime: Int32
+        private let isLiveStream: Bool
         
         let queue: Queue
         let account: Account
@@ -3747,13 +3753,14 @@ public final class GroupCallMessagesContext {
         
         private var messageLifeTimer: SwiftSignalKit.Timer?
         
-        init(queue: Queue, account: Account, callId: Int64, reference: InternalGroupCallReference, e2eContext: ConferenceCallE2EContext?, messageLifetime: Int32) {
+        init(queue: Queue, account: Account, callId: Int64, reference: InternalGroupCallReference, e2eContext: ConferenceCallE2EContext?, messageLifetime: Int32, isLiveStream: Bool) {
             self.queue = queue
             self.account = account
             self.callId = callId
             self.reference = reference
             self.e2eContext = e2eContext
             self.messageLifetime = messageLifetime
+            self.isLiveStream = isLiveStream
             
             self.state = State(messages: [])
             self.stateValue.set(self.state)
@@ -3764,16 +3771,16 @@ public final class GroupCallMessagesContext {
                     return
                 }
                 let currentTime = Int32(CFAbsoluteTimeGetCurrent())
-                var addedMessages: [(authorId: PeerId, randomId: Int64, text: String, entities: [MessageTextEntity])] = []
+                var addedMessages: [(authorId: PeerId, randomId: Int64, text: String, entities: [MessageTextEntity], timestamp: Int32, paidMessageStars: Int64?)] = []
                 var addedOpaqueMessages: [(authorId: PeerId, data: Data)] = []
                 for update in updates {
                     if update.callId != self.callId {
                         continue
                     }
                     switch update.update {
-                    case let .newPlaintextMessage(authorId, randomId, text, entities):
+                    case let .newPlaintextMessage(authorId, randomId, text, entities, timestamp, paidMessageStars):
                         if authorId != self.account.peerId {
-                            addedMessages.append((authorId, randomId, text, entities))
+                            addedMessages.append((authorId, randomId, text, entities, timestamp, paidMessageStars))
                         }
                     case let .newOpaqueMessage(authorId, data):
                         if authorId != self.account.peerId {
@@ -3783,6 +3790,9 @@ public final class GroupCallMessagesContext {
                 }
                 
                 if !addedMessages.isEmpty || !addedOpaqueMessages.isEmpty {
+                    let messageLifetime = self.messageLifetime
+                    let isLiveStream = self.isLiveStream
+                    
                     let _ = (self.account.postbox.transaction { transaction -> [Message] in
                         var messages: [Message] = []
                         if let e2eContext = self.e2eContext {
@@ -3814,7 +3824,8 @@ public final class GroupCallMessagesContext {
                                     text: text,
                                     entities: entities,
                                     date: currentTime,
-                                    lifetime: self.messageLifetime
+                                    lifetime: messageLifetime,
+                                    paidStars: nil
                                 ))
                             }
                         } else {
@@ -3822,13 +3833,22 @@ public final class GroupCallMessagesContext {
                                 if self.processedIds.contains(addedMessage.randomId) {
                                     continue
                                 }
+                                
+                                let lifetime: Int32
+                                if isLiveStream {
+                                    lifetime = Int32(GroupCallMessagesContext.getStarAmountParamMapping(value: addedMessage.paidMessageStars ?? 0).period)
+                                } else {
+                                    lifetime = self.messageLifetime
+                                }
+                                
                                 messages.append(Message(
                                     id: addedMessage.randomId,
                                     author: transaction.getPeer(addedMessage.authorId).flatMap(EnginePeer.init),
                                     text: addedMessage.text,
                                     entities: addedMessage.entities,
-                                    date: currentTime,
-                                    lifetime: self.messageLifetime
+                                    date: addedMessage.timestamp,
+                                    lifetime: lifetime,
+                                    paidStars: addedMessage.paidMessageStars
                                 ))
                             }
                         }
@@ -3871,7 +3891,7 @@ public final class GroupCallMessagesContext {
             }
         }
         
-        func send(fromId: EnginePeer.Id, randomId requestedRandomId: Int64?, text: String, entities: [MessageTextEntity]) {
+        func send(fromId: EnginePeer.Id, randomId requestedRandomId: Int64?, text: String, entities: [MessageTextEntity], paidStars: Int64?) {
             let _ = (self.account.postbox.transaction { transaction -> Peer? in
                 return transaction.getPeer(fromId)
             }
@@ -3888,6 +3908,14 @@ public final class GroupCallMessagesContext {
                 } else {
                     arc4random_buf(&randomId, 8)
                 }
+                
+                let lifetime: Int32
+                if isLiveStream {
+                    lifetime = Int32(GroupCallMessagesContext.getStarAmountParamMapping(value: paidStars ?? 0).period)
+                } else {
+                    lifetime = self.messageLifetime
+                }
+                
                 var state = self.state
                 state.messages.append(Message(
                     id: randomId,
@@ -3895,9 +3923,17 @@ public final class GroupCallMessagesContext {
                     text: text,
                     entities: entities,
                     date: currentTime,
-                    lifetime: self.messageLifetime
+                    lifetime: lifetime,
+                    paidStars: paidStars
                 ))
                 self.state = state
+                
+                #if DEBUG
+                var paidStars = paidStars
+                if "".isEmpty {
+                    paidStars = nil
+                }
+                #endif
                 
                 self.processedIds.insert(randomId)
                 
@@ -3921,6 +3957,10 @@ public final class GroupCallMessagesContext {
                     } else {
                         arc4random_buf(&randomId, 8)
                     }
+                    var flags: Int32 = 0
+                    if paidStars != nil {
+                        flags |= 1 << 0
+                    }
                     self.sendMessageDisposables.add(self.account.network.request(Api.functions.phone.sendGroupCallMessage(
                         flags: 0,
                         call: self.reference.apiInputGroupCall,
@@ -3929,7 +3969,7 @@ public final class GroupCallMessagesContext {
                             text: text,
                             entities: apiEntitiesFromMessageTextEntities(entities, associatedPeers: SimpleDictionary())
                         ),
-                        allowPaidStars: nil
+                        allowPaidStars: paidStars
                     )).startStrict())
                 }
             })
@@ -3945,17 +3985,42 @@ public final class GroupCallMessagesContext {
         }
     }
     
-    init(account: Account, callId: Int64, reference: InternalGroupCallReference, e2eContext: ConferenceCallE2EContext?, messageLifetime: Int32) {
+    init(account: Account, callId: Int64, reference: InternalGroupCallReference, e2eContext: ConferenceCallE2EContext?, messageLifetime: Int32, isLiveStream: Bool) {
         let queue = Queue(name: "GroupCallMessagesContext")
         self.queue = queue
         self.impl = QueueLocalObject(queue: queue, generate: {
-            return Impl(queue: queue, account: account, callId: callId, reference: reference, e2eContext: e2eContext, messageLifetime: messageLifetime)
+            return Impl(queue: queue, account: account, callId: callId, reference: reference, e2eContext: e2eContext, messageLifetime: messageLifetime, isLiveStream: isLiveStream)
         })
     }
     
-    public func send(fromId: EnginePeer.Id, randomId: Int64?, text: String, entities: [MessageTextEntity]) {
+    public func send(fromId: EnginePeer.Id, randomId: Int64?, text: String, entities: [MessageTextEntity], paidStars: Int64?) {
         self.impl.with { impl in
-            impl.send(fromId: fromId, randomId: randomId, text: text, entities: entities)
+            impl.send(fromId: fromId, randomId: randomId, text: text, entities: entities, paidStars: paidStars)
         }
+    }
+    
+    public static func getStarAmountParamMapping(value: Int64) -> (period: Int, maxLength: Int, emojiCount: Int) {
+        if value >= 10000 {
+            return (3600, 400, 20)
+        }
+        if value >= 2000 {
+            return (1800, 280, 10)
+        }
+        if value >= 500 {
+            return (900, 200, 7)
+        }
+        if value >= 250 {
+            return (600, 150, 4)
+        }
+        if value >= 100 {
+            return (300, 110, 3)
+        }
+        if value >= 50 {
+            return (120, 80, 2)
+        }
+        if value >= 10 {
+            return (60, 60, 1)
+        }
+        return (30, 30, 0)
     }
 }

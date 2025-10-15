@@ -1453,6 +1453,7 @@ final class MediaEditorScreenComponent: Component {
                             controller.presentTimeoutSetup(sourceView: view, gesture: gesture)
                         },
                         forwardAction: nil,
+                        paidMessageAction: nil,
                         moreAction: nil,
                         presentCaptionPositionTooltip: nil,
                         presentVoiceMessagesUnavailableTooltip: nil,

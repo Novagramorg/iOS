@@ -1683,9 +1683,12 @@ private func finalStateWithUpdatesAndServerTime(accountPeerId: PeerId, postbox: 
                 if case let .inputGroupCall(id, accessHash) = call {
                     updatedState.updateGroupCallChainBlocks(id: id, accessHash: accessHash, subChainId: subChainId, blocks: blocks.map { $0.makeData() }, nextOffset: nextOffset)
                 }
-            case let .updateGroupCallMessage(_, call, fromId, randomId, message, _):
+            case let .updateGroupCallMessage(call, message):
                 if case let .inputGroupCall(id, _) = call {
-                    updatedState.updateGroupCallMessage(id: id, authorId: fromId.peerId, randomId: randomId, text: message)
+                    switch message {
+                    case let .groupCallMessage(_, fromId, date, randomId, message, paidMessageStars):
+                        updatedState.updateGroupCallMessage(id: id, authorId: fromId.peerId, randomId: randomId, text: message, date: date, paidMessageStars: paidMessageStars)
+                    }
                 }
             case let .updateGroupCallEncryptedMessage(call, fromId, encryptedMessage):
                 if case let .inputGroupCall(id, _) = call {
@@ -4879,10 +4882,10 @@ func replayFinalState(
                     callId,
                     .state(update: GroupCallParticipantsContext.Update.StateUpdate(participants: participants, version: version))
                 ))
-            case let .UpdateGroupCallMessage(callId, authorId, randomId, text):
+            case let .UpdateGroupCallMessage(callId, authorId, randomId, text, date, paidMessageStars):
                 switch text {
                 case let .textWithEntities(text, entities):
-                    groupCallMessageUpdates.append(GroupCallMessageUpdate(callId: callId, update: .newPlaintextMessage(authorId: authorId, randomId: randomId, text: text, entities: messageTextEntitiesFromApiEntities(entities))))
+                    groupCallMessageUpdates.append(GroupCallMessageUpdate(callId: callId, update: .newPlaintextMessage(authorId: authorId, randomId: randomId, text: text, entities: messageTextEntitiesFromApiEntities(entities), timestamp: date, paidMessageStars: paidMessageStars)))
                 }
             case let .UpdateGroupCallOpaqueMessage(callId, authorId, data):
                 groupCallMessageUpdates.append(GroupCallMessageUpdate(callId: callId, update: .newOpaqueMessage(authorId: authorId, data: data)))

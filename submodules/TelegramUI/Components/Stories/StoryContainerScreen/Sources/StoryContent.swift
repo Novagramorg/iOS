@@ -68,6 +68,7 @@ public final class StoryContentItem: Equatable {
         public let externalState: ExternalState
         public let sharedState: SharedState
         public let theme: PresentationTheme
+        public let containerInsets: UIEdgeInsets
         public let presentationProgressUpdated: (Double, Bool, Bool) -> Void
         public let markAsSeen: (StoryId) -> Void
         
@@ -75,12 +76,14 @@ public final class StoryContentItem: Equatable {
             externalState: ExternalState,
             sharedState: SharedState,
             theme: PresentationTheme,
+            containerInsets: UIEdgeInsets,
             presentationProgressUpdated: @escaping (Double, Bool, Bool) -> Void,
             markAsSeen: @escaping (StoryId) -> Void
         ) {
             self.externalState = externalState
             self.sharedState = sharedState
             self.theme = theme
+            self.containerInsets = containerInsets
             self.presentationProgressUpdated = presentationProgressUpdated
             self.markAsSeen = markAsSeen
         }
@@ -93,6 +96,9 @@ public final class StoryContentItem: Equatable {
                 return false
             }
             if lhs.theme !== rhs.theme {
+                return false
+            }
+            if lhs.containerInsets != rhs.containerInsets {
                 return false
             }
             return true
