@@ -14973,7 +14973,6 @@ Sorry for the inconvenience.";
 "Gift.Value.MinimumPriceInfo" = "**%1$@** is the floor price for %2$@ gifts listed on Telegram and Fragment.";
 "Gift.Value.AveragePriceInfo" = "**%1$@** is the average sale price for %2$@ gifts listed on Telegram and Fragment over the past month.";
 
-"Gift.Value.AveragePrice" = "Last Sale";
 "Gift.Value.InitialSale" = "Initial Sale";
 "Gift.Value.InitialPrice" = "Initial Price";
 "Gift.Value.LastSale" = "Last Sale";
