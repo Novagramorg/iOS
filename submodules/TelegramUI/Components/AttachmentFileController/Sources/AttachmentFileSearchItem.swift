@@ -237,6 +237,7 @@ private final class AttachmentFileSearchItemNode: ItemListControllerSearchNode {
                 SearchInputPanelComponent(
                     theme: self.theme,
                     strings: self.strings,
+                    metrics: layout.metrics,
                     placeholder: self.strings.Attachment_FilesSearchPlaceholder,
                     resetText: nil,
                     updated: { [weak self] query in

@@ -27,10 +27,10 @@ import GlassBackgroundComponent
 
 private let legacyButtonSize = CGSize(width: 88.0, height: 49.0)
 private let glassButtonSize = CGSize(width: 72.0, height: 62.0)
-private let smallGlassButtonSize = CGSize(width: 70.0, height: 62.0)
+private let smallGlassButtonSize = CGSize(width: 72.0, height: 62.0)
 private let smallButtonWidth: CGFloat = 69.0
 private let iconSize = CGSize(width: 30.0, height: 30.0)
-private let sideInset: CGFloat = 3.0
+private let glassPanelSideInset: CGFloat = 20.0
 
 private final class IconComponent: Component {
     public let account: Account
@@ -321,6 +321,8 @@ private final class AttachButtonComponent: CombinedComponent {
                 transition: .immediate
             )
             
+            let size = CGSize(width: max(context.availableSize.width, title.size.width + 24.0), height: context.availableSize.height)
+            
             let button = button.update(
                 component: Rectangle(
                     color: .clear,
@@ -332,7 +334,6 @@ private final class AttachButtonComponent: CombinedComponent {
             )
 
             let titleFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((context.availableSize.width - title.size.width) / 2.0), y: iconFrame.midY + spacing), size: title.size)
-            
             context.add(title
                 .position(CGPoint(x: titleFrame.midX, y: titleFrame.midY))
             )
@@ -349,7 +350,7 @@ private final class AttachButtonComponent: CombinedComponent {
                 }))
             )
                         
-            return context.availableSize
+            return size
         }
     }
 }
@@ -1471,37 +1472,42 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate {
             return
         }
         
-        let width: CGFloat
+        let width = layout.size.width
+        var panelSideInset: CGFloat
         switch self.panelStyle {
         case .glass:
-            width = layout.size.width - 44.0
+            panelSideInset = glassPanelSideInset + 3.0
         case .legacy:
-            width = layout.size.width
+            panelSideInset = 3.0
         }
         
         let visibleRect = self.scrollNode.bounds.insetBy(dx: -180.0, dy: 0.0)
         
-        var distanceBetweenNodes = (width - sideInset * 2.0) / CGFloat(self.buttons.count)
+        var distanceBetweenNodes = floorToScreenPixels((width - panelSideInset * 2.0 - self.buttonSize.width) / CGFloat(max(1, self.buttons.count - 1)))
         let internalWidth = distanceBetweenNodes * CGFloat(self.buttons.count - 1)
         var buttonWidth = self.buttonSize.width
         var leftNodeOriginX: CGFloat
+        var maxButtonsToFit = 6
         switch self.panelStyle {
         case .glass:
-            leftNodeOriginX = layout.safeInsets.left + sideInset + buttonWidth / 2.0
+            leftNodeOriginX = layout.safeInsets.left + 3.0 + buttonWidth / 2.0
+            if layout.size.width < 400.0 {
+                maxButtonsToFit = 5
+            }
         case .legacy:
             leftNodeOriginX = (width - internalWidth) / 2.0
         }
                 
-        if self.buttons.count > 5 && layout.size.width < layout.size.height {
+        if self.buttons.count > maxButtonsToFit && layout.size.width < layout.size.height {
             switch self.panelStyle {
             case .glass:
                 buttonWidth = smallGlassButtonSize.width
-                distanceBetweenNodes = 60.0
+                distanceBetweenNodes = 62.0
             case .legacy:
                 buttonWidth = smallButtonWidth
                 distanceBetweenNodes = 60.0
             }
-            leftNodeOriginX = layout.safeInsets.left + sideInset + buttonWidth / 2.0
+            leftNodeOriginX = layout.safeInsets.left + 3.0 + buttonWidth / 2.0
         }
         
         var validIds = Set<AnyHashable>()
@@ -1559,7 +1565,7 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate {
                     }
                 }
             }
-            let _ = buttonView.update(
+            let actualButtonSize = buttonView.update(
                 transition: buttonTransition,
                 component: AnyComponent(AttachButtonComponent(
                     context: self.context,
@@ -1590,7 +1596,7 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate {
             )
             
             if i == self.selectedIndex {
-                selectionFrame = buttonFrame
+                selectionFrame = CGRect(origin: CGPoint(x: buttonFrame.midX - actualButtonSize.width * 0.5, y: buttonFrame.minY), size: actualButtonSize)
             }
             buttonTransition.setFrame(view: buttonView, frame: buttonFrame)
             var accessibilityTitle = ""
@@ -1635,7 +1641,7 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate {
         self.selectionNode.cornerRadius = selectionFrame.height * 0.5
         transition.setFrame(view: self.selectionNode.view, frame: selectionFrame)
         
-        mostRightX += layout.safeInsets.right + sideInset
+        mostRightX += layout.safeInsets.right + 3.0
         
         let contentSize = CGSize(width: mostRightX, height: self.buttonSize.height)
         if contentSize != self.scrollNode.view.contentSize {
@@ -1877,7 +1883,9 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate {
             self.textInputPanelNode?.ensureUnfocused()
         }
         
-        let panelSideInset: CGFloat = isSelecting ? 8.0 : 22.0
+        let textPanelSideInset: CGFloat = 8.0
+        let defaultPanelSideInset: CGFloat = glassPanelSideInset
+        let panelSideInset: CGFloat = isSelecting ? textPanelSideInset : defaultPanelSideInset
         var textPanelHeight: CGFloat = 0.0
         var textPanelWidth: CGFloat = 0.0
         if let textInputPanelNode = self.textInputPanelNode {
@@ -2058,7 +2066,7 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate {
         containerTransition.updateFrame(node: self.separatorNode, frame: CGRect(origin: CGPoint(), size: CGSize(width: bounds.width, height: UIScreenPixel)))
                 
         if case .glass = self.panelStyle {
-            transition.updateFrameAsPositionAndBounds(node: self.scrollNode, frame: CGRect(origin: CGPoint(x: self.isSelecting ? panelSideInset - 22.0 : panelSideInset, y: self.isSelecting ? -11.0 : 0.0), size: CGSize(width: layout.size.width - panelSideInset * 2.0, height: self.buttonSize.height)))
+            transition.updateFrameAsPositionAndBounds(node: self.scrollNode, frame: CGRect(origin: CGPoint(x: self.isSelecting ? panelSideInset - defaultPanelSideInset : panelSideInset, y: self.isSelecting ? -11.0 : 0.0), size: CGSize(width: layout.size.width - panelSideInset * 2.0, height: self.buttonSize.height)))
         }
 
         self.updateViews(transition: .immediate)
