@@ -46,8 +46,8 @@ public extension TelegramEngine {
             return _internal_importContact(account: self.account, firstName: firstName, lastName: lastName, phoneNumber: phoneNumber)
         }
 
-        public func addContactInteractively(peerId: PeerId, firstName: String, lastName: String, phoneNumber: String, addToPrivacyExceptions: Bool) -> Signal<Never, AddContactError> {
-            return _internal_addContactInteractively(account: self.account, peerId: peerId, firstName: firstName, lastName: lastName, phoneNumber: phoneNumber, addToPrivacyExceptions: addToPrivacyExceptions)
+        public func addContactInteractively(peerId: PeerId, firstName: String, lastName: String, phoneNumber: String, noteText: String, noteEntities: [MessageTextEntity], addToPrivacyExceptions: Bool) -> Signal<Never, AddContactError> {
+            return _internal_addContactInteractively(account: self.account, peerId: peerId, firstName: firstName, lastName: lastName, phoneNumber: phoneNumber, noteText: noteText, noteEntities: noteEntities, addToPrivacyExceptions: addToPrivacyExceptions)
         }
 
         public func acceptAndShareContact(peerId: PeerId) -> Signal<Never, AcceptAndShareContactError> {

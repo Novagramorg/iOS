@@ -2261,6 +2261,7 @@ private final class PremiumIntroScreenContentComponent: CombinedComponent {
                 let perksSection = perksSection.update(
                     component: ListSectionComponent(
                         theme: environment.theme,
+                        style: .glass,
                         header: AnyComponent(MultilineTextComponent(
                             text: .plain(NSAttributedString(
                                 string: strings.Premium_WhatsIncluded.uppercased(),
@@ -2504,6 +2505,7 @@ private final class PremiumIntroScreenContentComponent: CombinedComponent {
                 let businessSection = businessSection.update(
                     component: ListSectionComponent(
                         theme: environment.theme,
+                        style: .glass,
                         header: nil,
                         footer: nil,
                         items: perksItems
@@ -2531,6 +2533,7 @@ private final class PremiumIntroScreenContentComponent: CombinedComponent {
                 if let accountContext = context.component.screenContext.context {
                     perksItems.append(AnyComponentWithIdentity(id: perksItems.count, component: AnyComponent(ListActionItemComponent(
                         theme: environment.theme,
+                        style: .glass,
                         title: AnyComponent(VStack([
                             AnyComponentWithIdentity(id: AnyHashable(0), component: AnyComponent(MultilineTextComponent(
                                 text: .plain(NSAttributedString(
@@ -2573,6 +2576,7 @@ private final class PremiumIntroScreenContentComponent: CombinedComponent {
                 
                 perksItems.append(AnyComponentWithIdentity(id: perksItems.count, component: AnyComponent(ListActionItemComponent(
                     theme: environment.theme,
+                    style: .glass,
                     title: AnyComponent(VStack([
                         AnyComponentWithIdentity(id: AnyHashable(0), component: AnyComponent(MultilineTextComponent(
                             text: .plain(NSAttributedString(
@@ -2607,6 +2611,7 @@ private final class PremiumIntroScreenContentComponent: CombinedComponent {
                 
                 perksItems.append(AnyComponentWithIdentity(id: perksItems.count, component: AnyComponent(ListActionItemComponent(
                     theme: environment.theme,
+                    style: .glass,
                     title: AnyComponent(VStack([
                         AnyComponentWithIdentity(id: AnyHashable(0), component: AnyComponent(MultilineTextComponent(
                             text: .plain(NSAttributedString(
@@ -2642,6 +2647,7 @@ private final class PremiumIntroScreenContentComponent: CombinedComponent {
                 let moreBusinessSection = moreBusinessSection.update(
                     component: ListSectionComponent(
                         theme: environment.theme,
+                        style: .glass,
                         header: AnyComponent(MultilineTextComponent(
                             text: .plain(NSAttributedString(
                                 string: strings.Business_MoreFeaturesTitle.uppercased(),
@@ -2689,6 +2695,7 @@ private final class PremiumIntroScreenContentComponent: CombinedComponent {
                 var adsSettingsItems: [AnyComponentWithIdentity<Empty>] = []
                 adsSettingsItems.append(AnyComponentWithIdentity(id: 0, component: AnyComponent(ListActionItemComponent(
                     theme: environment.theme,
+                    style: .glass,
                     title: AnyComponent(VStack([
                         AnyComponentWithIdentity(id: AnyHashable(0), component: AnyComponent(MultilineTextComponent(
                             text: .plain(NSAttributedString(
@@ -2726,6 +2733,7 @@ private final class PremiumIntroScreenContentComponent: CombinedComponent {
                 let adsSettingsSection = adsSettingsSection.update(
                     component: ListSectionComponent(
                         theme: environment.theme,
+                        style: .glass,
                         header: AnyComponent(MultilineTextComponent(
                             text: .plain(NSAttributedString(
                                 string: strings.Business_AdsTitle.uppercased(),
@@ -2805,7 +2813,7 @@ private final class PremiumIntroScreenContentComponent: CombinedComponent {
                 } else {
                     layoutPerks()
                 
-                    let textPadding: CGFloat = 13.0
+                    let textPadding: CGFloat = 17.0
                     
                     let infoTitle = infoTitle.update(
                         component: MultilineTextComponent(
@@ -2844,7 +2852,7 @@ private final class PremiumIntroScreenContentComponent: CombinedComponent {
                     let infoBackground = infoBackground.update(
                         component: RoundedRectangle(
                             color: environment.theme.list.itemBlocksBackgroundColor,
-                            cornerRadius: 10.0
+                            cornerRadius: 26.0
                         ),
                         environment: {},
                         availableSize: CGSize(width: availableWidth - sideInsets, height: infoText.size.height + textPadding * 2.0),

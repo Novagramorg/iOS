@@ -4766,6 +4766,10 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         return nil
     }
     
+    public func getAttachmentButton() -> UIView {
+        return self.attachmentButton
+    }
+    
     public func frameForAttachmentButton() -> CGRect? {
         if !self.attachmentButtonBackground.alpha.isZero {
             return self.attachmentButtonBackground.frame.insetBy(dx: 0.0, dy: -4.0).offsetBy(dx: 0.0, dy: 0.0)

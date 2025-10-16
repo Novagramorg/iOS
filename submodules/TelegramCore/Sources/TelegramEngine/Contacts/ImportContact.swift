@@ -41,7 +41,7 @@ public enum AddContactError {
     case generic
 }
 
-func _internal_addContactInteractively(account: Account, peerId: PeerId, firstName: String, lastName: String, phoneNumber: String, addToPrivacyExceptions: Bool) -> Signal<Never, AddContactError> {
+func _internal_addContactInteractively(account: Account, peerId: PeerId, firstName: String, lastName: String, phoneNumber: String, noteText: String, noteEntities: [MessageTextEntity], addToPrivacyExceptions: Bool) -> Signal<Never, AddContactError> {
     let accountPeerId = account.peerId
     
     return account.postbox.transaction { transaction -> (Api.InputUser, String)? in
@@ -60,7 +60,12 @@ func _internal_addContactInteractively(account: Account, peerId: PeerId, firstNa
         if addToPrivacyExceptions {
             flags |= (1 << 0)
         }
-        return account.network.request(Api.functions.contacts.addContact(flags: flags, id: inputUser, firstName: firstName, lastName: lastName, phone: phone, note: nil))
+        var note: Api.TextWithEntities?
+        if !noteText.isEmpty {
+            flags |= (1 << 1)
+            note = .textWithEntities(text: noteText, entities: apiEntitiesFromMessageTextEntities(noteEntities, associatedPeers: SimpleDictionary()))
+        }
+        return account.network.request(Api.functions.contacts.addContact(flags: flags, id: inputUser, firstName: firstName, lastName: lastName, phone: phone, note: note))
         |> mapError { _ -> AddContactError in
             return .generic
         }

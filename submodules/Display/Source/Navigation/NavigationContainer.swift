@@ -250,7 +250,7 @@ public final class NavigationContainer: ASDisplayNode, ASGestureRecognizerDelega
                 bottomController.viewWillAppear(true)
                 let bottomNode = bottomController.displayNode
                 
-                let navigationTransitionCoordinator = NavigationTransitionCoordinator(transition: .Pop, isInteractive: true, isFlat: self.isFlat, container: self, topNode: topNode, topNavigationBar: topController.transitionNavigationBar, bottomNode: bottomNode, bottomNavigationBar: bottomController.transitionNavigationBar, didUpdateProgress: { [weak self, weak bottomController] progress, transition, topFrame, bottomFrame in
+                let navigationTransitionCoordinator = NavigationTransitionCoordinator(transition: .Pop, isInteractive: true, isFlat: self.isFlat, container: self, topNode: topNode, topNavigationBar: topController.transitionNavigationBar, bottomNode: bottomNode, bottomNavigationBar: bottomController.transitionNavigationBar, screenCornerRadius: layout.deviceMetrics.screenCornerRadius, didUpdateProgress: { [weak self, weak bottomController] progress, transition, topFrame, bottomFrame in
                     if let strongSelf = self {
                         if let top = strongSelf.state.top {
                             strongSelf.syncKeyboard(leftEdge: top.value.displayNode.frame.minX, transition: transition)
@@ -490,7 +490,7 @@ public final class NavigationContainer: ASDisplayNode, ASGestureRecognizerDelega
             }
             toValue.value.setIgnoreAppearanceMethodInvocations(false)
             
-            let topTransition = TopTransition(type: transitionType, previous: fromValue, coordinator: NavigationTransitionCoordinator(transition: mappedTransitionType, isInteractive: false, isFlat: self.isFlat, container: self, topNode: topController.displayNode, topNavigationBar: topController.transitionNavigationBar, bottomNode: bottomController.displayNode, bottomNavigationBar: bottomController.transitionNavigationBar, didUpdateProgress: { [weak self] _, transition, topFrame, bottomFrame in
+            let topTransition = TopTransition(type: transitionType, previous: fromValue, coordinator: NavigationTransitionCoordinator(transition: mappedTransitionType, isInteractive: false, isFlat: self.isFlat, container: self, topNode: topController.displayNode, topNavigationBar: topController.transitionNavigationBar, bottomNode: bottomController.displayNode, bottomNavigationBar: bottomController.transitionNavigationBar, screenCornerRadius: layout.deviceMetrics.screenCornerRadius, didUpdateProgress: { [weak self] _, transition, topFrame, bottomFrame in
                 guard let strongSelf = self else {
                     return
                 }
