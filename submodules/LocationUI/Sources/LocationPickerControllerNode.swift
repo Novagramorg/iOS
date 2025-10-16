@@ -1441,6 +1441,7 @@ final class LocationPickerControllerNode: ViewControllerTracingNode, CLLocationM
                         SearchInputPanelComponent(
                             theme: self.presentationData.theme,
                             strings: self.presentationData.strings,
+                            metrics: layout.metrics,
                             placeholder: self.presentationData.strings.Map_Search,
                             resetText: nil,
                             updated: { [weak self] query in

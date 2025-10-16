@@ -595,7 +595,7 @@ public class AttachmentController: ViewController, MinimizableController {
                     strongSelf.controller?.minimizedBounds = bounds
                     
                     if !strongSelf.isMinimizing {
-                        if controller.style != .glass {
+                        if controller.style != .glass || strongSelf.didMaximizeOnce {
                             strongSelf.controller?.updateModalStyleOverlayTransitionFactor(progress, transition: transition)
                         }
                         strongSelf.containerLayoutUpdated(layout, transition: transition)
@@ -623,6 +623,7 @@ public class AttachmentController: ViewController, MinimizableController {
                     self.minimize(damping: damping, initialVelocity: initialVelocity)
                     return false
                 } else {
+                    controller.willDismiss()
                     self.animateOut(damping: damping, initialVelocity: initialVelocity, completion: {
                         self.controller?.dismiss(animated: false)
                     })
@@ -822,12 +823,14 @@ public class AttachmentController: ViewController, MinimizableController {
             }
         }
         
+        private var didMaximizeOnce = false
         fileprivate func minimize(damping: CGFloat? = nil, initialVelocity: CGFloat? = nil) {
             guard let controller = self.controller, let navigationController = controller.navigationController as? NavigationController else {
                 return
             }
-            navigationController.minimizeViewController(controller, damping: damping, velocity: initialVelocity, beforeMaximize: { navigationController, completion in
-                controller.mainController.beforeMaximize(navigationController: navigationController, completion: completion)
+            navigationController.minimizeViewController(controller, damping: damping, velocity: initialVelocity, beforeMaximize: { [weak self, weak controller] navigationController, completion in
+                self?.didMaximizeOnce = true
+                controller?.mainController.beforeMaximize(navigationController: navigationController, completion: completion)
             }, setupContainer: { [weak self] current in
                 let minimizedContainer: MinimizedContainerImpl?
                 if let current = current as? MinimizedContainerImpl {
@@ -1228,7 +1231,7 @@ public class AttachmentController: ViewController, MinimizableController {
                         self?.isAnimating = false
                     })
                     
-                    if controller.style != .glass {
+                    if controller.style != .glass || self.didMaximizeOnce {
                         self.controller?.updateModalStyleOverlayTransitionFactor(0.0, transition: positionTransition)
                     }
                     
@@ -1293,7 +1296,8 @@ public class AttachmentController: ViewController, MinimizableController {
                     self.wrapperNode.view.mask = nil
                     self.shadowNode.alpha = 0.0
                 } else {
-                    let availableHeight = layout.size.height - (layout.inputHeight ?? 0.0) - 60.0
+                    let inputHeight = layout.inputHeight ?? 0.0
+                    let availableHeight = layout.size.height - inputHeight
                     
                     let size = CGSize(width: 390.0, height: min(620.0, availableHeight))
                     
@@ -1301,7 +1305,7 @@ public class AttachmentController: ViewController, MinimizableController {
                     let masterWidth = min(max(320.0, floor(layout.size.width / 3.0)), floor(layout.size.width / 2.0))
                     
                     let position: CGPoint
-                    let positionY = layout.size.height - size.height - insets.bottom - 54.0
+                    let positionY = layout.size.height - size.height - insets.bottom - (inputHeight > 0.0 ? 0.0 : 54.0)
                     if let sourceRect = controller.getSourceRect?() {
                         position = CGPoint(x: min(layout.size.width - size.width - 28.0, floor(sourceRect.midX - size.width / 2.0) - 2.0), y: min(positionY, sourceRect.minY - size.height))
                     } else {
@@ -1674,10 +1678,11 @@ public class AttachmentController: ViewController, MinimizableController {
     
     public func makeContentSnapshotView() -> UIView? {
         let snapshotView = self.view.snapshotView(afterScreenUpdates: false)
+        let navigationBarHeight = self.validLayout.flatMap { self.navigationLayout(layout: $0) }?.defaultContentHeight ?? 56.0
         if let contentSnapshotView = self.mainController.makeContentSnapshotView() {
             if !self.mainController.isFullscreen {
                 if let layout = self.validLayout {
-                    contentSnapshotView.frame = contentSnapshotView.frame.offsetBy(dx: 0.0, dy: (layout.statusBarHeight ?? 0.0) + 10.0 + 56.0)
+                    contentSnapshotView.frame = contentSnapshotView.frame.offsetBy(dx: 0.0, dy: (layout.statusBarHeight ?? 0.0) + 10.0 + navigationBarHeight)
                 }
             }
             snapshotView?.addSubview(contentSnapshotView)

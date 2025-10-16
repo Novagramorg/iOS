@@ -707,6 +707,7 @@ public final class ContactsSearchContainerNode: SearchDisplayControllerContentNo
                     SearchInputPanelComponent(
                         theme: self.presentationData.theme,
                         strings: self.presentationData.strings,
+                        metrics: layout.metrics,
                         placeholder: nil,
                         resetText: nil,
                         updated: { [weak self] query in

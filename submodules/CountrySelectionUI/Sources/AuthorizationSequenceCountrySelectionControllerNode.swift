@@ -320,6 +320,7 @@ final class AuthorizationSequenceCountrySelectionControllerNode: ASDisplayNode, 
                     SearchInputPanelComponent(
                         theme: self.theme,
                         strings: self.strings,
+                        metrics: layout.metrics,
                         updated: { [weak self] query in
                             guard let self else {
                                 return
