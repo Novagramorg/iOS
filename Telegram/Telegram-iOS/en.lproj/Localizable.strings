@@ -14065,6 +14065,7 @@ Sorry for the inconvenience.";
 "Privacy.Gifts.AcceptedTypes.Unlimited" = "Unlimited";
 "Privacy.Gifts.AcceptedTypes.Limited" = "Limited-Edition";
 "Privacy.Gifts.AcceptedTypes.Unique" = "Unique";
+"Privacy.Gifts.AcceptedTypes.Channel" = "From Channels";
 "Privacy.Gifts.AcceptedTypes.Premium" = "Premium Subscriptions";
 "Privacy.Gifts.AcceptedTypes.Info" = "Choose the types of gifts that you allow others to send you.";
 
