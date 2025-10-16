@@ -174,6 +174,7 @@ private enum SelectivePrivacySettingsEntry: ItemListNodeEntry {
     case disallowedGiftsUnlimited(PresentationTheme, String, Bool, Bool)
     case disallowedGiftsLimited(PresentationTheme, String, Bool, Bool)
     case disallowedGiftsUnique(PresentationTheme, String, Bool, Bool)
+    case disallowedGiftsChannel(PresentationTheme, String, Bool, Bool)
     case disallowedGiftsPremium(PresentationTheme, String, Bool, Bool)
     case disallowedGiftsInfo(PresentationTheme, String)
     case showGiftButton(PresentationTheme, String, Bool, Bool, Bool)
@@ -203,7 +204,7 @@ private enum SelectivePrivacySettingsEntry: ItemListNodeEntry {
                 return SelectivePrivacySettingsSection.hideReadTime.rawValue
             case .subscribeToPremium, .subscribeToPremiumInfo:
                 return SelectivePrivacySettingsSection.premium.rawValue
-            case .disallowedGiftsHeader, .disallowedGiftsUnlimited, .disallowedGiftsLimited, .disallowedGiftsUnique, .disallowedGiftsPremium, .disallowedGiftsInfo:
+            case .disallowedGiftsHeader, .disallowedGiftsUnlimited, .disallowedGiftsLimited, .disallowedGiftsUnique, .disallowedGiftsChannel, .disallowedGiftsPremium, .disallowedGiftsInfo:
                 return SelectivePrivacySettingsSection.disallowedGifts.rawValue
             case .showGiftButton, .showGiftButtonInfo:
                 return SelectivePrivacySettingsSection.giftButton.rawValue
@@ -290,10 +291,12 @@ private enum SelectivePrivacySettingsEntry: ItemListNodeEntry {
                 return 37
             case .disallowedGiftsUnique:
                 return 38
-            case .disallowedGiftsPremium:
+            case .disallowedGiftsChannel:
                 return 39
-            case .disallowedGiftsInfo:
+            case .disallowedGiftsPremium:
                 return 40
+            case .disallowedGiftsInfo:
+                return 41
         }
     }
     
@@ -521,6 +524,12 @@ private enum SelectivePrivacySettingsEntry: ItemListNodeEntry {
             } else {
                 return false
             }
+        case let .disallowedGiftsChannel(lhsTheme, lhsText, lhsEnabled, lhsValue):
+            if case let .disallowedGiftsChannel(rhsTheme, rhsText, rhsEnabled, rhsValue) = rhs, lhsTheme === rhsTheme, lhsText == rhsText, lhsEnabled == rhsEnabled, lhsValue == rhsValue {
+                return true
+            } else {
+                return false
+            }
         case let .disallowedGiftsPremium(lhsTheme, lhsText, lhsEnabled, lhsValue):
             if case let .disallowedGiftsPremium(rhsTheme, rhsText, rhsEnabled, rhsValue) = rhs, lhsTheme === rhsTheme, lhsText == rhsText, lhsEnabled == rhsEnabled, lhsValue == rhsValue {
                 return true
@@ -699,6 +708,16 @@ private enum SelectivePrivacySettingsEntry: ItemListNodeEntry {
                 return ItemListSwitchItem(presentationData: presentationData, systemStyle: .glass, title: text, value: value, enableInteractiveChanges: !isLocked, enabled: true, displayLocked: isLocked, sectionId: self.section, style: .blocks, updated: { updatedValue in
                     if !isLocked {
                         arguments.updateDisallowedGifts?(.unique, !updatedValue)
+                    } else {
+                        arguments.displayLockedGiftsInfo()
+                    }
+                }, activatedWhileDisabled: {
+                    arguments.displayLockedGiftsInfo()
+                })
+            case let .disallowedGiftsChannel(_, text, isLocked, value):
+                return ItemListSwitchItem(presentationData: presentationData, systemStyle: .glass, title: text, value: value, enableInteractiveChanges: !isLocked, enabled: true, displayLocked: isLocked, sectionId: self.section, style: .blocks, updated: { updatedValue in
+                    if !isLocked {
+                        arguments.updateDisallowedGifts?(.channel, !updatedValue)
                     } else {
                         arguments.displayLockedGiftsInfo()
                     }
@@ -1152,6 +1171,7 @@ private func selectivePrivacySettingsControllerEntries(presentationData: Present
         entries.append(.disallowedGiftsUnlimited(presentationData.theme, presentationData.strings.Privacy_Gifts_AcceptedTypes_Unlimited, !isPremium, !(state.disallowedGifts?.contains(.unlimited) ?? false)))
         entries.append(.disallowedGiftsLimited(presentationData.theme, presentationData.strings.Privacy_Gifts_AcceptedTypes_Limited, !isPremium, !(state.disallowedGifts?.contains(.limited) ?? false)))
         entries.append(.disallowedGiftsUnique(presentationData.theme, presentationData.strings.Privacy_Gifts_AcceptedTypes_Unique, !isPremium, !(state.disallowedGifts?.contains(.unique) ?? false)))
+        entries.append(.disallowedGiftsChannel(presentationData.theme, presentationData.strings.Privacy_Gifts_AcceptedTypes_Channel, !isPremium, !(state.disallowedGifts?.contains(.channel) ?? false)))
         entries.append(.disallowedGiftsPremium(presentationData.theme, presentationData.strings.Privacy_Gifts_AcceptedTypes_Premium, !isPremium, !(state.disallowedGifts?.contains(.premium) ?? false)))
         entries.append(.disallowedGiftsInfo(presentationData.theme, presentationData.strings.Privacy_Gifts_AcceptedTypes_Info))
     }
