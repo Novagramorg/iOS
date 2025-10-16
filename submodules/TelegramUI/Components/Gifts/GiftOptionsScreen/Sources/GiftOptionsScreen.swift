@@ -26,6 +26,8 @@ import TabSelectorComponent
 import GiftSetupScreen
 import GiftViewScreen
 import UndoUI
+import EdgeEffect
+import GlassBarButtonComponent
 
 final class GiftOptionsScreenComponent: Component {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
@@ -122,7 +124,8 @@ final class GiftOptionsScreenComponent: Component {
         private let topOverscrollLayer = SimpleLayer()
         private let scrollView: ScrollView
         
-        private let topPanel = ComponentView<Empty>()
+        private let topEdgeEffectView: EdgeEffectView
+        private let bottomEdgeEffectView: EdgeEffectView
         private let topSeparator = ComponentView<Empty>()
         private let cancelButton = ComponentView<Empty>()
         
@@ -253,6 +256,9 @@ final class GiftOptionsScreenComponent: Component {
                 self.scrollView.automaticallyAdjustsScrollIndicatorInsets = false
             }
             self.scrollView.alwaysBounceVertical = true
+            
+            self.topEdgeEffectView = EdgeEffectView()
+            self.bottomEdgeEffectView = EdgeEffectView()
             
             super.init(frame: frame)
             
@@ -394,20 +400,30 @@ final class GiftOptionsScreenComponent: Component {
                 }
             }
         }
+        
+        private var isInAttachmentMenu: Bool {
+            if let controller = self.environment?.controller() {
+                return type(of: controller) != GiftOptionsScreen.self
+            } else {
+                return false
+            }
+        }
                 
         private func updateScrolling(interactive: Bool = false, transition: ComponentTransition) {
             guard let environment = self.environment, let component = self.component else {
                 return
             }
-               
+            
+            let theme = self.isInAttachmentMenu ? environment.theme.withModalBlocksBackground() : environment.theme
+            
             let availableWidth = self.scrollView.bounds.width
             let contentOffset = self.scrollView.contentOffset.y
-                        
-            let topPanelAlpha = min(20.0, max(0.0, contentOffset - 95.0)) / 20.0
-            if let topPanelView = self.topPanel.view, let topSeparator = self.topSeparator.view {
-                transition.setAlpha(view: topPanelView, alpha: topPanelAlpha)
-                transition.setAlpha(view: topSeparator, alpha: topPanelAlpha)
-            }
+//                        
+//            let topPanelAlpha = min(20.0, max(0.0, contentOffset - 95.0)) / 20.0
+//            if let topPanelView = self.topPanel.view, let topSeparator = self.topSeparator.view {
+//                transition.setAlpha(view: topPanelView, alpha: topPanelAlpha)
+//                transition.setAlpha(view: topSeparator, alpha: topPanelAlpha)
+//            }
             
             let topInset: CGFloat = 0.0
             let headerTopInset: CGFloat = environment.navigationHeight - 56.0
@@ -575,7 +591,8 @@ final class GiftOptionsScreenComponent: Component {
                                     content: AnyComponent(
                                         GiftItemComponent(
                                             context: component.context,
-                                            theme: environment.theme,
+                                            style: .glass,
+                                            theme: theme,
                                             strings: environment.strings,
                                             peer: nil,
                                             subject: subject,
@@ -644,44 +661,61 @@ final class GiftOptionsScreenComponent: Component {
                 topPanelHeight += 39.0
             }
             
-            if let tabSelectorView = self.tabSelector.view {
-                let tabSelectorSize = tabSelectorView.bounds.size
-                transition.setFrame(view: tabSelectorView, frame: CGRect(origin: CGPoint(x: floor((availableWidth - tabSelectorSize.width) / 2.0), y: max(56.0, self.tabSelectorOrigin - contentOffset)), size: tabSelectorSize))
-            }
+//            if let tabSelectorView = self.tabSelector.view {
+//                let tabSelectorSize = tabSelectorView.bounds.size
+//                transition.setFrame(view: tabSelectorView, frame: CGRect(origin: CGPoint(x: floor((availableWidth - tabSelectorSize.width) / 2.0), y: max(56.0, self.tabSelectorOrigin - contentOffset)), size: tabSelectorSize))
+//            }
             
-            var panelTransition = transition
-            if self.topPanel.view?.superview != nil && !self.switchingFilter {
-                panelTransition = .spring(duration: 0.3)
-            }
-            let topPanelSize = self.topPanel.update(
-                transition: panelTransition,
-                component: AnyComponent(BlurredBackgroundComponent(
-                    color: environment.theme.rootController.navigationBar.blurredBackgroundColor
-                )),
-                environment: {},
-                containerSize: CGSize(width: availableWidth, height: topPanelHeight)
-            )
-            
-            let topSeparatorSize = self.topSeparator.update(
-                transition: panelTransition,
-                component: AnyComponent(Rectangle(
-                    color: environment.theme.rootController.navigationBar.separatorColor
-                )),
-                environment: {},
-                containerSize: CGSize(width: availableWidth, height: UIScreenPixel)
-            )
-            let topPanelFrame = CGRect(origin: .zero, size: CGSize(width: availableWidth, height: topPanelSize.height))
-            let topSeparatorFrame = CGRect(origin: CGPoint(x: 0.0, y: topPanelSize.height), size: CGSize(width: topSeparatorSize.width, height: topSeparatorSize.height))
-            if let topPanelView = self.topPanel.view, let topSeparatorView = self.topSeparator.view {
-                if topPanelView.superview == nil {
-                    if let headerView = self.header.view {
-                        self.insertSubview(topSeparatorView, aboveSubview: headerView)
-                        self.insertSubview(topPanelView, aboveSubview: headerView)
-                    }
+            let edgeEffectHeight: CGFloat = 88.0
+            let topEdgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: availableWidth, height: edgeEffectHeight))
+            transition.setFrame(view: self.topEdgeEffectView, frame: topEdgeEffectFrame)
+            self.topEdgeEffectView.update(content: theme.list.blocksBackgroundColor, alpha: 1.0, rect: topEdgeEffectFrame, edge: .top, edgeSize: topEdgeEffectFrame.height, transition: transition)
+            if self.topEdgeEffectView.superview == nil {
+                if let headerView = self.header.view {
+                    self.insertSubview(self.topEdgeEffectView, aboveSubview: headerView)
                 }
-                panelTransition.setFrame(view: topPanelView, frame: topPanelFrame)
-                panelTransition.setFrame(view: topSeparatorView, frame: topSeparatorFrame)
+                if self.isInAttachmentMenu {
+                    self.addSubview(self.bottomEdgeEffectView)
+                }
             }
+            
+            let bottomEdgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: self.bounds.height - edgeEffectHeight - environment.additionalInsets.bottom), size: CGSize(width: availableWidth, height: edgeEffectHeight))
+            transition.setFrame(view: self.bottomEdgeEffectView, frame: bottomEdgeEffectFrame)
+            self.bottomEdgeEffectView.update(content: theme.list.blocksBackgroundColor, blur: true, alpha: 1.0, rect: bottomEdgeEffectFrame, edge: .bottom, edgeSize: bottomEdgeEffectFrame.height, transition: transition)
+            
+//            var panelTransition = transition
+//            if self.topPanel.view?.superview != nil && !self.switchingFilter {
+//                panelTransition = .spring(duration: 0.3)
+//            }
+//            let topPanelSize = self.topPanel.update(
+//                transition: panelTransition,
+//                component: AnyComponent(BlurredBackgroundComponent(
+//                    color: environment.theme.rootController.navigationBar.blurredBackgroundColor
+//                )),
+//                environment: {},
+//                containerSize: CGSize(width: availableWidth, height: topPanelHeight)
+//            )
+//            
+//            let topSeparatorSize = self.topSeparator.update(
+//                transition: panelTransition,
+//                component: AnyComponent(Rectangle(
+//                    color: environment.theme.rootController.navigationBar.separatorColor
+//                )),
+//                environment: {},
+//                containerSize: CGSize(width: availableWidth, height: UIScreenPixel)
+//            )
+//            let topPanelFrame = CGRect(origin: .zero, size: CGSize(width: availableWidth, height: topPanelSize.height))
+//            let topSeparatorFrame = CGRect(origin: CGPoint(x: 0.0, y: topPanelSize.height), size: CGSize(width: topSeparatorSize.width, height: topSeparatorSize.height))
+//            if let topPanelView = self.topPanel.view, let topSeparatorView = self.topSeparator.view {
+//                if topPanelView.superview == nil {
+//                    if let headerView = self.header.view {
+//                        self.insertSubview(topSeparatorView, aboveSubview: headerView)
+//                        self.insertSubview(topPanelView, aboveSubview: headerView)
+//                    }
+//                }
+//                panelTransition.setFrame(view: topPanelView, frame: topPanelFrame)
+//                panelTransition.setFrame(view: topSeparatorView, frame: topSeparatorFrame)
+//            }
             
             let bottomContentOffset = max(0.0, self.scrollView.contentSize.height - self.scrollView.contentOffset.y - self.scrollView.frame.height)
             if interactive, bottomContentOffset < 320.0, case .transfer = self.starsFilter {
@@ -908,7 +942,7 @@ final class GiftOptionsScreenComponent: Component {
             }
             self.component = component
             
-            let theme = environment.theme
+            let theme = self.isInAttachmentMenu ? environment.theme.withModalBlocksBackground() : environment.theme
             let strings = environment.strings
             
             if let disallowedGifts = self.state?.disallowedGifts, disallowedGifts == .All, let controller = controller(), !self.dismissed {
@@ -927,7 +961,7 @@ final class GiftOptionsScreenComponent: Component {
             }
             
             if themeUpdated {
-                self.backgroundColor = environment.theme.list.blocksBackgroundColor
+                self.backgroundColor = theme.list.blocksBackgroundColor
             }
                         
             let textColor = theme.list.itemPrimaryTextColor
@@ -1015,32 +1049,68 @@ final class GiftOptionsScreenComponent: Component {
 //                transition.setFrame(view: topSeparatorView, frame: topSeparatorFrame)
 //            }
             
-            let cancelButtonSize = self.cancelButton.update(
-                transition: transition,
-                component: AnyComponent(
-                    PlainButtonComponent(
-                        content: AnyComponent(
-                            MultilineTextComponent(
-                                text: .plain(NSAttributedString(string: strings.Common_Cancel, font: Font.regular(17.0), textColor: theme.rootController.navigationBar.accentTextColor)),
-                                horizontalAlignment: .center
+            var isGlass = false
+            if let controller = controller(), controller._hasGlassStyle {
+                isGlass = true
+            }
+            
+            if isGlass {
+                let barButtonSize = CGSize(width: 40.0, height: 40.0)
+                let cancelButtonSize = self.cancelButton.update(
+                    transition: transition,
+                    component: AnyComponent(GlassBarButtonComponent(
+                        size: barButtonSize,
+                        backgroundColor: theme.rootController.navigationBar.glassBarButtonBackgroundColor,
+                        isDark: theme.overallDarkAppearance,
+                        state: .generic,
+                        component: AnyComponentWithIdentity(id: "close", component: AnyComponent(
+                            BundleIconComponent(
+                                name: "Navigation/Close",
+                                tintColor: theme.rootController.navigationBar.glassBarButtonForegroundColor
                             )
-                        ),
-                        effectAlignment: .center,
-                        action: {
+                        )),
+                        action: { _ in
                             controller()?.dismiss()
-                        },
-                        animateScale: false
-                    )
-                ),
-                environment: {},
-                containerSize: CGSize(width: availableSize.width, height: 100.0)
-            )
-            let cancelButtonFrame = CGRect(origin: CGPoint(x: environment.safeInsets.left + 16.0, y: environment.statusBarHeight + (environment.navigationHeight - environment.statusBarHeight) / 2.0 - cancelButtonSize.height / 2.0), size: cancelButtonSize)
-            if let cancelButtonView = self.cancelButton.view {
-                if cancelButtonView.superview == nil {
-                    self.addSubview(cancelButtonView)
+                        }
+                    )),
+                    environment: {},
+                    containerSize: barButtonSize
+                )
+                let cancelButtonFrame = CGRect(origin: CGPoint(x: environment.safeInsets.left + 16.0, y: 16.0), size: cancelButtonSize)
+                if let cancelButtonView = self.cancelButton.view {
+                    if cancelButtonView.superview == nil {
+                        self.addSubview(cancelButtonView)
+                    }
+                    transition.setFrame(view: cancelButtonView, frame: cancelButtonFrame)
                 }
-                transition.setFrame(view: cancelButtonView, frame: cancelButtonFrame)
+            } else {
+                let cancelButtonSize = self.cancelButton.update(
+                    transition: transition,
+                    component: AnyComponent(
+                        PlainButtonComponent(
+                            content: AnyComponent(
+                                MultilineTextComponent(
+                                    text: .plain(NSAttributedString(string: strings.Common_Cancel, font: Font.regular(17.0), textColor: theme.rootController.navigationBar.accentTextColor)),
+                                    horizontalAlignment: .center
+                                )
+                            ),
+                            effectAlignment: .center,
+                            action: {
+                                controller()?.dismiss()
+                            },
+                            animateScale: false
+                        )
+                    ),
+                    environment: {},
+                    containerSize: CGSize(width: availableSize.width, height: 100.0)
+                )
+                let cancelButtonFrame = CGRect(origin: CGPoint(x: environment.safeInsets.left + 16.0, y: environment.statusBarHeight + (environment.navigationHeight - environment.statusBarHeight) / 2.0 - cancelButtonSize.height / 2.0), size: cancelButtonSize)
+                if let cancelButtonView = self.cancelButton.view {
+                    if cancelButtonView.superview == nil {
+                        self.addSubview(cancelButtonView)
+                    }
+                    transition.setFrame(view: cancelButtonView, frame: cancelButtonFrame)
+                }
             }
             
             let balanceTitleSize = self.balanceTitle.update(
@@ -1049,7 +1119,7 @@ final class GiftOptionsScreenComponent: Component {
                     text: .plain(NSAttributedString(
                         string: strings.Stars_Purchase_Balance,
                         font: Font.regular(14.0),
-                        textColor: environment.theme.actionSheet.primaryTextColor
+                        textColor: theme.actionSheet.primaryTextColor
                     )),
                     maximumNumberOfLines: 1
                 )),
@@ -1060,7 +1130,12 @@ final class GiftOptionsScreenComponent: Component {
             let formattedBalance = formatStarsAmountText(self.starsState?.balance ?? StarsAmount.zero, dateTimeFormat: environment.dateTimeFormat)
             let smallLabelFont = Font.regular(11.0)
             let labelFont = Font.semibold(14.0)
-            let balanceText = tonAmountAttributedString(formattedBalance, integralFont: labelFont, fractionalFont: smallLabelFont, color: environment.theme.actionSheet.primaryTextColor, decimalSeparator: environment.dateTimeFormat.decimalSeparator)
+            let balanceText = tonAmountAttributedString(formattedBalance, integralFont: labelFont, fractionalFont: smallLabelFont, color: theme.actionSheet.primaryTextColor, decimalSeparator: environment.dateTimeFormat.decimalSeparator)
+            
+            var balanceInset: CGFloat = 16.0
+            if let controller = controller(), controller._hasGlassStyle {
+                balanceInset += 6.0
+            }
             
             let balanceValueSize = self.balanceValue.update(
                 transition: .immediate,
@@ -1086,11 +1161,11 @@ final class GiftOptionsScreenComponent: Component {
                 }
                 let navigationHeight = environment.navigationHeight - environment.statusBarHeight
                 let topBalanceOriginY = environment.statusBarHeight + (navigationHeight - balanceTitleSize.height - balanceValueSize.height) / 2.0
-                balanceTitleView.center = CGPoint(x: availableSize.width - 16.0 - environment.safeInsets.right - balanceTitleSize.width / 2.0, y: topBalanceOriginY + balanceTitleSize.height / 2.0)
+                balanceTitleView.center = CGPoint(x: availableSize.width - balanceInset - environment.safeInsets.right - balanceTitleSize.width / 2.0, y: topBalanceOriginY + balanceTitleSize.height / 2.0)
                 balanceTitleView.bounds = CGRect(origin: .zero, size: balanceTitleSize)
-                balanceValueView.center = CGPoint(x: availableSize.width - 16.0 - environment.safeInsets.right - balanceValueSize.width / 2.0, y: topBalanceOriginY + balanceTitleSize.height + balanceValueSize.height / 2.0)
+                balanceValueView.center = CGPoint(x: availableSize.width - balanceInset - environment.safeInsets.right - balanceValueSize.width / 2.0, y: topBalanceOriginY + balanceTitleSize.height + balanceValueSize.height / 2.0)
                 balanceValueView.bounds = CGRect(origin: .zero, size: balanceValueSize)
-                balanceIconView.center = CGPoint(x: availableSize.width - 16.0 - environment.safeInsets.right - balanceValueSize.width - balanceIconSize.width / 2.0 - 2.0, y: topBalanceOriginY + balanceTitleSize.height + balanceValueSize.height / 2.0 - UIScreenPixel)
+                balanceIconView.center = CGPoint(x: availableSize.width - balanceInset - environment.safeInsets.right - balanceValueSize.width - balanceIconSize.width / 2.0 - 2.0, y: topBalanceOriginY + balanceTitleSize.height + balanceValueSize.height / 2.0 - UIScreenPixel)
                 balanceIconView.bounds = CGRect(origin: .zero, size: balanceIconSize)
             }
             
@@ -1262,6 +1337,7 @@ final class GiftOptionsScreenComponent: Component {
                         
                         let giftItemComponent = GiftItemComponent(
                             context: component.context,
+                            style: .glass,
                             theme: theme,
                             strings: environment.strings,
                             peer: nil,
@@ -1509,7 +1585,7 @@ final class GiftOptionsScreenComponent: Component {
                 self.tabSelectorOrigin = contentHeight
                 if let tabSelectorView = self.tabSelector.view {
                     if tabSelectorView.superview == nil {
-                        self.addSubview(tabSelectorView)
+                        self.scrollView.addSubview(tabSelectorView)
                     }
                     transition.setFrame(view: tabSelectorView, frame: CGRect(origin: CGPoint(x: floor((availableSize.width - tabSelectorSize.width) / 2.0), y: contentHeight), size: tabSelectorSize))
                 }

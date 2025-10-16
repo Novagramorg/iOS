@@ -2266,9 +2266,9 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                     let transformedMessages = strongSelf.transformEnqueueMessages(messages, silentPosting: silentPosting, postpone: postpone)
                     strongSelf.sendMessages(transformedMessages)
                 } else if schedule {
-                    strongSelf.presentScheduleTimePicker(completion: { [weak self] scheduleTime in
+                    strongSelf.presentScheduleTimePicker(completion: { [weak self] scheduleTime, repeatPeriod in
                         if let strongSelf = self {
-                            let transformedMessages = strongSelf.transformEnqueueMessages(messages, silentPosting: false, scheduleTime: scheduleTime, postpone: postpone)
+                            let transformedMessages = strongSelf.transformEnqueueMessages(messages, silentPosting: false, scheduleTime: scheduleTime, repeatPeriod: repeatPeriod, postpone: postpone)
                             strongSelf.sendMessages(transformedMessages)
                         }
                     })
@@ -2354,9 +2354,9 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                         messages = strongSelf.transformEnqueueMessages(messages, silentPosting: true)
                         strongSelf.sendMessages(messages)
                     } else if schedule {
-                        strongSelf.presentScheduleTimePicker(completion: { [weak self] scheduleTime in
+                        strongSelf.presentScheduleTimePicker(completion: { [weak self] scheduleTime, repeatPeriod in
                             if let strongSelf = self {
-                                let transformedMessages = strongSelf.transformEnqueueMessages(messages, silentPosting: false, scheduleTime: scheduleTime)
+                                let transformedMessages = strongSelf.transformEnqueueMessages(messages, silentPosting: false, scheduleTime: scheduleTime, repeatPeriod: repeatPeriod)
                                 strongSelf.sendMessages(transformedMessages)
                             }
                         })
@@ -3649,7 +3649,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             guard !self.presentAccountFrozenInfoIfNeeded(delay: true) else {
                 return
             }
-            self.presentScheduleTimePicker(completion: { [weak self] time in
+            self.presentScheduleTimePicker(completion: { [weak self] time, repeatPeriod in
                 if let strongSelf = self {
                     if let _ = strongSelf.presentationInterfaceState.interfaceState.mediaDraftState {
                         strongSelf.sendMediaRecording(scheduleTime: time, messageEffect: (params?.effect).flatMap {
@@ -3657,7 +3657,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                         })
                     } else {
                         let silentPosting = strongSelf.presentationInterfaceState.interfaceState.silentPosting
-                        strongSelf.chatDisplayNode.sendCurrentMessage(silentPosting: silentPosting, scheduleTime: time, messageEffect: (params?.effect).flatMap {
+                        strongSelf.chatDisplayNode.sendCurrentMessage(silentPosting: silentPosting, scheduleTime: time, repeatPeriod: repeatPeriod, messageEffect: (params?.effect).flatMap {
                             return ChatSendMessageEffect(id: $0.id)
                         }) { [weak self] in
                             if let strongSelf = self {
@@ -3697,7 +3697,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                         guard let strongSelf = self, let message = message else {
                             return
                         }
-                        strongSelf.presentScheduleTimePicker(selectedTime: message.timestamp, completion: { [weak self] time in
+                        strongSelf.presentScheduleTimePicker(selectedTime: message.timestamp, completion: { [weak self] time, repeatPeriod in
                             if let strongSelf = self {
                                 var entities: TextEntitiesMessageAttribute?
                                 for attribute in message.attributes {
@@ -3708,7 +3708,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                                 }
                                 
                                 let inlineStickers: [MediaId: TelegramMediaFile] = [:]
-                                strongSelf.editMessageDisposable.set((strongSelf.context.engine.messages.requestEditMessage(messageId: messageId, text: message.text, media: .keep, entities: entities, inlineStickers: inlineStickers, webpagePreviewAttribute: nil, disableUrlPreview: false, scheduleTime: time) |> deliverOnMainQueue).startStrict(next: { result in
+                                strongSelf.editMessageDisposable.set((strongSelf.context.engine.messages.requestEditMessage(messageId: messageId, text: message.text, media: .keep, entities: entities, inlineStickers: inlineStickers, webpagePreviewAttribute: nil, disableUrlPreview: false, scheduleInfoAttribute: OutgoingScheduleInfoMessageAttribute(scheduleTime: time, repeatPeriod: repeatPeriod)) |> deliverOnMainQueue).startStrict(next: { result in
                                 }, error: { error in
                                 }))
                             }
@@ -8079,7 +8079,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         }
     }
     
-    func transformEnqueueMessages(_ messages: [EnqueueMessage], silentPosting: Bool, scheduleTime: Int32? = nil, postpone: Bool = false) -> [EnqueueMessage] {
+    func transformEnqueueMessages(_ messages: [EnqueueMessage], silentPosting: Bool, scheduleTime: Int32? = nil, repeatPeriod: Int32? = nil, postpone: Bool = false) -> [EnqueueMessage] {
         var defaultThreadId: Int64?
         var defaultReplyMessageSubject: EngineMessageReplySubject?
         switch self.chatLocation {
@@ -8162,8 +8162,8 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                     if silentPosting {
                         attributes.append(NotificationInfoMessageAttribute(flags: .muted))
                     }
-                    if let scheduleTime = scheduleTime {
-                         attributes.append(OutgoingScheduleInfoMessageAttribute(scheduleTime: scheduleTime))
+                    if let scheduleTime {
+                         attributes.append(OutgoingScheduleInfoMessageAttribute(scheduleTime: scheduleTime, repeatPeriod: repeatPeriod))
                     }
                 }
                 
@@ -8229,7 +8229,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                     return message.withUpdatedAttributes { attributes in
                         var attributes = attributes
                         attributes.removeAll(where: { $0 is OutgoingScheduleInfoMessageAttribute })
-                        attributes.append(OutgoingScheduleInfoMessageAttribute(scheduleTime: Int32(Date().timeIntervalSince1970) + 10 * 24 * 60 * 60))
+                        attributes.append(OutgoingScheduleInfoMessageAttribute(scheduleTime: Int32(Date().timeIntervalSince1970) + 10 * 24 * 60 * 60, repeatPeriod: nil))
                         return attributes
                     }
                 }
@@ -8265,9 +8265,9 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                     })
                 }
             } else {
-                self.presentScheduleTimePicker(style: media ? .media : .default, dismissByTapOutside: false, completion: { [weak self] time in
+                self.presentScheduleTimePicker(style: media ? .media : .default, dismissByTapOutside: false, completion: { [weak self] time, repeatPeriod in
                     if let strongSelf = self {
-                        strongSelf.sendMessages(strongSelf.transformEnqueueMessages(messages, silentPosting: false, scheduleTime: time, postpone: postpone), commit: true)
+                        strongSelf.sendMessages(strongSelf.transformEnqueueMessages(messages, silentPosting: false, scheduleTime: time, repeatPeriod: repeatPeriod, postpone: postpone), commit: true)
                     }
                 })
             }
@@ -8490,7 +8490,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         }
         
         if isScheduledMessages {
-            self.presentScheduleTimePicker(style: .default, dismissByTapOutside: false, completion: { time in
+            self.presentScheduleTimePicker(style: .default, dismissByTapOutside: false, completion: { time, repeatPeriod in
                 sendMessage(time)
             })
         } else {
@@ -9742,7 +9742,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         )
     }
     
-    func presentScheduleTimePicker(style: ChatScheduleTimeControllerStyle = .default, selectedTime: Int32? = nil, dismissByTapOutside: Bool = true, completion: @escaping (Int32) -> Void) {
+    func presentScheduleTimePicker(style: ChatScheduleTimeControllerStyle = .default, selectedTime: Int32? = nil, dismissByTapOutside: Bool = true, completion: @escaping (Int32, Int32?) -> Void) {
         guard let peerId = self.chatLocation.peerId else {
             return
         }
@@ -9760,15 +9760,24 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                 sendWhenOnlineAvailable = false
             }
             
-            let mode: ChatScheduleTimeControllerMode
+            let mode: ChatScheduleTimeScreen.Mode
             if peerId == strongSelf.context.account.peerId {
                 mode = .reminders
             } else {
                 mode = .scheduledMessages(sendWhenOnlineAvailable: sendWhenOnlineAvailable)
             }
-            let controller = ChatScheduleTimeController(context: strongSelf.context, updatedPresentationData: strongSelf.updatedPresentationData, mode: mode, style: style, currentTime: selectedTime, minimalTime: strongSelf.presentationInterfaceState.slowmodeState?.timeout, dismissByTapOutside: dismissByTapOutside, completion: { time in
-                completion(time)
-            })
+            
+            let controller = ChatScheduleTimeScreen(
+                context: strongSelf.context,
+                mode: mode,
+                completion: { result in
+                    completion(result.time, result.repeatPeriod)
+                }
+            )
+            
+//            let controller = ChatScheduleTimeController(context: strongSelf.context, updatedPresentationData: strongSelf.updatedPresentationData, mode: mode, style: style, currentTime: selectedTime, minimalTime: strongSelf.presentationInterfaceState.slowmodeState?.timeout, dismissByTapOutside: dismissByTapOutside, completion: { time in
+//                completion(time)
+//            })
             strongSelf.chatDisplayNode.dismissInput()
             strongSelf.present(controller, in: .window(.root))
         })

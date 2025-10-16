@@ -1277,6 +1277,7 @@ final class UserAppearanceScreenComponent: Component {
                             AnyComponentWithIdentity(id: 0, component: AnyComponent(ListItemComponentAdaptor(
                                 itemGenerator: PeerNameColorItem(
                                     theme: environment.theme,
+                                    systemStyle: .glass,
                                     colors: component.context.peerNameColors,
                                     mode: .profile,
                                     currentColor: resolvedState.profileColor,
@@ -1609,6 +1610,7 @@ final class UserAppearanceScreenComponent: Component {
                             AnyComponentWithIdentity(id: 0, component: AnyComponent(ListItemComponentAdaptor(
                                 itemGenerator: PeerNameColorItem(
                                     theme: environment.theme,
+                                    systemStyle: .glass,
                                     colors: component.context.peerNameColors,
                                     mode: .name,
                                     currentColor: resolvedState.nameColor.nameColor,

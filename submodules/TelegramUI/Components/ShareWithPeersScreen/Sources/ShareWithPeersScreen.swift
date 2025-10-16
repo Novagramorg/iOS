@@ -29,6 +29,7 @@ import ContextUI
 import BundleIconComponent
 import PromptUI
 import DirectMediaImageCache
+import GlassBarButtonComponent
 
 final class ShareWithPeersScreenComponent: Component {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
@@ -411,7 +412,7 @@ final class ShareWithPeersScreenComponent: Component {
             
             self.itemContainerView = UIView()
             self.itemContainerView.clipsToBounds = true
-            self.itemContainerView.layer.cornerRadius = 10.0
+            self.itemContainerView.layer.cornerRadius = 38.0// 10.0
             
             super.init(frame: frame)
             
@@ -1096,7 +1097,7 @@ final class ShareWithPeersScreenComponent: Component {
                             }
                             sectionBackground = UIView()
                             sectionBackground.backgroundColor = environment.theme.list.itemModalBlocksBackgroundColor
-                            sectionBackground.layer.cornerRadius = 10.0
+                            sectionBackground.layer.cornerRadius = 26.0
                             self.visibleSectionBackgrounds[section.id] = sectionBackground
                         }
                         
@@ -1868,6 +1869,7 @@ final class ShareWithPeersScreenComponent: Component {
                             transition: itemTransition,
                             component: AnyComponent(ListActionItemComponent(
                                 theme: environment.theme,
+                                style: .glass,
                                 background: nil,
                                 title: AnyComponent(VStack([
                                     AnyComponentWithIdentity(id: AnyHashable(0), component: AnyComponent(MultilineTextComponent(
@@ -2401,7 +2403,9 @@ final class ShareWithPeersScreenComponent: Component {
                 
                 self.scrollView.indicatorStyle = environment.theme.overallDarkAppearance ? .white : .black
                 
-                self.backgroundView.image = generateImage(CGSize(width: 20.0, height: 20.0), rotatedContext: { size, context in
+                let cornerRadius: CGFloat = 38.0
+                
+                self.backgroundView.image = generateImage(CGSize(width: cornerRadius * 2.0, height: cornerRadius * 2.0), rotatedContext: { size, context in
                     context.clear(CGRect(origin: CGPoint(), size: size))
                     
                     if self.hasBlocksStyle {
@@ -2411,7 +2415,7 @@ final class ShareWithPeersScreenComponent: Component {
                     }
                     context.fillEllipse(in: CGRect(origin: CGPoint(), size: size))
                     context.fill(CGRect(origin: CGPoint(x: 0.0, y: size.height * 0.5), size: CGSize(width: size.width, height: size.height * 0.5)))
-                })?.stretchableImage(withLeftCapWidth: 10, topCapHeight: 19)
+                })?.stretchableImage(withLeftCapWidth: Int(cornerRadius), topCapHeight: Int(cornerRadius * 2.0 - 1.0))
                 
                 if self.hasBlocksStyle {
                     self.navigationBackgroundView.updateColor(color: environment.theme.list.modalBlocksBackgroundColor, transition: .immediate)
@@ -2759,21 +2763,37 @@ final class ShareWithPeersScreenComponent: Component {
                 containerInset += 10.0
             }
                         
-            var navigationHeight: CGFloat = 56.0
+            var navigationHeight: CGFloat = 66.0
             let navigationSideInset: CGFloat = 16.0
+            let buttonSideInset: CGFloat = 36.0
             var navigationButtonsWidth: CGFloat = 0.0
             
             let navigationLeftButtonSize = self.navigationLeftButton.update(
                 transition: transition,
-                component: AnyComponent(Button(
-                    content: AnyComponent(Text(text: environment.strings.Common_Cancel, font: Font.regular(17.0), color: environment.theme.rootController.navigationBar.accentTextColor)),
-                    action: { [weak self] in
-                        guard let self else {
-                            return
-                        }
-                        self.saveAndDismiss()
+//                component: AnyComponent(Button(
+//                    content: AnyComponent(Text(text: environment.strings.Common_Cancel, font: Font.regular(17.0), color: environment.theme.rootController.navigationBar.accentTextColor)),
+//                    action: { [weak self] in
+//                        guard let self else {
+//                            return
+//                        }
+//                        self.saveAndDismiss()
+//                    }
+//                ).minSize(CGSize(width: navigationHeight, height: navigationHeight))),
+                component: AnyComponent(GlassBarButtonComponent(
+                    size: CGSize(width: 40.0, height: 40.0),
+                    backgroundColor: environment.theme.rootController.navigationBar.glassBarButtonBackgroundColor,
+                    isDark: environment.theme.overallDarkAppearance,
+                    state: .generic,
+                    component: AnyComponentWithIdentity(id: "close", component: AnyComponent(
+                        BundleIconComponent(
+                            name: "Navigation/Close",
+                            tintColor: environment.theme.rootController.navigationBar.glassBarButtonForegroundColor
+                        )
+                    )),
+                    action: { [weak self] _ in
+                        self?.saveAndDismiss()
                     }
-                ).minSize(CGSize(width: navigationHeight, height: navigationHeight))),
+                )),
                 environment: {},
                 containerSize: CGSize(width: availableSize.width, height: navigationHeight)
             )
@@ -2928,7 +2948,7 @@ final class ShareWithPeersScreenComponent: Component {
                 topInset = max(0.0, availableSize.height - containerInset - inset)
             }
             
-            self.navigationBackgroundView.update(size: CGSize(width: containerWidth, height: navigationHeight), cornerRadius: 10.0, maskedCorners: [.layerMinXMinYCorner, .layerMaxXMinYCorner], transition: transition.containedViewLayoutTransition)
+            self.navigationBackgroundView.update(size: CGSize(width: containerWidth, height: navigationHeight), cornerRadius: 38.0, maskedCorners: [.layerMinXMinYCorner, .layerMaxXMinYCorner], transition: transition.containedViewLayoutTransition)
             transition.setFrame(view: self.navigationBackgroundView, frame: CGRect(origin: CGPoint(x: containerSideInset, y: 0.0), size: CGSize(width: containerWidth, height: navigationHeight)))
             
             transition.setFrame(layer: self.navigationSeparatorLayer, frame: CGRect(origin: CGPoint(x: containerSideInset, y: navigationHeight), size: CGSize(width: containerWidth, height: UIScreenPixel)))
@@ -2949,6 +2969,7 @@ final class ShareWithPeersScreenComponent: Component {
                     transition: transition,
                     component: AnyComponent(ButtonComponent(
                         background: ButtonComponent.Background(
+                            style: .glass,
                             color: environment.theme.list.itemCheckColors.fillColor,
                             foreground: environment.theme.list.itemCheckColors.foregroundColor,
                             pressedColor: environment.theme.list.itemCheckColors.fillColor.withMultipliedAlpha(0.9)
@@ -3166,7 +3187,7 @@ final class ShareWithPeersScreenComponent: Component {
                         }
                     )),
                     environment: {},
-                    containerSize: CGSize(width: containerWidth - navigationSideInset * 2.0, height: 50.0)
+                    containerSize: CGSize(width: containerWidth - buttonSideInset * 2.0, height: 52.0)
                 )
                 
                 if environment.inputHeight != 0.0 {
@@ -3174,7 +3195,7 @@ final class ShareWithPeersScreenComponent: Component {
                 } else {
                     bottomPanelHeight += 10.0 + environment.safeInsets.bottom + actionButtonSize.height
                 }
-                let actionButtonFrame = CGRect(origin: CGPoint(x: containerSideInset + navigationSideInset, y: availableSize.height - bottomPanelHeight), size: actionButtonSize)
+                let actionButtonFrame = CGRect(origin: CGPoint(x: containerSideInset + buttonSideInset, y: availableSize.height - bottomPanelHeight), size: actionButtonSize)
                 if let actionButtonView = self.actionButton.view {
                     if actionButtonView.superview == nil {
                         self.containerView.addSubview(actionButtonView)
