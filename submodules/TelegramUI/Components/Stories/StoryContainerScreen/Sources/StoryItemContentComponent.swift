@@ -110,6 +110,7 @@ final class StoryItemContentComponent: Component {
         private var component: StoryItemContentComponent?
         private weak var state: EmptyComponentState?
         private var environment: StoryContentItem.Environment?
+        private var isUpdating: Bool = false
         
         private var unsupportedText: ComponentView<Empty>?
         private var unsupportedButton: ComponentView<Empty>?
@@ -180,7 +181,7 @@ final class StoryItemContentComponent: Component {
                 guard let self else {
                     return
                 }
-                self.state?.updated(transition: .immediate)
+                self.state?.updated(transition: .immediate, isLocal: true)
             }
 		}
         
@@ -298,8 +299,8 @@ final class StoryItemContentComponent: Component {
                         }
                     }
                     videoNode.canAttachContent = true
-                    if update {
-                        self.state?.updated(transition: .immediate)
+                    if update && !self.isUpdating {
+                        self.state?.updated(transition: .immediate, isLocal: true)
                     }
                 }
             }
@@ -546,7 +547,7 @@ final class StoryItemContentComponent: Component {
                     
                     if !self.contentLoaded {
                         self.contentLoaded = true
-                        self.state?.updated(transition: .immediate)
+                        self.state?.updated(transition: .immediate, isLocal: true)
                     }
                 }
             }
@@ -612,6 +613,11 @@ final class StoryItemContentComponent: Component {
         }
 
         func update(component: StoryItemContentComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<StoryContentItem.Environment>, transition: ComponentTransition) -> CGSize {
+            self.isUpdating = true
+            defer {
+                self.isUpdating = false
+            }
+            
             let previousItem = self.component?.item
             
             self.component = component
@@ -735,7 +741,7 @@ final class StoryItemContentComponent: Component {
                         }
                         if !self.contentLoaded {
                             self.contentLoaded = true
-                            self.state?.updated(transition: .immediate)
+                            self.state?.updated(transition: .immediate, isLocal: true)
                         }
                     })
                 }
@@ -900,7 +906,7 @@ final class StoryItemContentComponent: Component {
                         }
                         self.contentLoaded = true
                         if applyState {
-                            self.state?.updated(transition: .immediate)
+                            self.state?.updated(transition: .immediate, isLocal: true)
                         }
                     }
                     self.imageView.update(

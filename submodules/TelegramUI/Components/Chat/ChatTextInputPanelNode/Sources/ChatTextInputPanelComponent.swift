@@ -234,6 +234,13 @@ public final class ChatTextInputPanelComponent: Component {
             textView.deleteBackward()
         }
         
+        public func activateInput() {
+            guard let panelNode = self.panelNode else {
+                return
+            }
+            panelNode.ensureFocused()
+        }
+        
         public func updateState(transition: ComponentTransition) {
             self.state?.updated(transition: transition)
         }
