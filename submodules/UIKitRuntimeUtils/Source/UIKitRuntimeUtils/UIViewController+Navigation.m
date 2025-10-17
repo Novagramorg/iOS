@@ -174,11 +174,11 @@ static bool notyfyingShiftState = false;
 @end
 
 static EffectSettingsContainerView *findTopmostEffectSuperview(UIView *view, int depth) {
-    if (depth > 5) {
+    if (depth > 10) {
         return nil;
     }
     if ([view isKindOfClass:[EffectSettingsContainerView class]]) {
-        return (EffectSettingsContainerView* )view;
+        return (EffectSettingsContainerView *)view;
     }
     if (view.superview != nil) {
         return findTopmostEffectSuperview(view.superview, depth + 1);

@@ -174,43 +174,44 @@ public final class ChatChannelSubscriberInputPanelNode: ChatInputPanelNode {
         self.button = HighlightableButton()
         self.buttonBackgroundView = GlassBackgroundView()
         self.buttonBackgroundView.isUserInteractionEnabled = false
-        self.button.addSubview(self.buttonBackgroundView)
         self.buttonTitle = ImmediateTextNode()
         self.buttonTitle.isUserInteractionEnabled = false
         self.buttonTintTitle = ImmediateTextNode()
         self.buttonBackgroundView.contentView.addSubview(self.buttonTitle.view)
         self.buttonBackgroundView.maskContentView.addSubview(self.buttonTintTitle.view)
+        self.buttonBackgroundView.contentView.addSubview(self.button)
         
         self.helpButton = HighlightableButton()
-        self.helpButton.isHidden = true
         self.helpButtonBackgroundView = GlassBackgroundView()
         self.helpButtonBackgroundView.isUserInteractionEnabled = false
-        self.helpButton.addSubview(self.helpButtonBackgroundView)
         self.helpButtonIconView = GlassBackgroundView.ContentImageView()
         self.helpButtonBackgroundView.contentView.addSubview(self.helpButtonIconView)
+        self.helpButtonBackgroundView.contentView.addSubview(self.helpButton)
+        self.helpButtonBackgroundView.isHidden = true
         
         self.giftButton = HighlightableButton()
-        self.giftButton.isHidden = true
         self.giftButtonBackgroundView = GlassBackgroundView()
         self.giftButtonBackgroundView.isUserInteractionEnabled = false
-        self.giftButton.addSubview(self.giftButtonBackgroundView)
         self.giftButtonIconView = GlassBackgroundView.ContentImageView()
         self.giftButtonBackgroundView.contentView.addSubview(self.giftButtonIconView)
+        self.giftButtonBackgroundView.contentView.addSubview(self.giftButton)
+        self.giftButtonBackgroundView.isHidden = true
         
         self.suggestedPostButton = HighlightableButton()
-        self.suggestedPostButton.isHidden = true
         self.suggestedPostButtonBackgroundView = GlassBackgroundView()
         self.suggestedPostButtonBackgroundView.isUserInteractionEnabled = false
         self.suggestedPostButton.addSubview(self.suggestedPostButtonBackgroundView)
         self.suggestedPostButtonIconView = GlassBackgroundView.ContentImageView()
         self.suggestedPostButtonBackgroundView.contentView.addSubview(self.suggestedPostButtonIconView)
+        self.suggestedPostButtonBackgroundView.contentView.addSubview(self.suggestedPostButton)
+        self.suggestedPostButtonBackgroundView.isHidden = true
         
         super.init()
         
-        self.view.addSubview(self.button)
-        self.view.addSubview(self.helpButton)
-        self.view.addSubview(self.giftButton)
-        self.view.addSubview(self.suggestedPostButton)
+        self.view.addSubview(self.buttonBackgroundView)
+        self.view.addSubview(self.helpButtonBackgroundView)
+        self.view.addSubview(self.giftButtonBackgroundView)
+        self.view.addSubview(self.suggestedPostButtonBackgroundView)
         self.button.addTarget(self, action: #selector(self.buttonPressed), for: .touchUpInside)
         self.helpButton.addTarget(self, action: #selector(self.helpPressed), for: .touchUpInside)
         self.giftButton.addTarget(self, action: #selector(self.giftPressed), for: .touchUpInside)
@@ -442,36 +443,36 @@ public final class ChatChannelSubscriberInputPanelNode: ChatInputPanelNode {
                     self.giftButton.layer.animateScale(from: 0.01, to: 1.0, duration: 0.2)
                 }
                 
-                self.giftButton.isHidden = false
-                self.helpButton.isHidden = true
-                self.suggestedPostButton.isHidden = !broadcastInfo.flags.contains(.hasMonoforum)
+                self.giftButtonBackgroundView.isHidden = false
+                self.helpButtonBackgroundView.isHidden = true
+                self.suggestedPostButtonBackgroundView.isHidden = !broadcastInfo.flags.contains(.hasMonoforum)
                 self.presentGiftOrSuggestTooltip()
             } else if case let .broadcast(broadcastInfo) = peer.info, broadcastInfo.flags.contains(.hasMonoforum) {
-                self.giftButton.isHidden = true
-                self.helpButton.isHidden = true
-                self.suggestedPostButton.isHidden = false
+                self.giftButtonBackgroundView.isHidden = true
+                self.helpButtonBackgroundView.isHidden = true
+                self.suggestedPostButtonBackgroundView.isHidden = false
                 self.presentGiftOrSuggestTooltip()
             } else if peer.flags.contains(.isGigagroup), self.action == .muteNotifications || self.action == .unmuteNotifications {
-                self.giftButton.isHidden = true
-                self.helpButton.isHidden = false
-                self.suggestedPostButton.isHidden = true
+                self.giftButtonBackgroundView.isHidden = true
+                self.helpButtonBackgroundView.isHidden = false
+                self.suggestedPostButtonBackgroundView.isHidden = true
             } else {
-                self.giftButton.isHidden = true
-                self.helpButton.isHidden = true
-                self.suggestedPostButton.isHidden = true
+                self.giftButtonBackgroundView.isHidden = true
+                self.helpButtonBackgroundView.isHidden = true
+                self.suggestedPostButtonBackgroundView.isHidden = true
             }
         } else {
-            self.giftButton.isHidden = true
-            self.helpButton.isHidden = true
-            self.suggestedPostButton.isHidden = true
+            self.giftButtonBackgroundView.isHidden = true
+            self.helpButtonBackgroundView.isHidden = true
+            self.suggestedPostButtonBackgroundView.isHidden = true
         }
         
         let buttonTitleSize = self.buttonTitle.updateLayout(CGSize(width: width, height: panelHeight))
         let _ = self.buttonTintTitle.updateLayout(CGSize(width: width, height: panelHeight))
         let buttonSize = CGSize(width: buttonTitleSize.width + 16.0 * 2.0, height: 40.0)
         let buttonFrame = CGRect(origin: CGPoint(x: floor((width - buttonSize.width) / 2.0), y: floor((panelHeight - buttonSize.height) * 0.5)), size: buttonSize)
-        transition.updateFrame(view: self.button, frame: buttonFrame)
-        transition.updateFrame(view: self.buttonBackgroundView, frame: CGRect(origin: CGPoint(), size: buttonFrame.size))
+        transition.updateFrame(view: self.buttonBackgroundView, frame: buttonFrame)
+        transition.updateFrame(view: self.button, frame: CGRect(origin: CGPoint(), size: buttonFrame.size))
         let buttonTintColor: GlassBackgroundView.TintColor
         if case .join = self.action {
             buttonTintColor = .init(kind: .custom, color: interfaceState.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7), innerColor: interfaceState.theme.chat.inputPanel.actionControlFillColor)
@@ -483,27 +484,27 @@ public final class ChatChannelSubscriberInputPanelNode: ChatInputPanelNode {
         self.buttonTintTitle.frame = self.buttonTitle.frame
         
         let giftButtonFrame = CGRect(x: width - rightInset - 40.0 - 8.0, y: floor((panelHeight - 40.0) * 0.5), width: 40.0, height: 40.0)
-        transition.updateFrame(view: self.giftButton, frame: giftButtonFrame)
+        transition.updateFrame(view: self.giftButtonBackgroundView, frame: giftButtonFrame)
         if let image = self.giftButtonIconView.image {
             transition.updateFrame(view: self.giftButtonIconView, frame: image.size.centered(in: CGRect(origin: CGPoint(), size: giftButtonFrame.size)))
         }
-        transition.updateFrame(view: self.giftButtonBackgroundView, frame: CGRect(origin: CGPoint(), size: giftButtonFrame.size))
+        transition.updateFrame(view: self.giftButton, frame: CGRect(origin: CGPoint(), size: giftButtonFrame.size))
         self.giftButtonBackgroundView.update(size: giftButtonFrame.size, cornerRadius: giftButtonFrame.height * 0.5, isDark: interfaceState.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: interfaceState.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7)), transition: ComponentTransition(transition))
         
         let helpButtonFrame = CGRect(x: width - rightInset - 8.0 - 40.0, y: floor((panelHeight - 40.0) * 0.5), width: 40.0, height: 40.0)
-        transition.updateFrame(view: self.helpButton, frame: helpButtonFrame)
+        transition.updateFrame(view: self.helpButtonBackgroundView, frame: helpButtonFrame)
         if let image = self.helpButtonIconView.image {
             transition.updateFrame(view: self.helpButtonIconView, frame: image.size.centered(in: CGRect(origin: CGPoint(), size: helpButtonFrame.size)))
         }
-        transition.updateFrame(view: self.helpButtonBackgroundView, frame: CGRect(origin: CGPoint(), size: helpButtonFrame.size))
+        transition.updateFrame(view: self.helpButton, frame: CGRect(origin: CGPoint(), size: helpButtonFrame.size))
         self.helpButtonBackgroundView.update(size: helpButtonFrame.size, cornerRadius: helpButtonFrame.height * 0.5, isDark: interfaceState.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: interfaceState.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7)), transition: ComponentTransition(transition))
         
         let suggestedPostButtonFrame = CGRect(x: leftInset + 8.0, y: floor((panelHeight - 40.0) * 0.5), width: 40.0, height: 40.0)
-        transition.updateFrame(view: self.suggestedPostButton, frame: suggestedPostButtonFrame)
+        transition.updateFrame(view: self.suggestedPostButtonBackgroundView, frame: suggestedPostButtonFrame)
         if let image = self.suggestedPostButtonIconView.image {
             transition.updateFrame(view: self.suggestedPostButtonIconView, frame: image.size.centered(in: CGRect(origin: CGPoint(), size: suggestedPostButtonFrame.size)))
         }
-        transition.updateFrame(view: self.suggestedPostButtonBackgroundView, frame: CGRect(origin: CGPoint(), size: suggestedPostButtonFrame.size))
+        transition.updateFrame(view: self.suggestedPostButton, frame: CGRect(origin: CGPoint(), size: suggestedPostButtonFrame.size))
         self.suggestedPostButtonBackgroundView.update(size: suggestedPostButtonFrame.size, cornerRadius: suggestedPostButtonFrame.height * 0.5, isDark: interfaceState.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: interfaceState.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7)), transition: ComponentTransition(transition))
         
         return panelHeight

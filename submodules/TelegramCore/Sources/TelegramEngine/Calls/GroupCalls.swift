@@ -3925,7 +3925,7 @@ public final class GroupCallMessagesContext {
             if !self.isLiveStream {
                 for i in (0 ..< self.state.messages.count).reversed() {
                     let message = self.state.messages[i]
-                    if (now - message.date) < message.lifetime {
+                    if message.date + message.lifetime < now {
                         if updatedState == nil {
                             updatedState = self.state
                         }
@@ -3936,7 +3936,7 @@ public final class GroupCallMessagesContext {
             
             for i in (0 ..< self.state.pinnedMessages.count).reversed() {
                 let message = self.state.pinnedMessages[i]
-                if (now - message.date) < message.lifetime {
+                if message.date + message.lifetime < now {
                     if updatedState == nil {
                         updatedState = self.state
                     }
