@@ -134,6 +134,7 @@ private final class AttachButtonComponent: CombinedComponent {
     let context: AccountContext
     let style: Style
     let type: AttachmentButtonType
+    let isFirstOrLast: Bool
     let isSelected: Bool
     let strings: PresentationStrings
     let theme: PresentationTheme
@@ -144,6 +145,7 @@ private final class AttachButtonComponent: CombinedComponent {
         context: AccountContext,
         style: Style,
         type: AttachmentButtonType,
+        isFirstOrLast: Bool,
         isSelected: Bool,
         strings: PresentationStrings,
         theme: PresentationTheme,
@@ -153,6 +155,7 @@ private final class AttachButtonComponent: CombinedComponent {
         self.context = context
         self.style = style
         self.type = type
+        self.isFirstOrLast = isFirstOrLast
         self.isSelected = isSelected
         self.strings = strings
         self.theme = theme
@@ -168,6 +171,9 @@ private final class AttachButtonComponent: CombinedComponent {
             return false
         }
         if lhs.type != rhs.type {
+            return false
+        }
+        if lhs.isFirstOrLast != rhs.isFirstOrLast {
             return false
         }
         if lhs.isSelected != rhs.isSelected {
@@ -321,7 +327,7 @@ private final class AttachButtonComponent: CombinedComponent {
                 transition: .immediate
             )
             
-            let size = CGSize(width: max(context.availableSize.width, title.size.width + 24.0), height: context.availableSize.height)
+            let size = CGSize(width: max(component.isFirstOrLast ? context.availableSize.width : 64.0, title.size.width + 24.0), height: context.availableSize.height)
             
             let button = button.update(
                 component: Rectangle(
@@ -1571,6 +1577,7 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate {
                     context: self.context,
                     style: self.panelStyle == .glass ? .glass : .legacy,
                     type: type,
+                    isFirstOrLast: i == 0 || i == self.buttons.count - 1,
                     isSelected: i == self.selectedIndex,
                     strings: self.presentationData.strings,
                     theme: self.presentationData.theme,

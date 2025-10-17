@@ -1022,7 +1022,7 @@ public final class ListMessageFileItemNode: ListMessageNode {
                 switch iconImage {
                     case let .imageRepresentation(_, representation):
                         let iconSize = CGSize(width: 40.0, height: 40.0)
-                        let imageCorners = ImageCorners(radius: iconCornerRadius)
+                        let imageCorners = ImageCorners(radius: iconCornerRadius, curve: item.systemStyle == .glass ? .continuous : .circular)
                         let arguments = TransformImageArguments(corners: imageCorners, imageSize: representation.dimensions.cgSize.aspectFilled(iconSize), boundingSize: iconSize, intrinsicInsets: UIEdgeInsets(), emptyColor: item.presentationData.theme.theme.list.mediaPlaceholderColor)
                         iconImageApply = iconImageLayout(arguments)
                     case .albumArt:

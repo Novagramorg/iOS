@@ -359,10 +359,12 @@ private final class StarsPurchaseScreenContentComponent: CombinedComponent {
                         id: product.id,
                         component: AnyComponent(ListSectionComponent(
                             theme: environment.theme,
+                            style: .glass,
                             header: nil,
                             footer: nil,
                             items: [AnyComponentWithIdentity(id: 0, component: AnyComponent(ListActionItemComponent(
                                 theme: environment.theme,
+                                style: .glass,
                                 background: backgroundComponent,
                                 title: titleComponent,
                                 contentInsets: UIEdgeInsets(top: 12.0, left: -6.0, bottom: 12.0, right: 0.0),
@@ -414,10 +416,12 @@ private final class StarsPurchaseScreenContentComponent: CombinedComponent {
                     id: items.count,
                     component: AnyComponent(ListSectionComponent(
                         theme: environment.theme,
+                        style: .glass,
                         header: nil,
                         footer: nil,
                         items: [AnyComponentWithIdentity(id: 0, component: AnyComponent(ListActionItemComponent(
                             theme: environment.theme,
+                            style: .glass,
                             title: titleCombinedComponent,
                             titleAlignment: .center,
                             contentInsets: UIEdgeInsets(top: 7.0, left: 0.0, bottom: 7.0, right: 0.0),

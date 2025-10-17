@@ -84,7 +84,7 @@ final class AttachmentFileEmptyStateItemNode: ItemListControllerEmptyStateItemNo
         self.textNode.lineSpacing = 0.1
         self.textNode.textAlignment = .center
         
-        self.buttonNode = SolidRoundedButtonNode(theme: SolidRoundedButtonTheme(backgroundColor: .black, foregroundColor: .white), height: 50.0, cornerRadius: 11.0, gloss: true)
+        self.buttonNode = SolidRoundedButtonNode(theme: SolidRoundedButtonTheme(backgroundColor: .black, foregroundColor: .white), height: 52.0, cornerRadius: 26.0, isShimmering: true)
         
         super.init()
         

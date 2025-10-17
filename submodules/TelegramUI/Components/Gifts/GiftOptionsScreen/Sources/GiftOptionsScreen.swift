@@ -661,15 +661,11 @@ final class GiftOptionsScreenComponent: Component {
                 topPanelHeight += 39.0
             }
             
-//            if let tabSelectorView = self.tabSelector.view {
-//                let tabSelectorSize = tabSelectorView.bounds.size
-//                transition.setFrame(view: tabSelectorView, frame: CGRect(origin: CGPoint(x: floor((availableWidth - tabSelectorSize.width) / 2.0), y: max(56.0, self.tabSelectorOrigin - contentOffset)), size: tabSelectorSize))
-//            }
             
             let edgeEffectHeight: CGFloat = 88.0
             let topEdgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: availableWidth, height: edgeEffectHeight))
             transition.setFrame(view: self.topEdgeEffectView, frame: topEdgeEffectFrame)
-            self.topEdgeEffectView.update(content: theme.list.blocksBackgroundColor, alpha: 1.0, rect: topEdgeEffectFrame, edge: .top, edgeSize: topEdgeEffectFrame.height, transition: transition)
+            self.topEdgeEffectView.update(content: .clear, blur: true, alpha: 1.0, rect: topEdgeEffectFrame, edge: .top, edgeSize: topEdgeEffectFrame.height, transition: transition)
             if self.topEdgeEffectView.superview == nil {
                 if let headerView = self.header.view {
                     self.insertSubview(self.topEdgeEffectView, aboveSubview: headerView)
@@ -682,41 +678,7 @@ final class GiftOptionsScreenComponent: Component {
             let bottomEdgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: self.bounds.height - edgeEffectHeight - environment.additionalInsets.bottom), size: CGSize(width: availableWidth, height: edgeEffectHeight))
             transition.setFrame(view: self.bottomEdgeEffectView, frame: bottomEdgeEffectFrame)
             self.bottomEdgeEffectView.update(content: theme.list.blocksBackgroundColor, blur: true, alpha: 1.0, rect: bottomEdgeEffectFrame, edge: .bottom, edgeSize: bottomEdgeEffectFrame.height, transition: transition)
-            
-//            var panelTransition = transition
-//            if self.topPanel.view?.superview != nil && !self.switchingFilter {
-//                panelTransition = .spring(duration: 0.3)
-//            }
-//            let topPanelSize = self.topPanel.update(
-//                transition: panelTransition,
-//                component: AnyComponent(BlurredBackgroundComponent(
-//                    color: environment.theme.rootController.navigationBar.blurredBackgroundColor
-//                )),
-//                environment: {},
-//                containerSize: CGSize(width: availableWidth, height: topPanelHeight)
-//            )
-//            
-//            let topSeparatorSize = self.topSeparator.update(
-//                transition: panelTransition,
-//                component: AnyComponent(Rectangle(
-//                    color: environment.theme.rootController.navigationBar.separatorColor
-//                )),
-//                environment: {},
-//                containerSize: CGSize(width: availableWidth, height: UIScreenPixel)
-//            )
-//            let topPanelFrame = CGRect(origin: .zero, size: CGSize(width: availableWidth, height: topPanelSize.height))
-//            let topSeparatorFrame = CGRect(origin: CGPoint(x: 0.0, y: topPanelSize.height), size: CGSize(width: topSeparatorSize.width, height: topSeparatorSize.height))
-//            if let topPanelView = self.topPanel.view, let topSeparatorView = self.topSeparator.view {
-//                if topPanelView.superview == nil {
-//                    if let headerView = self.header.view {
-//                        self.insertSubview(topSeparatorView, aboveSubview: headerView)
-//                        self.insertSubview(topPanelView, aboveSubview: headerView)
-//                    }
-//                }
-//                panelTransition.setFrame(view: topPanelView, frame: topPanelFrame)
-//                panelTransition.setFrame(view: topSeparatorView, frame: topSeparatorFrame)
-//            }
-            
+                        
             let bottomContentOffset = max(0.0, self.scrollView.contentSize.height - self.scrollView.contentOffset.y - self.scrollView.frame.height)
             if interactive, bottomContentOffset < 320.0, case .transfer = self.starsFilter {
                 self.state?.starGiftsContext.loadMore()
