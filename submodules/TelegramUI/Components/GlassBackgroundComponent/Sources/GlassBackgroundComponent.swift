@@ -266,11 +266,11 @@ public class GlassBackgroundView: UIView {
         }
     }
     
-    private struct Params: Equatable {
-        let cornerRadius: CGFloat
-        let isDark: Bool
-        let tintColor: TintColor
-        let isInteractive: Bool
+    public struct Params: Equatable {
+        public let cornerRadius: CGFloat
+        public let isDark: Bool
+        public let tintColor: TintColor
+        public let isInteractive: Bool
         
         init(cornerRadius: CGFloat, isDark: Bool, tintColor: TintColor, isInteractive: Bool) {
             self.cornerRadius = cornerRadius
@@ -301,8 +301,8 @@ public class GlassBackgroundView: UIView {
         }
     }
     
-    private var params: Params?
-    
+    public private(set) var params: Params?
+        
     public static var useCustomGlassImpl: Bool = false
     
     public override init(frame: CGRect) {
@@ -375,7 +375,7 @@ public class GlassBackgroundView: UIView {
         }
         return nil
     }
-    
+        
     public func update(size: CGSize, cornerRadius: CGFloat, isDark: Bool, tintColor: TintColor, isInteractive: Bool = false, transition: ComponentTransition) {
         if let nativeView = self.nativeView, nativeView.bounds.size != size {
             
@@ -383,7 +383,8 @@ public class GlassBackgroundView: UIView {
                 nativeView.layer.cornerRadius = cornerRadius
                 nativeView.frame = CGRect(origin: CGPoint(), size: size)
             } else {
-                nativeView.layer.cornerRadius = cornerRadius
+                //nativeView.layer.cornerRadius = cornerRadius
+                transition.setCornerRadius(layer: nativeView.layer, cornerRadius: cornerRadius)
                 
                 let nativeFrame = CGRect(origin: CGPoint(), size: size)
                 
@@ -553,95 +554,6 @@ public final class GlassBackgroundContainerView: UIView {
         } else if let legacyView = self.legacyView {
             transition.setFrame(view: legacyView, frame: CGRect(origin: CGPoint(), size: size))
         }
-    }
-}
-
-public final class VariableBlurView: UIVisualEffectView {
-    public let maxBlurRadius: CGFloat
-    
-    public var gradientMask: UIImage {
-        didSet {
-            if self.gradientMask !== oldValue {
-                self.resetEffect()
-            }
-        }
-    }
-    
-    public init(gradientMask: UIImage, maxBlurRadius: CGFloat = 20.0) {
-        self.gradientMask = gradientMask
-        self.maxBlurRadius = maxBlurRadius
-        
-        super.init(effect: UIBlurEffect(style: .regular))
-
-        self.resetEffect()
-
-        if self.subviews.indices.contains(1) {
-            let tintOverlayView = subviews[1]
-            tintOverlayView.alpha = 0
-        }
-    }
-
-    required public init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-    
-    override public func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
-        if self.traitCollection.hasDifferentColorAppearance(comparedTo: previousTraitCollection) {
-            self.resetEffect()
-        }
-    }
-    
-    private func resetEffect() {
-        let filterClassStringEncoded = "Q0FGaWx0ZXI="
-        let filterClassString: String = {
-            if
-                let data = Data(base64Encoded: filterClassStringEncoded),
-                let string = String(data: data, encoding: .utf8)
-            {
-                return string
-            }
-
-            return ""
-        }()
-        let filterWithTypeStringEncoded = "ZmlsdGVyV2l0aFR5cGU6"
-        let filterWithTypeString: String = {
-            if
-                let data = Data(base64Encoded: filterWithTypeStringEncoded),
-                let string = String(data: data, encoding: .utf8)
-            {
-                return string
-            }
-
-            return ""
-        }()
-
-        let filterWithTypeSelector = Selector(filterWithTypeString)
-
-        guard let filterClass = NSClassFromString(filterClassString) as AnyObject as? NSObjectProtocol else {
-            return
-        }
-
-        guard filterClass.responds(to: filterWithTypeSelector) else {
-            return
-        }
-
-        let variableBlur = filterClass.perform(filterWithTypeSelector, with: "variableBlur").takeUnretainedValue()
-
-        guard let variableBlur = variableBlur as? NSObject else {
-            return
-        }
-        
-        guard let gradientImageRef = self.gradientMask.cgImage else {
-            return
-        }
-
-        variableBlur.setValue(self.maxBlurRadius, forKey: "inputRadius")
-        variableBlur.setValue(gradientImageRef, forKey: "inputMaskImage")
-        variableBlur.setValue(true, forKey: "inputNormalizeEdges")
-        variableBlur.setValue(UIScreenScale, forKey: "scale")
-        
-        let backdropLayer = self.subviews.first?.layer
-        backdropLayer?.filters = [variableBlur]
     }
 }
 

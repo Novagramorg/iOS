@@ -677,6 +677,7 @@ final class StarsTransactionsScreenComponent: Component {
                     transition: .immediate,
                     component: AnyComponent(ListSectionComponent(
                         theme: environment.theme,
+                        style: .glass,
                         header: AnyComponent(MultilineTextComponent(
                             text: .plain(NSAttributedString(
                                 string: environment.strings.Ton_ProceedsOverview.uppercased(),
@@ -738,6 +739,7 @@ final class StarsTransactionsScreenComponent: Component {
                 transition: .immediate,
                 component: AnyComponent(ListSectionComponent(
                     theme: environment.theme,
+                    style: .glass,
                     header: nil,
                     footer: component.starsContext.ton ? AnyComponent(MultilineTextComponent(
                         text: .plain(balanceInfoString),
@@ -837,6 +839,7 @@ final class StarsTransactionsScreenComponent: Component {
                     transition: .immediate,
                     component: AnyComponent(ListSectionComponent(
                         theme: environment.theme,
+                        style: .glass,
                         header: nil,
                         footer: nil,
                         items: [
@@ -966,6 +969,7 @@ final class StarsTransactionsScreenComponent: Component {
                         component: AnyComponent(
                             ListActionItemComponent(
                                 theme: environment.theme,
+                                style: .glass,
                                 title: AnyComponent(VStack(titleComponents, alignment: .left, spacing: 2.0)),
                                 contentInsets: UIEdgeInsets(top: 9.0, left: 0.0, bottom: 8.0, right: 0.0),
                                 leftIcon: .custom(AnyComponentWithIdentity(id: "avatar", component: AnyComponent(StarsAvatarComponent(context: component.context, theme: environment.theme, peer: .transactionPeer(.peer(subscription.peer)), photo: nil, media: [], uniqueGift: nil, backgroundColor: environment.theme.list.plainBackgroundColor))), false),
@@ -987,6 +991,7 @@ final class StarsTransactionsScreenComponent: Component {
                         component: AnyComponent(
                             ListActionItemComponent(
                                 theme: environment.theme,
+                                style: .glass,
                                 title: AnyComponent(Text(
                                     text: environment.strings.Stars_Intro_Subscriptions_ShowMore,
                                     font: Font.regular(17.0),
@@ -1029,6 +1034,7 @@ final class StarsTransactionsScreenComponent: Component {
                     transition: transition,
                     component: AnyComponent(ListSectionComponent(
                         theme: environment.theme,
+                        style: .glass,
                         header: AnyComponent(MultilineTextComponent(
                             text: .plain(NSAttributedString(
                                 string: environment.strings.Stars_Intro_Subscriptions_Title.uppercased(),

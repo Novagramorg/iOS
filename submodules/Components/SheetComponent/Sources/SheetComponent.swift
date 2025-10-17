@@ -4,6 +4,7 @@ import Display
 import ComponentFlow
 import ViewControllerComponent
 import SwiftSignalKit
+import DynamicCornerRadiusView
 
 public final class SheetComponentEnvironment: Equatable {
     public let isDisplaying: Bool
@@ -59,8 +60,14 @@ public final class SheetComponent<ChildEnvironmentType: Sendable & Equatable>: C
         case blur(BlurStyle)
     }
     
+    public enum Style: Equatable {
+        case glass
+        case legacy
+    }
+    
     public let content: AnyComponent<ChildEnvironmentType>
     public let headerContent: AnyComponent<Empty>?
+    public let style: Style
     public let backgroundColor: BackgroundColor
     public let followContentSizeChanges: Bool
     public let clipsContent: Bool
@@ -75,6 +82,7 @@ public final class SheetComponent<ChildEnvironmentType: Sendable & Equatable>: C
     public init(
         content: AnyComponent<ChildEnvironmentType>,
         headerContent: AnyComponent<Empty>? = nil,
+        style: Style = .legacy,
         backgroundColor: BackgroundColor,
         followContentSizeChanges: Bool = false,
         clipsContent: Bool = false,
@@ -88,6 +96,7 @@ public final class SheetComponent<ChildEnvironmentType: Sendable & Equatable>: C
     ) {
         self.content = content
         self.headerContent = headerContent
+        self.style = style
         self.backgroundColor = backgroundColor
         self.followContentSizeChanges = followContentSizeChanges
         self.clipsContent = clipsContent
@@ -105,6 +114,9 @@ public final class SheetComponent<ChildEnvironmentType: Sendable & Equatable>: C
             return false
         }
         if lhs.headerContent != rhs.headerContent {
+            return false
+        }
+        if lhs.style != rhs.style {
             return false
         }
         if lhs.backgroundColor != rhs.backgroundColor {
@@ -162,7 +174,7 @@ public final class SheetComponent<ChildEnvironmentType: Sendable & Equatable>: C
         
         private let dimView: UIView
         private let scrollView: ScrollView
-        private let backgroundView: UIView
+        private let backgroundView: DynamicCornerRadiusView
         private var effectView: UIVisualEffectView?
         private let contentView: ComponentView<ChildEnvironmentType>
         private var headerView: ComponentView<Empty>?
@@ -186,9 +198,7 @@ public final class SheetComponent<ChildEnvironmentType: Sendable & Equatable>: C
             self.scrollView.showsHorizontalScrollIndicator = false
             self.scrollView.alwaysBounceVertical = true
             
-            self.backgroundView = UIView()
-            self.backgroundView.layer.cornerRadius = 12.0
-            self.backgroundView.layer.masksToBounds = true
+            self.backgroundView = DynamicCornerRadiusView()
             
             self.contentView = ComponentView<ChildEnvironmentType>()
             
@@ -354,6 +364,19 @@ public final class SheetComponent<ChildEnvironmentType: Sendable & Equatable>: C
             self.component = component
             self.currentHasInputHeight = sheetEnvironment.hasInputHeight
             
+            let glassInset: CGFloat = 6.0
+            
+            var topCornerRadius: CGFloat
+            var bottomCornerRadius: CGFloat
+            switch component.style {
+            case .glass:
+                topCornerRadius = 38.0
+                bottomCornerRadius = 56.0
+            case .legacy:
+                topCornerRadius = 12.0
+                bottomCornerRadius = 12.0
+            }
+            
             switch component.backgroundColor {
                 case let .blur(style):
                     self.backgroundView.isHidden = true
@@ -365,7 +388,7 @@ public final class SheetComponent<ChildEnvironmentType: Sendable & Equatable>: C
                         self.effectView = effectView
                     }
                 case let .color(color):
-                    self.backgroundView.backgroundColor = color
+                    self.backgroundView.updateColor(color: color, transition: .immediate)
                     self.backgroundView.isHidden = false
                     self.effectView?.removeFromSuperview()
                     self.effectView = nil
@@ -383,7 +406,12 @@ public final class SheetComponent<ChildEnvironmentType: Sendable & Equatable>: C
                     containerSize = regularMetricsSize
                 }
             } else {
-                containerSize = CGSize(width: availableSize.width, height: .greatestFiniteMagnitude)
+                switch component.style {
+                case .glass:
+                    containerSize = CGSize(width: availableSize.width - glassInset * 2.0, height: .greatestFiniteMagnitude)
+                case .legacy:
+                    containerSize = CGSize(width: availableSize.width, height: .greatestFiniteMagnitude)
+                }
             }
             
             self.contentView.parentState = state
@@ -403,7 +431,7 @@ public final class SheetComponent<ChildEnvironmentType: Sendable & Equatable>: C
                     self.scrollView.addSubview(contentView)
                 }
                 contentView.clipsToBounds = component.clipsContent
-                contentView.layer.cornerRadius = self.backgroundView.layer.cornerRadius
+                contentView.layer.cornerRadius = topCornerRadius
                 if sheetEnvironment.isCentered {
                     let y: CGFloat = floorToScreenPixels((availableSize.height - contentSize.height) / 2.0)
                     transition.setFrame(view: contentView, frame: CGRect(origin: CGPoint(x: floorToScreenPixels((availableSize.width - contentSize.width) / 2.0), y: -y), size: contentSize), completion: nil)
@@ -411,12 +439,20 @@ public final class SheetComponent<ChildEnvironmentType: Sendable & Equatable>: C
                     if let effectView = self.effectView {
                         transition.setFrame(view: effectView, frame: CGRect(origin: CGPoint(x: floorToScreenPixels((availableSize.width - contentSize.width) / 2.0), y: -y), size: contentSize), completion: nil)
                     }
+                    self.backgroundView.update(size: contentSize, corners: .init(minXMinY: topCornerRadius, maxXMinY: topCornerRadius, minXMaxY: bottomCornerRadius, maxXMaxY: bottomCornerRadius), transition: transition)
                 } else {
-                    transition.setFrame(view: contentView, frame: CGRect(origin: .zero, size: CGSize(width: contentSize.width, height: contentSize.height + 100.0)), completion: nil)
-                    transition.setFrame(view: self.backgroundView, frame: CGRect(origin: .zero, size: CGSize(width: contentSize.width, height: contentSize.height + 1000.0)), completion: nil)
-                    if let effectView = self.effectView {
-                        transition.setFrame(view: effectView, frame: CGRect(origin: .zero, size: CGSize(width: contentSize.width, height: contentSize.height + 1000.0)), completion: nil)
+                    switch component.style {
+                    case .glass:
+                        transition.setFrame(view: contentView, frame: CGRect(origin: CGPoint(x: glassInset, y: -glassInset), size: CGSize(width: contentSize.width, height: contentSize.height)), completion: nil)
+                        transition.setFrame(view: self.backgroundView, frame: CGRect(origin: CGPoint(x: glassInset, y: -glassInset), size: CGSize(width: contentSize.width, height: contentSize.height)), completion: nil)
+                    case .legacy:
+                        transition.setFrame(view: contentView, frame: CGRect(origin: .zero, size: CGSize(width: contentSize.width, height: contentSize.height + 100.0)), completion: nil)
+                        transition.setFrame(view: self.backgroundView, frame: CGRect(origin: .zero, size: CGSize(width: contentSize.width, height: contentSize.height + 1000.0)), completion: nil)
+                        if let effectView = self.effectView {
+                            transition.setFrame(view: effectView, frame: CGRect(origin: .zero, size: CGSize(width: contentSize.width, height: contentSize.height + 1000.0)), completion: nil)
+                        }
                     }
+                    self.backgroundView.update(size: contentSize, corners: .init(minXMinY: topCornerRadius, maxXMinY: topCornerRadius, minXMaxY: bottomCornerRadius, maxXMaxY: bottomCornerRadius), transition: transition)
                 }
             }
             transition.setFrame(view: self.scrollView, frame: CGRect(origin: CGPoint(), size: availableSize), completion: nil)

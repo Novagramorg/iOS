@@ -307,6 +307,7 @@ public struct TelegramDisallowedGifts: OptionSet, Codable {
     public static let limited = TelegramDisallowedGifts(rawValue: 1 << 1)
     public static let unique = TelegramDisallowedGifts(rawValue: 1 << 2)
     public static let premium = TelegramDisallowedGifts(rawValue: 1 << 3)
+    public static let channel = TelegramDisallowedGifts(rawValue: 1 << 4)
     
     public static let All: TelegramDisallowedGifts = [
         .unlimited,
@@ -324,6 +325,33 @@ public struct TelegramDisallowedGifts: OptionSet, Codable {
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: StringCodingKey.self)
         try container.encode(self.rawValue, forKey: "v")
+    }
+}
+
+extension TelegramDisallowedGifts {
+    init(apiDisallowedGifts: Api.DisallowedGiftsSettings?) {
+        var disallowedGifts: TelegramDisallowedGifts = []
+        switch apiDisallowedGifts {
+        case let .disallowedGiftsSettings(giftFlags):
+            if (giftFlags & (1 << 0)) != 0 {
+                disallowedGifts.insert(.unlimited)
+            }
+            if (giftFlags & (1 << 1)) != 0 {
+                disallowedGifts.insert(.limited)
+            }
+            if (giftFlags & (1 << 2)) != 0 {
+                disallowedGifts.insert(.unique)
+            }
+            if (giftFlags & (1 << 3)) != 0 {
+                disallowedGifts.insert(.premium)
+            }
+            if (giftFlags & (1 << 4)) != 0 {
+                disallowedGifts.insert(.channel)
+            }
+        default:
+            break
+        }
+        self = disallowedGifts
     }
 }
 

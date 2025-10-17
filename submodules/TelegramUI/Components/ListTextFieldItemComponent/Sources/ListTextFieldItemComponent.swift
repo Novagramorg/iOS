@@ -9,6 +9,11 @@ import PlainButtonComponent
 import BundleIconComponent
 
 public final class ListTextFieldItemComponent: Component {
+    public enum Style {
+        case glass
+        case legacy
+    }
+    
     public final class ResetText: Equatable {
         public let value: String
         
@@ -21,6 +26,7 @@ public final class ListTextFieldItemComponent: Component {
         }
     }
     
+    public let style: Style
     public let theme: PresentationTheme
     public let initialText: String
     public let resetText: ResetText?
@@ -31,6 +37,7 @@ public final class ListTextFieldItemComponent: Component {
     public let tag: AnyObject?
     
     public init(
+        style: Style = .legacy,
         theme: PresentationTheme,
         initialText: String,
         resetText: ResetText? = nil,
@@ -40,6 +47,7 @@ public final class ListTextFieldItemComponent: Component {
         updated: ((String) -> Void)?,
         tag: AnyObject? = nil
     ) {
+        self.style = style
         self.theme = theme
         self.initialText = initialText
         self.resetText = resetText
@@ -51,6 +59,9 @@ public final class ListTextFieldItemComponent: Component {
     }
     
     public static func ==(lhs: ListTextFieldItemComponent, rhs: ListTextFieldItemComponent) -> Bool {
+        if lhs.style != rhs.style {
+            return false
+        }
         if lhs.theme !== rhs.theme {
             return false
         }
@@ -144,6 +155,10 @@ public final class ListTextFieldItemComponent: Component {
             return false
         }
         
+        public func activateInput() {
+            self.textField.becomeFirstResponder()
+        }
+        
         func update(component: ListTextFieldItemComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
             self.isUpdating = true
             defer {
@@ -180,7 +195,10 @@ public final class ListTextFieldItemComponent: Component {
                 self.textField.textColor = component.theme.list.itemPrimaryTextColor
             }
             
-            let verticalInset: CGFloat = 12.0
+            var verticalInset: CGFloat = 12.0
+            if case .glass = component.style {
+                verticalInset = 16.0
+            }
             let sideInset: CGFloat = 16.0
             
             self.textField.sideInset = sideInset

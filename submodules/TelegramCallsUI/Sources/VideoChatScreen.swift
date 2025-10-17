@@ -1395,7 +1395,7 @@ final class VideoChatScreenComponent: Component {
             )
             self.inputMediaInteraction?.forceTheme = defaultDarkColorPresentationTheme
             
-            let _ = (allowedStoryReactions(context: context)
+            let _ = (allowedStoryReactions(account: context.account)
             |> deliverOnMainQueue).start(next: { [weak self] reactionItems in
                 self?.reactionItems = reactionItems
             })
@@ -1880,6 +1880,7 @@ final class VideoChatScreenComponent: Component {
                                 }
                             }
                         } else {
+                            //TODO:localized
                             if event.joined {
                                 self.lastTitleEvent = "\(event.peer.compactDisplayTitle) joined"
                             } else {
@@ -2350,7 +2351,7 @@ final class VideoChatScreenComponent: Component {
                             name: "Call/PanelIcon",
                             tintColor: .white
                         )),
-                        background: AnyComponent(GlassBackgroundComponent(size: CGSize(width: navigationButtonDiameter + 10.0, height: navigationButtonDiameter), cornerRadius: navigationButtonDiameter * 0.5, isDark: true, tintColor: .init(kind: .panel, color: panelColor))),
+                        background: AnyComponent(GlassBackgroundComponent(size: CGSize(width: navigationButtonDiameter + 10.0, height: navigationButtonDiameter), cornerRadius: navigationButtonDiameter * 0.5, isDark: true, tintColor: .init(kind: .custom, color: panelColor))),
                         effectAlignment: .center,
                         minSize: CGSize(width: navigationButtonDiameter + 10.0, height: navigationButtonDiameter),
                         action: { [weak self] in
@@ -4239,9 +4240,9 @@ private func hasFirstResponder(_ view: UIView) -> Bool {
     return false
 }
 
-private func allowedStoryReactions(context: AccountContext) -> Signal<[ReactionItem], NoError> {
+func allowedStoryReactions(account: Account) -> Signal<[ReactionItem], NoError> {
     let viewKey: PostboxViewKey = .orderedItemList(id: Namespaces.OrderedItemList.CloudTopReactions)
-    let topReactions = context.account.postbox.combinedView(keys: [viewKey])
+    let topReactions = account.postbox.combinedView(keys: [viewKey])
     |> map { views -> [RecentReactionItem] in
         guard let view = views.views[viewKey] as? OrderedItemListView else {
             return []
@@ -4252,7 +4253,7 @@ private func allowedStoryReactions(context: AccountContext) -> Signal<[ReactionI
     }
 
     return combineLatest(
-        context.engine.stickers.availableReactions(),
+        TelegramEngine(account: account).stickers.availableReactions(),
         topReactions
     )
     |> take(1)

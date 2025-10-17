@@ -94,7 +94,7 @@ final class StorageCategoriesComponent: Component {
             super.init(frame: frame)
             
             self.clipsToBounds = true
-            self.layer.cornerRadius = 10.0
+            self.layer.cornerRadius = 26.0
         }
         
         required init?(coder: NSCoder) {
@@ -227,8 +227,8 @@ final class StorageCategoriesComponent: Component {
                         ),
                         font: .bold,
                         fontSize: 17.0,
-                        height: 50.0,
-                        cornerRadius: 10.0,
+                        height: 52.0,
+                        cornerRadius: 26.0,
                         gloss: false,
                         isEnabled: totalSelectedSize != 0,
                         animationName: nil,

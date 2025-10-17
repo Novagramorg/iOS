@@ -46,6 +46,7 @@ swift_library(
         "//submodules/ContextUI",
         "//submodules/PromptUI",
         "//submodules/DirectMediaImageCache",
+        "//submodules/TelegramUI/Components/GlassBarButtonComponent",
     ],
     visibility = [
         "//visibility:public",
