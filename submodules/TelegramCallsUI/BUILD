@@ -128,6 +128,8 @@ swift_library(
         "//submodules/TelegramUI/Components/TextFieldComponent",
         "//submodules/ReactionSelectionNode",
         "//submodules/TelegramUI/Components/EntityKeyboard",
+        "//submodules/TelegramUI/Components/EdgeEffect",
+        "//submodules/PremiumUI",
     ],
     visibility = [
         "//visibility:public",

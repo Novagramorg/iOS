@@ -87,6 +87,8 @@ import PostSuggestionsSettingsScreen
 import ForumSettingsScreen
 import ForumCreateTopicScreen
 import GlassBackgroundComponent
+import AttachmentFileController
+import NewContactScreen
 
 private final class AccountUserInterfaceInUseContext {
     let subscribers = Bag<(Bool) -> Void>()
@@ -3970,6 +3972,10 @@ public final class SharedAccountContextImpl: SharedAccountContext {
     
     public func makeChannelMembersSearchController(params: ChannelMembersSearchControllerParams) -> ChannelMembersSearchController {
         return ChannelMembersSearchControllerImpl(params: params)
+    }
+    
+    public func makeNewContactScreen(context: AccountContext, firstName: String?, lastName: String?, phoneNumber: String?) -> ViewController {
+        return NewContactScreen(context: context, initialData: NewContactScreen.initialData(firstName: firstName, lastName: lastName, phoneNumber: phoneNumber), completion: { _ in })
     }
 }
 

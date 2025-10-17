@@ -3588,7 +3588,7 @@ public final class StoryItemSetContainerComponent: Component {
                                                         return false
                                                     }
                                                     if case .undo = action {
-                                                        let _ =  component.context.engine.contacts.addContactInteractively(peerId: peer.id, firstName: user.firstName ?? "", lastName: user.lastName ?? "", phoneNumber: user.phone ?? "", addToPrivacyExceptions: false).startStandalone()
+                                                        let _ =  component.context.engine.contacts.addContactInteractively(peerId: peer.id, firstName: user.firstName ?? "", lastName: user.lastName ?? "", phoneNumber: user.phone ?? "", noteText: "", noteEntities: [], addToPrivacyExceptions: false).startStandalone()
                                                     }
                                                     return false
                                                 }

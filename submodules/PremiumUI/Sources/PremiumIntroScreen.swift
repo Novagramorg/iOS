@@ -10,6 +10,7 @@ import PresentationDataUtils
 import ViewControllerComponent
 import AccountContext
 import SolidRoundedButtonComponent
+import ButtonComponent
 import MultilineTextComponent
 import MultilineTextWithEntitiesComponent
 import BundleIconComponent
@@ -2098,7 +2099,7 @@ private final class PremiumIntroScreenContentComponent: CombinedComponent {
                     context.add(optionsSection
                         .position(CGPoint(x: availableWidth / 2.0, y: size.height + optionsSection.size.height / 2.0))
                         .clipsToBounds(true)
-                        .cornerRadius(10.0)
+                        .cornerRadius(26.0)
                     )
                     size.height += optionsSection.size.height
                     
@@ -2261,6 +2262,7 @@ private final class PremiumIntroScreenContentComponent: CombinedComponent {
                 let perksSection = perksSection.update(
                     component: ListSectionComponent(
                         theme: environment.theme,
+                        style: .glass,
                         header: AnyComponent(MultilineTextComponent(
                             text: .plain(NSAttributedString(
                                 string: strings.Premium_WhatsIncluded.uppercased(),
@@ -2504,6 +2506,7 @@ private final class PremiumIntroScreenContentComponent: CombinedComponent {
                 let businessSection = businessSection.update(
                     component: ListSectionComponent(
                         theme: environment.theme,
+                        style: .glass,
                         header: nil,
                         footer: nil,
                         items: perksItems
@@ -2531,6 +2534,7 @@ private final class PremiumIntroScreenContentComponent: CombinedComponent {
                 if let accountContext = context.component.screenContext.context {
                     perksItems.append(AnyComponentWithIdentity(id: perksItems.count, component: AnyComponent(ListActionItemComponent(
                         theme: environment.theme,
+                        style: .glass,
                         title: AnyComponent(VStack([
                             AnyComponentWithIdentity(id: AnyHashable(0), component: AnyComponent(MultilineTextComponent(
                                 text: .plain(NSAttributedString(
@@ -2573,6 +2577,7 @@ private final class PremiumIntroScreenContentComponent: CombinedComponent {
                 
                 perksItems.append(AnyComponentWithIdentity(id: perksItems.count, component: AnyComponent(ListActionItemComponent(
                     theme: environment.theme,
+                    style: .glass,
                     title: AnyComponent(VStack([
                         AnyComponentWithIdentity(id: AnyHashable(0), component: AnyComponent(MultilineTextComponent(
                             text: .plain(NSAttributedString(
@@ -2607,6 +2612,7 @@ private final class PremiumIntroScreenContentComponent: CombinedComponent {
                 
                 perksItems.append(AnyComponentWithIdentity(id: perksItems.count, component: AnyComponent(ListActionItemComponent(
                     theme: environment.theme,
+                    style: .glass,
                     title: AnyComponent(VStack([
                         AnyComponentWithIdentity(id: AnyHashable(0), component: AnyComponent(MultilineTextComponent(
                             text: .plain(NSAttributedString(
@@ -2642,6 +2648,7 @@ private final class PremiumIntroScreenContentComponent: CombinedComponent {
                 let moreBusinessSection = moreBusinessSection.update(
                     component: ListSectionComponent(
                         theme: environment.theme,
+                        style: .glass,
                         header: AnyComponent(MultilineTextComponent(
                             text: .plain(NSAttributedString(
                                 string: strings.Business_MoreFeaturesTitle.uppercased(),
@@ -2689,6 +2696,7 @@ private final class PremiumIntroScreenContentComponent: CombinedComponent {
                 var adsSettingsItems: [AnyComponentWithIdentity<Empty>] = []
                 adsSettingsItems.append(AnyComponentWithIdentity(id: 0, component: AnyComponent(ListActionItemComponent(
                     theme: environment.theme,
+                    style: .glass,
                     title: AnyComponent(VStack([
                         AnyComponentWithIdentity(id: AnyHashable(0), component: AnyComponent(MultilineTextComponent(
                             text: .plain(NSAttributedString(
@@ -2726,6 +2734,7 @@ private final class PremiumIntroScreenContentComponent: CombinedComponent {
                 let adsSettingsSection = adsSettingsSection.update(
                     component: ListSectionComponent(
                         theme: environment.theme,
+                        style: .glass,
                         header: AnyComponent(MultilineTextComponent(
                             text: .plain(NSAttributedString(
                                 string: strings.Business_AdsTitle.uppercased(),
@@ -2805,7 +2814,7 @@ private final class PremiumIntroScreenContentComponent: CombinedComponent {
                 } else {
                     layoutPerks()
                 
-                    let textPadding: CGFloat = 13.0
+                    let textPadding: CGFloat = 17.0
                     
                     let infoTitle = infoTitle.update(
                         component: MultilineTextComponent(
@@ -2844,7 +2853,7 @@ private final class PremiumIntroScreenContentComponent: CombinedComponent {
                     let infoBackground = infoBackground.update(
                         component: RoundedRectangle(
                             color: environment.theme.list.itemBlocksBackgroundColor,
-                            cornerRadius: 10.0
+                            cornerRadius: 26.0
                         ),
                         environment: {},
                         availableSize: CGSize(width: availableWidth - sideInsets, height: infoText.size.height + textPadding * 2.0),
@@ -3828,8 +3837,9 @@ private final class PremiumIntroScreenComponent: CombinedComponent {
                     }
                 }
                 
+                let buttonSideInset: CGFloat = 36.0
+                
                 let controller = environment.controller
-                let sideInset: CGFloat = 16.0
                 let button = button.update(
                     component: SolidRoundedButtonComponent(
                         title: buttonTitle,
@@ -3844,8 +3854,8 @@ private final class PremiumIntroScreenComponent: CombinedComponent {
                             ],
                             foregroundColor: .white
                         ),
-                        height: 50.0,
-                        cornerRadius: 11.0,
+                        height: 52.0,
+                        cornerRadius: 26.0,
                         gloss: true,
                         isLoading: state.inProgress,
                         action: {
@@ -3857,7 +3867,7 @@ private final class PremiumIntroScreenComponent: CombinedComponent {
                             }
                         }
                     ),
-                    availableSize: CGSize(width: context.availableSize.width - sideInset * 2.0 - environment.safeInsets.left - environment.safeInsets.right, height: 50.0),
+                    availableSize: CGSize(width: context.availableSize.width - buttonSideInset * 2.0 - environment.safeInsets.left - environment.safeInsets.right, height: 52.0),
                     transition: context.transition)
                                
                 let bottomPanel = bottomPanel.update(

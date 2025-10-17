@@ -27,6 +27,8 @@ import EmojiSuggestionsComponent
 import TextFormat
 import TextFieldComponent
 import ListComposePollOptionComponent
+import EdgeEffect
+import GlassBarButtonComponent
 
 public final class ComposedPoll {
     public struct Text {
@@ -110,6 +112,8 @@ final class ComposePollScreenComponent: Component {
     
     final class View: UIView, UIScrollViewDelegate {
         private let scrollView: UIScrollView
+        private let edgeEffectView: EdgeEffectView
+        
         private var reactionInput: ComponentView<Empty>?
         private let pollTextSection = ComponentView<Empty>()
         private let quizAnswerSection = ComponentView<Empty>()
@@ -120,7 +124,10 @@ final class ComposePollScreenComponent: Component {
         private var pollOptionsSectionContainer: ListSectionContentView
         
         private let pollSettingsSection = ComponentView<Empty>()
-        private let actionButton = ComponentView<Empty>()
+        
+        private let title = ComponentView<Empty>()
+        private let cancelButton = ComponentView<Empty>()
+        private let doneButton = ComponentView<Empty>()
         
         private var reactionSelectionControl: ComponentView<Empty>?
         
@@ -178,12 +185,16 @@ final class ComposePollScreenComponent: Component {
             self.scrollView.contentInsetAdjustmentBehavior = .never
             self.scrollView.alwaysBounceVertical = true
             
+            self.edgeEffectView = EdgeEffectView()
+            
             self.pollOptionsSectionContainer = ListSectionContentView(frame: CGRect())
             
             super.init(frame: frame)
             
             self.scrollView.delegate = self
             self.addSubview(self.scrollView)
+            
+            self.addSubview(self.edgeEffectView)
             
             let reorderRecognizer = ReorderGestureRecognizer(
                 shouldBegin: { [weak self] point in
@@ -851,6 +862,7 @@ final class ComposePollScreenComponent: Component {
             pollTextSectionItems.append(AnyComponentWithIdentity(id: 0, component: AnyComponent(ListComposePollOptionComponent(
                 externalState: self.pollTextInputState,
                 context: component.context,
+                style: .glass,
                 theme: theme,
                 strings: environment.strings,
                 resetText: self.resetPollText.flatMap { resetText in
@@ -894,6 +906,7 @@ final class ComposePollScreenComponent: Component {
                 transition: transition,
                 component: AnyComponent(ListSectionComponent(
                     theme: theme,
+                    style: .glass,
                     header: AnyComponent(MultilineTextComponent(
                         text: .plain(NSAttributedString(
                             string: environment.strings.CreatePoll_TextHeader,
@@ -951,6 +964,7 @@ final class ComposePollScreenComponent: Component {
                 pollOptionsSectionItems.append(AnyComponentWithIdentity(id: pollOption.id, component: AnyComponent(ListComposePollOptionComponent(
                     externalState: pollOption.textInputState,
                     context: component.context,
+                    style: .glass,
                     theme: theme,
                     strings: environment.strings,
                     resetText: pollOption.resetText.flatMap { resetText in
@@ -1092,6 +1106,7 @@ final class ComposePollScreenComponent: Component {
             let pollOptionsSectionUpdateResult = self.pollOptionsSectionContainer.update(
                 configuration: ListSectionContentView.Configuration(
                     theme: theme,
+                    style: .glass,
                     displaySeparators: true,
                     extendsItemHighlightToSection: false,
                     background: .all
@@ -1231,6 +1246,7 @@ final class ComposePollScreenComponent: Component {
             if canBePublic {
                 pollSettingsSectionItems.append(AnyComponentWithIdentity(id: "anonymous", component: AnyComponent(ListActionItemComponent(
                     theme: theme,
+                    style: .glass,
                     title: AnyComponent(VStack([
                         AnyComponentWithIdentity(id: AnyHashable(0), component: AnyComponent(MultilineTextComponent(
                             text: .plain(NSAttributedString(
@@ -1253,6 +1269,7 @@ final class ComposePollScreenComponent: Component {
             }
             pollSettingsSectionItems.append(AnyComponentWithIdentity(id: "multiAnswer", component: AnyComponent(ListActionItemComponent(
                 theme: theme,
+                style: .glass,
                 title: AnyComponent(VStack([
                     AnyComponentWithIdentity(id: AnyHashable(0), component: AnyComponent(MultilineTextComponent(
                         text: .plain(NSAttributedString(
@@ -1277,6 +1294,7 @@ final class ComposePollScreenComponent: Component {
             ))))
             pollSettingsSectionItems.append(AnyComponentWithIdentity(id: "quiz", component: AnyComponent(ListActionItemComponent(
                 theme: theme,
+                style: .glass,
                 title: AnyComponent(VStack([
                     AnyComponentWithIdentity(id: AnyHashable(0), component: AnyComponent(MultilineTextComponent(
                         text: .plain(NSAttributedString(
@@ -1304,6 +1322,7 @@ final class ComposePollScreenComponent: Component {
                 transition: transition,
                 component: AnyComponent(ListSectionComponent(
                     theme: theme,
+                    style: .glass,
                     header: nil,
                     footer: AnyComponent(MultilineTextComponent(
                         text: .plain(NSAttributedString(
@@ -1334,6 +1353,7 @@ final class ComposePollScreenComponent: Component {
                 transition: transition,
                 component: AnyComponent(ListSectionComponent(
                     theme: theme,
+                    style: .glass,
                     header: AnyComponent(MultilineTextComponent(
                         text: .plain(NSAttributedString(
                             string: environment.strings.CreatePoll_ExplanationHeader,
@@ -1354,6 +1374,7 @@ final class ComposePollScreenComponent: Component {
                         AnyComponentWithIdentity(id: 0, component: AnyComponent(ListComposePollOptionComponent(
                             externalState: self.quizAnswerTextInputState,
                             context: component.context,
+                            style: .glass,
                             theme: theme,
                             strings: environment.strings,
                             resetText: self.resetQuizAnswerText.flatMap { resetText in
@@ -1620,6 +1641,104 @@ final class ComposePollScreenComponent: Component {
                 self.scrollView.verticalScrollIndicatorInsets = scrollInsets
             }
             
+            let edgeEffectHeight: CGFloat = 66.0
+            let edgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: availableSize.width, height: edgeEffectHeight))
+            transition.setFrame(view: self.edgeEffectView, frame: edgeEffectFrame)
+            self.edgeEffectView.update(content: theme.list.blocksBackgroundColor, alpha: 1.0, rect: edgeEffectFrame, edge: .top, edgeSize: edgeEffectFrame.height, transition: transition)
+            
+            let title = self.isQuiz ? environment.strings.CreatePoll_QuizTitle : environment.strings.CreatePoll_Title
+            let titleSize = self.title.update(
+                transition: .immediate,
+                component: AnyComponent(
+                    MultilineTextComponent(
+                        text: .plain(
+                            NSAttributedString(
+                                string: title,
+                                font: Font.semibold(17.0),
+                                textColor: environment.theme.rootController.navigationBar.primaryTextColor
+                            )
+                        )
+                    )
+                ),
+                environment: {},
+                containerSize: CGSize(width: 200.0, height: 40.0)
+            )
+            let titleFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((availableSize.width - titleSize.width) / 2.0), y: floorToScreenPixels((environment.navigationHeight - titleSize.height) / 2.0) + 3.0), size: titleSize)
+            if let titleView = self.title.view {
+                if titleView.superview == nil {
+                    self.addSubview(titleView)
+                }
+                transition.setFrame(view: titleView, frame: titleFrame)
+            }
+            
+            let barButtonSize = CGSize(width: 40.0, height: 40.0)
+            let cancelButtonSize = self.cancelButton.update(
+                transition: transition,
+                component: AnyComponent(GlassBarButtonComponent(
+                    size: barButtonSize,
+                    backgroundColor: environment.theme.rootController.navigationBar.glassBarButtonBackgroundColor,
+                    isDark: environment.theme.overallDarkAppearance,
+                    state: .generic,
+                    component: AnyComponentWithIdentity(id: "close", component: AnyComponent(
+                        BundleIconComponent(
+                            name: "Navigation/Close",
+                            tintColor: environment.theme.rootController.navigationBar.glassBarButtonForegroundColor
+                        )
+                    )),
+                    action: { [weak self] _ in
+                        guard let self, let controller = self.environment?.controller() as? ComposePollScreen else {
+                            return
+                        }
+                        controller.dismiss()
+                    }
+                )),
+                environment: {},
+                containerSize: barButtonSize
+            )
+            let cancelButtonFrame = CGRect(origin: CGPoint(x: environment.safeInsets.left + 16.0, y: 16.0), size: cancelButtonSize)
+            if let cancelButtonView = self.cancelButton.view {
+                if cancelButtonView.superview == nil {
+                    self.addSubview(cancelButtonView)
+                }
+                transition.setFrame(view: cancelButtonView, frame: cancelButtonFrame)
+            }
+            
+            let isValid = self.validatedInput() != nil
+            let doneButtonSize = self.doneButton.update(
+                transition: transition,
+                component: AnyComponent(GlassBarButtonComponent(
+                    size: barButtonSize,
+                    backgroundColor: isValid ? environment.theme.list.itemCheckColors.fillColor : environment.theme.list.itemCheckColors.fillColor.desaturated().withMultipliedAlpha(0.5),
+                    isDark: environment.theme.overallDarkAppearance,
+                    state: .tintedGlass,
+                    isEnabled: isValid,
+                    component: AnyComponentWithIdentity(id: "done", component: AnyComponent(
+                        BundleIconComponent(
+                            name: "Navigation/Done",
+                            tintColor: environment.theme.list.itemCheckColors.foregroundColor
+                        )
+                    )),
+                    action: { [weak self] _ in
+                        guard let self, let controller = self.environment?.controller() as? ComposePollScreen else {
+                            return
+                        }
+                        if let input = self.validatedInput() {
+                            controller.completion(input)
+                        }
+                        controller.dismiss()
+                    }
+                )),
+                environment: {},
+                containerSize: barButtonSize
+            )
+            let doneButtonFrame = CGRect(origin: CGPoint(x: availableSize.width - environment.safeInsets.right - 16.0 - doneButtonSize.width, y: 16.0), size: doneButtonSize)
+            if let doneButtonView = self.doneButton.view {
+                if doneButtonView.superview == nil {
+                    self.addSubview(doneButtonView)
+                }
+                transition.setFrame(view: doneButtonView, frame: doneButtonFrame)
+            }
+            
             if let recenterOnTag {
                 if let targetView = self.collectTextInputStates().first(where: { $0.view.currentTag === recenterOnTag })?.view {
                     let caretRect = targetView.convert(targetView.bounds, to: self.scrollView)
@@ -1652,18 +1771,6 @@ final class ComposePollScreenComponent: Component {
                     DispatchQueue.main.async { [weak controller] in
                         controller?.requestAttachmentMenuExpansion()
                     }
-                }
-            }
-            
-            let isValid = self.validatedInput() != nil
-            if let controller = environment.controller() as? ComposePollScreen, let sendButtonItem = controller.sendButtonItem {
-                if sendButtonItem.isEnabled != isValid {
-                    sendButtonItem.isEnabled = isValid
-                }
-                
-                let controllerTitle = self.isQuiz ? presentationData.strings.CreatePoll_QuizTitle : presentationData.strings.CreatePoll_Title
-                if controller.title != controllerTitle {
-                    controller.title = controllerTitle
                 }
             }
             
@@ -1708,7 +1815,7 @@ public class ComposePollScreen: ViewControllerComponentContainer, AttachmentCont
     }
     
     private let context: AccountContext
-    private let completion: (ComposedPoll) -> Void
+    fileprivate let completion: (ComposedPoll) -> Void
     private var isDismissed: Bool = false
     
     fileprivate private(set) var sendButtonItem: UIBarButtonItem?
@@ -1761,17 +1868,25 @@ public class ComposePollScreen: ViewControllerComponentContainer, AttachmentCont
             isQuiz: isQuiz,
             initialData: initialData,
             completion: completion
-        ), navigationBarAppearance: .default, theme: .default)
+        ), navigationBarAppearance: .transparent, theme: .default)
+        
+        self._hasGlassStyle = true
         
         let presentationData = context.sharedContext.currentPresentationData.with { $0 }
-        
-        self.title = isQuiz == true ? presentationData.strings.CreatePoll_QuizTitle : presentationData.strings.CreatePoll_Title
-        
-        self.navigationItem.setLeftBarButton(UIBarButtonItem(title: presentationData.strings.Common_Cancel, style: .plain, target: self, action: #selector(self.cancelPressed)), animated: false)
+                
+        if self._hasGlassStyle {
+            self.navigationItem.setLeftBarButton(UIBarButtonItem(customView: UIView()), animated: false)
+        } else {
+            self.navigationItem.setLeftBarButton(UIBarButtonItem(title: presentationData.strings.Common_Cancel, style: .plain, target: self, action: #selector(self.cancelPressed)), animated: false)
+        }
         
         let sendButtonItem = UIBarButtonItem(title: presentationData.strings.CreatePoll_Create, style: .done, target: self, action: #selector(self.sendPressed))
         self.sendButtonItem = sendButtonItem
-        self.navigationItem.setRightBarButton(sendButtonItem, animated: false)
+        if self._hasGlassStyle {
+        
+        } else {
+            self.navigationItem.setRightBarButton(sendButtonItem, animated: false)
+        }
         sendButtonItem.isEnabled = false
         
         self.scrollToTop = { [weak self] in
