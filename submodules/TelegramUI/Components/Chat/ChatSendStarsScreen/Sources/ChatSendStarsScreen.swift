@@ -26,112 +26,6 @@ import StarsBalanceOverlayComponent
 import TelegramStringFormatting
 import ChatScheduleTimeController
 
-private final class BalanceComponent: CombinedComponent {
-    let context: AccountContext
-    let theme: PresentationTheme
-    let strings: PresentationStrings
-    let balance: StarsAmount?
-    
-    init(
-        context: AccountContext,
-        theme: PresentationTheme,
-        strings: PresentationStrings,
-        balance: StarsAmount?
-    ) {
-        self.context = context
-        self.theme = theme
-        self.strings = strings
-        self.balance = balance
-    }
-    
-    static func ==(lhs: BalanceComponent, rhs: BalanceComponent) -> Bool {
-        if lhs.context !== rhs.context {
-            return false
-        }
-        if lhs.theme !== rhs.theme {
-            return false
-        }
-        if lhs.strings !== rhs.strings {
-            return false
-        }
-        if lhs.balance != rhs.balance {
-            return false
-        }
-        return true
-    }
-    
-    static var body: Body {
-        let title = Child(MultilineTextComponent.self)
-        let balance = Child(MultilineTextComponent.self)
-        let icon = Child(BundleIconComponent.self)
-        
-        return { context in
-            var size = CGSize(width: 0.0, height: 0.0)
-            
-            let title = title.update(
-                component: MultilineTextComponent(
-                    text: .plain(NSAttributedString(string: context.component.strings.SendStarReactions_Balance, font: Font.regular(14.0), textColor: context.component.theme.list.itemPrimaryTextColor))
-                ),
-                availableSize: context.availableSize,
-                transition: .immediate
-            )
-            
-            size.width = max(size.width, title.size.width)
-            size.height += title.size.height
-            
-            let balanceText: String
-            if let value = context.component.balance {
-                balanceText = "\(value.stringValue)"
-            } else {
-                balanceText = "..."
-            }
-            let balance = balance.update(
-                component: MultilineTextComponent(
-                    text: .plain(NSAttributedString(string: balanceText, font: Font.medium(15.0), textColor: context.component.theme.list.itemPrimaryTextColor))
-                ),
-                availableSize: context.availableSize,
-                transition: .immediate
-            )
-            
-            let iconSize = CGSize(width: 18.0, height: 18.0)
-            let icon = icon.update(
-                component: BundleIconComponent(
-                    name: "Premium/Stars/StarLarge",
-                    tintColor: nil
-                ),
-                availableSize: iconSize,
-                transition: context.transition
-            )
-            
-            let titleSpacing: CGFloat = 1.0
-            let iconSpacing: CGFloat = 2.0
-            
-            size.height += titleSpacing
-            
-            size.width = max(size.width, icon.size.width + iconSpacing + balance.size.width)
-            size.height += balance.size.height
-            
-            context.add(
-                title.position(
-                    title.size.centered(in: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: title.size)).center
-                )
-            )
-            context.add(
-                balance.position(
-                    balance.size.centered(in: CGRect(origin: CGPoint(x: icon.size.width + iconSpacing, y: title.size.height + titleSpacing), size: balance.size)).center
-                )
-            )
-            context.add(
-                icon.position(
-                    icon.size.centered(in: CGRect(origin: CGPoint(x: -1.0, y: title.size.height + titleSpacing), size: icon.size)).center
-                )
-            )
-
-            return size
-        }
-    }
-}
-
 private final class BadgeComponent: Component {
     let theme: PresentationTheme
     let title: String
@@ -859,12 +753,14 @@ private final class ChatSendStarsScreenComponent: Component {
     private struct ItemLayout: Equatable {
         var containerSize: CGSize
         var containerInset: CGFloat
+        var containerCornerRadius: CGFloat
         var bottomInset: CGFloat
         var topInset: CGFloat
         
-        init(containerSize: CGSize, containerInset: CGFloat, bottomInset: CGFloat, topInset: CGFloat) {
+        init(containerSize: CGSize, containerInset: CGFloat, containerCornerRadius: CGFloat, bottomInset: CGFloat, topInset: CGFloat) {
             self.containerSize = containerSize
             self.containerInset = containerInset
+            self.containerCornerRadius = containerCornerRadius
             self.bottomInset = bottomInset
             self.topInset = topInset
         }
@@ -961,6 +857,7 @@ private final class ChatSendStarsScreenComponent: Component {
     
     final class View: UIView, UIScrollViewDelegate {
         private let dimView: UIView
+        private let containerView: UIView
         private let backgroundLayer: SimpleLayer
         private let navigationBarContainer: SparseContainerView
         private let scrollView: ScrollView
@@ -970,6 +867,7 @@ private final class ChatSendStarsScreenComponent: Component {
         
         private var balanceOverlay = ComponentView<Empty>()
         
+        private let backgroundHandleView: UIImageView
         private let leftButton = ComponentView<Empty>()
         private let peerSelectorButton = ComponentView<Empty>()
         private let closeButton = ComponentView<Empty>()
@@ -983,6 +881,8 @@ private final class ChatSendStarsScreenComponent: Component {
         private let sliderBackground = ComponentView<Empty>()
         private let slider = ComponentView<Empty>()
         private let badge = ComponentView<Empty>()
+        
+        private var liveStreamPerks: [ComponentView<Empty>] = []
         
         private var topPeersLeftSeparator: SimpleLayer?
         private var topPeersRightSeparator: SimpleLayer?
@@ -1032,10 +932,17 @@ private final class ChatSendStarsScreenComponent: Component {
             self.bottomOverscrollLimit = 200.0
             
             self.dimView = UIView()
+            self.containerView = UIView()
+            
+            self.containerView.clipsToBounds = true
+            self.containerView.layer.cornerRadius = 40.0
+            self.containerView.layer.maskedCorners = [.layerMinXMaxYCorner, .layerMaxXMaxYCorner]
             
             self.backgroundLayer = SimpleLayer()
             self.backgroundLayer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
-            self.backgroundLayer.cornerRadius = 10.0
+            self.backgroundLayer.cornerRadius = 40.0
+            
+            self.backgroundHandleView = UIImageView()
             
             self.navigationBarContainer = SparseContainerView()
             
@@ -1051,7 +958,8 @@ private final class ChatSendStarsScreenComponent: Component {
             super.init(frame: frame)
             
             self.addSubview(self.dimView)
-            self.layer.addSublayer(self.backgroundLayer)
+            self.addSubview(self.containerView)
+            self.containerView.layer.addSublayer(self.backgroundLayer)
                         
             self.scrollView.delaysContentTouches = true
             self.scrollView.canCancelContentTouches = true
@@ -1070,16 +978,16 @@ private final class ChatSendStarsScreenComponent: Component {
             self.scrollView.delegate = self
             self.scrollView.clipsToBounds = true
             
-            self.addSubview(self.scrollContentClippingView)
+            self.containerView.addSubview(self.scrollContentClippingView)
             self.scrollContentClippingView.addSubview(self.scrollView)
             
             self.scrollView.addSubview(self.scrollContentView)
             
-            self.addSubview(self.navigationBarContainer)
+            self.containerView.addSubview(self.navigationBarContainer)
             
             self.dimView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(self.dimTapGesture(_:))))
             
-            self.addSubnode(self.hierarchyTrackingNode)
+            self.containerView.addSubnode(self.hierarchyTrackingNode)
             
             self.hierarchyTrackingNode.updated = { [weak self] value in
                 guard let self else {
@@ -1120,7 +1028,7 @@ private final class ChatSendStarsScreenComponent: Component {
         }
         
         func scrollViewWillEndDragging(_ scrollView: UIScrollView, withVelocity velocity: CGPoint, targetContentOffset: UnsafeMutablePointer<CGPoint>) {
-            guard let itemLayout = self.itemLayout, let topOffsetDistance = self.topOffsetDistance else {
+            /*guard let itemLayout = self.itemLayout, let topOffsetDistance = self.topOffsetDistance else {
                 return
             }
             
@@ -1130,7 +1038,7 @@ private final class ChatSendStarsScreenComponent: Component {
             if topOffset < topOffsetDistance {
                 targetContentOffset.pointee.y = scrollView.contentOffset.y
                 scrollView.setContentOffset(CGPoint(x: 0.0, y: itemLayout.topInset), animated: true)
-            }
+            }*/
         }
         
         override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
@@ -1170,7 +1078,7 @@ private final class ChatSendStarsScreenComponent: Component {
         }
         
         private func updateScrolling(transition: ComponentTransition) {
-            guard let environment = self.environment, let controller = environment.controller(), let itemLayout = self.itemLayout else {
+            guard let itemLayout = self.itemLayout else {
                 return
             }
             var topOffset = -self.scrollView.bounds.minY + itemLayout.topInset
@@ -1179,13 +1087,22 @@ private final class ChatSendStarsScreenComponent: Component {
             
             transition.setPosition(view: self.navigationBarContainer, position: CGPoint(x: 0.0, y: topOffset + itemLayout.containerInset))
             
-            let topOffsetDistance: CGFloat = min(60.0, floor(itemLayout.containerSize.height * 0.25))
-            self.topOffsetDistance = topOffsetDistance
-            var topOffsetFraction = topOffset / topOffsetDistance
+            var topOffsetFraction = self.scrollView.bounds.minY / 100.0
             topOffsetFraction = max(0.0, min(1.0, topOffsetFraction))
             
-            let transitionFactor: CGFloat = 1.0 - topOffsetFraction
-            controller.updateModalStyleOverlayTransitionFactor(transitionFactor, transition: transition.containedViewLayoutTransition)
+            let minScale: CGFloat = (itemLayout.containerSize.width - 6.0 * 2.0) / itemLayout.containerSize.width
+            let minScaledTranslation: CGFloat = (itemLayout.containerSize.height - itemLayout.containerSize.height * minScale) * 0.5 - 6.0
+            let minScaledCornerRadius: CGFloat = itemLayout.containerCornerRadius
+            
+            let scale = minScale * (1.0 - topOffsetFraction) + 1.0 * topOffsetFraction
+            let scaledTranslation = minScaledTranslation * (1.0 - topOffsetFraction)
+            let scaledCornerRadius = minScaledCornerRadius * (1.0 - topOffsetFraction) + itemLayout.containerCornerRadius * topOffsetFraction
+            
+            var containerTransform = CATransform3DIdentity
+            containerTransform = CATransform3DTranslate(containerTransform, 0.0, scaledTranslation, 0.0)
+            containerTransform = CATransform3DScale(containerTransform, scale, scale, scale)
+            transition.setTransform(view: self.containerView, transform: containerTransform)
+            transition.setCornerRadius(layer: self.containerView.layer, cornerRadius: scaledCornerRadius)
         }
         
         func animateIn() {
@@ -1546,7 +1463,7 @@ private final class ChatSendStarsScreenComponent: Component {
             
             if themeUpdated {
                 self.dimView.backgroundColor = UIColor(white: 0.0, alpha: 0.5)
-                self.backgroundLayer.backgroundColor = environment.theme.list.plainBackgroundColor.cgColor
+                self.backgroundLayer.backgroundColor = environment.theme.actionSheet.opaqueItemBackgroundColor.cgColor
                 
                 var locations: [NSNumber] = []
                 var colors: [CGColor] = []
@@ -1729,37 +1646,78 @@ private final class ChatSendStarsScreenComponent: Component {
                 
                 let starsRect = CGRect(origin: .zero, size: CGSize(width: availableSize.width, height: sliderForegroundFrame.midY))
                 self.badgeStars.frame = starsRect
-                self.badgeStars.update(size: starsRect.size, emitterPosition: CGPoint(x: badgeFrame.minX, y: badgeFrame.midY - 64.0))
+                self.badgeStars.update(size: starsRect.size, color: sliderColor, emitterPosition: CGPoint(x: badgeFrame.minX, y: badgeFrame.midY - 64.0))
             }
             
-            contentHeight += 123.0
+            switch component.initialData.subjectInitialData {
+            case .liveStreamMessage:
+                //LiveStreamPerkComponent
+                
+                //TODO:localize
+                let params = GroupCallMessagesContext.getStarAmountParamMapping(value: Int64(self.amount.realValue))
+                var perks: [(String, String)] = []
+                
+                perks.append((
+                    shortTimeIntervalString(strings: environment.strings, value: Int32(params.period), useLargeFormat: false),
+                    "pin in chat"
+                ))
+                
+                perks.append((
+                    "\(params.maxLength)",
+                    "characters"
+                ))
+                
+                perks.append((
+                    "\(params.emojiCount)",
+                    "emoji"
+                ))
+                
+                contentHeight += 180.0
+                
+                let perkHeight: CGFloat = 58.0
+                let perkSpacing: CGFloat = 10.0
+                let perkWidth: CGFloat = floor((availableSize.width - perkSpacing * CGFloat(perks.count - 1)) / CGFloat(perks.count))
+                
+                for i in 0 ..< perks.count {
+                    var perkFrame = CGRect(origin: CGPoint(x: sideInset + CGFloat(i) * (perkWidth + perkSpacing), y: contentHeight), size: CGSize(width: perkWidth, height: perkHeight))
+                    if i == perks.count - 1 {
+                        perkFrame.size.width = max(0.0, availableSize.width - sideInset - perkFrame.minX)
+                    }
+                    let perkView: ComponentView<Empty>
+                    if self.liveStreamPerks.count > i {
+                        perkView = self.liveStreamPerks[i]
+                    } else {
+                        perkView = ComponentView()
+                        self.liveStreamPerks.append(perkView)
+                    }
+                    let perk = perks[i]
+                    let _ = perkView.update(
+                        transition: transition,
+                        component: AnyComponent(LiveStreamPerkComponent(
+                            title: perk.0,
+                            subtitle: perk.1,
+                            theme: environment.theme
+                        )),
+                        environment: {},
+                        containerSize: perkFrame.size
+                    )
+                    if let perkComponentView = perkView.view {
+                        if perkComponentView.superview == nil {
+                            self.scrollContentView.addSubview(perkComponentView)
+                        }
+                        transition.setFrame(view: perkComponentView, frame: perkFrame)
+                    }
+                }
+                
+                contentHeight += perkHeight - 46.0
+            case .react:
+                contentHeight += 123.0
+            }
             
-            var leftButtonFrameValue: CGRect?
             switch component.initialData.subjectInitialData {
             case let .react(reactData):
                 var sendAsPeers: [EnginePeer] = [reactData.myPeer]
                 sendAsPeers.append(contentsOf: self.channelsForPublicReaction)
-                
-                let leftButtonSize = self.leftButton.update(
-                    transition: transition,
-                    component: AnyComponent(BalanceComponent(
-                        context: component.context,
-                        theme: environment.theme,
-                        strings: environment.strings,
-                        balance: self.balance
-                    )),
-                    environment: {},
-                    containerSize: CGSize(width: 120.0, height: 100.0)
-                )
-                let leftButtonFrame = CGRect(origin: CGPoint(x: sideInset, y: floor((56.0 - leftButtonSize.height) * 0.5)), size: leftButtonSize)
-                if let leftButtonView = self.leftButton.view {
-                    if leftButtonView.superview == nil {
-                        self.navigationBarContainer.addSubview(leftButtonView)
-                    }
-                    transition.setFrame(view: leftButtonView, frame: leftButtonFrame)
-                    leftButtonView.isHidden = sendAsPeers.count > 1
-                }
-                leftButtonFrameValue = leftButtonFrame
                 
                 let currentMyPeer = self.currentMyPeer ?? reactData.myPeer
                 
@@ -1780,7 +1738,7 @@ private final class ChatSendStarsScreenComponent: Component {
                     environment: {},
                     containerSize: CGSize(width: 120.0, height: 100.0)
                 )
-                let peerSelectorButtonFrame = CGRect(origin: CGPoint(x: sideInset, y: 1.0 + floor((56.0 - peerSelectorButtonSize.height) * 0.5)), size: peerSelectorButtonSize)
+                let peerSelectorButtonFrame = CGRect(origin: CGPoint(x: sideInset, y: 1.0 + floor((72.0 - peerSelectorButtonSize.height) * 0.5)), size: peerSelectorButtonSize)
                 if let peerSelectorButtonView = self.peerSelectorButton.view {
                     if peerSelectorButtonView.superview == nil {
                         self.navigationBarContainer.addSubview(peerSelectorButtonView)
@@ -1792,6 +1750,16 @@ private final class ChatSendStarsScreenComponent: Component {
                 break
             }
             
+            if self.backgroundHandleView.image == nil {
+                self.backgroundHandleView.image = generateStretchableFilledCircleImage(diameter: 5.0, color: .white)?.withRenderingMode(.alwaysTemplate)
+            }
+            self.backgroundHandleView.tintColor = UIColor(rgb: 0x808084, alpha: 0.1)
+            let backgroundHandleFrame = CGRect(origin: CGPoint(x: floor((availableSize.width - 36.0) * 0.5), y: 5.0), size: CGSize(width: 36.0, height: 5.0))
+            if self.backgroundHandleView.superview == nil {
+                self.navigationBarContainer.addSubview(self.backgroundHandleView)
+            }
+            transition.setFrame(view: self.backgroundHandleView, frame: backgroundHandleFrame)
+            
             if themeUpdated {
                 self.cachedCloseImage = nil
             }
@@ -1799,7 +1767,7 @@ private final class ChatSendStarsScreenComponent: Component {
             if let current = self.cachedCloseImage {
                 closeImage = current
             } else {
-                closeImage = generateCloseButtonImage(backgroundColor: UIColor(rgb: 0x808084, alpha: 0.1), foregroundColor: environment.theme.actionSheet.inputClearButtonColor)!
+                closeImage = generateCloseButtonImage(backgroundColor: UIColor(rgb: 0x808084, alpha: 0.1), foregroundColor: environment.theme.chat.inputPanel.panelControlColor)!
                 self.cachedCloseImage = closeImage
             }
             let closeButtonSize = self.closeButton.update(
@@ -1815,9 +1783,9 @@ private final class ChatSendStarsScreenComponent: Component {
                     }
                 )),
                 environment: {},
-                containerSize: CGSize(width: 30.0, height: 30.0)
+                containerSize: CGSize(width: 40.0, height: 40.0)
             )
-            let closeButtonFrame = CGRect(origin: CGPoint(x: availableSize.width - sideInset - closeButtonSize.width, y: floor((56.0 - 34.0) * 0.5)), size: closeButtonSize)
+            let closeButtonFrame = CGRect(origin: CGPoint(x: sideInset, y: 16.0), size: closeButtonSize)
             if let closeButtonView = self.closeButton.view {
                 if closeButtonView.superview == nil {
                     self.navigationBarContainer.addSubview(closeButtonView)
@@ -1853,7 +1821,7 @@ private final class ChatSendStarsScreenComponent: Component {
                         text: .plain(NSAttributedString(string: subtitleText, font: Font.regular(12.0), textColor: environment.theme.list.itemSecondaryTextColor))
                     )),
                     environment: {},
-                    containerSize: CGSize(width: availableSize.width - (leftButtonFrameValue?.maxX ?? sideInset) * 2.0, height: 100.0)
+                    containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 100.0)
                 )
             }
             
@@ -1872,7 +1840,7 @@ private final class ChatSendStarsScreenComponent: Component {
                     text: .plain(NSAttributedString(string: titleText, font: Font.semibold(17.0), textColor: environment.theme.list.itemPrimaryTextColor))
                 )),
                 environment: {},
-                containerSize: CGSize(width: availableSize.width - (leftButtonFrameValue?.maxX ?? sideInset) * 2.0, height: 100.0)
+                containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 100.0)
             )
             
             let titleSubtitleHeight: CGFloat
@@ -1882,7 +1850,7 @@ private final class ChatSendStarsScreenComponent: Component {
                 titleSubtitleHeight = titleSize.height
             }
             
-            let titleFrame = CGRect(origin: CGPoint(x: floor((availableSize.width - titleSize.width) * 0.5), y: floor((56.0 - titleSubtitleHeight) * 0.5)), size: titleSize)
+            let titleFrame = CGRect(origin: CGPoint(x: floor((availableSize.width - titleSize.width) * 0.5), y: floor((72.0 - titleSubtitleHeight) * 0.5)), size: titleSize)
             if let titleView = title.view {
                 if titleView.superview == nil {
                     self.navigationBarContainer.addSubview(titleView)
@@ -1900,7 +1868,7 @@ private final class ChatSendStarsScreenComponent: Component {
                 }
             }
             
-            contentHeight += 56.0
+            contentHeight += 72.0
             contentHeight += 8.0
             
             let text: String
@@ -2176,7 +2144,7 @@ private final class ChatSendStarsScreenComponent: Component {
                                 itemComponentView.alpha = 0.0
                             }
                             
-                            let itemFrame = CGRect(origin: CGPoint(x: itemX, y: contentHeight + 56.0), size: itemSize)
+                            let itemFrame = CGRect(origin: CGPoint(x: itemX, y: contentHeight + 72.0), size: itemSize)
                             
                             if animateItem {
                                 itemPositionTransition.setPosition(view: itemComponentView, position: itemFrame.center)
@@ -2308,10 +2276,11 @@ private final class ChatSendStarsScreenComponent: Component {
                 transition: transition,
                 component: AnyComponent(ButtonComponent(
                     background: ButtonComponent.Background(
+                        style: .glass,
                         color: environment.theme.list.itemCheckColors.fillColor,
                         foreground: environment.theme.list.itemCheckColors.foregroundColor,
                         pressedColor: environment.theme.list.itemCheckColors.fillColor.withMultipliedAlpha(0.9),
-                        cornerRadius: 10.0
+                        cornerRadius: 25.0
                     ),
                     content: AnyComponentWithIdentity(
                         id: AnyHashable(0),
@@ -2448,7 +2417,7 @@ private final class ChatSendStarsScreenComponent: Component {
             let actionButtonFrame = CGRect(origin: CGPoint(x: sideInset, y: availableSize.height - bottomPanelHeight), size: actionButtonSize)
             if let actionButtonView = actionButton.view {
                 if actionButtonView.superview == nil {
-                    self.addSubview(actionButtonView)
+                    self.containerView.addSubview(actionButtonView)
                 }
                 transition.setFrame(view: actionButtonView, frame: actionButtonFrame)
             }
@@ -2457,7 +2426,7 @@ private final class ChatSendStarsScreenComponent: Component {
                 let buttonDescriptionTextFrame = CGRect(origin: CGPoint(x: floor((availableSize.width - buttonDescriptionTextSize.width) * 0.5), y: actionButtonFrame.maxY + buttonDescriptionSpacing), size: buttonDescriptionTextSize)
                 if let buttonDescriptionTextView = buttonDescriptionText.view {
                     if buttonDescriptionTextView.superview == nil {
-                        self.addSubview(buttonDescriptionTextView)
+                        self.containerView.addSubview(buttonDescriptionTextView)
                     }
                     transition.setFrame(view: buttonDescriptionTextView, frame: buttonDescriptionTextFrame)
                 }
@@ -2474,7 +2443,7 @@ private final class ChatSendStarsScreenComponent: Component {
             
             self.scrollContentClippingView.layer.cornerRadius = 10.0
             
-            self.itemLayout = ItemLayout(containerSize: availableSize, containerInset: containerInset, bottomInset: environment.safeInsets.bottom, topInset: topInset)
+            self.itemLayout = ItemLayout(containerSize: availableSize, containerInset: containerInset, containerCornerRadius: environment.deviceMetrics.screenCornerRadius, bottomInset: environment.safeInsets.bottom, topInset: topInset)
             
             transition.setFrame(view: self.scrollContentView, frame: CGRect(origin: CGPoint(x: 0.0, y: topInset + containerInset), size: CGSize(width: availableSize.width, height: contentHeight)))
             
@@ -2496,6 +2465,9 @@ private final class ChatSendStarsScreenComponent: Component {
             }
             self.ignoreScrolling = false
             self.updateScrolling(transition: transition)
+            
+            transition.setPosition(view: self.containerView, position: CGRect(origin: CGPoint(), size: availableSize).center)
+            transition.setBounds(view: self.containerView, bounds: CGRect(origin: CGPoint(), size: availableSize))
             
             return availableSize
         }
@@ -2859,7 +2831,7 @@ public class ChatSendStarsScreen: ViewControllerComponentContainer {
 }
 
 private func generateCloseButtonImage(backgroundColor: UIColor, foregroundColor: UIColor) -> UIImage? {
-    return generateImage(CGSize(width: 30.0, height: 30.0), contextGenerator: { size, context in
+    return generateImage(CGSize(width: 40.0, height: 40.0), contextGenerator: { size, context in
         context.clear(CGRect(origin: CGPoint(), size: size))
         
         context.setFillColor(backgroundColor.cgColor)
@@ -2870,10 +2842,10 @@ private func generateCloseButtonImage(backgroundColor: UIColor, foregroundColor:
         context.setStrokeColor(foregroundColor.cgColor)
         
         context.beginPath()
-        context.move(to: CGPoint(x: 10.0, y: 10.0))
-        context.addLine(to: CGPoint(x: 20.0, y: 20.0))
-        context.move(to: CGPoint(x: 20.0, y: 10.0))
-        context.addLine(to: CGPoint(x: 10.0, y: 20.0))
+        context.move(to: CGPoint(x: 12.0, y: 12.0))
+        context.addLine(to: CGPoint(x: size.width - 12.0, y: size.height - 12.0))
+        context.move(to: CGPoint(x: size.width - 12.0, y: 12.0))
+        context.addLine(to: CGPoint(x: 12.0, y: size.height - 12.0))
         context.strokePath()
     })
 }
@@ -2881,6 +2853,7 @@ private func generateCloseButtonImage(backgroundColor: UIColor, foregroundColor:
 private final class BadgeStarsView: UIView {
     private let staticEmitterLayer = CAEmitterLayer()
     private let dynamicEmitterLayer = CAEmitterLayer()
+    private var currentColor: UIColor?
     
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -2894,7 +2867,10 @@ private final class BadgeStarsView: UIView {
     }
         
     private func setupEmitter() {
-        let color = UIColor(rgb: 0xffbe27)
+        guard let currentColor = self.currentColor else {
+            return
+        }
+        let color = currentColor
         
         self.staticEmitterLayer.emitterShape = .circle
         self.staticEmitterLayer.emitterSize = CGSize(width: 10.0, height: 5.0)
@@ -2999,8 +2975,9 @@ private final class BadgeStarsView: UIView {
         }
     }
     
-    func update(size: CGSize, emitterPosition: CGPoint) {
-        if self.staticEmitterLayer.emitterCells == nil {
+    func update(size: CGSize, color: UIColor, emitterPosition: CGPoint) {
+        if self.staticEmitterLayer.emitterCells == nil || self.currentColor != color {
+            self.currentColor = color
             self.setupEmitter()
         }
         
@@ -3239,6 +3216,116 @@ final class HeaderContextReferenceContentSource: ContextReferenceContentSource {
 
     func transitionInfo() -> ContextControllerReferenceViewInfo? {
         return ContextControllerReferenceViewInfo(referenceView: self.sourceView, contentAreaInScreenSpace: UIScreen.main.bounds, actionsPosition: self.actionsOnTop ? .top : .bottom)
+    }
+}
+
+private final class LiveStreamPerkComponent: Component {
+    let title: String
+    let subtitle: String
+    let theme: PresentationTheme
+    
+    init(
+        title: String,
+        subtitle: String,
+        theme: PresentationTheme
+    ) {
+        self.title = title
+        self.subtitle = subtitle
+        self.theme = theme
+    }
+    
+    static func ==(lhs: LiveStreamPerkComponent, rhs: LiveStreamPerkComponent) -> Bool {
+        if lhs.title != rhs.title {
+            return false
+        }
+        if lhs.subtitle != rhs.subtitle {
+            return false
+        }
+        if lhs.theme != rhs.theme {
+            return false
+        }
+        return true
+    }
+    
+    final class View: UIView {
+        let background = ComponentView<Empty>()
+        let title = ComponentView<Empty>()
+        let subtitle = ComponentView<Empty>()
+        
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+        }
+        
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
+        
+        func update(component: LiveStreamPerkComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
+            let backgroundFrame = CGRect(origin: CGPoint(), size: availableSize)
+            let _ = self.background.update(
+                transition: transition,
+                component: AnyComponent(FilledRoundedRectangleComponent(
+                    color: UIColor(rgb: 0x808084, alpha: 0.1),
+                    cornerRadius: .value(10.0),
+                    smoothCorners: true
+                )),
+                environment: {},
+                containerSize: backgroundFrame.size
+            )
+            if let backgroundView = self.background.view {
+                if backgroundView.superview == nil {
+                    self.addSubview(backgroundView)
+                }
+                transition.setFrame(view: backgroundView, frame: backgroundFrame)
+            }
+            
+            let titleSize = self.title.update(
+                transition: .immediate,
+                component: AnyComponent(MultilineTextComponent(
+                    text: .plain(NSAttributedString(string: component.title, font: Font.semibold(20.0), textColor: component.theme.list.itemPrimaryTextColor))
+                )),
+                environment: {},
+                containerSize: backgroundFrame.size
+            )
+            
+            let subtitleSize = self.subtitle.update(
+                transition: .immediate,
+                component: AnyComponent(MultilineTextComponent(
+                    text: .plain(NSAttributedString(string: component.subtitle, font: Font.regular(11.0), textColor: component.theme.list.itemPrimaryTextColor))
+                )),
+                environment: {},
+                containerSize: backgroundFrame.size
+            )
+            
+            let spacing: CGFloat = 2.0
+            
+            let titleFrame = CGRect(origin: CGPoint(x: floor((backgroundFrame.width - titleSize.width) * 0.5), y: floor((backgroundFrame.height - titleSize.height - spacing - subtitleSize.height) * 0.5)), size: titleSize)
+            let subtitleFrame = CGRect(origin: CGPoint(x: floor((backgroundFrame.width - subtitleSize.width) * 0.5), y: titleFrame.maxY + spacing), size: subtitleSize)
+            
+            if let titleView = self.title.view {
+                if titleView.superview == nil {
+                    self.addSubview(titleView)
+                }
+                titleView.frame = titleFrame
+            }
+            
+            if let subtitleView = self.subtitle.view {
+                if subtitleView.superview == nil {
+                    self.addSubview(subtitleView)
+                }
+                subtitleView.frame = subtitleFrame
+            }
+            
+            return availableSize
+        }
+    }
+    
+    func makeView() -> View {
+        return View(frame: CGRect())
+    }
+    
+    func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
+        return view.update(component: self, availableSize: availableSize, state: state, environment: environment, transition: transition)
     }
 }
 

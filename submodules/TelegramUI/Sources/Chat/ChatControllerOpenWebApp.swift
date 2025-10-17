@@ -164,7 +164,18 @@ func openWebAppImpl(
                 }, getInputContainerNode: { [weak parentController] in
                     if let parentController = parentController as? ChatControllerImpl, let layout = parentController.validLayout, case .compact = layout.metrics.widthClass {
                         return (parentController.chatDisplayNode.getWindowInputAccessoryHeight(), parentController.chatDisplayNode.inputPanelContainerNode, {
-                            return parentController.chatDisplayNode.textInputPanelNode?.makeAttachmentMenuTransition(accessoryPanelNode: nil)
+                            guard let menuTransition = parentController.chatDisplayNode.textInputPanelNode?.makeAttachmentMenuTransition(accessoryPanelNode: nil) else {
+                                return nil
+                            }
+                            return AttachmentController.InputPanelTransition(
+                                inputNode: menuTransition.inputNode,
+                                accessoryPanelNode: menuTransition.accessoryPanelNode,
+                                menuButtonNode: menuTransition.menuButtonNode,
+                                menuButtonBackgroundView: menuTransition.menuButtonBackgroundView,
+                                menuIconNode: menuTransition.menuIconNode,
+                                menuTextNode: menuTransition.menuTextNode,
+                                prepareForDismiss: menuTransition.prepareForDismiss
+                            )
                         })
                     } else {
                         return nil

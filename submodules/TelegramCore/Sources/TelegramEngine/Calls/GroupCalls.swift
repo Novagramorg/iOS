@@ -3460,7 +3460,7 @@ func _internal_refreshInlineGroupCall(account: Account, messageId: MessageId) ->
 
 struct GroupCallMessageUpdate {
     enum Update {
-        case newPlaintextMessage(authorId: PeerId, randomId: Int64, text: String, entities: [MessageTextEntity], timestamp: Int32, paidMessageStars: Int64?)
+        case newPlaintextMessage(authorId: PeerId, messageId: Int32, text: String, entities: [MessageTextEntity], timestamp: Int32, paidMessageStars: Int64?)
         case newOpaqueMessage(authorId: PeerId, data: Data)
     }
     
@@ -3692,6 +3692,18 @@ public final class GroupCallMessagesContext {
             self.paidStars = paidStars
         }
         
+        public func withId(_ id: Int64) -> Message {
+            return Message(
+                id: id,
+                author: self.author,
+                text: self.text,
+                entities: self.entities,
+                date: self.date,
+                lifetime: self.lifetime,
+                paidStars: self.paidStars
+            )
+        }
+        
         public static func ==(lhs: Message, rhs: Message) -> Bool {
             if lhs.id != rhs.id {
                 return false
@@ -3723,9 +3735,11 @@ public final class GroupCallMessagesContext {
     
     public struct State: Equatable {
         public var messages: [Message]
+        public var pinnedMessages: [Message]
         
-        public init(messages: [Message]) {
+        public init(messages: [Message], pinnedMessages: [Message]) {
             self.messages = messages
+            self.pinnedMessages = pinnedMessages
         }
     }
     
@@ -3762,7 +3776,7 @@ public final class GroupCallMessagesContext {
             self.messageLifetime = messageLifetime
             self.isLiveStream = isLiveStream
             
-            self.state = State(messages: [])
+            self.state = State(messages: [], pinnedMessages: [])
             self.stateValue.set(self.state)
             
             self.updatesDisposable = (account.stateManager.groupCallMessageUpdates
@@ -3770,17 +3784,17 @@ public final class GroupCallMessagesContext {
                 guard let self else {
                     return
                 }
-                let currentTime = Int32(CFAbsoluteTimeGetCurrent())
-                var addedMessages: [(authorId: PeerId, randomId: Int64, text: String, entities: [MessageTextEntity], timestamp: Int32, paidMessageStars: Int64?)] = []
+                let currentTime = Int32(CFAbsoluteTimeGetCurrent() + kCFAbsoluteTimeIntervalSince1970)
+                var addedMessages: [(authorId: PeerId, messageId: Int32, text: String, entities: [MessageTextEntity], timestamp: Int32, paidMessageStars: Int64?)] = []
                 var addedOpaqueMessages: [(authorId: PeerId, data: Data)] = []
                 for update in updates {
                     if update.callId != self.callId {
                         continue
                     }
                     switch update.update {
-                    case let .newPlaintextMessage(authorId, randomId, text, entities, timestamp, paidMessageStars):
+                    case let .newPlaintextMessage(authorId, messageId, text, entities, timestamp, paidMessageStars):
                         if authorId != self.account.peerId {
-                            addedMessages.append((authorId, randomId, text, entities, timestamp, paidMessageStars))
+                            addedMessages.append((authorId, messageId, text, entities, timestamp, paidMessageStars))
                         }
                     case let .newOpaqueMessage(authorId, data):
                         if authorId != self.account.peerId {
@@ -3830,7 +3844,7 @@ public final class GroupCallMessagesContext {
                             }
                         } else {
                             for addedMessage in addedMessages {
-                                if self.processedIds.contains(addedMessage.randomId) {
+                                if self.processedIds.contains(Int64(addedMessage.messageId)) {
                                     continue
                                 }
                                 
@@ -3841,15 +3855,16 @@ public final class GroupCallMessagesContext {
                                     lifetime = self.messageLifetime
                                 }
                                 
-                                messages.append(Message(
-                                    id: addedMessage.randomId,
+                                let message = Message(
+                                    id: Int64(addedMessage.messageId),
                                     author: transaction.getPeer(addedMessage.authorId).flatMap(EnginePeer.init),
                                     text: addedMessage.text,
                                     entities: addedMessage.entities,
                                     date: addedMessage.timestamp,
                                     lifetime: lifetime,
                                     paidStars: addedMessage.paidMessageStars
-                                ))
+                                )
+                                messages.append(message)
                             }
                         }
                         return messages
@@ -3862,7 +3877,17 @@ public final class GroupCallMessagesContext {
                             self.processedIds.insert(message.id)
                         }
                         var state = self.state
-                        state.messages.append(contentsOf: messages)
+                        var existingIds = Set(state.messages.map(\.id))
+                        for message in messages {
+                            if existingIds.contains(message.id) {
+                                continue
+                            }
+                            existingIds.insert(message.id)
+                            state.messages.append(message)
+                            if self.isLiveStream && message.paidStars != nil {
+                                state.pinnedMessages.append(message)
+                            }
+                        }
                         self.state = state
                     })
                 }
@@ -3882,12 +3907,32 @@ public final class GroupCallMessagesContext {
         }
         
         private func messageLifetimeTick() {
-            let now = Int32(CFAbsoluteTimeGetCurrent())
-            let filtered = self.state.messages.filter { now - $0.date < $0.lifetime }
-            if filtered.count != self.state.messages.count {
-                var state = self.state
-                state.messages = filtered
-                self.state = state
+            let now = Int32(CFAbsoluteTimeGetCurrent() + kCFAbsoluteTimeIntervalSince1970)
+            var updatedState: State?
+            if !self.isLiveStream {
+                for i in (0 ..< self.state.messages.count).reversed() {
+                    let message = self.state.messages[i]
+                    if (now - message.date) < message.lifetime {
+                        if updatedState == nil {
+                            updatedState = self.state
+                        }
+                        updatedState?.messages.remove(at: i)
+                    }
+                }
+            }
+            
+            for i in (0 ..< self.state.pinnedMessages.count).reversed() {
+                let message = self.state.pinnedMessages[i]
+                if (now - message.date) < message.lifetime {
+                    if updatedState == nil {
+                        updatedState = self.state
+                    }
+                    updatedState?.pinnedMessages.remove(at: i)
+                }
+            }
+            
+            if let updatedState {
+                self.state = updatedState
             }
         }
         
@@ -3917,7 +3962,7 @@ public final class GroupCallMessagesContext {
                 }
                 
                 var state = self.state
-                state.messages.append(Message(
+                let message = Message(
                     id: randomId,
                     author: fromPeer.flatMap(EnginePeer.init),
                     text: text,
@@ -3925,7 +3970,13 @@ public final class GroupCallMessagesContext {
                     date: currentTime,
                     lifetime: lifetime,
                     paidStars: paidStars
-                ))
+                )
+                state.messages.append(message)
+                if self.isLiveStream {
+                    if paidStars != nil {
+                        state.pinnedMessages.append(message)
+                    }
+                }
                 self.state = state
                 
                 #if DEBUG
@@ -3961,7 +4012,7 @@ public final class GroupCallMessagesContext {
                     if paidStars != nil {
                         flags |= 1 << 0
                     }
-                    self.sendMessageDisposables.add(self.account.network.request(Api.functions.phone.sendGroupCallMessage(
+                    self.sendMessageDisposables.add((self.account.network.request(Api.functions.phone.sendGroupCallMessage(
                         flags: 0,
                         call: self.reference.apiInputGroupCall,
                         randomId: randomId,
@@ -3970,9 +4021,50 @@ public final class GroupCallMessagesContext {
                             entities: apiEntitiesFromMessageTextEntities(entities, associatedPeers: SimpleDictionary())
                         ),
                         allowPaidStars: paidStars
-                    )).startStrict())
+                    )) |> deliverOn(self.queue)).startStrict(next: { [weak self] updates in
+                        guard let self else {
+                            return
+                        }
+                        self.account.stateManager.addUpdates(updates)
+                        for update in updates.allUpdates {
+                            if case let .updateMessageID(id, randomIdValue) = update {
+                                if randomIdValue == randomId {
+                                    var state = self.state
+                                    if let index = state.messages.firstIndex(where: { $0.id == randomId }) {
+                                        state.messages[index] = state.messages[index].withId(Int64(id))
+                                    }
+                                    if let index = state.pinnedMessages.firstIndex(where: { $0.id == randomId }) {
+                                        state.pinnedMessages[index] = state.pinnedMessages[index].withId(Int64(id))
+                                    }
+                                    self.state = state
+                                    break
+                                }
+                            }
+                        }
+                    }, error: { _ in
+                        
+                    }))
                 }
             })
+        }
+        
+        func deleteMessage(id: Int64) {
+            var updatedState: State?
+            if let index = self.state.messages.firstIndex(where: { $0.id == id }) {
+                if updatedState == nil {
+                    updatedState = self.state
+                }
+                updatedState?.messages.remove(at: index)
+            }
+            if let index = self.state.pinnedMessages.firstIndex(where: { $0.id == id }) {
+                if updatedState == nil {
+                    updatedState = self.state
+                }
+                updatedState?.pinnedMessages.remove(at: index)
+            }
+            if let updatedState {
+                self.state = updatedState
+            }
         }
     }
     
@@ -3996,6 +4088,12 @@ public final class GroupCallMessagesContext {
     public func send(fromId: EnginePeer.Id, randomId: Int64?, text: String, entities: [MessageTextEntity], paidStars: Int64?) {
         self.impl.with { impl in
             impl.send(fromId: fromId, randomId: randomId, text: text, entities: entities, paidStars: paidStars)
+        }
+    }
+    
+    public func deleteMessage(id: Int64) {
+        self.impl.with { impl in
+            impl.deleteMessage(id: id)
         }
     }
     

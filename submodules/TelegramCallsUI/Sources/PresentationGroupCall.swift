@@ -831,7 +831,7 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
             }
         }
     }
-    private let messagesStatePromise = Promise<GroupCallMessagesContext.State>(GroupCallMessagesContext.State(messages: []))
+    private let messagesStatePromise = Promise<GroupCallMessagesContext.State>(GroupCallMessagesContext.State(messages: [], pinnedMessages: []))
     public var messagesState: Signal<GroupCallMessagesContext.State, NoError> {
         return self.messagesStatePromise.get()
     }
@@ -4039,6 +4039,12 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
     public func sendMessage(randomId: Int64? = nil, text: String, entities: [MessageTextEntity], paidStars: Int64?) {
         if let messagesContext = self.messagesContext {
             messagesContext.send(fromId: self.joinAsPeerId, randomId: randomId, text: text, entities: entities, paidStars: paidStars)
+        }
+    }
+    
+    public func deleteMessage(id: Int64) {
+        if let messagesContext = self.messagesContext {
+            messagesContext.deleteMessage(id: id)
         }
     }
 }

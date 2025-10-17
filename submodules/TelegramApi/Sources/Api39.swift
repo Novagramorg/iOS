@@ -10403,6 +10403,44 @@ public extension Api.functions.phone {
                 }
 }
 public extension Api.functions.phone {
+                static func deleteGroupCallMessages(flags: Int32, call: Api.InputGroupCall, messages: [Int32]) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Updates>) {
+                    let buffer = Buffer()
+                    buffer.appendInt32(-162573065)
+                    serializeInt32(flags, buffer: buffer, boxed: false)
+                    call.serialize(buffer, true)
+                    buffer.appendInt32(481674261)
+                    buffer.appendInt32(Int32(messages.count))
+                    for item in messages {
+                        serializeInt32(item, buffer: buffer, boxed: false)
+                    }
+                    return (FunctionDescription(name: "phone.deleteGroupCallMessages", parameters: [("flags", String(describing: flags)), ("call", String(describing: call)), ("messages", String(describing: messages))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.Updates? in
+                        let reader = BufferReader(buffer)
+                        var result: Api.Updates?
+                        if let signature = reader.readInt32() {
+                            result = Api.parse(reader, signature: signature) as? Api.Updates
+                        }
+                        return result
+                    })
+                }
+}
+public extension Api.functions.phone {
+                static func deleteGroupCallParticipantMessages(flags: Int32, call: Api.InputGroupCall, participant: Api.InputPeer) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Updates>) {
+                    let buffer = Buffer()
+                    buffer.appendInt32(499117216)
+                    serializeInt32(flags, buffer: buffer, boxed: false)
+                    call.serialize(buffer, true)
+                    participant.serialize(buffer, true)
+                    return (FunctionDescription(name: "phone.deleteGroupCallParticipantMessages", parameters: [("flags", String(describing: flags)), ("call", String(describing: call)), ("participant", String(describing: participant))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.Updates? in
+                        let reader = BufferReader(buffer)
+                        var result: Api.Updates?
+                        if let signature = reader.readInt32() {
+                            result = Api.parse(reader, signature: signature) as? Api.Updates
+                        }
+                        return result
+                    })
+                }
+}
+public extension Api.functions.phone {
                 static func discardCall(flags: Int32, peer: Api.InputPhoneCall, duration: Int32, reason: Api.PhoneCallDiscardReason, connectionId: Int64) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Updates>) {
                     let buffer = Buffer()
                     buffer.appendInt32(-1295269440)
@@ -10834,19 +10872,19 @@ public extension Api.functions.phone {
                 }
 }
 public extension Api.functions.phone {
-                static func sendGroupCallMessage(flags: Int32, call: Api.InputGroupCall, randomId: Int64, message: Api.TextWithEntities, allowPaidStars: Int64?) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Bool>) {
+                static func sendGroupCallMessage(flags: Int32, call: Api.InputGroupCall, randomId: Int64, message: Api.TextWithEntities, allowPaidStars: Int64?) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Updates>) {
                     let buffer = Buffer()
-                    buffer.appendInt32(2124127245)
+                    buffer.appendInt32(445465039)
                     serializeInt32(flags, buffer: buffer, boxed: false)
                     call.serialize(buffer, true)
                     serializeInt64(randomId, buffer: buffer, boxed: false)
                     message.serialize(buffer, true)
                     if Int(flags) & Int(1 << 0) != 0 {serializeInt64(allowPaidStars!, buffer: buffer, boxed: false)}
-                    return (FunctionDescription(name: "phone.sendGroupCallMessage", parameters: [("flags", String(describing: flags)), ("call", String(describing: call)), ("randomId", String(describing: randomId)), ("message", String(describing: message)), ("allowPaidStars", String(describing: allowPaidStars))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.Bool? in
+                    return (FunctionDescription(name: "phone.sendGroupCallMessage", parameters: [("flags", String(describing: flags)), ("call", String(describing: call)), ("randomId", String(describing: randomId)), ("message", String(describing: message)), ("allowPaidStars", String(describing: allowPaidStars))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.Updates? in
                         let reader = BufferReader(buffer)
-                        var result: Api.Bool?
+                        var result: Api.Updates?
                         if let signature = reader.readInt32() {
-                            result = Api.parse(reader, signature: signature) as? Api.Bool
+                            result = Api.parse(reader, signature: signature) as? Api.Updates
                         }
                         return result
                     })
