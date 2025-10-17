@@ -387,6 +387,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     public var customLeftAction: LeftAction?
     public var customRightAction: RightAction?
     public var customSendColor: UIColor?
+    public var customInputTextMaxLength: Int?
     
     private var starReactionButton: ComponentView<Empty>?
     
@@ -3580,7 +3581,9 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     
     private func updateCounterTextNode(transition: ContainedViewLayoutTransition) {
         var inputTextMaxLength: Int32?
-        if let presentationInterfaceState = self.presentationInterfaceState {
+        if let customInputTextMaxLength = self.customInputTextMaxLength {
+            inputTextMaxLength = Int32(customInputTextMaxLength)
+        } else if let presentationInterfaceState = self.presentationInterfaceState {
             if let editMessage = presentationInterfaceState.interfaceState.editMessage, let inputTextMaxLengthValue = editMessage.inputTextMaxLength {
                 inputTextMaxLength = inputTextMaxLengthValue
             } else if case let .customChatContents(customChatContents) = presentationInterfaceState.subject, case .businessLinkSetup = customChatContents.kind {

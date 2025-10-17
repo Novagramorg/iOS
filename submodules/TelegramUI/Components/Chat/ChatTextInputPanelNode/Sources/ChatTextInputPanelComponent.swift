@@ -112,6 +112,7 @@ public final class ChatTextInputPanelComponent: Component {
     let hideKeyboard: Bool
     let insets: UIEdgeInsets
     let maxHeight: CGFloat
+    let maxLength: Int?
     let sendAction: (() -> Void)?
     let sendContextAction: ((UIView, ContextGesture) -> Void)?
     
@@ -130,6 +131,7 @@ public final class ChatTextInputPanelComponent: Component {
         hideKeyboard: Bool,
         insets: UIEdgeInsets,
         maxHeight: CGFloat,
+        maxLength: Int?,
         sendAction: (() -> Void)?,
         sendContextAction: ((UIView, ContextGesture) -> Void)?
     ) {
@@ -147,6 +149,7 @@ public final class ChatTextInputPanelComponent: Component {
         self.hideKeyboard = hideKeyboard
         self.insets = insets
         self.maxHeight = maxHeight
+        self.maxLength = maxLength
         self.sendAction = sendAction
         self.sendContextAction = sendContextAction
     }
@@ -192,6 +195,9 @@ public final class ChatTextInputPanelComponent: Component {
             return false
         }
         if lhs.maxHeight != rhs.maxHeight {
+            return false
+        }
+        if lhs.maxLength != rhs.maxLength {
             return false
         }
         if (lhs.sendAction == nil) != (rhs.sendAction == nil) {
@@ -783,6 +789,7 @@ public final class ChatTextInputPanelComponent: Component {
             }
             
             panelNode.customSendColor = component.sendColor
+            panelNode.customInputTextMaxLength = component.maxLength
             
             if let resetInputState = component.externalState.resetInputState {
                 component.externalState.resetInputState = nil

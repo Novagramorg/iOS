@@ -952,6 +952,7 @@ public final class MessageInputPanelComponent: Component {
                         hideKeyboard: component.hideKeyboard,
                         insets: UIEdgeInsets(top: 0.0, left: 0.0, bottom: component.bottomInset, right: 0.0),
                         maxHeight: availableSize.height,
+                        maxLength: component.maxLength,
                         sendAction: { [weak self] in
                             guard let self, let component = self.component else {
                                 return
