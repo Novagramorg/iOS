@@ -23,10 +23,34 @@ import ForwardInfoPanelComponent
 import MultilineTextComponent
 import PlainButtonComponent
 import GlassBackgroundComponent
+import ChatTextInputPanelNode
 
 private var sharedIsReduceTransparencyEnabled = UIAccessibility.isReduceTransparencyEnabled
 
 private let timeoutButtonTag = GenericComponentViewTag()
+
+private func getStarAmountColorMapping(value: Int64) -> UIColor {
+    //TODO:localize unify
+    if value >= 10000 {
+        return UIColor(rgb: 0x7C8695)
+    }
+    if value >= 2000 {
+        return UIColor(rgb: 0xE6514E)
+    }
+    if value >= 500 {
+        return UIColor(rgb: 0xEE7E20)
+    }
+    if value >= 250 {
+        return UIColor(rgb: 0xE4A20A)
+    }
+    if value >= 100 {
+        return UIColor(rgb: 0x5AB03D)
+    }
+    if value >= 50 {
+        return UIColor(rgb: 0x3E9CDF)
+    }
+    return UIColor(rgb: 0x985FDC)
+}
 
 public final class MessageInputPanelComponent: Component {
     public struct ContextQueryTypes: OptionSet {
@@ -228,6 +252,8 @@ public final class MessageInputPanelComponent: Component {
     public let isChannel: Bool
     public let storyItem: EngineStoryItem?
     public let chatLocation: ChatLocation?
+    public let isLiveChatExpanded: Bool?
+    public let toggleLiveChatExpanded: (() -> Void)?
     
     public init(
         externalState: ExternalState,
@@ -287,7 +313,9 @@ public final class MessageInputPanelComponent: Component {
         header: AnyComponent<Empty>?,
         isChannel: Bool,
         storyItem: EngineStoryItem?,
-        chatLocation: ChatLocation?
+        chatLocation: ChatLocation?,
+        isLiveChatExpanded: Bool? = nil,
+        toggleLiveChatExpanded: (() -> Void)? = nil
     ) {
         self.externalState = externalState
         self.context = context
@@ -347,6 +375,8 @@ public final class MessageInputPanelComponent: Component {
         self.isChannel = isChannel
         self.storyItem = storyItem
         self.chatLocation = chatLocation
+        self.isLiveChatExpanded = isLiveChatExpanded
+        self.toggleLiveChatExpanded = toggleLiveChatExpanded
     }
     
     public static func ==(lhs: MessageInputPanelComponent, rhs: MessageInputPanelComponent) -> Bool {
@@ -473,6 +503,9 @@ public final class MessageInputPanelComponent: Component {
         if lhs.chatLocation != rhs.chatLocation {
             return false
         }
+        if lhs.isLiveChatExpanded != rhs.isLiveChatExpanded {
+            return false
+        }
         return true
     }
     
@@ -481,6 +514,9 @@ public final class MessageInputPanelComponent: Component {
     }
             
     public final class View: UIView {
+        private var inputPanel: ComponentView<Empty>?
+        private let textInputPanelExternalState = ChatTextInputPanelComponent.ExternalState()
+        
         private let fieldBackgroundView: BlurredBackgroundView
         private let fieldBackgroundTint: UIView
         private var fieldGlassBackgroundView: GlassBackgroundView?
@@ -612,6 +648,11 @@ public final class MessageInputPanelComponent: Component {
         }
         
         public func getSendMessageInput() -> SendMessageInput {
+            if let inputPanelView = self.inputPanel?.view as? ChatTextInputPanelComponent.View {
+                let _ = inputPanelView
+                return .text(expandedInputStateAttributedString(self.textInputPanelExternalState.textInputState.inputText))
+            }
+            
             guard let textFieldView = self.textField.view as? TextFieldComponent.View else {
                 return .text(NSAttributedString())
             }
@@ -638,6 +679,15 @@ public final class MessageInputPanelComponent: Component {
         }
         
         public func clearSendMessageInput(updateState: Bool) {
+            if let inputPanelView = self.inputPanel?.view as? ChatTextInputPanelComponent.View {
+                let _ = inputPanelView
+                self.textInputPanelExternalState.resetInputState = ChatTextInputState()
+                if updateState {
+                    inputPanelView.updateState(transition: .spring(duration: 0.4))
+                }
+                return
+            }
+            
             if let textFieldView = self.textField.view as? TextFieldComponent.View {
                 textFieldView.setAttributedText(NSAttributedString(), updateState: updateState)
             }
@@ -802,6 +852,152 @@ public final class MessageInputPanelComponent: Component {
         }
         
         func update(component: MessageInputPanelComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
+            self.component = component
+            self.state = state
+            
+            if case .story = component.style, case .liveStream = component.storyItem?.media {
+                let inputPanel: ComponentView<Empty>
+                if let current = self.inputPanel {
+                    inputPanel = current
+                } else {
+                    inputPanel = ComponentView()
+                    self.inputPanel = inputPanel
+                    
+                    for subview in Array(self.subviews) {
+                        subview.removeFromSuperview()
+                    }
+                }
+                
+                let inputMode = component.nextInputMode(self.textInputPanelExternalState.textInputState.inputText.length != 0)
+                self.currentInputMode = inputMode
+                
+                var inlineActions: [ChatTextInputPanelComponent.InlineAction] = []
+                if component.paidMessageAction != nil && self.textInputPanelExternalState.textInputState.inputText.length == 0 {
+                    inlineActions.append(ChatTextInputPanelComponent.InlineAction(
+                        kind: .paidMessage,
+                        action: { [weak self] in
+                            guard let self else {
+                                return
+                            }
+                            self.component?.paidMessageAction?()
+                        }
+                    ))
+                } else if let inputMode {
+                    let mappedInputMode: ChatTextInputPanelComponent.InputMode
+                    switch inputMode {
+                    case .text:
+                        mappedInputMode = .text
+                    case .emoji:
+                        mappedInputMode = .emoji
+                    case .stickers:
+                        mappedInputMode = .stickers
+                    }
+                    inlineActions.append(ChatTextInputPanelComponent.InlineAction(
+                        kind: .inputMode(mappedInputMode),
+                        action: { [weak self] in
+                            guard let self, let component = self.component else {
+                                return
+                            }
+                            component.inputModeAction?()
+                        }
+                    ))
+                }
+                
+                let placeholder: String
+                switch component.placeholder {
+                case let .counter(items):
+                    placeholder = items.map({ item -> String in
+                        switch item.content {
+                        case let .number(value, minDigits):
+                            var result = "\(value)"
+                            while result.count < minDigits {
+                                result.insert("0", at: result.startIndex)
+                            }
+                            return result
+                        case let .text(text):
+                            return text
+                        }
+                    }).joined(separator: "")
+                case let .plain(text):
+                    placeholder = text
+                }
+                
+                let inputPanelSize = inputPanel.update(
+                    transition: transition,
+                    component: AnyComponent(ChatTextInputPanelComponent(
+                        externalState: self.textInputPanelExternalState,
+                        context: component.context,
+                        theme: component.theme,
+                        strings: component.strings,
+                        chatPeerId: component.chatLocation?.peerId ?? component.context.account.peerId,
+                        inlineActions: inlineActions,
+                        leftAction: ChatTextInputPanelComponent.LeftAction(kind:  .toggleExpanded(isVisible: component.isLiveChatExpanded != nil, isExpanded: component.isLiveChatExpanded ?? true), action: { [weak self] in
+                            guard let self, let component = self.component else {
+                                return
+                            }
+                            component.toggleLiveChatExpanded?()
+                        }),
+                        rightAction: ChatTextInputPanelComponent.RightAction(kind: .stars(count: 0, isFilled: false), action: {
+                        }),
+                        placeholder: placeholder,
+                        paidMessagePrice: component.sendPaidMessageStars,
+                        sendColor: component.sendPaidMessageStars.flatMap { value in
+                            return getStarAmountColorMapping(value: value.value)
+                        },
+                        hideKeyboard: component.hideKeyboard,
+                        insets: UIEdgeInsets(top: 0.0, left: 0.0, bottom: component.bottomInset, right: 0.0),
+                        maxHeight: availableSize.height,
+                        sendAction: { [weak self] in
+                            guard let self, let component = self.component else {
+                                return
+                            }
+                            component.sendMessageAction(nil)
+                        },
+                        sendContextAction: component.sendMessageOptionsAction == nil ? nil : { [weak self] view, gesture in
+                            guard let self, let component = self.component else {
+                                return
+                            }
+                            component.sendMessageOptionsAction?(view, gesture)
+                        }
+                    )),
+                    environment: {},
+                    containerSize: availableSize
+                )
+                let inputPanelFrame = CGRect(origin: CGPoint(), size: inputPanelSize)
+                if let inputPanelView = inputPanel.view {
+                    if inputPanelView.superview == nil {
+                        inputPanel.parentState = state
+                        self.addSubview(inputPanelView)
+                    }
+                    transition.setFrame(view: inputPanelView, frame: inputPanelFrame)
+                }
+                
+                component.externalState.isEditing = self.textInputPanelExternalState.isEditing
+                component.externalState.hasText = self.textInputPanelExternalState.textInputState.inputText.length != 0
+                component.externalState.isKeyboardHidden = component.hideKeyboard
+                component.externalState.insertText = { [weak self] text in
+                    guard let self, let inputPanelView = self.inputPanel?.view as? ChatTextInputPanelComponent.View else {
+                        return
+                    }
+                    inputPanelView.insertText(text: text)
+                }
+                component.externalState.deleteBackward = { [weak self] in
+                    guard let self, let inputPanelView = self.inputPanel?.view as? ChatTextInputPanelComponent.View else {
+                        return
+                    }
+                    inputPanelView.deleteBackward()
+                }
+                
+                var size = inputPanelSize
+                if component.bottomInset <= 32.0 {
+                    size.height += 7.0
+                } else {
+                    size.height += 4.0
+                }
+                
+                return size
+            }
+            
             let previousPlaceholder = self.component?.placeholder
             
             let defaultInsets = UIEdgeInsets(top: 14.0, left: 9.0, bottom: 6.0, right: 41.0)
@@ -839,9 +1035,6 @@ public final class MessageInputPanelComponent: Component {
             if transition.animation.isImmediate, let previousComponent, previousComponent.storyItem?.id == component.storyItem?.id, component.isChannel {
                 transition = transition.withAnimation(.curve(duration: 0.3, curve: .spring))
             }
-
-            self.component = component
-            self.state = state
             
             if let initialText = component.externalState.initialText {
                 component.externalState.initialText = nil

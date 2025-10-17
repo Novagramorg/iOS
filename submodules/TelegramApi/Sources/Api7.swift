@@ -1330,18 +1330,18 @@ public extension Api {
 }
 public extension Api {
     enum GroupCallMessage: TypeConstructorDescription {
-        case groupCallMessage(flags: Int32, fromId: Api.Peer, date: Int32, randomId: Int64, message: Api.TextWithEntities, paidMessageStars: Int64?)
+        case groupCallMessage(flags: Int32, id: Int32, fromId: Api.Peer, date: Int32, message: Api.TextWithEntities, paidMessageStars: Int64?)
     
     public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
     switch self {
-                case .groupCallMessage(let flags, let fromId, let date, let randomId, let message, let paidMessageStars):
+                case .groupCallMessage(let flags, let id, let fromId, let date, let message, let paidMessageStars):
                     if boxed {
-                        buffer.appendInt32(-2018173984)
+                        buffer.appendInt32(445316222)
                     }
                     serializeInt32(flags, buffer: buffer, boxed: false)
+                    serializeInt32(id, buffer: buffer, boxed: false)
                     fromId.serialize(buffer, true)
                     serializeInt32(date, buffer: buffer, boxed: false)
-                    serializeInt64(randomId, buffer: buffer, boxed: false)
                     message.serialize(buffer, true)
                     if Int(flags) & Int(1 << 0) != 0 {serializeInt64(paidMessageStars!, buffer: buffer, boxed: false)}
                     break
@@ -1350,22 +1350,22 @@ public extension Api {
     
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
-                case .groupCallMessage(let flags, let fromId, let date, let randomId, let message, let paidMessageStars):
-                return ("groupCallMessage", [("flags", flags as Any), ("fromId", fromId as Any), ("date", date as Any), ("randomId", randomId as Any), ("message", message as Any), ("paidMessageStars", paidMessageStars as Any)])
+                case .groupCallMessage(let flags, let id, let fromId, let date, let message, let paidMessageStars):
+                return ("groupCallMessage", [("flags", flags as Any), ("id", id as Any), ("fromId", fromId as Any), ("date", date as Any), ("message", message as Any), ("paidMessageStars", paidMessageStars as Any)])
     }
     }
     
         public static func parse_groupCallMessage(_ reader: BufferReader) -> GroupCallMessage? {
             var _1: Int32?
             _1 = reader.readInt32()
-            var _2: Api.Peer?
+            var _2: Int32?
+            _2 = reader.readInt32()
+            var _3: Api.Peer?
             if let signature = reader.readInt32() {
-                _2 = Api.parse(reader, signature: signature) as? Api.Peer
+                _3 = Api.parse(reader, signature: signature) as? Api.Peer
             }
-            var _3: Int32?
-            _3 = reader.readInt32()
-            var _4: Int64?
-            _4 = reader.readInt64()
+            var _4: Int32?
+            _4 = reader.readInt32()
             var _5: Api.TextWithEntities?
             if let signature = reader.readInt32() {
                 _5 = Api.parse(reader, signature: signature) as? Api.TextWithEntities
@@ -1379,7 +1379,7 @@ public extension Api {
             let _c5 = _5 != nil
             let _c6 = (Int(_1!) & Int(1 << 0) == 0) || _6 != nil
             if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 {
-                return Api.GroupCallMessage.groupCallMessage(flags: _1!, fromId: _2!, date: _3!, randomId: _4!, message: _5!, paidMessageStars: _6)
+                return Api.GroupCallMessage.groupCallMessage(flags: _1!, id: _2!, fromId: _3!, date: _4!, message: _5!, paidMessageStars: _6)
             }
             else {
                 return nil

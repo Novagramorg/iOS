@@ -18,6 +18,70 @@ import AnimatedCountLabelNode
 import GlassBackgroundComponent
 import ComponentDisplayAdapters
 
+private final class StarsButtonEffectLayer: SimpleLayer {
+    let emitterLayer = CAEmitterLayer()
+    private var currentColor: UIColor?
+    
+    override init() {
+        super.init()
+        
+        self.addSublayer(self.emitterLayer)
+    }
+    
+    override init(layer: Any) {
+        super.init(layer: layer)
+    }
+    
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+    
+    private func setup() {
+        guard let currentColor = self.currentColor else {
+            return
+        }
+        let color = currentColor
+        
+        let emitter = CAEmitterCell()
+        emitter.name = "emitter"
+        emitter.contents = UIImage(bundleImageName: "Premium/Stars/Particle")?.cgImage
+        emitter.birthRate = 25.0
+        emitter.lifetime = 2.0
+        emitter.velocity = 12.0
+        emitter.velocityRange = 3
+        emitter.scale = 0.1
+        emitter.scaleRange = 0.08
+        emitter.alphaRange = 0.1
+        emitter.emissionRange = .pi * 2.0
+        emitter.setValue(3.0, forKey: "mass")
+        emitter.setValue(2.0, forKey: "massRange")
+        
+        let staticColors: [Any] = [
+            color.withAlphaComponent(0.0).cgColor,
+            color.cgColor,
+            color.cgColor,
+            color.withAlphaComponent(0.0).cgColor
+        ]
+        let staticColorBehavior = CAEmitterCell.createEmitterBehavior(type: "colorOverLife")
+        staticColorBehavior.setValue(staticColors, forKey: "colors")
+        emitter.setValue([staticColorBehavior], forKey: "emitterBehaviors")
+        
+        self.emitterLayer.emitterCells = [emitter]
+    }
+    
+    func update(color: UIColor, size: CGSize) {
+        if self.emitterLayer.emitterCells == nil || self.currentColor != color {
+            self.currentColor = color
+            self.setup()
+        }
+        self.emitterLayer.emitterShape = .circle
+        self.emitterLayer.emitterSize = CGSize(width: size.width * 0.7, height: size.height * 0.7)
+        self.emitterLayer.emitterMode = .surface
+        self.emitterLayer.frame = CGRect(origin: .zero, size: size)
+        self.emitterLayer.emitterPosition = CGPoint(x: size.width / 2.0, y: size.height / 2.0)
+    }
+}
+
 private final class EffectBadgeView: UIView {
     private let context: AccountContext
     private var currentEffectId: Int64?
@@ -139,6 +203,7 @@ public final class ChatTextInputActionButtonsNode: ASDisplayNode, ChatSendMessag
     
     public let sendContainerNode: ASDisplayNode
     public let sendButtonBackgroundView: UIImageView
+    private var sendButtonBackgroundEffectLayer: StarsButtonEffectLayer?
     public let sendButton: HighlightTrackingButtonNode
     public var sendButtonRadialStatusNode: ChatSendButtonRadialStatusNode?
     public var sendButtonHasApplyIcon = false
@@ -167,6 +232,8 @@ public final class ChatTextInputActionButtonsNode: ASDisplayNode, ChatSendMessag
     let maskContentView: UIView
     
     private var validLayout: CGSize?
+    
+    public var customSendColor: UIColor?
     
     public init(context: AccountContext, presentationInterfaceState: ChatPresentationInterfaceState, presentationContext: ChatPresentationContext?, presentController: @escaping (ViewController) -> Void) {
         self.context = context
@@ -347,8 +414,36 @@ public final class ChatTextInputActionButtonsNode: ASDisplayNode, ChatSendMessag
         transition.updateFrame(layer: self.micButton.layer, frame: CGRect(origin: CGPoint(), size: size))
         self.micButton.layoutItems()
         
-        transition.updateFrame(view: self.sendButtonBackgroundView, frame: CGRect(origin: CGPoint(), size: innerSize).insetBy(dx: 3.0, dy: 3.0))
-        self.sendButtonBackgroundView.tintColor = interfaceState.theme.chat.inputPanel.panelControlAccentColor
+        let sendButtonBackgroundFrame = CGRect(origin: CGPoint(), size: innerSize).insetBy(dx: 3.0, dy: 3.0)
+        transition.updateFrame(view: self.sendButtonBackgroundView, frame: sendButtonBackgroundFrame)
+        self.sendButtonBackgroundView.tintColor = self.customSendColor ?? interfaceState.theme.chat.inputPanel.panelControlAccentColor
+        
+        if let _ = self.customSendColor {
+            let sendButtonBackgroundEffectLayer: StarsButtonEffectLayer
+            var sendButtonBackgroundEffectLayerTransition = transition
+            if let current = self.sendButtonBackgroundEffectLayer {
+                sendButtonBackgroundEffectLayer = current
+            } else {
+                sendButtonBackgroundEffectLayerTransition = .immediate
+                sendButtonBackgroundEffectLayer = StarsButtonEffectLayer()
+                sendButtonBackgroundEffectLayer.masksToBounds = true
+                self.sendButtonBackgroundEffectLayer = sendButtonBackgroundEffectLayer
+                self.sendButtonBackgroundView.layer.addSublayer(sendButtonBackgroundEffectLayer)
+                if transition.isAnimated {
+                    sendButtonBackgroundEffectLayer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
+                }
+            }
+            transition.updateFrame(layer: sendButtonBackgroundEffectLayer, frame: CGRect(origin: CGPoint(), size: sendButtonBackgroundFrame.size))
+            sendButtonBackgroundEffectLayerTransition.updateCornerRadius(layer: sendButtonBackgroundEffectLayer, cornerRadius: sendButtonBackgroundFrame.height * 0.5)
+            sendButtonBackgroundEffectLayer.update(color: UIColor(white: 1.0, alpha: 0.5), size: sendButtonBackgroundFrame.size)
+        } else if let sendButtonBackgroundEffectLayer = self.sendButtonBackgroundEffectLayer {
+            self.sendButtonBackgroundEffectLayer = nil
+            transition.updateFrame(layer: sendButtonBackgroundEffectLayer, frame: CGRect(origin: CGPoint(), size: sendButtonBackgroundFrame.size))
+            transition.updateAlpha(layer: sendButtonBackgroundEffectLayer, alpha: 0.0, completion: { [weak sendButtonBackgroundEffectLayer] _ in
+                sendButtonBackgroundEffectLayer?.removeFromSuperlayer()
+            })
+        }
+        
         transition.updateFrame(layer: self.sendButton.layer, frame: CGRect(origin: CGPoint(), size: innerSize))
         let sendContainerFrame = CGRect(origin: CGPoint(), size: innerSize)
         transition.updatePosition(node: self.sendContainerNode, position: sendContainerFrame.center)
