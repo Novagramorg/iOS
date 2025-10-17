@@ -470,8 +470,6 @@ public class GlassBackgroundView: UIView {
                             nativeParamsView.lumaMin = 0.25
                             nativeParamsView.lumaMax = 1.0
                         }
-                        
-                        nativeView.overrideUserInterfaceStyle = isDark ? .dark : .light
                     }
                 }
             }

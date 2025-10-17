@@ -14,18 +14,21 @@ import AvatarNode
 import MultilineTextWithEntitiesComponent
 import GlassBackgroundComponent
 import MultilineTextComponent
+import ContextUI
 
 private final class MessageItemComponent: Component {
     let context: AccountContext
     let strings: PresentationStrings
     let theme: PresentationTheme
     let message: GroupCallMessagesContext.Message
+    let contextGesture: ((ContextGesture, ContextExtractedContentContainingNode) -> Void)?
     
-    init(context: AccountContext, strings: PresentationStrings, theme: PresentationTheme, message: GroupCallMessagesContext.Message) {
+    init(context: AccountContext, strings: PresentationStrings, theme: PresentationTheme, message: GroupCallMessagesContext.Message, contextGesture: ((ContextGesture, ContextExtractedContentContainingNode) -> Void)?) {
         self.context = context
         self.strings = strings
         self.theme = theme
         self.message = message
+        self.contextGesture = contextGesture
     }
     
     static func ==(lhs: MessageItemComponent, rhs: MessageItemComponent) -> Bool {
@@ -48,10 +51,14 @@ private final class MessageItemComponent: Component {
     }
     
     final class View: UIView {
+        private let extractedContainerNode: ContextExtractedContentContainingNode
+        private let containerNode: ContextControllerSourceNode
+        
         private let contentContainer: UIView
         private var avatarNode: AvatarNode?
         private let text = ComponentView<Empty>()
         private var backgroundView: UIImageView?
+        private var effectLayer: StarsButtonEffectLayer?
 
         private var component: MessageItemComponent?
         private weak var state: EmptyComponentState?
@@ -61,9 +68,23 @@ private final class MessageItemComponent: Component {
             self.contentContainer = UIView()
             self.contentContainer.transform = CGAffineTransformMakeRotation(-CGFloat.pi)
             
+            self.extractedContainerNode = ContextExtractedContentContainingNode()
+            self.containerNode = ContextControllerSourceNode()
+            
             super.init(frame: frame)
             
             self.addSubview(self.contentContainer)
+            
+            self.containerNode.addSubnode(self.extractedContainerNode)
+            self.containerNode.targetNodeForActivationProgress = self.extractedContainerNode.contentNode
+            self.contentContainer.addSubview(self.containerNode.view)
+            
+            self.containerNode.activated = { [weak self] gesture, _ in
+                guard let self, let component = self.component else {
+                    return
+                }
+                component.contextGesture?(gesture, self.extractedContainerNode)
+            }
         }
         
         required init?(coder: NSCoder) {
@@ -94,7 +115,9 @@ private final class MessageItemComponent: Component {
             self.component = component
             self.state = state
             
-            let insets = UIEdgeInsets(top: 8.0, left: 20.0, bottom: 8.0, right: 20.0)
+            self.containerNode.isGestureEnabled = component.contextGesture != nil
+            
+            let insets = UIEdgeInsets(top: 8.0, left: 8.0, bottom: 8.0, right: 8.0)
             let avatarSize: CGFloat = 24.0
             let avatarSpacing: CGFloat = 6.0
             
@@ -127,7 +150,7 @@ private final class MessageItemComponent: Component {
                 } else {
                     avatarNode = AvatarNode(font: avatarPlaceholderFont(size: 10.0))
                     self.avatarNode = avatarNode
-                    self.contentContainer.addSubview(avatarNode.view)
+                    self.extractedContainerNode.contentNode.view.addSubview(avatarNode.view)
                 }
                 transition.setFrame(view: avatarNode.view, frame: avatarFrame)
                 avatarNode.updateSize(size: avatarFrame.size)
@@ -146,11 +169,13 @@ private final class MessageItemComponent: Component {
             if let textView = self.text.view {
                 if textView.superview == nil {
                     textView.layer.anchorPoint = CGPoint()
-                    self.contentContainer.addSubview(textView)
+                    self.extractedContainerNode.contentNode.view.addSubview(textView)
                 }
                 transition.setPosition(view: textView, position: textFrame.origin)
                 textView.bounds = CGRect(origin: CGPoint(), size: textFrame.size)
             }
+            
+            let backgroundFrame = CGRect(origin: CGPoint(x: 6.0, y: 2.0), size: CGSize(width: textFrame.maxX + 8.0 - 6.0, height: textFrame.maxY + 3.0))
             
             if let paidStars = component.message.paidStars {
                 let backgroundView: UIImageView
@@ -159,20 +184,43 @@ private final class MessageItemComponent: Component {
                 } else {
                     backgroundView = UIImageView()
                     self.backgroundView = backgroundView
-                    self.contentContainer.insertSubview(backgroundView, at: 0)
+                    self.extractedContainerNode.contentNode.view.insertSubview(backgroundView, at: 0)
                     backgroundView.image = generateStretchableFilledCircleImage(diameter: 28.0, color: .white)?.withRenderingMode(.alwaysTemplate)
                 }
-                let backgroundFrame = CGRect(origin: CGPoint(x: 16.0, y: 2.0), size: CGSize(width: textFrame.maxX + 8.0 - 16.0, height: textFrame.maxY + 3.0))
                 transition.setFrame(view: backgroundView, frame: backgroundFrame)
                 backgroundView.tintColor = getStarAmountColorMapping(value: paidStars)
+                
+                let effectLayer: StarsButtonEffectLayer
+                if let current = self.effectLayer {
+                    effectLayer = current
+                } else {
+                    effectLayer = StarsButtonEffectLayer()
+                    self.effectLayer = effectLayer
+                    backgroundView.layer.addSublayer(effectLayer)
+                    effectLayer.masksToBounds = true
+                }
+                
+                transition.setFrame(layer: effectLayer, frame: CGRect(origin: CGPoint(), size: backgroundFrame.size))
+                transition.setCornerRadius(layer: effectLayer, cornerRadius: min(28.0, backgroundFrame.height * 0.5))
+                effectLayer.update(color: UIColor(white: 1.0, alpha: 0.5), size: backgroundFrame.size)
             } else if let backgroundView = self.backgroundView {
                 self.backgroundView = nil
                 backgroundView.removeFromSuperview()
+                
+                if let effectLayer = self.effectLayer {
+                    self.effectLayer = nil
+                    effectLayer.removeFromSuperlayer()
+                }
             }
             
             let contentFrame = CGRect(origin: CGPoint(), size: size)
             transition.setPosition(view: self.contentContainer, position: contentFrame.center)
             transition.setBounds(view: self.contentContainer, bounds: CGRect(origin: CGPoint(), size: contentFrame.size))
+            
+            self.extractedContainerNode.frame = CGRect(origin: CGPoint(), size: size)
+            self.extractedContainerNode.contentNode.frame = CGRect(origin: CGPoint(), size: size)
+            self.extractedContainerNode.contentRect = backgroundFrame
+            self.containerNode.frame = CGRect(origin: CGPoint(), size: size)
             
             return size
         }
@@ -188,6 +236,7 @@ private final class MessageItemComponent: Component {
 }
 
 private func getStarAmountColorMapping(value: Int64) -> UIColor {
+    //TODO:localize unify
     if value >= 10000 {
         return UIColor(rgb: 0x7C8695)
     }
@@ -245,6 +294,7 @@ private final class PinnedBarMessageComponent: Component {
         private let backgroundView: UIImageView
         private let foregroundClippingView: UIView
         private let foregroundView: UIImageView
+        private let effectLayer: StarsButtonEffectLayer
         
         private var avatarNode: AvatarNode?
         private let title = ComponentView<Empty>()
@@ -260,6 +310,8 @@ private final class PinnedBarMessageComponent: Component {
             self.foregroundClippingView = UIView()
             self.foregroundClippingView.clipsToBounds = true
             self.foregroundView = UIImageView()
+            self.effectLayer = StarsButtonEffectLayer()
+            self.effectLayer.masksToBounds = true
             
             super.init(frame: frame)
             
@@ -267,6 +319,7 @@ private final class PinnedBarMessageComponent: Component {
             
             self.foregroundClippingView.addSubview(self.foregroundView)
             self.addSubview(self.foregroundClippingView)
+            self.layer.addSublayer(self.effectLayer)
         }
         
         required init?(coder: NSCoder) {
@@ -343,6 +396,10 @@ private final class PinnedBarMessageComponent: Component {
             transition.setFrame(view: self.foregroundView, frame: CGRect(origin: CGPoint(), size: size))
             transition.setFrame(view: self.foregroundClippingView, frame: CGRect(origin: CGPoint(), size: CGSize(width: floorToScreenPixels(size.width * timeFraction), height: size.height)))
             
+            transition.setFrame(layer: self.effectLayer, frame: CGRect(origin: CGPoint(), size: size))
+            transition.setCornerRadius(layer: self.effectLayer, cornerRadius: size.height * 0.5)
+            self.effectLayer.update(color: UIColor(white: 1.0, alpha: 0.5), size: size)
+            
             let avatarFrame = CGRect(origin: CGPoint(x: avatarInset, y: floor((itemHeight - avatarSize) * 0.5)), size: CGSize(width: avatarSize, height: avatarSize))
             do {
                 let avatarNode: AvatarNode
@@ -376,7 +433,7 @@ private final class PinnedBarMessageComponent: Component {
                 titleView.bounds = CGRect(origin: CGPoint(), size: titleFrame.size)
             }
             
-            return size
+            return CGSize(width: size.width + 10.0, height: size.height)
         }
     }
 
@@ -452,12 +509,6 @@ private final class PinnedBarComponent: Component {
             super.init(frame: frame)
             
             self.addSubview(self.listContainer)
-            
-            self.toggleButtonBackground.contentView.addSubview(self.toggleButtonIcon)
-            self.toggleButtonBackground.contentView.addSubview(self.toggleButton)
-            self.addSubview(self.toggleButtonBackground)
-            
-            self.toggleButton.addTarget(self, action: #selector(self.toggleButtonPressed), for: .touchUpInside)
         }
         
         required init?(coder: NSCoder) {
@@ -501,22 +552,6 @@ private final class PinnedBarComponent: Component {
             
             let size = CGSize(width: availableSize.width, height: insets.top + itemHeight + insets.bottom)
             
-            let toggleButtonFrame = CGRect(origin: CGPoint(x: insets.left, y: insets.top), size: CGSize(width: itemHeight, height: itemHeight))
-            transition.setFrame(view: self.toggleButtonBackground, frame: toggleButtonFrame)
-            self.toggleButtonBackground.update(size: toggleButtonFrame.size, cornerRadius: toggleButtonFrame.height * 0.5, isDark: true, tintColor: .init(kind: .panel, color: component.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7)), isInteractive: true, transition: transition)
-            transition.setFrame(view: self.toggleButton, frame: CGRect(origin: CGPoint(), size: toggleButtonFrame.size))
-            if self.toggleButtonIcon.image == nil {
-                self.toggleButtonIcon.image = UIImage(bundleImageName: "Chat/Context Menu/ReactionExpandArrow")?.withRenderingMode(.alwaysTemplate)
-                self.toggleButtonIcon.tintColor = .white
-            }
-            if let image = self.toggleButtonIcon.image {
-                var iconFrame = image.size.centered(in: CGRect(origin: CGPoint(), size: toggleButtonFrame.size))
-                iconFrame.origin.y += 1.0
-                transition.setTransform(view: self.toggleButtonIcon, transform: CATransform3DMakeRotation((!component.isExpanded) ? CGFloat.pi : 0.0, 0.0, 0.0, 1.0))
-                transition.setPosition(view: self.toggleButtonIcon, position: iconFrame.center)
-                transition.setBounds(view: self.toggleButtonIcon, bounds: CGRect(origin: CGPoint(), size: iconFrame.size))
-            }
-            
             var listItems: [AnyComponentWithIdentity<Empty>] = []
             for message in component.messages {
                 if let author = message.author {
@@ -529,8 +564,8 @@ private final class PinnedBarComponent: Component {
                 }
             }
             
-            let listInsets = UIEdgeInsets(top: 0.0, left: 5.0, bottom: 0.0, right: 5.0 + 20.0)
-            let listFrame = CGRect(origin: CGPoint(x: toggleButtonFrame.maxX, y: 0.0), size: CGSize(width: size.width - toggleButtonFrame.maxX, height: size.height))
+            let listInsets = UIEdgeInsets(top: 0.0, left: 8.0, bottom: 0.0, right: 8.0)
+            let listFrame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: size.width, height: size.height))
             let _ = self.list.update(
                 transition: transition,
                 component: AnyComponent(AsyncListComponent(
@@ -571,6 +606,7 @@ final class StoryContentLiveChatComponent: Component {
     let strings: PresentationStrings
     let theme: PresentationTheme
     let call: PresentationGroupCall
+    let storyPeerId: EnginePeer.Id
     let insets: UIEdgeInsets
     
     init(
@@ -578,12 +614,14 @@ final class StoryContentLiveChatComponent: Component {
         strings: PresentationStrings,
         theme: PresentationTheme,
         call: PresentationGroupCall,
+        storyPeerId: EnginePeer.Id,
         insets: UIEdgeInsets
     ) {
         self.context = context
         self.strings = strings
         self.theme = theme
         self.call = call
+        self.storyPeerId = storyPeerId
         self.insets = insets
     }
 
@@ -598,6 +636,9 @@ final class StoryContentLiveChatComponent: Component {
             return false
         }
         if lhs.call !== rhs.call {
+            return false
+        }
+        if lhs.storyPeerId != rhs.storyPeerId {
             return false
         }
         if lhs.insets != rhs.insets {
@@ -624,7 +665,13 @@ final class StoryContentLiveChatComponent: Component {
         private var messagesState: GroupCallMessagesContext.State?
         private var stateDisposable: Disposable?
         
-        private var isChatExpanded: Bool = false
+        public var isChatEmpty: Bool {
+            guard let messagesState = self.messagesState else {
+                return true
+            }
+            return messagesState.messages.isEmpty
+        }
+        private(set) var isChatExpanded: Bool = false
         
         override init(frame: CGRect) {
             self.listContainer = UIView()
@@ -709,6 +756,89 @@ final class StoryContentLiveChatComponent: Component {
             return result
         }
         
+        func toggleLiveChatExpanded() {
+            self.isChatExpanded = !self.isChatExpanded
+            self.state?.updated(transition: .spring(duration: 0.4))
+        }
+        
+        private func openMessageContextMenu(id: Int64, gesture: ContextGesture, sourceNode: ContextExtractedContentContainingNode) {
+            Task { @MainActor [weak self] in
+                guard let self else {
+                    return
+                }
+                guard let component = self.component else {
+                    return
+                }
+                let presentationData = component.context.sharedContext.currentPresentationData.with({ $0 }).withUpdated(theme: component.theme)
+                
+                if let listView = self.list.view as? AsyncListComponent.View {
+                    listView.stopScrolling()
+                }
+                
+                var items: [ContextMenuItem] = []
+                //TODO:localize
+                items.append(.action(ContextMenuActionItem(text: "Copy", textColor: .primary, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Copy"), color: theme.contextMenu.primaryColor) }, action: { [weak self] c, _ in
+                    guard let self else {
+                        return
+                    }
+                    
+                    c?.dismiss(completion: { [weak self] in
+                        guard let self else {
+                            return
+                        }
+                        if let messagesState = self.messagesState, let message = messagesState.messages.first(where: { $0.id == id }) {
+                            UIPasteboard.general.string = message.text
+                        }
+                    })
+                })))
+                
+                let state = await (component.call.state |> take(1)).get()
+                if state.canManageCall || component.storyPeerId == component.context.account.peerId {
+                    items.append(.action(ContextMenuActionItem(text: presentationData.strings.ChatList_Context_Delete, textColor: .destructive, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Delete"), color: theme.contextMenu.destructiveColor) }, action: { [weak self] c, _ in
+                        guard let self else {
+                            return
+                        }
+                        
+                        c?.dismiss(completion: { [weak self] in
+                            guard let self, let component = self.component else {
+                                return
+                            }
+                            if let call = component.call as? PresentationGroupCallImpl {
+                                call.deleteMessage(id: id)
+                            }
+                        })
+                    })))
+                }
+                
+                let contextController = ContextController(
+                    presentationData: presentationData,
+                    source: .extracted(ItemExtractedContentSource(
+                        sourceNode: sourceNode,
+                        containerView: self,
+                        keepInPlace: false
+                    )),
+                    items: .single(ContextController.Items(content: .list(items))),
+                    recognizer: nil,
+                    gesture: gesture
+                )
+                contextController.dismissed = { [weak self] in
+                    guard let self else {
+                        return
+                    }
+                    if let listView = self.list.view {
+                        let transition: ComponentTransition = .easeInOut(duration: 0.2)
+                        transition.setAlpha(view: listView, alpha: 1.0)
+                    }
+                }
+                if let listView = self.list.view {
+                    let transition: ComponentTransition = .easeInOut(duration: 0.2)
+                    transition.setAlpha(view: listView, alpha: 0.25)
+                }
+                
+                component.context.sharedContext.mainWindow?.presentInGlobalOverlay(contextController)
+            }
+        }
+        
         func update(component: StoryContentLiveChatComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
             self.isUpdating = true
             defer {
@@ -742,13 +872,22 @@ final class StoryContentLiveChatComponent: Component {
             var topMessageByPeerId: [EnginePeer.Id: GroupCallMessagesContext.Message] = [:]
             if let messagesState = self.messagesState {
                 for message in messagesState.messages.reversed() {
+                    let messageId = message.id
                     listItems.append(AnyComponentWithIdentity(id: message.id, component: AnyComponent(MessageItemComponent(
                         context: component.context,
                         strings: component.strings,
                         theme: component.theme,
-                        message: message
+                        message: message,
+                        contextGesture: { [weak self] gesture, sourceNode in
+                            guard let self else {
+                                return
+                            }
+                            self.openMessageContextMenu(id: messageId, gesture: gesture, sourceNode: sourceNode)
+                        }
                     ))))
-                    
+                }
+                
+                for message in messagesState.pinnedMessages.reversed() {
                     if let author = message.author, let paidStars = message.paidStars {
                         if let current = topMessageByPeerId[author.id] {
                             if let currentPaidStars = current.paidStars, currentPaidStars < paidStars {
@@ -790,16 +929,19 @@ final class StoryContentLiveChatComponent: Component {
                 environment: {},
                 containerSize: availableSize
             )
-            let pinnedBarFrame = CGRect(origin: CGPoint(x: 0.0, y: availableSize.height - component.insets.bottom - pinnedBarSize.height), size: pinnedBarSize)
+            let pinnedBarFrame = CGRect(origin: CGPoint(x: 0.0, y: availableSize.height - component.insets.bottom - pinnedBarSize.height - 4.0), size: pinnedBarSize)
             if let pinnedBarView = self.pinnedBar.view {
                 if pinnedBarView.superview == nil {
                     self.addSubview(pinnedBarView)
                 }
                 transition.setFrame(view: pinnedBarView, frame: pinnedBarFrame)
-                transition.setAlpha(view: pinnedBarView, alpha: (listItems.isEmpty && topMessages.isEmpty) ? 0.0 : 1.0)
+                transition.setAlpha(view: pinnedBarView, alpha: topMessages.isEmpty ? 0.0 : 1.0)
             }
             
-            var listInsets = UIEdgeInsets(top: availableSize.height - pinnedBarFrame.minY, left: component.insets.right, bottom: component.insets.top, right: component.insets.left)
+            var listInsets = UIEdgeInsets(top: component.insets.bottom + 16.0, left: component.insets.right, bottom: component.insets.top + 8.0, right: component.insets.left)
+            if !topMessages.isEmpty {
+                listInsets.top = availableSize.height - pinnedBarFrame.minY
+            }
             listInsets.top += 4.0
             let _ = self.list.update(
                 transition: transition,
@@ -827,7 +969,7 @@ final class StoryContentLiveChatComponent: Component {
             transition.setFrame(view: self.listMaskContainer, frame: CGRect(origin: CGPoint(), size: availableSize))
             
             let maskTopInset: CGFloat = component.insets.top - 20.0
-            let maskBottomInset: CGFloat = availableSize.height - pinnedBarFrame.minY - 26.0
+            let maskBottomInset: CGFloat = listInsets.top - 26.0
             transition.setFrame(view: self.maskGradientView, frame: CGRect(origin: CGPoint(x: 0.0, y: maskTopInset), size: CGSize(width: availableSize.width, height: max(0.0, availableSize.height - maskTopInset - maskBottomInset))))
             
             transition.setFrame(view: self.listShadowView, frame: CGRect(origin: CGPoint(), size: availableSize))
@@ -845,5 +987,101 @@ final class StoryContentLiveChatComponent: Component {
     
     func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
         return view.update(component: self, availableSize: availableSize, state: state, environment: environment, transition: transition)
+    }
+}
+
+private final class StarsButtonEffectLayer: SimpleLayer {
+    let emitterLayer = CAEmitterLayer()
+    private var currentColor: UIColor?
+    
+    override init() {
+        super.init()
+        
+        self.addSublayer(self.emitterLayer)
+    }
+    
+    override init(layer: Any) {
+        super.init(layer: layer)
+    }
+    
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+    
+    private func setup() {
+        guard let currentColor = self.currentColor else {
+            return
+        }
+        let color = currentColor
+        
+        let emitter = CAEmitterCell()
+        emitter.name = "emitter"
+        emitter.contents = UIImage(bundleImageName: "Premium/Stars/Particle")?.cgImage
+        emitter.birthRate = 25.0
+        emitter.lifetime = 2.0
+        emitter.velocity = 12.0
+        emitter.velocityRange = 3
+        emitter.scale = 0.1
+        emitter.scaleRange = 0.08
+        emitter.alphaRange = 0.1
+        emitter.emissionRange = .pi * 2.0
+        emitter.setValue(3.0, forKey: "mass")
+        emitter.setValue(2.0, forKey: "massRange")
+        
+        let staticColors: [Any] = [
+            color.withAlphaComponent(0.0).cgColor,
+            color.cgColor,
+            color.cgColor,
+            color.withAlphaComponent(0.0).cgColor
+        ]
+        let staticColorBehavior = CAEmitterCell.createEmitterBehavior(type: "colorOverLife")
+        staticColorBehavior.setValue(staticColors, forKey: "colors")
+        emitter.setValue([staticColorBehavior], forKey: "emitterBehaviors")
+        
+        self.emitterLayer.emitterCells = [emitter]
+    }
+    
+    func update(color: UIColor, size: CGSize) {
+        if self.emitterLayer.emitterCells == nil || self.currentColor != color {
+            self.currentColor = color
+            self.setup()
+        }
+        self.emitterLayer.emitterShape = .circle
+        self.emitterLayer.emitterSize = CGSize(width: size.width * 0.7, height: size.height * 0.7)
+        self.emitterLayer.emitterMode = .surface
+        self.emitterLayer.frame = CGRect(origin: .zero, size: size)
+        self.emitterLayer.emitterPosition = CGPoint(x: size.width / 2.0, y: size.height / 2.0)
+    }
+}
+
+private final class ItemExtractedContentSource: ContextExtractedContentSource {
+    let keepInPlace: Bool
+    let ignoreContentTouches: Bool = true
+    let blurBackground: Bool = false
+    let adjustContentForSideInset: Bool = true
+    
+    private let sourceNode: ContextExtractedContentContainingNode
+    private weak var containerView: UIView?
+    
+    init(sourceNode: ContextExtractedContentContainingNode, containerView: UIView, keepInPlace: Bool) {
+        self.sourceNode = sourceNode
+        self.containerView = containerView
+        self.keepInPlace = keepInPlace
+    }
+    
+    func takeView() -> ContextControllerTakeViewInfo? {
+        var contentArea: CGRect?
+        if let containerView = self.containerView {
+            contentArea = containerView.convert(containerView.bounds, to: nil)
+        }
+        
+        return ContextControllerTakeViewInfo(
+            containingItem: .node(self.sourceNode),
+            contentAreaInScreenSpace: contentArea ?? UIScreen.main.bounds
+        )
+    }
+    
+    func putBack() -> ContextControllerPutBackViewInfo? {
+        return ContextControllerPutBackViewInfo(contentAreaInScreenSpace: UIScreen.main.bounds)
     }
 }

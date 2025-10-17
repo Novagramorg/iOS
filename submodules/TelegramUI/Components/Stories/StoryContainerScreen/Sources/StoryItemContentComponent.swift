@@ -134,6 +134,23 @@ final class StoryItemContentComponent: Component {
         private var fetchPriorityResourceId: String?
         private var currentFetchPriority: (isMain: Bool, disposable: Disposable)?
         
+        public var isLiveChatExpanded: Bool? {
+            guard let liveChatView = self.liveChat?.view as? StoryContentLiveChatComponent.View else {
+                return nil
+            }
+            if liveChatView.isChatEmpty {
+                return nil
+            }
+            return liveChatView.isChatExpanded
+        }
+        
+        public func toggleLiveChatExpanded() {
+            guard let liveChatView = self.liveChat?.view as? StoryContentLiveChatComponent.View else {
+                return
+            }
+            return liveChatView.toggleLiveChatExpanded()
+        }
+        
 		override init(frame: CGRect) {
             self.hierarchyTrackingLayer = HierarchyTrackingLayer()
             self.imageView = StoryItemImageView()
@@ -799,6 +816,7 @@ final class StoryItemContentComponent: Component {
                         strings: component.strings,
                         theme: environment.theme,
                         call: mediaStreamCall,
+                        storyPeerId: component.peer.id,
                         insets: environment.containerInsets
                     )),
                     environment: {},
@@ -807,6 +825,7 @@ final class StoryItemContentComponent: Component {
                 let liveChatFrame = CGRect(origin: CGPoint(), size: availableSize)
                 if let liveChatView = liveChat.view {
                     if liveChatView.superview == nil {
+                        liveChat.parentState = state
                         self.insertSubview(liveChatView, aboveSubview: self.imageView)
                     }
                     mediaStreamTransition.setFrame(view: liveChatView, frame: liveChatFrame)

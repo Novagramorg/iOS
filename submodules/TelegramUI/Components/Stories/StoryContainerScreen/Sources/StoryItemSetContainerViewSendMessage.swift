@@ -401,48 +401,72 @@ final class StoryItemSetContainerSendMessage {
         
         view.dismissAllTooltips()
         
-        var sendWhenOnlineAvailable = false
-        if let presence = component.slice.additionalPeerData.presence, case .present = presence.status {
-            sendWhenOnlineAvailable = true
-        }
-        
         let presentationData = component.context.sharedContext.currentPresentationData.with({ $0 }).withUpdated(theme: component.theme)
         var items: [ContextMenuItem] = []
         
-        items.append(.action(ContextMenuActionItem(text: presentationData.strings.Conversation_SendMessage_SendSilently, icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Input/Menu/SilentIcon"), color: theme.contextMenu.primaryColor)
-        }, action: { [weak self, weak view] _, a in
-            a(.default)
-            
-            guard let self, let view else {
-                return
+        if case .liveStream = component.slice.item.storyItem.media {
+            //TODO:localize
+            items.append(.action(ContextMenuActionItem(text: "Edit Stars", icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Input/Text/AccessoryIconSuggestPost"), color: theme.contextMenu.primaryColor)
+            }, action: { [weak self, weak view] _, a in
+                a(.default)
+                
+                guard let self, let view else {
+                    return
+                }
+                self.performPaidMessageAction(view: view)
+            })))
+            if self.currentLiveStreamMessageStars != nil {
+                items.append(.action(ContextMenuActionItem(text: "Remove Stars", icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Input/Text/AccessoryIconSuggestPost"), color: theme.contextMenu.primaryColor)
+                }, action: { [weak self, weak view] _, a in
+                    a(.default)
+                    
+                    guard let self, let view else {
+                        return
+                    }
+                    self.currentLiveStreamMessageStars = nil
+                    view.state?.updated(transition: .spring(duration: 0.3))
+                })))
             }
-            self.performSendMessageAction(view: view, silentPosting: true)
-        })))
-        
-        if sendWhenOnlineAvailable {
-            items.append(.action(ContextMenuActionItem(text: presentationData.strings.Conversation_SendMessage_SendWhenOnline, icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Input/Menu/WhenOnlineIcon"), color: theme.contextMenu.primaryColor)
+        } else {
+            var sendWhenOnlineAvailable = false
+            if let presence = component.slice.additionalPeerData.presence, case .present = presence.status {
+                sendWhenOnlineAvailable = true
+            }
+            
+            items.append(.action(ContextMenuActionItem(text: presentationData.strings.Conversation_SendMessage_SendSilently, icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Input/Menu/SilentIcon"), color: theme.contextMenu.primaryColor)
             }, action: { [weak self, weak view] _, a in
                 a(.default)
                 
                 guard let self, let view else {
                     return
                 }
-                self.performSendMessageAction(view: view, scheduleTime: scheduleWhenOnlineTimestamp)
+                self.performSendMessageAction(view: view, silentPosting: true)
             })))
+            
+            if sendWhenOnlineAvailable {
+                items.append(.action(ContextMenuActionItem(text: presentationData.strings.Conversation_SendMessage_SendWhenOnline, icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Input/Menu/WhenOnlineIcon"), color: theme.contextMenu.primaryColor)
+                }, action: { [weak self, weak view] _, a in
+                    a(.default)
+                    
+                    guard let self, let view else {
+                        return
+                    }
+                    self.performSendMessageAction(view: view, scheduleTime: scheduleWhenOnlineTimestamp)
+                })))
+            }
+            
+            if component.slice.additionalPeerData.sendPaidMessageStars == nil {
+                items.append(.action(ContextMenuActionItem(text: presentationData.strings.Conversation_SendMessage_ScheduleMessage, icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Input/Menu/ScheduleIcon"), color: theme.contextMenu.primaryColor)
+                }, action: { [weak self, weak view] _, a in
+                    a(.default)
+                    
+                    guard let self, let view else {
+                        return
+                    }
+                    self.presentScheduleTimePicker(view: view)
+                })))
+            }
         }
-        
-        if component.slice.additionalPeerData.sendPaidMessageStars == nil {
-            items.append(.action(ContextMenuActionItem(text: presentationData.strings.Conversation_SendMessage_ScheduleMessage, icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Input/Menu/ScheduleIcon"), color: theme.contextMenu.primaryColor)
-            }, action: { [weak self, weak view] _, a in
-                a(.default)
-                
-                guard let self, let view else {
-                    return
-                }
-                self.presentScheduleTimePicker(view: view)
-            })))
-        }
-        
         
         let contextItems = ContextController.Items(content: .list(items))
         
