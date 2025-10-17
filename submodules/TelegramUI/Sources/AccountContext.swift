@@ -123,7 +123,6 @@ public final class AccountContextImpl: AccountContext {
     public let downloadedMediaStoreManager: DownloadedMediaStoreManager
     
     public let liveLocationManager: LiveLocationManager?
-    public let peersNearbyManager: PeersNearbyManager?
     public let wallpaperUploadManager: WallpaperUploadManager?
     private let themeUpdateManager: ThemeUpdateManager?
     public let inAppPurchaseManager: InAppPurchaseManager?
@@ -311,9 +310,7 @@ public final class AccountContextImpl: AccountContext {
         
         self.account.stateManager.starsContext = self.starsContext
         self.account.stateManager.tonContext = self.starsContext
-        
-        self.peersNearbyManager = nil
-        
+                
         self.cachedGroupCallContexts = AccountGroupCallContextCacheImpl()
         
         let cacheStorageBox = self.account.postbox.mediaBox.cacheStorageBox

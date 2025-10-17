@@ -9,12 +9,12 @@ private let pinOffset = CGPoint(x: 0.0, y: 33.0)
 
 public enum LocationMapMode {
     case map
-    case sattelite
+    case satellite
     case hybrid
     
     var mapType: MKMapType {
         switch self {
-            case .sattelite:
+            case .satellite:
                 return .satellite
             case .hybrid:
                 return .hybrid

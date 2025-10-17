@@ -2530,8 +2530,12 @@ private final class GiftViewSheetContent: CombinedComponent {
             }
             
             var ownerPeerId: EnginePeer.Id?
-            if let uniqueGift, case let .peerId(peerId) = uniqueGift.owner {
-                ownerPeerId = peerId
+            if let uniqueGift {
+                if case let .peerId(peerId) = uniqueGift.owner {
+                    ownerPeerId = peerId
+                } else {
+                    ownerPeerId = uniqueGift.hostPeerId
+                }
             }
             let wearOwnerPeerId = ownerPeerId ?? component.context.account.peerId
             

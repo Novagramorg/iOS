@@ -3151,7 +3151,7 @@ public final class MediaEditorScreenImpl: ViewController, MediaEditorScreen, UID
             self.previewContainerView = UIView()
             self.previewContainerView.alpha = 0.0
             self.previewContainerView.clipsToBounds = true
-            self.previewContainerView.layer.cornerRadius = 12.0
+            self.previewContainerView.layer.cornerRadius = 30.0 //12.0
             if #available(iOS 13.0, *) {
                 self.previewContainerView.layer.cornerCurve = .continuous
             }

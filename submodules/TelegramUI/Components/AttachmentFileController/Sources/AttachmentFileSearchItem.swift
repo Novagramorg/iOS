@@ -17,6 +17,8 @@ import ItemListUI
 import SearchUI
 import ContextUI
 import ListMessageItem
+import ComponentFlow
+import SearchInputPanelComponent
 
 private let searchBarFont = Font.regular(17.0)
 
@@ -41,12 +43,12 @@ private final class AttachmentFileSearchNavigationContentNode: NavigationBarCont
         
         self.focus = focus
         self.cancel = cancel
-        
+                
         self.searchBar = SearchBarNode(theme: SearchBarNodeTheme(theme: theme, hasSeparator: false), strings: strings, fieldStyle: .modern, displayBackground: false)
         
         super.init()
-        
-        self.addSubnode(self.searchBar)
+                
+        //self.addSubnode(self.searchBar)
                 
         self.searchBar.cancel = { [weak self] in
             self?.searchBar.deactivate(clear: false)
@@ -95,11 +97,11 @@ private final class AttachmentFileSearchNavigationContentNode: NavigationBarCont
     }
     
     func activate() {
-        self.searchBar.activate()
+        //self.searchBar.activate()
     }
     
     func deactivate() {
-        self.searchBar.deactivate(clear: false)
+        //self.searchBar.deactivate(clear: false)
     }
 }
 
@@ -149,40 +151,60 @@ final class AttachmentFileSearchItem: ItemListControllerSearch {
         }
     }
     
-    func titleContentNode(current: (NavigationBarContentNode & ItemListControllerSearchNavigationContentNode)?) -> NavigationBarContentNode & ItemListControllerSearchNavigationContentNode {
-        let presentationData = self.presentationData
-        if let current = current as? AttachmentFileSearchNavigationContentNode {
-            current.updateTheme(presentationData.theme)
-            return current
-        } else {
-            return AttachmentFileSearchNavigationContentNode(theme: presentationData.theme, strings: presentationData.strings, focus: self.focus, cancel: self.cancel, updateActivity: { [weak self] value in
-                self?.updateActivity = value
-            })
-        }
+    func titleContentNode(current: (NavigationBarContentNode & ItemListControllerSearchNavigationContentNode)?) -> (NavigationBarContentNode & ItemListControllerSearchNavigationContentNode)? {
+        return nil
+//        let presentationData = self.presentationData
+//        if let current = current as? AttachmentFileSearchNavigationContentNode {
+//            current.updateTheme(presentationData.theme)
+//            return current
+//        } else {
+//            return AttachmentFileSearchNavigationContentNode(theme: presentationData.theme, strings: presentationData.strings, focus: self.focus, cancel: self.cancel, updateActivity: { [weak self] value in
+//                self?.updateActivity = value
+//            })
+//        }
     }
     
     func node(current: ItemListControllerSearchNode?, titleContentNode: (NavigationBarContentNode & ItemListControllerSearchNavigationContentNode)?) -> ItemListControllerSearchNode {
-        return AttachmentFileSearchItemNode(context: self.context, send: self.send, cancel: self.cancel, updateActivity: { [weak self] value in
+        return AttachmentFileSearchItemNode(context: self.context, theme: self.presentationData.theme, strings: self.presentationData.strings, focus: self.focus, send: self.send, cancel: self.cancel, updateActivity: { [weak self] value in
             self?.activity.set(value)
         }, dismissInput: self.dismissInput)
     }
 }
 
 private final class AttachmentFileSearchItemNode: ItemListControllerSearchNode {
+    private let context: AccountContext
+    private let theme: PresentationTheme
+    private let strings: PresentationStrings
+    private let focus: () -> Void
+    private let cancel: () -> Void
+    
     private let containerNode: AttachmentFileSearchContainerNode
     
-    init(context: AccountContext, send: @escaping (Message) -> Void, cancel: @escaping () -> Void, updateActivity: @escaping(Bool) -> Void, dismissInput: @escaping () -> Void) {
+    private let searchInput = ComponentView<Empty>()
+    
+    private var validLayout: ContainerViewLayout?
+    
+    init(context: AccountContext, theme: PresentationTheme, strings: PresentationStrings, focus: @escaping () -> Void, send: @escaping (Message) -> Void, cancel: @escaping () -> Void, updateActivity: @escaping(Bool) -> Void, dismissInput: @escaping () -> Void) {
+        self.context = context
+        self.theme = theme
+        self.strings = strings
+        self.focus = focus
+        self.cancel = cancel
+        
         self.containerNode = AttachmentFileSearchContainerNode(context: context, forceTheme: nil, send: { message in
             send(message)
         }, updateActivity: updateActivity)
-        self.containerNode.cancel = {
-            cancel()
-        }
+
         
         super.init()
         
         self.addSubnode(self.containerNode)
         
+        self.containerNode.cancel = { [weak self] in
+            dismissInput()
+            cancel()
+            self?.deactivateInput()
+        }
         self.containerNode.dismissInput = {
             dismissInput()
         }
@@ -196,12 +218,67 @@ private final class AttachmentFileSearchItemNode: ItemListControllerSearchNode {
         self.containerNode.scrollToTop()
     }
     
+    private func deactivateInput() {
+        if let layout = self.validLayout, let searchInputView = self.searchInput.view as? SearchInputPanelComponent.View {
+            let transition = ComponentTransition.spring(duration: 0.4)
+            transition.setFrame(view: searchInputView, frame: CGRect(origin: CGPoint(x: searchInputView.frame.minX, y: layout.size.height), size: searchInputView.frame.size))
+        }
+    }
+    
     override func updateLayout(layout: ContainerViewLayout, navigationBarHeight: CGFloat, transition: ContainedViewLayoutTransition) {
+        self.validLayout = layout
+        
         transition.updateFrame(node: self.containerNode, frame: CGRect(origin: CGPoint(x: 0.0, y: navigationBarHeight), size: CGSize(width: layout.size.width, height: layout.size.height - navigationBarHeight)))
         self.containerNode.containerLayoutUpdated(layout.withUpdatedSize(CGSize(width: layout.size.width, height: layout.size.height - navigationBarHeight)), navigationBarHeight: 0.0, transition: transition)
+        
+        let searchInputSize = self.searchInput.update(
+            transition: .immediate,
+            component: AnyComponent(
+                SearchInputPanelComponent(
+                    theme: self.theme,
+                    strings: self.strings,
+                    metrics: layout.metrics,
+                    placeholder: self.strings.Attachment_FilesSearchPlaceholder,
+                    resetText: nil,
+                    updated: { [weak self] query in
+                        guard let self else {
+                            return
+                        }
+                        self.queryUpdated(query)
+                    },
+                    cancel: { [weak self] in
+                        guard let self else {
+                            return
+                        }
+                        self.cancel()
+                        self.deactivateInput()
+                    }
+                )
+            ),
+            environment: {},
+            containerSize: CGSize(width: layout.size.width - layout.safeInsets.left - layout.safeInsets.right, height: layout.size.height)
+        )
+        
+        let bottomInset: CGFloat = layout.insets(options: .input).bottom
+        let searchInputFrame = CGRect(origin: CGPoint(x: layout.safeInsets.left, y: layout.size.height - bottomInset - searchInputSize.height), size: searchInputSize)
+        if let searchInputView = self.searchInput.view as? SearchInputPanelComponent.View {
+            if searchInputView.superview == nil {
+                self.view.addSubview(searchInputView)
+                searchInputView.frame = CGRect(origin: CGPoint(x: searchInputFrame.minX, y: layout.size.height), size: searchInputFrame.size)
+                
+                self.focus()
+                searchInputView.activateInput()
+            }
+            transition.updateFrame(view: searchInputView, frame: searchInputFrame)
+        }
     }
     
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        if let searchInputView = self.searchInput.view as? SearchInputPanelComponent.View {
+            if let result = searchInputView.hitTest(self.view.convert(point, to: searchInputView), with: event) {
+                return result
+            }
+        }
         if let result = self.containerNode.hitTest(self.view.convert(point, to: self.containerNode.view), with: event) {
             return result
         }
@@ -315,7 +392,7 @@ public final class AttachmentFileSearchContainerNode: SearchDisplayControllerCon
     private var presentationDataDisposable: Disposable?
         
     private let presentationDataPromise: Promise<PresentationData>
-    
+        
     private var _hasDim: Bool = false
     override public var hasDim: Bool {
         return _hasDim
@@ -335,7 +412,7 @@ public final class AttachmentFileSearchContainerNode: SearchDisplayControllerCon
         self.presentationDataPromise = Promise(self.presentationData)
         
         self.dimNode = ASDisplayNode()
-        self.dimNode.backgroundColor = UIColor.black.withAlphaComponent(0.5)
+        self.dimNode.backgroundColor = .clear // UIColor.black.withAlphaComponent(0.5)
         
         self.listNode = ListView()
         self.listNode.accessibilityPageScrolledString = { row, count in
@@ -357,7 +434,8 @@ public final class AttachmentFileSearchContainerNode: SearchDisplayControllerCon
         super.init()
                 
         self.listNode.backgroundColor = self.presentationData.theme.chatList.backgroundColor
-        self.listNode.isHidden = true
+        self.listNode.alpha = 0.0
+        //self.listNode.isHidden = true
         
         self._hasDim = true
         
@@ -503,7 +581,8 @@ public final class AttachmentFileSearchContainerNode: SearchDisplayControllerCon
                     return
                 }
                 
-                strongSelf.listNode.isHidden = !isSearching
+                let containerTransition = ContainedViewLayoutTransition.animated(duration: 0.3, curve: .easeInOut)
+                containerTransition.updateAlpha(node: strongSelf.listNode, alpha: isSearching ? 1.0 : 0.0)
                 strongSelf.dimNode.isHidden = transition.isSearching
                 
                 strongSelf.emptyResultsTextNode.attributedText = NSAttributedString(string: strongSelf.presentationData.strings.ChatList_Search_NoResultsQueryDescription(transition.query).string, font: Font.regular(15.0), textColor: strongSelf.presentationData.theme.list.freeTextColor)
@@ -555,7 +634,9 @@ public final class AttachmentFileSearchContainerNode: SearchDisplayControllerCon
     }
     
     override public func scrollToTop() {
-        self.listNode.transaction(deleteIndices: [], insertIndicesAndItems: [], updateIndicesAndItems: [], options: [.Synchronous, .LowLatency], scrollToItem: ListViewScrollToItem(index: 0, position: .top(0.0), animated: true, curve: .Default(duration: nil), directionHint: .Up), updateSizeAndInsets: nil, stationaryItemRange: nil, updateOpaqueState: nil, completion: { _ in })
+        if self.listNode.alpha > 0.0 {
+            self.listNode.transaction(deleteIndices: [], insertIndicesAndItems: [], updateIndicesAndItems: [], options: [.Synchronous, .LowLatency], scrollToItem: ListViewScrollToItem(index: 0, position: .top(0.0), animated: true, curve: .Default(duration: nil), directionHint: .Up), updateSizeAndInsets: nil, stationaryItemRange: nil, updateOpaqueState: nil, completion: { _ in })
+        }
     }
     
     @objc func dimTapGesture(_ recognizer: UITapGestureRecognizer) {

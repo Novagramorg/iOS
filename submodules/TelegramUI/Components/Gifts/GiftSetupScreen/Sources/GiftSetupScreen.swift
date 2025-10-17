@@ -36,6 +36,7 @@ import Markdown
 import GiftViewScreen
 import UndoUI
 import ConfettiEffect
+import EdgeEffect
 
 final class GiftSetupScreenComponent: Component {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
@@ -89,6 +90,7 @@ final class GiftSetupScreenComponent: Component {
         private let upgradeSection = ComponentView<Empty>()
         private let hideSection = ComponentView<Empty>()
     
+        private let edgeEffectView: EdgeEffectView
         private let buttonBackground = ComponentView<Empty>()
         private let buttonSeparator = SimpleLayer()
         private let button = ComponentView<Empty>()
@@ -159,12 +161,16 @@ final class GiftSetupScreenComponent: Component {
             }
             self.scrollView.alwaysBounceVertical = true
             
+            self.edgeEffectView = EdgeEffectView()
+            
             super.init(frame: frame)
             
             self.scrollView.delegate = self
             self.addSubview(self.scrollView)
             
             self.scrollView.layer.addSublayer(self.topOverscrollLayer)
+            
+            self.addSubview(self.edgeEffectView)
                 
             self.disablesInteractiveKeyboardGestureRecognizer = true
         }
@@ -1400,10 +1406,10 @@ final class GiftSetupScreenComponent: Component {
             self.buttonSeparator.backgroundColor = environment.theme.rootController.tabBar.separatorColor.cgColor
             
             if let view = self.buttonBackground.view {
-                if view.superview == nil {
-                    self.addSubview(view)
-                    self.layer.addSublayer(self.buttonSeparator)
-                }
+//                if view.superview == nil {
+//                    self.addSubview(view)
+//                    self.layer.addSublayer(self.buttonSeparator)
+//                }
                 view.frame = CGRect(origin: CGPoint(x: 0.0, y: availableSize.height - bottomPanelSize.height), size: bottomPanelSize)
                 self.buttonSeparator.frame = CGRect(origin: CGPoint(x: 0.0, y: availableSize.height - bottomPanelSize.height), size: CGSize(width: availableSize.width, height: UIScreenPixel))
             }
@@ -1672,6 +1678,11 @@ final class GiftSetupScreenComponent: Component {
                     }
                 }
             }
+            
+            let edgeEffectHeight: CGFloat = bottomPanelHeight
+            let edgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: availableSize.height - edgeEffectHeight), size: CGSize(width: availableSize.width, height: edgeEffectHeight))
+            transition.setFrame(view: self.edgeEffectView, frame: edgeEffectFrame)
+            self.edgeEffectView.update(content: environment.theme.list.blocksBackgroundColor, rect: edgeEffectFrame, edge: .bottom, edgeSize: edgeEffectFrame.height, transition: transition)
             
             self.topOverscrollLayer.frame = CGRect(origin: CGPoint(x: 0.0, y: -3000.0), size: CGSize(width: availableSize.width, height: 3000.0))
             self.ignoreScrolling = false

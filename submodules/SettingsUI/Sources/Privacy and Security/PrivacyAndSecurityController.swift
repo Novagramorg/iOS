@@ -401,33 +401,33 @@ private enum PrivacyAndSecurityEntry: ItemListNodeEntry {
             case let .privacyHeader(_, text):
                 return ItemListSectionHeaderItem(presentationData: presentationData, text: text, sectionId: self.section)
             case let .blockedPeers(_, text, value):
-                return ItemListDisclosureItem(presentationData: presentationData, icon: UIImage(bundleImageName: "Settings/Menu/Blocked")?.precomposed(), title: text, label: value, sectionId: self.section, style: .blocks, action: {
+                return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, icon: UIImage(bundleImageName: "Settings/Menu/Blocked")?.precomposed(), title: text, label: value, sectionId: self.section, style: .blocks, action: {
                     arguments.openBlockedUsers()
                 })
             case let .phoneNumberPrivacy(_, text, value):
-                return ItemListDisclosureItem(presentationData: presentationData, title: text, label: value, sectionId: self.section, style: .blocks, action: {
+                return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: text, label: value, sectionId: self.section, style: .blocks, action: {
                     arguments.openPhoneNumberPrivacy()
                 })
             case let .lastSeenPrivacy(_, text, value):
-                return ItemListDisclosureItem(presentationData: presentationData, title: text, label: value, sectionId: self.section, style: .blocks, action: {
+                return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: text, label: value, sectionId: self.section, style: .blocks, action: {
                     arguments.openLastSeenPrivacy()
                 })
             case let .profilePhotoPrivacy(_, text, value):
-                return ItemListDisclosureItem(presentationData: presentationData, title: text, label: value, sectionId: self.section, style: .blocks, action: {
+                return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: text, label: value, sectionId: self.section, style: .blocks, action: {
                     arguments.openProfilePhotoPrivacy()
                 })
             case let .forwardPrivacy(_, text, value):
-                return ItemListDisclosureItem(presentationData: presentationData, title: text, label: value, sectionId: self.section, style: .blocks, action: {
+                return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: text, label: value, sectionId: self.section, style: .blocks, action: {
                     arguments.openForwardPrivacy()
                 })
             case let .groupPrivacy(_, text, value):
-                return ItemListDisclosureItem(presentationData: presentationData, title: text, label: value, sectionId: self.section, style: .blocks, action: {
+                return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: text, label: value, sectionId: self.section, style: .blocks, action: {
                     arguments.openGroupsPrivacy()
                 })
             case .groupPrivacyFooter:
                 return ItemListTextItem(presentationData: presentationData, text: .markdown(presentationData.strings.PrivacySettings_InviteSectionFooter), sectionId: self.section)
             case let .voiceMessagePrivacy(theme, text, value, hasPremium):
-                return ItemListDisclosureItem(presentationData: presentationData, title: text, titleIcon: hasPremium ? PresentationResourcesItemList.premiumIcon(theme) : nil, label: value, labelStyle: .text, sectionId: self.section, style: .blocks, action: {
+                return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: text, titleIcon: hasPremium ? PresentationResourcesItemList.premiumIcon(theme) : nil, label: value, labelStyle: .text, sectionId: self.section, style: .blocks, action: {
                     arguments.openVoiceMessagePrivacy()
                 })
             case let .messagePrivacy(theme, value, hasPremium):
@@ -444,55 +444,55 @@ private enum PrivacyAndSecurityEntry: ItemListNodeEntry {
                 case .paidMessages:
                     label = presentationData.strings.Settings_Privacy_Messages_ValuePaid
                 }
-                return ItemListDisclosureItem(presentationData: presentationData, title: presentationData.strings.Settings_Privacy_Messages, titleIcon: hasPremium ? PresentationResourcesItemList.premiumIcon(theme) : nil, label: label, sectionId: self.section, style: .blocks, action: {
+                return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: presentationData.strings.Settings_Privacy_Messages, titleIcon: hasPremium ? PresentationResourcesItemList.premiumIcon(theme) : nil, label: label, sectionId: self.section, style: .blocks, action: {
                     arguments.openMessagePrivacy()
                 })
             case let .bioPrivacy(_, text, value):
-                return ItemListDisclosureItem(presentationData: presentationData, title: text, label: value, sectionId: self.section, style: .blocks, action: {
+                return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: text, label: value, sectionId: self.section, style: .blocks, action: {
                     arguments.openBioPrivacy()
                 })
             case let .birthdayPrivacy(_, text, value):
-                return ItemListDisclosureItem(presentationData: presentationData, title: text, label: value, sectionId: self.section, style: .blocks, action: {
+                return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: text, label: value, sectionId: self.section, style: .blocks, action: {
                     arguments.openBirthdayPrivacy()
                 })
             case let .giftsAutoSavePrivacy(_, text, value):
-                return ItemListDisclosureItem(presentationData: presentationData, title: text, label: value, sectionId: self.section, style: .blocks, action: {
+                return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: text, label: value, sectionId: self.section, style: .blocks, action: {
                     arguments.openGiftsPrivacy()
                 })
             case let .selectivePrivacyInfo(_, text):
                 return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
             case let .voiceCallPrivacy(_, text, value):
-                return ItemListDisclosureItem(presentationData: presentationData, title: text, label: value, sectionId: self.section, style: .blocks, action: {
+                return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: text, label: value, sectionId: self.section, style: .blocks, action: {
                     arguments.openVoiceCallPrivacy()
                 })
             case let .passcode(_, text, hasFaceId, value):
-                return ItemListDisclosureItem(presentationData: presentationData, icon: UIImage(bundleImageName: hasFaceId ? "Settings/Menu/FaceId" : "Settings/Menu/TouchId")?.precomposed(), title: text, label: value, sectionId: self.section, style: .blocks, action: {
+                return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, icon: UIImage(bundleImageName: hasFaceId ? "Settings/Menu/FaceId" : "Settings/Menu/TouchId")?.precomposed(), title: text, label: value, sectionId: self.section, style: .blocks, action: {
                     arguments.openPasscode()
                 })
             case let .twoStepVerification(_, text, value, data):
-                return ItemListDisclosureItem(presentationData: presentationData, icon: UIImage(bundleImageName: "Settings/Menu/TwoStepAuth")?.precomposed(), title: text, label: value, sectionId: self.section, style: .blocks, action: {
+                return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, icon: UIImage(bundleImageName: "Settings/Menu/TwoStepAuth")?.precomposed(), title: text, label: value, sectionId: self.section, style: .blocks, action: {
                     arguments.openTwoStepVerification(data)
                 })
             case let .messageAutoremoveTimeout(_, text, value):
-                return ItemListDisclosureItem(presentationData: presentationData, icon: UIImage(bundleImageName: "Settings/Menu/Timer")?.precomposed(), title: text, label: value, sectionId: self.section, style: .blocks, action: {
+                return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, icon: UIImage(bundleImageName: "Settings/Menu/Timer")?.precomposed(), title: text, label: value, sectionId: self.section, style: .blocks, action: {
                     arguments.setupMessageAutoremove()
                 }, tag: PrivacyAndSecurityEntryTag.messageAutoremoveTimeout)
             case let .messageAutoremoveInfo(_, text):
                 return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
             case let .loginEmail(_, text, emailPattern):
-                return ItemListDisclosureItem(presentationData: presentationData, icon: UIImage(bundleImageName: "Settings/Menu/LoginEmail")?.precomposed(), title: text, label: "", sectionId: self.section, style: .blocks, action: {
+                return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, icon: UIImage(bundleImageName: "Settings/Menu/LoginEmail")?.precomposed(), title: text, label: "", sectionId: self.section, style: .blocks, action: {
                     arguments.openEmailSettings(emailPattern)
                 })
             case let .loginEmailInfo(_, text):
                 return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
             case let .activeSessions(_, text, value):
-                return ItemListDisclosureItem(presentationData: presentationData, icon: UIImage(bundleImageName: "Settings/Menu/Websites")?.precomposed(), title: text, label: value, sectionId: self.section, style: .blocks, action: {
+                return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, icon: UIImage(bundleImageName: "Settings/Menu/Websites")?.precomposed(), title: text, label: value, sectionId: self.section, style: .blocks, action: {
                     arguments.openActiveSessions()
                 })
             case let .autoArchiveHeader(text):
                 return ItemListSectionHeaderItem(presentationData: presentationData, text: text, sectionId: self.section)
             case let .autoArchive(text, value):
-                return ItemListSwitchItem(presentationData: presentationData, title: text, value: value, sectionId: self.section, style: .blocks, updated: { value in
+                return ItemListSwitchItem(presentationData: presentationData, systemStyle: .glass, title: text, value: value, sectionId: self.section, style: .blocks, updated: { value in
                     arguments.toggleArchiveAndMuteNonContacts(value)
                 }, tag: PrivacyAndSecurityEntryTag.autoArchive)
             case let .autoArchiveInfo(text):
@@ -500,13 +500,13 @@ private enum PrivacyAndSecurityEntry: ItemListNodeEntry {
             case let .accountHeader(_, text):
                 return ItemListSectionHeaderItem(presentationData: presentationData, text: text, sectionId: self.section)
             case let .accountTimeout(_, text, value):
-                return ItemListDisclosureItem(presentationData: presentationData, title: text, label: value, sectionId: self.section, style: .blocks, action: {
+                return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: text, label: value, sectionId: self.section, style: .blocks, action: {
                     arguments.setupAccountAutoremove()
                 }, tag: PrivacyAndSecurityEntryTag.accountTimeout)
             case let .accountInfo(_, text):
                 return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
             case let .dataSettings(_, text):
-                return ItemListDisclosureItem(presentationData: presentationData, title: text, label: "", sectionId: self.section, style: .blocks, action: {
+                return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: text, label: "", sectionId: self.section, style: .blocks, action: {
                     arguments.openDataSettings()
                 })
             case let .dataSettingsInfo(_, text):

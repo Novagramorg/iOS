@@ -20,6 +20,7 @@ private let smallTextFont = Font.with(size: 13.0, traits: .monospacedNumbers)
 public final class MessagePriceItem: Equatable, ListViewItem, ItemListItem, ListItemComponentAdaptor.ItemGenerator {
     let theme: PresentationTheme
     let strings: PresentationStrings
+    let systemStyle: ItemListSystemStyle
     let isEnabled: Bool
     let minValue: Int64
     let maxValue: Int64
@@ -30,9 +31,10 @@ public final class MessagePriceItem: Equatable, ListViewItem, ItemListItem, List
     let openSetCustom: (() -> Void)?
     let openPremiumInfo: (() -> Void)?
     
-    public init(theme: PresentationTheme, strings: PresentationStrings, isEnabled: Bool, minValue: Int64, maxValue: Int64, value: Int64, price: String, sectionId: ItemListSectionId, updated: @escaping (Int64, Bool) -> Void, openSetCustom: (() -> Void)? = nil, openPremiumInfo: (() -> Void)? = nil) {
+    public init(theme: PresentationTheme, strings: PresentationStrings, systemStyle: ItemListSystemStyle = .legacy, isEnabled: Bool, minValue: Int64, maxValue: Int64, value: Int64, price: String, sectionId: ItemListSectionId, updated: @escaping (Int64, Bool) -> Void, openSetCustom: (() -> Void)? = nil, openPremiumInfo: (() -> Void)? = nil) {
         self.theme = theme
         self.strings = strings
+        self.systemStyle = systemStyle
         self.isEnabled = isEnabled
         self.minValue = minValue
         self.maxValue = maxValue
@@ -301,6 +303,7 @@ private class MessagePriceItemNode: ListViewItemNode {
             var contentSize: CGSize
             let insets: UIEdgeInsets
             let separatorHeight = UIScreenPixel
+            let separatorRightInset: CGFloat = item.systemStyle == .glass ? 16.0 : 0.0
             
             contentSize = CGSize(width: params.width, height: 88.0)
             if !item.isEnabled {
@@ -358,12 +361,12 @@ private class MessagePriceItemNode: ListViewItemNode {
                             strongSelf.bottomStripeNode.isHidden = hasCorners
                     }
                     
-                    strongSelf.maskNode.image = hasCorners ? PresentationResourcesItemList.cornersImage(item.theme, top: hasTopCorners, bottom: hasBottomCorners) : nil
+                    strongSelf.maskNode.image = hasCorners ? PresentationResourcesItemList.cornersImage(item.theme, top: hasTopCorners, bottom: hasBottomCorners, glass: item.systemStyle == .glass) : nil
                     
                     strongSelf.backgroundNode.frame = CGRect(origin: CGPoint(x: 0.0, y: -min(insets.top, separatorHeight)), size: CGSize(width: params.width, height: contentSize.height + min(insets.top, separatorHeight) + min(insets.bottom, separatorHeight)))
                     strongSelf.maskNode.frame = strongSelf.backgroundNode.frame.insetBy(dx: params.leftInset, dy: 0.0)
                     strongSelf.topStripeNode.frame = CGRect(origin: CGPoint(x: 0.0, y: -min(insets.top, separatorHeight)), size: CGSize(width: layoutSize.width, height: separatorHeight))
-                    strongSelf.bottomStripeNode.frame = CGRect(origin: CGPoint(x: bottomStripeInset, y: contentSize.height + bottomStripeOffset), size: CGSize(width: layoutSize.width - bottomStripeInset, height: separatorHeight))
+                    strongSelf.bottomStripeNode.frame = CGRect(origin: CGPoint(x: bottomStripeInset, y: contentSize.height + bottomStripeOffset), size: CGSize(width: layoutSize.width - bottomStripeInset - params.rightInset - separatorRightInset, height: separatorHeight))
                     
                     strongSelf.leftTextNode.attributedText = NSAttributedString(string: "\(item.minValue)", font: Font.regular(13.0), textColor: item.theme.list.itemSecondaryTextColor)
                     strongSelf.rightTextNode.attributedText = NSAttributedString(string: "\(item.maxValue)", font: Font.regular(13.0), textColor: item.theme.list.itemSecondaryTextColor)

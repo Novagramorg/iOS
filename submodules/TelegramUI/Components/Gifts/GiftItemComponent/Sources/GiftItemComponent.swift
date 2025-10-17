@@ -19,6 +19,11 @@ import CheckNode
 import BundleIconComponent
 
 public final class GiftItemComponent: Component {
+    public enum Style {
+        case glass
+        case legacy
+    }
+    
     public enum Subject: Equatable {
         case premium(months: Int32, price: String)
         case starGift(gift: StarGift.Gift, price: String)
@@ -138,6 +143,7 @@ public final class GiftItemComponent: Component {
     }
     
     let context: AccountContext
+    let style: Style
     let theme: PresentationTheme
     let strings: PresentationStrings
     let peer: GiftItemComponent.Peer?
@@ -161,6 +167,7 @@ public final class GiftItemComponent: Component {
     
     public init(
         context: AccountContext,
+        style: Style = .legacy,
         theme: PresentationTheme,
         strings: PresentationStrings,
         peer: GiftItemComponent.Peer? = nil,
@@ -183,6 +190,7 @@ public final class GiftItemComponent: Component {
         contextAction: ((UIView, ContextGesture) -> Void)? = nil
     ) {
         self.context = context
+        self.style = style
         self.theme = theme
         self.strings = strings
         self.peer = peer
@@ -207,6 +215,9 @@ public final class GiftItemComponent: Component {
 
     public static func ==(lhs: GiftItemComponent, rhs: GiftItemComponent) -> Bool {
         if lhs.context !== rhs.context {
+            return false
+        }
+        if lhs.style != rhs.style {
             return false
         }
         if lhs.theme !== rhs.theme {
@@ -365,7 +376,12 @@ public final class GiftItemComponent: Component {
                     size.height += 23.0
                 }
                 iconSize = CGSize(width: 88.0, height: 88.0)
-                cornerRadius = 10.0
+                switch component.style {
+                case .glass:
+                    cornerRadius = 16.0
+                case .legacy:
+                    cornerRadius = 10.0
+                }
             case .profile, .select:
                 size = availableSize
                 let side = floor(88.0 * availableSize.height / 116.0)
@@ -1108,8 +1124,8 @@ public final class GiftItemComponent: Component {
                     let image = generateImage(outlineFrame.size, rotatedContext: { size, context in
                         context.clear(CGRect(origin: .zero, size: size))
                         
-                        context.addPath(CGPath(roundedRect: CGRect(origin: .zero, size: outlineFrame.size), cornerWidth: 10.0, cornerHeight: 10.0, transform: nil))
-                        context.addPath(CGPath(roundedRect: CGRect(origin: .zero, size: outlineFrame.size).insetBy(dx: lineWidth, dy: lineWidth), cornerWidth: 8.0, cornerHeight: 8.0, transform: nil))
+                        context.addPath(CGPath(roundedRect: CGRect(origin: .zero, size: outlineFrame.size), cornerWidth: cornerRadius, cornerHeight: cornerRadius, transform: nil))
+                        context.addPath(CGPath(roundedRect: CGRect(origin: .zero, size: outlineFrame.size).insetBy(dx: lineWidth, dy: lineWidth), cornerWidth: cornerRadius - 2.0, cornerHeight: cornerRadius - 2.0, transform: nil))
                         
                         context.clip(using: .evenOdd)
                         

@@ -14,6 +14,10 @@ import ItemListPeerActionItem
 import AttachmentUI
 import TelegramStringFormatting
 import ListMessageItem
+import ComponentFlow
+import GlassBarButtonComponent
+import BundleIconComponent
+import EdgeEffect
 
 private final class AttachmentFileControllerArguments {
     let context: AccountContext
@@ -113,11 +117,11 @@ private enum AttachmentFileEntry: ItemListNodeEntry {
         let arguments = arguments as! AttachmentFileControllerArguments
         switch self {
             case let .selectFromGallery(_, text):
-                return ItemListPeerActionItem(presentationData: presentationData, icon: PresentationResourcesItemList.imageIcon(presentationData.theme), title: text, alwaysPlain: false, sectionId: self.section, height: .generic, editing: false, action: {
+                return ItemListPeerActionItem(presentationData: presentationData, systemStyle: .glass, icon: PresentationResourcesItemList.imageIcon(presentationData.theme), title: text, alwaysPlain: false, sectionId: self.section, height: .generic, editing: false, action: {
                     arguments.openGallery()
                 })
             case let .selectFromFiles(_, text):
-                return ItemListPeerActionItem(presentationData: presentationData, icon: PresentationResourcesItemList.cloudIcon(presentationData.theme), title: text, alwaysPlain: false, sectionId: self.section, height: .generic, editing: false, action: {
+                return ItemListPeerActionItem(presentationData: presentationData, systemStyle: .glass, icon: PresentationResourcesItemList.cloudIcon(presentationData.theme), title: text, alwaysPlain: false, sectionId: self.section, height: .generic, editing: false, action: {
                     arguments.openFiles()
                 })
             case let .recentHeader(_, text):
@@ -131,7 +135,7 @@ private enum AttachmentFileEntry: ItemListNodeEntry {
                 let dateTimeFormat = arguments.context.sharedContext.currentPresentationData.with({$0}).dateTimeFormat
                 let chatPresentationData = ChatPresentationData(theme: ChatPresentationThemeData(theme: presentationData.theme, wallpaper: .color(0)), fontSize: presentationData.fontSize, strings: presentationData.strings, dateTimeFormat: dateTimeFormat, nameDisplayOrder: .firstLast, disableAnimations: false, largeEmoji: false, chatBubbleCorners: PresentationChatBubbleCorners(mainRadius: 0, auxiliaryRadius: 0, mergeBubbleCorners: false))
             
-                return ListMessageItem(presentationData: chatPresentationData, context: arguments.context, chatLocation: .peer(id: PeerId(0)), interaction: interaction, message: message, selection: .none, displayHeader: false, displayFileInfo: false, displayBackground: true, style: .blocks)
+                return ListMessageItem(presentationData: chatPresentationData, systemStyle: .glass, context: arguments.context, chatLocation: .peer(id: PeerId(0)), interaction: interaction, message: message, selection: .none, displayHeader: false, displayFileInfo: false, displayBackground: true, style: .blocks)
         }
     }
 }
@@ -166,7 +170,7 @@ private func attachmentFileControllerEntries(presentationData: PresentationData,
 private final class AttachmentFileContext: AttachmentMediaPickerContext {
 }
 
-class AttachmentFileControllerImpl: ItemListController, AttachmentFileController, AttachmentContainable {
+public class AttachmentFileControllerImpl: ItemListController, AttachmentFileController, AttachmentContainable {
     public var requestAttachmentMenuExpansion: () -> Void = {}
     public var updateNavigationStack: (@escaping ([AttachmentContainable]) -> ([AttachmentContainable], AttachmentMediaPickerContext?)) -> Void = { _ in }
     public var parentController: () -> ViewController? = {
@@ -182,12 +186,12 @@ class AttachmentFileControllerImpl: ItemListController, AttachmentFileController
     var delayDisappear = false
     
     var resetForReuseImpl: () -> Void = {}
-    func resetForReuse() {
+    public func resetForReuse() {
         self.resetForReuseImpl()
         self.scrollToTop?()
     }
     
-    func prepareForReuse() {
+    public func prepareForReuse() {
         self.delayDisappear = true
         self.visibleBottomContentOffsetChanged?(self.visibleBottomContentOffset)
         self.delayDisappear = false
@@ -196,13 +200,49 @@ class AttachmentFileControllerImpl: ItemListController, AttachmentFileController
     public var mediaPickerContext: AttachmentMediaPickerContext? {
         return AttachmentFileContext()
     }
+    
+    private var topEdgeEffectView: EdgeEffectView?
+    private var bottomEdgeEffectView: EdgeEffectView?
+    
+    public override func containerLayoutUpdated(_ layout: ContainerViewLayout, transition: ContainedViewLayoutTransition) {
+        super.containerLayoutUpdated(layout, transition: transition)
+        
+        let topEdgeEffectView: EdgeEffectView
+        if let current = self.topEdgeEffectView {
+            topEdgeEffectView = current
+        } else {
+            topEdgeEffectView = EdgeEffectView()
+            if let navigationBar = self.navigationBar {
+                self.view.insertSubview(topEdgeEffectView, belowSubview: navigationBar.view)
+            }
+            self.topEdgeEffectView = topEdgeEffectView
+        }
+        
+        let edgeEffectHeight: CGFloat = 88.0
+        let topEdgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: layout.size.width, height: edgeEffectHeight))
+        transition.updateFrame(view: topEdgeEffectView, frame: topEdgeEffectFrame)
+        topEdgeEffectView.update(content: .clear, blur: true, alpha: 1.0, rect: topEdgeEffectFrame, edge: .top, edgeSize: topEdgeEffectFrame.height, transition: ComponentTransition(transition))
+        
+        let bottomEdgeEffectView: EdgeEffectView
+        if let current = self.bottomEdgeEffectView {
+            bottomEdgeEffectView = current
+        } else {
+            bottomEdgeEffectView = EdgeEffectView()
+            self.view.addSubview(bottomEdgeEffectView)
+            self.bottomEdgeEffectView = bottomEdgeEffectView
+        }
+                
+        let bottomEdgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: layout.size.height - edgeEffectHeight - layout.additionalInsets.bottom), size: CGSize(width: layout.size.width, height: edgeEffectHeight))
+        transition.updateFrame(view: bottomEdgeEffectView, frame: bottomEdgeEffectFrame)
+        bottomEdgeEffectView.update(content: .clear, blur: true, alpha: 1.0, rect: bottomEdgeEffectFrame, edge: .bottom, edgeSize: bottomEdgeEffectFrame.height, transition: ComponentTransition(transition))
+    }
 }
 
 private struct AttachmentFileControllerState: Equatable {
     var searching: Bool
 }
 
-func makeAttachmentFileControllerImpl(context: AccountContext, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)? = nil, bannedSendMedia: (Int32, Bool)?, presentGallery: @escaping () -> Void, presentFiles: @escaping () -> Void, send: @escaping (AnyMediaReference) -> Void) -> AttachmentFileController {
+public func makeAttachmentFileControllerImpl(context: AccountContext, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)? = nil, bannedSendMedia: (Int32, Bool)?, presentGallery: @escaping () -> Void, presentFiles: @escaping () -> Void, send: @escaping (AnyMediaReference) -> Void) -> AttachmentFileController {
     let actionsDisposable = DisposableSet()
     
     let statePromise = ValuePromise(AttachmentFileControllerState(searching: false), ignoreRepeated: true)
@@ -211,6 +251,7 @@ func makeAttachmentFileControllerImpl(context: AccountContext, updatedPresentati
         statePromise.set(stateValue.modify { f($0) })
     }
     
+    var updateTabBarVisibilityImpl: ((Bool) -> Void)?
     var expandImpl: (() -> Void)?
     var dismissImpl: (() -> Void)?
     var dismissInputImpl: (() -> Void)?
@@ -251,40 +292,110 @@ func makeAttachmentFileControllerImpl(context: AccountContext, updatedPresentati
     )
     
     let presentationData = updatedPresentationData?.signal ?? context.sharedContext.presentationData
-
+        
+    let existingCloseButton = Atomic<BarComponentHostNode?>(value: nil)
+    let existingSearchButton = Atomic<BarComponentHostNode?>(value: nil)
+    
     let previousRecentDocuments = Atomic<[Message]?>(value: nil)
     let signal = combineLatest(queue: Queue.mainQueue(),
        presentationData,
        recentDocuments,
        statePromise.get()
     )
-    |> map { presentationData, recentDocuments, state -> (ItemListControllerState, (ItemListNodeState, Any)) in
+    |> map {
+        presentationData,
+        recentDocuments,
+        state -> (ItemListControllerState, (ItemListNodeState, Any)) in
         var presentationData = presentationData
         
         let updatedTheme = presentationData.theme.withModalBlocksBackground()
         presentationData = presentationData.withUpdated(theme: updatedTheme)
         
-        let previousRecentDocuments = previousRecentDocuments.swap(recentDocuments)
-        let crossfade = previousRecentDocuments == nil && recentDocuments != nil
-        var animateChanges = false
-        if let previousRecentDocuments = previousRecentDocuments, let recentDocuments = recentDocuments, !previousRecentDocuments.isEmpty && !recentDocuments.isEmpty, !crossfade {
-            animateChanges = true
+        let barButtonSize = CGSize(width: 40.0, height: 40.0)
+        let closeButton = GlassBarButtonComponent(
+            size: barButtonSize,
+            backgroundColor: presentationData.theme.rootController.navigationBar.glassBarButtonBackgroundColor,
+            isDark: presentationData.theme.overallDarkAppearance,
+            state: .generic,
+            component: AnyComponentWithIdentity(id: "close", component: AnyComponent(
+                BundleIconComponent(
+                    name: "Navigation/Close",
+                    tintColor: presentationData.theme.rootController.navigationBar.glassBarButtonForegroundColor
+                )
+            )),
+            action: { _ in
+                dismissImpl?()
+            }
+        )
+        let closeButtonComponent = AnyComponentWithIdentity(id: "close", component: AnyComponent(closeButton))
+        let closeButtonNode = existingCloseButton.modify { current in
+            let buttonNode: BarComponentHostNode
+            if let current {
+                buttonNode = current
+                buttonNode.component = closeButtonComponent
+            } else {
+                buttonNode = BarComponentHostNode(component: closeButtonComponent, size: barButtonSize)
+            }
+            return buttonNode
         }
-        
-        var rightNavigationButton: ItemListNavigationButton?
-        if bannedSendMedia == nil && (recentDocuments == nil || (recentDocuments?.count ?? 0) > 10) {
-            rightNavigationButton = ItemListNavigationButton(content: .icon(.search), style: .regular, enabled: true, action: {
+                
+        let searchButton = GlassBarButtonComponent(
+            size: barButtonSize,
+            backgroundColor: presentationData.theme.rootController.navigationBar.glassBarButtonBackgroundColor,
+            isDark: presentationData.theme.overallDarkAppearance,
+            state: .generic,
+            component: AnyComponentWithIdentity(id: "search", component: AnyComponent(
+                BundleIconComponent(
+                    name: "Navigation/Search",
+                    tintColor: presentationData.theme.rootController.navigationBar.glassBarButtonForegroundColor
+                )
+            )),
+            action: { _ in
                 updateState { state in
                     var updatedState = state
                     updatedState.searching = true
                     return updatedState
                 }
-            })
+                updateTabBarVisibilityImpl?(false)
+            }
+        )
+        let searchButtonComponent = state.searching ? nil : AnyComponentWithIdentity(id: "search", component: AnyComponent(searchButton))
+        let searchButtonNode = existingSearchButton.modify { current in
+            let buttonNode: BarComponentHostNode
+            if let current {
+                buttonNode = current
+                buttonNode.component = searchButtonComponent
+            } else {
+                buttonNode = BarComponentHostNode(component: searchButtonComponent, size: barButtonSize)
+            }
+            return buttonNode
+        }
+                
+        let previousRecentDocuments = previousRecentDocuments.swap(recentDocuments)
+        let crossfade = previousRecentDocuments == nil && recentDocuments != nil
+        var animateChanges = false
+        if let previousRecentDocuments = previousRecentDocuments,
+           let recentDocuments = recentDocuments,
+           !previousRecentDocuments.isEmpty && !recentDocuments.isEmpty,
+           !crossfade {
+            animateChanges = true
         }
         
-        let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text(presentationData.strings.Attachment_File), leftNavigationButton: ItemListNavigationButton(content: .text(presentationData.strings.Common_Cancel), style: .regular, enabled: true, action: {
-            dismissImpl?()
-        }), rightNavigationButton: rightNavigationButton, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back), animateChanges: true)
+        let leftNavigationButton =  closeButtonNode.flatMap { ItemListNavigationButton(content: .node($0), style: .regular, enabled: true, action: {}) }
+        
+        var rightNavigationButton: ItemListNavigationButton?
+        if bannedSendMedia == nil && (recentDocuments == nil || (recentDocuments?.count ?? 0) > 10) {
+            rightNavigationButton = searchButtonNode.flatMap { ItemListNavigationButton(content: .node($0), style: .regular, enabled: true, action: {}) }
+        }
+        
+        let controllerState = ItemListControllerState(
+            presentationData: ItemListPresentationData(presentationData),
+            title: .text(presentationData.strings.Attachment_File),
+            leftNavigationButton: leftNavigationButton,
+            rightNavigationButton: rightNavigationButton,
+            backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back),
+            animateChanges: true
+        )
         
         var emptyItem: AttachmentFileEmptyStateItem?
         if let (untilDate, personal) = bannedSendMedia {
@@ -297,7 +408,8 @@ func makeAttachmentFileControllerImpl(context: AccountContext, updatedPresentati
                 banDescription = presentationData.strings.Conversation_DefaultRestrictedMedia
             }
             emptyItem = AttachmentFileEmptyStateItem(context: context, theme: presentationData.theme, strings: presentationData.strings, content: .bannedSendMedia(text: banDescription, canBoost: false))
-        } else if let recentDocuments = recentDocuments, recentDocuments.isEmpty {
+        } else if let recentDocuments = recentDocuments,
+                  recentDocuments.isEmpty {
             emptyItem = AttachmentFileEmptyStateItem(context: context, theme: presentationData.theme, strings: presentationData.strings, content: .intro)
         }
         
@@ -311,6 +423,7 @@ func makeAttachmentFileControllerImpl(context: AccountContext, updatedPresentati
                     updatedState.searching = false
                     return updatedState
                 }
+                updateTabBarVisibilityImpl?(true)
             }, send: { message in
                 arguments.send(message)
             }, dismissInput: {
@@ -325,7 +438,7 @@ func makeAttachmentFileControllerImpl(context: AccountContext, updatedPresentati
         actionsDisposable.dispose()
     }
     
-    let controller = AttachmentFileControllerImpl(context: context, state: signal)
+    let controller = AttachmentFileControllerImpl(context: context, state: signal, hideNavigationBarBackground: true)
     controller.delayDisappear = true
     controller.visibleBottomContentOffsetChanged = { [weak controller] offset in
         switch offset {
@@ -358,6 +471,9 @@ func makeAttachmentFileControllerImpl(context: AccountContext, updatedPresentati
     }
     expandImpl = { [weak controller] in
         controller?.requestAttachmentMenuExpansion()
+    }
+    updateTabBarVisibilityImpl = { [weak controller] isVisible in
+        controller?.updateTabBarVisibility(isVisible, .animated(duration: 0.4, curve: .spring))
     }
     return controller
 }

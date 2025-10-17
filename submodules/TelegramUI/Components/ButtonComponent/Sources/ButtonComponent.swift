@@ -536,7 +536,7 @@ public final class ButtonComponent: Component {
                 transition: contentItemTransition,
                 component: component.content.component,
                 environment: {},
-                containerSize: availableSize
+                containerSize: CGSize(width: availableSize.width - cornerRadius * 2.0, height: availableSize.height)
             )
             if let contentView = contentItem.view.view {
                 var animateIn = false

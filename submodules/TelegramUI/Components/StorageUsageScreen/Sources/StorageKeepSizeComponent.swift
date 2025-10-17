@@ -89,7 +89,7 @@ final class StorageKeepSizeComponent: Component {
             super.init(frame: frame)
             
             self.clipsToBounds = true
-            self.layer.cornerRadius = 10.0
+            self.layer.cornerRadius = 26.0
         }
         
         required init?(coder: NSCoder) {
@@ -106,7 +106,7 @@ final class StorageKeepSizeComponent: Component {
                 self.backgroundColor = component.theme.list.itemBlocksBackgroundColor
             }
             
-            let height: CGFloat = 88.0
+            let height: CGFloat = 96.0
             
             var titleSizes: [CGSize] = []
             for i in 0 ..< self.titles.count {
@@ -133,7 +133,7 @@ final class StorageKeepSizeComponent: Component {
                     } else if i > 0 {
                         position -= titleSize.width / 2.0
                     }
-                    transition.setFrame(view: titleView, frame: CGRect(origin: CGPoint(x: position, y: 15.0), size: titleSize))
+                    transition.setFrame(view: titleView, frame: CGRect(origin: CGPoint(x: position, y: 19.0), size: titleSize))
                 }
             }
             
@@ -167,7 +167,7 @@ final class StorageKeepSizeComponent: Component {
                 sliderView.knobImage = PresentationResourcesItemList.knobImage(component.theme)
             }
             
-            transition.setFrame(view: sliderView, frame: CGRect(origin: CGPoint(x: 15.0, y: 37.0), size: CGSize(width: availableSize.width - 15.0 * 2.0, height: 44.0)))
+            transition.setFrame(view: sliderView, frame: CGRect(origin: CGPoint(x: 15.0, y: 41.0), size: CGSize(width: availableSize.width - 15.0 * 2.0, height: 44.0)))
             sliderView.hitTestEdgeInsets = UIEdgeInsets(top: -sliderView.frame.minX, left: 0.0, bottom: 0.0, right: -sliderView.frame.minX)
             
             self.updateSliderView()
