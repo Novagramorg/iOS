@@ -1535,7 +1535,7 @@ private class FooterNode: ASDisplayNode {
         self.backgroundNode = NavigationBackgroundNode(color: theme.rootController.tabBar.backgroundColor)
         self.separatorNode = ASDisplayNode()
         
-        self.buttonNode = SolidRoundedButtonNode(theme: SolidRoundedButtonTheme(backgroundColor: .black, foregroundColor: .white), height: 50.0, cornerRadius: 11.0, gloss: gloss)
+        self.buttonNode = SolidRoundedButtonNode(theme: SolidRoundedButtonTheme(backgroundColor: .black, foregroundColor: .white), height: 50.0, cornerRadius: 11.0, isShimmering: gloss)
         self.buttonNode.title = title
         
         self.coverNode = ASDisplayNode()

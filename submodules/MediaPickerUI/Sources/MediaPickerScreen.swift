@@ -2510,7 +2510,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
             let title: String
             let isEnabled: Bool
             if self.controllerNode.currentDisplayMode == .selected {
-                title = self.presentationData.strings.Attachment_SelectedMedia(count)
+                title = "" // self.presentationData.strings.Attachment_SelectedMedia(count)
                 isEnabled = false
             } else {
                 title = self.selectedCollectionValue?.localizedTitle ?? self.presentationData.strings.MediaPicker_Recents

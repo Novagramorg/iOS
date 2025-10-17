@@ -10,6 +10,7 @@ import PresentationDataUtils
 import ViewControllerComponent
 import AccountContext
 import SolidRoundedButtonComponent
+import ButtonComponent
 import MultilineTextComponent
 import MultilineTextWithEntitiesComponent
 import BundleIconComponent
@@ -2098,7 +2099,7 @@ private final class PremiumIntroScreenContentComponent: CombinedComponent {
                     context.add(optionsSection
                         .position(CGPoint(x: availableWidth / 2.0, y: size.height + optionsSection.size.height / 2.0))
                         .clipsToBounds(true)
-                        .cornerRadius(10.0)
+                        .cornerRadius(26.0)
                     )
                     size.height += optionsSection.size.height
                     
@@ -3836,8 +3837,9 @@ private final class PremiumIntroScreenComponent: CombinedComponent {
                     }
                 }
                 
+                let buttonSideInset: CGFloat = 36.0
+                
                 let controller = environment.controller
-                let sideInset: CGFloat = 16.0
                 let button = button.update(
                     component: SolidRoundedButtonComponent(
                         title: buttonTitle,
@@ -3852,8 +3854,8 @@ private final class PremiumIntroScreenComponent: CombinedComponent {
                             ],
                             foregroundColor: .white
                         ),
-                        height: 50.0,
-                        cornerRadius: 11.0,
+                        height: 52.0,
+                        cornerRadius: 26.0,
                         gloss: true,
                         isLoading: state.inProgress,
                         action: {
@@ -3865,7 +3867,7 @@ private final class PremiumIntroScreenComponent: CombinedComponent {
                             }
                         }
                     ),
-                    availableSize: CGSize(width: context.availableSize.width - sideInset * 2.0 - environment.safeInsets.left - environment.safeInsets.right, height: 50.0),
+                    availableSize: CGSize(width: context.availableSize.width - buttonSideInset * 2.0 - environment.safeInsets.left - environment.safeInsets.right, height: 52.0),
                     transition: context.transition)
                                
                 let bottomPanel = bottomPanel.update(

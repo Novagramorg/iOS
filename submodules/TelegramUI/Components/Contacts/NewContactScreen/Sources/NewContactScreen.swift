@@ -391,16 +391,19 @@ final class NewContactScreenComponent: Component {
                                 
                                 let cleanNumber = number.replacingOccurrences(of: "+", with: "")
                                 var scheduleResolve = false
+                                var resolveDelay: Double = 2.5
                                 if !mask.isEmpty && abs(cleanNumber.count - mask.count) < 3 {
                                     scheduleResolve = true
+                                    if abs(cleanNumber.count - mask.count) == 0 {
+                                        resolveDelay = 0.1
+                                    }
                                 } else if mask.isEmpty && cleanNumber.count > 4 {
                                     scheduleResolve = true
                                 }
-                                let _ = component
                                 
                                 if scheduleResolve {
                                     self.resolvedPeerDisposable.set(
-                                        ((Signal.complete() |> delay(2.5, queue: Queue.mainQueue()))
+                                        ((Signal.complete() |> delay(resolveDelay, queue: Queue.mainQueue()))
                                         |> then(
                                             component.context.engine.peers.resolvePeerByPhone(phone: number)
                                             |> beforeStarted({ [weak self] in
@@ -414,16 +417,24 @@ final class NewContactScreenComponent: Component {
                                             })
                                         )
                                         |> deliverOnMainQueue).start(next: { [weak self] peer in
-                                            guard let self else {
+                                            guard let self, let component = self.component else {
                                                 return
                                             }
                                             if let peer {
-                                                self.resolvedPeer = .peer(peer: peer, isContact: false)
+                                                self.resolvedPeerDisposable.set((component.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.IsContact(id: peer.id)) |> deliverOnMainQueue).start(next: { [weak self] isContact in
+                                                    guard let self else {
+                                                        return
+                                                    }
+                                                    self.resolvedPeer = .peer(peer: peer, isContact: isContact)
+                                                    if !self.isUpdating {
+                                                        self.state?.updated(transition: .easeInOut(duration: 0.2))
+                                                    }
+                                                }))
                                             } else {
                                                 self.resolvedPeer = .notFound
-                                            }
-                                            if !self.isUpdating {
-                                                self.state?.updated(transition: .easeInOut(duration: 0.2))
+                                                if !self.isUpdating {
+                                                    self.state?.updated(transition: .easeInOut(duration: 0.2))
+                                                }
                                             }
                                         })
                                     )
