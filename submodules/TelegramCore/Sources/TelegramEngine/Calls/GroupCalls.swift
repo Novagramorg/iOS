@@ -3891,6 +3891,9 @@ public final class GroupCallMessagesContext {
                         }
                         var state = self.state
                         var existingIds = Set(state.messages.map(\.id))
+                        
+                        let currentTime = Int32(CFAbsoluteTimeGetCurrent() + kCFAbsoluteTimeIntervalSince1970)
+                        
                         for message in messages {
                             if existingIds.contains(message.id) {
                                 continue
@@ -3898,7 +3901,9 @@ public final class GroupCallMessagesContext {
                             existingIds.insert(message.id)
                             state.messages.append(message)
                             if self.isLiveStream && message.paidStars != nil {
-                                state.pinnedMessages.append(message)
+                                if message.date + message.lifetime >= currentTime {
+                                    state.pinnedMessages.append(message)
+                                }
                             }
                         }
                         self.state = state
