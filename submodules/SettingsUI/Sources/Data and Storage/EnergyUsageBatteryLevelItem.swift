@@ -11,13 +11,15 @@ import PresentationDataUtils
 import AppBundle
 
 class EnergyUsageBatteryLevelItem: ListViewItem, ItemListItem {
+    let systemStyle: ItemListSystemStyle
     let theme: PresentationTheme
     let strings: PresentationStrings
     let value: Int32
     let sectionId: ItemListSectionId
     let updated: (Int32) -> Void
     
-    init(theme: PresentationTheme, strings: PresentationStrings, value: Int32, sectionId: ItemListSectionId, updated: @escaping (Int32) -> Void) {
+    init(systemStyle: ItemListSystemStyle = .legacy, theme: PresentationTheme, strings: PresentationStrings, value: Int32, sectionId: ItemListSectionId, updated: @escaping (Int32) -> Void) {
+        self.systemStyle = systemStyle
         self.theme = theme
         self.strings = strings
         self.value = value
@@ -157,8 +159,14 @@ class EnergyUsageBatteryLevelItemNode: ListViewItemNode {
             let contentSize: CGSize
             let insets: UIEdgeInsets
             let separatorHeight = UIScreenPixel
+            let separatorRightInset: CGFloat = item.systemStyle == .glass ? 16.0 : 0.0
             
-            contentSize = CGSize(width: params.width, height: 88.0)
+            var verticalInset: CGFloat = 0.0
+            if case .glass = item.systemStyle {
+                verticalInset = 4.0
+            }
+            
+            contentSize = CGSize(width: params.width, height: 88.0 + verticalInset * 2.0)
             insets = itemListNeighborsGroupedInsets(neighbors, params)
             
             let layout = ListViewItemNodeLayout(contentSize: contentSize, insets: insets)
@@ -210,12 +218,12 @@ class EnergyUsageBatteryLevelItemNode: ListViewItemNode {
                             strongSelf.bottomStripeNode.isHidden = hasCorners
                     }
                     
-                    strongSelf.maskNode.image = hasCorners ? PresentationResourcesItemList.cornersImage(item.theme, top: hasTopCorners, bottom: hasBottomCorners) : nil
+                    strongSelf.maskNode.image = hasCorners ? PresentationResourcesItemList.cornersImage(item.theme, top: hasTopCorners, bottom: hasBottomCorners, glass: item.systemStyle == .glass) : nil
                     
                     strongSelf.backgroundNode.frame = CGRect(origin: CGPoint(x: 0.0, y: -min(insets.top, separatorHeight)), size: CGSize(width: params.width, height: contentSize.height + min(insets.top, separatorHeight) + min(insets.bottom, separatorHeight)))
                     strongSelf.maskNode.frame = strongSelf.backgroundNode.frame.insetBy(dx: params.leftInset, dy: 0.0)
                     strongSelf.topStripeNode.frame = CGRect(origin: CGPoint(x: 0.0, y: -min(insets.top, separatorHeight)), size: CGSize(width: layoutSize.width, height: separatorHeight))
-                    strongSelf.bottomStripeNode.frame = CGRect(origin: CGPoint(x: bottomStripeInset, y: contentSize.height + bottomStripeOffset), size: CGSize(width: layoutSize.width - bottomStripeInset, height: separatorHeight))
+                    strongSelf.bottomStripeNode.frame = CGRect(origin: CGPoint(x: bottomStripeInset, y: contentSize.height + bottomStripeOffset), size: CGSize(width: layoutSize.width - bottomStripeInset - params.rightInset - separatorRightInset, height: separatorHeight))
                     
                     strongSelf.leftTextNode.attributedText = NSAttributedString(string: item.strings.PowerSaving_BatteryLevelLimit_Off, font: Font.regular(13.0), textColor: item.theme.list.itemSecondaryTextColor)
                     strongSelf.rightTextNode.attributedText = NSAttributedString(string: item.strings.PowerSaving_BatteryLevelLimit_On, font: Font.regular(13.0), textColor: item.theme.list.itemSecondaryTextColor)
@@ -246,10 +254,10 @@ class EnergyUsageBatteryLevelItemNode: ListViewItemNode {
                     
                     let sideInset: CGFloat = 18.0
                     
-                    strongSelf.leftTextNode.frame = CGRect(origin: CGPoint(x: params.leftInset + sideInset, y: 15.0), size: leftTextSize)
-                    strongSelf.rightTextNode.frame = CGRect(origin: CGPoint(x: params.width - params.leftInset - sideInset - rightTextSize.width, y: 15.0), size: rightTextSize)
+                    strongSelf.leftTextNode.frame = CGRect(origin: CGPoint(x: params.leftInset + sideInset, y: 15.0 + verticalInset), size: leftTextSize)
+                    strongSelf.rightTextNode.frame = CGRect(origin: CGPoint(x: params.width - params.leftInset - sideInset - rightTextSize.width, y: 15.0 + verticalInset), size: rightTextSize)
                     
-                    var centerFrame = CGRect(origin: CGPoint(x: floor((params.width - centerMeasureTextSize.width) / 2.0), y: 11.0), size: centerTextSize)
+                    var centerFrame = CGRect(origin: CGPoint(x: floor((params.width - centerMeasureTextSize.width) / 2.0), y: 11.0 + verticalInset), size: centerTextSize)
                     if !strongSelf.batteryBackgroundNode.isHidden {
                         centerFrame.origin.x -= 12.0
                     }
@@ -312,7 +320,7 @@ class EnergyUsageBatteryLevelItemNode: ListViewItemNode {
                             sliderView.knobImage = PresentationResourcesItemList.knobImage(item.theme)
                         }
                         
-                        sliderView.frame = CGRect(origin: CGPoint(x: params.leftInset + 18.0, y: 36.0), size: CGSize(width: params.width - params.leftInset - params.rightInset - 18.0 * 2.0, height: 44.0))
+                        sliderView.frame = CGRect(origin: CGPoint(x: params.leftInset + 18.0, y: 36.0 + verticalInset), size: CGSize(width: params.width - params.leftInset - params.rightInset - 18.0 * 2.0, height: 44.0))
                     }
                 }
             })

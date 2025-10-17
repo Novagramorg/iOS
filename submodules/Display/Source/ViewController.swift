@@ -163,6 +163,7 @@ public protocol CustomViewControllerNavigationDataSummary: AnyObject {
     
     open var navigationPresentation: ViewControllerNavigationPresentation = .default
     open var _presentedInModal: Bool = false
+    open var _hasGlassStyle: Bool = false
     open var flatReceivesModalTransition: Bool = false
     
     public var presentedOverCoveringView: Bool = false
@@ -241,7 +242,7 @@ public protocol CustomViewControllerNavigationDataSummary: AnyObject {
         let statusBarHeight: CGFloat = layout.statusBarHeight ?? 0.0
         var defaultNavigationBarHeight: CGFloat
         if self._presentedInModal && layout.orientation == .portrait {
-            defaultNavigationBarHeight = 56.0
+            defaultNavigationBarHeight = self._hasGlassStyle ? 66.0 : 56.0
         } else {
             defaultNavigationBarHeight = 44.0
         }

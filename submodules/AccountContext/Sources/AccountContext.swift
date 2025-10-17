@@ -1416,6 +1416,8 @@ public protocol SharedAccountContext: AnyObject {
     
     func openCreateGroupCallUI(context: AccountContext, peerIds: [EnginePeer.Id], parentController: ViewController)
     
+    func makeNewContactScreen(context: AccountContext, firstName: String?, lastName: String?, phoneNumber: String?) -> ViewController
+    
     func navigateToCurrentCall()
     var hasOngoingCall: ValuePromise<Bool> { get }
     var immediateHasOngoingCall: Bool { get }
@@ -1486,7 +1488,6 @@ public protocol AccountContext: AnyObject {
     var engine: TelegramEngine { get }
     
     var liveLocationManager: LiveLocationManager? { get }
-    var peersNearbyManager: PeersNearbyManager? { get }
     var fetchManager: FetchManager { get }
     var prefetchManager: PrefetchManager? { get }
     var downloadedMediaStoreManager: DownloadedMediaStoreManager { get }

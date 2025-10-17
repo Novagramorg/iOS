@@ -33,21 +33,7 @@ func _internal_updateGlobalPrivacySettings(account: Account) -> Signal<Never, No
                     nonContactChatsPrivacy = .everybody
                 }
                 
-                var disallowedGifts: TelegramDisallowedGifts = []
-                if case let .disallowedGiftsSettings(giftFlags) = disallowedStarGifts {
-                    if (giftFlags & (1 << 0)) != 0 {
-                        disallowedGifts.insert(.unlimited)
-                    }
-                    if (giftFlags & (1 << 1)) != 0 {
-                        disallowedGifts.insert(.limited)
-                    }
-                    if (giftFlags & (1 << 2)) != 0 {
-                        disallowedGifts.insert(.unique)
-                    }
-                    if (giftFlags & (1 << 3)) != 0 {
-                        disallowedGifts.insert(.premium)
-                    }
-                }
+                let disallowedGifts = TelegramDisallowedGifts(apiDisallowedGifts: disallowedStarGifts)
                 
                 globalSettings = GlobalPrivacySettings(
                     automaticallyArchiveAndMuteNonContacts: automaticallyArchiveAndMuteNonContacts,
@@ -258,21 +244,7 @@ func _internal_requestAccountPrivacySettings(account: Account) -> Signal<Account
                 nonContactChatsPrivacy = .everybody
             }
             
-            var disallowedGifts: TelegramDisallowedGifts = []
-            if case let .disallowedGiftsSettings(giftFlags) = disallowedStarGifts {
-                if (giftFlags & (1 << 0)) != 0 {
-                    disallowedGifts.insert(.unlimited)
-                }
-                if (giftFlags & (1 << 1)) != 0 {
-                    disallowedGifts.insert(.limited)
-                }
-                if (giftFlags & (1 << 2)) != 0 {
-                    disallowedGifts.insert(.unique)
-                }
-                if (giftFlags & (1 << 3)) != 0 {
-                    disallowedGifts.insert(.premium)
-                }
-            }
+            let disallowedGifts = TelegramDisallowedGifts(apiDisallowedGifts: disallowedStarGifts)
             
             globalSettings = GlobalPrivacySettings(
                 automaticallyArchiveAndMuteNonContacts: automaticallyArchiveAndMuteNonContacts,
@@ -416,10 +388,13 @@ func _internal_updateGlobalPrivacySettings(account: Account, settings: GlobalPri
         if settings.disallowedGifts.contains(.premium) {
             giftFlags |= 1 << 3
         }
+        if settings.disallowedGifts.contains(.channel) {
+            giftFlags |= 1 << 4
+        }
     }
     flags |= 1 << 6
-    let disallowedStargifts = Api.DisallowedGiftsSettings.disallowedGiftsSettings(flags: giftFlags)
     
+    let disallowedStargifts: Api.DisallowedGiftsSettings = .disallowedGiftsSettings(flags: giftFlags)
     return account.network.request(Api.functions.account.setGlobalPrivacySettings(
         settings: .globalPrivacySettings(flags: flags, noncontactPeersPaidStars: noncontactPeersPaidStars, disallowedGifts: disallowedStargifts)
     ))

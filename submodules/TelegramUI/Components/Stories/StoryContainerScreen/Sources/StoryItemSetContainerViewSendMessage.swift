@@ -983,7 +983,7 @@ final class StoryItemSetContainerSendMessage {
                                 guard let self, let view else {
                                     return
                                 }
-                                self.presentScheduleTimePicker(view: view, peer: peer, completion: { time in
+                                self.presentScheduleTimePicker(view: view, peer: peer, completion: { time, repeatPeriod in
                                     done(time)
                                 })
                             })))
@@ -2110,7 +2110,7 @@ final class StoryItemSetContainerSendMessage {
             guard let self, let view else {
                 return
             }
-            self.presentScheduleTimePicker(view: view, peer: peer, style: media ? .media : .default, completion: { time in
+            self.presentScheduleTimePicker(view: view, peer: peer, style: media ? .media : .default, completion: { time, repeatPeriod in
                 done(time)
             })
         }
@@ -2234,7 +2234,7 @@ final class StoryItemSetContainerSendMessage {
                         view.component?.controller()?.present(standardTextAlertController(theme: AlertControllerTheme(presentationData: presentationData), title: nil, text: text, actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]), in: .window(.root))
                     }, presentSchedulePicker: { [weak view] media, done in
                         if let strongSelf = self, let view {
-                            strongSelf.presentScheduleTimePicker(view: view, peer: peer, style: media ? .media : .default, completion: { time in
+                            strongSelf.presentScheduleTimePicker(view: view, peer: peer, style: media ? .media : .default, completion: { time, repeatPeriod in
                                  done(time)
                             })
                         }
@@ -2643,7 +2643,7 @@ final class StoryItemSetContainerSendMessage {
                 guard let self, let view else {
                     return
                 }
-                self.presentScheduleTimePicker(view: view, peer: peer, style: .media, completion: { time in
+                self.presentScheduleTimePicker(view: view, peer: peer, style: .media, completion: { time, repeatPeriod in
                     done(time)
                 })
             }, presentTimerPicker: { [weak self, weak view] done in
@@ -2678,7 +2678,7 @@ final class StoryItemSetContainerSendMessage {
         style: ChatScheduleTimeControllerStyle = .default,
         selectedTime: Int32? = nil,
         dismissByTapOutside: Bool = true,
-        completion: @escaping (Int32) -> Void
+        completion: @escaping (Int32, Int32?) -> Void
     ) {
         guard let component = view.component else {
             return
@@ -2707,7 +2707,7 @@ final class StoryItemSetContainerSendMessage {
             }
             let theme = component.theme
             let controller = ChatScheduleTimeController(context: component.context, updatedPresentationData: (component.context.sharedContext.currentPresentationData.with({ $0 }).withUpdated(theme: theme), component.context.sharedContext.presentationData |> map { $0.withUpdated(theme: theme) }), mode: mode, style: style, currentTime: selectedTime, minimalTime: nil, dismissByTapOutside: dismissByTapOutside, completion: { time in
-                completion(time)
+                completion(time, nil)
             })
             view.endEditing(true)
             view.component?.controller()?.present(controller, in: .window(.root))
@@ -2760,7 +2760,7 @@ final class StoryItemSetContainerSendMessage {
                         attributes.append(NotificationInfoMessageAttribute(flags: .muted))
                     }
                     if let scheduleTime = scheduleTime {
-                         attributes.append(OutgoingScheduleInfoMessageAttribute(scheduleTime: scheduleTime))
+                         attributes.append(OutgoingScheduleInfoMessageAttribute(scheduleTime: scheduleTime, repeatPeriod: nil))
                     }
                 }
                 var messageAttributes: [MessageAttribute] = []

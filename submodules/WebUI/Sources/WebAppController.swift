@@ -39,6 +39,9 @@ import LegacyMediaPickerUI
 import GenerateStickerPlaceholderImage
 import PassKit
 import Photos
+import GlassBarButtonComponent
+import BundleIconComponent
+import LottieComponent
 
 private let durgerKingBotIds: [Int64] = [5104055776, 2200339955]
 
@@ -182,7 +185,7 @@ public final class WebAppController: ViewController, AttachmentContainable {
         private var queryId: Int64?
         fileprivate let canMinimize = true
         
-        private var hasBackButton = false
+        fileprivate var hasBackButton = false
         
         private var placeholderDisposable = MetaDisposable()
         private var keepAliveDisposable: Disposable?
@@ -808,7 +811,7 @@ public final class WebAppController: ViewController, AttachmentContainable {
                                 guard let self else {
                                     return
                                 }
-                                self.controller?.morePressed(node: node, gesture: gesture)
+                                self.controller?.morePressed(view: node.view, gesture: gesture)
                             }
                         )
                     ),
@@ -1218,7 +1221,7 @@ public final class WebAppController: ViewController, AttachmentContainable {
             case "web_app_setup_back_button":
                 if let json = json, let isVisible = json["is_visible"] as? Bool {
                     self.hasBackButton = isVisible
-                    self.controller?.cancelButtonNode.setState(isVisible ? .back : .cancel, animated: true)
+                    self.controller?.updateNavigationButtons()
                     if controller.isFullscreen {
                         self.requestLayout(transition: .immediate)
                     }
@@ -3260,6 +3263,9 @@ public final class WebAppController: ViewController, AttachmentContainable {
     private var titleView: WebAppTitleView?
     fileprivate let cancelButtonNode: WebAppCancelButtonNode
     fileprivate let moreButtonNode: MoreButtonNode
+    private var cancelBarButtonNode: BarComponentHostNode?
+    private var moreBarButtonNode: BarComponentHostNode?
+    private let moreButtonPlayOnce = ActionSlot<Void>()
     
     private let context: AccountContext
     public let source: WebAppParameters.Source
@@ -3331,20 +3337,24 @@ public final class WebAppController: ViewController, AttachmentContainable {
         self.statusBar.statusBarStyle = self.presentationData.theme.rootController.statusBarStyle.style
         self.automaticallyControlPresentationContextLayout = false
         
-        self.navigationItem.leftBarButtonItem = UIBarButtonItem(customDisplayNode: self.cancelButtonNode)
-        self.navigationItem.leftBarButtonItem?.action = #selector(self.cancelPressed)
-        self.navigationItem.leftBarButtonItem?.target = self
-        
-        if !self.isVerifyAgeBot {
-            self.navigationItem.rightBarButtonItem = UIBarButtonItem(customDisplayNode: self.moreButtonNode)
-            self.navigationItem.rightBarButtonItem?.action = #selector(self.moreButtonPressed)
-            self.navigationItem.rightBarButtonItem?.target = self
+        if case .attachMenu = self.source {
+            
+        } else {
+            self.navigationItem.leftBarButtonItem = UIBarButtonItem(customDisplayNode: self.cancelButtonNode)
+            self.navigationItem.leftBarButtonItem?.action = #selector(self.cancelPressed)
+            self.navigationItem.leftBarButtonItem?.target = self
+            
+            if !self.isVerifyAgeBot {
+                self.navigationItem.rightBarButtonItem = UIBarButtonItem(customDisplayNode: self.moreButtonNode)
+                self.navigationItem.rightBarButtonItem?.action = #selector(self.moreButtonPressed)
+                self.navigationItem.rightBarButtonItem?.target = self
+            }
         }
         
         self.navigationItem.backBarButtonItem = UIBarButtonItem(title: self.presentationData.strings.Common_Back, style: .plain, target: nil, action: nil)
         
         if !self.isVerifyAgeBot {
-            let titleView = WebAppTitleView(context: self.context, theme: self.presentationData.theme)
+            let titleView = WebAppTitleView(context: self.context, theme: self.presentationData.theme, isAttachMenu: self.source == .attachMenu)
             titleView.title = WebAppTitle(title: params.botName, counter: self.presentationData.strings.WebApp_Miniapp, isVerified: params.botVerified)
             self.navigationItem.titleView = titleView
             self.titleView = titleView
@@ -3352,7 +3362,7 @@ public final class WebAppController: ViewController, AttachmentContainable {
         
         self.moreButtonNode.action = { [weak self] _, gesture in
             if let strongSelf = self {
-                strongSelf.morePressed(node: strongSelf.moreButtonNode.contextSourceNode, gesture: gesture)
+                strongSelf.morePressed(view: strongSelf.moreButtonNode.contextSourceNode.view, gesture: gesture)
             }
         }
         
@@ -3392,6 +3402,8 @@ public final class WebAppController: ViewController, AttachmentContainable {
                 }
             })
         }
+        
+        self.updateNavigationButtons()
     }
     
     required public init(coder aDecoder: NSCoder) {
@@ -3401,6 +3413,76 @@ public final class WebAppController: ViewController, AttachmentContainable {
     deinit {
         assert(true)
         self.presentationDataDisposable?.dispose()
+    }
+    
+    private func updateNavigationButtons() {
+        if case .attachMenu = self.source {
+            let barButtonSize = CGSize(width: 40.0, height: 40.0)
+            let closeComponent: AnyComponentWithIdentity<Empty> = AnyComponentWithIdentity(
+                id: "close",
+                component: AnyComponent(GlassBarButtonComponent(
+                    size: barButtonSize,
+                    backgroundColor: self.presentationData.theme.rootController.navigationBar.glassBarButtonBackgroundColor,
+                    isDark: self.presentationData.theme.overallDarkAppearance,
+                    state: .generic,
+                    component: AnyComponentWithIdentity(id: self.controllerNode.hasBackButton ? "back" : "close", component: AnyComponent(
+                        BundleIconComponent(
+                            name: self.controllerNode.hasBackButton ? "Navigation/Back" : "Navigation/Close",
+                            tintColor: self.presentationData.theme.rootController.navigationBar.glassBarButtonForegroundColor
+                        )
+                    )),
+                    action: { [weak self] _ in
+                        self?.cancelPressed()
+                    }
+                ))
+            )
+            
+            let moreComponent: AnyComponentWithIdentity<Empty> = AnyComponentWithIdentity(
+                id: "more",
+                component: AnyComponent(GlassBarButtonComponent(
+                    size: barButtonSize,
+                    backgroundColor: self.presentationData.theme.rootController.navigationBar.glassBarButtonBackgroundColor,
+                    isDark: self.presentationData.theme.overallDarkAppearance,
+                    state: .generic,
+                    component: AnyComponentWithIdentity(id: "more", component: AnyComponent(
+                        LottieComponent(
+                            content: LottieComponent.AppBundleContent(
+                                name: "anim_morewide"
+                            ),
+                            color: self.presentationData.theme.rootController.navigationBar.glassBarButtonForegroundColor,
+                            size: CGSize(width: 34.0, height: 34.0),
+                            playOnce: self.moreButtonPlayOnce
+                        )
+                    )),
+                    action: { [weak self] view in
+                        self?.morePressed(view: view, gesture: nil)
+                        self?.moreButtonPlayOnce.invoke(Void())
+                    }
+                ))
+            )
+            
+            let cancelButtonNode: BarComponentHostNode
+            if let current = self.cancelBarButtonNode {
+                cancelButtonNode = current
+                cancelButtonNode.component = closeComponent
+            } else {
+                cancelButtonNode = BarComponentHostNode(component: closeComponent, size: barButtonSize)
+                self.cancelBarButtonNode = cancelButtonNode
+                self.navigationItem.leftBarButtonItem = UIBarButtonItem(customDisplayNode: cancelButtonNode)
+            }
+            
+            let morehButtonNode: BarComponentHostNode
+            if let current = self.moreBarButtonNode {
+                morehButtonNode = current
+                morehButtonNode.component = moreComponent
+            } else {
+                morehButtonNode = BarComponentHostNode(component: moreComponent, size: barButtonSize)
+                self.moreBarButtonNode = morehButtonNode
+                self.navigationItem.rightBarButtonItem = UIBarButtonItem(customDisplayNode: morehButtonNode)
+            }
+        }
+            
+        self.cancelButtonNode.setState(self.controllerNode.hasBackButton ? .back : .cancel, animated: true)
     }
     
     private var isVerifyAgeBot: Bool {
@@ -3469,10 +3551,7 @@ public final class WebAppController: ViewController, AttachmentContainable {
         self.moreButtonNode.buttonPressed()
     }
     
-    @objc fileprivate func morePressed(node: ASDisplayNode, gesture: ContextGesture?) {
-        guard let node = node as? ContextReferenceContentNode else {
-            return
-        }
+    @objc fileprivate func morePressed(view: UIView, gesture: ContextGesture?) {
         let context = self.context
         var presentationData = self.presentationData
         if !presentationData.theme.overallDarkAppearance, let headerColor = self.controllerNode.headerColor {
@@ -3667,7 +3746,7 @@ public final class WebAppController: ViewController, AttachmentContainable {
             return ContextController.Items(content: .list(items))
         }
         
-        let contextController = ContextController(presentationData: presentationData, source: .reference(WebAppContextReferenceContentSource(controller: self, sourceNode: node)), items: items, gesture: gesture)
+        let contextController = ContextController(presentationData: presentationData, source: .reference(WebAppContextReferenceContentSource(controller: self, sourceView: view)), items: items, gesture: gesture)
         self.presentInGlobalOverlay(contextController)
     }
     
@@ -3698,15 +3777,17 @@ public final class WebAppController: ViewController, AttachmentContainable {
         self.validLayout = layout
         super.containerLayoutUpdated(layout, transition: transition)
         
+        let navigationBarHeight = self.navigationLayout(layout: layout).navigationFrame.maxY
+        
         var presentationLayout = layout
         if self.isFullscreen {
             presentationLayout.intrinsicInsets.top = (presentationLayout.statusBarHeight ?? 0.0) + 36.0
         } else {
-            presentationLayout.intrinsicInsets.top = 56.0
+            presentationLayout.intrinsicInsets.top = navigationBarHeight
         }
         self.presentationContext.containerLayoutUpdated(presentationLayout, transition: transition)
         
-        self.controllerNode.containerLayoutUpdated(layout, navigationBarHeight: self.navigationLayout(layout: layout).navigationFrame.maxY, transition: transition)
+        self.controllerNode.containerLayoutUpdated(layout, navigationBarHeight: navigationBarHeight, transition: transition)
     }
     
     override public var presentationController: UIPresentationController? {
@@ -3856,15 +3937,15 @@ final class WebAppPickerContext: AttachmentMediaPickerContext {
 
 private final class WebAppContextReferenceContentSource: ContextReferenceContentSource {
     private let controller: ViewController
-    private let sourceNode: ContextReferenceContentNode
+    private let sourceView: UIView
     
-    init(controller: ViewController, sourceNode: ContextReferenceContentNode) {
+    init(controller: ViewController, sourceView: UIView) {
         self.controller = controller
-        self.sourceNode = sourceNode
+        self.sourceView = sourceView
     }
     
     func transitionInfo() -> ContextControllerReferenceViewInfo? {
-        return ContextControllerReferenceViewInfo(referenceView: self.sourceNode.view, contentAreaInScreenSpace: UIScreen.main.bounds)
+        return ContextControllerReferenceViewInfo(referenceView: self.sourceView, contentAreaInScreenSpace: UIScreen.main.bounds)
     }
 }
 

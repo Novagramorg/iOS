@@ -95,6 +95,34 @@ public func stringForMessageTimestampStatus(accountPeerId: PeerId, message: Mess
         dateText = "         "
     }
     
+    if let repeatPeriod = message.scheduleRepeatPeriod {
+        //TODO:localize
+        let repeatString: String
+        switch repeatPeriod {
+        case 60:
+            repeatString = "1 min"
+        case 300:
+            repeatString = "5 min"
+        case 86400:
+            repeatString = "daily"
+        case 7 * 86400:
+            repeatString = "weekly"
+        case 14 * 86400:
+            repeatString = "biweekly"
+        case 30 * 86400:
+            repeatString = "monthly"
+        case 91 * 86400:
+            repeatString = "every 3 months"
+        case 182 * 86400:
+            repeatString = "every 6 months"
+        case 365 * 86400:
+            repeatString = "yearly"
+        default:
+            repeatString = ""
+        }
+        dateText = "\(repeatString) at \(dateText)"
+    }
+    
     if message.id.namespace == Namespaces.Message.ScheduledCloud, let _ = message.pendingProcessingAttribute {
         return "appx. \(dateText)"
     }
