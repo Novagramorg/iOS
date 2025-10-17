@@ -4042,7 +4042,7 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
         }
     }
     
-    public func deleteMessage(id: Int64) {
+    public func deleteMessage(id: GroupCallMessagesContext.Message.Id) {
         if let messagesContext = self.messagesContext {
             messagesContext.deleteMessage(id: id)
         }

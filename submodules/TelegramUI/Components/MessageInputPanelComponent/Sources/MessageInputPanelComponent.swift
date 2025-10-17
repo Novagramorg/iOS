@@ -694,6 +694,11 @@ public final class MessageInputPanelComponent: Component {
         }
         
         public func activateInput() {
+            if let inputPanelView = self.inputPanel?.view as? ChatTextInputPanelComponent.View {
+                inputPanelView.activateInput()
+                return
+            }
+            
             if let textFieldView = self.textField.view as? TextFieldComponent.View {
                 textFieldView.activateInput()
             }

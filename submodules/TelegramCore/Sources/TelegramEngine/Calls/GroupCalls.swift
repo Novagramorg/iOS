@@ -3674,7 +3674,22 @@ private func deserializeGroupCallMessage(data: Data) -> (randomId: Int64, text: 
 
 public final class GroupCallMessagesContext {
     public final class Message: Equatable {
-        public let id: Int64
+        public struct Id: Hashable {
+            public enum Space {
+                case local
+                case remote
+            }
+            
+            public var space: Space
+            public var id: Int64
+            
+            public init(space: Space, id: Int64) {
+                self.space = space
+                self.id = id
+            }
+        }
+        
+        public let id: Id
         public let author: EnginePeer?
         public let text: String
         public let entities: [MessageTextEntity]
@@ -3682,7 +3697,7 @@ public final class GroupCallMessagesContext {
         public let lifetime: Int32
         public let paidStars: Int64?
         
-        public init(id: Int64, author: EnginePeer?, text: String, entities: [MessageTextEntity], date: Int32, lifetime: Int32, paidStars: Int64?) {
+        public init(id: Id, author: EnginePeer?, text: String, entities: [MessageTextEntity], date: Int32, lifetime: Int32, paidStars: Int64?) {
             self.id = id
             self.author = author
             self.text = text
@@ -3692,7 +3707,7 @@ public final class GroupCallMessagesContext {
             self.paidStars = paidStars
         }
         
-        public func withId(_ id: Int64) -> Message {
+        public func withId(_ id: Id) -> Message {
             return Message(
                 id: id,
                 author: self.author,
@@ -3793,9 +3808,7 @@ public final class GroupCallMessagesContext {
                     }
                     switch update.update {
                     case let .newPlaintextMessage(authorId, messageId, text, entities, timestamp, paidMessageStars):
-                        if authorId != self.account.peerId {
-                            addedMessages.append((authorId, messageId, text, entities, timestamp, paidMessageStars))
-                        }
+                        addedMessages.append((authorId, messageId, text, entities, timestamp, paidMessageStars))
                     case let .newOpaqueMessage(authorId, data):
                         if authorId != self.account.peerId {
                             addedOpaqueMessages.append((authorId, data))
@@ -3833,7 +3846,7 @@ public final class GroupCallMessagesContext {
                                     continue
                                 }
                                 messages.append(Message(
-                                    id: randomId,
+                                    id: Message.Id(space: .remote, id: randomId),
                                     author: transaction.getPeer(addedOpaqueMessage.authorId).flatMap(EnginePeer.init),
                                     text: text,
                                     entities: entities,
@@ -3856,7 +3869,7 @@ public final class GroupCallMessagesContext {
                                 }
                                 
                                 let message = Message(
-                                    id: Int64(addedMessage.messageId),
+                                    id: Message.Id(space: .remote, id: Int64(addedMessage.messageId)),
                                     author: transaction.getPeer(addedMessage.authorId).flatMap(EnginePeer.init),
                                     text: addedMessage.text,
                                     entities: addedMessage.entities,
@@ -3874,7 +3887,7 @@ public final class GroupCallMessagesContext {
                             return
                         }
                         for message in messages {
-                            self.processedIds.insert(message.id)
+                            self.processedIds.insert(message.id.id)
                         }
                         var state = self.state
                         var existingIds = Set(state.messages.map(\.id))
@@ -3963,7 +3976,7 @@ public final class GroupCallMessagesContext {
                 
                 var state = self.state
                 let message = Message(
-                    id: randomId,
+                    id: Message.Id(space: .local, id: randomId),
                     author: fromPeer.flatMap(EnginePeer.init),
                     text: text,
                     entities: entities,
@@ -4029,12 +4042,13 @@ public final class GroupCallMessagesContext {
                         for update in updates.allUpdates {
                             if case let .updateMessageID(id, randomIdValue) = update {
                                 if randomIdValue == randomId {
+                                    self.processedIds.insert(Int64(id))
                                     var state = self.state
-                                    if let index = state.messages.firstIndex(where: { $0.id == randomId }) {
-                                        state.messages[index] = state.messages[index].withId(Int64(id))
+                                    if let index = state.messages.firstIndex(where: { $0.id == Message.Id(space: .local, id: randomId) }) {
+                                        state.messages[index] = state.messages[index].withId(Message.Id(space: .remote, id: Int64(id)))
                                     }
-                                    if let index = state.pinnedMessages.firstIndex(where: { $0.id == randomId }) {
-                                        state.pinnedMessages[index] = state.pinnedMessages[index].withId(Int64(id))
+                                    if let index = state.pinnedMessages.firstIndex(where: { $0.id == Message.Id(space: .local, id: randomId) }) {
+                                        state.pinnedMessages[index] = state.pinnedMessages[index].withId(Message.Id(space: .remote, id: Int64(id)))
                                     }
                                     self.state = state
                                     break
@@ -4048,7 +4062,7 @@ public final class GroupCallMessagesContext {
             })
         }
         
-        func deleteMessage(id: Int64) {
+        func deleteMessage(id: Message.Id) {
             var updatedState: State?
             if let index = self.state.messages.firstIndex(where: { $0.id == id }) {
                 if updatedState == nil {
@@ -4091,7 +4105,7 @@ public final class GroupCallMessagesContext {
         }
     }
     
-    public func deleteMessage(id: Int64) {
+    public func deleteMessage(id: Message.Id) {
         self.impl.with { impl in
             impl.deleteMessage(id: id)
         }

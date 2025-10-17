@@ -3791,7 +3791,7 @@ public final class StoryItemSetContainerComponent: Component {
             let contentFrame = CGRect(origin: CGPoint(x: 0.0, y: component.containerInsets.top - (contentSize.height - contentVisualHeight) * 0.5 - contentBottomInsetOverflow), size: contentSize)
             var contentInsets = UIEdgeInsets(top: 54.0, left: 0.0, bottom: 0.0, right: 0.0)
             if let inputPanelFrameValue {
-                contentInsets.bottom = max(0.0, contentFrame.maxY - (inputPanelFrameValue.minY + 8.0))
+                contentInsets.bottom = max(0.0, contentFrame.maxY - inputPanelFrameValue.minY - 2.0)
             }
             
             transition.setFrame(view: self.viewListsContainer, frame: CGRect(origin: CGPoint(x: contentFrame.minX, y: 0.0), size: CGSize(width: contentSize.width, height: availableSize.height)))
