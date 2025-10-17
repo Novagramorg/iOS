@@ -3900,7 +3900,7 @@ public final class GroupCallMessagesContext {
                     return
                 }
                 
-                let currentTime = Int32(CFAbsoluteTimeGetCurrent())
+                let currentTime = Int32(CFAbsoluteTimeGetCurrent() + kCFAbsoluteTimeIntervalSince1970)
                 
                 var randomId: Int64 = 0
                 if let requestedRandomId {
