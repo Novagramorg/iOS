@@ -1235,7 +1235,7 @@ public final class StoryItemSetContainerComponent: Component {
                             self.state?.updated(transition: ComponentTransition(animation: .curve(duration: 0.4, curve: .spring)))
                         }
                     } else {
-                        if let visibleItemView = self.visibleItems[component.slice.item.id]?.view.view as? StoryItemContentComponent.View  {
+                        if let visibleItemView = self.visibleItems[component.slice.item.id]?.view.view as? StoryItemContentComponent.View {
                             visibleItemView.seekEnded()
                         }
                         if translation.y > 200.0 || (translation.y > 5.0 && velocity.y > 200.0) {
@@ -1598,6 +1598,7 @@ public final class StoryItemSetContainerComponent: Component {
                     )
                     if let view = visibleItem.view.view {
                         if visibleItem.contentContainerView.superview == nil {
+                            visibleItem.view.parentState = self.state
                             self.itemsContainerView.addSubview(visibleItem.contentContainerView)
                             self.itemsContainerView.layer.addSublayer(visibleItem.contentTintLayer)
                             self.itemsContainerView.addSubview(visibleItem.unclippedContainerView)
@@ -2882,6 +2883,19 @@ public final class StoryItemSetContainerComponent: Component {
             var inputPanelSize: CGSize?
             
             let _ = inputNodeVisible
+            
+            var inputPanelInset: CGFloat = component.containerInsets.bottom
+            var inputHeight = component.inputHeight
+            
+            var needInputBackground = true
+            if self.viewListDisplayState != .hidden {
+                needInputBackground = false
+            }
+            if self.inputPanelExternalState.isEditing {
+                if self.sendMessageContext.currentInputMode == .media || (inputHeight.isZero && keyboardWasHidden) {
+                    inputHeight = component.deviceMetrics.standardInputHeight(inLandscape: false)
+                }
+            }
                         
             if showMessageInputPanel {
                 var haveLikeOptions = false
@@ -2904,6 +2918,11 @@ public final class StoryItemSetContainerComponent: Component {
                 var maxInputLength = 4096
                 if isLiveStream {
                     maxInputLength = GroupCallMessagesContext.getStarAmountParamMapping(value: self.sendMessageContext.currentLiveStreamMessageStars?.value ?? 0).maxLength
+                }
+                
+                var isLiveChatExpanded: Bool?
+                if let visibleItemView = self.visibleItems[component.slice.item.id]?.view.view as? StoryItemContentComponent.View {
+                    isLiveChatExpanded = visibleItemView.isLiveChatExpanded
                 }
                 
                 inputPanelSize = self.inputPanel.update(
@@ -2944,6 +2963,13 @@ public final class StoryItemSetContainerComponent: Component {
                             guard let self else {
                                 return
                             }
+                            
+                            if let visibleItemView = self.visibleItems[component.slice.item.id]?.view.view as? StoryItemContentComponent.View {
+                                if !(visibleItemView.isLiveChatExpanded ?? true) {
+                                    visibleItemView.toggleLiveChatExpanded()
+                                }
+                            }
+                            
                             self.sendMessageContext.performSendMessageAction(view: self)
                         },
                         sendMessageOptionsAction: { [weak self] sourceView, gesture in
@@ -3055,7 +3081,7 @@ public final class StoryItemSetContainerComponent: Component {
                             }
                             self.sendMessageContext.performShareAction(view: self)
                         } : nil,
-                        paidMessageAction: (isLiveStream && self.sendMessageContext.currentLiveStreamMessageStars == nil) ? { [weak self] in
+                        paidMessageAction: isLiveStream ? { [weak self] in
                             guard let self else {
                                 return
                             }
@@ -3123,7 +3149,7 @@ public final class StoryItemSetContainerComponent: Component {
                         timeoutValue: nil,
                         timeoutSelected: false,
                         displayGradient: false,
-                        bottomInset: max(bottomContentInset, component.inputHeight),
+                        bottomInset: max(bottomContentInset, inputHeight),
                         isFormattingLocked: false,
                         hideKeyboard: self.sendMessageContext.currentInputMode == .media,
                         customInputView: nil,
@@ -3132,20 +3158,22 @@ public final class StoryItemSetContainerComponent: Component {
                         header: nil,
                         isChannel: isChannel,
                         storyItem: component.slice.item.storyItem,
-                        chatLocation: nil
+                        chatLocation: nil,
+                        isLiveChatExpanded: isLiveChatExpanded,
+                        toggleLiveChatExpanded: { [weak self] in
+                            guard let self else {
+                                return
+                            }
+                            if let visibleItemView = self.visibleItems[component.slice.item.id]?.view.view as? StoryItemContentComponent.View {
+                                visibleItemView.toggleLiveChatExpanded()
+                            }
+                        }
                     )),
                     environment: {},
                     containerSize: CGSize(width: inputPanelAvailableWidth, height: 200.0)
                 )
             }
             
-            var inputPanelInset: CGFloat = component.containerInsets.bottom
-            var inputHeight = component.inputHeight
-            
-            var needInputBackground = true
-            if self.viewListDisplayState != .hidden {
-                needInputBackground = false
-            }
             if self.inputPanelExternalState.isEditing {
                 if self.sendMessageContext.currentInputMode == .media || (inputHeight.isZero && keyboardWasHidden) {
                     inputHeight = component.deviceMetrics.standardInputHeight(inLandscape: false)

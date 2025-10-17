@@ -586,6 +586,7 @@ public extension Api {
         case updateContactsReset
         case updateDcOptions(dcOptions: [Api.DcOption])
         case updateDeleteChannelMessages(channelId: Int64, messages: [Int32], pts: Int32, ptsCount: Int32)
+        case updateDeleteGroupCallMessages(call: Api.InputGroupCall, messages: [Int32])
         case updateDeleteMessages(messages: [Int32], pts: Int32, ptsCount: Int32)
         case updateDeleteQuickReply(shortcutId: Int32)
         case updateDeleteQuickReplyMessages(shortcutId: Int32, messages: [Int32])
@@ -1112,6 +1113,17 @@ public extension Api {
                     }
                     serializeInt32(pts, buffer: buffer, boxed: false)
                     serializeInt32(ptsCount, buffer: buffer, boxed: false)
+                    break
+                case .updateDeleteGroupCallMessages(let call, let messages):
+                    if boxed {
+                        buffer.appendInt32(1048963372)
+                    }
+                    call.serialize(buffer, true)
+                    buffer.appendInt32(481674261)
+                    buffer.appendInt32(Int32(messages.count))
+                    for item in messages {
+                        serializeInt32(item, buffer: buffer, boxed: false)
+                    }
                     break
                 case .updateDeleteMessages(let messages, let pts, let ptsCount):
                     if boxed {
@@ -2072,6 +2084,8 @@ public extension Api {
                 return ("updateDcOptions", [("dcOptions", dcOptions as Any)])
                 case .updateDeleteChannelMessages(let channelId, let messages, let pts, let ptsCount):
                 return ("updateDeleteChannelMessages", [("channelId", channelId as Any), ("messages", messages as Any), ("pts", pts as Any), ("ptsCount", ptsCount as Any)])
+                case .updateDeleteGroupCallMessages(let call, let messages):
+                return ("updateDeleteGroupCallMessages", [("call", call as Any), ("messages", messages as Any)])
                 case .updateDeleteMessages(let messages, let pts, let ptsCount):
                 return ("updateDeleteMessages", [("messages", messages as Any), ("pts", pts as Any), ("ptsCount", ptsCount as Any)])
                 case .updateDeleteQuickReply(let shortcutId):
@@ -3207,6 +3221,24 @@ public extension Api {
             let _c4 = _4 != nil
             if _c1 && _c2 && _c3 && _c4 {
                 return Api.Update.updateDeleteChannelMessages(channelId: _1!, messages: _2!, pts: _3!, ptsCount: _4!)
+            }
+            else {
+                return nil
+            }
+        }
+        public static func parse_updateDeleteGroupCallMessages(_ reader: BufferReader) -> Update? {
+            var _1: Api.InputGroupCall?
+            if let signature = reader.readInt32() {
+                _1 = Api.parse(reader, signature: signature) as? Api.InputGroupCall
+            }
+            var _2: [Int32]?
+            if let _ = reader.readInt32() {
+                _2 = Api.parseVector(reader, elementSignature: -1471112230, elementType: Int32.self)
+            }
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            if _c1 && _c2 {
+                return Api.Update.updateDeleteGroupCallMessages(call: _1!, messages: _2!)
             }
             else {
                 return nil

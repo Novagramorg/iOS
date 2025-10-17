@@ -23,7 +23,6 @@ import TextInputMenu
 import Pasteboard
 import ChatPresentationInterfaceState
 import ManagedAnimationNode
-import AttachmentUI
 import EditableChatTextNode
 import EmojiTextAttachmentView
 import LottieAnimationComponent
@@ -373,6 +372,63 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                     self?.updateIsProcessingInlineRequest(value)
                 }).strict())
             }
+        }
+    }
+    
+    public enum LeftAction {
+        case toggleExpanded(isVisible: Bool, isExpanded: Bool)
+    }
+    
+    public enum RightAction {
+        case stars(count: Int, isFilled: Bool, action: () -> Void)
+    }
+    
+    public var customPlaceholder: String?
+    public var customLeftAction: LeftAction?
+    public var customRightAction: RightAction?
+    public var customSendColor: UIColor?
+    
+    private var starReactionButton: ComponentView<Empty>?
+    
+    public func insertText(text: NSAttributedString) {
+        guard let textInputState = self.presentationInterfaceState?.interfaceState.effectiveInputState else {
+            return
+        }
+        
+        let inputText = NSMutableAttributedString(attributedString: textInputState.inputText)
+        
+        let range = textInputState.selectionRange
+        
+        let updatedText = NSMutableAttributedString(attributedString: text)
+        if range.lowerBound < inputText.length {
+            if let quote = inputText.attribute(ChatTextInputAttributes.block, at: range.lowerBound, effectiveRange: nil) {
+                updatedText.addAttribute(ChatTextInputAttributes.block, value: quote, range: NSRange(location: 0, length: updatedText.length))
+            }
+        }
+        inputText.replaceCharacters(in: NSMakeRange(range.lowerBound, range.count), with: updatedText)
+        
+        let selectionPosition = range.lowerBound + (updatedText.string as NSString).length
+        let updatedState = ChatTextInputState(inputText: inputText, selectionRange: selectionPosition ..< selectionPosition)
+        
+        if let textInputNode = self.textInputNode, let context = self.context {
+            var textColor: UIColor = .black
+            var accentTextColor: UIColor = .blue
+            var baseFontSize: CGFloat = 17.0
+            
+            if let presentationInterfaceState = self.presentationInterfaceState {
+                textColor = presentationInterfaceState.theme.chat.inputPanel.inputTextColor
+                accentTextColor = presentationInterfaceState.theme.chat.inputPanel.panelControlAccentColor
+                baseFontSize = max(minInputFontSize, presentationInterfaceState.fontSize.baseDisplaySize)
+            }
+            if "".isEmpty {
+                baseFontSize = 17.0
+            }
+            
+            textInputNode.attributedText = textAttributedStringForStateText(context: context, stateText: updatedState.inputText, fontSize: baseFontSize, textColor: textColor, accentTextColor: accentTextColor, writingDirection: nil, spoilersRevealed: self.spoilersRevealed, availableEmojis: Set(context.animatedEmojiStickersValue.keys), emojiViewProvider: self.emojiViewProvider, makeCollapsedQuoteAttachment: { text, attributes in
+                return ChatInputTextCollapsedQuoteAttachmentImpl(text: text, attributes: attributes)
+            })
+            textInputNode.selectedRange = NSMakeRange(updatedState.selectionRange.lowerBound, updatedState.selectionRange.count)
+            self.chatInputTextNodeDidUpdateText()
         }
     }
             
@@ -1276,6 +1332,8 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         metrics: LayoutMetrics,
         isMediaInputExpanded: Bool
     ) -> CGFloat {
+        let isFirstTime = self.validLayout == nil
+        
         let previousAdditionalSideInsets = self.validLayout?.4
         self.validLayout = (width, leftInset, rightInset, bottomInset, additionalSideInsets, maxHeight, maxOverlayHeight, metrics, isSecondary, isMediaInputExpanded)
         
@@ -1288,6 +1346,8 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         }
         
         let placeholderColor: UIColor = interfaceState.theme.chat.inputPanel.inputPlaceholderColor
+        
+        self.sendActionButtons.customSendColor = self.customSendColor
     
         var transition = transition
         var additionalOffset: CGFloat = 0.0
@@ -1555,7 +1615,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         
         var buttonTitleUpdated = false
         var menuTextSize = self.menuButtonTextNode.frame.size
-        if self.presentationInterfaceState != interfaceState {
+        if self.presentationInterfaceState != interfaceState || isFirstTime {
             let previousState = self.presentationInterfaceState
             self.presentationInterfaceState = interfaceState
             
@@ -1655,7 +1715,13 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 
                 self.theme = interfaceState.theme
                 
-                if interfaceState.interfaceState.mediaDraftState != nil {
+                if let customLeftAction = self.customLeftAction {
+                    switch customLeftAction {
+                    case .toggleExpanded:
+                        self.attachmentButtonIcon.image = UIImage(bundleImageName: "Chat/Context Menu/ReactionExpandArrow")?.withRenderingMode(.alwaysTemplate)
+                        self.attachmentButtonIcon.tintColor = interfaceState.theme.chat.inputPanel.panelControlColor
+                    }
+                } else if interfaceState.interfaceState.mediaDraftState != nil {
                     self.attachmentButtonIcon.image = UIImage(bundleImageName: "Chat/Context Menu/Delete")?.withRenderingMode(.alwaysTemplate)
                     self.attachmentButtonIcon.tintColor = interfaceState.theme.chat.inputPanel.panelControlColor
                 } else if isEditingMedia {
@@ -1688,8 +1754,15 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                     }
                 }
                 
-                if wasEditingMedia != isEditingMedia || hadMediaDraft != hasMediaDraft {
-                    if interfaceState.interfaceState.mediaDraftState != nil {
+                if wasEditingMedia != isEditingMedia || hadMediaDraft != hasMediaDraft || isFirstTime {
+                    
+                    if let customLeftAction = self.customLeftAction {
+                        switch customLeftAction {
+                        case .toggleExpanded:
+                            self.attachmentButtonIcon.image = UIImage(bundleImageName: "Chat/Context Menu/ReactionExpandArrow")?.withRenderingMode(.alwaysTemplate)
+                            self.attachmentButtonIcon.tintColor = interfaceState.theme.chat.inputPanel.panelControlColor
+                        }
+                    } else if interfaceState.interfaceState.mediaDraftState != nil {
                         self.attachmentButtonIcon.image = UIImage(bundleImageName: "Chat/Context Menu/Delete")?.withRenderingMode(.alwaysTemplate)
                         self.attachmentButtonIcon.tintColor = interfaceState.theme.chat.inputPanel.panelControlColor
                     } else if isEditingMedia {
@@ -1708,6 +1781,20 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             var peerUpdated = false
             if let peer = interfaceState.renderedPeer?.peer, previousState?.renderedPeer?.peer == nil || !peer.isEqual(previousState!.renderedPeer!.peer!) {
                 peerUpdated = true
+            }
+            
+            if let customLeftAction = self.customLeftAction {
+                switch customLeftAction {
+                case let .toggleExpanded(_, isExpanded):
+                    var iconTransform = CATransform3DIdentity
+                    iconTransform = CATransform3DTranslate(iconTransform, 0.0, 1.0, 0.0)
+                    if isExpanded || "".isEmpty {
+                        iconTransform = CATransform3DRotate(iconTransform, CGFloat.pi, 0.0, 0.0, 1.0)
+                    }
+                    transition.updateTransform(layer: self.attachmentButtonIcon.layer, transform: iconTransform)
+                }
+            } else {
+                self.attachmentButtonIcon.layer.transform = CATransform3DIdentity
             }
             
             if peerUpdated || previousState?.chatLocation != interfaceState.chatLocation || previousState?.interfaceState.silentPosting != interfaceState.interfaceState.silentPosting || themeUpdated || !self.initializedPlaceholder || previousState?.keyboardButtonsMessage?.id != interfaceState.keyboardButtonsMessage?.id || previousState?.keyboardButtonsMessage?.visibleReplyMarkupPlaceholder != interfaceState.keyboardButtonsMessage?.visibleReplyMarkupPlaceholder || dismissedButtonMessageUpdated || replyMessageUpdated || (previousState?.interfaceState.editMessage == nil) != (interfaceState.interfaceState.editMessage == nil) || previousState?.forumTopicData != interfaceState.forumTopicData || previousState?.replyMessage?.id != interfaceState.replyMessage?.id || previousState?.sendPaidMessageStars != interfaceState.sendPaidMessageStars {
@@ -1786,6 +1873,10 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 updatedPlaceholder = placeholder
                 
                 self.sendActionButtons.sendButtonLongPressEnabled = !isScheduledMessages
+            }
+            
+            if let customPlaceholder = self.customPlaceholder {
+                updatedPlaceholder = customPlaceholder
             }
             
             var sendButtonHasApplyIcon = interfaceState.interfaceState.editMessage != nil
@@ -1923,6 +2014,8 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         var attachmentButtonX: CGFloat = hideOffset.x + leftInset + leftMenuInset + 8.0
         if !displayMediaButton || mediaRecordingState != nil {
             attachmentButtonX = -48.0
+        } else if let customLeftAction = self.customLeftAction, case let .toggleExpanded(isVisible, _) = customLeftAction, !isVisible {
+            attachmentButtonX = -48.0
         }
         
         self.mediaActionButtons.micButton.updateMode(mode: interfaceState.interfaceState.mediaRecordingMode, animated: transition.isAnimated)
@@ -2016,6 +2109,9 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             textFieldInsets.right = 54.0
         }
         if mediaRecordingState != nil {
+            textFieldInsets.left = 8.0
+        }
+        if let customLeftAction = self.customLeftAction, case let .toggleExpanded(isVisible, _) = customLeftAction, !isVisible {
             textFieldInsets.left = 8.0
         }
         
@@ -2644,6 +2740,50 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         transition.updateFrame(node: self.mediaActionButtons, frame: actionButtonsFrame)
         if let (rect, containerSize) = self.absoluteRect {
             self.mediaActionButtons.updateAbsoluteRect(CGRect(x: rect.origin.x + actionButtonsFrame.origin.x, y: rect.origin.y + actionButtonsFrame.origin.y, width: actionButtonsFrame.width, height: actionButtonsFrame.height), within: containerSize, transition: transition)
+        }
+        
+        if let customRightAction = self.customRightAction, case let .stars(count, isFilled, action) = customRightAction {
+            let starReactionButton: ComponentView<Empty>
+            var starReactionButtonTransition = transition
+            if let current = self.starReactionButton {
+                starReactionButton = current
+            } else {
+                starReactionButton = ComponentView()
+                self.starReactionButton = starReactionButton
+                starReactionButtonTransition = .immediate
+            }
+            let starReactionButtonSize = starReactionButton.update(
+                transition: ComponentTransition(starReactionButtonTransition),
+                component: AnyComponent(StarReactionButtonComponent(
+                    theme: interfaceState.theme,
+                    count: count,
+                    isFilled: isFilled,
+                    action: {
+                        action()
+                    }
+                )),
+                environment: {},
+                containerSize: CGSize(width: 40.0, height: 40.0)
+            )
+            let _ = starReactionButtonSize
+            if let starReactionButtonView = starReactionButton.view {
+                if starReactionButtonView.superview == nil {
+                    self.glassBackgroundContainer.contentView.addSubview(starReactionButtonView)
+                    if transition.isAnimated {
+                        starReactionButtonView.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
+                        transition.animateTransformScale(view: starReactionButtonView, from: 0.001)
+                    }
+                }
+                starReactionButtonTransition.updateFrame(view: starReactionButtonView, frame: actionButtonsFrame)
+            }
+        } else if let starReactionButton = self.starReactionButton {
+            self.starReactionButton = nil
+            if let starReactionButtonView = starReactionButton.view {
+                transition.updateAlpha(layer: starReactionButtonView.layer, alpha: 0.0, completion: { [weak starReactionButtonView] _ in
+                    starReactionButtonView?.removeFromSuperview()
+                })
+                transition.updateTransformScale(layer: starReactionButtonView.layer, scale: 0.001)
+            }
         }
         
         var sendActionButtonsFrame = CGRect(origin: CGPoint(x: textInputContainerBackgroundFrame.maxX - sendActionButtonsSize.width, y: textInputContainerBackgroundFrame.maxY - sendActionButtonsSize.height), size: sendActionButtonsSize)
@@ -3764,6 +3904,10 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         var hideMicButton = false
         var hideMicButtonBackground = false
         
+        if self.customRightAction != nil {
+            self.mediaActionButtons.isHidden = true
+        }
+        
         var mediaInputIsActive = false
         var keepSendButtonEnabled = self.keepSendButtonEnabled
         var hasForward = false
@@ -4849,7 +4993,36 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         )
     }
     
-    public func makeAttachmentMenuTransition(accessoryPanelNode: ASDisplayNode?) -> AttachmentController.InputPanelTransition {
-        return AttachmentController.InputPanelTransition(inputNode: self, accessoryPanelNode: accessoryPanelNode, menuButtonNode: self.menuButton, menuButtonBackgroundView: self.menuButtonBackgroundView, menuIconNode: self.menuButtonIconNode, menuTextNode: self.menuButtonTextNode, prepareForDismiss: { self.menuButtonIconNode.enqueueState(.app, animated: false) })
+    public final class AttachmentInputPanelTransition {
+        public let inputNode: ASDisplayNode
+        public let accessoryPanelNode: ASDisplayNode?
+        public let menuButtonNode: ASDisplayNode
+        public let menuButtonBackgroundView: UIView
+        public let menuIconNode: ASDisplayNode
+        public let menuTextNode: ASDisplayNode
+        public let prepareForDismiss: () -> Void
+
+        public init(
+            inputNode: ASDisplayNode,
+            accessoryPanelNode: ASDisplayNode?,
+            menuButtonNode: ASDisplayNode,
+            menuButtonBackgroundView: UIView,
+            menuIconNode: ASDisplayNode,
+            menuTextNode: ASDisplayNode,
+            prepareForDismiss: @escaping () -> Void
+        ) {
+            self.inputNode = inputNode
+            self.accessoryPanelNode = accessoryPanelNode
+            self.menuButtonNode = menuButtonNode
+            self.menuButtonBackgroundView = menuButtonBackgroundView
+            self.menuIconNode = menuIconNode
+            self.menuTextNode = menuTextNode
+            self.prepareForDismiss = prepareForDismiss
+        }
+    }
+    
+    
+    public func makeAttachmentMenuTransition(accessoryPanelNode: ASDisplayNode?) -> AttachmentInputPanelTransition {
+        return AttachmentInputPanelTransition(inputNode: self, accessoryPanelNode: accessoryPanelNode, menuButtonNode: self.menuButton, menuButtonBackgroundView: self.menuButtonBackgroundView, menuIconNode: self.menuButtonIconNode, menuTextNode: self.menuButtonTextNode, prepareForDismiss: { self.menuButtonIconNode.enqueueState(.app, animated: false) })
     }
 }
