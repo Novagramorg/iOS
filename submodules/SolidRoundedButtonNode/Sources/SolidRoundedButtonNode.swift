@@ -797,25 +797,27 @@ public final class SolidRoundedButtonNode: ASDisplayNode {
             self.subtitleNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.3)
         }
         
-        let chromeView: UIImageView
-        var chromeTransition = transition
-        if let current = self.chromeView {
-            chromeView = current
-        } else {
-            chromeTransition = .immediate
-            chromeView = UIImageView()
-            self.chromeView = chromeView
-            if let shimmeringView = self.shimmerView {
-                self.view.insertSubview(chromeView, aboveSubview: shimmeringView)
+        if self.glass {
+            let chromeView: UIImageView
+            var chromeTransition = transition
+            if let current = self.chromeView {
+                chromeView = current
             } else {
-                self.view.insertSubview(chromeView, aboveSubview: self.buttonBackgroundNode.view)
+                chromeTransition = .immediate
+                chromeView = UIImageView()
+                self.chromeView = chromeView
+                if let shimmeringView = self.shimmerView {
+                    self.view.insertSubview(chromeView, aboveSubview: shimmeringView)
+                } else {
+                    self.view.insertSubview(chromeView, aboveSubview: self.buttonBackgroundNode.view)
+                }
+                
+                chromeView.layer.compositingFilter = "overlayBlendMode"
+                chromeView.alpha = 0.8
+                chromeView.image = GlassBackgroundView.generateForegroundImage(size: CGSize(width: 26.0 * 2.0, height: 26.0 * 2.0), isDark: self.theme.backgroundColor.lightness < 0.4, fillColor: .clear)
             }
-            
-            chromeView.layer.compositingFilter = "overlayBlendMode"
-            chromeView.alpha = 0.8
-            chromeView.image = GlassBackgroundView.generateForegroundImage(size: CGSize(width: 26.0 * 2.0, height: 26.0 * 2.0), isDark: self.theme.backgroundColor.lightness < 0.4, fillColor: .clear)
+            chromeTransition.updateFrame(view: chromeView, frame: CGRect(origin: .zero, size: buttonSize))
         }
-        chromeTransition.updateFrame(view: chromeView, frame: CGRect(origin: .zero, size: buttonSize))
         
         return buttonSize.height
     }

@@ -19,7 +19,7 @@ swift_library(
         "//submodules/Components/ViewControllerComponent:ViewControllerComponent",
         "//submodules/Components/ComponentDisplayAdapters:ComponentDisplayAdapters",
         "//submodules/Components/MultilineTextComponent:MultilineTextComponent",
-        "//submodules/Components/SolidRoundedButtonComponent",
+        "//submodules/TelegramUI/Components/ButtonComponent",
         "//submodules/TelegramPresentationData:TelegramPresentationData",
         "//submodules/AccountContext:AccountContext",
         "//submodules/AppBundle:AppBundle",

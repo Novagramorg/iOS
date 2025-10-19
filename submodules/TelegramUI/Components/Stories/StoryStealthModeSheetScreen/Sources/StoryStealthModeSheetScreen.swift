@@ -223,7 +223,7 @@ private final class StoryStealthModeSheetContentComponent: Component {
                         size: CGSize(width: 40.0, height: 40.0),
                         backgroundColor: environment.theme.rootController.navigationBar.glassBarButtonBackgroundColor,
                         isDark: environment.theme.overallDarkAppearance,
-                        state: .tintedGlass,
+                        state: .generic,
                         component: AnyComponentWithIdentity(id: "close", component: AnyComponent(
                             BundleIconComponent(
                                 name: "Navigation/Close",
