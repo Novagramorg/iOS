@@ -492,6 +492,7 @@ public final class GlassBackgroundContainerView: UIView {
     }
     
     private let legacyView: ContentView?
+    private let nativeParamsView: EffectSettingsContainerView?
     private let nativeView: UIVisualEffectView?
     
     public var contentView: UIView {
@@ -506,17 +507,24 @@ public final class GlassBackgroundContainerView: UIView {
         if #available(iOS 26.0, *) {
             let effect = UIGlassContainerEffect()
             effect.spacing = 7.0
-            self.nativeView = UIVisualEffectView(effect: effect)
+            let nativeView = UIVisualEffectView(effect: effect)
+            self.nativeView = nativeView
+            
+            let nativeParamsView = EffectSettingsContainerView(frame: CGRect())
+            self.nativeParamsView = nativeParamsView
+            nativeParamsView.addSubview(nativeView)
+            
             self.legacyView = nil
         } else {
             self.nativeView = nil
+            self.nativeParamsView = nil
             self.legacyView = ContentView()
         }
         
         super.init(frame: frame)
         
-        if let nativeView = self.nativeView {
-            self.addSubview(nativeView)
+        if let nativeParamsView = self.nativeParamsView {
+            self.addSubview(nativeParamsView)
         } else if let legacyView = self.legacyView {
             self.addSubview(legacyView)
         }
@@ -529,7 +537,7 @@ public final class GlassBackgroundContainerView: UIView {
     override public func didAddSubview(_ subview: UIView) {
         super.didAddSubview(subview)
         
-        if subview !== self.nativeView && subview !== self.legacyView {
+        if subview !== self.nativeParamsView && subview !== self.legacyView {
             assertionFailure()
         }
     }
@@ -538,15 +546,20 @@ public final class GlassBackgroundContainerView: UIView {
         guard let result = self.contentView.hitTest(point, with: event) else {
             return nil
         }
-        if result === self.contentView {
-            //return nil
-        }
         return result
     }
     
     public func update(size: CGSize, isDark: Bool, transition: ComponentTransition) {
-        if let nativeView = self.nativeView {
+        if let nativeParamsView = self.nativeParamsView, let nativeView = self.nativeView {
             nativeView.overrideUserInterfaceStyle = isDark ? .dark : .light
+            
+            if isDark {
+                nativeParamsView.lumaMin = 0.0
+                nativeParamsView.lumaMax = 0.15
+            } else {
+                nativeParamsView.lumaMin = 0.25
+                nativeParamsView.lumaMax = 1.0
+            }
             
             transition.setFrame(view: nativeView, frame: CGRect(origin: CGPoint(), size: size))
         } else if let legacyView = self.legacyView {

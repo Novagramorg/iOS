@@ -117,7 +117,7 @@ private final class MessageItemComponent: Component {
             
             self.containerNode.isGestureEnabled = component.contextGesture != nil
             
-            let insets = UIEdgeInsets(top: 8.0, left: 8.0, bottom: 8.0, right: 8.0)
+            let insets = UIEdgeInsets(top: 9.0, left: 20.0, bottom: 9.0, right: 20.0)
             let avatarSize: CGFloat = 24.0
             let avatarSpacing: CGFloat = 6.0
             
@@ -175,7 +175,8 @@ private final class MessageItemComponent: Component {
                 textView.bounds = CGRect(origin: CGPoint(), size: textFrame.size)
             }
             
-            let backgroundFrame = CGRect(origin: CGPoint(x: 6.0, y: 2.0), size: CGSize(width: textFrame.maxX + 8.0 - 6.0, height: textFrame.maxY + 3.0))
+            let backgroundOrigin = CGPoint(x: avatarFrame.minX - 2.0, y: avatarFrame.minY - 2.0)
+            let backgroundFrame = CGRect(origin: backgroundOrigin, size: CGSize(width: textFrame.maxX + 8.0 - backgroundOrigin.x, height: max(avatarFrame.maxY + 2.0, textFrame.maxY + 5.0) - backgroundOrigin.y))
             
             if let paidStars = component.message.paidStars {
                 let backgroundView: UIImageView
@@ -185,7 +186,7 @@ private final class MessageItemComponent: Component {
                     backgroundView = UIImageView()
                     self.backgroundView = backgroundView
                     self.extractedContainerNode.contentNode.view.insertSubview(backgroundView, at: 0)
-                    backgroundView.image = generateStretchableFilledCircleImage(diameter: 28.0, color: .white)?.withRenderingMode(.alwaysTemplate)
+                    backgroundView.image = generateStretchableFilledCircleImage(diameter: avatarSize + 2.0 * 2.0, color: .white)?.withRenderingMode(.alwaysTemplate)
                 }
                 transition.setFrame(view: backgroundView, frame: backgroundFrame)
                 backgroundView.tintColor = getStarAmountColorMapping(value: paidStars)
@@ -219,7 +220,7 @@ private final class MessageItemComponent: Component {
             
             self.extractedContainerNode.frame = CGRect(origin: CGPoint(), size: size)
             self.extractedContainerNode.contentNode.frame = CGRect(origin: CGPoint(), size: size)
-            self.extractedContainerNode.contentRect = backgroundFrame
+            self.extractedContainerNode.contentRect = backgroundFrame.insetBy(dx: -4.0, dy: 0.0)
             self.containerNode.frame = CGRect(origin: CGPoint(), size: size)
             
             return size
@@ -548,7 +549,7 @@ private final class PinnedBarComponent: Component {
             
             let itemHeight: CGFloat = 32.0
             
-            let insets = UIEdgeInsets(top: 16.0, left: 16.0, bottom: 16.0, right: 16.0)
+            let insets = UIEdgeInsets(top: 13.0, left: 20.0, bottom: 13.0, right: 20.0)
             
             let size = CGSize(width: availableSize.width, height: insets.top + itemHeight + insets.bottom)
             
@@ -564,7 +565,7 @@ private final class PinnedBarComponent: Component {
                 }
             }
             
-            let listInsets = UIEdgeInsets(top: 0.0, left: 8.0, bottom: 0.0, right: 8.0)
+            let listInsets = UIEdgeInsets(top: 0.0, left: insets.left, bottom: 0.0, right: insets.right)
             let listFrame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: size.width, height: size.height))
             let _ = self.list.update(
                 transition: transition,
@@ -665,6 +666,8 @@ final class StoryContentLiveChatComponent: Component {
         private var messagesState: GroupCallMessagesContext.State?
         private var stateDisposable: Disposable?
         
+        private var currentListIsEmpty: Bool = true
+        
         public var isChatEmpty: Bool {
             guard let messagesState = self.messagesState else {
                 return true
@@ -761,7 +764,7 @@ final class StoryContentLiveChatComponent: Component {
             self.state?.updated(transition: .spring(duration: 0.4))
         }
         
-        private func openMessageContextMenu(id: Int64, gesture: ContextGesture, sourceNode: ContextExtractedContentContainingNode) {
+        private func openMessageContextMenu(id: GroupCallMessagesContext.Message.Id, gesture: ContextGesture, sourceNode: ContextExtractedContentContainingNode) {
             Task { @MainActor [weak self] in
                 guard let self else {
                     return
@@ -844,6 +847,8 @@ final class StoryContentLiveChatComponent: Component {
             defer {
                 self.isUpdating = false
             }
+            
+            let alphaTransition: ComponentTransition = transition.animation.isImmediate ? .immediate : .easeInOut(duration: 0.2)
 
             if self.component?.call !== component.call {
                 self.stateDisposable?.dispose()
@@ -867,6 +872,8 @@ final class StoryContentLiveChatComponent: Component {
             
             self.component = component
             self.state = state
+            
+            let previousListIsEmpty = self.currentListIsEmpty
             
             var listItems: [AnyComponentWithIdentity<Empty>] = []
             var topMessageByPeerId: [EnginePeer.Id: GroupCallMessagesContext.Message] = [:]
@@ -908,6 +915,8 @@ final class StoryContentLiveChatComponent: Component {
                 return lhs.date > rhs.date
             })
             
+            self.currentListIsEmpty = listItems.isEmpty
+            
             let pinnedBarSize = self.pinnedBar.update(
                 transition: transition,
                 component: AnyComponent(PinnedBarComponent(
@@ -938,13 +947,19 @@ final class StoryContentLiveChatComponent: Component {
                 transition.setAlpha(view: pinnedBarView, alpha: topMessages.isEmpty ? 0.0 : 1.0)
             }
             
-            var listInsets = UIEdgeInsets(top: component.insets.bottom + 16.0, left: component.insets.right, bottom: component.insets.top + 8.0, right: component.insets.left)
+            var listInsets = UIEdgeInsets(top: component.insets.bottom + 8.0, left: component.insets.right, bottom: component.insets.top + 8.0, right: component.insets.left)
             if !topMessages.isEmpty {
                 listInsets.top = availableSize.height - pinnedBarFrame.minY
             }
-            listInsets.top += 4.0
+            listInsets.top += 1.0
+            
+            var listTransition = transition
+            if previousListIsEmpty != self.currentListIsEmpty {
+                listTransition = listTransition.withAnimation(.none)
+            }
+            
             let _ = self.list.update(
-                transition: transition,
+                transition: listTransition,
                 component: AnyComponent(AsyncListComponent(
                     externalState: self.listState,
                     items: listItems,
@@ -963,6 +978,7 @@ final class StoryContentLiveChatComponent: Component {
                 }
                 transition.setPosition(view: listView, position: listFrame.offsetBy(dx: 0.0, dy: self.isChatExpanded ? 0.0 : listFrame.height).center)
                 transition.setBounds(view: listView, bounds: CGRect(origin: CGPoint(), size: listFrame.size))
+                alphaTransition.setAlpha(view: listView, alpha: listItems.isEmpty ? 0.0 : 1.0)
             }
             
             transition.setFrame(view: self.listContainer, frame: CGRect(origin: CGPoint(), size: availableSize))

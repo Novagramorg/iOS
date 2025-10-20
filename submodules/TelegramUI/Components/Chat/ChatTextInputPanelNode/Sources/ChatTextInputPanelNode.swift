@@ -387,6 +387,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     public var customLeftAction: LeftAction?
     public var customRightAction: RightAction?
     public var customSendColor: UIColor?
+    public var customInputTextMaxLength: Int?
     
     private var starReactionButton: ComponentView<Empty>?
     
@@ -1783,20 +1784,6 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 peerUpdated = true
             }
             
-            if let customLeftAction = self.customLeftAction {
-                switch customLeftAction {
-                case let .toggleExpanded(_, isExpanded):
-                    var iconTransform = CATransform3DIdentity
-                    iconTransform = CATransform3DTranslate(iconTransform, 0.0, 1.0, 0.0)
-                    if isExpanded || "".isEmpty {
-                        iconTransform = CATransform3DRotate(iconTransform, CGFloat.pi, 0.0, 0.0, 1.0)
-                    }
-                    transition.updateTransform(layer: self.attachmentButtonIcon.layer, transform: iconTransform)
-                }
-            } else {
-                self.attachmentButtonIcon.layer.transform = CATransform3DIdentity
-            }
-            
             if peerUpdated || previousState?.chatLocation != interfaceState.chatLocation || previousState?.interfaceState.silentPosting != interfaceState.interfaceState.silentPosting || themeUpdated || !self.initializedPlaceholder || previousState?.keyboardButtonsMessage?.id != interfaceState.keyboardButtonsMessage?.id || previousState?.keyboardButtonsMessage?.visibleReplyMarkupPlaceholder != interfaceState.keyboardButtonsMessage?.visibleReplyMarkupPlaceholder || dismissedButtonMessageUpdated || replyMessageUpdated || (previousState?.interfaceState.editMessage == nil) != (interfaceState.interfaceState.editMessage == nil) || previousState?.forumTopicData != interfaceState.forumTopicData || previousState?.replyMessage?.id != interfaceState.replyMessage?.id || previousState?.sendPaidMessageStars != interfaceState.sendPaidMessageStars {
                 self.initializedPlaceholder = true
                 
@@ -1921,6 +1908,20 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                     }
                 }
             }
+        }
+        
+        if let customLeftAction = self.customLeftAction {
+            switch customLeftAction {
+            case let .toggleExpanded(_, isExpanded):
+                var iconTransform = CATransform3DIdentity
+                iconTransform = CATransform3DTranslate(iconTransform, 0.0, 1.0, 0.0)
+                if isExpanded {
+                    iconTransform = CATransform3DRotate(iconTransform, CGFloat.pi, 0.0, 0.0, 1.0)
+                }
+                transition.updateTransform(layer: self.attachmentButtonIcon.layer, transform: iconTransform)
+            }
+        } else {
+            self.attachmentButtonIcon.layer.transform = CATransform3DIdentity
         }
         
         var textFieldMinHeight: CGFloat = 33.0
@@ -2868,7 +2869,10 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         transition.updateFrame(node: self.attachmentButtonDisabledNode, frame: self.attachmentButtonBackground.frame)
         
         if let image = self.attachmentButtonIcon.image {
-            transition.updateFrame(view: self.attachmentButtonIcon, frame: CGRect(origin: CGPoint(x: floor((attachmentButtonFrame.width - image.size.width) * 0.5), y: floor((attachmentButtonFrame.height - image.size.height) * 0.5)), size: image.size))
+            let attachmentButtonIconFrame = CGRect(origin: CGPoint(x: floor((attachmentButtonFrame.width - image.size.width) * 0.5), y: floor((attachmentButtonFrame.height - image.size.height) * 0.5)), size: image.size)
+            let transition = ComponentTransition(transition)
+            transition.setPosition(view: self.attachmentButtonIcon, position: attachmentButtonIconFrame.center)
+            transition.setBounds(view: self.attachmentButtonIcon, bounds: CGRect(origin: CGPoint(), size: attachmentButtonIconFrame.size))
         }
         
         if let context = self.context, let interfaceState = self.presentationInterfaceState, let editMessageState = interfaceState.editMessageState, let updatedMediaReference = editMessageState.mediaReference {
@@ -3577,7 +3581,9 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     
     private func updateCounterTextNode(transition: ContainedViewLayoutTransition) {
         var inputTextMaxLength: Int32?
-        if let presentationInterfaceState = self.presentationInterfaceState {
+        if let customInputTextMaxLength = self.customInputTextMaxLength {
+            inputTextMaxLength = Int32(customInputTextMaxLength)
+        } else if let presentationInterfaceState = self.presentationInterfaceState {
             if let editMessage = presentationInterfaceState.interfaceState.editMessage, let inputTextMaxLengthValue = editMessage.inputTextMaxLength {
                 inputTextMaxLength = inputTextMaxLengthValue
             } else if case let .customChatContents(customChatContents) = presentationInterfaceState.subject, case .businessLinkSetup = customChatContents.kind {

@@ -930,17 +930,34 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
             if let data = accountContext.currentAppConfiguration.with({ $0 }).data, let value = data["group_call_message_ttl"] as? Double {
                 messageLifetime = Int32(value)
             }
+            
+            var createMessageContext = true
+            
             if isStream {
                 messageLifetime = Int32.max
+                
+                if self.isStream {
+                    createMessageContext = false
+                    if let data = self.accountContext.currentAppConfiguration.with({ $0 }).data {
+                        if let dev = data["dev"] as? Double, dev != 0.0 {
+                            createMessageContext = true
+                        }
+                        if data["ios_can_join_streams"] != nil {
+                            createMessageContext = true
+                        }
+                    }
+                }
             }
-            self.messagesContext = accountContext.engine.messages.groupCallMessages(
-                callId: initialCall.description.id,
-                reference: .id(id: initialCall.description.id, accessHash: initialCall.description.accessHash),
-                e2eContext: self.e2eContext,
-                messageLifetime: messageLifetime,
-                isLiveStream: isStream
-            )
-            self.messagesStatePromise.set(self.messagesContext!.state)
+            if createMessageContext {
+                self.messagesContext = accountContext.engine.messages.groupCallMessages(
+                    callId: initialCall.description.id,
+                    reference: .id(id: initialCall.description.id, accessHash: initialCall.description.accessHash),
+                    e2eContext: self.e2eContext,
+                    messageLifetime: messageLifetime,
+                    isLiveStream: isStream
+                )
+                self.messagesStatePromise.set(self.messagesContext!.state)
+            }
         }
         
         var sharedAudioContext = sharedAudioContext
@@ -2028,6 +2045,7 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
                 }
 
                 self.currentLocalSsrc = ssrc
+                
                 self.requestDisposable.set((self.accountContext.engine.calls.joinGroupCall(
                     peerId: self.peerId,
                     joinAs: self.joinAsPeerId,
@@ -4042,7 +4060,7 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
         }
     }
     
-    public func deleteMessage(id: Int64) {
+    public func deleteMessage(id: GroupCallMessagesContext.Message.Id) {
         if let messagesContext = self.messagesContext {
             messagesContext.deleteMessage(id: id)
         }

@@ -218,7 +218,7 @@ public class CallStatusBarNodeImpl: CallStatusBarNode {
     private var reactionItems: [ReactionItem]?
     private var messagesState: GroupCallMessagesContext.State?
     private let messagesStateDisposable = MetaDisposable()
-    private var currentMessageId: Int64?
+    private var currentMessageId: GroupCallMessagesContext.Message.Id?
     
     private let hierarchyTrackingNode: HierarchyTrackingNode
     private var isCurrentlyInHierarchy = true
