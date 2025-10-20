@@ -132,7 +132,7 @@ final class SegmentControlComponent: Component {
                 if themeUpdated {
                     let backgroundColor = component.theme.overallDarkAppearance ? component.theme.list.itemBlocksBackgroundColor : component.theme.rootController.navigationBar.segmentedBackgroundColor
                     segmentedView.setTitleTextAttributes([
-                        .font: UIFont.boldSystemFont(ofSize: 15.0),
+                        .font: Font.semibold(14.0),
                         .foregroundColor: component.theme.rootController.navigationBar.segmentedTextColor
                     ], for: .normal)
                     segmentedView.foregroundColor = component.theme.rootController.navigationBar.segmentedForegroundColor

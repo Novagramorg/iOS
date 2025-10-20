@@ -4,8 +4,8 @@ import UIKit
 import AsyncDisplayKit
 import TelegramPresentationData
 
-private let textFont = Font.regular(13.0)
-private let selectedTextFont = Font.bold(13.0)
+private let textFont = Font.regular(14.0)
+private let selectedTextFont = Font.semibold(14.0)
 
 public enum SegmentedControlLayout {
     case stretchToFill(width: CGFloat)

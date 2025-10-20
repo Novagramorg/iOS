@@ -32,6 +32,7 @@ private final class PrivacyAndSecurityControllerArguments {
     let openVoiceMessagePrivacy: () -> Void
     let openBioPrivacy: () -> Void
     let openBirthdayPrivacy: () -> Void
+    let openSavedMusicPrivacy: () -> Void
     let openPasscode: () -> Void
     let openTwoStepVerification: (TwoStepVerificationAccessConfiguration?) -> Void
     let openActiveSessions: () -> Void
@@ -43,7 +44,7 @@ private final class PrivacyAndSecurityControllerArguments {
     let openMessagePrivacy: () -> Void
     let openGiftsPrivacy: () -> Void
     
-    init(account: Account, openBlockedUsers: @escaping () -> Void, openLastSeenPrivacy: @escaping () -> Void, openGroupsPrivacy: @escaping () -> Void, openVoiceCallPrivacy: @escaping () -> Void, openProfilePhotoPrivacy: @escaping () -> Void, openForwardPrivacy: @escaping () -> Void, openPhoneNumberPrivacy: @escaping () -> Void, openVoiceMessagePrivacy: @escaping () -> Void, openBioPrivacy: @escaping () -> Void, openBirthdayPrivacy: @escaping () -> Void, openPasscode: @escaping () -> Void, openTwoStepVerification: @escaping (TwoStepVerificationAccessConfiguration?) -> Void, openActiveSessions: @escaping () -> Void, toggleArchiveAndMuteNonContacts: @escaping (Bool) -> Void, setupAccountAutoremove: @escaping () -> Void, setupMessageAutoremove: @escaping () -> Void, openDataSettings: @escaping () -> Void, openEmailSettings: @escaping (String?) -> Void, openMessagePrivacy: @escaping () -> Void, openGiftsPrivacy: @escaping () -> Void) {
+    init(account: Account, openBlockedUsers: @escaping () -> Void, openLastSeenPrivacy: @escaping () -> Void, openGroupsPrivacy: @escaping () -> Void, openVoiceCallPrivacy: @escaping () -> Void, openProfilePhotoPrivacy: @escaping () -> Void, openForwardPrivacy: @escaping () -> Void, openPhoneNumberPrivacy: @escaping () -> Void, openVoiceMessagePrivacy: @escaping () -> Void, openBioPrivacy: @escaping () -> Void, openBirthdayPrivacy: @escaping () -> Void, openSavedMusicPrivacy: @escaping () -> Void, openPasscode: @escaping () -> Void, openTwoStepVerification: @escaping (TwoStepVerificationAccessConfiguration?) -> Void, openActiveSessions: @escaping () -> Void, toggleArchiveAndMuteNonContacts: @escaping (Bool) -> Void, setupAccountAutoremove: @escaping () -> Void, setupMessageAutoremove: @escaping () -> Void, openDataSettings: @escaping () -> Void, openEmailSettings: @escaping (String?) -> Void, openMessagePrivacy: @escaping () -> Void, openGiftsPrivacy: @escaping () -> Void) {
         self.account = account
         self.openBlockedUsers = openBlockedUsers
         self.openLastSeenPrivacy = openLastSeenPrivacy
@@ -55,6 +56,7 @@ private final class PrivacyAndSecurityControllerArguments {
         self.openVoiceMessagePrivacy = openVoiceMessagePrivacy
         self.openBioPrivacy = openBioPrivacy
         self.openBirthdayPrivacy = openBirthdayPrivacy
+        self.openSavedMusicPrivacy = openSavedMusicPrivacy
         self.openPasscode = openPasscode
         self.openTwoStepVerification = openTwoStepVerification
         self.openActiveSessions = openActiveSessions
@@ -106,6 +108,7 @@ private enum PrivacyAndSecurityEntry: ItemListNodeEntry {
     case messagePrivacy(PresentationTheme, GlobalPrivacySettings.NonContactChatsPrivacy, Bool)
     case bioPrivacy(PresentationTheme, String, String)
     case birthdayPrivacy(PresentationTheme, String, String)
+    case savedMusicPrivacy(PresentationTheme, String, String)
     case giftsAutoSavePrivacy(PresentationTheme, String, String)
     case selectivePrivacyInfo(PresentationTheme, String)
     case passcode(PresentationTheme, String, Bool, String)
@@ -130,7 +133,7 @@ private enum PrivacyAndSecurityEntry: ItemListNodeEntry {
             return PrivacyAndSecuritySection.general.rawValue
         case .loginEmail, .loginEmailInfo:
             return PrivacyAndSecuritySection.loginEmail.rawValue
-        case .privacyHeader, .phoneNumberPrivacy, .lastSeenPrivacy, .profilePhotoPrivacy, .forwardPrivacy, .groupPrivacy, .groupPrivacyFooter, .voiceCallPrivacy, .voiceMessagePrivacy, .messagePrivacy, .bioPrivacy, .birthdayPrivacy, .giftsAutoSavePrivacy, .selectivePrivacyInfo:
+        case .privacyHeader, .phoneNumberPrivacy, .lastSeenPrivacy, .profilePhotoPrivacy, .forwardPrivacy, .groupPrivacy, .groupPrivacyFooter, .voiceCallPrivacy, .voiceMessagePrivacy, .messagePrivacy, .bioPrivacy, .birthdayPrivacy, .savedMusicPrivacy, .giftsAutoSavePrivacy, .selectivePrivacyInfo:
             return PrivacyAndSecuritySection.privacy.rawValue
         case .autoArchiveHeader, .autoArchive, .autoArchiveInfo:
             return PrivacyAndSecuritySection.autoArchive.rawValue
@@ -173,36 +176,38 @@ private enum PrivacyAndSecurityEntry: ItemListNodeEntry {
                 return 14
             case .birthdayPrivacy:
                 return 15
-            case .forwardPrivacy:
+            case .savedMusicPrivacy:
                 return 16
-            case .voiceCallPrivacy:
+            case .forwardPrivacy:
                 return 17
-            case .voiceMessagePrivacy:
+            case .voiceCallPrivacy:
                 return 18
-            case .messagePrivacy:
+            case .voiceMessagePrivacy:
                 return 19
-            case .groupPrivacy:
+            case .messagePrivacy:
                 return 20
-            case .groupPrivacyFooter:
+            case .groupPrivacy:
                 return 21
-            case .selectivePrivacyInfo:
+            case .groupPrivacyFooter:
                 return 22
-            case .autoArchiveHeader:
+            case .selectivePrivacyInfo:
                 return 23
-            case .autoArchive:
+            case .autoArchiveHeader:
                 return 24
-            case .autoArchiveInfo:
+            case .autoArchive:
                 return 25
-            case .accountHeader:
+            case .autoArchiveInfo:
                 return 26
-            case .accountTimeout:
+            case .accountHeader:
                 return 27
-            case .accountInfo:
+            case .accountTimeout:
                 return 28
-            case .dataSettings:
+            case .accountInfo:
                 return 29
-            case .dataSettingsInfo:
+            case .dataSettings:
                 return 30
+            case .dataSettingsInfo:
+                return 31
         }
     }
     
@@ -282,6 +287,12 @@ private enum PrivacyAndSecurityEntry: ItemListNodeEntry {
                 }
             case let .birthdayPrivacy(lhsTheme, lhsText, lhsValue):
                 if case let .birthdayPrivacy(rhsTheme, rhsText, rhsValue) = rhs, lhsTheme === rhsTheme, lhsText == rhsText, lhsValue == rhsValue {
+                    return true
+                } else {
+                    return false
+                }
+            case let .savedMusicPrivacy(lhsTheme, lhsText, lhsValue):
+                if case let .savedMusicPrivacy(rhsTheme, rhsText, rhsValue) = rhs, lhsTheme === rhsTheme, lhsText == rhsText, lhsValue == rhsValue {
                     return true
                 } else {
                     return false
@@ -454,6 +465,10 @@ private enum PrivacyAndSecurityEntry: ItemListNodeEntry {
             case let .birthdayPrivacy(_, text, value):
                 return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: text, label: value, sectionId: self.section, style: .blocks, action: {
                     arguments.openBirthdayPrivacy()
+                })
+            case let .savedMusicPrivacy(_, text, value):
+                return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: text, label: value, sectionId: self.section, style: .blocks, action: {
+                    arguments.openSavedMusicPrivacy()
                 })
             case let .giftsAutoSavePrivacy(_, text, value):
                 return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: text, label: value, sectionId: self.section, style: .blocks, action: {
@@ -670,6 +685,7 @@ private func privacyAndSecurityControllerEntries(
         entries.append(.bioPrivacy(presentationData.theme, presentationData.strings.Privacy_Bio, stringForSelectiveSettings(strings: presentationData.strings, settings: privacySettings.bio)))
         entries.append(.giftsAutoSavePrivacy(presentationData.theme, presentationData.strings.Privacy_Gifts, stringForSelectiveSettings(strings: presentationData.strings, settings: privacySettings.giftsAutoSave)))
         entries.append(.birthdayPrivacy(presentationData.theme, presentationData.strings.Privacy_Birthday, stringForSelectiveSettings(strings: presentationData.strings, settings: privacySettings.birthday)))
+        entries.append(.savedMusicPrivacy(presentationData.theme, presentationData.strings.Privacy_SavedMusic, stringForSelectiveSettings(strings: presentationData.strings, settings: privacySettings.savedMusic)))
         entries.append(.forwardPrivacy(presentationData.theme, presentationData.strings.Privacy_Forwards, stringForSelectiveSettings(strings: presentationData.strings, settings: privacySettings.forwards)))
         entries.append(.voiceCallPrivacy(presentationData.theme, presentationData.strings.Privacy_Calls, stringForSelectiveSettings(strings: presentationData.strings, settings: privacySettings.voiceCalls)))
         if !isPremiumDisabled || isPremium {
@@ -685,6 +701,7 @@ private func privacyAndSecurityControllerEntries(
         entries.append(.bioPrivacy(presentationData.theme, presentationData.strings.Privacy_GroupsAndChannels, presentationData.strings.Channel_NotificationLoading))
         entries.append(.giftsAutoSavePrivacy(presentationData.theme, presentationData.strings.Privacy_Gifts, presentationData.strings.Channel_NotificationLoading))
         entries.append(.birthdayPrivacy(presentationData.theme, presentationData.strings.Privacy_Birthday, presentationData.strings.Channel_NotificationLoading))
+        entries.append(.savedMusicPrivacy(presentationData.theme, presentationData.strings.Privacy_SavedMusic, presentationData.strings.Channel_NotificationLoading))
         entries.append(.forwardPrivacy(presentationData.theme, presentationData.strings.Privacy_Forwards, presentationData.strings.Channel_NotificationLoading))
         entries.append(.voiceCallPrivacy(presentationData.theme, presentationData.strings.Privacy_Calls, presentationData.strings.Channel_NotificationLoading))
         if !isPremiumDisabled || isPremium {
@@ -886,7 +903,7 @@ public func privacyAndSecurityController(
                         |> deliverOnMainQueue
                         |> mapToSignal { value -> Signal<Void, NoError> in
                             if let value = value {
-                                privacySettingsPromise.set(.single(AccountPrivacySettings(presence: updated, groupInvitations: value.groupInvitations, voiceCalls: value.voiceCalls, voiceCallsP2P: value.voiceCallsP2P, profilePhoto: value.profilePhoto, forwards: value.forwards, phoneNumber: value.phoneNumber, phoneDiscoveryEnabled: value.phoneDiscoveryEnabled, voiceMessages: value.voiceMessages, bio: value.bio, birthday: value.birthday, giftsAutoSave: value.giftsAutoSave, noPaidMessages: value.noPaidMessages, globalSettings: updatedGlobalSettings ?? value.globalSettings, accountRemovalTimeout: value.accountRemovalTimeout, messageAutoremoveTimeout: value.messageAutoremoveTimeout)))
+                                privacySettingsPromise.set(.single(AccountPrivacySettings(presence: updated, groupInvitations: value.groupInvitations, voiceCalls: value.voiceCalls, voiceCallsP2P: value.voiceCallsP2P, profilePhoto: value.profilePhoto, forwards: value.forwards, phoneNumber: value.phoneNumber, phoneDiscoveryEnabled: value.phoneDiscoveryEnabled, voiceMessages: value.voiceMessages, bio: value.bio, birthday: value.birthday, giftsAutoSave: value.giftsAutoSave, noPaidMessages: value.noPaidMessages, savedMusic: value.savedMusic, globalSettings: updatedGlobalSettings ?? value.globalSettings, accountRemovalTimeout: value.accountRemovalTimeout, messageAutoremoveTimeout: value.messageAutoremoveTimeout)))
                             }
                             return .complete()
                         }
@@ -909,7 +926,7 @@ public func privacyAndSecurityController(
                         |> deliverOnMainQueue
                         |> mapToSignal { value -> Signal<Void, NoError> in
                             if let value = value {
-                                privacySettingsPromise.set(.single(AccountPrivacySettings(presence: value.presence, groupInvitations: updated, voiceCalls: value.voiceCalls, voiceCallsP2P: value.voiceCallsP2P, profilePhoto: value.profilePhoto, forwards: value.forwards, phoneNumber: value.phoneNumber, phoneDiscoveryEnabled: value.phoneDiscoveryEnabled, voiceMessages: value.voiceMessages, bio: value.bio, birthday: value.birthday, giftsAutoSave: value.giftsAutoSave, noPaidMessages: value.noPaidMessages, globalSettings: value.globalSettings, accountRemovalTimeout: value.accountRemovalTimeout, messageAutoremoveTimeout: value.messageAutoremoveTimeout)))
+                                privacySettingsPromise.set(.single(AccountPrivacySettings(presence: value.presence, groupInvitations: updated, voiceCalls: value.voiceCalls, voiceCallsP2P: value.voiceCallsP2P, profilePhoto: value.profilePhoto, forwards: value.forwards, phoneNumber: value.phoneNumber, phoneDiscoveryEnabled: value.phoneDiscoveryEnabled, voiceMessages: value.voiceMessages, bio: value.bio, birthday: value.birthday, giftsAutoSave: value.giftsAutoSave, noPaidMessages: value.noPaidMessages, savedMusic: value.savedMusic, globalSettings: value.globalSettings, accountRemovalTimeout: value.accountRemovalTimeout, messageAutoremoveTimeout: value.messageAutoremoveTimeout)))
                             }
                             return .complete()
                         }
@@ -950,7 +967,7 @@ public func privacyAndSecurityController(
                         |> deliverOnMainQueue
                         |> mapToSignal { value -> Signal<Void, NoError> in
                             if let value = value {
-                                privacySettingsPromise.set(.single(AccountPrivacySettings(presence: value.presence, groupInvitations: value.groupInvitations, voiceCalls: updated, voiceCallsP2P: updatedCallsPrivacy, profilePhoto: value.profilePhoto, forwards: value.forwards, phoneNumber: value.phoneNumber, phoneDiscoveryEnabled: value.phoneDiscoveryEnabled, voiceMessages: value.voiceMessages, bio: value.bio, birthday: value.birthday, giftsAutoSave: value.giftsAutoSave, noPaidMessages: value.noPaidMessages, globalSettings: value.globalSettings, accountRemovalTimeout: value.accountRemovalTimeout, messageAutoremoveTimeout: value.messageAutoremoveTimeout)))
+                                privacySettingsPromise.set(.single(AccountPrivacySettings(presence: value.presence, groupInvitations: value.groupInvitations, voiceCalls: updated, voiceCallsP2P: updatedCallsPrivacy, profilePhoto: value.profilePhoto, forwards: value.forwards, phoneNumber: value.phoneNumber, phoneDiscoveryEnabled: value.phoneDiscoveryEnabled, voiceMessages: value.voiceMessages, bio: value.bio, birthday: value.birthday, giftsAutoSave: value.giftsAutoSave, noPaidMessages: value.noPaidMessages, savedMusic: value.savedMusic, globalSettings: value.globalSettings, accountRemovalTimeout: value.accountRemovalTimeout, messageAutoremoveTimeout: value.messageAutoremoveTimeout)))
                             }
                             return .complete()
                         }
@@ -981,7 +998,7 @@ public func privacyAndSecurityController(
                         |> deliverOnMainQueue
                         |> mapToSignal { value -> Signal<Void, NoError> in
                             if let value = value {
-                                privacySettingsPromise.set(.single(AccountPrivacySettings(presence: value.presence, groupInvitations: value.groupInvitations, voiceCalls: value.voiceCalls, voiceCallsP2P: value.voiceCallsP2P, profilePhoto: updated, forwards: value.forwards, phoneNumber: value.phoneNumber, phoneDiscoveryEnabled: value.phoneDiscoveryEnabled, voiceMessages: value.voiceMessages, bio: value.bio, birthday: value.birthday, giftsAutoSave: value.giftsAutoSave, noPaidMessages: value.noPaidMessages, globalSettings: value.globalSettings, accountRemovalTimeout: value.accountRemovalTimeout, messageAutoremoveTimeout: value.messageAutoremoveTimeout)))
+                                privacySettingsPromise.set(.single(AccountPrivacySettings(presence: value.presence, groupInvitations: value.groupInvitations, voiceCalls: value.voiceCalls, voiceCallsP2P: value.voiceCallsP2P, profilePhoto: updated, forwards: value.forwards, phoneNumber: value.phoneNumber, phoneDiscoveryEnabled: value.phoneDiscoveryEnabled, voiceMessages: value.voiceMessages, bio: value.bio, birthday: value.birthday, giftsAutoSave: value.giftsAutoSave, noPaidMessages: value.noPaidMessages, savedMusic: value.savedMusic, globalSettings: value.globalSettings, accountRemovalTimeout: value.accountRemovalTimeout, messageAutoremoveTimeout: value.messageAutoremoveTimeout)))
                             }
                             return .complete()
                         }
@@ -1004,7 +1021,7 @@ public func privacyAndSecurityController(
                             |> deliverOnMainQueue
                             |> mapToSignal { value -> Signal<Void, NoError> in
                                 if let value = value {
-                                    privacySettingsPromise.set(.single(AccountPrivacySettings(presence: value.presence, groupInvitations: value.groupInvitations, voiceCalls: value.voiceCalls, voiceCallsP2P: value.voiceCallsP2P, profilePhoto: value.profilePhoto, forwards: updated, phoneNumber: value.phoneNumber, phoneDiscoveryEnabled: value.phoneDiscoveryEnabled, voiceMessages: value.voiceMessages, bio: value.bio, birthday: value.birthday, giftsAutoSave: value.giftsAutoSave, noPaidMessages: value.noPaidMessages, globalSettings: value.globalSettings, accountRemovalTimeout: value.accountRemovalTimeout, messageAutoremoveTimeout: value.messageAutoremoveTimeout)))
+                                    privacySettingsPromise.set(.single(AccountPrivacySettings(presence: value.presence, groupInvitations: value.groupInvitations, voiceCalls: value.voiceCalls, voiceCallsP2P: value.voiceCallsP2P, profilePhoto: value.profilePhoto, forwards: updated, phoneNumber: value.phoneNumber, phoneDiscoveryEnabled: value.phoneDiscoveryEnabled, voiceMessages: value.voiceMessages, bio: value.bio, birthday: value.birthday, giftsAutoSave: value.giftsAutoSave, noPaidMessages: value.noPaidMessages, savedMusic: value.savedMusic, globalSettings: value.globalSettings, accountRemovalTimeout: value.accountRemovalTimeout, messageAutoremoveTimeout: value.messageAutoremoveTimeout)))
                                 }
                                 return .complete()
                         }
@@ -1027,7 +1044,7 @@ public func privacyAndSecurityController(
                         |> deliverOnMainQueue
                         |> mapToSignal { value -> Signal<Void, NoError> in
                             if let value = value {
-                                privacySettingsPromise.set(.single(AccountPrivacySettings(presence: value.presence, groupInvitations: value.groupInvitations, voiceCalls: value.voiceCalls, voiceCallsP2P: value.voiceCallsP2P, profilePhoto: value.profilePhoto, forwards: value.forwards, phoneNumber: updated, phoneDiscoveryEnabled: updatedDiscoveryEnabled ?? value.phoneDiscoveryEnabled, voiceMessages: value.voiceMessages, bio: value.bio, birthday: value.birthday, giftsAutoSave: value.giftsAutoSave, noPaidMessages: value.noPaidMessages, globalSettings: value.globalSettings, accountRemovalTimeout: value.accountRemovalTimeout, messageAutoremoveTimeout: value.messageAutoremoveTimeout)))
+                                privacySettingsPromise.set(.single(AccountPrivacySettings(presence: value.presence, groupInvitations: value.groupInvitations, voiceCalls: value.voiceCalls, voiceCallsP2P: value.voiceCallsP2P, profilePhoto: value.profilePhoto, forwards: value.forwards, phoneNumber: updated, phoneDiscoveryEnabled: updatedDiscoveryEnabled ?? value.phoneDiscoveryEnabled, voiceMessages: value.voiceMessages, bio: value.bio, birthday: value.birthday, giftsAutoSave: value.giftsAutoSave, noPaidMessages: value.noPaidMessages, savedMusic: value.savedMusic, globalSettings: value.globalSettings, accountRemovalTimeout: value.accountRemovalTimeout, messageAutoremoveTimeout: value.messageAutoremoveTimeout)))
                             }
                             return .complete()
                         }
@@ -1053,7 +1070,7 @@ public func privacyAndSecurityController(
                             |> deliverOnMainQueue
                             |> mapToSignal { value -> Signal<Void, NoError> in
                                 if let value = value {
-                                    privacySettingsPromise.set(.single(AccountPrivacySettings(presence: value.presence, groupInvitations: value.groupInvitations, voiceCalls: value.voiceCalls, voiceCallsP2P: value.voiceCallsP2P, profilePhoto: value.profilePhoto, forwards: value.forwards, phoneNumber: value.phoneNumber, phoneDiscoveryEnabled: value.phoneDiscoveryEnabled, voiceMessages: updated, bio: value.bio, birthday: value.birthday, giftsAutoSave: value.giftsAutoSave, noPaidMessages: value.noPaidMessages, globalSettings: value.globalSettings, accountRemovalTimeout: value.accountRemovalTimeout, messageAutoremoveTimeout: value.messageAutoremoveTimeout)))
+                                    privacySettingsPromise.set(.single(AccountPrivacySettings(presence: value.presence, groupInvitations: value.groupInvitations, voiceCalls: value.voiceCalls, voiceCallsP2P: value.voiceCallsP2P, profilePhoto: value.profilePhoto, forwards: value.forwards, phoneNumber: value.phoneNumber, phoneDiscoveryEnabled: value.phoneDiscoveryEnabled, voiceMessages: updated, bio: value.bio, birthday: value.birthday, giftsAutoSave: value.giftsAutoSave, noPaidMessages: value.noPaidMessages, savedMusic: value.savedMusic, globalSettings: value.globalSettings, accountRemovalTimeout: value.accountRemovalTimeout, messageAutoremoveTimeout: value.messageAutoremoveTimeout)))
                                 }
                                 return .complete()
                         }
@@ -1076,7 +1093,7 @@ public func privacyAndSecurityController(
                         |> deliverOnMainQueue
                         |> mapToSignal { value -> Signal<Void, NoError> in
                             if let value = value {
-                                privacySettingsPromise.set(.single(AccountPrivacySettings(presence: value.presence, groupInvitations: value.groupInvitations, voiceCalls: value.voiceCalls, voiceCallsP2P: value.voiceCallsP2P, profilePhoto: value.profilePhoto, forwards: value.forwards, phoneNumber: value.phoneNumber, phoneDiscoveryEnabled: value.phoneDiscoveryEnabled, voiceMessages: value.voiceMessages, bio: updated, birthday: value.birthday, giftsAutoSave: value.giftsAutoSave, noPaidMessages: value.noPaidMessages, globalSettings: value.globalSettings, accountRemovalTimeout: value.accountRemovalTimeout, messageAutoremoveTimeout: value.messageAutoremoveTimeout)))
+                                privacySettingsPromise.set(.single(AccountPrivacySettings(presence: value.presence, groupInvitations: value.groupInvitations, voiceCalls: value.voiceCalls, voiceCallsP2P: value.voiceCallsP2P, profilePhoto: value.profilePhoto, forwards: value.forwards, phoneNumber: value.phoneNumber, phoneDiscoveryEnabled: value.phoneDiscoveryEnabled, voiceMessages: value.voiceMessages, bio: updated, birthday: value.birthday, giftsAutoSave: value.giftsAutoSave, noPaidMessages: value.noPaidMessages, savedMusic: value.savedMusic, globalSettings: value.globalSettings, accountRemovalTimeout: value.accountRemovalTimeout, messageAutoremoveTimeout: value.messageAutoremoveTimeout)))
                             }
                             return .complete()
                         }
@@ -1099,7 +1116,30 @@ public func privacyAndSecurityController(
                         |> deliverOnMainQueue
                         |> mapToSignal { value -> Signal<Void, NoError> in
                             if let value = value {
-                                privacySettingsPromise.set(.single(AccountPrivacySettings(presence: value.presence, groupInvitations: value.groupInvitations, voiceCalls: value.voiceCalls, voiceCallsP2P: value.voiceCallsP2P, profilePhoto: value.profilePhoto, forwards: value.forwards, phoneNumber: value.phoneNumber, phoneDiscoveryEnabled: value.phoneDiscoveryEnabled, voiceMessages: value.voiceMessages, bio: value.bio, birthday: updated, giftsAutoSave: value.giftsAutoSave, noPaidMessages: value.noPaidMessages, globalSettings: value.globalSettings, accountRemovalTimeout: value.accountRemovalTimeout, messageAutoremoveTimeout: value.messageAutoremoveTimeout)))
+                                privacySettingsPromise.set(.single(AccountPrivacySettings(presence: value.presence, groupInvitations: value.groupInvitations, voiceCalls: value.voiceCalls, voiceCallsP2P: value.voiceCallsP2P, profilePhoto: value.profilePhoto, forwards: value.forwards, phoneNumber: value.phoneNumber, phoneDiscoveryEnabled: value.phoneDiscoveryEnabled, voiceMessages: value.voiceMessages, bio: value.bio, birthday: updated, giftsAutoSave: value.giftsAutoSave, noPaidMessages: value.noPaidMessages, savedMusic: value.savedMusic, globalSettings: value.globalSettings, accountRemovalTimeout: value.accountRemovalTimeout, messageAutoremoveTimeout: value.messageAutoremoveTimeout)))
+                            }
+                            return .complete()
+                        }
+                        currentInfoDisposable.set(applySetting.start())
+                    }
+                }), true)
+            }
+        }))
+    }, openSavedMusicPrivacy: {
+        let signal = privacySettingsPromise.get()
+        |> take(1)
+        |> deliverOnMainQueue
+        currentInfoDisposable.set(signal.start(next: { [weak currentInfoDisposable] info in
+            if let info = info {
+                pushControllerImpl?(selectivePrivacySettingsController(context: context, kind: .savedMusic, current: info.savedMusic, updated: { updated, _, _, _ in
+                    if let currentInfoDisposable = currentInfoDisposable {
+                        let applySetting: Signal<Void, NoError> = privacySettingsPromise.get()
+                        |> filter { $0 != nil }
+                        |> take(1)
+                        |> deliverOnMainQueue
+                        |> mapToSignal { value -> Signal<Void, NoError> in
+                            if let value = value {
+                                privacySettingsPromise.set(.single(AccountPrivacySettings(presence: value.presence, groupInvitations: value.groupInvitations, voiceCalls: value.voiceCalls, voiceCallsP2P: value.voiceCallsP2P, profilePhoto: value.profilePhoto, forwards: value.forwards, phoneNumber: value.phoneNumber, phoneDiscoveryEnabled: value.phoneDiscoveryEnabled, voiceMessages: value.voiceMessages, bio: value.bio, birthday: value.birthday, giftsAutoSave: value.giftsAutoSave, noPaidMessages: value.noPaidMessages, savedMusic: updated, globalSettings: value.globalSettings, accountRemovalTimeout: value.accountRemovalTimeout, messageAutoremoveTimeout: value.messageAutoremoveTimeout)))
                             }
                             return .complete()
                         }
@@ -1167,7 +1207,7 @@ public func privacyAndSecurityController(
                 var globalSettings = value.globalSettings
                 globalSettings.automaticallyArchiveAndMuteNonContacts = archiveValue
                 
-                privacySettingsPromise.set(.single(AccountPrivacySettings(presence: value.presence, groupInvitations: value.groupInvitations, voiceCalls: value.voiceCalls, voiceCallsP2P: value.voiceCallsP2P, profilePhoto: value.profilePhoto, forwards: value.forwards, phoneNumber: value.phoneNumber, phoneDiscoveryEnabled: value.phoneDiscoveryEnabled, voiceMessages: value.voiceMessages, bio: value.bio, birthday: value.birthday, giftsAutoSave: value.giftsAutoSave, noPaidMessages: value.noPaidMessages, globalSettings: globalSettings, accountRemovalTimeout: value.accountRemovalTimeout, messageAutoremoveTimeout: value.messageAutoremoveTimeout)))
+                privacySettingsPromise.set(.single(AccountPrivacySettings(presence: value.presence, groupInvitations: value.groupInvitations, voiceCalls: value.voiceCalls, voiceCallsP2P: value.voiceCallsP2P, profilePhoto: value.profilePhoto, forwards: value.forwards, phoneNumber: value.phoneNumber, phoneDiscoveryEnabled: value.phoneDiscoveryEnabled, voiceMessages: value.voiceMessages, bio: value.bio, birthday: value.birthday, giftsAutoSave: value.giftsAutoSave, noPaidMessages: value.noPaidMessages, savedMusic: value.savedMusic, globalSettings: globalSettings, accountRemovalTimeout: value.accountRemovalTimeout, messageAutoremoveTimeout: value.messageAutoremoveTimeout)))
             }
             return .complete()
         }
@@ -1206,7 +1246,7 @@ public func privacyAndSecurityController(
                         |> deliverOnMainQueue
                         |> mapToSignal { value -> Signal<Void, NoError> in
                             if let value = value {
-                                privacySettingsPromise.set(.single(AccountPrivacySettings(presence: value.presence, groupInvitations: value.groupInvitations, voiceCalls: value.voiceCalls, voiceCallsP2P: value.voiceCallsP2P, profilePhoto: value.profilePhoto, forwards: value.forwards, phoneNumber: value.phoneNumber, phoneDiscoveryEnabled: value.phoneDiscoveryEnabled, voiceMessages: value.voiceMessages, bio: value.bio, birthday: value.birthday, giftsAutoSave: value.giftsAutoSave, noPaidMessages: value.noPaidMessages, globalSettings: value.globalSettings, accountRemovalTimeout: timeout, messageAutoremoveTimeout: value.messageAutoremoveTimeout)))
+                                privacySettingsPromise.set(.single(AccountPrivacySettings(presence: value.presence, groupInvitations: value.groupInvitations, voiceCalls: value.voiceCalls, voiceCallsP2P: value.voiceCallsP2P, profilePhoto: value.profilePhoto, forwards: value.forwards, phoneNumber: value.phoneNumber, phoneDiscoveryEnabled: value.phoneDiscoveryEnabled, voiceMessages: value.voiceMessages, bio: value.bio, birthday: value.birthday, giftsAutoSave: value.giftsAutoSave, noPaidMessages: value.noPaidMessages, savedMusic: value.savedMusic, globalSettings: value.globalSettings, accountRemovalTimeout: timeout, messageAutoremoveTimeout: value.messageAutoremoveTimeout)))
                             }
                             return .complete()
                         }
@@ -1269,7 +1309,7 @@ public func privacyAndSecurityController(
                     |> deliverOnMainQueue
                     |> mapToSignal { value -> Signal<Void, NoError> in
                         if let value = value {
-                            privacySettingsPromise.set(.single(AccountPrivacySettings(presence: value.presence, groupInvitations: value.groupInvitations, voiceCalls: value.voiceCalls, voiceCallsP2P: value.voiceCallsP2P, profilePhoto: value.profilePhoto, forwards: value.forwards, phoneNumber: value.phoneNumber, phoneDiscoveryEnabled: value.phoneDiscoveryEnabled, voiceMessages: value.voiceMessages, bio: value.bio, birthday: value.birthday, giftsAutoSave: value.giftsAutoSave, noPaidMessages: value.noPaidMessages, globalSettings: value.globalSettings, accountRemovalTimeout: value.accountRemovalTimeout, messageAutoremoveTimeout: updatedValue == 0 ? nil : updatedValue)))
+                            privacySettingsPromise.set(.single(AccountPrivacySettings(presence: value.presence, groupInvitations: value.groupInvitations, voiceCalls: value.voiceCalls, voiceCallsP2P: value.voiceCallsP2P, profilePhoto: value.profilePhoto, forwards: value.forwards, phoneNumber: value.phoneNumber, phoneDiscoveryEnabled: value.phoneDiscoveryEnabled, voiceMessages: value.voiceMessages, bio: value.bio, birthday: value.birthday, giftsAutoSave: value.giftsAutoSave, noPaidMessages: value.noPaidMessages, savedMusic: value.savedMusic, globalSettings: value.globalSettings, accountRemovalTimeout: value.accountRemovalTimeout, messageAutoremoveTimeout: updatedValue == 0 ? nil : updatedValue)))
                         }
                         return .complete()
                     }
@@ -1319,7 +1359,7 @@ public func privacyAndSecurityController(
                         var globalSettings = value.globalSettings
                         globalSettings.nonContactChatsPrivacy = settingValue
                         
-                        privacySettingsPromise.set(.single(AccountPrivacySettings(presence: value.presence, groupInvitations: value.groupInvitations, voiceCalls: value.voiceCalls, voiceCallsP2P: value.voiceCallsP2P, profilePhoto: value.profilePhoto, forwards: value.forwards, phoneNumber: value.phoneNumber, phoneDiscoveryEnabled: value.phoneDiscoveryEnabled, voiceMessages: value.voiceMessages, bio: value.bio, birthday: value.birthday, giftsAutoSave: value.giftsAutoSave, noPaidMessages: value.noPaidMessages, globalSettings: globalSettings, accountRemovalTimeout: value.accountRemovalTimeout, messageAutoremoveTimeout: value.messageAutoremoveTimeout)))
+                        privacySettingsPromise.set(.single(AccountPrivacySettings(presence: value.presence, groupInvitations: value.groupInvitations, voiceCalls: value.voiceCalls, voiceCallsP2P: value.voiceCallsP2P, profilePhoto: value.profilePhoto, forwards: value.forwards, phoneNumber: value.phoneNumber, phoneDiscoveryEnabled: value.phoneDiscoveryEnabled, voiceMessages: value.voiceMessages, bio: value.bio, birthday: value.birthday, giftsAutoSave: value.giftsAutoSave, noPaidMessages: value.noPaidMessages, savedMusic: value.savedMusic, globalSettings: globalSettings, accountRemovalTimeout: value.accountRemovalTimeout, messageAutoremoveTimeout: value.messageAutoremoveTimeout)))
                     }
                     return .complete()
                 }
@@ -1366,7 +1406,7 @@ public func privacyAndSecurityController(
                         |> deliverOnMainQueue
                         |> mapToSignal { value -> Signal<Void, NoError> in
                             if let value = value {
-                                privacySettingsPromise.set(.single(AccountPrivacySettings(presence: value.presence, groupInvitations: value.groupInvitations, voiceCalls: value.voiceCalls, voiceCallsP2P: value.voiceCallsP2P, profilePhoto: value.profilePhoto, forwards: value.forwards, phoneNumber: value.phoneNumber, phoneDiscoveryEnabled: value.phoneDiscoveryEnabled, voiceMessages: value.voiceMessages, bio: value.bio, birthday: value.birthday, giftsAutoSave: updated, noPaidMessages: value.noPaidMessages, globalSettings: updatedGlobalSettings ?? value.globalSettings, accountRemovalTimeout: value.accountRemovalTimeout, messageAutoremoveTimeout: value.messageAutoremoveTimeout)))
+                                privacySettingsPromise.set(.single(AccountPrivacySettings(presence: value.presence, groupInvitations: value.groupInvitations, voiceCalls: value.voiceCalls, voiceCallsP2P: value.voiceCallsP2P, profilePhoto: value.profilePhoto, forwards: value.forwards, phoneNumber: value.phoneNumber, phoneDiscoveryEnabled: value.phoneDiscoveryEnabled, voiceMessages: value.voiceMessages, bio: value.bio, birthday: value.birthday, giftsAutoSave: updated, noPaidMessages: value.noPaidMessages, savedMusic: value.savedMusic, globalSettings: updatedGlobalSettings ?? value.globalSettings, accountRemovalTimeout: value.accountRemovalTimeout, messageAutoremoveTimeout: value.messageAutoremoveTimeout)))
                             }
                             return .complete()
                         }
