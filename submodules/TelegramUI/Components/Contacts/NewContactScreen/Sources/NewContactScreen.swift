@@ -911,8 +911,8 @@ public class NewContactScreen: ViewControllerComponentContainer {
     }
     
     fileprivate func complete(result: NewContactScreenComponent.Result) {
+        let entities = generateChatInputTextEntities(result.note)
         if let peer = result.peer {
-            let entities = generateChatInputTextEntities(result.note)
             let _ = self.context.engine.contacts.addContactInteractively(
                 peerId: peer.id,
                 firstName: result.firstName,
@@ -926,7 +926,9 @@ public class NewContactScreen: ViewControllerComponentContainer {
             let _ = self.context.engine.contacts.importContact(
                 firstName: result.firstName,
                 lastName: result.lastName,
-                phoneNumber: result.phoneNumber
+                phoneNumber: result.phoneNumber,
+                noteText: result.note.string,
+                noteEntities: entities
             ).startStandalone()
         }
     }
