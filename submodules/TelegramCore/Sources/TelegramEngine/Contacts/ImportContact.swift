@@ -3,10 +3,17 @@ import TelegramApi
 import SwiftSignalKit
 
 
-func _internal_importContact(account: Account, firstName: String, lastName: String, phoneNumber: String) -> Signal<PeerId?, NoError> {
+func _internal_importContact(account: Account, firstName: String, lastName: String, phoneNumber: String, noteText: String, noteEntities: [MessageTextEntity]) -> Signal<PeerId?, NoError> {
     let accountPeerId = account.peerId
     
-    let input = Api.InputContact.inputPhoneContact(flags: 0, clientId: 1, phone: phoneNumber, firstName: firstName, lastName: lastName, note: nil)
+    var flags: Int32 = 0
+    var note: Api.TextWithEntities?
+    if !noteText.isEmpty {
+        flags |= (1 << 1)
+        note = .textWithEntities(text: noteText, entities: apiEntitiesFromMessageTextEntities(noteEntities, associatedPeers: SimpleDictionary()))
+    }
+    
+    let input = Api.InputContact.inputPhoneContact(flags: 0, clientId: 1, phone: phoneNumber, firstName: firstName, lastName: lastName, note: note)
     
     return account.network.request(Api.functions.contacts.importContacts(contacts: [input]))
     |> map(Optional.init)
@@ -27,6 +34,11 @@ func _internal_importContact(account: Account, firstName: String, lastName: Stri
                             if !peerIds.contains(peerId) {
                                 peerIds.insert(peerId)
                                 transaction.replaceContactPeerIds(peerIds)
+                            }
+                            if !noteText.isEmpty {
+                                transaction.updatePeerCachedData(peerIds: peerIds, update: { peerId, cachedData in
+                                    (cachedData as? CachedUserData)?.withUpdatedNote(.init(text: noteText, entities: noteEntities))
+                                })
                             }
                             return peerId
                         }
@@ -85,6 +97,11 @@ func _internal_addContactInteractively(account: Account, peerId: PeerId, firstNa
                 if !peerIds.contains(peerId) {
                     peerIds.insert(peerId)
                     transaction.replaceContactPeerIds(peerIds)
+                }
+                if !noteText.isEmpty {
+                    transaction.updatePeerCachedData(peerIds: peerIds, update: { peerId, cachedData in
+                        (cachedData as? CachedUserData)?.withUpdatedNote(.init(text: noteText, entities: noteEntities))
+                    })
                 }
                 
                 account.stateManager.addUpdates(result)
