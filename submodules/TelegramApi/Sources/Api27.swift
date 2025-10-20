@@ -186,16 +186,16 @@ public extension Api {
 }
 public extension Api {
     enum TodoCompletion: TypeConstructorDescription {
-        case todoCompletion(id: Int32, completedBy: Int64, date: Int32)
+        case todoCompletion(id: Int32, completedBy: Api.Peer, date: Int32)
     
     public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
     switch self {
                 case .todoCompletion(let id, let completedBy, let date):
                     if boxed {
-                        buffer.appendInt32(1287725239)
+                        buffer.appendInt32(572241380)
                     }
                     serializeInt32(id, buffer: buffer, boxed: false)
-                    serializeInt64(completedBy, buffer: buffer, boxed: false)
+                    completedBy.serialize(buffer, true)
                     serializeInt32(date, buffer: buffer, boxed: false)
                     break
     }
@@ -211,8 +211,10 @@ public extension Api {
         public static func parse_todoCompletion(_ reader: BufferReader) -> TodoCompletion? {
             var _1: Int32?
             _1 = reader.readInt32()
-            var _2: Int64?
-            _2 = reader.readInt64()
+            var _2: Api.Peer?
+            if let signature = reader.readInt32() {
+                _2 = Api.parse(reader, signature: signature) as? Api.Peer
+            }
             var _3: Int32?
             _3 = reader.readInt32()
             let _c1 = _1 != nil

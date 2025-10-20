@@ -149,7 +149,9 @@ final class AttachmentContainer: ASDisplayNode, ASGestureRecognizerDelegate {
         self.panGestureRecognizer = panRecognizer
         self.wrappingNode.view.addGestureRecognizer(panRecognizer)
                 
-        self.clipNode.view.addSubview(self.pillView)
+        if self.glass {
+            self.clipNode.view.addSubview(self.pillView)
+        }
     }
     
     func cancelPanGesture() {

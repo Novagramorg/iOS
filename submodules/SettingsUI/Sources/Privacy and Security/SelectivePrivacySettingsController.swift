@@ -1012,6 +1012,11 @@ private func selectivePrivacySettingsControllerEntries(presentationData: Present
             settingInfoText = presentationData.strings.Privacy_Birthday_CustomHelp
             disableForText = presentationData.strings.PrivacyLastSeenSettings_NeverShareWith
             enableForText = presentationData.strings.PrivacyLastSeenSettings_AlwaysShareWith
+        case .savedMusic:
+            settingTitle = presentationData.strings.Privacy_SavedMusic_WhoCanSeeMyMusic
+            settingInfoText = presentationData.strings.Privacy_SavedMusic_CustomHelp
+            disableForText = presentationData.strings.PrivacyLastSeenSettings_NeverShareWith
+            enableForText = presentationData.strings.PrivacyLastSeenSettings_AlwaysShareWith
         case .giftsAutoSave:
             settingTitle = presentationData.strings.Privacy_Gifts_WhoCanSeeMyBio
             settingInfoText = presentationData.strings.Privacy_Gifts_CustomHelp
@@ -1295,6 +1300,8 @@ public func selectivePrivacySettingsController(
                     title = strings.Privacy_Bio_AlwaysShareWith_Title
                 case .birthday:
                     title = strings.Privacy_Birthday_AlwaysShareWith_Title
+                case .savedMusic:
+                    title = strings.Privacy_SavedMusic_AlwaysShareWith_Title
                 case .giftsAutoSave:
                     title = strings.Privacy_Gifts_AlwaysAllow_Title
             }
@@ -1318,6 +1325,8 @@ public func selectivePrivacySettingsController(
                     title = strings.Privacy_Bio_NeverShareWith_Title
                 case .birthday:
                     title = strings.Privacy_Birthday_NeverShareWith_Title
+                case .savedMusic:
+                    title = strings.Privacy_SavedMusic_NeverShareWith_Title
                 case .giftsAutoSave:
                     title = strings.Privacy_Gifts_NeverAllow_Title
             }
@@ -1686,26 +1695,28 @@ public func selectivePrivacySettingsController(
         
         let title: String
         switch kind {
-            case .presence:
-                title = presentationData.strings.PrivacySettings_LastSeenTitle
-            case .groupInvitations:
-                title = presentationData.strings.Privacy_GroupsAndChannels
-            case .voiceCalls:
-                title = presentationData.strings.Settings_CallSettings
-            case .profilePhoto:
-                title = presentationData.strings.Privacy_ProfilePhoto
-            case .forwards:
-                title = presentationData.strings.Privacy_Forwards
-            case .phoneNumber:
-                title = presentationData.strings.Privacy_PhoneNumber
-            case .voiceMessages:
-                title = presentationData.strings.Privacy_VoiceMessages
-            case .bio:
-                title = presentationData.strings.Privacy_Bio
-            case .birthday:
-                title = presentationData.strings.Privacy_Birthday
-            case .giftsAutoSave:
-                title = presentationData.strings.Privacy_Gifts
+        case .presence:
+            title = presentationData.strings.PrivacySettings_LastSeenTitle
+        case .groupInvitations:
+            title = presentationData.strings.Privacy_GroupsAndChannels
+        case .voiceCalls:
+            title = presentationData.strings.Settings_CallSettings
+        case .profilePhoto:
+            title = presentationData.strings.Privacy_ProfilePhoto
+        case .forwards:
+            title = presentationData.strings.Privacy_Forwards
+        case .phoneNumber:
+            title = presentationData.strings.Privacy_PhoneNumber
+        case .voiceMessages:
+            title = presentationData.strings.Privacy_VoiceMessages
+        case .bio:
+            title = presentationData.strings.Privacy_Bio
+        case .birthday:
+            title = presentationData.strings.Privacy_Birthday
+        case .savedMusic:
+            title = presentationData.strings.Privacy_SavedMusic
+        case .giftsAutoSave:
+            title = presentationData.strings.Privacy_Gifts
         }
         let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text(title), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back), animateChanges: false)
         let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: selectivePrivacySettingsControllerEntries(presentationData: presentationData, kind: kind, state: state, peerName: peerName ?? "", phoneNumber: phoneNumber, peer: peer, birthday: birthday, publicPhoto: publicPhoto.knownValue), style: .blocks, animateChanges: true)
@@ -1796,26 +1807,28 @@ public func selectivePrivacySettingsController(
             
             let type: UpdateSelectiveAccountPrivacySettingsType
             switch kind {
-                case .presence:
-                    type = .presence
-                case .groupInvitations:
-                    type = .groupInvitations
-                case .voiceCalls:
-                    type = .voiceCalls
-                case .profilePhoto:
-                    type = .profilePhoto
-                case .forwards:
-                    type = .forwards
-                case .phoneNumber:
-                    type = .phoneNumber
-                case .voiceMessages:
-                    type = .voiceMessages
-                case .bio:
-                    type = .bio
-                case .birthday:
-                    type = .birthday
-                case .giftsAutoSave:
-                    type = .giftsAutoSave
+            case .presence:
+                type = .presence
+            case .groupInvitations:
+                type = .groupInvitations
+            case .voiceCalls:
+                type = .voiceCalls
+            case .profilePhoto:
+                type = .profilePhoto
+            case .forwards:
+                type = .forwards
+            case .phoneNumber:
+                type = .phoneNumber
+            case .voiceMessages:
+                type = .voiceMessages
+            case .bio:
+                type = .bio
+            case .birthday:
+                type = .birthday
+            case .savedMusic:
+                type = .savedMusic
+            case .giftsAutoSave:
+                type = .giftsAutoSave
             }
             
             let updateSettingsSignal = context.engine.privacy.updateSelectiveAccountPrivacySettings(type: type, settings: settings)

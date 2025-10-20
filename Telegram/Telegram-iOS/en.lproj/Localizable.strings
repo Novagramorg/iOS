@@ -15157,3 +15157,9 @@ Error: %8$@";
 "Chat.NewThreadInfo.Text" = "Type any message to\ncreate a new thread.";
 "Chat.InlineTopicMenu.NewForumThreadTab" = "New Chat";
 "Chat.GenericForuThreadStatus" = "thread";
+
+"Privacy.SavedMusic" = "Saved Music";
+"Privacy.SavedMusic.WhoCanSeeMyMusic" = "WHO CAN SEE MY SAVED MUSIC";
+"Privacy.SavedMusic.CustomHelp" = "You can restrict who can see your saved music with granular precision.";
+"Privacy.SavedMusic.AlwaysShareWith.Title" = "Always Share With";
+"Privacy.SavedMusic.NeverShareWith.Title" = "Never Share With";
