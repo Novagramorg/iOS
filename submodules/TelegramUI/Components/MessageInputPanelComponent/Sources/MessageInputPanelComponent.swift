@@ -694,6 +694,11 @@ public final class MessageInputPanelComponent: Component {
         }
         
         public func activateInput() {
+            if let inputPanelView = self.inputPanel?.view as? ChatTextInputPanelComponent.View {
+                inputPanelView.activateInput()
+                return
+            }
+            
             if let textFieldView = self.textField.view as? TextFieldComponent.View {
                 textFieldView.activateInput()
             }
@@ -947,6 +952,7 @@ public final class MessageInputPanelComponent: Component {
                         hideKeyboard: component.hideKeyboard,
                         insets: UIEdgeInsets(top: 0.0, left: 0.0, bottom: component.bottomInset, right: 0.0),
                         maxHeight: availableSize.height,
+                        maxLength: component.maxLength,
                         sendAction: { [weak self] in
                             guard let self, let component = self.component else {
                                 return

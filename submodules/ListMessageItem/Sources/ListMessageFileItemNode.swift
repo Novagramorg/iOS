@@ -25,7 +25,7 @@ import EmojiStatusComponent
 
 private let extensionImageCache = Atomic<[UInt32: UIImage]>(value: [:])
 
-private let redColors: (UInt32, UInt32) = (0xed6b7b, 0xe63f45)
+private let redColors: (UInt32, UInt32) = (0xff875f, 0xff5069)
 private let greenColors: (UInt32, UInt32) = (0x99de6f, 0x5fb84f)
 private let blueColors: (UInt32, UInt32) = (0x72d5fd, 0x2a9ef1)
 private let yellowColors: (UInt32, UInt32) = (0xffa24b, 0xed705c)
@@ -63,11 +63,22 @@ private func generateExtensionImage(colors: (UInt32, UInt32)) -> UIImage? {
         
         context.restoreGState()
         
+        context.saveGState()
+        let rounded = UIBezierPath(roundedRect: CGRect(origin: .zero, size: size), cornerRadius: 13).cgPath
+        let full = UIBezierPath(rect: CGRect(origin: .zero, size: size)).cgPath
+        context.addPath(full)
+        context.addPath(rounded)
+        context.setBlendMode(.destinationOut)
+        context.drawPath(using: .eoFill)
+        context.setBlendMode(.normal)
+        context.restoreGState()
+        
         context.beginPath()
         let _ = try? drawSvgPath(context, path: "M6,0 L26.7573593,0 C27.5530088,-8.52837125e-16 28.3160705,0.316070521 28.8786797,0.878679656 L39.1213203,11.1213203 C39.6839295,11.6839295 40,12.4469912 40,13.2426407 L40,34 C40,37.3137085 37.3137085,40 34,40 L6,40 C2.6862915,40 4.05812251e-16,37.3137085 0,34 L0,6 C-4.05812251e-16,2.6862915 2.6862915,6.08718376e-16 6,0 ")
         context.clip()
-        
-        context.setFillColor(UIColor(rgb: 0xffffff, alpha: 0.2).cgColor)
+
+        context.setBlendMode(.overlay)
+        context.setFillColor(UIColor(rgb: 0xffffff, alpha: 0.5).cgColor)
         context.translateBy(x: 40.0 - 14.0, y: 0.0)
         let _ = try? drawSvgPath(context, path: "M-1,0 L14,0 L14,15 L14,14 C14,12.8954305 13.1045695,12 12,12 L4,12 C2.8954305,12 2,11.1045695 2,10 L2,2 C2,0.8954305 1.1045695,-2.02906125e-16 0,0 L-1,0 L-1,0 Z ")
     })
@@ -1250,7 +1261,7 @@ public final class ListMessageFileItemNode: ListMessageNode {
                     let iconFrame = CGRect(origin: CGPoint(x: params.leftInset + leftOffset + 12.0, y: 8.0 + verticalInset), size: iconSize)
                     transition.updateFrame(node: strongSelf.extensionIconNode, frame: iconFrame)
                     strongSelf.extensionIconNode.image = extensionIconImage
-                    transition.updateFrame(node: strongSelf.extensionIconText, frame: CGRect(origin: CGPoint(x: iconFrame.minX + floorToScreenPixels((iconFrame.width - extensionTextLayout.size.width) / 2.0), y: iconFrame.minY + 7.0 + floorToScreenPixels((iconFrame.height - extensionTextLayout.size.height) / 2.0)), size: extensionTextLayout.size))
+                    transition.updateFrame(node: strongSelf.extensionIconText, frame: CGRect(origin: CGPoint(x: iconFrame.minX + floorToScreenPixels((iconFrame.width - extensionTextLayout.size.width) / 2.0), y: iconFrame.minY + 5.0 + floorToScreenPixels((iconFrame.height - extensionTextLayout.size.height) / 2.0)), size: extensionTextLayout.size))
                     
                     transition.updateFrame(node: strongSelf.iconStatusNode, frame: iconFrame)
                     

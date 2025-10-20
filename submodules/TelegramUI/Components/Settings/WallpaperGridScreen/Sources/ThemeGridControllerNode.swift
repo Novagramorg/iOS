@@ -283,7 +283,7 @@ final class ThemeGridControllerNode: ASDisplayNode {
         self.descriptionItem = ItemListTextItem(presentationData: ItemListPresentationData(presentationData), text: .plain(descriptionText), sectionId: 0)
 
         self.resetItemNode = ItemListActionItemNode()
-        self.resetItem = ItemListActionItem(presentationData: ItemListPresentationData(presentationData), title: presentationData.strings.Wallpaper_ResetWallpapers, kind: .generic, alignment: .natural, sectionId: 0, style: .blocks, action: {
+        self.resetItem = ItemListActionItem(presentationData: ItemListPresentationData(presentationData), systemStyle: .glass, title: presentationData.strings.Wallpaper_ResetWallpapers, kind: .generic, alignment: .natural, sectionId: 0, style: .blocks, action: {
             resetWallpapers()
         })
         self.resetDescriptionItemNode = ItemListTextItemNode()

@@ -141,7 +141,7 @@ private final class ChatScheduleTimeSheetContentComponent: Component {
                         size: barButtonSize,
                         backgroundColor: environment.theme.rootController.navigationBar.glassBarButtonBackgroundColor,
                         isDark: environment.theme.overallDarkAppearance,
-                        state: .glass,
+                        state: .generic,
                         component: AnyComponentWithIdentity(id: "close", component: AnyComponent(
                             BundleIconComponent(
                                 name: "Navigation/Close",
