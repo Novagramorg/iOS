@@ -785,6 +785,10 @@ public final class ChatTextInputPanelComponent: Component {
                 case .attach:
                     panelNode.customLeftAction = nil
                 case let .toggleExpanded(isVisible, isExpanded, hasUnseen):
+                    var isVisible = isVisible
+                    if component.insets.bottom > 40.0 {
+                        isVisible = false
+                    }
                     panelNode.customLeftAction = .toggleExpanded(isVisible: isVisible, isExpanded: isExpanded, hasUnseen: hasUnseen)
                 }
             } else {

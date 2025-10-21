@@ -244,10 +244,12 @@ final class StoryItemSetContainerSendMessage {
                 )
             }
             
+            var animateIn = false
             let inputMediaNode: ChatEntityKeyboardInputNode
             if let current = self.inputMediaNode {
                 inputMediaNode = current
             } else {
+                animateIn = true
                 inputMediaNode = ChatEntityKeyboardInputNode(
                     context: context,
                     currentInputData: updatedInputData,
@@ -308,7 +310,7 @@ final class StoryItemSetContainerSendMessage {
             let inputNodeHeight = heightAndOverflow.0
             let inputNodeFrame = CGRect(origin: CGPoint(x: 0.0, y: availableSize.height - inputNodeHeight), size: CGSize(width: availableSize.width, height: inputNodeHeight))
             
-            do {
+            if animateIn {
                 let inputNodeFrame = inputNodeFrame.offsetBy(dx: 0.0, dy: inputNodeHeight)
                 ComponentTransition.immediate.setFrame(layer: inputMediaNode.layer, frame: inputNodeFrame)
             }
@@ -412,7 +414,7 @@ final class StoryItemSetContainerSendMessage {
                 self.performPaidMessageAction(view: view)
             })))
             if self.currentLiveStreamMessageStars != nil {
-                items.append(.action(ContextMenuActionItem(text: "Remove Stars", icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Input/Text/AccessoryIconSuggestPost"), color: theme.contextMenu.primaryColor)
+                items.append(.action(ContextMenuActionItem(text: "Remove Stars", icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/RemovePrice"), color: theme.contextMenu.primaryColor)
                 }, action: { [weak self, weak view] _, a in
                     a(.default)
                     
@@ -621,6 +623,51 @@ final class StoryItemSetContainerSendMessage {
                     switch inputPanelView.getSendMessageInput() {
                     case let .text(text):
                         if !text.string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            var maxInputLength: Int?
+                            var maxEmojiCount: Int?
+                            let params = GroupCallMessagesContext.getStarAmountParamMapping(value: self.currentLiveStreamMessageStars?.value ?? 0)
+                            maxInputLength = params.maxLength
+                            maxEmojiCount = params.emojiCount
+                            
+                            var isSendDisabled = false
+                            if let maxInputLength, text.string.count > maxInputLength {
+                                isSendDisabled = true
+                            }
+                            if let maxEmojiCount {
+                                var emojiCount = 0
+                                let nsString = text.string as NSString
+                                var processedRanges = Set<Range<Int>>()
+                                nsString.enumerateSubstrings(in: NSRange(location: 0, length: nsString.length), options: .byComposedCharacterSequences, using: {
+                                    substring, range, _, _ in
+                                    if let substring, substring.isSingleEmoji {
+                                        emojiCount += 1
+                                        processedRanges.insert(range.lowerBound ..< range.upperBound)
+                                    }
+                                })
+                                let entities = generateChatInputTextEntities(text, generateLinks: false)
+                                for entity in entities {
+                                    if case .CustomEmoji = entity.type {
+                                        if !processedRanges.contains(entity.range) {
+                                            emojiCount += 1
+                                        }
+                                    }
+                                }
+                                if emojiCount > maxEmojiCount {
+                                    isSendDisabled = true
+                                }
+                            }
+                            
+                            if isSendDisabled {
+                                self.performPaidMessageAction(view: view)
+                                return
+                            }
+                            
+                            if let visibleItemView = view.visibleItems[component.slice.item.id]?.view.view as? StoryItemContentComponent.View {
+                                if !(visibleItemView.liveChatState?.isExpanded ?? true) {
+                                    visibleItemView.toggleLiveChatExpanded()
+                                }
+                            }
+                            
                             let entities = generateChatInputTextEntities(text)
                             
                             call.sendMessage(text: text.string, entities: entities, paidStars: self.currentLiveStreamMessageStars?.value)

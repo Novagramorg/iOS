@@ -1335,6 +1335,7 @@ private final class StoryContainerScreenComponent: Component {
                             hasTrending: true,
                             hasSearch: true,
                             hideBackground: true,
+                            maskEdge: .clip,
                             sendGif: nil
                         )
                     )
