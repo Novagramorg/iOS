@@ -593,6 +593,7 @@ final class UserAppearanceScreenComponent: Component {
                             options: options ?? [],
                             purpose: .buyStarGift(requiredStars: resellAmount.amount.value),
                             targetPeerId: nil,
+                            customTheme: nil,
                             completion: { [weak self, weak starsContext] stars in
                                 guard let self, let starsContext else {
                                     return

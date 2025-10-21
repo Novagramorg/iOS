@@ -844,7 +844,7 @@ func openResolvedUrlImpl(
             dismissInput()
             if let starsContext = context.starsContext {
                 let proceed = {
-                    let controller = context.sharedContext.makeStarsPurchaseScreen(context: context, starsContext: starsContext, options: [], purpose: .topUp(requiredStars: amount, purpose: purpose), targetPeerId: nil, completion: { _ in })
+                    let controller = context.sharedContext.makeStarsPurchaseScreen(context: context, starsContext: starsContext, options: [], purpose: .topUp(requiredStars: amount, purpose: purpose), targetPeerId: nil, customTheme: nil, completion: { _ in })
                     if let navigationController = navigationController {
                         navigationController.pushViewController(controller, animated: true)
                     }

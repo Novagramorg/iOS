@@ -143,7 +143,7 @@ public struct GroupCallSummary: Equatable {
 extension GroupCallInfo {
     init?(_ call: Api.GroupCall) {
         switch call {
-        case let .groupCall(flags, id, accessHash, participantsCount, title, streamDcId, recordStartDate, scheduleDate, _, unmutedVideoLimit, _, _):
+        case let .groupCall(flags, id, accessHash, participantsCount, title, streamDcId, recordStartDate, scheduleDate, _, unmutedVideoLimit, _, _, sendPaidMessagesStars):
             self.init(
                 id: id,
                 accessHash: accessHash,
@@ -155,7 +155,7 @@ extension GroupCallInfo {
                 recordingStartTimestamp: recordStartDate,
                 sortAscending: (flags & (1 << 6)) != 0,
                 defaultParticipantsAreMuted: GroupCallParticipantsContext.State.DefaultParticipantsAreMuted(isMuted: (flags & (1 << 1)) != 0, canChange: (flags & (1 << 2)) != 0),
-                messagesAreEnabled: GroupCallParticipantsContext.State.MessagesAreEnabled(isEnabled: (flags & (1 << 17)) != 0, canChange: (flags & (1 << 18)) != 0),
+                messagesAreEnabled: GroupCallParticipantsContext.State.MessagesAreEnabled(isEnabled: (flags & (1 << 17)) != 0, canChange: (flags & (1 << 18)) != 0, sendPaidMessagesStars: sendPaidMessagesStars),
                 isVideoEnabled: (flags & (1 << 9)) != 0,
                 unmutedVideoLimit: Int(unmutedVideoLimit),
                 isStream: (flags & (1 << 12)) != 0,
@@ -564,7 +564,7 @@ func _internal_getGroupCallParticipants(account: Account, reference: InternalGro
                 adminIds: Set(),
                 isCreator: isCreator,
                 defaultParticipantsAreMuted: defaultParticipantsAreMuted ?? GroupCallParticipantsContext.State.DefaultParticipantsAreMuted(isMuted: false, canChange: false),
-                messagesAreEnabled: messagesAreEnabled ?? GroupCallParticipantsContext.State.MessagesAreEnabled(isEnabled: true, canChange: false),
+                messagesAreEnabled: messagesAreEnabled ?? GroupCallParticipantsContext.State.MessagesAreEnabled(isEnabled: true, canChange: false, sendPaidMessagesStars: nil),
                 sortAscending: sortAscendingValue,
                 recordingStartTimestamp: nil,
                 title: nil,
@@ -727,7 +727,7 @@ func _internal_joinGroupCall(account: Account, peerId: PeerId?, joinAs: PeerId?,
                     adminIds: Set(),
                     isCreator: false,
                     defaultParticipantsAreMuted: .init(isMuted: true, canChange: false),
-                    messagesAreEnabled: .init(isEnabled: true, canChange: false),
+                    messagesAreEnabled: .init(isEnabled: true, canChange: false, sendPaidMessagesStars: nil),
                     sortAscending: true,
                     recordingStartTimestamp: nil,
                     title: nil,
@@ -784,7 +784,7 @@ func _internal_joinGroupCall(account: Account, peerId: PeerId?, joinAs: PeerId?,
                             maybeParsedCall = GroupCallInfo(call)
                             
                             switch call {
-                            case let .groupCall(flags, _, _, _, title, _, recordStartDate, scheduleDate, _, unmutedVideoLimit, _, _):
+                            case let .groupCall(flags, _, _, _, title, _, recordStartDate, scheduleDate, _, unmutedVideoLimit, _, _, sendPaidMessagesStars):
                                 let isMin = (flags & (1 << 19)) != 0
                                 let isMuted = (flags & (1 << 1)) != 0
                                 let canChange = (flags & (1 << 2)) != 0
@@ -792,7 +792,7 @@ func _internal_joinGroupCall(account: Account, peerId: PeerId?, joinAs: PeerId?,
                                 let messagesEnabled = (flags & (1 << 17)) != 0
                                 let canChangeMessagesEnabled = (flags & (1 << 18)) != 0
                                 state.defaultParticipantsAreMuted = GroupCallParticipantsContext.State.DefaultParticipantsAreMuted(isMuted: isMuted, canChange: isMin ? state.defaultParticipantsAreMuted.canChange : canChange)
-                                state.messagesAreEnabled = GroupCallParticipantsContext.State.MessagesAreEnabled(isEnabled: messagesEnabled, canChange: isMin ? state.messagesAreEnabled.canChange : canChangeMessagesEnabled)
+                                state.messagesAreEnabled = GroupCallParticipantsContext.State.MessagesAreEnabled(isEnabled: messagesEnabled, canChange: isMin ? state.messagesAreEnabled.canChange : canChangeMessagesEnabled, sendPaidMessagesStars: sendPaidMessagesStars)
                                 state.title = title
                                 state.recordingStartTimestamp = recordStartDate
                                 state.scheduleTimestamp = scheduleDate
@@ -1415,10 +1415,12 @@ public final class GroupCallParticipantsContext {
         public struct MessagesAreEnabled: Equatable {
             public var isEnabled: Bool
             public var canChange: Bool
+            public var sendPaidMessagesStars: Int64?
             
-            public init(isEnabled: Bool, canChange: Bool) {
+            public init(isEnabled: Bool, canChange: Bool, sendPaidMessagesStars: Int64?) {
                 self.isEnabled = isEnabled
                 self.canChange = canChange
+                self.sendPaidMessagesStars = sendPaidMessagesStars
             }
         }
         
@@ -1437,6 +1439,7 @@ public final class GroupCallParticipantsContext {
         public var isVideoEnabled: Bool
         public var unmutedVideoLimit: Int
         public var isStream: Bool
+        public var sendPaidMessagesStars: Int64?
         public var version: Int32
         
         public mutating func mergeActivity(from other: State, myPeerId: PeerId?, previousMyPeerId: PeerId?, mergeActivityTimestamps: Bool) {
@@ -2001,7 +2004,7 @@ public final class GroupCallParticipantsContext {
             } else if case let .call(_, defaultParticipantsAreMuted, messagesAreEnabled, title, recordingStartTimestamp, scheduleTimestamp, isVideoEnabled, participantsCount, isMin) = update {
                 var state = self.stateValue.state
                 state.defaultParticipantsAreMuted = isMin ? State.DefaultParticipantsAreMuted(isMuted: defaultParticipantsAreMuted.isMuted, canChange: state.defaultParticipantsAreMuted.canChange) : defaultParticipantsAreMuted
-                state.messagesAreEnabled = isMin ? State.MessagesAreEnabled(isEnabled: messagesAreEnabled.isEnabled, canChange: state.messagesAreEnabled.canChange) : messagesAreEnabled
+                state.messagesAreEnabled = isMin ? State.MessagesAreEnabled(isEnabled: messagesAreEnabled.isEnabled, canChange: state.messagesAreEnabled.canChange, sendPaidMessagesStars: state.messagesAreEnabled.sendPaidMessagesStars) : messagesAreEnabled
                 state.recordingStartTimestamp = recordingStartTimestamp
                 state.title = title
                 state.scheduleTimestamp = scheduleTimestamp
@@ -3689,6 +3692,16 @@ public final class GroupCallMessagesContext {
             }
         }
         
+        public enum Color {
+            case purple
+            case blue
+            case green
+            case yellow
+            case orange
+            case red
+            case silver
+        }
+        
         public let id: Id
         public let author: EnginePeer?
         public let text: String
@@ -4116,28 +4129,28 @@ public final class GroupCallMessagesContext {
         }
     }
     
-    public static func getStarAmountParamMapping(value: Int64) -> (period: Int, maxLength: Int, emojiCount: Int) {
+    public static func getStarAmountParamMapping(value: Int64) -> (period: Int, maxLength: Int, emojiCount: Int, color: Message.Color?) {
         if value >= 10000 {
-            return (3600, 400, 20)
+            return (3600, 400, 20, .silver)
         }
         if value >= 2000 {
-            return (1800, 280, 10)
+            return (1800, 280, 10, .red)
         }
         if value >= 500 {
-            return (900, 200, 7)
+            return (900, 200, 7, .orange)
         }
         if value >= 250 {
-            return (600, 150, 4)
+            return (600, 150, 4, .yellow)
         }
         if value >= 100 {
-            return (300, 110, 3)
+            return (300, 110, 3, .green)
         }
         if value >= 50 {
-            return (120, 80, 2)
+            return (120, 80, 2, .blue)
         }
-        if value >= 10 {
-            return (60, 60, 1)
+        if value >= 1 {
+            return (60, 60, 1, .purple)
         }
-        return (30, 30, 0)
+        return (30, 30, 0, nil)
     }
 }

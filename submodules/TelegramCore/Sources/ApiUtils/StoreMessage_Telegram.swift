@@ -495,9 +495,15 @@ func textMediaAndExpirationTimerFromApiMedia(_ media: Api.MessageMedia?, _ peerI
             return (TelegramMediaGiveawayResults(flags: flags, launchMessageId: MessageId(peerId: PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(channelId)), namespace: Namespaces.Message.Cloud, id: launchMsgId), additionalChannelsCount: additionalPeersCount ?? 0, winnersPeerIds: winners.map { PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value($0)) }, winnersCount: winnersCount, unclaimedCount: unclaimedCount, prize: prize, untilDate: untilDate, prizeDescription: prizeDescription), nil, nil, nil, nil, nil)
         case let .messageMediaPaidMedia(starsAmount, apiExtendedMedia):
             return (TelegramMediaPaidContent(amount: starsAmount, extendedMedia: apiExtendedMedia.compactMap({ TelegramExtendedMedia(apiExtendedMedia: $0, peerId: peerId) })), nil, nil, nil, nil, nil)
-        case let .messageMediaVideoStream(call):
+        case let .messageMediaVideoStream(flags, call):
             if let call = GroupCallReference(call) {
-                return (TelegramMediaLiveStream(call: call), nil, nil, nil, nil, nil)
+                let kind: TelegramMediaLiveStream.Kind
+                if (flags & (1 << 0)) != 0 {
+                    kind = .rtmp
+                } else {
+                    kind = .rtc
+                }
+                return (TelegramMediaLiveStream(call: call, kind: kind), nil, nil, nil, nil, nil)
             }
         }
     }

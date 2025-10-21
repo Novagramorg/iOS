@@ -30,6 +30,7 @@ private extension PresentationGroupCallState {
             defaultParticipantMuteState: nil,
             messagesAreEnabled: !isChannel,
             canEnableMessages: false,
+            sendPaidMessageStars: nil,
             recordingStartTimestamp: nil,
             title: title,
             raisedHand: false,
@@ -931,33 +932,33 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
                 messageLifetime = Int32(value)
             }
             
-            var createMessageContext = true
-            
             if isStream {
                 messageLifetime = Int32.max
                 
                 if self.isStream {
-                    createMessageContext = false
+                    var allowLiveChat = false
                     if let data = self.accountContext.currentAppConfiguration.with({ $0 }).data {
                         if let dev = data["dev"] as? Double, dev != 0.0 {
-                            createMessageContext = true
+                            allowLiveChat = true
                         }
                         if data["ios_can_join_streams"] != nil {
-                            createMessageContext = true
+                            allowLiveChat = true
                         }
+                    }
+                    if !allowLiveChat {
+                        preconditionFailure()
                     }
                 }
             }
-            if createMessageContext {
-                self.messagesContext = accountContext.engine.messages.groupCallMessages(
-                    callId: initialCall.description.id,
-                    reference: .id(id: initialCall.description.id, accessHash: initialCall.description.accessHash),
-                    e2eContext: self.e2eContext,
-                    messageLifetime: messageLifetime,
-                    isLiveStream: isStream
-                )
-                self.messagesStatePromise.set(self.messagesContext!.state)
-            }
+            
+            self.messagesContext = accountContext.engine.messages.groupCallMessages(
+                callId: initialCall.description.id,
+                reference: .id(id: initialCall.description.id, accessHash: initialCall.description.accessHash),
+                e2eContext: self.e2eContext,
+                messageLifetime: messageLifetime,
+                isLiveStream: isStream
+            )
+            self.messagesStatePromise.set(self.messagesContext!.state)
         }
         
         var sharedAudioContext = sharedAudioContext
@@ -1562,7 +1563,7 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
                 adminIds: Set(),
                 isCreator: false,
                 defaultParticipantsAreMuted: callInfo.defaultParticipantsAreMuted ?? GroupCallParticipantsContext.State.DefaultParticipantsAreMuted(isMuted: self.stateValue.defaultParticipantMuteState == .muted, canChange: true),
-                messagesAreEnabled: callInfo.messagesAreEnabled ?? GroupCallParticipantsContext.State.MessagesAreEnabled(isEnabled: self.stateValue.messagesAreEnabled, canChange: self.stateValue.canEnableMessages),
+                messagesAreEnabled: callInfo.messagesAreEnabled ?? GroupCallParticipantsContext.State.MessagesAreEnabled(isEnabled: self.stateValue.messagesAreEnabled, canChange: self.stateValue.canEnableMessages, sendPaidMessagesStars: self.stateValue.sendPaidMessageStars),
                 sortAscending: true,
                 recordingStartTimestamp: nil,
                 title: self.stateValue.title,

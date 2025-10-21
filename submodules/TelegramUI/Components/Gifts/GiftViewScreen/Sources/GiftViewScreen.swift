@@ -825,6 +825,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                         options: options ?? [],
                         purpose: .removeOriginalDetailsStarGift(requiredStars: price),
                         targetPeerId: nil,
+                        customTheme: nil,
                         completion: { [weak self, weak starsContext] stars in
                             guard let self, let starsContext else {
                                 return
@@ -1831,6 +1832,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                                 options: options ?? [],
                                 purpose: .buyStarGift(requiredStars: resellAmount.amount.value),
                                 targetPeerId: nil,
+                                customTheme: nil,
                                 completion: { [weak self, weak starsContext] stars in
                                     guard let self, let starsContext else {
                                         return
@@ -2114,6 +2116,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                             options: options ?? [],
                             purpose: .upgradeStarGift(requiredStars: price),
                             targetPeerId: nil,
+                            customTheme: nil,
                             completion: { [weak self, weak starsContext] stars in
                                 guard let self, let starsContext else {
                                     return
@@ -2256,6 +2259,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                         options: options ?? [],
                         purpose: .upgradeStarGift(requiredStars: price),
                         targetPeerId: nil,
+                        customTheme: nil,
                         completion: { [weak self, weak starsContext] stars in
                             guard let self, let starsContext else {
                                 return
@@ -5450,6 +5454,7 @@ public class GiftViewScreen: ViewControllerComponentContainer {
                                         options: options,
                                         purpose: .generic,
                                         targetPeerId: nil,
+                                        customTheme: nil,
                                         completion: { _ in }
                                     )
                                     navigationController.pushViewController(controller)

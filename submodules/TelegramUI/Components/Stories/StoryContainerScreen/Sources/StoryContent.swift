@@ -70,6 +70,7 @@ public final class StoryContentItem: Equatable {
         public let theme: PresentationTheme
         public let containerInsets: UIEdgeInsets
         public let presentationProgressUpdated: (Double, Bool, Bool) -> Void
+        public let customItemSubtitleUpdated: () -> Void
         public let markAsSeen: (StoryId) -> Void
         
         public init(
@@ -78,6 +79,7 @@ public final class StoryContentItem: Equatable {
             theme: PresentationTheme,
             containerInsets: UIEdgeInsets,
             presentationProgressUpdated: @escaping (Double, Bool, Bool) -> Void,
+            customItemSubtitleUpdated: @escaping () -> Void,
             markAsSeen: @escaping (StoryId) -> Void
         ) {
             self.externalState = externalState
@@ -85,6 +87,7 @@ public final class StoryContentItem: Equatable {
             self.theme = theme
             self.containerInsets = containerInsets
             self.presentationProgressUpdated = presentationProgressUpdated
+            self.customItemSubtitleUpdated = customItemSubtitleUpdated
             self.markAsSeen = markAsSeen
         }
         

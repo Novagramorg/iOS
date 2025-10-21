@@ -24,8 +24,9 @@ final class StoryAuthorInfoComponent: Component {
     let counters: Counters?
     let isEdited: Bool
     let isLiveStream: Bool
+    let customSubtitle: String?
     
-    init(context: AccountContext, strings: PresentationStrings, peer: EnginePeer?, forwardInfo: EngineStoryItem.ForwardInfo?, author: EnginePeer?, timestamp: Int32, counters: Counters?, isEdited: Bool, isLiveStream: Bool) {
+    init(context: AccountContext, strings: PresentationStrings, peer: EnginePeer?, forwardInfo: EngineStoryItem.ForwardInfo?, author: EnginePeer?, timestamp: Int32, counters: Counters?, isEdited: Bool, isLiveStream: Bool, customSubtitle: String?) {
         self.context = context
         self.strings = strings
         self.peer = peer
@@ -35,6 +36,7 @@ final class StoryAuthorInfoComponent: Component {
         self.counters = counters
         self.isEdited = isEdited
         self.isLiveStream = isLiveStream
+        self.customSubtitle = customSubtitle
     }
 
 	static func ==(lhs: StoryAuthorInfoComponent, rhs: StoryAuthorInfoComponent) -> Bool {
@@ -63,6 +65,9 @@ final class StoryAuthorInfoComponent: Component {
             return false
         }
         if lhs.isLiveStream != rhs.isLiveStream {
+            return false
+        }
+        if lhs.customSubtitle != rhs.customSubtitle {
             return false
         }
 		return true
@@ -116,7 +121,10 @@ final class StoryAuthorInfoComponent: Component {
             let subtitleColor = UIColor(white: 1.0, alpha: 0.8)
             let subtitle: NSAttributedString
             let subtitleTruncationType: CTLineTruncationType
-            if let forwardInfo = component.forwardInfo {
+            if let customSubtitle = component.customSubtitle {
+                subtitle = NSAttributedString(string: customSubtitle, font: Font.medium(11.0), textColor: titleColor)
+                subtitleTruncationType = .end
+            } else if let forwardInfo = component.forwardInfo {
                 let authorName: String
                 switch forwardInfo {
                 case let .known(peer, _, _):

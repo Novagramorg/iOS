@@ -554,6 +554,7 @@ final class GiftSetupScreenComponent: Component {
                         options: options ?? [],
                         purpose: .starGift(peerId: component.peerId, requiredStars: finalPrice),
                         targetPeerId: nil,
+                        customTheme: nil,
                         completion: { [weak self, weak starsContext] stars in
                             guard let self, let starsContext else {
                                 return
@@ -1169,7 +1170,7 @@ final class GiftSetupScreenComponent: Component {
                                     |> filter { $0 != nil }
                                     |> take(1)
                                     |> deliverOnMainQueue).startStandalone(next: { options in
-                                        let purchaseController = component.context.sharedContext.makeStarsPurchaseScreen(context: component.context, starsContext: starsContext, options: options ?? [], purpose: .generic, targetPeerId: nil, completion: { stars in
+                                        let purchaseController = component.context.sharedContext.makeStarsPurchaseScreen(context: component.context, starsContext: starsContext, options: options ?? [], purpose: .generic, targetPeerId: nil, customTheme: nil, completion: { stars in
                                             starsContext.add(balance: StarsAmount(value: stars, nanos: 0))
                                         })
                                         controller.push(purchaseController)

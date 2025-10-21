@@ -93,7 +93,6 @@ final class StoryItemSetContainerSendMessage {
     var inputMediaNodeStateContext = ChatEntityKeyboardInputNode.StateContext()
     var inputMediaInteraction: ChatEntityKeyboardInputNode.Interaction?
     var inputMediaNode: ChatEntityKeyboardInputNode?
-    var inputMediaNodeBackground = SimpleLayer()
     
     let controllerNavigationDisposable = MetaDisposable()
     let enqueueMediaMessageDisposable = MetaDisposable()
@@ -230,14 +229,40 @@ final class StoryItemSetContainerSendMessage {
                        
         var height: CGFloat = 0.0
         if let component = self.view?.component, case .media = self.currentInputMode, let inputData = self.inputMediaNodeData {
+            var updatedInputData = inputData
+            var isLiveStream = false
+            if case .liveStream = component.slice.item.storyItem.media {
+                isLiveStream = true
+            }
+            
+            if isLiveStream {
+                updatedInputData = ChatEntityKeyboardInputNode.InputData(
+                    emoji: updatedInputData.emoji,
+                    stickers: nil,
+                    gifs: nil,
+                    availableGifSearchEmojies: []
+                )
+            }
+            
             let inputMediaNode: ChatEntityKeyboardInputNode
             if let current = self.inputMediaNode {
                 inputMediaNode = current
             } else {
                 inputMediaNode = ChatEntityKeyboardInputNode(
                     context: context,
-                    currentInputData: inputData,
-                    updatedInputData: component.keyboardInputData,
+                    currentInputData: updatedInputData,
+                    updatedInputData: component.keyboardInputData |> map { inputData in
+                        if isLiveStream {
+                            return ChatEntityKeyboardInputNode.InputData(
+                                emoji: inputData.emoji,
+                                stickers: nil,
+                                gifs: nil,
+                                availableGifSearchEmojies: []
+                            )
+                        } else {
+                            return inputData
+                        }
+                    },
                     defaultToEmojiTab: self.inputPanelExternalState?.hasText ?? false,
                     opaqueTopPanelBackground: false,
                     interaction: self.inputMediaInteraction,
@@ -247,8 +272,6 @@ final class StoryItemSetContainerSendMessage {
                 inputMediaNode.externalTopPanelContainerImpl = nil
                 inputMediaNode.useExternalSearchContainer = true
                 if inputMediaNode.view.superview == nil {
-                    self.inputMediaNodeBackground.removeAllAnimations()
-                    self.inputMediaNodeBackground.backgroundColor = UIColor(rgb: 0x000000, alpha: 0.7).cgColor
                     view.inputPanelContainer.addSubview(inputMediaNode.view)
                 }
                 self.inputMediaNode = inputMediaNode
@@ -285,41 +308,24 @@ final class StoryItemSetContainerSendMessage {
             let inputNodeHeight = heightAndOverflow.0
             let inputNodeFrame = CGRect(origin: CGPoint(x: 0.0, y: availableSize.height - inputNodeHeight), size: CGSize(width: availableSize.width, height: inputNodeHeight))
             
-            if self.needsInputActivation {
+            do {
                 let inputNodeFrame = inputNodeFrame.offsetBy(dx: 0.0, dy: inputNodeHeight)
                 ComponentTransition.immediate.setFrame(layer: inputMediaNode.layer, frame: inputNodeFrame)
-                ComponentTransition.immediate.setFrame(layer: self.inputMediaNodeBackground, frame: inputNodeFrame)
             }
+            
             transition.setFrame(layer: inputMediaNode.layer, frame: inputNodeFrame)
-            transition.setFrame(layer: self.inputMediaNodeBackground, frame: inputNodeFrame)
             
             height = heightAndOverflow.0
         } else if let inputMediaNode = self.inputMediaNode {
             self.inputMediaNode = nil
             
             var targetFrame = inputMediaNode.frame
-            if effectiveInputHeight > 0.0 {
-                targetFrame.origin.y = availableSize.height - effectiveInputHeight
-            } else {
-                targetFrame.origin.y = availableSize.height
-            }
+            targetFrame.origin.y = availableSize.height
             transition.setFrame(view: inputMediaNode.view, frame: targetFrame, completion: { [weak inputMediaNode] _ in
                 if let inputMediaNode {
                     Queue.mainQueue().after(0.3) {
                         inputMediaNode.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.35, removeOnCompletion: false, completion: { [weak inputMediaNode] _ in
                             inputMediaNode?.view.removeFromSuperview()
-                        })
-                    }
-                }
-            })
-            transition.setFrame(layer: self.inputMediaNodeBackground, frame: targetFrame, completion: { _ in
-                Queue.mainQueue().after(0.3) {
-                    if self.currentInputMode == .text {
-                        self.inputMediaNodeBackground.animateAlpha(from: 1.0, to: 0.0, duration: 0.35, removeOnCompletion: false, completion: { finished in
-                            if finished {
-                                self.inputMediaNodeBackground.removeFromSuperlayer()
-                            }
-                            self.inputMediaNodeBackground.removeAllAnimations()
                         })
                     }
                 }
@@ -347,16 +353,6 @@ final class StoryItemSetContainerSendMessage {
                 additive: true
             )
             inputMediaNode.layer.animateAlpha(from: inputMediaNode.alpha, to: 0.0, duration: 0.3, removeOnCompletion: false)
-            
-            self.inputMediaNodeBackground.animatePosition(
-                from: CGPoint(),
-                to: CGPoint(x: 0.0, y: bounds.height - self.inputMediaNodeBackground.frame.minY),
-                duration: 0.3,
-                timingFunction: kCAMediaTimingFunctionSpring,
-                removeOnCompletion: false,
-                additive: true
-            )
-            self.inputMediaNodeBackground.animateAlpha(from: CGFloat(self.inputMediaNodeBackground.opacity), to: 0.0, duration: 0.3, removeOnCompletion: false)
         }
     }
     
@@ -1276,19 +1272,33 @@ final class StoryItemSetContainerSendMessage {
             guard let controller = component.controller() else {
                 return
             }
+            guard let inputPanelView = view.inputPanel.view as? MessageInputPanelComponent.View else {
+                return
+            }
             let focusedItem = component.slice.item
             guard let peerId = focusedItem.peerId else {
                 return
             }
             
-            let initialData = await ChatSendStarsScreen.initialDataLiveStreamMessage(context: component.context, peerId: peerId, completion: { [weak self, weak view] amount, _ in
-                guard let self, let view else {
-                    return
+            var inputText = NSAttributedString(string: "")
+            switch inputPanelView.getSendMessageInput() {
+            case let .text(text):
+                inputText = text
+            }
+            
+            let initialData = await ChatSendStarsScreen.initialDataLiveStreamMessage(
+                context: component.context,
+                peerId: peerId,
+                text: inputText,
+                completion: { [weak self, weak view] amount, _ in
+                    guard let self, let view else {
+                        return
+                    }
+                    
+                    self.currentLiveStreamMessageStars = StarsAmount(value: amount, nanos: 0)
+                    view.state?.updated(transition: .spring(duration: 0.4))
                 }
-                
-                self.currentLiveStreamMessageStars = StarsAmount(value: amount, nanos: 0)
-                view.state?.updated(transition: .spring(duration: 0.4))
-            }).get()
+            ).get()
             if let initialData {
                 controller.push(ChatSendStarsScreen(
                     context: component.context,
@@ -3815,6 +3825,51 @@ final class StoryItemSetContainerSendMessage {
                 }
             }
         }
+    }
+    
+    func openSendStars(view: StoryItemSetContainerComponent.View) {
+        Task { @MainActor [weak view] in
+            guard let view else {
+                return
+            }
+            guard let component = view.component else {
+                return
+            }
+            guard let controller = component.controller() else {
+                return
+            }
+            let focusedItem = component.slice.item
+            guard let peerId = focusedItem.peerId else {
+                return
+            }
+            
+            let initialData = await ChatSendStarsScreen.initialData(
+                context: component.context,
+                peerId: peerId,
+                reactSubject: .liveStream(peerId: peerId, storyId: focusedItem.storyItem.id),
+                topPeers: [],
+                completion: { [weak view] amount, privacy, isBecomingTop, transitionOut in
+                    guard let view, let component = view.component else {
+                        return
+                    }
+                    let _ = component.context.engine.messages.sendStoryStars(peerId: component.slice.effectivePeer.id, id: component.slice.item.storyItem.id, count: Int(amount)).startStandalone()
+                }).get()
+            if let initialData {
+                controller.push(ChatSendStarsScreen(
+                    context: component.context,
+                    initialData: initialData,
+                    theme: component.theme
+                ))
+            }
+        }
+    }
+    
+    func performSendStars(view: StoryItemSetContainerComponent.View, buttonView: UIView, count: Int, isFromExpandedView: Bool) {
+        guard let component = view.component else {
+            return
+        }
+        
+        let _ = component.context.engine.messages.sendStoryStars(peerId: component.slice.effectivePeer.id, id: component.slice.item.storyItem.id, count: count).startStandalone()
     }
 }
 

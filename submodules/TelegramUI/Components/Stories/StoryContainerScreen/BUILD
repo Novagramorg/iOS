@@ -107,6 +107,8 @@ swift_library(
         "//submodules/Components/MultilineTextComponent",
         "//submodules/TelegramUI/Components/Chat/ChatSendStarsScreen",
         "//submodules/TelegramUI/Components/GlassBackgroundComponent",
+        "//submodules/TelegramUI/Components/Stories/LiveChat/StoryLiveChatMessageComponent",
+        "//submodules/TelegramUI/Components/StarsParticleEffect",
     ],
     visibility = [
         "//visibility:public",

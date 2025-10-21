@@ -1491,6 +1491,10 @@ public extension TelegramEngine {
             return _internal_setStoryReaction(account: self.account, peerId: peerId, id: id, reaction: reaction)
         }
         
+        public func sendStoryStars(peerId: EnginePeer.Id, id: Int32, count: Int) -> Signal<Never, NoError> {
+            return _internal_sendStoryStars(account: self.account, peerId: peerId, id: id, count: count)
+        }
+        
         public func getStory(peerId: EnginePeer.Id, id: Int32) -> Signal<EngineStoryItem?, NoError> {
             return _internal_getStoryById(accountPeerId: self.account.peerId, postbox: self.account.postbox, network: self.account.network, peerId: peerId, id: id)
         }

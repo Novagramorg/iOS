@@ -17,70 +17,7 @@ import ComponentFlow
 import AnimatedCountLabelNode
 import GlassBackgroundComponent
 import ComponentDisplayAdapters
-
-private final class StarsButtonEffectLayer: SimpleLayer {
-    let emitterLayer = CAEmitterLayer()
-    private var currentColor: UIColor?
-    
-    override init() {
-        super.init()
-        
-        self.addSublayer(self.emitterLayer)
-    }
-    
-    override init(layer: Any) {
-        super.init(layer: layer)
-    }
-    
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-    
-    private func setup() {
-        guard let currentColor = self.currentColor else {
-            return
-        }
-        let color = currentColor
-        
-        let emitter = CAEmitterCell()
-        emitter.name = "emitter"
-        emitter.contents = UIImage(bundleImageName: "Premium/Stars/Particle")?.cgImage
-        emitter.birthRate = 25.0
-        emitter.lifetime = 2.0
-        emitter.velocity = 12.0
-        emitter.velocityRange = 3
-        emitter.scale = 0.1
-        emitter.scaleRange = 0.08
-        emitter.alphaRange = 0.1
-        emitter.emissionRange = .pi * 2.0
-        emitter.setValue(3.0, forKey: "mass")
-        emitter.setValue(2.0, forKey: "massRange")
-        
-        let staticColors: [Any] = [
-            color.withAlphaComponent(0.0).cgColor,
-            color.cgColor,
-            color.cgColor,
-            color.withAlphaComponent(0.0).cgColor
-        ]
-        let staticColorBehavior = CAEmitterCell.createEmitterBehavior(type: "colorOverLife")
-        staticColorBehavior.setValue(staticColors, forKey: "colors")
-        emitter.setValue([staticColorBehavior], forKey: "emitterBehaviors")
-        
-        self.emitterLayer.emitterCells = [emitter]
-    }
-    
-    func update(color: UIColor, size: CGSize) {
-        if self.emitterLayer.emitterCells == nil || self.currentColor != color {
-            self.currentColor = color
-            self.setup()
-        }
-        self.emitterLayer.emitterShape = .circle
-        self.emitterLayer.emitterSize = CGSize(width: size.width * 0.7, height: size.height * 0.7)
-        self.emitterLayer.emitterMode = .surface
-        self.emitterLayer.frame = CGRect(origin: .zero, size: size)
-        self.emitterLayer.emitterPosition = CGPoint(x: size.width / 2.0, y: size.height / 2.0)
-    }
-}
+import StarsParticleEffect
 
 private final class EffectBadgeView: UIView {
     private let context: AccountContext
@@ -203,7 +140,7 @@ public final class ChatTextInputActionButtonsNode: ASDisplayNode, ChatSendMessag
     
     public let sendContainerNode: ASDisplayNode
     public let sendButtonBackgroundView: UIImageView
-    private var sendButtonBackgroundEffectLayer: StarsButtonEffectLayer?
+    private var sendButtonBackgroundEffectLayer: StarsParticleEffectLayer?
     public let sendButton: HighlightTrackingButtonNode
     public var sendButtonRadialStatusNode: ChatSendButtonRadialStatusNode?
     public var sendButtonHasApplyIcon = false
@@ -234,6 +171,7 @@ public final class ChatTextInputActionButtonsNode: ASDisplayNode, ChatSendMessag
     private var validLayout: CGSize?
     
     public var customSendColor: UIColor?
+    public var isSendDisabled: Bool = false
     
     public init(context: AccountContext, presentationInterfaceState: ChatPresentationInterfaceState, presentationContext: ChatPresentationContext?, presentController: @escaping (ViewController) -> Void) {
         self.context = context
@@ -404,7 +342,6 @@ public final class ChatTextInputActionButtonsNode: ASDisplayNode, ChatSendMessag
             }
             transition.updateFrame(node: self.textNode, frame: CGRect(origin: CGPoint(x: showTitle ? 5.0 + 7.0 : floorToScreenPixels((innerSize.width - textSize.width) / 2.0), y: floorToScreenPixels((size.height - textSize.height) / 2.0)), size: textSize))
         } else {
-            self.sendButton.imageNode.alpha = 1.0
             self.textNode.isHidden = true
         }
     
@@ -416,17 +353,29 @@ public final class ChatTextInputActionButtonsNode: ASDisplayNode, ChatSendMessag
         
         let sendButtonBackgroundFrame = CGRect(origin: CGPoint(), size: innerSize).insetBy(dx: 3.0, dy: 3.0)
         transition.updateFrame(view: self.sendButtonBackgroundView, frame: sendButtonBackgroundFrame)
-        self.sendButtonBackgroundView.tintColor = self.customSendColor ?? interfaceState.theme.chat.inputPanel.panelControlAccentColor
+        
+        if self.isSendDisabled {
+            transition.updateTintColor(view: self.sendButtonBackgroundView, color: interfaceState.theme.chat.inputPanel.panelControlAccentColor.withMultiplied(hue: 1.0, saturation: 0.0, brightness: 0.5).withMultipliedAlpha(0.25))
+        } else {
+            transition.updateTintColor(view: self.sendButtonBackgroundView, color: self.customSendColor ?? interfaceState.theme.chat.inputPanel.panelControlAccentColor)
+        }
+        
+        if starsAmount == nil {
+            if self.isSendDisabled {
+                transition.updateAlpha(layer: self.sendButton.imageNode.layer, alpha: 0.4)
+            } else {
+                transition.updateAlpha(layer: self.sendButton.imageNode.layer, alpha: 1.0)
+            }
+        }
         
         if let _ = self.customSendColor {
-            let sendButtonBackgroundEffectLayer: StarsButtonEffectLayer
+            let sendButtonBackgroundEffectLayer: StarsParticleEffectLayer
             var sendButtonBackgroundEffectLayerTransition = transition
             if let current = self.sendButtonBackgroundEffectLayer {
                 sendButtonBackgroundEffectLayer = current
             } else {
                 sendButtonBackgroundEffectLayerTransition = .immediate
-                sendButtonBackgroundEffectLayer = StarsButtonEffectLayer()
-                sendButtonBackgroundEffectLayer.masksToBounds = true
+                sendButtonBackgroundEffectLayer = StarsParticleEffectLayer()
                 self.sendButtonBackgroundEffectLayer = sendButtonBackgroundEffectLayer
                 self.sendButtonBackgroundView.layer.addSublayer(sendButtonBackgroundEffectLayer)
                 if transition.isAnimated {
@@ -434,8 +383,7 @@ public final class ChatTextInputActionButtonsNode: ASDisplayNode, ChatSendMessag
                 }
             }
             transition.updateFrame(layer: sendButtonBackgroundEffectLayer, frame: CGRect(origin: CGPoint(), size: sendButtonBackgroundFrame.size))
-            sendButtonBackgroundEffectLayerTransition.updateCornerRadius(layer: sendButtonBackgroundEffectLayer, cornerRadius: sendButtonBackgroundFrame.height * 0.5)
-            sendButtonBackgroundEffectLayer.update(color: UIColor(white: 1.0, alpha: 0.5), size: sendButtonBackgroundFrame.size)
+            sendButtonBackgroundEffectLayer.update(color: UIColor(white: 1.0, alpha: 0.5), size: sendButtonBackgroundFrame.size, cornerRadius: sendButtonBackgroundFrame.height * 0.5, transition: ComponentTransition(sendButtonBackgroundEffectLayerTransition))
         } else if let sendButtonBackgroundEffectLayer = self.sendButtonBackgroundEffectLayer {
             self.sendButtonBackgroundEffectLayer = nil
             transition.updateFrame(layer: sendButtonBackgroundEffectLayer, frame: CGRect(origin: CGPoint(), size: sendButtonBackgroundFrame.size))

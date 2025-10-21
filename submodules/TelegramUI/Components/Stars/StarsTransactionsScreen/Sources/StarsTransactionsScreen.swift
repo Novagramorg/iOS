@@ -1340,7 +1340,7 @@ public final class StarsTransactionsScreen: ViewControllerComponentContainer {
                 guard let self else {
                     return
                 }
-                let controller = context.sharedContext.makeStarsPurchaseScreen(context: context, starsContext: starsContext, options: options, purpose: .generic, targetPeerId: nil, completion: { [weak self] stars in
+                let controller = context.sharedContext.makeStarsPurchaseScreen(context: context, starsContext: starsContext, options: options, purpose: .generic, targetPeerId: nil, customTheme: nil, completion: { [weak self] stars in
                     guard let self else {
                         return
                     }
@@ -1465,6 +1465,7 @@ public final class StarsTransactionsScreen: ViewControllerComponentContainer {
                         options: options,
                         purpose: .gift(peerId: peerId),
                         targetPeerId: nil,
+                        customTheme: nil,
                         completion: { [weak self] stars in
                             guard let self else {
                                 return

@@ -323,6 +323,7 @@ public final class StoryItemSetContainerComponent: Component {
         let view = ComponentView<StoryContentItem.Environment>()
         var currentProgress: Double = 0.0
         var isBuffering: Bool = false
+        var customSubtitle: String?
         var requestedNext: Bool = false
         var footerPanel: ComponentView<Empty>?
         
@@ -1561,6 +1562,20 @@ public final class StoryItemSetContainerComponent: Component {
                                 }
                             }
                         },
+                        customItemSubtitleUpdated: { [weak self, weak visibleItem] in
+                            guard let self else {
+                                return
+                            }
+                            guard let visibleItem, let visibleItemView = visibleItem.view.view as? StoryItemContentComponent.View else {
+                                return
+                            }
+                            if visibleItem.customSubtitle != visibleItemView.customSubtitle {
+                                visibleItem.customSubtitle = visibleItemView.customSubtitle
+                                if !self.isUpdatingComponent {
+                                    self.state?.updated(transition: .immediate)
+                                }
+                            }
+                        },
                         markAsSeen: { [weak self] id in
                             guard let self, let component = self.component else {
                                 return
@@ -1596,7 +1611,7 @@ public final class StoryItemSetContainerComponent: Component {
                         },
                         containerSize: itemLayout.contentFrame.size
                     )
-                    if let view = visibleItem.view.view {
+                    if let view = visibleItem.view.view as? StoryItemContentComponent.View {
                         if visibleItem.contentContainerView.superview == nil {
                             visibleItem.view.parentState = self.state
                             self.itemsContainerView.addSubview(visibleItem.contentContainerView)
@@ -1604,6 +1619,8 @@ public final class StoryItemSetContainerComponent: Component {
                             self.itemsContainerView.addSubview(visibleItem.unclippedContainerView)
                             visibleItem.contentContainerView.addSubview(view)
                         }
+                        
+                        visibleItem.customSubtitle = view.customSubtitle
                         
                         itemTransition.setPosition(view: view, position: CGPoint(x: itemLayout.contentFrame.size.width * 0.5, y: itemLayout.contentFrame.size.height * 0.5))
                         itemTransition.setBounds(view: view, bounds: CGRect(origin: CGPoint(), size: itemLayout.contentFrame.size))
@@ -1667,9 +1684,7 @@ public final class StoryItemSetContainerComponent: Component {
                             itemProgressMode = .pause
                         }
 
-                        if let view = view as? StoryContentItem.View {
-                            view.setProgressMode(itemProgressMode)
-                        }
+                        view.setProgressMode(itemProgressMode)
                         
                         var isChannel = false
                         var canShare = true
@@ -2916,13 +2931,21 @@ public final class StoryItemSetContainerComponent: Component {
                 }
                 
                 var maxInputLength = 4096
+                var maxEmojiCount: Int?
                 if isLiveStream {
-                    maxInputLength = GroupCallMessagesContext.getStarAmountParamMapping(value: self.sendMessageContext.currentLiveStreamMessageStars?.value ?? 0).maxLength
+                    let params = GroupCallMessagesContext.getStarAmountParamMapping(value: self.sendMessageContext.currentLiveStreamMessageStars?.value ?? 0)
+                    maxInputLength = params.maxLength
+                    maxEmojiCount = params.emojiCount
                 }
                 
-                var isLiveChatExpanded: Bool?
+                var liveChatState: MessageInputPanelComponent.LiveChatState?
                 if let visibleItemView = self.visibleItems[component.slice.item.id]?.view.view as? StoryItemContentComponent.View {
-                    isLiveChatExpanded = visibleItemView.isLiveChatExpanded
+                    liveChatState = visibleItemView.liveChatState.flatMap { liveChatState in
+                        return MessageInputPanelComponent.LiveChatState(
+                            isExpanded: liveChatState.isExpanded,
+                            hasUnseenMessages: liveChatState.hasUnseenMessages
+                        )
+                    }
                 }
                 
                 inputPanelSize = self.inputPanel.update(
@@ -2936,6 +2959,7 @@ public final class StoryItemSetContainerComponent: Component {
                         placeholder: inputPlaceholder,
                         sendPaidMessageStars: isLiveStream ? self.sendMessageContext.currentLiveStreamMessageStars : component.slice.additionalPeerData.sendPaidMessageStars,
                         maxLength: maxInputLength,
+                        maxEmojiCount: maxEmojiCount,
                         queryTypes: [.mention, .hashtag, .emoji],
                         alwaysDarkWhenHasText: component.metrics.widthClass == .regular,
                         resetInputContents: resetInputContents,
@@ -2965,7 +2989,7 @@ public final class StoryItemSetContainerComponent: Component {
                             }
                             
                             if let visibleItemView = self.visibleItems[component.slice.item.id]?.view.view as? StoryItemContentComponent.View {
-                                if !(visibleItemView.isLiveChatExpanded ?? true) {
+                                if !(visibleItemView.liveChatState?.isExpanded ?? true) {
                                     visibleItemView.toggleLiveChatExpanded()
                                 }
                             }
@@ -3071,7 +3095,7 @@ public final class StoryItemSetContainerComponent: Component {
                             if !hasFirstResponder(self) {
                                 self.state?.updated(transition: .spring(duration: 0.4))
                             } else {
-                                self.state?.updated(transition: .immediate)
+                                self.state?.updated(transition: .spring(duration: 0.4))
                             }
                         },
                         timeoutAction: nil,
@@ -3159,7 +3183,7 @@ public final class StoryItemSetContainerComponent: Component {
                         isChannel: isChannel,
                         storyItem: component.slice.item.storyItem,
                         chatLocation: nil,
-                        isLiveChatExpanded: isLiveChatExpanded,
+                        liveChatState: liveChatState,
                         toggleLiveChatExpanded: { [weak self] in
                             guard let self else {
                                 return
@@ -3167,7 +3191,17 @@ public final class StoryItemSetContainerComponent: Component {
                             if let visibleItemView = self.visibleItems[component.slice.item.id]?.view.view as? StoryItemContentComponent.View {
                                 visibleItemView.toggleLiveChatExpanded()
                             }
-                        }
+                        },
+                        sendStarsAction: isLiveStream ? { [weak self] sourceView, isLongPress in
+                            guard let self else {
+                                return
+                            }
+                            if isLongPress {
+                                self.sendMessageContext.openSendStars(view: self)
+                            } else {
+                                self.sendMessageContext.performSendStars(view: self, buttonView: sourceView, count: 1, isFromExpandedView: false)
+                            }
+                        } : nil
                     )),
                     environment: {},
                     containerSize: CGSize(width: inputPanelAvailableWidth, height: 200.0)
@@ -4132,6 +4166,11 @@ public final class StoryItemSetContainerComponent: Component {
                     )
                 }
                 
+                var customSubtitle: String?
+                if let visibleItem = self.visibleItems[focusedItem.id] {
+                    customSubtitle = visibleItem.customSubtitle
+                }
+                
                 let centerInfoComponent = AnyComponent(StoryAuthorInfoComponent(
                     context: component.context,
                     strings: component.strings,
@@ -4141,7 +4180,8 @@ public final class StoryItemSetContainerComponent: Component {
                     timestamp: component.slice.item.storyItem.timestamp,
                     counters: counters,
                     isEdited: component.slice.item.storyItem.isEdited,
-                    isLiveStream: isLiveStream
+                    isLiveStream: isLiveStream,
+                    customSubtitle: customSubtitle
                 ))
                 if let centerInfoItem = self.centerInfoItem, centerInfoItem.component == centerInfoComponent {
                     currentCenterInfoItem = centerInfoItem
