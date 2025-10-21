@@ -1210,6 +1210,7 @@ final class VideoChatScreenComponent: Component {
                     defaultParticipantMuteState: nil,
                     messagesAreEnabled: true,
                     canEnableMessages: false,
+                    sendPaidMessageStars: nil,
                     recordingStartTimestamp: nil,
                     title: nil,
                     raisedHand: false,

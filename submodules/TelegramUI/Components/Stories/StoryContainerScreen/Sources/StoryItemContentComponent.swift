@@ -88,16 +88,28 @@ final class StoryItemContentComponent: Component {
         }
 		return true
 	}
+    
+    struct LiveChatState {
+        var isExpanded: Bool
+        var hasUnseenMessages: Bool
+        
+        init(isExpanded: Bool, hasUnseenMessages: Bool) {
+            self.isExpanded = isExpanded
+            self.hasUnseenMessages = hasUnseenMessages
+        }
+    }
 
     final class View: StoryContentItem.View {
         private let imageView: StoryItemImageView
         private let overlaysView: StoryItemOverlaysView
         private var videoNode: UniversalVideoNode?
         private(set) var mediaStreamCall: PresentationGroupCallImpl?
+        private var liveCallStateDisposable: Disposable?
         private var mediaStream: ComponentView<Empty>?
         private var loadingEffectView: StoryItemLoadingEffectView?
         private var loadingEffectAppearanceTimer: SwiftSignalKit.Timer?
         
+        private let liveChatExternal = StoryContentLiveChatComponent.External()
         private var liveChat: ComponentView<Empty>?
         
         private var mediaAreasEffectView: StoryItemLoadingEffectView?
@@ -129,20 +141,25 @@ final class StoryItemContentComponent: Component {
         override var videoPlaybackPosition: Double? {
             return self.videoPlaybackStatus?.timestamp
         }
+        
+        var customSubtitle: String?
 
         private let hierarchyTrackingLayer: HierarchyTrackingLayer
         
         private var fetchPriorityResourceId: String?
         private var currentFetchPriority: (isMain: Bool, disposable: Disposable)?
         
-        public var isLiveChatExpanded: Bool? {
+        public var liveChatState: LiveChatState? {
             guard let liveChatView = self.liveChat?.view as? StoryContentLiveChatComponent.View else {
                 return nil
             }
             if liveChatView.isChatEmpty {
                 return nil
             }
-            return liveChatView.isChatExpanded
+            return LiveChatState(
+                isExpanded: liveChatView.isChatExpanded,
+                hasUnseenMessages: self.liveChatExternal.hasUnseenMessages
+            )
         }
         
         public func toggleLiveChatExpanded() {
@@ -195,6 +212,7 @@ final class StoryItemContentComponent: Component {
             self.currentProgressTimer?.invalidate()
             self.videoProgressDisposable?.dispose()
             self.currentFetchPriority?.disposable.dispose()
+            self.liveCallStateDisposable?.dispose()
         }
         
         func allowsInstantPauseOnTouch(point: CGPoint) -> Bool {
@@ -639,6 +657,11 @@ final class StoryItemContentComponent: Component {
             if case .liveStream = component.item.media {
                 selectedMedia = component.item.media
                 messageMedia = selectedMedia
+                
+                //TODO:localize
+                if self.customSubtitle == nil {
+                    self.customSubtitle = "loading..."
+                }
             } else if !component.preferHighQuality, !component.item.isMy, let alternativeMediaValue = component.item.alternativeMediaList.first {
                 selectedMedia = alternativeMediaValue
                 
@@ -818,6 +841,7 @@ final class StoryItemContentComponent: Component {
                 let _ = liveChat.update(
                     transition: mediaStreamTransition,
                     component: AnyComponent(StoryContentLiveChatComponent(
+                        external: self.liveChatExternal,
                         context: component.context,
                         strings: component.strings,
                         theme: environment.theme,
@@ -965,6 +989,31 @@ final class StoryItemContentComponent: Component {
                         }
                     }
                 }
+            }
+            
+            if let mediaStreamCall = self.mediaStreamCall {
+                if self.liveCallStateDisposable == nil {
+                    self.liveCallStateDisposable = (mediaStreamCall.members
+                    |> deliverOnMainQueue).startStandalone(next: { [weak self] members in
+                        guard let self, let environment = self.environment else {
+                            return
+                        }
+                        //TODO:localize
+                        let subtitle: String
+                        if let members {
+                            subtitle = "\(max(1, members.totalCount)) watching"
+                        } else {
+                            subtitle = "loading..."
+                        }
+                        if self.customSubtitle != subtitle {
+                            self.customSubtitle = subtitle
+                            environment.customItemSubtitleUpdated()
+                        }
+                    })
+                }
+            } else if let liveCallStateDisposable = self.liveCallStateDisposable {
+                self.liveCallStateDisposable = nil
+                liveCallStateDisposable.dispose()
             }
             
             switch selectedMedia {

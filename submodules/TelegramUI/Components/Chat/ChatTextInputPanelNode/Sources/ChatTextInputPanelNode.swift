@@ -252,10 +252,12 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     public let sendAsAvatarReferenceNode: ContextReferenceContentNode
     public let sendAsAvatarContainerNode: ContextControllerSourceNode
     private let sendAsAvatarNode: AvatarNode
+    private let sendAsCloseIconView: UIImageView
     
     public let attachmentButton: HighlightTrackingButton
     public let attachmentButtonBackground: GlassBackgroundView
     public let attachmentButtonIcon: GlassBackgroundView.ContentImageView
+    private var attachmentButtonUnseenIcon: UIImageView?
     public let attachmentButtonDisabledNode: HighlightableButtonNode
     
     public var attachmentImageNode: TransformImageNode?
@@ -376,18 +378,20 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     }
     
     public enum LeftAction {
-        case toggleExpanded(isVisible: Bool, isExpanded: Bool)
+        case toggleExpanded(isVisible: Bool, isExpanded: Bool, hasUnseen: Bool)
     }
     
     public enum RightAction {
-        case stars(count: Int, isFilled: Bool, action: () -> Void)
+        case stars(count: Int, isFilled: Bool, action: (UIView) -> Void, longPressAction: ((UIView) -> Void)?)
     }
     
     public var customPlaceholder: String?
     public var customLeftAction: LeftAction?
     public var customRightAction: RightAction?
     public var customSendColor: UIColor?
+    public var customSendIsDisabled: Bool = false
     public var customInputTextMaxLength: Int?
+    public var customSwitchToKeyboard: (() -> Void)?
     
     private var starReactionButton: ComponentView<Empty>?
     
@@ -623,6 +627,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         self.sendAsAvatarContainerNode = ContextControllerSourceNode()
         self.sendAsAvatarContainerNode.animateScale = false
         self.sendAsAvatarNode = AvatarNode(font: avatarPlaceholderFont(size: 16.0))
+        self.sendAsCloseIconView = UIImageView()
         
         self.attachmentButton = HighlightTrackingButton()
         self.attachmentButton.accessibilityLabel = presentationInterfaceState.strings.VoiceOver_AttachMedia
@@ -873,8 +878,9 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         
         self.sendAsAvatarContainerNode.addSubnode(self.sendAsAvatarReferenceNode)
         self.sendAsAvatarReferenceNode.addSubnode(self.sendAsAvatarNode)
+        self.sendAsAvatarReferenceNode.view.addSubview(self.sendAsCloseIconView)
         self.sendAsAvatarButtonNode.addSubnode(self.sendAsAvatarContainerNode)
-        self.glassBackgroundContainer.contentView.addSubview(self.sendAsAvatarButtonNode.view)
+        self.textInputContainerBackgroundView.contentView.addSubview(self.sendAsAvatarButtonNode.view)
         
         self.glassBackgroundContainer.contentView.addSubview(self.menuButton.view)
         self.glassBackgroundContainer.contentView.addSubview(self.attachmentButtonBackground)
@@ -1120,7 +1126,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         return max(33.0, maxHeight - (textFieldInsets.top + textFieldInsets.bottom + self.textInputViewInternalInsets.top + self.textInputViewInternalInsets.bottom))
     }
     
-    private func calculateTextFieldMetrics(width: CGFloat, sendActionControlsWidth: CGFloat, maxHeight: CGFloat, metrics: LayoutMetrics, bottomInset: CGFloat) -> (accessoryButtonsWidth: CGFloat, textFieldHeight: CGFloat, isOverflow: Bool) {
+    private func calculateTextFieldMetrics(width: CGFloat, sendActionControlsWidth: CGFloat, maxHeight: CGFloat, metrics: LayoutMetrics, bottomInset: CGFloat, interfaceState: ChatPresentationInterfaceState) -> (accessoryButtonsWidth: CGFloat, textFieldHeight: CGFloat, isOverflow: Bool) {
         let maxHeight = max(maxHeight, 40.0)
         
         let textFieldInsets = self.textFieldInsets(metrics: metrics, bottomInset: bottomInset)
@@ -1154,10 +1160,20 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             textInputViewRealInsets = calculateTextFieldRealInsets(presentationInterfaceState: presentationInterfaceState, accessoryButtonsWidth: accessoryButtonsWidth, actionControlsWidth: sendActionControlsWidth)
         }
         
+        var hasSendAsButton = false
+        if let sendAsPeers = interfaceState.sendAsPeers, !sendAsPeers.isEmpty && interfaceState.editMessageState == nil {
+            hasSendAsButton = true
+        }
+        
+        var actualTextInputViewInternalInsets = self.textInputViewInternalInsets
+        if hasSendAsButton {
+            actualTextInputViewInternalInsets.left += 31.0
+        }
+        
         var textFieldHeight: CGFloat
         var isOverflow = false
         if let textInputNode = self.textInputNode {
-            let maxTextWidth = width - textFieldInsets.left - textFieldInsets.right - self.textInputViewInternalInsets.left - self.textInputViewInternalInsets.right
+            let maxTextWidth = width - textFieldInsets.left - textFieldInsets.right - actualTextInputViewInternalInsets.left - actualTextInputViewInternalInsets.right
             let measuredHeight = textInputNode.textHeightForWidth(maxTextWidth, rightInset: textInputViewRealInsets.right)
             
             let unboundTextFieldHeight = max(textFieldMinHeight, ceil(measuredHeight))
@@ -1177,7 +1193,10 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     }
     
     private func textFieldInsets(metrics: LayoutMetrics, bottomInset: CGFloat) -> UIEdgeInsets {
-        let insets = UIEdgeInsets(top: 0.0, left: 54.0, bottom: 0.0, right: 8.0)
+        var insets = UIEdgeInsets(top: 0.0, left: 54.0, bottom: 0.0, right: 8.0)
+        if let customLeftAction = self.customLeftAction, case let .toggleExpanded(isVisible, _, _) = customLeftAction, !isVisible {
+            insets.left = 8.0
+        }
         return insets
     }
     
@@ -1349,6 +1368,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         let placeholderColor: UIColor = interfaceState.theme.chat.inputPanel.inputPlaceholderColor
         
         self.sendActionButtons.customSendColor = self.customSendColor
+        self.sendActionButtons.isSendDisabled = self.customSendIsDisabled
     
         var transition = transition
         var additionalOffset: CGFloat = 0.0
@@ -1500,7 +1520,6 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         
         var hasMenuButton = false
         var menuButtonExpanded = false
-        var isSendAsButton = false
         
         var shouldDisplayMenuButton = false
         if interfaceState.hasBotCommands {
@@ -1511,10 +1530,8 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         
         let mediaRecordingState = interfaceState.inputTextPanelState.mediaRecordingState
         if let sendAsPeers = interfaceState.sendAsPeers, !sendAsPeers.isEmpty && interfaceState.editMessageState == nil {
-            hasMenuButton = true
             menuButtonExpanded = false
-            isSendAsButton = true
-            self.sendAsAvatarNode.isHidden = false
+            self.sendAsAvatarButtonNode.isHidden = false
             
             var currentPeer = sendAsPeers.first(where: { $0.peer.id == interfaceState.currentSendAsPeerId})?.peer
             if currentPeer == nil {
@@ -1534,9 +1551,9 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                     break
                 }
             }
-            self.sendAsAvatarNode.isHidden = true
+            self.sendAsAvatarButtonNode.isHidden = true
         } else {
-            self.sendAsAvatarNode.isHidden = true
+            self.sendAsAvatarButtonNode.isHidden = true
         }
         if mediaRecordingState != nil || interfaceState.interfaceState.mediaDraftState != nil {
             hasMenuButton = false
@@ -1625,13 +1642,26 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             } else if case .commands = interfaceState.botMenuButton, self.menuButtonIconNode.iconState == .app {
                 self.menuButtonIconNode.enqueueState(.menu, animated: false)
             }
-            if themeUpdated {
+            if themeUpdated || isFirstTime {
                 self.menuButtonIconNode.customColor = interfaceState.theme.chat.inputPanel.actionControlForegroundColor
                 self.startButton.updateTheme(SolidRoundedButtonTheme(theme: interfaceState.theme))
+                
+                self.sendAsCloseIconView.image = generateImage(CGSize(width: 34.0, height: 34.0), rotatedContext: { size, context in
+                    context.clear(CGRect(origin: CGPoint(), size: size))
+                    context.setFillColor(interfaceState.theme.list.itemCheckColors.fillColor.cgColor)
+                    context.fillEllipse(in: CGRect(origin: CGPoint(), size: size))
+                    
+                    context.setStrokeColor(interfaceState.theme.list.itemCheckColors.foregroundColor.cgColor)
+                    context.setLineWidth(1.66)
+                    context.setLineCap(.round)
+                    context.move(to: CGPoint(x: 11.0, y: 11.0))
+                    context.addLine(to: CGPoint(x: size.width - 11.0, y: size.height - 11.0))
+                    context.move(to: CGPoint(x: size.width - 11.0, y: 11.0))
+                    context.addLine(to: CGPoint(x: 11.0, y: size.height - 11.0))
+                    context.strokePath()
+                })
             }
-            if let sendAsPeers = interfaceState.sendAsPeers, !sendAsPeers.isEmpty {
-                self.menuButtonIconNode.enqueueState(.close, animated: false)
-            } else if case .webView = interfaceState.botMenuButton, let previousShowWebView = previousState?.showWebView, previousShowWebView != interfaceState.showWebView {
+            if case .webView = interfaceState.botMenuButton, let previousShowWebView = previousState?.showWebView, previousShowWebView != interfaceState.showWebView {
                 if interfaceState.showWebView {
 //                    self.menuButtonIconNode.enqueueState(.close, animated: true)
                 } else {
@@ -1912,16 +1942,48 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         
         if let customLeftAction = self.customLeftAction {
             switch customLeftAction {
-            case let .toggleExpanded(_, isExpanded):
+            case let .toggleExpanded(_, isExpanded, hasUnseen):
                 var iconTransform = CATransform3DIdentity
                 iconTransform = CATransform3DTranslate(iconTransform, 0.0, 1.0, 0.0)
-                if isExpanded {
+                if !isExpanded {
                     iconTransform = CATransform3DRotate(iconTransform, CGFloat.pi, 0.0, 0.0, 1.0)
                 }
                 transition.updateTransform(layer: self.attachmentButtonIcon.layer, transform: iconTransform)
+                
+                if hasUnseen {
+                    let attachmentButtonUnseenIcon: UIImageView
+                    if let current = self.attachmentButtonUnseenIcon {
+                        attachmentButtonUnseenIcon = current
+                    } else {
+                        attachmentButtonUnseenIcon = UIImageView()
+                        self.attachmentButtonUnseenIcon = attachmentButtonUnseenIcon
+                        self.attachmentButtonBackground.contentView.addSubview(attachmentButtonUnseenIcon)
+                        attachmentButtonUnseenIcon.image = generateStretchableFilledCircleImage(diameter: 6.0, color: .white)?.withRenderingMode(.alwaysTemplate)
+                    }
+                    attachmentButtonUnseenIcon.tintColor = interfaceState.theme.list.itemAccentColor
+                    
+                    if let image = attachmentButtonUnseenIcon.image {
+                        attachmentButtonUnseenIcon.frame = CGRect(origin: CGPoint(x: 40.0 - 8.0 - image.size.width, y: 8.0), size: image.size)
+                    }
+                } else {
+                    if let attachmentButtonUnseenIcon = self.attachmentButtonUnseenIcon {
+                        self.attachmentButtonUnseenIcon = nil
+                        transition.updateTransformScale(layer: attachmentButtonUnseenIcon.layer, scale: 0.001)
+                        transition.updateAlpha(layer: attachmentButtonUnseenIcon.layer, alpha: 0.0, completion: { [weak attachmentButtonUnseenIcon] _ in
+                            attachmentButtonUnseenIcon?.removeFromSuperview()
+                        })
+                    }
+                }
             }
         } else {
             self.attachmentButtonIcon.layer.transform = CATransform3DIdentity
+            if let attachmentButtonUnseenIcon = self.attachmentButtonUnseenIcon {
+                self.attachmentButtonUnseenIcon = nil
+                transition.updateTransformScale(layer: attachmentButtonUnseenIcon.layer, scale: 0.001)
+                transition.updateAlpha(layer: attachmentButtonUnseenIcon.layer, alpha: 0.0, completion: { [weak attachmentButtonUnseenIcon] _ in
+                    attachmentButtonUnseenIcon?.removeFromSuperview()
+                })
+            }
         }
         
         var textFieldMinHeight: CGFloat = 33.0
@@ -1985,7 +2047,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                         
         let leftMenuInset: CGFloat
         let menuButtonHeight: CGFloat = 40.0
-        let menuCollapsedButtonWidth: CGFloat = isSendAsButton ? menuButtonHeight : 40.0
+        let menuCollapsedButtonWidth: CGFloat = 40.0
         let menuButtonWidth = menuTextSize.width + 47.0
         if hasMenuButton {
             let menuButtonSpacing: CGFloat = 6.0
@@ -2015,7 +2077,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         var attachmentButtonX: CGFloat = hideOffset.x + leftInset + leftMenuInset + 8.0
         if !displayMediaButton || mediaRecordingState != nil {
             attachmentButtonX = -48.0
-        } else if let customLeftAction = self.customLeftAction, case let .toggleExpanded(isVisible, _) = customLeftAction, !isVisible {
+        } else if let customLeftAction = self.customLeftAction, case let .toggleExpanded(isVisible, _, _) = customLeftAction, !isVisible {
             attachmentButtonX = -48.0
         }
         
@@ -2023,7 +2085,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         
         self.updateActionButtons(hasText: inputHasText, transition: transition)
         
-        var actionButtonsSize = CGSize(width: 40.0, height: 40.0)
+        var mediaActionButtonsSize = CGSize(width: 40.0, height: 40.0)
         var sendActionButtonsSize = CGSize(width: 40.0, height: 40.0)
         if let presentationInterfaceState = self.presentationInterfaceState {
             var showTitle = false
@@ -2038,11 +2100,46 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 }
             }
             sendActionButtonsSize = self.sendActionButtons.updateLayout(size: CGSize(width: 40.0, height: minimalHeight), isMediaInputExpanded: isMediaInputExpanded, showTitle: showTitle, currentMessageEffectId: presentationInterfaceState.interfaceState.sendMessageEffect, transition: transition, interfaceState: presentationInterfaceState)
-            actionButtonsSize = self.mediaActionButtons.updateLayout(size: CGSize(width: 40.0, height: minimalHeight), isMediaInputExpanded: isMediaInputExpanded, showTitle: false, currentMessageEffectId: presentationInterfaceState.interfaceState.sendMessageEffect, transition: transition, interfaceState: presentationInterfaceState)
+            mediaActionButtonsSize = self.mediaActionButtons.updateLayout(size: CGSize(width: 40.0, height: minimalHeight), isMediaInputExpanded: isMediaInputExpanded, showTitle: false, currentMessageEffectId: presentationInterfaceState.interfaceState.sendMessageEffect, transition: transition, interfaceState: presentationInterfaceState)
         }
         
+        var starReactionButtonSize: CGSize?
+        if let customRightAction = self.customRightAction, case let .stars(count, isFilled, action, longPressAction) = customRightAction {
+            let starReactionButton: ComponentView<Empty>
+            var starReactionButtonTransition = transition
+            if let current = self.starReactionButton {
+                starReactionButton = current
+            } else {
+                starReactionButton = ComponentView()
+                self.starReactionButton = starReactionButton
+                starReactionButtonTransition = .immediate
+            }
+            starReactionButtonSize = starReactionButton.update(
+                transition: ComponentTransition(starReactionButtonTransition),
+                component: AnyComponent(StarReactionButtonComponent(
+                    theme: interfaceState.theme,
+                    count: count,
+                    isFilled: isFilled,
+                    action: action,
+                    longPressAction: longPressAction
+                )),
+                environment: {},
+                containerSize: CGSize(width: 40.0, height: 40.0)
+            )
+        } else if let starReactionButton = self.starReactionButton {
+            self.starReactionButton = nil
+            if let starReactionButtonView = starReactionButton.view {
+                transition.updateAlpha(layer: starReactionButtonView.layer, alpha: 0.0, completion: { [weak starReactionButtonView] _ in
+                    starReactionButtonView?.removeFromSuperview()
+                })
+                transition.updateTransformScale(layer: starReactionButtonView.layer, scale: 0.001)
+            }
+        }
+        
+        let effectiveActionButtonsSize = starReactionButtonSize ?? mediaActionButtonsSize
+        
         let baseWidth = width - leftInset - leftMenuInset - rightInset - rightSlowModeInset
-        let (accessoryButtonsWidth, textFieldHeight, isTextFieldOverflow) = self.calculateTextFieldMetrics(width: baseWidth, sendActionControlsWidth: sendActionButtonsSize.width, maxHeight: maxHeight, metrics: metrics, bottomInset: bottomInset)
+        let (accessoryButtonsWidth, textFieldHeight, isTextFieldOverflow) = self.calculateTextFieldMetrics(width: baseWidth, sendActionControlsWidth: sendActionButtonsSize.width, maxHeight: maxHeight, metrics: metrics, bottomInset: bottomInset, interfaceState: interfaceState)
         var panelHeight = self.panelHeight(textFieldHeight: textFieldHeight, metrics: metrics, bottomInset: bottomInset)
         if displayBotStartButton {
             panelHeight += 27.0
@@ -2071,35 +2168,11 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         transition.updateAlpha(node: self.menuButtonTextNode, alpha: menuButtonExpanded ? 1.0 : 0.0)
         transition.updateFrame(node: self.menuButtonIconNode, frame: CGRect(x: 7.0, y: 7.0, width: 26.0, height: 26.0))
         
-        transition.updateFrame(node: self.sendAsAvatarButtonNode, frame: menuButtonFrame)
-        transition.updateFrame(node: self.sendAsAvatarContainerNode, frame: CGRect(origin: CGPoint(), size: menuButtonFrame.size))
-        transition.updateFrame(node: self.sendAsAvatarReferenceNode, frame: CGRect(origin: CGPoint(), size: menuButtonFrame.size))
-        transition.updateFrame(node: self.sendAsAvatarNode, frame: CGRect(origin: CGPoint(), size: menuButtonFrame.size))
-        
         let showMenuButton = hasMenuButton && interfaceState.interfaceState.mediaDraftState == nil
-        if isSendAsButton {
-            if interfaceState.showSendAsPeers {
-                transition.updateTransformScale(node: self.menuButton, scale: 1.0)
-                transition.updateAlpha(node: self.menuButton, alpha: 1.0)
-                
-                transition.updateTransformScale(node: self.sendAsAvatarButtonNode, scale: 0.001)
-                transition.updateAlpha(node: self.sendAsAvatarButtonNode, alpha: 0.0)
-            } else {
-                transition.updateTransformScale(node: self.menuButton, scale: 0.001)
-                transition.updateAlpha(node: self.menuButton, alpha: 0.0)
-                
-                transition.updateTransformScale(node: self.sendAsAvatarButtonNode, scale: showMenuButton ? 1.0 : 0.001)
-                transition.updateAlpha(node: self.sendAsAvatarButtonNode, alpha: showMenuButton ? 1.0 : 0.0)
-            }
-        } else {
-            transition.updateTransformScale(node: self.menuButton, scale: showMenuButton ? 1.0 : 0.001)
-            transition.updateAlpha(node: self.menuButton, alpha: showMenuButton ? 1.0 : 0.0)
-            
-            transition.updateTransformScale(node: self.sendAsAvatarButtonNode, scale: 0.001)
-            transition.updateAlpha(node: self.sendAsAvatarButtonNode, alpha: 0.0)
-        }
+        transition.updateTransformScale(node: self.menuButton, scale: showMenuButton ? 1.0 : 0.001)
+        transition.updateAlpha(node: self.menuButton, alpha: showMenuButton ? 1.0 : 0.0)
+        
         self.menuButton.isUserInteractionEnabled = hasMenuButton
-        self.sendAsAvatarButtonNode.isUserInteractionEnabled = hasMenuButton && isSendAsButton
         
         var textFieldInsets = self.textFieldInsets(metrics: metrics, bottomInset: bottomInset)
         if additionalSideInsets.right > 0.0 {
@@ -2107,12 +2180,16 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         }
         if inputHasText || self.extendedSearchLayout || hasMediaDraft || hasForward {
         } else {
-            textFieldInsets.right = 54.0
+            if let starReactionButtonSize {
+                textFieldInsets.right = 14.0 + starReactionButtonSize.width
+            } else {
+                textFieldInsets.right = 54.0
+            }
         }
         if mediaRecordingState != nil {
             textFieldInsets.left = 8.0
         }
-        if let customLeftAction = self.customLeftAction, case let .toggleExpanded(isVisible, _) = customLeftAction, !isVisible {
+        if let customLeftAction = self.customLeftAction, case let .toggleExpanded(isVisible, _, _) = customLeftAction, !isVisible {
             textFieldInsets.left = 8.0
         }
         
@@ -2373,7 +2450,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
 
         var textInputViewRealInsets = UIEdgeInsets()
         if let presentationInterfaceState = self.presentationInterfaceState {
-            textInputViewRealInsets = calculateTextFieldRealInsets(presentationInterfaceState: presentationInterfaceState, accessoryButtonsWidth: accessoryButtonsWidth, actionControlsWidth: actionButtonsSize.width)
+            textInputViewRealInsets = calculateTextFieldRealInsets(presentationInterfaceState: presentationInterfaceState, accessoryButtonsWidth: accessoryButtonsWidth, actionControlsWidth: effectiveActionButtonsSize.width)
         }
         
         var contentHeight: CGFloat = 0.0
@@ -2447,7 +2524,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         }
         
         if let _ = interfaceState.interfaceState.mediaDraftState {
-            let mediaPreviewPanelFrame = CGRect(origin: CGPoint(x: 0.0, y: contentHeight), size: CGSize(width: textInputWidth - actionButtonsSize.width - 8.0, height: 40.0))
+            let mediaPreviewPanelFrame = CGRect(origin: CGPoint(x: 0.0, y: contentHeight), size: CGSize(width: textInputWidth - effectiveActionButtonsSize.width - 8.0, height: 40.0))
             var mediaPreviewPanelTransition = transition
             
             let mediaPreviewPanelNode: ChatRecordingPreviewInputPanelNodeImpl
@@ -2521,8 +2598,18 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             })
         }
         
-        let textFieldFrame = CGRect(origin: CGPoint(x: self.textInputViewInternalInsets.left, y: self.textInputViewInternalInsets.top + textFieldTopContentOffset), size: CGSize(width: textInputFrame.size.width - (self.textInputViewInternalInsets.left + self.textInputViewInternalInsets.right), height: textInputHeight - self.textInputViewInternalInsets.top - textInputViewInternalInsets.bottom))
-        let textInputNodeClippingContainerFrame = CGRect(origin: CGPoint(x: textFieldFrame.minX - self.textInputViewInternalInsets.left, y: textFieldFrame.minY - self.textInputViewInternalInsets.top), size: CGSize(width: textFieldFrame.width + self.textInputViewInternalInsets.left + self.textInputViewInternalInsets.right,  height: textFieldFrame.height + self.textInputViewInternalInsets.top + self.textInputViewInternalInsets.bottom))
+        var hasSendAsButton = false
+        if let sendAsPeers = interfaceState.sendAsPeers, !sendAsPeers.isEmpty && interfaceState.editMessageState == nil {
+            hasSendAsButton = true
+        }
+        
+        var actualTextInputViewInternalInsets = self.textInputViewInternalInsets
+        if hasSendAsButton {
+            actualTextInputViewInternalInsets.left += 31.0
+        }
+        
+        let textFieldFrame = CGRect(origin: CGPoint(x: actualTextInputViewInternalInsets.left, y: actualTextInputViewInternalInsets.top + textFieldTopContentOffset), size: CGSize(width: textInputFrame.size.width - (actualTextInputViewInternalInsets.left + actualTextInputViewInternalInsets.right), height: textInputHeight - actualTextInputViewInternalInsets.top - actualTextInputViewInternalInsets.bottom))
+        let textInputNodeClippingContainerFrame = CGRect(origin: CGPoint(x: textFieldFrame.minX - actualTextInputViewInternalInsets.left, y: textFieldFrame.minY - actualTextInputViewInternalInsets.top), size: CGSize(width: textFieldFrame.width + actualTextInputViewInternalInsets.left + actualTextInputViewInternalInsets.right,  height: textFieldFrame.height + actualTextInputViewInternalInsets.top + actualTextInputViewInternalInsets.bottom))
         let shouldUpdateLayout = textInputNodeClippingContainerFrame.size != self.textInputNodeClippingContainer.frame.size
         transition.updateFrame(node: self.textInputNodeClippingContainer, frame: textInputNodeClippingContainerFrame)
         
@@ -2530,7 +2617,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         self.textInputSeparator.backgroundColor = interfaceState.theme.chat.inputPanel.inputPlaceholderColor
         transition.updateAlpha(layer: self.textInputSeparator.layer, alpha: isTextFieldOverflow ? 1.0 : 0.0)
         
-        let actualTextFieldFrame = CGRect(origin: CGPoint(x: self.textInputViewInternalInsets.left, y: self.textInputViewInternalInsets.top), size: textFieldFrame.size)
+        let actualTextFieldFrame = CGRect(origin: CGPoint(x: actualTextInputViewInternalInsets.left, y: actualTextInputViewInternalInsets.top), size: textFieldFrame.size)
         self.textInputNodeLayout = (actualTextFieldFrame, textInputViewRealInsets)
             
         if let textInputNode = self.textInputNode {
@@ -2547,7 +2634,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             let placeholderLayout = TextNode.asyncLayout(self.contextPlaceholderNode)
             let contextPlaceholder = NSMutableAttributedString(attributedString: contextPlaceholder)
             contextPlaceholder.addAttribute(.foregroundColor, value: placeholderColor.withAlphaComponent(1.0), range: NSRange(location: 0, length: contextPlaceholder.length))
-            let (placeholderSize, placeholderApply) = placeholderLayout(TextNodeLayoutArguments(attributedString: contextPlaceholder, backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .end, constrainedSize: CGSize(width: width - leftInset - rightInset - textFieldInsets.left - textFieldInsets.right - self.textInputViewInternalInsets.left - self.textInputViewInternalInsets.right - accessoryButtonsWidth, height: CGFloat.greatestFiniteMagnitude), alignment: .natural, cutout: nil, insets: UIEdgeInsets()))
+            let (placeholderSize, placeholderApply) = placeholderLayout(TextNodeLayoutArguments(attributedString: contextPlaceholder, backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .end, constrainedSize: CGSize(width: width - leftInset - rightInset - textFieldInsets.left - textFieldInsets.right - actualTextInputViewInternalInsets.left - actualTextInputViewInternalInsets.right - accessoryButtonsWidth, height: CGFloat.greatestFiniteMagnitude), alignment: .natural, cutout: nil, insets: UIEdgeInsets()))
             let tintContextPlaceholder = NSMutableAttributedString(attributedString: contextPlaceholder)
             tintContextPlaceholder.addAttribute(.foregroundColor, value: UIColor.black, range: NSRange(location: 0, length: tintContextPlaceholder.length))
             let contextPlaceholderNode = placeholderApply()
@@ -2571,7 +2658,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             } else {
                 placeholderTransition = .immediate
             }
-            placeholderTransition.updateFrame(node: contextPlaceholderNode, frame: CGRect(origin: CGPoint(x: self.textInputViewInternalInsets.left, y: hideOffset.y + textFieldInsets.top + self.textInputViewInternalInsets.top + textInputViewRealInsets.top + UIScreenPixel + (accessoryPanel != nil ? 52.0 : 0.0)), size: placeholderSize.size))
+            placeholderTransition.updateFrame(node: contextPlaceholderNode, frame: CGRect(origin: CGPoint(x: actualTextInputViewInternalInsets.left, y: hideOffset.y + textFieldInsets.top + actualTextInputViewInternalInsets.top + textInputViewRealInsets.top + UIScreenPixel + (accessoryPanel != nil ? 52.0 : 0.0)), size: placeholderSize.size))
             contextPlaceholderNode.view.setMonochromaticEffect(tintColor: placeholderColor)
             contextPlaceholderNode.alpha = audioRecordingItemsAlpha * placeholderColor.alpha
         } else {
@@ -2591,7 +2678,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 self.slowmodePlaceholderNode = slowmodePlaceholderNode
                 self.textInputContainerBackgroundView.contentView.insertSubview(slowmodePlaceholderNode.view, aboveSubview: self.textPlaceholderNode.view)
             }
-            let placeholderFrame = CGRect(origin: CGPoint(x: self.textInputViewInternalInsets.left, y: textFieldInsets.top + self.textInputViewInternalInsets.top + textInputViewRealInsets.top + UIScreenPixel + textFieldTopContentOffset), size: CGSize(width: width - leftInset - rightInset - textFieldInsets.left - textFieldInsets.right - self.textInputViewInternalInsets.left - self.textInputViewInternalInsets.right - accessoryButtonsWidth, height: 30.0))
+            let placeholderFrame = CGRect(origin: CGPoint(x: actualTextInputViewInternalInsets.left, y: textFieldInsets.top + actualTextInputViewInternalInsets.top + textInputViewRealInsets.top + UIScreenPixel + textFieldTopContentOffset), size: CGSize(width: width - leftInset - rightInset - textFieldInsets.left - textFieldInsets.right - actualTextInputViewInternalInsets.left - actualTextInputViewInternalInsets.right - accessoryButtonsWidth, height: 30.0))
             slowmodePlaceholderNode.updateState(slowmodeState)
             if slowmodePlaceholderNode.bounds.isEmpty {
                 slowmodePlaceholderNode.frame = placeholderFrame
@@ -2687,7 +2774,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         
         let textPlaceholderFrame: CGRect
         if sendingTextDisabled {
-            textPlaceholderFrame = CGRect(origin: CGPoint(x: floor((textInputContainerBackgroundFrame.width - textPlaceholderSize.width) / 2.0), y: self.textInputViewInternalInsets.top + textInputViewRealInsets.top + UIScreenPixel + textFieldTopContentOffset), size: textPlaceholderSize)
+            textPlaceholderFrame = CGRect(origin: CGPoint(x: floor((textInputContainerBackgroundFrame.width - textPlaceholderSize.width) / 2.0), y: actualTextInputViewInternalInsets.top + textInputViewRealInsets.top + UIScreenPixel + textFieldTopContentOffset), size: textPlaceholderSize)
             
             let textLockIconNode: ASImageNode
             var textLockIconTransition = transition
@@ -2706,7 +2793,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 textLockIconTransition.updateFrame(node: textLockIconNode, frame: CGRect(origin: CGPoint(x: -image.size.width - 4.0, y: floor((textPlaceholderFrame.height - image.size.height) / 2.0)), size: image.size))
             }
         } else {
-            textPlaceholderFrame = CGRect(origin: CGPoint(x: self.textInputViewInternalInsets.left, y: self.textInputViewInternalInsets.top + textInputViewRealInsets.top + UIScreenPixel + textFieldTopContentOffset), size: textPlaceholderSize)
+            textPlaceholderFrame = CGRect(origin: CGPoint(x: actualTextInputViewInternalInsets.left, y: actualTextInputViewInternalInsets.top + textInputViewRealInsets.top + UIScreenPixel + textFieldTopContentOffset), size: textPlaceholderSize)
             
             if let textLockIconNode = self.textLockIconNode {
                 self.textLockIconNode = nil
@@ -2714,6 +2801,31 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             }
         }
         transition.updateFrame(node: self.textPlaceholderNode, frame: textPlaceholderFrame)
+        
+        let sendAsButtonFrame = CGRect(origin: CGPoint(x: 3.0, y: textInputContainerBackgroundFrame.height - 3.0 - 34.0), size: CGSize(width: 34.0, height: 34.0))
+        transition.updateFrame(node: self.sendAsAvatarButtonNode, frame: sendAsButtonFrame)
+        transition.updateFrame(node: self.sendAsAvatarContainerNode, frame: CGRect(origin: CGPoint(), size: sendAsButtonFrame.size))
+        transition.updateFrame(node: self.sendAsAvatarReferenceNode, frame: CGRect(origin: CGPoint(), size: sendAsButtonFrame.size))
+        transition.updatePosition(node: self.sendAsAvatarNode, position: CGRect(origin: CGPoint(), size: sendAsButtonFrame.size).center)
+        transition.updateBounds(node: self.sendAsAvatarNode, bounds: CGRect(origin: CGPoint(), size: sendAsButtonFrame.size))
+        self.sendAsAvatarNode.updateSize(size: sendAsButtonFrame.size)
+        ComponentTransition(transition).setPosition(view: self.sendAsCloseIconView, position: CGRect(origin: CGPoint(), size: sendAsButtonFrame.size).center)
+        ComponentTransition(transition).setBounds(view: self.sendAsCloseIconView, bounds: CGRect(origin: CGPoint(), size: sendAsButtonFrame.size))
+        self.sendAsAvatarButtonNode.isUserInteractionEnabled = hasSendAsButton
+        
+        if interfaceState.showSendAsPeers {
+            transition.updateTransformScale(layer: self.sendAsCloseIconView.layer, scale: 1.0)
+            transition.updateAlpha(layer: self.sendAsCloseIconView.layer, alpha: 1.0)
+            
+            transition.updateTransformScale(node: self.sendAsAvatarNode, scale: 0.001)
+            transition.updateAlpha(node: self.sendAsAvatarNode, alpha: 0.0)
+        } else {
+            transition.updateTransformScale(layer: self.sendAsCloseIconView.layer, scale: 0.001)
+            transition.updateAlpha(layer: self.sendAsCloseIconView.layer, alpha: 0.0)
+            
+            transition.updateTransformScale(node: self.sendAsAvatarNode, scale: 1.0)
+            transition.updateAlpha(node: self.sendAsAvatarNode, alpha: 1.0)
+        }
         
         let textPlaceholderAlpha: CGFloat = audioRecordingItemsAlpha * placeholderColor.alpha
         transition.updateAlpha(node: self.textPlaceholderNode, alpha: textPlaceholderAlpha)
@@ -2734,57 +2846,30 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             }
         }
         
-        var actionButtonsFrame = CGRect(origin: CGPoint(x: textInputContainerBackgroundFrame.maxX + 6.0, y: textInputContainerBackgroundFrame.maxY - actionButtonsSize.height), size: actionButtonsSize)
+        var mediaActionButtonsFrame = CGRect(origin: CGPoint(x: textInputContainerBackgroundFrame.maxX + 6.0, y: textInputContainerBackgroundFrame.maxY - mediaActionButtonsSize.height), size: mediaActionButtonsSize)
         if inputHasText || self.extendedSearchLayout || hasMediaDraft {
-            actionButtonsFrame.origin.x = width + 8.0
+            mediaActionButtonsFrame.origin.x = width + 8.0
         }
-        transition.updateFrame(node: self.mediaActionButtons, frame: actionButtonsFrame)
+        transition.updateFrame(node: self.mediaActionButtons, frame: mediaActionButtonsFrame)
         if let (rect, containerSize) = self.absoluteRect {
-            self.mediaActionButtons.updateAbsoluteRect(CGRect(x: rect.origin.x + actionButtonsFrame.origin.x, y: rect.origin.y + actionButtonsFrame.origin.y, width: actionButtonsFrame.width, height: actionButtonsFrame.height), within: containerSize, transition: transition)
+            self.mediaActionButtons.updateAbsoluteRect(CGRect(x: rect.origin.x + mediaActionButtonsFrame.origin.x, y: rect.origin.y + mediaActionButtonsFrame.origin.y, width: mediaActionButtonsFrame.width, height: mediaActionButtonsFrame.height), within: containerSize, transition: transition)
         }
         
-        if let customRightAction = self.customRightAction, case let .stars(count, isFilled, action) = customRightAction {
-            let starReactionButton: ComponentView<Empty>
-            var starReactionButtonTransition = transition
-            if let current = self.starReactionButton {
-                starReactionButton = current
-            } else {
-                starReactionButton = ComponentView()
-                self.starReactionButton = starReactionButton
-                starReactionButtonTransition = .immediate
+        if let starReactionButtonView = self.starReactionButton?.view, let starReactionButtonSize {
+            var starReactionButtonFrame = CGRect(origin: CGPoint(x: textInputContainerBackgroundFrame.maxX + 6.0, y: textInputContainerBackgroundFrame.maxY - starReactionButtonSize.height), size: starReactionButtonSize)
+            if inputHasText || self.extendedSearchLayout || hasMediaDraft {
+                starReactionButtonFrame.origin.x = width + 8.0
             }
-            let starReactionButtonSize = starReactionButton.update(
-                transition: ComponentTransition(starReactionButtonTransition),
-                component: AnyComponent(StarReactionButtonComponent(
-                    theme: interfaceState.theme,
-                    count: count,
-                    isFilled: isFilled,
-                    action: {
-                        action()
-                    }
-                )),
-                environment: {},
-                containerSize: CGSize(width: 40.0, height: 40.0)
-            )
-            let _ = starReactionButtonSize
-            if let starReactionButtonView = starReactionButton.view {
-                if starReactionButtonView.superview == nil {
-                    self.glassBackgroundContainer.contentView.addSubview(starReactionButtonView)
-                    if transition.isAnimated {
-                        starReactionButtonView.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
-                        transition.animateTransformScale(view: starReactionButtonView, from: 0.001)
-                    }
+            
+            if starReactionButtonView.superview == nil {
+                self.glassBackgroundContainer.contentView.addSubview(starReactionButtonView)
+                if transition.isAnimated {
+                    starReactionButtonView.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
+                    transition.animateTransformScale(view: starReactionButtonView, from: 0.001)
+                    starReactionButtonView.frame = starReactionButtonFrame
                 }
-                starReactionButtonTransition.updateFrame(view: starReactionButtonView, frame: actionButtonsFrame)
             }
-        } else if let starReactionButton = self.starReactionButton {
-            self.starReactionButton = nil
-            if let starReactionButtonView = starReactionButton.view {
-                transition.updateAlpha(layer: starReactionButtonView.layer, alpha: 0.0, completion: { [weak starReactionButtonView] _ in
-                    starReactionButtonView?.removeFromSuperview()
-                })
-                transition.updateTransformScale(layer: starReactionButtonView.layer, scale: 0.001)
-            }
+            transition.updateFrame(view: starReactionButtonView, frame: starReactionButtonFrame)
         }
         
         var sendActionButtonsFrame = CGRect(origin: CGPoint(x: textInputContainerBackgroundFrame.maxX - sendActionButtonsSize.width, y: textInputContainerBackgroundFrame.maxY - sendActionButtonsSize.height), size: sendActionButtonsSize)
@@ -2834,7 +2919,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             }
             self.mediaActionButtons.isAccessibilityElement = false
             let size: CGFloat = 120.0
-            mediaRecordingAccessibilityArea.frame = CGRect(origin: CGPoint(x: actionButtonsFrame.midX - size / 2.0, y: actionButtonsFrame.midY - size / 2.0), size: CGSize(width: size, height: size))
+            mediaRecordingAccessibilityArea.frame = CGRect(origin: CGPoint(x: mediaActionButtonsFrame.midX - size / 2.0, y: mediaActionButtonsFrame.midY - size / 2.0), size: CGSize(width: size, height: size))
             if added {
                 DispatchQueue.main.asyncAfter(deadline: DispatchTime.now() + 0.4, execute: {
                     [weak mediaRecordingAccessibilityArea] in
@@ -3602,13 +3687,13 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             self.counterTextNode.attributedText = NSAttributedString(string: "", font: counterFont, textColor: .black)
         }
         
-        if let (width, leftInset, rightInset, bottomInset, _, maxHeight, _, metrics, _, _) = self.validLayout {
+        if let (width, leftInset, rightInset, bottomInset, _, maxHeight, _, metrics, _, _) = self.validLayout, let interfaceState = self.presentationInterfaceState {
             var composeButtonsOffset: CGFloat = 0.0
             if self.extendedSearchLayout {
                 composeButtonsOffset = 40.0
             }
             
-            let (_, textFieldHeight, _) = self.calculateTextFieldMetrics(width: width - leftInset - rightInset - self.leftMenuInset - self.rightSlowModeInset + self.currentTextInputBackgroundWidthOffset, sendActionControlsWidth: self.sendActionButtons.bounds.width, maxHeight: maxHeight, metrics: metrics, bottomInset: bottomInset)
+            let (_, textFieldHeight, _) = self.calculateTextFieldMetrics(width: width - leftInset - rightInset - self.leftMenuInset - self.rightSlowModeInset + self.currentTextInputBackgroundWidthOffset, sendActionControlsWidth: self.sendActionButtons.bounds.width, maxHeight: maxHeight, metrics: metrics, bottomInset: bottomInset, interfaceState: interfaceState)
             let panelHeight = self.panelHeight(textFieldHeight: textFieldHeight, metrics: metrics, bottomInset: bottomInset)
             var textFieldMinHeight: CGFloat = 33.0
             if let presentationInterfaceState = self.presentationInterfaceState {
@@ -4070,8 +4155,16 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     }
     
     private func updateTextHeight(animated: Bool) {
-        if let (width, leftInset, rightInset, bottomInset, additionalSideInsets, maxHeight, _, metrics, _, _) = self.validLayout {
-            let (_, textFieldHeight, _) = self.calculateTextFieldMetrics(width: width - leftInset - rightInset - additionalSideInsets.right - self.leftMenuInset - self.rightSlowModeInset + self.currentTextInputBackgroundWidthOffset, sendActionControlsWidth: self.sendActionButtons.bounds.width, maxHeight: maxHeight, metrics: metrics, bottomInset: bottomInset)
+        if let (width, leftInset, rightInset, bottomInset, additionalSideInsets, maxHeight, _, metrics, _, _) = self.validLayout, let interfaceState = self.presentationInterfaceState {
+            var leftInset = leftInset
+            var rightInset = rightInset
+            if bottomInset <= 32.0 {
+                leftInset += 18.0
+                rightInset += 18.0
+            }
+            
+            let baseWidth = width - leftInset - self.leftMenuInset - rightInset - self.rightSlowModeInset + self.currentTextInputBackgroundWidthOffset - additionalSideInsets.right
+            let (_, textFieldHeight, _) = self.calculateTextFieldMetrics(width: baseWidth, sendActionControlsWidth: self.sendActionButtons.bounds.width, maxHeight: maxHeight, metrics: metrics, bottomInset: bottomInset, interfaceState: interfaceState)
             let panelHeight = self.panelHeight(textFieldHeight: textFieldHeight, metrics: metrics, bottomInset: bottomInset)
             if !self.bounds.size.height.isEqual(to: panelHeight) {
                 self.updateHeight(animated)
@@ -4830,9 +4923,13 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 case let .input(isEnabled, inputMode), let .botInput(isEnabled, inputMode):
                     switch inputMode {
                         case .keyboard:
-                            self.interfaceInteraction?.updateInputModeAndDismissedButtonKeyboardMessageId({ state in
-                                return (.text, state.keyboardButtonsMessage?.id)
-                            })
+                            if let customSwitchToKeyboard = self.customSwitchToKeyboard {
+                                customSwitchToKeyboard()
+                            } else {
+                                self.interfaceInteraction?.updateInputModeAndDismissedButtonKeyboardMessageId({ state in
+                                    return (.text, state.keyboardButtonsMessage?.id)
+                                })
+                            }
                         case .stickers, .emoji:
                             if isEnabled {
                                 self.interfaceInteraction?.openStickers()

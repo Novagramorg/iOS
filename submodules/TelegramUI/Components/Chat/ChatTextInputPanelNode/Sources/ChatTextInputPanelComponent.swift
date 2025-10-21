@@ -58,7 +58,7 @@ public final class ChatTextInputPanelComponent: Component {
     public final class LeftAction: Equatable {
         public enum Kind: Equatable {
             case attach
-            case toggleExpanded(isVisible: Bool, isExpanded: Bool)
+            case toggleExpanded(isVisible: Bool, isExpanded: Bool, hasUnseen: Bool)
         }
         
         public let kind: Kind
@@ -83,15 +83,20 @@ public final class ChatTextInputPanelComponent: Component {
         }
         
         public let kind: Kind
-        public let action: () -> Void
+        public let action: (UIView) -> Void
+        public let longPressAction: ((UIView) -> Void)?
         
-        public init(kind: Kind, action: @escaping () -> Void) {
+        public init(kind: Kind, action: @escaping (UIView) -> Void, longPressAction: ((UIView) -> Void)? = nil) {
             self.kind = kind
             self.action = action
+            self.longPressAction = longPressAction
         }
         
         public static func ==(lhs: RightAction, rhs: RightAction) -> Bool {
             if lhs.kind != rhs.kind {
+                return false
+            }
+            if (lhs.longPressAction == nil) != (rhs.longPressAction == nil) {
                 return false
             }
             return true
@@ -109,6 +114,7 @@ public final class ChatTextInputPanelComponent: Component {
     let placeholder: String
     let paidMessagePrice: StarsAmount?
     let sendColor: UIColor?
+    let isSendDisabled: Bool
     let hideKeyboard: Bool
     let insets: UIEdgeInsets
     let maxHeight: CGFloat
@@ -128,6 +134,7 @@ public final class ChatTextInputPanelComponent: Component {
         placeholder: String,
         paidMessagePrice: StarsAmount?,
         sendColor: UIColor?,
+        isSendDisabled: Bool,
         hideKeyboard: Bool,
         insets: UIEdgeInsets,
         maxHeight: CGFloat,
@@ -146,6 +153,7 @@ public final class ChatTextInputPanelComponent: Component {
         self.placeholder = placeholder
         self.paidMessagePrice = paidMessagePrice
         self.sendColor = sendColor
+        self.isSendDisabled = isSendDisabled
         self.hideKeyboard = hideKeyboard
         self.insets = insets
         self.maxHeight = maxHeight
@@ -186,6 +194,9 @@ public final class ChatTextInputPanelComponent: Component {
             return false
         }
         if lhs.sendColor != rhs.sendColor {
+            return false
+        }
+        if lhs.isSendDisabled != rhs.isSendDisabled {
             return false
         }
         if lhs.hideKeyboard != rhs.hideKeyboard {
@@ -706,6 +717,9 @@ public final class ChatTextInputPanelComponent: Component {
                     mediaRecordingState: nil
                 )
             }
+            presentationInterfaceState = presentationInterfaceState.updatedInterfaceState { interfaceState in
+                return interfaceState.withUpdatedEffectiveInputState(component.externalState.textInputState)
+            }
             presentationInterfaceState = presentationInterfaceState.updatedSendPaidMessageStars(component.paidMessagePrice)
             
             let panelNode: ChatTextInputPanelNode
@@ -770,8 +784,8 @@ public final class ChatTextInputPanelComponent: Component {
                 switch leftAction.kind {
                 case .attach:
                     panelNode.customLeftAction = nil
-                case let .toggleExpanded(isVisible, isExpanded):
-                    panelNode.customLeftAction = .toggleExpanded(isVisible: isVisible, isExpanded: isExpanded)
+                case let .toggleExpanded(isVisible, isExpanded, hasUnseen):
+                    panelNode.customLeftAction = .toggleExpanded(isVisible: isVisible, isExpanded: isExpanded, hasUnseen: hasUnseen)
                 }
             } else {
                 panelNode.customLeftAction = nil
@@ -780,8 +794,12 @@ public final class ChatTextInputPanelComponent: Component {
             if let rightAction = component.rightAction {
                 switch rightAction.kind {
                 case let .stars(count, isFilled):
-                    panelNode.customRightAction = .stars(count: count, isFilled: isFilled, action: {
-                        rightAction.action()
+                    panelNode.customRightAction = .stars(count: count, isFilled: isFilled, action: { sourceView in
+                        rightAction.action(sourceView)
+                    }, longPressAction: rightAction.longPressAction.flatMap { longPressAction in
+                        return { sourceView in
+                            longPressAction(sourceView)
+                        }
                     })
                 }
             } else {
@@ -789,7 +807,22 @@ public final class ChatTextInputPanelComponent: Component {
             }
             
             panelNode.customSendColor = component.sendColor
+            panelNode.customSendIsDisabled = component.isSendDisabled
             panelNode.customInputTextMaxLength = component.maxLength
+            panelNode.customSwitchToKeyboard = { [weak self] in
+                guard let self, let component = self.component else {
+                    return
+                }
+                for inlineAction in component.inlineActions {
+                    switch inlineAction.kind {
+                    case .inputMode:
+                        inlineAction.action()
+                        return
+                    default:
+                        break
+                    }
+                }
+            }
             
             if let resetInputState = component.externalState.resetInputState {
                 component.externalState.resetInputState = nil

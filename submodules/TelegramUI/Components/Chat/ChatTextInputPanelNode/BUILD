@@ -63,6 +63,7 @@ swift_library(
         "//submodules/TelegramUI/Components/Chat/ChatInputAutocompletePanel",
         "//submodules/TelegramUI/Components/Chat/ChatRecordingPreviewInputPanelNode",
         "//submodules/TelegramUI/Components/Chat/ChatInputContextPanelNode",
+        "//submodules/TelegramUI/Components/AnimatedTextComponent",
     ],
     visibility = [
         "//visibility:public",

@@ -224,6 +224,7 @@ public struct PresentationGroupCallState: Equatable {
     public var defaultParticipantMuteState: DefaultParticipantMuteState?
     public var messagesAreEnabled: Bool
     public var canEnableMessages: Bool
+    public var sendPaidMessageStars: Int64?
     public var recordingStartTimestamp: Int32?
     public var title: String?
     public var raisedHand: Bool
@@ -242,6 +243,7 @@ public struct PresentationGroupCallState: Equatable {
         defaultParticipantMuteState: DefaultParticipantMuteState?,
         messagesAreEnabled: Bool,
         canEnableMessages: Bool,
+        sendPaidMessageStars: Int64?,
         recordingStartTimestamp: Int32?,
         title: String?,
         raisedHand: Bool,
@@ -259,6 +261,7 @@ public struct PresentationGroupCallState: Equatable {
         self.defaultParticipantMuteState = defaultParticipantMuteState
         self.messagesAreEnabled = messagesAreEnabled
         self.canEnableMessages = canEnableMessages
+        self.sendPaidMessageStars = sendPaidMessageStars
         self.recordingStartTimestamp = recordingStartTimestamp
         self.title = title
         self.raisedHand = raisedHand

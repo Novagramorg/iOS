@@ -1017,6 +1017,7 @@ public final class StarsPurchaseScreen: ViewControllerComponentContainer {
         options: [Any] = [],
         purpose: StarsPurchasePurpose,
         targetPeerId: EnginePeer.Id?,
+        customTheme: PresentationTheme? = nil,
         completion: @escaping (Int64) -> Void = { _ in }
     ) {
         self.context = context
@@ -1044,7 +1045,7 @@ public final class StarsPurchaseScreen: ViewControllerComponentContainer {
             completion: { stars in
                 completionImpl?(stars)
             }
-        ), navigationBarAppearance: .transparent, presentationMode: .modal, theme: .default)
+        ), navigationBarAppearance: .transparent, presentationMode: .modal, theme: customTheme.flatMap { .custom($0) } ?? .default)
         
         let presentationData = context.sharedContext.currentPresentationData.with { $0 }
         

@@ -894,7 +894,7 @@ private final class SheetContent: CombinedComponent {
                                                     guard let controller, let state else {
                                                         return
                                                     }
-                                                    let purchaseController = state.context.sharedContext.makeStarsPurchaseScreen(context: state.context, starsContext: starsContext, options: options, purpose: .generic, targetPeerId: nil, completion: { _ in
+                                                    let purchaseController = state.context.sharedContext.makeStarsPurchaseScreen(context: state.context, starsContext: starsContext, options: options, purpose: .generic, targetPeerId: nil, customTheme: nil, completion: { _ in
                                                     })
                                                     controller.push(purchaseController)
                                                 })

@@ -1115,7 +1115,8 @@ func _internal_cancelStoryUpload(account: Account, stableId: Int32) {
 func _internal_beginStoryLivestream(account: Account) -> Signal<Never, NoError> {
     var flags: Int32 = 0
     flags |= 1 << 5
-    return account.network.request(Api.functions.stories.startLive(flags: flags, peer: .inputPeerSelf, caption: nil, entities: nil, privacyRules: [.inputPrivacyValueAllowAll], randomId: Int64.random(in: Int64.min ... Int64.max)))
+    flags |= 1 << 6
+    return account.network.request(Api.functions.stories.startLive(flags: flags, peer: .inputPeerSelf, caption: nil, entities: nil, privacyRules: [.inputPrivacyValueAllowAll], randomId: Int64.random(in: Int64.min ... Int64.max), messagesEnabled: .boolTrue, sendPaidMessagesStars: nil))
     |> map(Optional.init)
     |> `catch` { _ -> Signal<Api.Updates?, NoError> in
         return .single(nil)
@@ -2705,14 +2706,14 @@ public func _internal_setMessageNotificationWasDisplayed(transaction: Transactio
     transaction.putItemCacheEntry(id: ItemCacheEntryId(collectionId: Namespaces.CachedItemCollection.displayedMessageNotifications, key: key), entry: CodableEntry(data: Data()))
 }
 
-func _internal_updateStoryViewsForMyReaction(isChannel: Bool, views: Stories.Item.Views?, previousReaction: MessageReaction.Reaction?, reaction: MessageReaction.Reaction?) -> Stories.Item.Views? {
-    if !isChannel {
+func _internal_updateStoryViewsForMyReaction(isChannel: Bool, views: Stories.Item.Views?, previousReaction: MessageReaction.Reaction?, reaction: MessageReaction.Reaction?, addedCount: Int = 1) -> Stories.Item.Views? {
+    if !isChannel && reaction != .stars {
         return views
     }
     
     var views = views ?? Stories.Item.Views(seenCount: 0, reactedCount: 0, forwardCount: 0, seenPeerIds: [], reactions: [], hasList: false)
     
-    if let reaction = reaction {
+    if let reaction {
         if previousReaction == nil {
             views.reactedCount += 1
         }
@@ -2720,17 +2721,19 @@ func _internal_updateStoryViewsForMyReaction(isChannel: Bool, views: Stories.Ite
         do {
             var reactions = views.reactions
             
-            if let previousIndex = reactions.firstIndex(where: { $0.chosenOrder != nil }) {
-                reactions[previousIndex].chosenOrder = nil
-                reactions[previousIndex].count = max(0, reactions[previousIndex].count - 1)
+            if reaction != .stars {
+                if let previousIndex = reactions.firstIndex(where: { $0.chosenOrder != nil }) {
+                    reactions[previousIndex].chosenOrder = nil
+                    reactions[previousIndex].count = max(0, reactions[previousIndex].count - 1)
+                }
             }
             if let reactionIndex = reactions.firstIndex(where: { $0.value == reaction }) {
                 reactions[reactionIndex].chosenOrder = 0
-                reactions[reactionIndex].count += 1
+                reactions[reactionIndex].count += Int32(addedCount)
             } else {
                 reactions.append(MessageReaction(
                     value: reaction,
-                    count: 1,
+                    count: Int32(addedCount),
                     chosenOrder: 0
                 ))
             }
@@ -2870,5 +2873,122 @@ func _internal_setStoryReaction(account: Account, peerId: EnginePeer.Id, id: Int
             
             return .complete()
         }
+    }
+}
+
+func _internal_sendStoryStars(account: Account, peerId: EnginePeer.Id, id: Int32, count: Int) -> Signal<Never, NoError> {
+    return account.postbox.transaction { transaction -> (Stories.StoredItem?, Api.InputPeer?) in
+        guard let peer = transaction.getPeer(peerId) else {
+            return (nil, nil)
+        }
+        guard let inputPeer = apiInputPeer(peer) else {
+            return (nil, nil)
+        }
+        
+        var updatedItemValue: Stories.StoredItem?
+        
+        let updateViews: (Stories.Item.Views?, MessageReaction.Reaction?) -> Stories.Item.Views? = { views, previousReaction in
+            return _internal_updateStoryViewsForMyReaction(isChannel: peerId.namespace == Namespaces.Peer.CloudChannel, views: views, previousReaction: previousReaction, reaction: .stars, addedCount: count)
+        }
+        
+        var currentItems = transaction.getStoryItems(peerId: peerId)
+        for i in 0 ..< currentItems.count {
+            if currentItems[i].id == id {
+                if case let .item(item) = currentItems[i].value.get(Stories.StoredItem.self) {
+                    let updatedItem: Stories.StoredItem = .item(Stories.Item(
+                        id: item.id,
+                        timestamp: item.timestamp,
+                        expirationTimestamp: item.expirationTimestamp,
+                        media: item.media,
+                        alternativeMediaList: item.alternativeMediaList,
+                        mediaAreas: item.mediaAreas,
+                        text: item.text,
+                        entities: item.entities,
+                        views: updateViews(item.views, item.myReaction),
+                        privacy: item.privacy,
+                        isPinned: item.isPinned,
+                        isExpired: item.isEdited,
+                        isPublic: item.isPublic,
+                        isCloseFriends: item.isCloseFriends,
+                        isContacts: item.isContacts,
+                        isSelectedContacts: item.isSelectedContacts,
+                        isForwardingDisabled: item.isForwardingDisabled,
+                        isEdited: item.isEdited,
+                        isMy: item.isMy,
+                        myReaction: .stars,
+                        forwardInfo: item.forwardInfo,
+                        authorId: item.authorId,
+                        folderIds: item.folderIds
+                    ))
+                    updatedItemValue = updatedItem
+                    if let entry = CodableEntry(updatedItem) {
+                        currentItems[i] = StoryItemsTableEntry(value: entry, id: updatedItem.id, expirationTimestamp: updatedItem.expirationTimestamp, isCloseFriends: updatedItem.isCloseFriends, isLiveStream: updatedItem.isLiveStream)
+                    }
+                }
+            }
+        }
+        transaction.setStoryItems(peerId: peerId, items: currentItems)
+        
+        if let current = transaction.getStory(id: StoryId(peerId: peerId, id: id))?.get(Stories.StoredItem.self), case let .item(item) = current {
+            let updatedItem: Stories.StoredItem = .item(Stories.Item(
+                id: item.id,
+                timestamp: item.timestamp,
+                expirationTimestamp: item.expirationTimestamp,
+                media: item.media,
+                alternativeMediaList: item.alternativeMediaList,
+                mediaAreas: item.mediaAreas,
+                text: item.text,
+                entities: item.entities,
+                views: updateViews(item.views, item.myReaction),
+                privacy: item.privacy,
+                isPinned: item.isPinned,
+                isExpired: item.isEdited,
+                isPublic: item.isPublic,
+                isCloseFriends: item.isCloseFriends,
+                isContacts: item.isContacts,
+                isSelectedContacts: item.isSelectedContacts,
+                isForwardingDisabled: item.isForwardingDisabled,
+                isEdited: item.isEdited,
+                isMy: item.isMy,
+                myReaction: .stars,
+                forwardInfo: item.forwardInfo,
+                authorId: item.authorId,
+                folderIds: item.folderIds
+            ))
+            updatedItemValue = updatedItem
+            if let entry = CodableEntry(updatedItem) {
+                transaction.setStory(id: StoryId(peerId: peerId, id: id), value: entry)
+            }
+        }
+        
+        return (updatedItemValue, inputPeer)
+    }
+    |> mapToSignal { storyItem, inputPeer -> Signal<Never, NoError> in
+        guard let inputPeer else {
+            return .complete()
+        }
+        
+        if let storyItem {
+            account.stateManager.injectStoryUpdates(updates: [InternalStoryUpdate.added(peerId: peerId, item: storyItem)])
+        }
+        account.stateManager.injectStoryUpdates(updates: [InternalStoryUpdate.updateMyReaction(peerId: peerId, id: id, reaction: .stars)])
+        
+        let _ = inputPeer
+        
+        //TODO:release
+        return .complete()
+        
+        /*return account.network.request(Api.functions.stories.sendReaction(flags: 0, peer: inputPeer, storyId: id, reaction: .reactionPaid))
+        |> map(Optional.init)
+        |> `catch` { _ -> Signal<Api.Updates?, NoError> in
+            return .single(nil)
+        }
+        |> mapToSignal { updates -> Signal<Never, NoError> in
+            if let updates = updates {
+                account.stateManager.addUpdates(updates)
+            }
+            
+            return .complete()
+        }*/
     }
 }

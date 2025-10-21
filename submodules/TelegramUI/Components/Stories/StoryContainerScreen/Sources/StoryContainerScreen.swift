@@ -1380,6 +1380,13 @@ private final class StoryContainerScreenComponent: Component {
                         self.dismissWithoutTransitionOut = true
                         environment.controller()?.dismiss()
                     } else {
+                        var transition: ComponentTransition = .immediate
+                        if let previousState = self.stateValue, let previousSlice = previousState.slice, let slice = stateValue?.slice {
+                            if previousSlice.item.id == slice.item.id {
+                                transition = .spring(duration: 0.4)
+                            }
+                        }
+                        
                         self.stateValue = stateValue
                         
                         if update {
@@ -1387,7 +1394,7 @@ private final class StoryContainerScreenComponent: Component {
                                 self.environment?.controller()?.dismiss()
                             } else {
                                 if !self.isUpdating {
-                                    self.state?.updated(transition: .immediate)
+                                    self.state?.updated(transition: transition)
                                 }
                             }
                         } else {
@@ -1395,7 +1402,7 @@ private final class StoryContainerScreenComponent: Component {
                                 guard let self else {
                                     return
                                 }
-                                self.state?.updated(transition: .immediate)
+                                self.state?.updated(transition: transition)
                             }
                         }
                     }
