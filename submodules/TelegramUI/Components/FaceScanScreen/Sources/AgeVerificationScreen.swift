@@ -112,7 +112,7 @@ private final class SheetContent: CombinedComponent {
                     size: CGSize(width: 40.0, height: 40.0),
                     backgroundColor: theme.rootController.navigationBar.glassBarButtonBackgroundColor,
                     isDark: theme.overallDarkAppearance,
-                    state: .tintedGlass,
+                    state: .generic,
                     component: AnyComponentWithIdentity(id: "close", component: AnyComponent(
                         BundleIconComponent(
                             name: "Navigation/Close",

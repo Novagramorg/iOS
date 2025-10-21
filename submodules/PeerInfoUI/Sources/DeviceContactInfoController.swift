@@ -1197,7 +1197,7 @@ public func deviceContactInfoController(context: ShareControllerAccountContext, 
                                         break
                                 }
                                 
-                                return context.engine.contacts.importContact(firstName: composedContactData.basicData.firstName, lastName: composedContactData.basicData.lastName, phoneNumber: filteredPhoneNumbers[0].value)
+                                return context.engine.contacts.importContact(firstName: composedContactData.basicData.firstName, lastName: composedContactData.basicData.lastName, phoneNumber: filteredPhoneNumbers[0].value, noteText: "", noteEntities: [])
                                 |> castError(AddContactError.self)
                                 |> mapToSignal { peerId -> Signal<(DeviceContactStableId, DeviceContactExtendedData, EnginePeer?)?, AddContactError> in
                                     if let peerId = peerId {

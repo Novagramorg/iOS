@@ -1060,14 +1060,9 @@ public class AttachmentController: ViewController, MinimizableController {
                     let sourceButtonScale = sourceButtonFrame.width / targetFrame.width
                     
                     if let sourceGlassView = findParentGlassBackgroundView(attachmentButton), let glassParams = sourceGlassView.params {
-                        let containerView = UIView()
-                        containerView.clipsToBounds = true
+                        let containerView = ClipContainerView()
+                        containerView.update(bounds: CGRect(origin: CGPoint(x: 0.0, y: (targetFrame.height - targetFrame.width) * 0.5), size: CGSize(width: targetFrame.width, height: targetFrame.width)), topCornerRadius: targetFrame.width * 0.5, bottomCornerRadius: targetFrame.width * 0.5, boundsTransition: .immediate, cornersTransition: .immediate)
                         containerView.frame = targetFrame
-                        if #available(iOS 26.0, *) {
-                            containerView.cornerConfiguration = .uniformCorners(radius: .fixed(containerView.bounds.width * 0.5))
-                        } else {
-                            containerView.layer.cornerRadius = containerView.bounds.width * 0.5
-                        }
                         self.view.addSubview(containerView)
                         
                         let localGlassView = GlassBackgroundView()
@@ -1079,7 +1074,7 @@ public class AttachmentController: ViewController, MinimizableController {
                             transition: .immediate
                         )
                         localGlassView.frame = CGRect(origin: .zero, size: targetFrame.size)
-                        containerView.addSubview(localGlassView)
+                        containerView.contentView.addSubview(localGlassView)
                         
                         let initialContainerBounds = self.container.bounds
                         let initialContainerFrame = self.container.frame
@@ -1087,10 +1082,10 @@ public class AttachmentController: ViewController, MinimizableController {
                         
                         let clipInnerFrame = self.container.container.view.convert(self.container.container.view.bounds, to: self.container.view)
                         self.container.bounds = CGRect(origin: .zero, size: self.container.bounds.size)
-                        self.container.frame = CGRect(origin: CGPoint(x: floorToScreenPixels    ((targetFrame.width - self.container.frame.width) / 2.0), y: -clipInnerFrame.minY), size: self.container.frame.size)
+                        self.container.frame = CGRect(origin: CGPoint(x: floorToScreenPixels((targetFrame.width - self.container.frame.width) / 2.0), y: -clipInnerFrame.minY), size: self.container.frame.size)
                         self.container.view.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
                         self.container.bottomClipNode.cornerRadius = 0.0
-                        containerView.addSubnode(self.container)
+                        containerView.contentView.addSubnode(self.container)
                                                 
                         let buttonIcon = GlassBackgroundView.ContentImageView()
                         let presentationData = controller.context.sharedContext.currentPresentationData.with { $0 }
@@ -1104,14 +1099,8 @@ public class AttachmentController: ViewController, MinimizableController {
                         localGlassView.contentView.addSubview(buttonIcon)
                         ComponentTransition(buttonTransition).animateBlur(layer: buttonIcon.layer, fromRadius: 0.0, toRadius: 10.0)
                         
-                        scaleTransition.animateBounds(layer: containerView.layer, from: CGRect(origin: CGPoint(x: 0.0, y: (targetFrame.height - targetFrame.width) * 0.5), size: CGSize(width: targetFrame.width, height: targetFrame.width)))
-                        cornersTransition.animateView {
-                            if #available(iOS 26.0, *) {
-                                containerView.cornerConfiguration = .corners(topLeftRadius: 38.0, topRightRadius: 38.0, bottomLeftRadius: .fixed(layout.deviceMetrics.screenCornerRadius - 2.0), bottomRightRadius: .fixed(layout.deviceMetrics.screenCornerRadius - 2.0))
-                            } else {
-                                containerView.layer.cornerRadius = layout.deviceMetrics.screenCornerRadius - 2.0
-                            }
-                        }
+                        containerView.update(bounds: CGRect(origin: .zero, size: targetFrame.size), topCornerRadius: 38.0, bottomCornerRadius: layout.deviceMetrics.screenCornerRadius - 2.0, boundsTransition: scaleTransition, cornersTransition: cornersTransition)
+                        scaleTransition.animateBounds(layer: containerView.layer, from: CGRect(origin: .zero, size: CGSize(width: targetFrame.width, height: targetFrame.width)))
                         scaleTransition.animateTransformScale(view: containerView, from: sourceButtonScale)
                         positionTransition.animatePosition(layer: containerView.layer, from: sourceButtonFrame.center, to: containerView.center, completion: { _ in
                             self.container.bottomClipNode.cornerRadius = initialBottomClipRadius
@@ -1176,14 +1165,9 @@ public class AttachmentController: ViewController, MinimizableController {
                     let targetButtonScale = targetButtonFrame.width / initialFrame.width
                     
                     if let sourceGlassView = findParentGlassBackgroundView(attachmentButton), let glassParams = sourceGlassView.params {
-                        let containerView = UIView()
-                        containerView.clipsToBounds = true
+                        let containerView = ClipContainerView()
                         containerView.frame = initialFrame
-                        if #available(iOS 26.0, *) {
-                            containerView.cornerConfiguration = .corners(topLeftRadius: 38.0, topRightRadius: 38.0, bottomLeftRadius: .fixed(layout.deviceMetrics.screenCornerRadius - 2.0), bottomRightRadius: .fixed(layout.deviceMetrics.screenCornerRadius - 2.0))
-                        } else {
-                            containerView.layer.cornerRadius = layout.deviceMetrics.screenCornerRadius - 2.0
-                        }
+                        containerView.update(bounds: CGRect(origin: .zero, size: initialFrame.size), topCornerRadius: 38.0, bottomCornerRadius: layout.deviceMetrics.screenCornerRadius - 2.0, boundsTransition: .immediate, cornersTransition: .immediate)
                         self.view.addSubview(containerView)
                         
                         let localGlassView = GlassBackgroundView()
@@ -1195,14 +1179,14 @@ public class AttachmentController: ViewController, MinimizableController {
                             transition: .immediate
                         )
                         localGlassView.frame = CGRect(origin: .zero, size: initialFrame.size)
-                        containerView.addSubview(localGlassView)
+                        containerView.contentView.addSubview(localGlassView)
                         
                         let clipInnerFrame = self.container.container.view.convert(self.container.container.view.bounds, to: self.container.view)
                         self.container.bounds = CGRect(origin: .zero, size: self.container.bounds.size)
-                        self.container.frame = CGRect(origin: CGPoint(x: floorToScreenPixels((initialFrame.width -  self.container.frame.width) / 2.0), y: -clipInnerFrame.minY), size: self.container.frame.size)
+                        self.container.frame = CGRect(origin: CGPoint(x: floorToScreenPixels((initialFrame.width - self.container.frame.width) / 2.0), y: -clipInnerFrame.minY), size: self.container.frame.size)
                         self.container.isUserInteractionEnabled = false
                         self.container.view.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.12, removeOnCompletion: false)
-                        containerView.addSubnode(self.container)
+                        containerView.contentView.addSubnode(self.container)
                         
                         let buttonIcon = GlassBackgroundView.ContentImageView()
                         let presentationData = controller.context.sharedContext.currentPresentationData.with { $0 }
@@ -1217,14 +1201,9 @@ public class AttachmentController: ViewController, MinimizableController {
                         ComponentTransition(buttonTransition).animateBlur(layer: buttonIcon.layer, fromRadius: 10.0, toRadius: 0.0)
                         ComponentTransition(buttonTransition).animateBlur(layer: sourceGlassView.contentView.layer, fromRadius: 10.0, toRadius: 0.0)
                         
-                        scaleTransition.updateBounds(layer: containerView.layer, bounds: CGRect(origin: CGPoint(x: 0.0, y: (initialFrame.height - initialFrame.width) * 0.5), size: CGSize(width: initialFrame.width, height: initialFrame.width)))
-                        cornersTransition.animateView {
-                            if #available(iOS 26.0, *) {
-                                containerView.cornerConfiguration = .uniformCorners(radius: .fixed(containerView.bounds.width * 0.5))
-                            } else {
-                                containerView.layer.cornerRadius = containerView.bounds.width * 0.5
-                            }
-                        }
+                        containerView.update(bounds: CGRect(origin: CGPoint(x: 0.0, y: (initialFrame.height - initialFrame.width) * 0.5), size: CGSize(width: initialFrame.width, height: initialFrame.width)), topCornerRadius: initialFrame.width * 0.5, bottomCornerRadius: initialFrame.width * 0.5, boundsTransition: scaleTransition, cornersTransition: cornersTransition)
+                        scaleTransition.updateBounds(layer: containerView.layer, bounds: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: initialFrame.width, height: initialFrame.width)))
+                        
                         scaleTransition.updateTransformScale(layer: containerView.layer, scale: targetButtonScale)
                         positionTransition.updatePosition(layer: containerView.layer, position: targetButtonFrame.center, completion: { [weak self] _ in
                             let _ = self?.container.dismiss(transition: .immediate, completion: completion)
@@ -1232,7 +1211,6 @@ public class AttachmentController: ViewController, MinimizableController {
                         })
                         
                         localGlassView.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.15, delay: 0.2, timingFunction: CAMediaTimingFunctionName.linear.rawValue, removeOnCompletion: false)
-                        //sourceGlassView.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.15, delay: 0.27, timingFunction: CAMediaTimingFunctionName.linear.rawValue)
                         scaleTransition.animateTransformScale(view: sourceGlassView, from: 1.0 / targetButtonScale)
                         
                         positionTransition.animatePosition(layer: sourceGlassView.layer, from: self.view.convert(initialFrame.center, to: sourceGlassView.superview), to: sourceGlassView.center)
@@ -1711,4 +1689,37 @@ private func findParentGlassBackgroundView(_ view: UIView) -> GlassBackgroundVie
         return findParentGlassBackgroundView(superview)
     }
     return nil
+}
+
+private final class ClipContainerView: UIView {
+    private let clipView = UIView()
+    let contentView = UIView()
+    
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        
+        self.clipView.clipsToBounds = true
+        self.clipView.layer.cornerCurve = .continuous
+        self.clipView.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
+        
+        self.contentView.clipsToBounds = true
+        self.contentView.layer.cornerCurve = .continuous
+        self.contentView.layer.maskedCorners = [.layerMinXMaxYCorner, .layerMaxXMaxYCorner]
+        
+        self.addSubview(self.clipView)
+        self.clipView.addSubview(self.contentView)
+    }
+    
+    required init?(coder: NSCoder) {
+        preconditionFailure()
+    }
+    
+    func update(bounds: CGRect, topCornerRadius: CGFloat, bottomCornerRadius: CGFloat, boundsTransition: ContainedViewLayoutTransition, cornersTransition: ContainedViewLayoutTransition) {
+        cornersTransition.updateCornerRadius(layer: self.clipView.layer, cornerRadius: topCornerRadius)
+        cornersTransition.updateCornerRadius(layer: self.contentView.layer, cornerRadius: bottomCornerRadius)
+        
+        boundsTransition.updateFrame(view: self.clipView, frame: CGRect(origin: .zero, size: bounds.size))
+        boundsTransition.updatePosition(layer: self.contentView.layer, position: CGPoint(x: bounds.size.width * 0.5, y: bounds.size.height * 0.5))
+        boundsTransition.updateBounds(layer: self.contentView.layer, bounds: bounds)
+    }
 }
