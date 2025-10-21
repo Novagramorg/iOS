@@ -14,7 +14,7 @@ import SheetComponent
 import MultilineTextComponent
 import MultilineTextWithEntitiesComponent
 import BundleIconComponent
-import SolidRoundedButtonComponent
+import ButtonComponent
 import Markdown
 import BalancedTextComponent
 import AvatarNode
@@ -27,6 +27,7 @@ import StarsAvatarComponent
 import MiniAppListScreen
 import PremiumStarComponent
 import GiftAnimationComponent
+import GlassBarButtonComponent
 
 private final class StarsTransactionSheetContent: CombinedComponent {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
@@ -86,8 +87,6 @@ private final class StarsTransactionSheetContent: CombinedComponent {
         
         var peerMap: [EnginePeer.Id: EnginePeer] = [:]
         
-        var cachedCloseImage: (UIImage, PresentationTheme)?
-        var cachedOverlayCloseImage: UIImage?
         var cachedChevronImage: (UIImage, PresentationTheme)?
         
         var inProgress = false
@@ -153,7 +152,7 @@ private final class StarsTransactionSheetContent: CombinedComponent {
     }
     
     static var body: Body {
-        let closeButton = Child(Button.self)
+        let closeButton = Child(GlassBarButtonComponent.self)
         let title = Child(MultilineTextComponent.self)
         let star = Child(StarsImageComponent.self)
         let activeStar = Child(PremiumStarComponent.self)
@@ -165,8 +164,8 @@ private final class StarsTransactionSheetContent: CombinedComponent {
         let table = Child(TableComponent.self)
         let additional = Child(BalancedTextComponent.self)
         let status = Child(BalancedTextComponent.self)
-        let cancelButton = Child(SolidRoundedButtonComponent.self)
-        let button = Child(SolidRoundedButtonComponent.self)
+        let cancelButton = Child(ButtonComponent.self)
+        let button = Child(ButtonComponent.self)
         
         let transactionStatusBackgound = Child(RoundedRectangle.self)
         let transactionStatusText = Child(MultilineTextComponent.self)
@@ -189,23 +188,7 @@ private final class StarsTransactionSheetContent: CombinedComponent {
             
             let sideInset: CGFloat = 16.0 + environment.safeInsets.left
             let textSideInset: CGFloat = 32.0 + environment.safeInsets.left
-            
-            let closeImage: UIImage
-            if let (image, theme) = state.cachedCloseImage, theme === environment.theme {
-                closeImage = image
-            } else {
-                closeImage = generateCloseButtonImage(backgroundColor: UIColor(rgb: 0x808084, alpha: 0.1), foregroundColor: theme.actionSheet.inputClearButtonColor)!
-                state.cachedCloseImage = (closeImage, theme)
-            }
-            
-            let closeOverlayImage: UIImage
-            if let image = state.cachedOverlayCloseImage {
-                closeOverlayImage = image
-            } else {
-                closeOverlayImage = generateCloseButtonImage(backgroundColor: UIColor(rgb: 0xffffff, alpha: 0.1), foregroundColor: .white)!
-                state.cachedOverlayCloseImage = closeOverlayImage
-            }
-                        
+                                    
             let titleText: String
             let amountText: String
             var descriptionText: String
@@ -655,15 +638,20 @@ private final class StarsTransactionSheetContent: CombinedComponent {
                 descriptionText = modifiedString
             }
             
-            var closeButtonImage = closeImage
-            if case .unique = giftAnimationSubject {
-                closeButtonImage = closeOverlayImage
-            }
             let closeButton = closeButton.update(
-                component: Button(
-                    content: AnyComponent(Image(image: closeButtonImage)),
-                    action: { [weak component] in
-                        component?.cancel(true)
+                component: GlassBarButtonComponent(
+                    size: CGSize(width: 40.0, height: 40.0),
+                    backgroundColor: theme.rootController.navigationBar.glassBarButtonBackgroundColor,
+                    isDark: theme.overallDarkAppearance,
+                    state: .generic,
+                    component: AnyComponentWithIdentity(id: "close", component: AnyComponent(
+                        BundleIconComponent(
+                            name: "Navigation/Close",
+                            tintColor: theme.rootController.navigationBar.glassBarButtonForegroundColor
+                        )
+                    )),
+                    action: { _ in
+                        component.cancel(true)
                     }
                 ),
                 availableSize: CGSize(width: 30.0, height: 30.0),
@@ -1615,18 +1603,39 @@ private final class StarsTransactionSheetContent: CombinedComponent {
             
             if let cancelButtonText {
                 let cancelButton = cancelButton.update(
-                    component: SolidRoundedButtonComponent(
-                        title: cancelButtonText,
-                        theme: SolidRoundedButtonComponent.Theme(backgroundColor: .clear, foregroundColor: linkColor),
-                        font: .regular,
-                        fontSize: 17.0,
-                        height: 50.0,
-                        cornerRadius: 10.0,
-                        gloss: false,
-                        iconName: nil,
-                        animationName: nil,
-                        iconPosition: .left,
-                        isLoading: state.inProgress,
+//                    component: SolidRoundedButtonComponent(
+//                        title: cancelButtonText,
+//                        theme: SolidRoundedButtonComponent.Theme(backgroundColor: .clear, foregroundColor: linkColor),
+//                        font: .regular,
+//                        fontSize: 17.0,
+//                        height: 50.0,
+//                        cornerRadius: 10.0,
+//                        gloss: false,
+//                        iconName: nil,
+//                        animationName: nil,
+//                        iconPosition: .left,
+//                        isLoading: state.inProgress,
+//                        action: {
+//                            component.cancel(true)
+//                            if isSubscription {
+//                                component.updateSubscription()
+//                            }
+//                        }
+//                    ),
+                    component: ButtonComponent(
+                        background: ButtonComponent.Background(
+                            style: .glass,
+                            color: theme.list.itemCheckColors.fillColor,
+                            foreground: theme.list.itemCheckColors.foregroundColor,
+                            pressedColor: theme.list.itemCheckColors.fillColor.withMultipliedAlpha(0.9),
+                            cornerRadius: 10.0,
+                        ),
+                        content: AnyComponentWithIdentity(
+                            id: AnyHashable(0),
+                            component: AnyComponent(MultilineTextComponent(text: .plain(NSMutableAttributedString(string: cancelButtonText, font: Font.semibold(17.0), textColor: theme.list.itemCheckColors.foregroundColor, paragraphAlignment: .center))))
+                        ),
+                        isEnabled: true,
+                        displaysProgress: state.inProgress,
                         action: {
                             component.cancel(true)
                             if isSubscription {
@@ -1634,13 +1643,12 @@ private final class StarsTransactionSheetContent: CombinedComponent {
                             }
                         }
                     ),
-                    availableSize: CGSize(width: context.availableSize.width - sideInset * 2.0, height: 50.0),
+                    availableSize: CGSize(width: context.availableSize.width - 30.0 * 2.0, height: 52.0),
                     transition: context.transition
                 )
                 
-                let cancelButtonFrame = CGRect(origin: CGPoint(x: sideInset, y: originY), size: cancelButton.size)
                 context.add(cancelButton
-                    .position(CGPoint(x: cancelButtonFrame.midX, y: cancelButtonFrame.midY))
+                    .position(CGPoint(x: context.availableSize.width / 2.0, y: originY + cancelButton.size.height / 2.0))
                 )
                 originY += cancelButton.size.height
                 originY += 8.0
@@ -1648,18 +1656,20 @@ private final class StarsTransactionSheetContent: CombinedComponent {
             
             if let buttonText {
                 let button = button.update(
-                    component: SolidRoundedButtonComponent(
-                        title: buttonText,
-                        theme: SolidRoundedButtonComponent.Theme(theme: theme),
-                        font: .bold,
-                        fontSize: 17.0,
-                        height: 50.0,
-                        cornerRadius: 10.0,
-                        gloss: false,
-                        iconName: nil,
-                        animationName: nil,
-                        iconPosition: .left,
-                        isLoading: state.inProgress,
+                    component: ButtonComponent(
+                        background: ButtonComponent.Background(
+                            style: .glass,
+                            color: theme.list.itemCheckColors.fillColor,
+                            foreground: theme.list.itemCheckColors.foregroundColor,
+                            pressedColor: theme.list.itemCheckColors.fillColor.withMultipliedAlpha(0.9),
+                            cornerRadius: 10.0,
+                        ),
+                        content: AnyComponentWithIdentity(
+                            id: AnyHashable(0),
+                            component: AnyComponent(MultilineTextComponent(text: .plain(NSMutableAttributedString(string: buttonText, font: Font.semibold(17.0), textColor: theme.list.itemCheckColors.foregroundColor, paragraphAlignment: .center))))
+                        ),
+                        isEnabled: true,
+                        displaysProgress: state.inProgress,
                         action: {
                             component.cancel(true)
                             if isSubscription && cancelButtonText == nil {
@@ -1667,20 +1677,19 @@ private final class StarsTransactionSheetContent: CombinedComponent {
                             }
                         }
                     ),
-                    availableSize: CGSize(width: context.availableSize.width - sideInset * 2.0, height: 50.0),
+                    availableSize: CGSize(width: context.availableSize.width - 30.0 * 2.0, height: 52.0),
                     transition: context.transition
                 )
                 
-                let buttonFrame = CGRect(origin: CGPoint(x: sideInset, y: originY), size: button.size)
                 context.add(button
-                    .position(CGPoint(x: buttonFrame.midX, y: buttonFrame.midY))
+                    .position(CGPoint(x: context.availableSize.width / 2.0, y: originY + button.size.height / 2.0))
                 )
                 originY += button.size.height
                 originY += 7.0
             }
             
             context.add(closeButton
-                .position(CGPoint(x: context.availableSize.width - environment.safeInsets.left - closeButton.size.width, y: 28.0))
+                .position(CGPoint(x: 16.0 + closeButton.size.width / 2.0, y: 16.0 + closeButton.size.height / 2.0))
             )
             
             let effectiveBottomInset: CGFloat = environment.metrics.isTablet ? 0.0 : environment.safeInsets.bottom
@@ -1773,6 +1782,7 @@ private final class StarsTransactionSheetComponent: CombinedComponent {
                         updateSubscription: context.component.updateSubscription,
                         sendGift: context.component.sendGift
                     )),
+                    style: .glass,
                     backgroundColor: .color(environment.theme.actionSheet.opaqueItemBackgroundColor),
                     followContentSizeChanges: true,
                     clipsContent: true,

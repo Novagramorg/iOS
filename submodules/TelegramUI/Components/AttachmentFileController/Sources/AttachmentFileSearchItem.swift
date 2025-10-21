@@ -10,7 +10,6 @@ import PresentationDataUtils
 import TelegramPresentationData
 import TelegramUIPreferences
 import AccountContext
-import SearchBarNode
 import MergeLists
 import ChatListSearchItemHeader
 import ItemListUI
@@ -19,92 +18,6 @@ import ContextUI
 import ListMessageItem
 import ComponentFlow
 import SearchInputPanelComponent
-
-private let searchBarFont = Font.regular(17.0)
-
-private final class AttachmentFileSearchNavigationContentNode: NavigationBarContentNode, ItemListControllerSearchNavigationContentNode {
-    private var theme: PresentationTheme
-    private let strings: PresentationStrings
-    
-    private let focus: () -> Void
-    private let cancel: () -> Void
-    
-    private let searchBar: SearchBarNode
-    
-    private var queryUpdated: ((String) -> Void)?
-    var activity: Bool = false {
-        didSet {
-            self.searchBar.activity = activity
-        }
-    }
-    init(theme: PresentationTheme, strings: PresentationStrings, focus: @escaping () -> Void, cancel: @escaping () -> Void, updateActivity: @escaping(@escaping(Bool)->Void) -> Void) {
-        self.theme = theme
-        self.strings = strings
-        
-        self.focus = focus
-        self.cancel = cancel
-                
-        self.searchBar = SearchBarNode(theme: SearchBarNodeTheme(theme: theme, hasSeparator: false), strings: strings, fieldStyle: .modern, displayBackground: false)
-        
-        super.init()
-                
-        //self.addSubnode(self.searchBar)
-                
-        self.searchBar.cancel = { [weak self] in
-            self?.searchBar.deactivate(clear: false)
-            self?.cancel()
-        }
-        
-        self.searchBar.textUpdated = { [weak self] query, _ in
-            self?.queryUpdated?(query)
-        }
-        
-        self.searchBar.focusUpdated = { [weak self] focus in
-            if focus {
-                self?.focus()
-            }
-        }
-        
-        updateActivity({ [weak self] value in
-            self?.activity = value
-        })
-        
-        self.updatePlaceholder()
-    }
-    
-    func setQueryUpdated(_ f: @escaping (String) -> Void) {
-        self.queryUpdated = f
-    }
-    
-    func updateTheme(_ theme: PresentationTheme) {
-        self.theme = theme
-        self.searchBar.updateThemeAndStrings(theme: SearchBarNodeTheme(theme: self.theme), strings: self.strings)
-        self.updatePlaceholder()
-    }
-    
-    func updatePlaceholder() {
-        self.searchBar.placeholderString = NSAttributedString(string: self.strings.Attachment_FilesSearchPlaceholder, font: searchBarFont, textColor: self.theme.rootController.navigationSearchBar.inputPlaceholderTextColor)
-    }
-    
-    override var nominalHeight: CGFloat {
-        return 56.0
-    }
-    
-    override func updateLayout(size: CGSize, leftInset: CGFloat, rightInset: CGFloat, transition: ContainedViewLayoutTransition) {
-        let searchBarFrame = CGRect(origin: CGPoint(x: 0.0, y: size.height - self.nominalHeight), size: CGSize(width: size.width, height: 56.0))
-        self.searchBar.frame = searchBarFrame
-        self.searchBar.updateLayout(boundingSize: searchBarFrame.size, leftInset: leftInset, rightInset: rightInset, transition: transition)
-    }
-    
-    func activate() {
-        //self.searchBar.activate()
-    }
-    
-    func deactivate() {
-        //self.searchBar.deactivate(clear: false)
-    }
-}
-
 
 final class AttachmentFileSearchItem: ItemListControllerSearch {
     let context: AccountContext
@@ -153,15 +66,6 @@ final class AttachmentFileSearchItem: ItemListControllerSearch {
     
     func titleContentNode(current: (NavigationBarContentNode & ItemListControllerSearchNavigationContentNode)?) -> (NavigationBarContentNode & ItemListControllerSearchNavigationContentNode)? {
         return nil
-//        let presentationData = self.presentationData
-//        if let current = current as? AttachmentFileSearchNavigationContentNode {
-//            current.updateTheme(presentationData.theme)
-//            return current
-//        } else {
-//            return AttachmentFileSearchNavigationContentNode(theme: presentationData.theme, strings: presentationData.strings, focus: self.focus, cancel: self.cancel, updateActivity: { [weak self] value in
-//                self?.updateActivity = value
-//            })
-//        }
     }
     
     func node(current: ItemListControllerSearchNode?, titleContentNode: (NavigationBarContentNode & ItemListControllerSearchNavigationContentNode)?) -> ItemListControllerSearchNode {
@@ -195,7 +99,6 @@ private final class AttachmentFileSearchItemNode: ItemListControllerSearchNode {
             send(message)
         }, updateActivity: updateActivity)
 
-        
         super.init()
         
         self.addSubnode(self.containerNode)
@@ -346,7 +249,7 @@ private final class AttachmentFileSearchEntry: Comparable, Identifiable {
             interaction.send(message)
             return false
         }, openMessageContextMenu: { _, _, _, _, _ in }, toggleMessagesSelection: { _, _ in }, openUrl: { _, _, _, _ in }, openInstantPage: { _, _ in }, longTap: { _, _ in }, getHiddenMedia: { return [:] })
-        return ListMessageItem(presentationData: ChatPresentationData(presentationData: interaction.context.sharedContext.currentPresentationData.with({$0})), context: interaction.context, chatLocation: .peer(id: PeerId(0)), interaction: itemInteraction, message: message, selection: .none, displayHeader: true, displayFileInfo: false, displayBackground: true, style: .plain)
+        return ListMessageItem(presentationData: ChatPresentationData(presentationData: interaction.context.sharedContext.currentPresentationData.with({$0})), systemStyle: .glass, context: interaction.context, chatLocation: .peer(id: PeerId(0)), interaction: itemInteraction, message: message, selection: .none, displayHeader: true, displayFileInfo: false, displayBackground: true, style: .plain)
     }
 }
 
@@ -412,7 +315,7 @@ public final class AttachmentFileSearchContainerNode: SearchDisplayControllerCon
         self.presentationDataPromise = Promise(self.presentationData)
         
         self.dimNode = ASDisplayNode()
-        self.dimNode.backgroundColor = .clear // UIColor.black.withAlphaComponent(0.5)
+        self.dimNode.backgroundColor = .clear
         
         self.listNode = ListView()
         self.listNode.accessibilityPageScrolledString = { row, count in
@@ -435,7 +338,6 @@ public final class AttachmentFileSearchContainerNode: SearchDisplayControllerCon
                 
         self.listNode.backgroundColor = self.presentationData.theme.chatList.backgroundColor
         self.listNode.alpha = 0.0
-        //self.listNode.isHidden = true
         
         self._hasDim = true
         
@@ -488,7 +390,7 @@ public final class AttachmentFileSearchContainerNode: SearchDisplayControllerCon
                         index += 1
                     }
                 } else {
-                    for _ in 0 ..< 2 {
+                    for _ in 0 ..< 16 {
                         entries.append(AttachmentFileSearchEntry(index: index, message: nil))
                         index += 1
                     }
