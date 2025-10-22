@@ -146,9 +146,9 @@ final class StarReactionButtonComponent: Component {
             
             let backgroundTintColor: GlassBackgroundView.TintColor
             if component.isFilled {
-                backgroundTintColor = .init(kind: .panel, color: component.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7))
-            } else {
                 backgroundTintColor = .init(kind: .custom, color: UIColor(rgb: 0xFFB10D))
+            } else {
+                backgroundTintColor = .init(kind: .panel, color: component.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7))
             }
             
             self.backgroundView.update(size: backgroundFrame.size, cornerRadius: backgroundFrame.height * 0.5, isDark: component.theme.overallDarkAppearance, tintColor: backgroundTintColor, isInteractive: true, transition: transition)
