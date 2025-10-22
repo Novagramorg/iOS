@@ -355,6 +355,7 @@ final class LocationPickerControllerNode: ViewControllerTracingNode, CLLocationM
     private let searchButton = ComponentView<Empty>()
     private let title = ComponentView<Empty>()
     
+    fileprivate let topEdgeEffectView: EdgeEffectView
     fileprivate let bottomEdgeEffectView: EdgeEffectView
     
     private var sendButton: ComponentView<Empty>?
@@ -428,6 +429,9 @@ final class LocationPickerControllerNode: ViewControllerTracingNode, CLLocationM
         self.shadeNode.alpha = 0.0
         self.innerShadeNode = ASDisplayNode()
         self.innerShadeNode.backgroundColor = self.presentationData.theme.list.plainBackgroundColor
+
+        self.topEdgeEffectView = EdgeEffectView()
+        self.topEdgeEffectView.isUserInteractionEnabled = false
         
         self.bottomEdgeEffectView = EdgeEffectView()
         self.bottomEdgeEffectView.isUserInteractionEnabled = false
@@ -1329,6 +1333,13 @@ final class LocationPickerControllerNode: ViewControllerTracingNode, CLLocationM
         }
         
         if glass {
+            let topEdgeEffectFrame = CGRect(origin: .zero, size: CGSize(width: layout.size.width, height: 80.0))
+            transition.updateFrame(view: self.topEdgeEffectView, frame: topEdgeEffectFrame)
+            self.topEdgeEffectView.update(content: self.headerNode.mapNode.mapMode == .map ? self.presentationData.theme.list.plainBackgroundColor : .clear, blur: true, alpha: 0.65, rect: topEdgeEffectFrame, edge: .top, edgeSize: topEdgeEffectFrame.height, transition: ComponentTransition(transition))
+            if self.topEdgeEffectView.superview == nil {
+                self.view.addSubview(self.topEdgeEffectView)
+            }
+            
             let titleSize = self.title.update(
                 transition: ComponentTransition(transition),
                 component: AnyComponent(
@@ -1481,7 +1492,7 @@ final class LocationPickerControllerNode: ViewControllerTracingNode, CLLocationM
                     })
                 }
             }
-            
+                        
             let bottomEdgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: layout.size.height - 88.0 - layout.additionalInsets.bottom), size: CGSize(width: layout.size.width, height: 88.0))
             transition.updateFrame(view: self.bottomEdgeEffectView, frame: bottomEdgeEffectFrame)
             self.bottomEdgeEffectView.update(content: self.presentationData.theme.list.plainBackgroundColor, blur: true, alpha: 0.65, rect: bottomEdgeEffectFrame, edge: .bottom, edgeSize: bottomEdgeEffectFrame.height, transition: ComponentTransition(transition))

@@ -1641,10 +1641,10 @@ final class ComposePollScreenComponent: Component {
                 self.scrollView.verticalScrollIndicatorInsets = scrollInsets
             }
             
-            let edgeEffectHeight: CGFloat = 66.0
+            let edgeEffectHeight: CGFloat = 80.0
             let edgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: availableSize.width, height: edgeEffectHeight))
             transition.setFrame(view: self.edgeEffectView, frame: edgeEffectFrame)
-            self.edgeEffectView.update(content: theme.list.blocksBackgroundColor, alpha: 1.0, rect: edgeEffectFrame, edge: .top, edgeSize: edgeEffectFrame.height, transition: transition)
+            self.edgeEffectView.update(content: theme.list.blocksBackgroundColor, blur: true, alpha: 1.0, rect: edgeEffectFrame, edge: .top, edgeSize: edgeEffectFrame.height, transition: transition)
             
             let title = self.isQuiz ? environment.strings.CreatePoll_QuizTitle : environment.strings.CreatePoll_Title
             let titleSize = self.title.update(

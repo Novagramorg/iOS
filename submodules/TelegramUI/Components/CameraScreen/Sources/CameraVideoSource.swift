@@ -18,7 +18,7 @@ final class CameraVideoSource: VideoSource {
     public var sourceId: Int = 0
     public var sizeMultiplicator: CGPoint = CGPoint(x: 1.0, y: 1.0)
     
-    public init?() {
+    public init() {
         self.device = MetalEngine.shared.device
                 
         self.cameraVideoOutput = CameraVideoOutput(sink: { [weak self] buffer, mirror in

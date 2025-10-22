@@ -28,17 +28,18 @@ float smin(float a, float b, float k) {
     return mix(a, b, h) - k * h * (1.0 - h);
 }
 
-float sdfRoundedRectangle(float2 uv, float2 position, float size, float radius) {
-    float2 q = abs(uv - position) - size + radius;
-    return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - radius;
+float sdfRoundedRectangle(float2 uv, float2 center, float2 halfSize, float radius) {
+    float r = min(radius, min(halfSize.x, halfSize.y));
+    float2 q = abs(uv - center) - (halfSize - float2(r));
+    return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
 }
 
 float sdfCircle(float2 uv, float2 position, float radius) {
     return length(uv - position) - radius;
 }
 
-float map(float2 uv, float3 primaryParameters, float2 primaryOffset, float3 secondaryParameters, float2 secondaryOffset) {
-    float primary = sdfRoundedRectangle(uv, primaryOffset, primaryParameters.x, primaryParameters.z);
+float map(float2 uv, float4 primaryParameters, float2 primaryOffset, float3 secondaryParameters, float2 secondaryOffset) {
+    float primary = sdfRoundedRectangle(uv, primaryOffset, primaryParameters.xy, primaryParameters.w);
     float secondary = sdfCircle(uv, secondaryOffset, secondaryParameters.x);
     float metaballs = 1.0;
     metaballs = smin(metaballs, primary, BindingDistance);
@@ -48,7 +49,7 @@ float map(float2 uv, float3 primaryParameters, float2 primaryOffset, float3 seco
 
 fragment half4 cameraBlobFragment(RasterizerData in[[stage_in]],
                               constant uint2 &resolution[[buffer(0)]],
-                              constant float3 &primaryParameters[[buffer(1)]],
+                              constant float4 &primaryParameters[[buffer(1)]],
                               constant float2 &primaryOffset[[buffer(2)]],
                               constant float3 &secondaryParameters[[buffer(3)]],
                               constant float2 &secondaryOffset[[buffer(4)]])
@@ -67,9 +68,9 @@ fragment half4 cameraBlobFragment(RasterizerData in[[stage_in]],
     
     float t = AARadius / resolution.y;
     
-    float cAlpha = min(1.0, 1.0 - primaryParameters.y);
-    float minColor = min(1.0, 1.0 + primaryParameters.y);
-    float bound = primaryParameters.x + 0.05;
+    float cAlpha = min(1.0, 1.0 - primaryParameters.z);
+    float minColor = min(1.0, 1.0 + primaryParameters.z);
+    float bound = max(primaryParameters.x, primaryParameters.y) + 0.05;
     if (abs(offset) > bound) {
         cAlpha = mix(0.0, 1.0, min(1.0, (abs(offset) - bound) * 2.4));
     }

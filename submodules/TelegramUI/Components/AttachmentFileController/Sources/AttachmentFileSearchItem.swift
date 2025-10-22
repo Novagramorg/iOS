@@ -94,12 +94,14 @@ private final class AttachmentFileSearchItemNode: ItemListControllerSearchNode {
         self.strings = strings
         self.focus = focus
         self.cancel = cancel
-        
+                
         self.containerNode = AttachmentFileSearchContainerNode(context: context, forceTheme: nil, send: { message in
             send(message)
         }, updateActivity: updateActivity)
 
         super.init()
+        
+        self.addedUnderNavigationBar = true
         
         self.addSubnode(self.containerNode)
         
@@ -278,6 +280,7 @@ public final class AttachmentFileSearchContainerNode: SearchDisplayControllerCon
     private let send: (Message) -> Void
     
     private let dimNode: ASDisplayNode
+    private let backgroundNode: ASDisplayNode
     private let listNode: ListView
     
     private let emptyResultsTitleNode: ImmediateTextNode
@@ -317,6 +320,8 @@ public final class AttachmentFileSearchContainerNode: SearchDisplayControllerCon
         self.dimNode = ASDisplayNode()
         self.dimNode.backgroundColor = .clear
         
+        self.backgroundNode = ASDisplayNode()
+        
         self.listNode = ListView()
         self.listNode.accessibilityPageScrolledString = { row, count in
             return presentationData.strings.VoiceOver_ScrollStatus(row, count).string
@@ -336,12 +341,16 @@ public final class AttachmentFileSearchContainerNode: SearchDisplayControllerCon
         
         super.init()
                 
+        self.backgroundNode.backgroundColor = self.presentationData.theme.chatList.backgroundColor
+        self.backgroundNode.alpha = 0.0
+        
         self.listNode.backgroundColor = self.presentationData.theme.chatList.backgroundColor
         self.listNode.alpha = 0.0
         
         self._hasDim = true
         
         self.addSubnode(self.dimNode)
+        self.addSubnode(self.backgroundNode)
         self.addSubnode(self.listNode)
         
         self.addSubnode(self.emptyResultsTitleNode)
@@ -448,6 +457,7 @@ public final class AttachmentFileSearchContainerNode: SearchDisplayControllerCon
     }
     
     private func updateThemeAndStrings(theme: PresentationTheme, strings: PresentationStrings) {
+        self.backgroundNode.backgroundColor = theme.chatList.backgroundColor
         self.listNode.backgroundColor = theme.chatList.backgroundColor
     }
     
@@ -484,6 +494,7 @@ public final class AttachmentFileSearchContainerNode: SearchDisplayControllerCon
                 }
                 
                 let containerTransition = ContainedViewLayoutTransition.animated(duration: 0.3, curve: .easeInOut)
+                containerTransition.updateAlpha(node: strongSelf.backgroundNode, alpha: isSearching ? 1.0 : 0.0)
                 containerTransition.updateAlpha(node: strongSelf.listNode, alpha: isSearching ? 1.0 : 0.0)
                 strongSelf.dimNode.isHidden = transition.isSearching
                 
@@ -514,6 +525,7 @@ public final class AttachmentFileSearchContainerNode: SearchDisplayControllerCon
         let topInset = navigationBarHeight
         transition.updateFrame(node: self.dimNode, frame: CGRect(origin: CGPoint(x: 0.0, y: topInset), size: CGSize(width: layout.size.width, height: layout.size.height - topInset)))
         
+        self.backgroundNode.frame = CGRect(origin: CGPoint(x: 0.0, y: -66.0), size: CGSize(width: layout.size.width, height: 66.0))
         self.listNode.frame = CGRect(origin: CGPoint(), size: layout.size)
         self.listNode.transaction(deleteIndices: [], insertIndicesAndItems: [], updateIndicesAndItems: [], options: [.Synchronous], scrollToItem: nil, updateSizeAndInsets: ListViewUpdateSizeAndInsets(size: layout.size, insets: insets, duration: duration, curve: curve), stationaryItemRange: nil, updateOpaqueState: nil, completion: { _ in })
         

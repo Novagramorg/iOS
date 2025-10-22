@@ -36,13 +36,16 @@ final class ShutterBlobView: UIView {
         case lock
         case transientToFlip
         case stopVideo
+        case live
         
-        var primarySize: CGFloat {
+        var primarySize: CGSize {
             switch self {
             case .generic, .video, .transientToFlip:
-                return 0.63
+                return CGSize(width: 0.63, height: 0.63)
+            case .live:
+                return CGSize(width: 3.4, height: 0.55)
             case .transientToLock, .lock, .stopVideo:
-                return 0.275
+                return CGSize(width: 0.275, height: 0.275)
             }
         }
         
@@ -54,6 +57,8 @@ final class ShutterBlobView: UIView {
                 } else {
                     return 0.0
                 }
+            case .live:
+                return 0.7
             default:
                 return 1.0
             }
@@ -63,6 +68,8 @@ final class ShutterBlobView: UIView {
             switch self {
             case .generic, .video, .transientToFlip:
                 return 0.63
+            case .live:
+                return 0.55
             case .transientToLock, .lock, .stopVideo:
                 return 0.185
             }
@@ -74,14 +81,14 @@ final class ShutterBlobView: UIView {
                 return 0.335
             case .lock:
                 return 0.5
-            case .stopVideo:
+            case .stopVideo, .live:
                 return 0.0
             }
         }
         
         var secondaryRedness: CGFloat {
             switch self {
-            case .generic, .lock, .transientToLock, .transientToFlip:
+            case .generic, .lock, .transientToLock, .transientToFlip, .live:
                 return 0.0
             default:
                 return 1.0
@@ -94,7 +101,8 @@ final class ShutterBlobView: UIView {
     
     private var displayLink: SharedDisplayLinkDriver.Link?
     
-    private var primarySize = AnimatableProperty<CGFloat>(value: 0.63)
+    private var primaryWidth = AnimatableProperty<CGFloat>(value: 0.63)
+    private var primaryHeight = AnimatableProperty<CGFloat>(value: 0.63)
     private var primaryOffsetX = AnimatableProperty<CGFloat>(value: 0.0)
     private var primaryOffsetY = AnimatableProperty<CGFloat>(value: 0.0)
     private var primaryRedness = AnimatableProperty<CGFloat>(value: 0.0)
@@ -174,7 +182,8 @@ final class ShutterBlobView: UIView {
         }
         self.state = state
         
-        self.primarySize.update(value: state.primarySize, transition: transition)
+        self.primaryWidth.update(value: state.primarySize.width, transition: transition)
+        self.primaryHeight.update(value: state.primarySize.height, transition: transition)
         self.primaryRedness.update(value: state.primaryRedness(tintColor: tintColor), transition: transition)
         self.primaryCornerRadius.update(value: state.primaryCornerRadius, transition: transition)
         self.secondarySize.update(value: state.secondarySize, transition: transition)
@@ -225,7 +234,8 @@ final class ShutterBlobView: UIView {
     
     private func updateAnimations() {
         let properties = [
-            self.primarySize,
+            self.primaryWidth,
+            self.primaryHeight,
             self.primaryOffsetX,
             self.primaryOffsetY,
             self.primaryRedness,
@@ -303,8 +313,9 @@ final class ShutterBlobView: UIView {
         var resolution = simd_uint2(UInt32(drawableSize.width), UInt32(drawableSize.height))
         renderEncoder.setFragmentBytes(&resolution, length: MemoryLayout<simd_uint2>.size * 2, index: 0)
         
-        var primaryParameters = simd_float3(
-            Float(self.primarySize.presentationValue),
+        var primaryParameters = simd_float4(
+            Float(self.primaryWidth.presentationValue),
+            Float(self.primaryHeight.presentationValue),
             Float(self.primaryRedness.presentationValue),
             Float(self.primaryCornerRadius.presentationValue)
         )

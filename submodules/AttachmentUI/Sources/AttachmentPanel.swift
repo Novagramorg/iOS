@@ -323,7 +323,7 @@ private final class AttachButtonComponent: CombinedComponent {
                     truncationType: .end,
                     maximumNumberOfLines: 1
                 ),
-                availableSize: context.availableSize,
+                availableSize: CGSize(width: 60.0, height: context.availableSize.height),
                 transition: .immediate
             )
             
@@ -1587,7 +1587,7 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate {
                                 strongSelf.selectedIndex = i
                                 strongSelf.updateViews(transition: .init(animation: .curve(duration: 0.2, curve: .spring)))
                                 
-                                if strongSelf.buttons.count > 5, let button = strongSelf.buttonViews[i] {
+                                if strongSelf.buttons.count > 5, let button = strongSelf.buttonViews[type.key] {
                                     strongSelf.scrollNode.view.scrollRectToVisible(button.frame.insetBy(dx: -35.0, dy: 0.0), animated: true)
                                 }
                             }

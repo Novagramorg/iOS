@@ -9,6 +9,9 @@ import LocalMediaResources
 import CameraButtonComponent
 import UIKitRuntimeUtils
 import AccountContext
+import GlassBackgroundComponent
+import GlassBarButtonComponent
+import BundleIconComponent
 
 enum ShutterButtonState: Equatable {
     case disabled
@@ -17,6 +20,7 @@ enum ShutterButtonState: Equatable {
     case stopRecording
     case holdRecording(progress: Float)
     case transition
+    case live(active: Bool)
 }
 
 private let maximumShutterSize = CGSize(width: 96.0, height: 96.0)
@@ -95,11 +99,16 @@ private final class ShutterButtonContentComponent: Component {
     final class View: UIView {
         private var component: ShutterButtonContentComponent?
         
+        private let backgroundView = BlurredBackgroundView(color: UIColor(rgb: 0x222222, alpha: 0.3))
+        
         private let underRingLayer = SimpleShapeLayer()
         private let ringLayer = SimpleShapeLayer()
         var blobView: ShutterBlobView?
         private let innerLayer = SimpleShapeLayer()
         private let progressLayer = SimpleShapeLayer()
+        
+        private let chromeView = UIImageView()
+        private let label = ComponentView<Empty>()
         
         private let checkLayer = SimpleLayer()
         private let checkLayerMask = SimpleShapeLayer()
@@ -107,6 +116,8 @@ private final class ShutterButtonContentComponent: Component {
         
         init() {
             super.init(frame: CGRect())
+            
+            self.addSubview(self.backgroundView)
                         
             self.layer.allowsGroupOpacity = true
             
@@ -139,9 +150,12 @@ private final class ShutterButtonContentComponent: Component {
             self.checkLayer.isHidden = true
             
             self.layer.addSublayer(self.innerLayer)
-            self.layer.addSublayer(self.underRingLayer)
-            self.layer.addSublayer(self.ringLayer)
+            //self.layer.addSublayer(self.underRingLayer)
+            //self.layer.addSublayer(self.ringLayer)
             self.layer.addSublayer(self.progressLayer)
+            
+            self.chromeView.alpha = 0.9
+            self.chromeView.image = GlassBackgroundView.generateForegroundImage(size: CGSize(width: 26.0 * 2.0, height: 26.0 * 2.0), isDark: false, fillColor: .clear)
         }
 
         required init?(coder aDecoder: NSCoder) {
@@ -152,11 +166,26 @@ private final class ShutterButtonContentComponent: Component {
             guard let blobView = self.blobView, let component = self.component else {
                 return
             }
-            let scale: CGFloat = isHighlighted ? 0.8 : 1.0
-            let transition = ComponentTransition(animation: .curve(duration: 0.3, curve: .easeInOut))
-            transition.setTransform(view: blobView, transform: CATransform3DMakeScale(scale, scale, 1.0))
-            if component.collageProgress > 1.0 - .ulpOfOne {
-                transition.setTransform(layer: self.ringLayer, transform: CATransform3DMakeScale(scale, scale, 1.0))
+            
+            if case .live = component.blobState {
+                let transition = ComponentTransition(animation: .curve(duration: isHighlighted ? 0.25 : 0.35, curve: .spring))
+                let scale: CGFloat = isHighlighted ? 1.05 : 1.0
+                transition.setScale(view: blobView, scale: scale)
+                transition.setScale(view: self.chromeView, scale: scale)
+                if let labelView = self.label.view {
+                    transition.setScale(view: labelView, scale: scale)
+                }
+            } else {
+                let scale: CGFloat = isHighlighted ? 0.8 : 1.0
+                let transition = ComponentTransition(animation: .curve(duration: 0.3, curve: .easeInOut))
+                transition.setTransform(view: blobView, transform: CATransform3DMakeScale(scale, scale, 1.0))
+                transition.setTransform(view: self.chromeView, transform: CATransform3DMakeScale(scale, scale, 1.0))
+                if let labelView = self.label.view {
+                    transition.setTransform(view: labelView, transform: CATransform3DMakeScale(scale, scale, 1.0))
+                }
+                if component.collageProgress > 1.0 - .ulpOfOne {
+                    transition.setTransform(layer: self.ringLayer, transform: CATransform3DMakeScale(scale, scale, 1.0))
+                }
             }
         }
         
@@ -166,7 +195,8 @@ private final class ShutterButtonContentComponent: Component {
             
             if component.hasAppeared && self.blobView == nil {
                 self.blobView = ShutterBlobView(test: false)
-                self.addSubview(self.blobView!)
+                self.insertSubview(self.blobView!, aboveSubview: self.backgroundView)
+                self.insertSubview(self.chromeView, aboveSubview: self.blobView!)
                 
                 self.layer.addSublayer(self.checkLayer)
                 
@@ -215,12 +245,35 @@ private final class ShutterButtonContentComponent: Component {
                     }
                 }
             }
+            
+            //TODO:localize
+            let labelSize = self.label.update(
+                transition: .immediate,
+                component: AnyComponent(
+                    Text(text: "Start Live Stream", font: Font.semibold(17.0), color: .white)
+                ),
+                environment: {},
+                containerSize: availableSize
+            )
+            let labelFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((maximumShutterSize.width - labelSize.width) / 2.0), y: floorToScreenPixels((maximumShutterSize.height - labelSize.height) / 2.0)), size: labelSize)
+            if let labelView = self.label.view {
+                if labelView.superview == nil {
+                    labelView.alpha = 0.0
+                    labelView.isUserInteractionEnabled = false
+                    self.addSubview(labelView)
+                }
+                labelView.frame = labelFrame
+            }
                         
             var innerColor: UIColor
             let innerSize: CGSize
             var ringSize: CGSize
             var ringWidth: CGFloat = 3.0
             var recordingProgress: Float?
+            var glassAlpha: CGFloat = 1.0
+            var chromeAlpha: CGFloat = 0.0
+            var chromeSize = CGSize(width: 60.0, height: 60.0)
+            var labelAlpha: CGFloat = 0.0
             switch component.shutterState {
             case .generic, .disabled:
                 innerColor = component.tintColor
@@ -244,6 +297,14 @@ private final class ShutterButtonContentComponent: Component {
                 innerSize = CGSize(width: 60.0, height: 60.0)
                 ringSize = CGSize(width: 68.0, height: 68.0)
                 recordingProgress = 0.0
+            case .live:
+                innerColor = UIColor(rgb: 0xff375f)
+                innerSize = CGSize(width: 52.0, height: 52.0)
+                ringSize = CGSize(width: 60.0, height: 60.0)
+                glassAlpha = 0.0
+                chromeAlpha = 0.65
+                labelAlpha = 1.0
+                chromeSize = CGSize(width: 326.0, height: 53.0 - UIScreenPixel)
             }
             
             if component.collageProgress > 1.0 - .ulpOfOne {
@@ -254,6 +315,23 @@ private final class ShutterButtonContentComponent: Component {
                 ringSize = CGSize(width: 74.0, height: 74.0)
                 ringWidth = 5.0
             }
+            
+            transition.setAlpha(view: self.backgroundView, alpha: glassAlpha)
+            transition.setAlpha(view: self.chromeView, alpha: chromeAlpha)
+            
+            if let labelView = self.label.view {
+                if labelAlpha != labelView.alpha {
+                    if labelAlpha > 0.0 {
+                        transition.animateBlur(layer: labelView.layer, fromRadius: 10.0, toRadius: 0.0)
+                    } else {
+                        transition.animateBlur(layer: labelView.layer, fromRadius: 0.0, toRadius: 10.0)
+                    }
+                }
+                transition.setAlpha(view: labelView, alpha: labelAlpha)
+            }
+            
+            let buttonFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((maximumShutterSize.width - chromeSize.width) / 2.0), y: floorToScreenPixels((maximumShutterSize.height - chromeSize.height) / 2.0)), size: chromeSize)
+            transition.setFrame(view: self.chromeView, frame: buttonFrame)
             
             if component.collageProgress > 1.0 - .ulpOfOne {
                 self.blobView?.isHidden = true
@@ -341,6 +419,10 @@ private final class ShutterButtonContentComponent: Component {
             self.progressLayer.strokeEnd = CGFloat(recordingProgress ?? 0.0) * totalProgress
             self.progressLayer.animateStrokeEnd(from: previousValue, to: self.progressLayer.strokeEnd, duration: 0.33)
             
+            let backgroundFrame = buttonFrame.insetBy(dx: -6.0, dy: -6.0)
+            self.backgroundView.update(size: backgroundFrame.size, cornerRadius: backgroundFrame.height * 0.5, transition: transition.containedViewLayoutTransition)
+            transition.setFrame(view: self.backgroundView, frame: backgroundFrame)
+                        
             return maximumShutterSize
         }
     }
@@ -583,6 +665,7 @@ final class CaptureControlsComponent: Component {
     let lockRecording: () -> Void
     let flipTapped: () -> Void
     let galleryTapped: () -> Void
+    let settingsTapped: () -> Void
     let swipeHintUpdated: (SwipeHint) -> Void
     let zoomUpdated: (CGFloat) -> Void
     let flipAnimationAction: ActionSlot<Void>
@@ -610,6 +693,7 @@ final class CaptureControlsComponent: Component {
         lockRecording: @escaping () -> Void,
         flipTapped: @escaping () -> Void,
         galleryTapped: @escaping () -> Void,
+        settingsTapped: @escaping () -> Void,
         swipeHintUpdated: @escaping (SwipeHint) -> Void,
         zoomUpdated: @escaping (CGFloat) -> Void,
         flipAnimationAction: ActionSlot<Void>,
@@ -636,6 +720,7 @@ final class CaptureControlsComponent: Component {
         self.lockRecording = lockRecording
         self.flipTapped = flipTapped
         self.galleryTapped = galleryTapped
+        self.settingsTapped = settingsTapped
         self.swipeHintUpdated = swipeHintUpdated
         self.zoomUpdated = zoomUpdated
         self.flipAnimationAction = flipAnimationAction
@@ -738,8 +823,15 @@ final class CaptureControlsComponent: Component {
         private let zoomView = ComponentView<Empty>()
         private let lockView = ComponentView<Empty>()
         private let galleryButtonView = ComponentView<Empty>()
+        private var galleryButtonChromeView = UIImageView()
+        
         private let shutterButtonView = ComponentView<Empty>()
+        
         private let flipButtonView = ComponentView<Empty>()
+        
+        private let bottomContainerView = GlassBackgroundContainerView()
+        private let bottomSettingsButton = ComponentView<Empty>()
+        private let bottomFlipButton = ComponentView<Empty>()
         
         private let leftGuide = SimpleLayer()
         private let rightGuide = SimpleLayer()
@@ -755,6 +847,9 @@ final class CaptureControlsComponent: Component {
         
         private var wasBanding: Bool?
         private var panBlobState: ShutterBlobView.BlobState?
+        
+        private var panGestureRecognizer: UIPanGestureRecognizer?
+        private var pressGestureRecognizer: UILongPressGestureRecognizer?
         
         private let hapticFeedback = HapticFeedback()
         
@@ -776,6 +871,12 @@ final class CaptureControlsComponent: Component {
             
             self.layer.addSublayer(self.leftGuide)
             self.layer.addSublayer(self.rightGuide)
+            
+            self.addSubview(self.bottomContainerView)
+            
+            self.galleryButtonChromeView.layer.compositingFilter = "overlayBlendMode"
+            self.galleryButtonChromeView.alpha = 0.8
+            self.galleryButtonChromeView.image = GlassBackgroundView.generateForegroundImage(size: CGSize(width: 48.0, height: 48.0), isDark: false, fillColor: .clear)
         }
 
         required init?(coder aDecoder: NSCoder) {
@@ -1019,6 +1120,11 @@ final class CaptureControlsComponent: Component {
                 transition.setScale(view: view, scale: 0.1)
                 transition.setAlpha(view: view, alpha: 0.0)
             }
+            
+            transition.setAlpha(view: self.bottomContainerView, alpha: 0.0)
+            if let view = self.bottomFlipButton.view {
+                transition.setScale(view: view, scale: 0.1)
+            }
         }
         
         func animateInFromEditor(transition: ComponentTransition) {
@@ -1046,6 +1152,11 @@ final class CaptureControlsComponent: Component {
                 transition.setScale(view: view, scale: 1.0)
                 transition.setAlpha(view: view, alpha: 1.0)
             }
+            
+            transition.setAlpha(view: self.bottomContainerView, alpha: 1.0)
+            if let view = self.bottomFlipButton.view {
+                transition.setScale(view: view, scale: 1.0)
+            }
         }
 
         func update(component: CaptureControlsComponent, state: State, availableSize: CGSize, transition: ComponentTransition) -> CGSize {
@@ -1062,6 +1173,8 @@ final class CaptureControlsComponent: Component {
             var isTransitioning = false
             var isRecording = false
             var isHolding = false
+            var isLiveStream = false
+            var isLiveActive = false
             if case .stopRecording = component.shutterState {
                 isRecording = true
             } else if case .holdRecording = component.shutterState {
@@ -1069,6 +1182,9 @@ final class CaptureControlsComponent: Component {
                 isHolding = true
             } else if case .transition = component.shutterState {
                 isTransitioning = true
+            } else if case let .live(active) = component.shutterState {
+                isLiveStream = true
+                isLiveActive = active
             }
                     
             let hideControls = component.hideControls
@@ -1081,8 +1197,8 @@ final class CaptureControlsComponent: Component {
                     gallerySize = CGSize(width: 72.0, height: 72.0)
                     galleryCornerRadius = 16.0
                 } else {
-                    gallerySize = CGSize(width: 50.0, height: 50.0)
-                    galleryCornerRadius = 10.0
+                    gallerySize = CGSize(width: 48.0, height: 48.0)
+                    galleryCornerRadius = 24.0
                 }
                 let galleryButtonId: String
                 if let (identifier, _) = state.cachedAssetImage, identifier == "" {
@@ -1116,21 +1232,28 @@ final class CaptureControlsComponent: Component {
                 if component.isTablet {
                     galleryButtonFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((size.width - galleryButtonSize.width) / 2.0), y: size.height - galleryButtonSize.height - 56.0), size: galleryButtonSize)
                 } else {
-                    galleryButtonFrame = CGRect(origin: CGPoint(x: buttonSideInset, y: floorToScreenPixels((size.height - galleryButtonSize.height) / 2.0)), size: galleryButtonSize)
+                    if "".isEmpty {
+                        galleryButtonFrame = CGRect(origin: CGPoint(x: 16.0, y: size.height + 21.0), size: galleryButtonSize)
+                    } else {
+                        galleryButtonFrame = CGRect(origin: CGPoint(x: buttonSideInset, y: floorToScreenPixels((size.height - galleryButtonSize.height) / 2.0)), size: galleryButtonSize)
+                    }
                 }
                 if let galleryButtonView = self.galleryButtonView.view as? CameraButton.View {
                     galleryButtonView.contentView.clipsToBounds = true
                     galleryButtonView.contentView.layer.cornerRadius = galleryCornerRadius
                     if galleryButtonView.superview == nil {
+                        galleryButtonView.contentView.addSubview(self.galleryButtonChromeView)
                         self.addSubview(galleryButtonView)
                     }
                     transition.setBounds(view: galleryButtonView, bounds: CGRect(origin: .zero, size: galleryButtonFrame.size))
                     transition.setPosition(view: galleryButtonView, position: galleryButtonFrame.center)
                     
+                    self.galleryButtonChromeView.frame = CGRect(origin: .zero, size: galleryButtonSize)
+                    
                     let normalAlpha = component.tintColor.rgb == 0xffffff ? 1.0 : 0.6
                     
-                    transition.setScale(view: galleryButtonView, scale: isRecording || isTransitioning || hideControls ? 0.1 : 1.0)
-                    transition.setAlpha(view: galleryButtonView, alpha: isRecording || isTransitioning || hideControls ? 0.0 : normalAlpha)
+                    transition.setScale(view: galleryButtonView, scale: isLiveStream || isRecording || isTransitioning || hideControls ? 0.1 : 1.0)
+                    transition.setAlpha(view: galleryButtonView, alpha: isLiveStream || isRecording || isTransitioning || hideControls ? 0.0 : normalAlpha)
                 }
             } else {
                 galleryButtonFrame = .zero
@@ -1165,6 +1288,13 @@ final class CaptureControlsComponent: Component {
                     containerSize: availableSize
                 )
                 let flipButtonFrame = CGRect(origin: CGPoint(x: flipButtonOriginX, y: (size.height - flipButtonSize.height) / 2.0), size: flipButtonSize)
+                //if "".isEmpty {
+                //    flipButtonFrame = CGRect(origin: CGPoint(x: availableSize.width - flipButtonSize.width - 16.0, y: size.height + 21.0), size: flipButtonSize)
+                //}
+                
+                //self.flipButtonBackgroundView.update(size: CGSize(width: 48.0, height: 48.0), cornerRadius: 24.0, isDark: true, tintColor: .init(kind: .custom, color: UIColor(rgb: 0xffffff, alpha: 0.06)), transition: .immediate)
+                //self.flipButtonBackgroundView.frame = flipButtonFrame.insetBy(dx: -2.0, dy: -2.0).offsetBy(dx: 2.0, dy: 2.0)
+                
                 if let flipButtonView = self.flipButtonView.view {
                     if flipButtonView.superview == nil {
                         self.addSubview(flipButtonView)
@@ -1172,11 +1302,84 @@ final class CaptureControlsComponent: Component {
                     transition.setBounds(view: flipButtonView, bounds: CGRect(origin: .zero, size: flipButtonFrame.size))
                     transition.setPosition(view: flipButtonView, position: flipButtonFrame.center)
                     
-                    transition.setScale(view: flipButtonView, scale: isTransitioning || hideControls ? 0.01 : 1.0)
-                    transition.setAlpha(view: flipButtonView, alpha: isTransitioning || hideControls ? 0.0 : 1.0)
+                    transition.setScale(view: flipButtonView, scale: !isRecording || isTransitioning || hideControls ? 0.01 : 1.0)
+                    transition.setAlpha(view: flipButtonView, alpha: !isRecording || isTransitioning || hideControls ? 0.0 : 1.0)
                 }
-            } else if let flipButtonView = self.flipButtonView.view {
-                flipButtonView.removeFromSuperview()
+                
+                self.bottomContainerView.frame = CGRect(origin: CGPoint(x: 0.0, y: size.height), size: CGSize(width: availableSize.width, height: 21.0 + 64.0))
+                
+                let bottomFlipButtonSize = self.bottomFlipButton.update(
+                    transition: .immediate,
+                    component: AnyComponent(
+                        GlassBarButtonComponent(
+                            size: CGSize(width: 48.0, height: 48.0),
+                            backgroundColor: UIColor(rgb: 0x212121),
+                            isDark: true,
+                            state: .tintedGlass,
+                            component: AnyComponentWithIdentity(id: "flip", component: AnyComponent(
+                                FlipButtonContentComponent(
+                                    action: component.flipAnimationAction,
+                                    maskFrame: flipButtonMaskFrame,
+                                    tintColor: component.tintColor
+                                )
+                            )),
+                            action: { _ in
+                                component.flipTapped()
+                            }
+                        )
+                    ),
+                    environment: {},
+                    containerSize: availableSize
+                )
+                let bottomFlipButtonFrame = CGRect(origin: CGPoint(x: availableSize.width - bottomFlipButtonSize.width - 16.0, y: 21.0), size: bottomFlipButtonSize)
+                if let bottomFlipButtonView = self.bottomFlipButton.view {
+                    if bottomFlipButtonView.superview == nil {
+                        self.bottomContainerView.contentView.addSubview(bottomFlipButtonView)
+                    }
+                    transition.setBounds(view: bottomFlipButtonView, bounds: CGRect(origin: .zero, size: bottomFlipButtonFrame.size))
+                    transition.setPosition(view: bottomFlipButtonView, position: bottomFlipButtonFrame.center)
+                    
+                    transition.setScale(view: bottomFlipButtonView, scale: isRecording || isLiveActive || isTransitioning || hideControls ? 0.01 : 1.0)
+                    transition.setAlpha(view: bottomFlipButtonView, alpha: isRecording || isLiveActive || isTransitioning || hideControls ? 0.0 : 1.0)
+                }
+            } else {
+                if let flipButtonView = self.flipButtonView.view {
+                    flipButtonView.removeFromSuperview()
+                }
+                if let bottomFlipButtonView = self.bottomFlipButton.view {
+                    bottomFlipButtonView.removeFromSuperview()
+                }
+            }
+            
+            let bottomSettingsButtonSize = self.bottomSettingsButton.update(
+                transition: .immediate,
+                component: AnyComponent(
+                    GlassBarButtonComponent(
+                        size: CGSize(width: 48.0, height: 48.0),
+                        backgroundColor: UIColor(rgb: 0x212121),
+                        isDark: true,
+                        state: .tintedGlass,
+                        component: AnyComponentWithIdentity(id: "settings", component: AnyComponent(
+                            BundleIconComponent(name: "Camera/Settings", tintColor: .white)
+                        )),
+                        action: { _ in
+                            component.settingsTapped()
+                        }
+                    )
+                ),
+                environment: {},
+                containerSize: availableSize
+            )
+            let bottomFlipButtonFrame = CGRect(origin: CGPoint(x: 16.0, y: 21.0), size: bottomSettingsButtonSize)
+            if let bottomSettingsButtonView = self.bottomSettingsButton.view {
+                if bottomSettingsButtonView.superview == nil {
+                    self.bottomContainerView.contentView.addSubview(bottomSettingsButtonView)
+                }
+                transition.setBounds(view: bottomSettingsButtonView, bounds: CGRect(origin: .zero, size: bottomFlipButtonFrame.size))
+                transition.setPosition(view: bottomSettingsButtonView, position: bottomFlipButtonFrame.center)
+                
+                transition.setScale(view: bottomSettingsButtonView, scale: !isLiveStream || isLiveActive || isRecording || isTransitioning || hideControls ? 0.01 : 1.0)
+                transition.setAlpha(view: bottomSettingsButtonView, alpha: !isLiveStream || isLiveActive || isRecording || isTransitioning || hideControls ? 0.0 : 1.0)
             }
             
             var blobState: ShutterBlobView.BlobState
@@ -1189,6 +1392,8 @@ final class CaptureControlsComponent: Component {
                 blobState = .stopVideo
             case .holdRecording:
                 blobState = self.panBlobState ?? .video
+            case .live:
+                blobState = .live
             }
             
             let shutterButtonSize = self.shutterButtonView.update(
@@ -1384,11 +1589,13 @@ final class CaptureControlsComponent: Component {
                     if !component.isSticker {
                         let panGestureRecognizer = UIPanGestureRecognizer(target: self, action: #selector(self.handlePan(_:)))
                         panGestureRecognizer.delegate = self
+                        self.panGestureRecognizer = panGestureRecognizer
                         shutterButtonView.addGestureRecognizer(panGestureRecognizer)
                         
                         let pressGestureRecognizer = UILongPressGestureRecognizer(target: self, action: #selector(self.handlePress(_:)))
                         pressGestureRecognizer.minimumPressDuration = 0.3
                         pressGestureRecognizer.delegate = self
+                        self.pressGestureRecognizer = pressGestureRecognizer
                         shutterButtonView.addGestureRecognizer(pressGestureRecognizer)
                     }
                     self.addSubview(shutterButtonView)
@@ -1396,11 +1603,14 @@ final class CaptureControlsComponent: Component {
                 let alpha: CGFloat = component.hasAccess ? 1.0 : 0.3
                 transition.setBounds(view: shutterButtonView, bounds: CGRect(origin: .zero, size: shutterButtonFrame.size))
                 transition.setPosition(view: shutterButtonView, position: shutterButtonFrame.center)
-                transition.setScale(view: shutterButtonView, scale: isTransitioning ? 0.01 : 1.0)
-                transition.setAlpha(view: shutterButtonView, alpha: isTransitioning ? 0.0 : alpha)
+                transition.setScale(view: shutterButtonView, scale: isTransitioning || isLiveActive ? 0.01 : 1.0)
+                transition.setAlpha(view: shutterButtonView, alpha: isTransitioning || isLiveActive ? 0.0 : alpha)
                 
                 shutterButtonView.isUserInteractionEnabled = component.hasAccess
             }
+            
+            self.panGestureRecognizer?.isEnabled = !isLiveStream
+            self.pressGestureRecognizer?.isEnabled = !isLiveStream
             
             if let buttonView = self.flipButtonView.view as? CameraButton.View, let contentView = buttonView.contentView.componentView as? FlipButtonContentComponent.View {
                 if contentView.maskContainerView.superview == nil {
@@ -1422,6 +1632,16 @@ final class CaptureControlsComponent: Component {
         override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
             if let codeResultView = self.codeResultView?.view, codeResultView.frame.contains(point) {
                 return codeResultView.hitTest(self.convert(point, to: codeResultView), with: event)
+            }
+            if let galleryButtonView = self.galleryButtonView.view, galleryButtonView.alpha > 0.0, galleryButtonView.frame.contains(point) {
+                return galleryButtonView.hitTest(self.convert(point, to: galleryButtonView), with: event)
+            }
+            let bottomPoint = self.convert(point, to: self.bottomContainerView)
+            if let bottomFlipButtonView = self.bottomFlipButton.view, bottomFlipButtonView.alpha > 0.0, bottomFlipButtonView.frame.contains(bottomPoint) {
+                return bottomFlipButtonView.hitTest(self.convert(point, to: bottomFlipButtonView), with: event)
+            }
+            if let bottomSettingsButtonView = self.bottomSettingsButton.view, bottomSettingsButtonView.alpha > 0.0, bottomSettingsButtonView.frame.contains(bottomPoint) {
+                return bottomSettingsButtonView.hitTest(self.convert(point, to: bottomSettingsButtonView), with: event)
             }
             return super.hitTest(point, with: event)
         }
