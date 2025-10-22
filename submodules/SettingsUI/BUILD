@@ -130,6 +130,7 @@ swift_library(
         "//submodules/ComponentFlow",
         "//submodules/Components/BundleIconComponent",
         "//submodules/TelegramUI/Components/ButtonComponent",
+        "//submodules/TelegramUI/Components/SliderComponent",
     ],
     visibility = [
         "//visibility:public",

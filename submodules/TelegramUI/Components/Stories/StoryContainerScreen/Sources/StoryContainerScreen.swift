@@ -1616,6 +1616,7 @@ private final class StoryContainerScreenComponent: Component {
                                 inputHeight: environment.inputHeight,
                                 metrics: environment.metrics,
                                 deviceMetrics: environment.deviceMetrics,
+                                isEmbeddedInCamera: false,
                                 isProgressPaused: isProgressPaused || i != focusedIndex,
                                 isAudioMuted: self.audioMode == .off || (self.audioMode == .ambient && !(self.isMuteSwitchOn || self.areHeadphonesConnected)),
                                 audioMode: self.audioMode,

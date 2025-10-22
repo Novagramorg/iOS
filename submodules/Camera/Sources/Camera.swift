@@ -1016,7 +1016,7 @@ public final class Camera {
         }
     }
     
-    public func setPreviewOutput(_ output: CameraVideoOutput?) {
+    public func setVideoOutput(_ output: CameraVideoOutput?) {
         let outputRef: Unmanaged<CameraVideoOutput>? = output.flatMap { Unmanaged.passRetained($0) }
         self.queue.async {
             if let context = self.contextRef?.takeUnretainedValue() {

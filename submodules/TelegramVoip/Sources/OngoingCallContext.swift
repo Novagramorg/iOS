@@ -489,7 +489,7 @@ public final class OngoingCallVideoCapturer {
         if isCustom {
             self.impl = OngoingCallThreadLocalContextVideoCapturer.withExternalSampleBufferProvider()
         } else {
-            #if targetEnvironment(simulator) && false
+            #if targetEnvironment(simulator)
             self.impl = OngoingCallThreadLocalContextVideoCapturer.withExternalSampleBufferProvider()
             let imageSize = CGSize(width: 600.0, height: 800.0)
             UIGraphicsBeginImageContextWithOptions(imageSize, true, 1.0)

@@ -418,12 +418,9 @@ final class GiftOptionsScreenComponent: Component {
             
             let availableWidth = self.scrollView.bounds.width
             let contentOffset = self.scrollView.contentOffset.y
-//                        
-//            let topPanelAlpha = min(20.0, max(0.0, contentOffset - 95.0)) / 20.0
-//            if let topPanelView = self.topPanel.view, let topSeparator = self.topSeparator.view {
-//                transition.setAlpha(view: topPanelView, alpha: topPanelAlpha)
-//                transition.setAlpha(view: topSeparator, alpha: topPanelAlpha)
-//            }
+                        
+            let topPanelAlpha = min(20.0, contentOffset) / 20.0
+            transition.setAlpha(view: self.topEdgeEffectView, alpha: topPanelAlpha)
             
             let topInset: CGFloat = 0.0
             let headerTopInset: CGFloat = environment.navigationHeight - 56.0
@@ -665,7 +662,7 @@ final class GiftOptionsScreenComponent: Component {
             let edgeEffectHeight: CGFloat = 88.0
             let topEdgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: availableWidth, height: edgeEffectHeight))
             transition.setFrame(view: self.topEdgeEffectView, frame: topEdgeEffectFrame)
-            self.topEdgeEffectView.update(content: .clear, blur: true, alpha: 1.0, rect: topEdgeEffectFrame, edge: .top, edgeSize: topEdgeEffectFrame.height, transition: transition)
+            self.topEdgeEffectView.update(content: theme.list.blocksBackgroundColor, blur: true, alpha: 1.0, rect: topEdgeEffectFrame, edge: .top, edgeSize: topEdgeEffectFrame.height, transition: transition)
             if self.topEdgeEffectView.superview == nil {
                 if let headerView = self.header.view {
                     self.insertSubview(self.topEdgeEffectView, aboveSubview: headerView)

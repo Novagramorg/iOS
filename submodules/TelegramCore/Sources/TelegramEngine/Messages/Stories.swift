@@ -1112,21 +1112,83 @@ func _internal_cancelStoryUpload(account: Account, stableId: Int32) {
     }).start()
 }
 
-func _internal_beginStoryLivestream(account: Account) -> Signal<Never, NoError> {
-    var flags: Int32 = 0
-    flags |= 1 << 5
-    flags |= 1 << 6
-    return account.network.request(Api.functions.stories.startLive(flags: flags, peer: .inputPeerSelf, caption: nil, entities: nil, privacyRules: [.inputPrivacyValueAllowAll], randomId: Int64.random(in: Int64.min ... Int64.max), messagesEnabled: .boolTrue, sendPaidMessagesStars: nil))
-    |> map(Optional.init)
-    |> `catch` { _ -> Signal<Api.Updates?, NoError> in
-        return .single(nil)
-    }
-    |> mapToSignal { updates -> Signal<Never, NoError> in
-        if let updates {
-            account.stateManager.addUpdates(updates)
+func _internal_beginStoryLivestream(account: Account, peerId: EnginePeer.Id, privacy: EngineStoryPrivacy, isForwardingDisabled: Bool) -> Signal<EngineStoryItem?, NoError> {
+    return account.postbox.transaction { transaction in
+        var flags: Int32 = 0
+        //flags |= 1 << 5
+        
+        if isForwardingDisabled {
+            flags |= 1 << 4
         }
-        return .complete()
+        
+        let inputPeer: Api.InputPeer
+        if peerId.namespace == Namespaces.Peer.CloudChannel, let peer = transaction.getPeer(peerId).flatMap(apiInputPeer) {
+            inputPeer = peer
+        } else {
+            inputPeer = .inputPeerSelf
+        }
+        
+        return account.network.request(Api.functions.stories.startLive(flags: flags, peer: inputPeer, caption: nil, entities: nil, privacyRules: [.inputPrivacyValueAllowAll], randomId: Int64.random(in: Int64.min ... Int64.max), messagesEnabled: nil, sendPaidMessagesStars: nil))
+        |> map(Optional.init)
+        |> `catch` { _ -> Signal<Api.Updates?, NoError> in
+            return .single(nil)
+        }
+        |> mapToSignal { updates -> Signal<EngineStoryItem?, NoError> in
+            if let updates {
+                account.stateManager.addUpdates(updates)
+
+                for update in updates.allUpdates {
+                    if case let .updateStory(_, apiStory) = update {
+                        return account.postbox.transaction { transaction in
+                            if let storedItem = Stories.StoredItem(apiStoryItem: apiStory, peerId: peerId, transaction: transaction), case let .item(item) = storedItem, let media = item.media {
+                                let mappedItem = EngineStoryItem(
+                                    id: item.id,
+                                    timestamp: item.timestamp,
+                                    expirationTimestamp: item.expirationTimestamp,
+                                    media: EngineMedia(media),
+                                    alternativeMediaList: item.alternativeMediaList.map(EngineMedia.init),
+                                    mediaAreas: item.mediaAreas,
+                                    text: item.text,
+                                    entities: item.entities,
+                                    views: item.views.flatMap { views in
+                                        return EngineStoryItem.Views(
+                                            seenCount: views.seenCount,
+                                            reactedCount: views.reactedCount,
+                                            forwardCount: views.forwardCount,
+                                            seenPeers: views.seenPeerIds.compactMap { id -> EnginePeer? in
+                                                return transaction.getPeer(id).flatMap(EnginePeer.init)
+                                            },
+                                            reactions: views.reactions,
+                                            hasList: views.hasList
+                                        )
+                                    },
+                                    privacy: item.privacy.flatMap(EngineStoryPrivacy.init),
+                                    isPinned: item.isPinned,
+                                    isExpired: item.isExpired,
+                                    isPublic: item.isPublic,
+                                    isPending: false,
+                                    isCloseFriends: item.isCloseFriends,
+                                    isContacts: item.isContacts,
+                                    isSelectedContacts: item.isSelectedContacts,
+                                    isForwardingDisabled: item.isForwardingDisabled,
+                                    isEdited: item.isEdited,
+                                    isMy: item.isMy,
+                                    myReaction: item.myReaction,
+                                    forwardInfo: item.forwardInfo.flatMap { EngineStoryItem.ForwardInfo($0, transaction: transaction) },
+                                    author: item.authorId.flatMap { transaction.getPeer($0).flatMap(EnginePeer.init) },
+                                    folderIds: item.folderIds
+                                )
+                                return mappedItem
+                            }
+                            return nil
+                        }
+                    }
+                }
+            }
+            return .single(nil)
+        }
     }
+    |> switchToLatest
 }
 
 private struct PendingStoryIdMappingKey: Hashable {

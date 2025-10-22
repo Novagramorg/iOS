@@ -145,11 +145,11 @@ private enum ContactListNodeEntry: Comparable, Identifiable {
                 return ContactListActionItem(presentationData: ItemListPresentationData(presentationData), title: text, icon: .inline(dropDownIcon, .right), highlight: .alpha, accessible: false, header: nil, action: {
             })
             case let .permissionInfo(_, title, text, suppressed):
-                return InfoListItem(presentationData: ItemListPresentationData(presentationData), title: title, text: .plain(text), style: .plain, closeAction: suppressed ? nil : {
+                return InfoListItem(presentationData: ItemListPresentationData(presentationData), systemStyle: listStyle == .blocks ? .glass : .legacy, title: title, text: .plain(text), style: listStyle, closeAction: suppressed ? nil : {
                     interaction.suppressWarning()
                 })
             case let .permissionEnable(_, text):
-                return ContactListActionItem(presentationData: ItemListPresentationData(presentationData), title: text, icon: .none, header: nil, action: {
+                return ContactListActionItem(presentationData: ItemListPresentationData(presentationData), style: listStyle, systemStyle: listStyle == .blocks ? .glass : .legacy, title: text, icon: .none, header: nil, action: {
                     interaction.authorize()
                 })
             case .permissionLimited:
@@ -167,7 +167,7 @@ private enum ContactListNodeEntry: Comparable, Identifiable {
                     style = .generic
                     height = .tall
                 }
-                return ContactListActionItem(presentationData: ItemListPresentationData(presentationData), title: option.title, subtitle: option.subtitle, icon: option.icon, style: style, height: height, clearHighlightAutomatically: option.clearHighlightAutomatically, header: header, action: option.action)
+                return ContactListActionItem(presentationData: ItemListPresentationData(presentationData), title: option.title, subtitle: option.subtitle, icon: option.icon, actionStyle: style, height: height, clearHighlightAutomatically: option.clearHighlightAutomatically, header: header, action: option.action)
             case let .header(_, header):
                 var sectionId: Int32 = 0
                 var text = ""
@@ -1218,11 +1218,13 @@ public final class ContactListNode: ASDisplayNode {
     
     private var authorizationNode: PermissionContentNode
     private let displayPermissionPlaceholder: Bool
+    private var authorizationDisposable: Disposable?
+    public var authorizationUpdated: ((AccessType) -> Void)?
     
     public var multipleSelection = false
     
     private let isPeerEnabled: ((EnginePeer) -> Bool)?
-    
+        
     public init(
         context: AccountContext,
         updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)? = nil,
@@ -1310,6 +1312,16 @@ public final class ContactListNode: ASDisplayNode {
         self.addSubnode(self.listNode)
         self.addSubnode(self.indexNode)
         self.addSubnode(self.authorizationNode)
+        
+        self.authorizationDisposable = (contactsAuthorization.get()
+        |> deliverOnMainQueue).start(next: { [weak self] authorization in
+            guard let self else {
+                return
+            }
+            Queue.mainQueue().justDispatch {
+                self.authorizationUpdated?(authorization)
+            }
+        })
         
         let processingQueue = Queue()
         let previousEntries = Atomic<[ContactListNodeEntry]?>(value: nil)
@@ -2268,6 +2280,14 @@ public final class ContactListNode: ASDisplayNode {
         if self.validLayout != nil {
             self.dequeueTransitions()
         }
+    }
+    
+    public override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        let result = super.hitTest(point, with: event)
+        if self.indexNode.frame.contains(point) {
+            return self.indexNode.view
+        }
+        return result
     }
     
     private func dequeueTransitions() {

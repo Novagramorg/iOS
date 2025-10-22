@@ -3,16 +3,8 @@ import UIKit
 import Display
 import AsyncDisplayKit
 import ComponentFlow
-import SwiftSignalKit
-import ViewControllerComponent
 import ComponentDisplayAdapters
 import TelegramPresentationData
-import AccountContext
-import TelegramCore
-import MultilineTextComponent
-import EmojiStatusComponent
-import TelegramStringFormatting
-import CheckNode
 import SegmentedControlNode
 
 final class SegmentControlComponent: Component {

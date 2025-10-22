@@ -22,7 +22,6 @@ import UndoUI
 import PresentationDataUtils
 import MoreButtonNode
 import Camera
-import CameraScreen
 import MediaEditor
 import ImageObjectSeparation
 import ChatSendMessageActionUI
@@ -2591,7 +2590,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
                     }
                 )),
                 environment: {},
-                containerSize: CGSize(width: 40.0, height: 40.0)
+                containerSize: barButtonSize
             )
             let cancelButtonFrame = CGRect(origin: CGPoint(x: barButtonSideInset, y: barButtonSideInset), size: cancelButtonSize)
             if let view = cancelButton.view {
@@ -2626,7 +2625,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
                         self?.moreButtonPlayOnce.invoke(Void())
                     })),
                 environment: {},
-                containerSize: CGSize(width: 40.0, height: 40.0)
+                containerSize: barButtonSize
             )
             let moreButtonFrame = CGRect(origin: CGPoint(x: layout.size.width - moreButtonSize.width - barButtonSideInset, y: barButtonSideInset), size: moreButtonSize)
             if let view = moreButton.view {
@@ -3712,46 +3711,47 @@ public func stickerMediaPickerController(
             controller?.dismiss(animated: true)
         }
         mediaPickerController.openCamera = { [weak controller] cameraHolder in
-            guard let cameraHolder = cameraHolder as? CameraHolder else {
-                return
-            }
-            
-            var returnToCameraImpl: (() -> Void)?
-            let cameraScreen = CameraScreenImpl(
-                context: context,
-                mode: .sticker,
-                holder: cameraHolder,
-                transitionIn: CameraScreenImpl.TransitionIn(
-                    sourceView: cameraHolder.parentView,
-                    sourceRect: cameraHolder.parentView.bounds,
-                    sourceCornerRadius: 0.0,
-                    useFillAnimation: false
-                ),
-                transitionOut: { _ in
-                    return CameraScreenImpl.TransitionOut(
-                        destinationView: cameraHolder.parentView,
-                        destinationRect: cameraHolder.parentView.bounds,
-                        destinationCornerRadius: 0.0
-                    )
-                },
-                completion: { result, _, _, commit in
-                    completion(result, nil, .zero, nil, true, { _ in return nil }, {
-                        returnToCameraImpl?()
-                    })
-                }
-            )
-            cameraScreen.transitionedOut = { [weak cameraHolder] in
-                if let cameraHolder {
-                    cameraHolder.restore()
-                }
-            }
-            controller?.push(cameraScreen)
-            
-            returnToCameraImpl = { [weak cameraScreen] in
-                if let cameraScreen {
-                    cameraScreen.returnFromEditor()
-                }
-            }
+            let _ = controller
+//            guard let cameraHolder = cameraHolder as? CameraHolder else {
+//                return
+//            }
+//            
+//            var returnToCameraImpl: (() -> Void)?
+//            let cameraScreen = CameraScreenImpl(
+//                context: context,
+//                mode: .sticker,
+//                holder: cameraHolder,
+//                transitionIn: CameraScreenImpl.TransitionIn(
+//                    sourceView: cameraHolder.parentView,
+//                    sourceRect: cameraHolder.parentView.bounds,
+//                    sourceCornerRadius: 0.0,
+//                    useFillAnimation: false
+//                ),
+//                transitionOut: { _ in
+//                    return CameraScreenImpl.TransitionOut(
+//                        destinationView: cameraHolder.parentView,
+//                        destinationRect: cameraHolder.parentView.bounds,
+//                        destinationCornerRadius: 0.0
+//                    )
+//                },
+//                completion: { result, _, _, commit in
+//                    completion(result, nil, .zero, nil, true, { _ in return nil }, {
+//                        returnToCameraImpl?()
+//                    })
+//                }
+//            )
+//            cameraScreen.transitionedOut = { [weak cameraHolder] in
+//                if let cameraHolder {
+//                    cameraHolder.restore()
+//                }
+//            }
+//            controller?.push(cameraScreen)
+//            
+//            returnToCameraImpl = { [weak cameraScreen] in
+//                if let cameraScreen {
+//                    cameraScreen.returnFromEditor()
+//                }
+//            }
         }
         present(mediaPickerController, mediaPickerController.mediaPickerContext)
     }
@@ -3839,46 +3839,47 @@ public func avatarMediaPickerController(
             controller?.dismiss(animated: true)
         }
         mediaPickerController.openCamera = { [weak controller] cameraHolder in
-            guard let cameraHolder = cameraHolder as? CameraHolder else {
-                return
-            }
-            
-            var returnToCameraImpl: (() -> Void)?
-            let cameraScreen = CameraScreenImpl(
-                context: context,
-                mode: .avatar,
-                holder: cameraHolder,
-                transitionIn: CameraScreenImpl.TransitionIn(
-                    sourceView: cameraHolder.parentView,
-                    sourceRect: cameraHolder.parentView.bounds,
-                    sourceCornerRadius: 0.0,
-                    useFillAnimation: false
-                ),
-                transitionOut: { _ in
-                    return CameraScreenImpl.TransitionOut(
-                        destinationView: cameraHolder.parentView,
-                        destinationRect: cameraHolder.parentView.bounds,
-                        destinationCornerRadius: 0.0
-                    )
-                },
-                completion: { result, _, _, commit in
-                    completion(result, nil, .zero, nil, true, { _ in return nil }, {
-                        returnToCameraImpl?()
-                    })
-                }
-            )
-            cameraScreen.transitionedOut = { [weak cameraHolder] in
-                if let cameraHolder {
-                    cameraHolder.restore()
-                }
-            }
-            controller?.push(cameraScreen)
-            
-            returnToCameraImpl = { [weak cameraScreen] in
-                if let cameraScreen {
-                    cameraScreen.returnFromEditor()
-                }
-            }
+            let _ = controller
+//            guard let cameraHolder = cameraHolder as? CameraHolder else {
+//                return
+//            }
+//            
+//            var returnToCameraImpl: (() -> Void)?
+//            let cameraScreen = CameraScreenImpl(
+//                context: context,
+//                mode: .avatar,
+//                holder: cameraHolder,
+//                transitionIn: CameraScreenImpl.TransitionIn(
+//                    sourceView: cameraHolder.parentView,
+//                    sourceRect: cameraHolder.parentView.bounds,
+//                    sourceCornerRadius: 0.0,
+//                    useFillAnimation: false
+//                ),
+//                transitionOut: { _ in
+//                    return CameraScreenImpl.TransitionOut(
+//                        destinationView: cameraHolder.parentView,
+//                        destinationRect: cameraHolder.parentView.bounds,
+//                        destinationCornerRadius: 0.0
+//                    )
+//                },
+//                completion: { result, _, _, commit in
+//                    completion(result, nil, .zero, nil, true, { _ in return nil }, {
+//                        returnToCameraImpl?()
+//                    })
+//                }
+//            )
+//            cameraScreen.transitionedOut = { [weak cameraHolder] in
+//                if let cameraHolder {
+//                    cameraHolder.restore()
+//                }
+//            }
+//            controller?.push(cameraScreen)
+//            
+//            returnToCameraImpl = { [weak cameraScreen] in
+//                if let cameraScreen {
+//                    cameraScreen.returnFromEditor()
+//                }
+//            }
         }
         present(mediaPickerController, mediaPickerController.mediaPickerContext)
     }

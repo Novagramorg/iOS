@@ -37,7 +37,7 @@ import TextFieldComponent
 import StickerPackPreviewUI
 import OpenInExternalAppUI
 import SafariServices
-import MediaPasteboardUI
+//import MediaPasteboardUI
 import WebPBinding
 import ContextUI
 import ChatScheduleTimeController
@@ -2403,71 +2403,71 @@ final class StoryItemSetContainerSendMessage {
     }
     
     func presentMediaPasteboard(view: StoryItemSetContainerComponent.View, subjects: [MediaPickerScreenImpl.Subject.Media]) {
-        guard let component = view.component else {
-            return
-        }
-        let focusedItem = component.slice.item
-        guard let peerId = focusedItem.peerId else {
-            return
-        }
-        let focusedStoryId = StoryId(peerId: peerId, id: focusedItem.storyItem.id)
-        guard let inputPanelView = view.inputPanel.view as? MessageInputPanelComponent.View else {
-            return
-        }
-        
-        var inputText = NSAttributedString(string: "")
-        switch inputPanelView.getSendMessageInput() {
-        case let .text(text):
-            inputText = text
-        }
-        
-        let peer = component.slice.effectivePeer
-        let theme = defaultDarkPresentationTheme
-        let updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>) = (component.context.sharedContext.currentPresentationData.with({ $0 }).withUpdated(theme: theme), component.context.sharedContext.presentationData |> map { $0.withUpdated(theme: theme) })
-        let controller = mediaPasteboardScreen(
-            context: component.context,
-            updatedPresentationData: updatedPresentationData,
-            peer: peer,
-            subjects: subjects,
-            presentMediaPicker: { [weak self] subject, saveEditedPhotos, bannedSendPhotos, bannedSendVideos, present in
-                if let self {
-                    self.presentMediaPicker(
-                        view: view,
-                        peer: peer,
-                        replyToMessageId: nil,
-                        replyToStoryId: focusedStoryId,
-                        subject: subject,
-                        saveEditedPhotos: saveEditedPhotos,
-                        bannedSendPhotos: bannedSendPhotos,
-                        bannedSendVideos: bannedSendVideos,
-                        present: { controller, mediaPickerContext in
-                            if !inputText.string.isEmpty {
-                                mediaPickerContext?.setCaption(inputText)
-                            }
-                            present(controller, mediaPickerContext)
-                        },
-                        updateMediaPickerContext: { _ in },
-                        completion: { [weak self, weak view] signals, silentPosting, scheduleTime, parameters, getAnimatedTransitionSource, completion in
-                            guard let self, let view else {
-                                return
-                            }
-                            if !inputText.string.isEmpty {
-                                self.clearInputText(view: view)
-                            }
-                            self.presentPaidMessageAlertIfNeeded(view: view, completion: { [weak self] in
-                                guard let self else {
-                                    return
-                                }
-                                self.enqueueMediaMessages(view: view, peer: peer, replyToMessageId: nil, replyToStoryId: focusedStoryId, signals: signals, silentPosting: silentPosting, scheduleTime: scheduleTime, parameters: parameters, getAnimatedTransitionSource: getAnimatedTransitionSource, completion: completion)
-                            })
-                        }
-                    )
-                }
-            },
-            getSourceRect: nil
-        )
-        controller.navigationPresentation = .flatModal
-        component.controller()?.push(controller)
+//        guard let component = view.component else {
+//            return
+//        }
+//        let focusedItem = component.slice.item
+//        guard let peerId = focusedItem.peerId else {
+//            return
+//        }
+//        let focusedStoryId = StoryId(peerId: peerId, id: focusedItem.storyItem.id)
+//        guard let inputPanelView = view.inputPanel.view as? MessageInputPanelComponent.View else {
+//            return
+//        }
+//        
+//        var inputText = NSAttributedString(string: "")
+//        switch inputPanelView.getSendMessageInput() {
+//        case let .text(text):
+//            inputText = text
+//        }
+//        
+//        let peer = component.slice.effectivePeer
+//        let theme = defaultDarkPresentationTheme
+//        let updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>) = (component.context.sharedContext.currentPresentationData.with({ $0 }).withUpdated(theme: theme), component.context.sharedContext.presentationData |> map { $0.withUpdated(theme: theme) })
+//        let controller = mediaPasteboardScreen(
+//            context: component.context,
+//            updatedPresentationData: updatedPresentationData,
+//            peer: peer,
+//            subjects: subjects,
+//            presentMediaPicker: { [weak self] subject, saveEditedPhotos, bannedSendPhotos, bannedSendVideos, present in
+//                if let self {
+//                    self.presentMediaPicker(
+//                        view: view,
+//                        peer: peer,
+//                        replyToMessageId: nil,
+//                        replyToStoryId: focusedStoryId,
+//                        subject: subject,
+//                        saveEditedPhotos: saveEditedPhotos,
+//                        bannedSendPhotos: bannedSendPhotos,
+//                        bannedSendVideos: bannedSendVideos,
+//                        present: { controller, mediaPickerContext in
+//                            if !inputText.string.isEmpty {
+//                                mediaPickerContext?.setCaption(inputText)
+//                            }
+//                            present(controller, mediaPickerContext)
+//                        },
+//                        updateMediaPickerContext: { _ in },
+//                        completion: { [weak self, weak view] signals, silentPosting, scheduleTime, parameters, getAnimatedTransitionSource, completion in
+//                            guard let self, let view else {
+//                                return
+//                            }
+//                            if !inputText.string.isEmpty {
+//                                self.clearInputText(view: view)
+//                            }
+//                            self.presentPaidMessageAlertIfNeeded(view: view, completion: { [weak self] in
+//                                guard let self else {
+//                                    return
+//                                }
+//                                self.enqueueMediaMessages(view: view, peer: peer, replyToMessageId: nil, replyToStoryId: focusedStoryId, signals: signals, silentPosting: silentPosting, scheduleTime: scheduleTime, parameters: parameters, getAnimatedTransitionSource: getAnimatedTransitionSource, completion: completion)
+//                            })
+//                        }
+//                    )
+//                }
+//            },
+//            getSourceRect: nil
+//        )
+//        controller.navigationPresentation = .flatModal
+//        component.controller()?.push(controller)
     }
     
     private func enqueueChatContextResult(view: StoryItemSetContainerComponent.View, peer: EnginePeer, replyMessageId: EngineMessage.Id?, storyId: StoryId?, results: ChatContextResultCollection, result: ChatContextResult, hideVia: Bool = false, closeMediaInput: Bool = false, silentPosting: Bool = false, resetTextInputState: Bool = true) {
