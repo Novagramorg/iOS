@@ -3013,12 +3013,6 @@ public final class StoryItemSetContainerComponent: Component {
                                 return
                             }
                             
-                            if let visibleItemView = self.visibleItems[component.slice.item.id]?.view.view as? StoryItemContentComponent.View {
-                                if !(visibleItemView.liveChatState?.isExpanded ?? true) {
-                                    visibleItemView.toggleLiveChatExpanded()
-                                }
-                            }
-                            
                             self.sendMessageContext.performSendMessageAction(view: self)
                         },
                         sendMessageOptionsAction: { [weak self] sourceView, gesture in

@@ -684,7 +684,7 @@ final class StoryContentLiveChatComponent: Component {
                         theme: component.theme,
                         layout: StoryLiveChatMessageComponent.Layout(
                             isFlipped: true,
-                            insets: UIEdgeInsets(top: 9.0, left: 20.0, bottom: 9.0, right: 20.0),
+                            insets: UIEdgeInsets(top: 9.0, left: 24.0, bottom: 9.0, right: 20.0),
                             fitToWidth: false,
                             transparentBackground: true
                         ),
