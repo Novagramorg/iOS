@@ -73,7 +73,6 @@ swift_library(
         "//submodules/StickerPackPreviewUI",
         "//submodules/Components/AnimatedStickerComponent",
         "//submodules/OpenInExternalAppUI",
-        "//submodules/MediaPasteboardUI",
         "//submodules/WebPBinding",
         "//submodules/Utils/RangeSet",
         "//submodules/TelegramUI/Components/Stories/StoryStealthModeSheetScreen",

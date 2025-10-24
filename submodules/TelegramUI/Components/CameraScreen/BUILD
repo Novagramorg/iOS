@@ -87,6 +87,12 @@ swift_library(
         "//submodules/ContextUI",
         "//submodules/AvatarNode",
         "//submodules/TelegramUI/Components/Utils/AnimatableProperty",
+        "//submodules/TelegramUI/Components/GlassBackgroundComponent",
+        "//submodules/TelegramUI/Components/GlassBarButtonComponent",
+        "//submodules/TelegramUI/Components/ShareWithPeersScreen",
+        "//submodules/TelegramCallsUI",
+        "//submodules/TelegramUI/Components/Stories/StoryContainerScreen",
+        "//submodules/TelegramUI/Components/ChatEntityKeyboardInputNode",
     ],
     visibility = [
         "//visibility:public",

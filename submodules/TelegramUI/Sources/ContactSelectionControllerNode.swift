@@ -66,6 +66,8 @@ final class ContactSelectionControllerNode: ASDisplayNode {
     private let topEdgeEffectView: EdgeEffectView
     private let bottomEdgeEffectView: EdgeEffectView
     
+    private var contactsAuthorization: AccessType?
+    
     init(
         context: AccountContext,
         listStyle: ItemListStyle,
@@ -207,6 +209,16 @@ final class ContactSelectionControllerNode: ASDisplayNode {
             }
         }
         
+        self.contactListNode.authorizationUpdated = { [weak self] authorization in
+            guard let self else {
+                return
+            }
+            self.contactsAuthorization = authorization
+            if let (layout, navigationHeight, actualNavigationHeight) = self.containerLayout {
+                self.containerLayoutUpdated(layout, navigationBarHeight: navigationHeight, actualNavigationBarHeight: actualNavigationHeight, transition: .immediate)
+            }
+        }
+        
         shareImpl = { [weak self] in
             self?.requestMultipleAction?(false, nil, nil)
         }
@@ -262,7 +274,11 @@ final class ContactSelectionControllerNode: ASDisplayNode {
         let safeInsets = layout.safeInsets
         var size = layout.size
         if case .blocks = self.listStyle {
-            insets.top -= 25.0
+            if let contactsAuthorization = self.contactsAuthorization, contactsAuthorization != .allowed {
+                insets.top += 23.0
+            } else {
+                insets.top -= 25.0
+            }
             
             let inset: CGFloat
             if layout.size.width >= 375.0 {
@@ -277,14 +293,6 @@ final class ContactSelectionControllerNode: ASDisplayNode {
         
         self.contactListNode.frame = CGRect(origin: CGPoint(x: floorToScreenPixels((layout.size.width - size.width) / 2.0), y: 0.0), size: size)
         
-//        let countPanelHeight = self.countPanelNode.updateLayout(width: layout.size.width, sideInset: layout.safeInsets.left, bottomInset: layout.intrinsicInsets.bottom, transition: transition)
-//        if (self.selectionState?.selectedPeerIndices.isEmpty ?? true) {
-//            transition.updateFrame(node: self.countPanelNode, frame: CGRect(origin: CGPoint(x: 0.0, y: layout.size.height), size: CGSize(width: layout.size.width, height: countPanelHeight)))
-//        } else {
-//            insets.bottom += countPanelHeight
-//            transition.updateFrame(node: self.countPanelNode, frame: CGRect(origin: CGPoint(x: 0.0, y: layout.size.height - countPanelHeight), size: CGSize(width: layout.size.width, height: countPanelHeight)))
-//        }
-        
         if let searchDisplayController = self.searchDisplayController {
             searchDisplayController.containerLayoutUpdated(layout, navigationBarHeight: navigationBarHeight, transition: transition)
         }
@@ -297,7 +305,7 @@ final class ContactSelectionControllerNode: ASDisplayNode {
         let topEdgeEffectHeight: CGFloat = 80.0
         let topEdgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: layout.size.width, height: topEdgeEffectHeight))
         transition.updateFrame(view: self.topEdgeEffectView, frame: topEdgeEffectFrame)
-        self.topEdgeEffectView.update(content: self.presentationData.theme.list.blocksBackgroundColor, blur: true, alpha: 0.65, rect: topEdgeEffectFrame, edge: .top, edgeSize: topEdgeEffectFrame.height, transition: ComponentTransition(transition))
+        self.topEdgeEffectView.update(content: self.presentationData.theme.list.blocksBackgroundColor, blur: true, alpha: 1.0, rect: topEdgeEffectFrame, edge: .top, edgeSize: topEdgeEffectFrame.height, transition: ComponentTransition(transition))
         
         let bottomEdgeEffectHeight: CGFloat = 88.0
         let bottomEdgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: layout.size.height - bottomEdgeEffectHeight - layout.additionalInsets.bottom), size: CGSize(width: layout.size.width, height: bottomEdgeEffectHeight))

@@ -108,6 +108,7 @@ public final class StoryItemSetContainerComponent: Component {
     public let inputHeight: CGFloat
     public let metrics: LayoutMetrics
     public let deviceMetrics: DeviceMetrics
+    public let isEmbeddedInCamera: Bool
     public let isProgressPaused: Bool
     public let isAudioMuted: Bool
     public let audioMode: StoryContentItem.AudioMode
@@ -133,7 +134,7 @@ public final class StoryItemSetContainerComponent: Component {
     let stealthModeTimeout: Int32?
     public let isDismissed: Bool
     
-    init(
+    public init(
         context: AccountContext,
         externalState: ExternalState,
         storyItemSharedState: StoryContentItem.SharedState,
@@ -147,6 +148,7 @@ public final class StoryItemSetContainerComponent: Component {
         inputHeight: CGFloat,
         metrics: LayoutMetrics,
         deviceMetrics: DeviceMetrics,
+        isEmbeddedInCamera: Bool,
         isProgressPaused: Bool,
         isAudioMuted: Bool,
         audioMode: StoryContentItem.AudioMode,
@@ -185,6 +187,7 @@ public final class StoryItemSetContainerComponent: Component {
         self.inputHeight = inputHeight
         self.metrics = metrics
         self.deviceMetrics = deviceMetrics
+        self.isEmbeddedInCamera = isEmbeddedInCamera
         self.isProgressPaused = isProgressPaused
         self.isAudioMuted = isAudioMuted
         self.audioMode = audioMode
@@ -243,6 +246,9 @@ public final class StoryItemSetContainerComponent: Component {
             return false
         }
         if lhs.deviceMetrics != rhs.deviceMetrics {
+            return false
+        }
+        if lhs.isEmbeddedInCamera != rhs.isEmbeddedInCamera {
             return false
         }
         if lhs.isProgressPaused != rhs.isProgressPaused {
@@ -590,6 +596,10 @@ public final class StoryItemSetContainerComponent: Component {
                     return []
                 }
                 
+                if let component = self.component, component.isEmbeddedInCamera {
+                    return []
+                }
+                
                 for (_, viewList) in self.viewLists {
                     if let view = viewList.view.view, view.hitTest(self.convert(point, to: view), with: nil) != nil {
                         return [.down]
@@ -734,6 +744,19 @@ public final class StoryItemSetContainerComponent: Component {
             self.audioRecorderStatusDisposable?.dispose()
             self.videoRecorderDisposable?.dispose()
             self.updateDisposable.dispose()
+        }
+        
+        public var mediaStreamCall: PresentationGroupCall? {
+            guard let component = self.component else {
+                return nil
+            }
+            guard let visibleItem = self.visibleItems[component.slice.item.id] else {
+                return nil
+            }
+            guard let itemView = visibleItem.view.view as? StoryItemContentComponent.View else {
+                return nil
+            }
+            return itemView.mediaStreamCall
         }
         
         func allowsExternalGestures(point: CGPoint) -> Bool {
@@ -1599,6 +1622,7 @@ public final class StoryItemSetContainerComponent: Component {
                             isVideoBuffering: visibleItem.isBuffering,
                             isCurrent: index == centralIndex,
                             preferHighQuality: component.slice.additionalPeerData.preferHighQualityStories,
+                            isEmbeddedInCamera: component.isEmbeddedInCamera,
                             activateReaction: { [weak self] reactionView, reaction in
                                 guard let self else {
                                     return
@@ -1644,6 +1668,7 @@ public final class StoryItemSetContainerComponent: Component {
                         itemTransition.setPosition(view: visibleItem.unclippedContainerView, position: CGPoint(x: itemPositionX, y: itemLayout.contentFrame.center.y))
                         itemTransition.setBounds(view: visibleItem.unclippedContainerView, bounds: CGRect(origin: CGPoint(), size: itemLayout.contentFrame.size))
                         
+                        visibleItem.contentTintLayer.isHidden = component.isEmbeddedInCamera
                         itemTransition.setPosition(layer: visibleItem.contentTintLayer, position: CGPoint(x: itemPositionX, y: itemLayout.contentFrame.center.y))
                         itemTransition.setBounds(layer: visibleItem.contentTintLayer, bounds: CGRect(origin: CGPoint(), size: itemLayout.contentFrame.size))
                         
@@ -3889,13 +3914,14 @@ public final class StoryItemSetContainerComponent: Component {
                 closeButtonFrame.origin.y -= contentBottomInsetOverflow
                 
                 transition.setFrame(view: self.closeButton, frame: closeButtonFrame)
-                transition.setAlpha(view: self.closeButton, alpha: (component.hideUI || self.isEditingStory) ? 0.0 : 1.0)
+                transition.setAlpha(view: self.closeButton, alpha: (component.hideUI || self.isEditingStory || component.isEmbeddedInCamera) ? 0.0 : 1.0)
                 transition.setFrame(view: self.closeButtonIconView, frame: CGRect(origin: CGPoint(x: floor((closeButtonFrame.width - image.size.width) * 0.5), y: floor((closeButtonFrame.height - image.size.height) * 0.5)), size: image.size))
                 headerRightOffset -= 51.0
             }
             
             var moreButtonSize: CGSize?
             if case let .user(user) = component.slice.peer, let botInfo = user.botInfo, !botInfo.flags.contains(.canEdit) {
+            } else if component.isEmbeddedInCamera {
             } else {
                 moreButtonSize = self.moreButton.update(
                     transition: transition,
@@ -4024,7 +4050,7 @@ public final class StoryItemSetContainerComponent: Component {
             }
             
             let storyPrivacyIcon: StoryPrivacyIconComponent.Privacy?
-            if case .user = component.slice.effectivePeer {
+            if !component.isEmbeddedInCamera, case .user = component.slice.effectivePeer {
                 if component.slice.item.storyItem.isCloseFriends {
                     storyPrivacyIcon = .closeFriends
                 } else if component.slice.item.storyItem.isContacts {
@@ -4278,6 +4304,7 @@ public final class StoryItemSetContainerComponent: Component {
             let topContentGradientRect = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: contentFrame.width, height: topGradientHeight))
             transition.setPosition(view: self.topContentGradientView, position: topContentGradientRect.center)
             transition.setBounds(view: self.topContentGradientView, bounds: CGRect(origin: CGPoint(), size: topContentGradientRect.size))
+            self.topContentGradientView.isHidden = component.isEmbeddedInCamera
             
             if let inputPanelFrame = inputPanelFrameValue {
                 var inputPanelAlpha: CGFloat = (component.hideUI || self.isEditingStory || component.slice.item.storyItem.isPending) ? 0.0 : 1.0
@@ -5040,7 +5067,7 @@ public final class StoryItemSetContainerComponent: Component {
             
             let navigationStripSideInset: CGFloat = 8.0
             let navigationStripTopInset: CGFloat = 8.0
-            if let focusedItem, let visibleItem = self.visibleItems[focusedItem.id], let index = focusedItem.position {
+            if !component.isEmbeddedInCamera, let focusedItem, let visibleItem = self.visibleItems[focusedItem.id], let index = focusedItem.position {
                 var index = max(0, min(index, component.slice.totalCount - 1))
                 var count = component.slice.totalCount
                 if let dayCounters = focusedItem.dayCounters {
@@ -5520,6 +5547,13 @@ public final class StoryItemSetContainerComponent: Component {
                 return
             }
         
+            #if DEBUG
+            if "".isEmpty {
+                self.performDeleteAction()
+                return
+            }
+            #endif
+            
             self.isEditingStory = true
             self.updateIsProgressPaused()
             self.state?.updated(transition: .easeInOut(duration: 0.2))
