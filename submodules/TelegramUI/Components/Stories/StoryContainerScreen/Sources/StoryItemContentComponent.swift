@@ -38,9 +38,10 @@ final class StoryItemContentComponent: Component {
     let isVideoBuffering: Bool
     let isCurrent: Bool
     let preferHighQuality: Bool
+    let isEmbeddedInCamera: Bool
     let activateReaction: (UIView, MessageReaction.Reaction) -> Void
     
-    init(context: AccountContext, strings: PresentationStrings, peer: EnginePeer, item: EngineStoryItem, availableReactions: StoryAvailableReactions?, entityFiles: [MediaId: TelegramMediaFile], audioMode: StoryContentItem.AudioMode, baseRate: Double, isVideoBuffering: Bool, isCurrent: Bool, preferHighQuality: Bool, activateReaction: @escaping (UIView, MessageReaction.Reaction) -> Void) {
+    init(context: AccountContext, strings: PresentationStrings, peer: EnginePeer, item: EngineStoryItem, availableReactions: StoryAvailableReactions?, entityFiles: [MediaId: TelegramMediaFile], audioMode: StoryContentItem.AudioMode, baseRate: Double, isVideoBuffering: Bool, isCurrent: Bool, preferHighQuality: Bool, isEmbeddedInCamera: Bool, activateReaction: @escaping (UIView, MessageReaction.Reaction) -> Void) {
 		self.context = context
         self.strings = strings
         self.peer = peer
@@ -52,6 +53,7 @@ final class StoryItemContentComponent: Component {
         self.isVideoBuffering = isVideoBuffering
         self.isCurrent = isCurrent
         self.preferHighQuality = preferHighQuality
+        self.isEmbeddedInCamera = isEmbeddedInCamera
         self.activateReaction = activateReaction
 	}
 
@@ -81,6 +83,9 @@ final class StoryItemContentComponent: Component {
             return false
         }
         if lhs.isCurrent != rhs.isCurrent {
+            return false
+        }
+        if lhs.isEmbeddedInCamera != rhs.isEmbeddedInCamera {
             return false
         }
         if lhs.preferHighQuality != rhs.preferHighQuality {
@@ -861,55 +866,57 @@ final class StoryItemContentComponent: Component {
                     mediaStreamTransition.setFrame(view: liveChatView, frame: liveChatFrame)
                 }
                 
-                let _ = mediaStream.update(
-                    transition: mediaStreamTransition,
-                    component: AnyComponent(MediaStreamVideoComponent(
-                        call: mediaStreamCall,
-                        hasVideo: true,
-                        isVisible: true,
-                        isAdmin: false,
-                        peerTitle: "",
-                        addInset: false,
-                        isFullscreen: false,
-                        videoLoading: false,
-                        callPeer: nil,
-                        activatePictureInPicture: ActionSlot(),
-                        deactivatePictureInPicture: ActionSlot(),
-                        bringBackControllerForPictureInPictureDeactivation: { f in
-                            f()
-                        },
-                        pictureInPictureClosed: {
-                        },
-                        onVideoSizeRetrieved: { _ in
-                        },
-                        onVideoPlaybackLiveChange: { [weak self] isLive in
-                            guard let self else {
-                                return
+                if !component.isEmbeddedInCamera {
+                    let _ = mediaStream.update(
+                        transition: mediaStreamTransition,
+                        component: AnyComponent(MediaStreamVideoComponent(
+                            call: mediaStreamCall,
+                            hasVideo: true,
+                            isVisible: true,
+                            isAdmin: false,
+                            peerTitle: "",
+                            addInset: false,
+                            isFullscreen: false,
+                            videoLoading: false,
+                            callPeer: nil,
+                            activatePictureInPicture: ActionSlot(),
+                            deactivatePictureInPicture: ActionSlot(),
+                            bringBackControllerForPictureInPictureDeactivation: { f in
+                                f()
+                            },
+                            pictureInPictureClosed: {
+                            },
+                            onVideoSizeRetrieved: { _ in
+                            },
+                            onVideoPlaybackLiveChange: { [weak self] isLive in
+                                guard let self else {
+                                    return
+                                }
+                                self.videoPlaybackStatus = MediaPlayerStatus(
+                                    generationTimestamp: CACurrentMediaTime(),
+                                    duration: .infinity,
+                                    dimensions: CGSize(),
+                                    timestamp: 0.0,
+                                    baseRate: 1.0,
+                                    seekId: 0,
+                                    status: isLive ? .playing : .buffering(initial: false, whilePlaying: true, progress: 0.0, display: true),
+                                    soundEnabled: true
+                                )
+                                if !self.isSeeking {
+                                    self.updateVideoPlaybackProgress()
+                                }
                             }
-                            self.videoPlaybackStatus = MediaPlayerStatus(
-                                generationTimestamp: CACurrentMediaTime(),
-                                duration: .infinity,
-                                dimensions: CGSize(),
-                                timestamp: 0.0,
-                                baseRate: 1.0,
-                                seekId: 0,
-                                status: isLive ? .playing : .buffering(initial: false, whilePlaying: true, progress: 0.0, display: true),
-                                soundEnabled: true
-                            )
-                            if !self.isSeeking {
-                                self.updateVideoPlaybackProgress()
-                            }
+                        )),
+                        environment: {},
+                        containerSize: availableSize
+                    )
+                    let mediaStreamFrame = CGRect(origin: CGPoint(), size: availableSize)
+                    if let mediaStreamView = mediaStream.view {
+                        if mediaStreamView.superview == nil {
+                            self.insertSubview(mediaStreamView, aboveSubview: self.imageView)
                         }
-                    )),
-                    environment: {},
-                    containerSize: availableSize
-                )
-                let mediaStreamFrame = CGRect(origin: CGPoint(), size: availableSize)
-                if let mediaStreamView = mediaStream.view {
-                    if mediaStreamView.superview == nil {
-                        self.insertSubview(mediaStreamView, aboveSubview: self.imageView)
+                        mediaStreamTransition.setFrame(view: mediaStreamView, frame: mediaStreamFrame)
                     }
-                    mediaStreamTransition.setFrame(view: mediaStreamView, frame: mediaStreamFrame)
                 }
             } else {
                 if let mediaStream = self.mediaStream {
@@ -1026,8 +1033,9 @@ final class StoryItemContentComponent: Component {
                     self.unsupportedButton = nil
                     unsupportedButton.view?.removeFromSuperview()
                 }
-                
-                self.backgroundColor = .black
+                if !component.isEmbeddedInCamera {
+                    self.backgroundColor = .black
+                }
             default:
                 var unsuportedTransition = transition
                 
@@ -1117,7 +1125,7 @@ final class StoryItemContentComponent: Component {
                 #endif
             }
             
-            if !self.contentLoaded || component.isVideoBuffering {
+            if !component.isEmbeddedInCamera && (!self.contentLoaded || component.isVideoBuffering) {
                 let loadingEffectView: StoryItemLoadingEffectView
                 if let current = self.loadingEffectView {
                     loadingEffectView = current

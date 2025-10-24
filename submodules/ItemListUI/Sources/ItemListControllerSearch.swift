@@ -17,6 +17,8 @@ public protocol ItemListControllerSearch {
 }
 
 open class ItemListControllerSearchNode: ASDisplayNode {
+    open var addedUnderNavigationBar: Bool = false
+    
     open func activate() {
         self.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2, timingFunction: CAMediaTimingFunctionName.easeInEaseOut.rawValue)
     }

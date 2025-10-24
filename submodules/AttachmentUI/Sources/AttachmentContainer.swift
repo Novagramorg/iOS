@@ -97,7 +97,6 @@ final class AttachmentContainer: ASDisplayNode, ASGestureRecognizerDelegate {
         self.clipNode = ASDisplayNode()
         self.bottomClipNode = ASDisplayNode()
         self.bottomClipNode.clipsToBounds = true
-        self.bottomClipNode.cornerRadius = 62.0
         
         var controllerRemovedImpl: ((ViewController) -> Void)?
         self.container = NavigationContainer(isFlat: false, controllerRemoved: { c in
@@ -132,7 +131,7 @@ final class AttachmentContainer: ASDisplayNode, ASGestureRecognizerDelegate {
             }
         }
         
-        applySmoothRoundedCorners(self.container.layer)
+        //applySmoothRoundedCorners(self.container.layer)
         
         controllerRemovedImpl = { [weak self] c in
             self?.controllerRemoved?(c)
@@ -152,6 +151,9 @@ final class AttachmentContainer: ASDisplayNode, ASGestureRecognizerDelegate {
         if self.glass {
             self.clipNode.view.addSubview(self.pillView)
         }
+        
+        self.clipNode.layer.cornerCurve = .continuous
+        self.bottomClipNode.layer.cornerCurve = .continuous
     }
     
     func cancelPanGesture() {
@@ -475,6 +477,8 @@ final class AttachmentContainer: ASDisplayNode, ASGestureRecognizerDelegate {
         if self.isDismissed {
             return
         }
+        self.bottomClipNode.cornerRadius = layout.deviceMetrics.screenCornerRadius - 2.0
+        
         self.isUpdatingState = true
         
         let isFirstTime = self.validLayout == nil

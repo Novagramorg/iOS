@@ -239,6 +239,7 @@ public final class ContactsSearchContainerNode: SearchDisplayControllerContentNo
     private let contextAction: ((EnginePeer, ASDisplayNode, ContextGesture?, CGPoint?) -> Void)?
     
     private let dimNode: ASDisplayNode
+    private let backgroundNode: ASDisplayNode
     public let listNode: ListView
     
     private let emptyResultsTitleNode: ImmediateTextNode
@@ -290,6 +291,11 @@ public final class ContactsSearchContainerNode: SearchDisplayControllerContentNo
         
         self.dimNode = ASDisplayNode()
         self.dimNode.backgroundColor = glass ? .clear : UIColor.black.withAlphaComponent(0.5)
+        
+        self.backgroundNode = ASDisplayNode()
+        self.backgroundNode.backgroundColor = self.presentationData.theme.list.plainBackgroundColor
+        self.backgroundNode.alpha = 0.0
+        
         self.listNode = ListView()
         self.listNode.backgroundColor = self.presentationData.theme.list.plainBackgroundColor
         self.listNode.alpha = 0.0
@@ -302,16 +308,19 @@ public final class ContactsSearchContainerNode: SearchDisplayControllerContentNo
         self.emptyResultsTitleNode.displaysAsynchronously = false
         self.emptyResultsTitleNode.attributedText = NSAttributedString(string: self.presentationData.strings.Contacts_Search_NoResults, font: Font.semibold(17.0), textColor: self.presentationData.theme.list.freeTextColor)
         self.emptyResultsTitleNode.textAlignment = .center
-        self.emptyResultsTitleNode.isHidden = true
+        self.emptyResultsTitleNode.alpha = 0.0
+        self.emptyResultsTitleNode.isUserInteractionEnabled = false
         
         self.emptyResultsTextNode = ImmediateTextNode()
         self.emptyResultsTextNode.displaysAsynchronously = false
         self.emptyResultsTextNode.maximumNumberOfLines = 0
         self.emptyResultsTextNode.textAlignment = .center
-        self.emptyResultsTextNode.isHidden = true
-             
+        self.emptyResultsTextNode.alpha = 0.0
+        self.emptyResultsTextNode.isUserInteractionEnabled = false
+        
         self.emptyResultsAnimationNode = DefaultAnimatedStickerNodeImpl()
-        self.emptyResultsAnimationNode.isHidden = true
+        self.emptyResultsAnimationNode.alpha = 0.0
+        self.emptyResultsAnimationNode.isUserInteractionEnabled = false
         
         super.init()
         
@@ -322,6 +331,7 @@ public final class ContactsSearchContainerNode: SearchDisplayControllerContentNo
         self.isOpaque = false
         
         self.addSubnode(self.dimNode)
+        self.addSubnode(self.backgroundNode)
         self.addSubnode(self.listNode)
         
         self.addSubnode(self.emptyResultsAnimationNode)
@@ -649,6 +659,8 @@ public final class ContactsSearchContainerNode: SearchDisplayControllerContentNo
         
         self.presentationData = presentationData
         self.themeAndStringsPromise.set(.single((presentationData.theme, presentationData.strings)))
+        
+        self.backgroundNode.backgroundColor = self.presentationData.theme.list.plainBackgroundColor
         self.listNode.backgroundColor = self.presentationData.theme.list.plainBackgroundColor
     }
     
@@ -676,8 +688,10 @@ public final class ContactsSearchContainerNode: SearchDisplayControllerContentNo
         let topInset = navigationBarHeight
         transition.updateFrame(node: self.dimNode, frame: CGRect(origin: CGPoint(x: 0.0, y: topInset), size: CGSize(width: layout.size.width, height: layout.size.height - topInset)))
         
-        self.listNode.frame = CGRect(origin: CGPoint(), size: layout.size)
-        self.listNode.transaction(deleteIndices: [], insertIndicesAndItems: [], updateIndicesAndItems: [], options: [.Synchronous], scrollToItem: nil, updateSizeAndInsets: ListViewUpdateSizeAndInsets(size: layout.size, insets: UIEdgeInsets(top: topInset, left: layout.safeInsets.left, bottom: layout.intrinsicInsets.bottom, right: layout.safeInsets.right), duration: 0.0, curve: .Default(duration: nil)), stationaryItemRange: nil, updateOpaqueState: nil, completion: { _ in })
+        self.backgroundNode.frame = CGRect(origin: .zero, size: CGSize(width: layout.size.width, height: navigationBarHeight))
+        
+        self.listNode.frame = CGRect(origin: CGPoint(x: 0.0, y: navigationBarHeight), size: CGSize(width: layout.size.width, height: layout.size.height - topInset))
+        self.listNode.transaction(deleteIndices: [], insertIndicesAndItems: [], updateIndicesAndItems: [], options: [.Synchronous], scrollToItem: nil, updateSizeAndInsets: ListViewUpdateSizeAndInsets(size: layout.size, insets: UIEdgeInsets(top: 0.0, left: layout.safeInsets.left, bottom: layout.intrinsicInsets.bottom, right: layout.safeInsets.right), duration: 0.0, curve: .Default(duration: nil)), stationaryItemRange: nil, updateOpaqueState: nil, completion: { _ in })
         
         let size = layout.size
         let sideInset = layout.safeInsets.left
@@ -783,13 +797,13 @@ public final class ContactsSearchContainerNode: SearchDisplayControllerContentNo
                 
                 let containerTransition = ContainedViewLayoutTransition.animated(duration: 0.3, curve: .easeInOut)
                 containerTransition.updateAlpha(node: strongSelf.listNode, alpha: isSearching ? 1.0 : 0.0)
+                containerTransition.updateAlpha(node: strongSelf.backgroundNode, alpha: isSearching ? 1.0 : 0.0)
                 strongSelf.dimNode.isHidden = isSearching
                 
-                strongSelf.emptyResultsAnimationNode.isHidden = !emptyResults
-                strongSelf.emptyResultsTitleNode.isHidden = !emptyResults
-                strongSelf.emptyResultsTextNode.isHidden = !emptyResults
+                containerTransition.updateAlpha(node: strongSelf.emptyResultsAnimationNode, alpha: emptyResults ? 1.0 : 0.0)
+                containerTransition.updateAlpha(node: strongSelf.emptyResultsTitleNode, alpha: emptyResults ? 1.0 : 0.0)
+                containerTransition.updateAlpha(node: strongSelf.emptyResultsTextNode, alpha: emptyResults ? 1.0 : 0.0)
                 strongSelf.emptyResultsAnimationNode.visibility = emptyResults
-                
             })
         }
     }

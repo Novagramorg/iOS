@@ -10,7 +10,6 @@ import GlassBackgroundComponent
 import PlainButtonComponent
 import BundleIconComponent
 import MultilineTextComponent
-import EdgeEffect
 
 private let panelInset: CGFloat = 4.0
 private let panelButtonSize = CGSize(width: 46.0, height: 46.0)
@@ -55,9 +54,7 @@ public final class LocationMapHeaderNode: ASDisplayNode {
     
     public let mapNode: LocationMapNode
     public var trackingMode: LocationTrackingMode = .none
-    
-    private let edgeEffectView: EdgeEffectView
-    
+        
     private let options: ComponentView<Empty>?
     
     private let optionsBackgroundView: GlassBackgroundView?
@@ -153,18 +150,13 @@ public final class LocationMapHeaderNode: ASDisplayNode {
             self.optionsBackgroundView = nil
             self.placesBackgroundView = nil
         }
-        
-        self.edgeEffectView = EdgeEffectView()
-        self.edgeEffectView.isUserInteractionEnabled = false
-        
+                
         super.init()
         
         self.clipsToBounds = true
         
         self.addSubnode(self.mapNode)
-        
-        self.view.addSubview(self.edgeEffectView)
-        
+                
         if glass {
             if let placesBackgroundView = self.placesBackgroundView {
                 self.placesBackgroundNode.view.addSubview(placesBackgroundView)
@@ -272,11 +264,6 @@ public final class LocationMapHeaderNode: ASDisplayNode {
         
         transition.updateFrame(node: self.shadowNode, frame: CGRect(x: 0.0, y: size.height - 14.0, width: size.width, height: 14.0))
         
-        let edgeEffectHeight: CGFloat = 80.0
-        let edgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: size.width, height: edgeEffectHeight))
-        transition.updateFrame(view: self.edgeEffectView, frame: edgeEffectFrame)
-        self.edgeEffectView.update(content: self.mapNode.mapMode == .map ? self.presentationData.theme.list.plainBackgroundColor : .clear, blur: true, alpha: 0.65, rect: edgeEffectFrame, edge: .top, edgeSize: edgeEffectFrame.height, transition: ComponentTransition(transition))
-        
         if let options = self.options {
             let optionsSize = options.update(
                 transition: ComponentTransition(transition),
@@ -314,6 +301,7 @@ public final class LocationMapHeaderNode: ASDisplayNode {
                     self.view.addSubview(optionsView)
                 }
                 transition.updateFrame(view: optionsView, frame: CGRect(origin: CGPoint(x: size.width - optionsSize.width - inset - 10.0, y: size.height - optionsSize.height - inset - controlsBottomPadding - 10.0), size: optionsSize))
+                ComponentTransition(animation: .curve(duration: 0.2, curve: .easeInOut)).setAlpha(view: optionsView, alpha: size.height < 180.0 ? 0.0 : 1.0)
             }
         } else {
             let buttonSize = self.glass ? glassPanelButtonSize : panelButtonSize

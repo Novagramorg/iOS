@@ -1156,6 +1156,9 @@ public class ContactsPeerItemNode: ItemListRevealOptionsItemNode {
             if case .app = item.peerMode {
                 verticalInset += 2.0
             }
+            if case .glass = item.systemStyle {
+                verticalInset += 4.0
+            }
             
             let statusHeightComponent: CGFloat
             if statusAttributedString == nil {

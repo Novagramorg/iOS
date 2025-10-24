@@ -204,6 +204,12 @@ public class AttachmentFileControllerImpl: ItemListController, AttachmentFileCon
     private var topEdgeEffectView: EdgeEffectView?
     private var bottomEdgeEffectView: EdgeEffectView?
     
+    var isSearching: Bool = false {
+        didSet {
+            self.requestLayout(transition: .animated(duration: 0.2, curve: .easeInOut))
+        }
+    }
+    
     public override func containerLayoutUpdated(_ layout: ContainerViewLayout, transition: ContainedViewLayoutTransition) {
         super.containerLayoutUpdated(layout, transition: transition)
         
@@ -234,6 +240,7 @@ public class AttachmentFileControllerImpl: ItemListController, AttachmentFileCon
                 
         let bottomEdgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: layout.size.height - edgeEffectHeight - layout.additionalInsets.bottom), size: CGSize(width: layout.size.width, height: edgeEffectHeight))
         transition.updateFrame(view: bottomEdgeEffectView, frame: bottomEdgeEffectFrame)
+        transition.updateAlpha(layer: bottomEdgeEffectView.layer, alpha: self.isSearching ? 0.0 : 1.0)
         bottomEdgeEffectView.update(content: .clear, blur: true, alpha: 1.0, rect: bottomEdgeEffectFrame, edge: .bottom, edgeSize: bottomEdgeEffectFrame.height, transition: ComponentTransition(transition))
     }
 }
@@ -255,6 +262,7 @@ public func makeAttachmentFileControllerImpl(context: AccountContext, updatedPre
     var expandImpl: (() -> Void)?
     var dismissImpl: (() -> Void)?
     var dismissInputImpl: (() -> Void)?
+    var updateIsSearchingImpl: ((Bool) -> Void)?
     let arguments = AttachmentFileControllerArguments(
         context: context,
         openGallery: {
@@ -357,6 +365,7 @@ public func makeAttachmentFileControllerImpl(context: AccountContext, updatedPre
                     return updatedState
                 }
                 updateTabBarVisibilityImpl?(false)
+                updateIsSearchingImpl?(true)
             }
         )
         let searchButtonComponent = state.searching ? nil : AnyComponentWithIdentity(id: "search", component: AnyComponent(searchButton))
@@ -424,6 +433,7 @@ public func makeAttachmentFileControllerImpl(context: AccountContext, updatedPre
                     return updatedState
                 }
                 updateTabBarVisibilityImpl?(true)
+                updateIsSearchingImpl?(false)
             }, send: { message in
                 arguments.send(message)
             }, dismissInput: {
@@ -462,6 +472,9 @@ public func makeAttachmentFileControllerImpl(context: AccountContext, updatedPre
             updatedState.searching = false
             return updatedState
         }
+    }
+    updateIsSearchingImpl = { [weak controller] isSearching in
+        controller?.isSearching = isSearching
     }
     dismissImpl = { [weak controller] in
         controller?.dismiss(animated: true)
