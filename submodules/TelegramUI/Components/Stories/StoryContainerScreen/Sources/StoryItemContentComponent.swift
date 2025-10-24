@@ -167,7 +167,7 @@ final class StoryItemContentComponent: Component {
             )
         }
         
-        public var starStars: (myStars: Int64, totalStars: Int64)? {
+        public var starStars: (myStars: Int64, pendingMyStars: Int64, totalStars: Int64, topItems: [GroupCallMessagesContext.TopStarsItem])? {
             guard let liveChatView = self.liveChat?.view as? StoryContentLiveChatComponent.View else {
                 return nil
             }
