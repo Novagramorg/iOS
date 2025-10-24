@@ -257,13 +257,16 @@ private final class BadgeComponent: Component {
 private final class PeerBadgeComponent: Component {
     let theme: PresentationTheme
     let title: String
+    let color: UIColor
     
     init(
         theme: PresentationTheme,
-        title: String
+        title: String,
+        color: UIColor
     ) {
         self.theme = theme
         self.title = title
+        self.color = color
     }
     
     static func ==(lhs: PeerBadgeComponent, rhs: PeerBadgeComponent) -> Bool {
@@ -271,6 +274,9 @@ private final class PeerBadgeComponent: Component {
             return false
         }
         if lhs.title != rhs.title {
+            return false
+        }
+        if lhs.color != rhs.color {
             return false
         }
         return true
@@ -324,7 +330,7 @@ private final class PeerBadgeComponent: Component {
             let size = CGSize(width: contentSize.width + sideInset * 2.0, height: contentSize.height + 3.0 * 2.0)
             
             self.backgroundMaskLayer.backgroundColor = component.theme.overallDarkAppearance ? component.theme.list.blocksBackgroundColor.cgColor : component.theme.list.plainBackgroundColor.cgColor
-            self.backgroundLayer.backgroundColor = UIColor(rgb: 0xFFB10D).cgColor
+            self.backgroundLayer.backgroundColor = component.color.cgColor
             
             let backgroundFrame = CGRect(origin: CGPoint(), size: size)
             self.backgroundLayer.frame = backgroundFrame
@@ -370,19 +376,22 @@ private final class PeerComponent: Component {
     let strings: PresentationStrings
     let peer: EnginePeer?
     let count: String
+    let color: UIColor
     
     init(
         context: AccountContext,
         theme: PresentationTheme,
         strings: PresentationStrings,
         peer: EnginePeer?,
-        count: String
+        count: String,
+        color: UIColor
     ) {
         self.context = context
         self.theme = theme
         self.strings = strings
         self.peer = peer
         self.count = count
+        self.color = color
     }
     
     static func ==(lhs: PeerComponent, rhs: PeerComponent) -> Bool {
@@ -399,6 +408,9 @@ private final class PeerComponent: Component {
             return false
         }
         if lhs.count != rhs.count {
+            return false
+        }
+        if lhs.color != rhs.color {
             return false
         }
         return true
@@ -445,7 +457,8 @@ private final class PeerComponent: Component {
                 transition: .immediate,
                 component: AnyComponent(PeerBadgeComponent(
                     theme: component.theme,
-                    title: component.count
+                    title: component.count,
+                    color: component.color
                 )),
                 environment: {},
                 containerSize: CGSize(width: 200.0, height: 200.0)
@@ -2015,71 +2028,73 @@ private final class ChatSendStarsScreenComponent: Component {
                 if !reactData.topPeers.isEmpty {
                     contentHeight += 3.0
                     
-                    let topPeersLeftSeparator: SimpleLayer
-                    if let current = self.topPeersLeftSeparator {
-                        topPeersLeftSeparator = current
-                    } else {
-                        topPeersLeftSeparator = SimpleLayer()
-                        self.topPeersLeftSeparator = topPeersLeftSeparator
-                        self.scrollContentView.layer.addSublayer(topPeersLeftSeparator)
-                    }
-                    
-                    let topPeersRightSeparator: SimpleLayer
-                    if let current = self.topPeersRightSeparator {
-                        topPeersRightSeparator = current
-                    } else {
-                        topPeersRightSeparator = SimpleLayer()
-                        self.topPeersRightSeparator = topPeersRightSeparator
-                        self.scrollContentView.layer.addSublayer(topPeersRightSeparator)
-                    }
-                    
-                    let topPeersTitleBackground: SimpleLayer
-                    if let current = self.topPeersTitleBackground {
-                        topPeersTitleBackground = current
-                    } else {
-                        topPeersTitleBackground = SimpleLayer()
-                        self.topPeersTitleBackground = topPeersTitleBackground
-                        self.scrollContentView.layer.addSublayer(topPeersTitleBackground)
-                    }
-                    
-                    let topPeersTitle: ComponentView<Empty>
-                    if let current = self.topPeersTitle {
-                        topPeersTitle = current
-                    } else {
-                        topPeersTitle = ComponentView()
-                        self.topPeersTitle = topPeersTitle
-                    }
-                    
-                    topPeersLeftSeparator.backgroundColor = environment.theme.list.itemPlainSeparatorColor.cgColor
-                    topPeersRightSeparator.backgroundColor = environment.theme.list.itemPlainSeparatorColor.cgColor
-                    
-                    let topPeersTitleSize = topPeersTitle.update(
-                        transition: .immediate,
-                        component: AnyComponent(MultilineTextComponent(
-                            text: .plain(NSAttributedString(string: environment.strings.SendStarReactions_SectionTop, font: Font.semibold(15.0), textColor: .white))
-                        )),
-                        environment: {},
-                        containerSize: CGSize(width: 300.0, height: 100.0)
-                    )
-                    let topPeersBackgroundSize = CGSize(width: topPeersTitleSize.width + 16.0 * 2.0, height: topPeersTitleSize.height + 9.0 * 2.0)
-                    let topPeersBackgroundFrame = CGRect(origin: CGPoint(x: floor((availableSize.width - topPeersBackgroundSize.width) * 0.5), y: contentHeight), size: topPeersBackgroundSize)
-                    
-                    topPeersTitleBackground.backgroundColor = UIColor(rgb: 0xFFB10D).cgColor
-                    topPeersTitleBackground.cornerRadius = topPeersBackgroundFrame.height * 0.5
-                    transition.setFrame(layer: topPeersTitleBackground, frame: topPeersBackgroundFrame)
-                    
-                    let topPeersTitleFrame = CGRect(origin: CGPoint(x: topPeersBackgroundFrame.minX + floor((topPeersBackgroundFrame.width - topPeersTitleSize.width) * 0.5), y: topPeersBackgroundFrame.minY + floor((topPeersBackgroundFrame.height - topPeersTitleSize.height) * 0.5)), size: topPeersTitleSize)
-                    if let topPeersTitleView = topPeersTitle.view {
-                        if topPeersTitleView.superview == nil {
-                            self.scrollContentView.addSubview(topPeersTitleView)
+                    if case .message = reactData.reactSubject {
+                        let topPeersLeftSeparator: SimpleLayer
+                        if let current = self.topPeersLeftSeparator {
+                            topPeersLeftSeparator = current
+                        } else {
+                            topPeersLeftSeparator = SimpleLayer()
+                            self.topPeersLeftSeparator = topPeersLeftSeparator
+                            self.scrollContentView.layer.addSublayer(topPeersLeftSeparator)
                         }
-                        transition.setFrame(view: topPeersTitleView, frame: topPeersTitleFrame)
+                        
+                        let topPeersRightSeparator: SimpleLayer
+                        if let current = self.topPeersRightSeparator {
+                            topPeersRightSeparator = current
+                        } else {
+                            topPeersRightSeparator = SimpleLayer()
+                            self.topPeersRightSeparator = topPeersRightSeparator
+                            self.scrollContentView.layer.addSublayer(topPeersRightSeparator)
+                        }
+                        
+                        let topPeersTitleBackground: SimpleLayer
+                        if let current = self.topPeersTitleBackground {
+                            topPeersTitleBackground = current
+                        } else {
+                            topPeersTitleBackground = SimpleLayer()
+                            self.topPeersTitleBackground = topPeersTitleBackground
+                            self.scrollContentView.layer.addSublayer(topPeersTitleBackground)
+                        }
+                        
+                        let topPeersTitle: ComponentView<Empty>
+                        if let current = self.topPeersTitle {
+                            topPeersTitle = current
+                        } else {
+                            topPeersTitle = ComponentView()
+                            self.topPeersTitle = topPeersTitle
+                        }
+                        
+                        topPeersLeftSeparator.backgroundColor = environment.theme.list.itemPlainSeparatorColor.cgColor
+                        topPeersRightSeparator.backgroundColor = environment.theme.list.itemPlainSeparatorColor.cgColor
+                        
+                        let topPeersTitleSize = topPeersTitle.update(
+                            transition: .immediate,
+                            component: AnyComponent(MultilineTextComponent(
+                                text: .plain(NSAttributedString(string: environment.strings.SendStarReactions_SectionTop, font: Font.semibold(15.0), textColor: .white))
+                            )),
+                            environment: {},
+                            containerSize: CGSize(width: 300.0, height: 100.0)
+                        )
+                        let topPeersBackgroundSize = CGSize(width: topPeersTitleSize.width + 16.0 * 2.0, height: topPeersTitleSize.height + 9.0 * 2.0)
+                        let topPeersBackgroundFrame = CGRect(origin: CGPoint(x: floor((availableSize.width - topPeersBackgroundSize.width) * 0.5), y: contentHeight), size: topPeersBackgroundSize)
+                        
+                        topPeersTitleBackground.backgroundColor = UIColor(rgb: 0xFFB10D).cgColor
+                        topPeersTitleBackground.cornerRadius = topPeersBackgroundFrame.height * 0.5
+                        transition.setFrame(layer: topPeersTitleBackground, frame: topPeersBackgroundFrame)
+                        
+                        let topPeersTitleFrame = CGRect(origin: CGPoint(x: topPeersBackgroundFrame.minX + floor((topPeersBackgroundFrame.width - topPeersTitleSize.width) * 0.5), y: topPeersBackgroundFrame.minY + floor((topPeersBackgroundFrame.height - topPeersTitleSize.height) * 0.5)), size: topPeersTitleSize)
+                        if let topPeersTitleView = topPeersTitle.view {
+                            if topPeersTitleView.superview == nil {
+                                self.scrollContentView.addSubview(topPeersTitleView)
+                            }
+                            transition.setFrame(view: topPeersTitleView, frame: topPeersTitleFrame)
+                        }
+                        
+                        let separatorY = topPeersBackgroundFrame.midY
+                        let separatorSpacing: CGFloat = 10.0
+                        transition.setFrame(layer: topPeersLeftSeparator, frame: CGRect(origin: CGPoint(x: sideInset, y: separatorY), size: CGSize(width: max(0.0, topPeersBackgroundFrame.minX - separatorSpacing - sideInset), height: UIScreenPixel)))
+                        transition.setFrame(layer: topPeersRightSeparator, frame: CGRect(origin: CGPoint(x: topPeersBackgroundFrame.maxX + separatorSpacing, y: separatorY), size: CGSize(width: max(0.0, availableSize.width - sideInset - (topPeersBackgroundFrame.maxX + separatorSpacing)), height: UIScreenPixel)))
                     }
-                    
-                    let separatorY = topPeersBackgroundFrame.midY
-                    let separatorSpacing: CGFloat = 10.0
-                    transition.setFrame(layer: topPeersLeftSeparator, frame: CGRect(origin: CGPoint(x: sideInset, y: separatorY), size: CGSize(width: max(0.0, topPeersBackgroundFrame.minX - separatorSpacing - sideInset), height: UIScreenPixel)))
-                    transition.setFrame(layer: topPeersRightSeparator, frame: CGRect(origin: CGPoint(x: topPeersBackgroundFrame.maxX + separatorSpacing, y: separatorY), size: CGSize(width: max(0.0, availableSize.width - sideInset - (topPeersBackgroundFrame.maxX + separatorSpacing)), height: UIScreenPixel)))
                     
                     var mappedTopPeers = reactData.topPeers
                     if let index = mappedTopPeers.firstIndex(where: { $0.isMy }) {
@@ -2142,6 +2157,12 @@ private final class ChatSendStarsScreenComponent: Component {
                         
                         let itemCountString = presentationStringsFormattedNumber(Int32(topPeer.count), environment.dateTimeFormat.groupingSeparator)
                         
+                        var peerColor: UIColor = UIColor(rgb: 0xFFB10D)
+                        if case .liveStream = reactData.reactSubject {
+                            let color = GroupCallMessagesContext.getStarAmountParamMapping(value: Int64(topPeer.count)).color ?? .purple
+                            peerColor = StoryLiveChatMessageComponent.getMessageColor(color: color)
+                        }
+                        
                         let itemSize = itemView.update(
                             transition: .immediate,
                             component: AnyComponent(PlainButtonComponent(
@@ -2150,7 +2171,8 @@ private final class ChatSendStarsScreenComponent: Component {
                                     theme: environment.theme,
                                     strings: environment.strings,
                                     peer: topPeer.peer,
-                                    count: itemCountString
+                                    count: itemCountString,
+                                    color: peerColor
                                 )),
                                 effectAlignment: .center,
                                 action: { [weak self] in

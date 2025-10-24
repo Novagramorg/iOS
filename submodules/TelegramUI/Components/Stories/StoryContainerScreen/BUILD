@@ -108,6 +108,7 @@ swift_library(
         "//submodules/TelegramUI/Components/GlassBackgroundComponent",
         "//submodules/TelegramUI/Components/Stories/LiveChat/StoryLiveChatMessageComponent",
         "//submodules/TelegramUI/Components/StarsParticleEffect",
+        "//submodules/TelegramUI/Components/AnimatedTextComponent",
     ],
     visibility = [
         "//visibility:public",

@@ -832,7 +832,7 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
             }
         }
     }
-    private let messagesStatePromise = Promise<GroupCallMessagesContext.State>(GroupCallMessagesContext.State(messages: [], pinnedMessages: [], topStars: [], totalStars: 0))
+    private let messagesStatePromise = Promise<GroupCallMessagesContext.State>(GroupCallMessagesContext.State(messages: [], pinnedMessages: [], topStars: [], totalStars: 0, pendingMyStars: 0))
     public var messagesState: Signal<GroupCallMessagesContext.State, NoError> {
         return self.messagesStatePromise.get()
     }
@@ -4061,9 +4061,21 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
         }
     }
     
-    public func sendStars(amount: Int64) {
+    public func sendStars(amount: Int64, delay: Bool) {
         if let messagesContext = self.messagesContext {
-            messagesContext.sendStars(fromId: self.joinAsPeerId, amount: amount)
+            messagesContext.sendStars(fromId: self.joinAsPeerId, amount: amount, delay: delay)
+        }
+    }
+    
+    public func cancelSendStars() {
+        if let messagesContext = self.messagesContext {
+            messagesContext.cancelSendStars()
+        }
+    }
+    
+    public func commitSendStars() {
+        if let messagesContext = self.messagesContext {
+            messagesContext.commitSendStars()
         }
     }
     

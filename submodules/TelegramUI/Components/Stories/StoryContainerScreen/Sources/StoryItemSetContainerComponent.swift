@@ -2979,19 +2979,6 @@ public final class StoryItemSetContainerComponent: Component {
                         )
                     }
                 }
-                if self.sendMessageContext.pendingLiveStreamSendStars != 0 {
-                    if let starStatsValue = starStats {
-                        starStats = MessageInputPanelComponent.StarStats(
-                            myStars: starStatsValue.myStars + Int64(self.sendMessageContext.pendingLiveStreamSendStars),
-                            totalStars: starStatsValue.totalStars + Int64(self.sendMessageContext.pendingLiveStreamSendStars)
-                        )
-                    } else {
-                        starStats = MessageInputPanelComponent.StarStats(
-                            myStars: Int64(self.sendMessageContext.pendingLiveStreamSendStars),
-                            totalStars: Int64(self.sendMessageContext.pendingLiveStreamSendStars)
-                        )
-                    }
-                }
                 
                 inputPanelSize = self.inputPanel.update(
                     transition: inputPanelTransition,

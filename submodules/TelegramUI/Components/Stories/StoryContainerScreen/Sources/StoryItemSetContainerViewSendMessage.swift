@@ -52,6 +52,7 @@ import StoryQualityUpgradeSheetScreen
 import AudioWaveform
 import ChatMessagePaymentAlertController
 import ChatSendStarsScreen
+import AnimatedTextComponent
 
 private var ObjCKey_DeinitWatcher: Int?
 
@@ -102,8 +103,7 @@ final class StoryItemSetContainerSendMessage {
     var currentSpeechHolder: SpeechSynthesizerHolder?
     
     var currentLiveStreamMessageStars: StarsAmount?
-    var pendingLiveStreamSendStars: Int = 0
-    var pendingLiveStreamSendStarTimer: Foundation.Timer?
+    weak var currentSendStarsUndoController: UndoOverlayController?
     
     private(set) var isMediaRecordingLocked: Bool = false
     var wasRecordingDismissed: Bool = false
@@ -118,7 +118,6 @@ final class StoryItemSetContainerSendMessage {
         self.resolvePeerByNameDisposable.dispose()
         self.inputMediaNodeDataDisposable?.dispose()
         self.currentTooltipUpdateTimer?.invalidate()
-        self.pendingLiveStreamSendStarTimer?.invalidate()
     }
     
     func setup(context: AccountContext, view: StoryItemSetContainerComponent.View, inputPanelExternalState: MessageInputPanelComponent.ExternalState, keyboardInputData: Signal<ChatEntityKeyboardInputNode.InputData, NoError>) {
@@ -3893,11 +3892,26 @@ final class StoryItemSetContainerSendMessage {
                 return
             }
             
+            var topPeers: [ReactionsMessageAttribute.TopPeer] = []
+            if let visibleItemView = view.visibleItems[component.slice.item.id]?.view.view as? StoryItemContentComponent.View {
+                if let topItems = visibleItemView.starStars?.topItems {
+                    topPeers = topItems.map { item -> ReactionsMessageAttribute.TopPeer in
+                        return ReactionsMessageAttribute.TopPeer(
+                            peerId: item.peerId,
+                            count: Int32(item.amount),
+                            isTop: item.isTop,
+                            isMy: item.isMy,
+                            isAnonymous: item.isAnonymous
+                        )
+                    }
+                }
+            }
+            
             let initialData = await ChatSendStarsScreen.initialData(
                 context: component.context,
                 peerId: peerId,
                 reactSubject: .liveStream(peerId: peerId, storyId: focusedItem.storyItem.id),
-                topPeers: [],
+                topPeers: topPeers,
                 completion: { [weak view] amount, privacy, isBecomingTop, transitionOut in
                     guard let view, let component = view.component else {
                         return
@@ -3915,36 +3929,153 @@ final class StoryItemSetContainerSendMessage {
     }
     
     func performSendStars(view: StoryItemSetContainerComponent.View, buttonView: UIView, count: Int, isFromExpandedView: Bool) {
-        self.pendingLiveStreamSendStars += count
+        guard let component = view.component else {
+            return
+        }
         
         if isFromExpandedView {
-            let totalCount = self.pendingLiveStreamSendStars
-            self.pendingLiveStreamSendStars = 0
-            self.pendingLiveStreamSendStarTimer?.invalidate()
-            self.pendingLiveStreamSendStarTimer = nil
-            
-            self.commitSendStars(view: view, count: totalCount)
+            self.commitSendStars(view: view, count: count, delay: false)
         } else {
-            self.pendingLiveStreamSendStarTimer?.invalidate()
-            self.pendingLiveStreamSendStarTimer = nil
-            view.state?.updated(transition: .spring(duration: 0.4))
-            
-            self.pendingLiveStreamSendStarTimer = Foundation.Timer.scheduledTimer(withTimeInterval: 5.0, repeats: false, block: { [weak self, weak view] _ in
-                guard let self, let view else {
+            Task { @MainActor [weak view] in
+                guard let view, let component = view.component else {
                     return
                 }
                 
-                let totalCount = self.pendingLiveStreamSendStars
-                self.pendingLiveStreamSendStars = 0
-                self.pendingLiveStreamSendStarTimer?.invalidate()
-                self.pendingLiveStreamSendStarTimer = nil
+                var reactionItem: ReactionItem?
+                if let availableReactions = await component.context.availableReactions.get() {
+                    for item in availableReactions.reactions {
+                        if item.value == .stars {
+                            guard let centerAnimation = item.centerAnimation else {
+                                continue
+                            }
+                            guard let aroundAnimation = item.aroundAnimation else {
+                                continue
+                            }
+                            
+                            reactionItem = ReactionItem(
+                                reaction: ReactionItem.Reaction(rawValue: item.value),
+                                appearAnimation: item.appearAnimation,
+                                stillAnimation: item.selectAnimation,
+                                listAnimation: centerAnimation,
+                                largeListAnimation: item.activateAnimation,
+                                applicationAnimation: aroundAnimation,
+                                largeApplicationAnimation: item.effectAnimation,
+                                isCustom: false
+                            )
+                            break
+                        }
+                    }
+                }
                 
-                self.commitSendStars(view: view, count: totalCount)
-            })
+                if let reactionItem {
+                    let targetFrame = buttonView.convert(buttonView.bounds, to: view)
+                    
+                    let targetView = UIView(frame: targetFrame)
+                    targetView.isUserInteractionEnabled = false
+                    view.addSubview(targetView)
+                    
+                    let standaloneReactionAnimation = StandaloneReactionAnimation(genericReactionEffect: nil, useDirectRendering: false)
+                    view.componentContainerView.addSubview(standaloneReactionAnimation.view)
+                    
+                    if let standaloneReactionAnimation = view.standaloneReactionAnimation {
+                        view.standaloneReactionAnimation = nil
+                        
+                        let standaloneReactionAnimationView = standaloneReactionAnimation.view
+                        standaloneReactionAnimation.view.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.12, removeOnCompletion: false, completion: { [weak standaloneReactionAnimationView] _ in
+                            standaloneReactionAnimationView?.removeFromSuperview()
+                        })
+                    }
+                    view.standaloneReactionAnimation = standaloneReactionAnimation
+                    
+                    standaloneReactionAnimation.frame = view.bounds
+                    standaloneReactionAnimation.animateReactionSelection(
+                        context: component.context,
+                        theme: component.theme,
+                        animationCache: component.context.animationCache,
+                        reaction: reactionItem,
+                        avatarPeers: [],
+                        playHaptic: true,
+                        isLarge: false,
+                        hideCenterAnimation: true,
+                        targetView: targetView,
+                        addStandaloneReactionAnimation: { [weak view] standaloneReactionAnimation in
+                            guard let view else {
+                                return
+                            }
+                            
+                            if let standaloneReactionAnimation = view.standaloneReactionAnimation {
+                                view.standaloneReactionAnimation = nil
+                                standaloneReactionAnimation.view.removeFromSuperview()
+                            }
+                            view.standaloneReactionAnimation = standaloneReactionAnimation
+                            
+                            standaloneReactionAnimation.frame = view.bounds
+                            view.componentContainerView.addSubview(standaloneReactionAnimation.view)
+                        },
+                        completion: { [weak targetView, weak standaloneReactionAnimation] in
+                            targetView?.removeFromSuperview()
+                            standaloneReactionAnimation?.view.removeFromSuperview()
+                        }
+                    )
+                }
+            }
+            
+            self.commitSendStars(view: view, count: count, delay: true)
+            
+            var totalStars = count
+            if let visibleItemView = view.visibleItems[component.slice.item.id]?.view.view as? StoryItemContentComponent.View {
+                if let pendingMyStars = visibleItemView.starStars?.pendingMyStars {
+                    totalStars += Int(pendingMyStars)
+                }
+            }
+            
+            let title: String
+            /*if case .anonymous = privacy {
+                title = self.presentationData.strings.Chat_ToastStarsSent_AnonymousTitle(Int32(self.currentSendStarsUndoCount))
+            } else if case .peer = privacy, let privacyPeer {
+                let rawTitle = self.presentationData.strings.Chat_ToastStarsSent_TitleChannel(Int32(self.currentSendStarsUndoCount))
+                title = rawTitle.replacingOccurrences(of: "{name}", with: privacyPeer.compactDisplayTitle)
+            } else*/ do {
+                title = component.strings.Chat_ToastStarsSent_Title(Int32(totalStars))
+            }
+            
+            let textItems = AnimatedTextComponent.extractAnimatedTextString(string: component.strings.Chat_ToastStarsSent_Text("", ""), id: "text", mapping: [
+                0: .number(totalStars, minDigits: 1),
+                1: .text(component.strings.Chat_ToastStarsSent_TextStarAmount(Int32(totalStars)))
+            ])
+            
+            if let current = self.currentSendStarsUndoController {
+                current.content = .starsSent(context: component.context, title: title, text: textItems, hasUndo: true)
+            } else {
+                let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }.withUpdated(theme: defaultDarkPresentationTheme)
+                let controller = UndoOverlayController(presentationData: presentationData, content: .starsSent(context: component.context, title: title, text: textItems, hasUndo: true), elevatedLayout: false, position: .top, action: { [weak view] action in
+                    guard let view else {
+                        return false
+                    }
+                    if case .undo = action {
+                        guard let component = view.component else {
+                            return false
+                        }
+                        guard case .liveStream = component.slice.item.storyItem.media else {
+                            return false
+                        }
+                        guard let visibleItem = view.visibleItems[component.slice.item.id], let itemView = visibleItem.view.view as? StoryItemContentComponent.View else {
+                            return false
+                        }
+                        guard let call = itemView.mediaStreamCall else {
+                            return false
+                        }
+                        call.cancelSendStars()
+                    }
+                    return false
+                })
+                self.currentSendStarsUndoController = controller
+                self.view?.component?.controller()?.present(controller, in: .current)
+            }
         }
     }
     
-    private func commitSendStars(view: StoryItemSetContainerComponent.View, count: Int) {
+    private func commitSendStars(view: StoryItemSetContainerComponent.View, count: Int, delay: Bool) {
         guard let component = view.component else {
             return
         }
@@ -3957,7 +4088,13 @@ final class StoryItemSetContainerSendMessage {
         guard let call = itemView.mediaStreamCall else {
             return
         }
-        call.sendStars(amount: Int64(count))
+        
+        if let current = self.currentSendStarsUndoController {
+            self.currentSendStarsUndoController = nil
+            current.dismiss()
+        }
+        
+        call.sendStars(amount: Int64(count), delay: delay)
     }
 }
 

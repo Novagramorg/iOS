@@ -446,7 +446,7 @@ final class StoryContentLiveChatComponent: Component {
         }
         private(set) var isChatExpanded: Bool = false
         
-        public var starStars: (myStars: Int64, totalStars: Int64)? {
+        public var starStars: (myStars: Int64, pendingMyStars: Int64, totalStars: Int64, topItems: [GroupCallMessagesContext.TopStarsItem])? {
             guard let messagesState = self.messagesState else {
                 return nil
             }
@@ -454,7 +454,7 @@ final class StoryContentLiveChatComponent: Component {
             if let item = messagesState.topStars.first(where: { $0.isMy }) {
                 myStars = item.amount
             }
-            return (myStars, messagesState.totalStars)
+            return (myStars + messagesState.pendingMyStars, pendingMyStars: messagesState.pendingMyStars, messagesState.totalStars + messagesState.pendingMyStars, messagesState.topStars)
         }
         
         override init(frame: CGRect) {
