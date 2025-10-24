@@ -1945,7 +1945,7 @@ private final class StoryContainerScreenComponent: Component {
                     size: availableSize,
                     metrics: environment.metrics,
                     deviceMetrics: environment.deviceMetrics,
-                    intrinsicInsets: UIEdgeInsets(top: environment.statusBarHeight, left: 0.0, bottom: contentDerivedBottomInset + presentationContextInsets.bottom, right: 0.0),
+                    intrinsicInsets: UIEdgeInsets(top: environment.statusBarHeight + 54.0, left: 0.0, bottom: contentDerivedBottomInset + presentationContextInsets.bottom, right: 0.0),
                     safeInsets: UIEdgeInsets(top: 0.0, left: presentationContextInsets.left, bottom: 0.0, right: presentationContextInsets.right),
                     additionalInsets: UIEdgeInsets(),
                     statusBarHeight: nil,

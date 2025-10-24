@@ -303,6 +303,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[-29248689] = { return Api.GlobalPrivacySettings.parse_globalPrivacySettings($0) }
     dict[-674602536] = { return Api.GroupCall.parse_groupCall($0) }
     dict[2004925620] = { return Api.GroupCall.parse_groupCallDiscarded($0) }
+    dict[-297595771] = { return Api.GroupCallDonor.parse_groupCallDonor($0) }
     dict[445316222] = { return Api.GroupCallMessage.parse_groupCallMessage($0) }
     dict[708691884] = { return Api.GroupCallParticipant.parse_groupCallParticipant($0) }
     dict[1735736008] = { return Api.GroupCallParticipantVideo.parse_groupCallParticipantVideo($0) }
@@ -1485,6 +1486,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[-784000893] = { return Api.payments.ValidatedRequestedInfo.parse_validatedRequestedInfo($0) }
     dict[541839704] = { return Api.phone.ExportedGroupCallInvite.parse_exportedGroupCallInvite($0) }
     dict[-1636664659] = { return Api.phone.GroupCall.parse_groupCall($0) }
+    dict[-1658995418] = { return Api.phone.GroupCallStars.parse_groupCallStars($0) }
     dict[-790330702] = { return Api.phone.GroupCallStreamChannels.parse_groupCallStreamChannels($0) }
     dict[767505458] = { return Api.phone.GroupCallStreamRtmpUrl.parse_groupCallStreamRtmpUrl($0) }
     dict[-193506890] = { return Api.phone.GroupParticipants.parse_groupParticipants($0) }
@@ -1819,6 +1821,8 @@ public extension Api {
             case let _1 as Api.GlobalPrivacySettings:
                 _1.serialize(buffer, boxed)
             case let _1 as Api.GroupCall:
+                _1.serialize(buffer, boxed)
+            case let _1 as Api.GroupCallDonor:
                 _1.serialize(buffer, boxed)
             case let _1 as Api.GroupCallMessage:
                 _1.serialize(buffer, boxed)
@@ -2639,6 +2643,8 @@ public extension Api {
             case let _1 as Api.phone.ExportedGroupCallInvite:
                 _1.serialize(buffer, boxed)
             case let _1 as Api.phone.GroupCall:
+                _1.serialize(buffer, boxed)
+            case let _1 as Api.phone.GroupCallStars:
                 _1.serialize(buffer, boxed)
             case let _1 as Api.phone.GroupCallStreamChannels:
                 _1.serialize(buffer, boxed)

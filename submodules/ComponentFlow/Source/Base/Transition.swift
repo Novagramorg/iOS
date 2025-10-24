@@ -1306,6 +1306,10 @@ public struct ComponentTransition {
     }
     
     public func animateBlur(layer: CALayer, fromRadius: CGFloat, toRadius: CGFloat, removeOnCompletion: Bool = true, completion: ((Bool) -> Void)? = nil) {
+        if case .none = self.animation {
+            return
+        }
+        
         if let blurFilter = CALayer.blur() {
             blurFilter.setValue(toRadius as NSNumber, forKey: "inputRadius")
             layer.filters = [blurFilter]

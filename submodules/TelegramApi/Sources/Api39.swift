@@ -10594,6 +10594,21 @@ public extension Api.functions.phone {
                 }
 }
 public extension Api.functions.phone {
+                static func getGroupCallStars(call: Api.InputGroupCall) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.phone.GroupCallStars>) {
+                    let buffer = Buffer()
+                    buffer.appendInt32(1868784386)
+                    call.serialize(buffer, true)
+                    return (FunctionDescription(name: "phone.getGroupCallStars", parameters: [("call", String(describing: call))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.phone.GroupCallStars? in
+                        let reader = BufferReader(buffer)
+                        var result: Api.phone.GroupCallStars?
+                        if let signature = reader.readInt32() {
+                            result = Api.parse(reader, signature: signature) as? Api.phone.GroupCallStars
+                        }
+                        return result
+                    })
+                }
+}
+public extension Api.functions.phone {
                 static func getGroupCallStreamChannels(call: Api.InputGroupCall) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.phone.GroupCallStreamChannels>) {
                     let buffer = Buffer()
                     buffer.appendInt32(447879488)
