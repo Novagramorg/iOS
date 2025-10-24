@@ -2956,7 +2956,10 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         transition.updateFrame(node: self.textPlaceholderNode, frame: textPlaceholderFrame)
         
         let sendAsButtonFrame = CGRect(origin: CGPoint(x: 3.0, y: textInputContainerBackgroundFrame.height - 3.0 - 34.0), size: CGSize(width: 34.0, height: 34.0))
-        transition.updateFrame(node: self.sendAsAvatarButtonNode, frame: sendAsButtonFrame)
+        transition.updatePosition(node: self.sendAsAvatarButtonNode, position: sendAsButtonFrame.center)
+        transition.updateBounds(node: self.sendAsAvatarButtonNode, bounds: CGRect(origin: CGPoint(), size: sendAsButtonFrame.size))
+        transition.updateAlpha(layer: self.sendAsAvatarButtonNode.layer, alpha: audioRecordingItemsAlpha)
+        transition.updateTransformScale(layer: self.sendAsAvatarButtonNode.layer, scale: audioRecordingItemsAlpha == 0.0 ? 0.001 : 1.0)
         transition.updateFrame(node: self.sendAsAvatarContainerNode, frame: CGRect(origin: CGPoint(), size: sendAsButtonFrame.size))
         transition.updateFrame(node: self.sendAsAvatarReferenceNode, frame: CGRect(origin: CGPoint(), size: sendAsButtonFrame.size))
         transition.updatePosition(node: self.sendAsAvatarNode, position: CGRect(origin: CGPoint(), size: sendAsButtonFrame.size).center)
@@ -3000,7 +3003,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         }
         
         var mediaActionButtonsFrame = CGRect(origin: CGPoint(x: textInputContainerBackgroundFrame.maxX + 6.0, y: textInputContainerBackgroundFrame.maxY - mediaActionButtonsSize.height), size: mediaActionButtonsSize)
-        if inputHasText || self.extendedSearchLayout || hasMediaDraft {
+        if inputHasText || self.extendedSearchLayout || hasMediaDraft || interfaceState.interfaceState.forwardMessageIds != nil {
             mediaActionButtonsFrame.origin.x = width + 8.0
         }
         transition.updateFrame(node: self.mediaActionButtons, frame: mediaActionButtonsFrame)

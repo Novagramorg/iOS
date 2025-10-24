@@ -1628,6 +1628,12 @@ public final class StoryItemSetContainerComponent: Component {
                                     return
                                 }
                                 self.sendMessageContext.activateInlineReaction(view: self, reactionView: reactionView, reaction: reaction)
+                            },
+                            controller: { [weak self] in
+                                guard let self, let component = self.component else {
+                                    return nil
+                                }
+                                return component.controller()
                             }
                         )),
                         environment: {
