@@ -3197,8 +3197,8 @@ private final class SliderStarsView: UIView {
             self.setupEmitter()
         }
         
-        self.emitterLayer.setValue(20.0 + Float(value * 40.0), forKeyPath: "emitterCells.emitter.birthRate")
-        self.emitterLayer.setValue(15.0 + value * 75.0, forKeyPath: "emitterCells.emitter.velocity")
+        self.emitterLayer.setValue(20.0 + Float(value * 200.0), forKeyPath: "emitterCells.emitter.birthRate")
+        self.emitterLayer.setValue(15.0 + value * 250.0, forKeyPath: "emitterCells.emitter.velocity")
         
         self.emitterLayer.frame = CGRect(origin: .zero, size: size)
         self.emitterLayer.emitterPosition = CGPoint(x: size.width / 2.0, y: size.height / 2.0)
