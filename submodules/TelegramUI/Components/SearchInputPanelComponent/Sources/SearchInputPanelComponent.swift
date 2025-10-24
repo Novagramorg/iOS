@@ -85,6 +85,7 @@ public final class SearchInputPanelComponent: Component {
     
     public final class View: UIView, UITextFieldDelegate {
         private let edgeEffectView: EdgeEffectView
+        private let containerView: GlassBackgroundContainerView
         private let backgroundView: GlassBackgroundView
         
         private let icon = ComponentView<Empty>()
@@ -106,13 +107,15 @@ public final class SearchInputPanelComponent: Component {
         override init(frame: CGRect) {
             self.edgeEffectView = EdgeEffectView()
             
+            self.containerView = GlassBackgroundContainerView()
             self.backgroundView = GlassBackgroundView()
             self.textField = TextField()
             
             super.init(frame: frame)
             
             self.addSubview(self.edgeEffectView)
-            self.addSubview(self.backgroundView)
+            self.addSubview(self.containerView)
+            self.containerView.contentView.addSubview(self.backgroundView)
         }
         
         required init?(coder: NSCoder) {
@@ -196,7 +199,7 @@ public final class SearchInputPanelComponent: Component {
             let fieldFrame = CGRect(origin: CGPoint(x: edgeInsets.left, y: edgeInsets.top), size: CGSize(width: availableSize.width - edgeInsets.left - edgeInsets.right - fieldHeight - buttonSpacing, height: fieldHeight))
             let cancelButtonFrame = CGRect(origin: CGPoint(x: edgeInsets.left + fieldFrame.width + buttonSpacing, y: edgeInsets.top), size: CGSize(width: fieldHeight, height: fieldHeight))
             
-            self.backgroundView.update(size: fieldFrame.size, cornerRadius: fieldFrame.height * 0.5, isDark: component.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: backgroundColor), transition: transition)
+            self.backgroundView.update(size: fieldFrame.size, cornerRadius: fieldFrame.height * 0.5, isDark: component.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: backgroundColor), isInteractive: true, transition: transition)
             transition.setFrame(view: self.backgroundView, frame: fieldFrame)
         
             let fieldSideInset: CGFloat = 41.0
@@ -299,7 +302,7 @@ public final class SearchInputPanelComponent: Component {
             )
             if let cancelButtonView = self.cancelButton.view {
                 if cancelButtonView.superview == nil {
-                    self.addSubview(cancelButtonView)
+                    self.containerView.contentView.addSubview(cancelButtonView)
                 }
                 transition.setFrame(view: cancelButtonView, frame: cancelButtonFrame)
             }
@@ -312,6 +315,9 @@ public final class SearchInputPanelComponent: Component {
             let edgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: size.height - edgeEffectHeight + 30.0), size: CGSize(width: size.width, height: edgeEffectHeight))
             transition.setFrame(view: self.edgeEffectView, frame: edgeEffectFrame)
             self.edgeEffectView.update(content: edgeColor, blur: true, rect: edgeEffectFrame, edge: .bottom, edgeSize: edgeEffectFrame.height, transition: transition)
+            
+            transition.setFrame(view: self.containerView, frame: CGRect(origin: .zero, size: size))
+            self.containerView.update(size: size, isDark: component.theme.overallDarkAppearance, transition: transition)
  
             return size
         }
