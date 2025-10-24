@@ -217,6 +217,11 @@ private func makeTextInputTheme(context: AccountContext, interfaceState: ChatPre
 }
 
 public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDelegate, ChatInputTextNodeDelegate {
+    private enum AudioRecordingRemoveAnimationState {
+        case recordingToAttachButton
+        case previewToAttachButton
+    }
+    
     public let textPlaceholderNode: ImmediateTextNodeWithEntities
     
     private let glassBackgroundContainer: GlassBackgroundContainerView
@@ -271,7 +276,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     private var searchActivityIndicator: ActivityIndicator?
     public var audioRecordingInfoContainerNode: ASDisplayNode?
     public var audioRecordingDotView: UIImageView?
-    public var audioRecordingDotNodeDismissed = false
+    private var audioRecordingRemoveAnimationState: AudioRecordingRemoveAnimationState?
     public var audioRecordingTimeNode: ChatTextInputAudioRecordingTimeNode?
     public var audioRecordingCancelIndicator: ChatTextInputAudioRecordingCancelIndicator?
     
@@ -803,6 +808,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                     if sendMedia {
                         interfaceInteraction.finishMediaRecording(.send(viewOnce: strongSelf.viewOnce))
                     } else {
+                        strongSelf.audioRecordingRemoveAnimationState = .recordingToAttachButton
                         interfaceInteraction.finishMediaRecording(.dismiss)
                     }
                 } else {
@@ -2256,6 +2262,46 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             audioRecordingItemsAlpha = 0.0
         }
         
+        if let audioRecordingRemoveAnimationState = self.audioRecordingRemoveAnimationState, case .previewToAttachButton = audioRecordingRemoveAnimationState {
+            self.audioRecordingRemoveAnimationState = nil
+            
+            let dotAnimation = ComponentView<Empty>()
+            let dotAnimationSize = dotAnimation.update(
+                transition: .immediate,
+                component: AnyComponent(LottieComponent(
+                    content: LottieComponent.AppBundleContent(name: "BinBlue"),
+                    color: interfaceState.theme.chat.inputPanel.panelControlColor,
+                    startingPosition: .begin
+                )),
+                environment: {},
+                containerSize: CGSize(width: 40.0, height: 40.0)
+            )
+            if let dotAnimationView = dotAnimation.view as? LottieComponent.View {
+                self.attachmentButtonBackground.contentView.addSubview(dotAnimationView)
+                dotAnimationView.frame = dotAnimationSize.centered(in: self.attachmentButtonBackground.contentView.bounds)
+                
+                self.attachmentButtonIcon.layer.opacity = 0.0
+                self.attachmentButtonIcon.layer.transform = CATransform3DMakeScale(0.001, 0.001, 1.0)
+                dotAnimationView.playOnce(completion: { [weak self, weak dotAnimationView] in
+                    guard let self else {
+                        return
+                    }
+                    
+                    let transition: ComponentTransition = .easeInOut(duration: 0.2)
+                    
+                    if let dotAnimationView {
+                        transition.setAlpha(view: dotAnimationView, alpha: 0.0, completion: { [weak dotAnimationView] _ in
+                            dotAnimationView?.removeFromSuperview()
+                        })
+                        transition.setScale(view: dotAnimationView, scale: 0.001)
+                    }
+                    
+                    transition.setAlpha(view: self.attachmentButtonIcon, alpha: 1.0)
+                    transition.setScale(view: self.attachmentButtonIcon, scale: 1.0)
+                })
+            }
+        }
+        
         if let mediaRecordingState {
             audioRecordingItemsAlpha = 0.0
         
@@ -2290,9 +2336,13 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 animateCancelSlideIn = transition.isAnimated
                 
                 audioRecordingCancelIndicator = ChatTextInputAudioRecordingCancelIndicator(theme: interfaceState.theme, strings: interfaceState.strings, cancel: { [weak self] in
-                    self?.viewOnce = false
-                    self?.interfaceInteraction?.finishMediaRecording(.dismiss)
-                    self?.tooltipController?.dismiss()
+                    guard let self else {
+                        return
+                    }
+                    self.viewOnce = false
+                    self.audioRecordingRemoveAnimationState = .recordingToAttachButton
+                    self.interfaceInteraction?.finishMediaRecording(.dismiss)
+                    self.tooltipController?.dismiss()
                 })
                 self.audioRecordingCancelIndicator = audioRecordingCancelIndicator
                 self.textInputContainerBackgroundView.contentView.addSubview(audioRecordingCancelIndicator)
@@ -2462,13 +2512,58 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             if let audioRecordingDotView = self.audioRecordingDotView {
                 self.audioRecordingDotView = nil
                 
-                var dotFrame = audioRecordingDotView.bounds.size.centered(around: audioRecordingDotView.center)
-                dotFrame.origin.x = hideOffset.x + leftInset + textFieldInsets.left + 16.0
-                transition.updatePosition(layer: audioRecordingDotView.layer, position: dotFrame.center)
-                
-                audioRecordingDotView.layer.animateScale(from: 1.0, to: 0.3, duration: 0.15, delay: 0.0, removeOnCompletion: false)
-                audioRecordingDotView.layer.animateAlpha(from: CGFloat(audioRecordingDotView.layer.presentation()?.opacity ?? 1), to: 0.0, duration: 0.15, delay: 0.0, removeOnCompletion: false) { [weak audioRecordingDotView] _ in
-                    audioRecordingDotView?.removeFromSuperview()
+                if let audioRecordingRemoveAnimationState = self.audioRecordingRemoveAnimationState, case .recordingToAttachButton = audioRecordingRemoveAnimationState {
+                    self.audioRecordingRemoveAnimationState = nil
+                    
+                    let sourceFrame = audioRecordingDotView.convert(audioRecordingDotView.bounds, to: self.attachmentButtonBackground.contentView)
+                    audioRecordingDotView.removeFromSuperview()
+                    
+                    let dotAnimation = ComponentView<Empty>()
+                    let dotAnimationSize = dotAnimation.update(
+                        transition: .immediate,
+                        component: AnyComponent(LottieComponent(
+                            content: LottieComponent.AppBundleContent(name: "BinRed"),
+                            color: UIColor(rgb: 0xFF3B30),
+                            startingPosition: .begin
+                        )),
+                        environment: {},
+                        containerSize: CGSize(width: 40.0, height: 40.0)
+                    )
+                    if let dotAnimationView = dotAnimation.view as? LottieComponent.View {
+                        self.attachmentButtonBackground.contentView.addSubview(dotAnimationView)
+                        dotAnimationView.frame = dotAnimationSize.centered(in: sourceFrame)
+                        
+                        transition.updatePosition(layer: dotAnimationView.layer, position: self.attachmentButtonBackground.contentView.bounds.center)
+                        
+                        self.attachmentButtonIcon.layer.opacity = 0.0
+                        self.attachmentButtonIcon.layer.transform = CATransform3DMakeScale(0.001, 0.001, 1.0)
+                        dotAnimationView.playOnce(completion: { [weak self, weak dotAnimationView] in
+                            guard let self else {
+                                return
+                            }
+                            
+                            let transition: ComponentTransition = .easeInOut(duration: 0.2)
+                            
+                            if let dotAnimationView {
+                                transition.setAlpha(view: dotAnimationView, alpha: 0.0, completion: { [weak dotAnimationView] _ in
+                                    dotAnimationView?.removeFromSuperview()
+                                })
+                                transition.setScale(view: dotAnimationView, scale: 0.001)
+                            }
+                            
+                            transition.setAlpha(view: self.attachmentButtonIcon, alpha: 1.0)
+                            transition.setScale(view: self.attachmentButtonIcon, scale: 1.0)
+                        })
+                    }
+                } else {
+                    var dotFrame = audioRecordingDotView.bounds.size.centered(around: audioRecordingDotView.center)
+                    dotFrame.origin.x = hideOffset.x + leftInset + textFieldInsets.left + 16.0
+                    transition.updatePosition(layer: audioRecordingDotView.layer, position: dotFrame.center)
+                    
+                    audioRecordingDotView.layer.animateScale(from: 1.0, to: 0.3, duration: 0.15, delay: 0.0, removeOnCompletion: false)
+                    audioRecordingDotView.layer.animateAlpha(from: CGFloat(audioRecordingDotView.layer.presentation()?.opacity ?? 1), to: 0.0, duration: 0.15, delay: 0.0, removeOnCompletion: false) { [weak audioRecordingDotView] _ in
+                        audioRecordingDotView?.removeFromSuperview()
+                    }
                 }
             }
             
@@ -4859,6 +4954,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     @objc func attachmentButtonPressed() {
         if let presentationInterfaceState = self.presentationInterfaceState, presentationInterfaceState.interfaceState.mediaDraftState != nil {
             self.viewOnce = false
+            self.audioRecordingRemoveAnimationState = .previewToAttachButton
             self.interfaceInteraction?.deleteRecordedMedia()
         } else {
             self.displayAttachmentMenu()
