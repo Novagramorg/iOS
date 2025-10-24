@@ -3761,13 +3761,54 @@ public final class GroupCallMessagesContext {
         }
     }
     
+    public final class TopStarsItem: Equatable {
+        public let peerId: EnginePeer.Id?
+        public let amount: Int64
+        public let isTop: Bool
+        public let isMy: Bool
+        public let isAnonymous: Bool
+        
+        public init(peerId: EnginePeer.Id?, amount: Int64, isTop: Bool, isMy: Bool, isAnonymous: Bool) {
+            self.peerId = peerId
+            self.amount = amount
+            self.isTop = isTop
+            self.isMy = isMy
+            self.isAnonymous = isAnonymous
+        }
+        
+        public static func ==(lhs: TopStarsItem, rhs: TopStarsItem) -> Bool {
+            if lhs.peerId != rhs.peerId {
+                return false
+            }
+            if lhs.amount != rhs.amount {
+                return false
+            }
+            if lhs.isTop != rhs.isTop {
+                return false
+            }
+            if lhs.isMy != rhs.isMy {
+                return false
+            }
+            if lhs.isAnonymous != rhs.isAnonymous {
+                return false
+            }
+            return true
+        }
+    }
+    
     public struct State: Equatable {
         public var messages: [Message]
         public var pinnedMessages: [Message]
+        public var topStars: [TopStarsItem]
+        public var totalStars: Int64
+        public var pendingMyStars: Int64
         
-        public init(messages: [Message], pinnedMessages: [Message]) {
+        public init(messages: [Message], pinnedMessages: [Message], topStars: [TopStarsItem], totalStars: Int64, pendingMyStars: Int64) {
             self.messages = messages
             self.pinnedMessages = pinnedMessages
+            self.topStars = topStars
+            self.totalStars = totalStars
+            self.pendingMyStars = pendingMyStars
         }
     }
     
@@ -3789,11 +3830,18 @@ public final class GroupCallMessagesContext {
         let stateValue = ValuePromise<State>()
         
         var updatesDisposable: Disposable?
+        
+        var didInitializeTopStars: Bool = false
+        var pollTopStarsDisposable: Disposable?
+        
         let sendMessageDisposables = DisposableSet()
         
         var processedIds = Set<Int64>()
         
         private var messageLifeTimer: SwiftSignalKit.Timer?
+        
+        private var pendingSendStars: (fromId: PeerId, messageId: Int64, amount: Int64)?
+        private var pendingSendStarsTimer: SwiftSignalKit.Timer?
         
         init(queue: Queue, account: Account, callId: Int64, reference: InternalGroupCallReference, e2eContext: ConferenceCallE2EContext?, messageLifetime: Int32, isLiveStream: Bool) {
             self.queue = queue
@@ -3804,9 +3852,10 @@ public final class GroupCallMessagesContext {
             self.messageLifetime = messageLifetime
             self.isLiveStream = isLiveStream
             
-            self.state = State(messages: [], pinnedMessages: [])
+            self.state = State(messages: [], pinnedMessages: [], topStars: [], totalStars: 0, pendingMyStars: 0)
             self.stateValue.set(self.state)
             
+            let accountPeerId = account.peerId
             self.updatesDisposable = (account.stateManager.groupCallMessageUpdates
             |> deliverOn(self.queue)).startStrict(next: { [weak self] updates in
                 guard let self else {
@@ -3913,13 +3962,20 @@ public final class GroupCallMessagesContext {
                             }
                             existingIds.insert(message.id)
                             state.messages.append(message)
-                            if self.isLiveStream && message.paidStars != nil {
+                            if self.isLiveStream, let paidStars = message.paidStars {
                                 if message.date + message.lifetime >= currentTime {
                                     state.pinnedMessages.append(message)
+                                }
+                                if let author = message.author {
+                                    if self.didInitializeTopStars {
+                                        Impl.addStateStars(state: &state, peerId: author.id, isMy: author.id == accountPeerId, amount: paidStars)
+                                    }
                                 }
                             }
                         }
                         self.state = state
+                        
+                        self.didInitializeTopStars = true
                     })
                 }
             })
@@ -3929,12 +3985,76 @@ public final class GroupCallMessagesContext {
             }, queue: self.queue)
             self.messageLifeTimer = timer
             timer.start()
+            
+            self.pollTopStars()
         }
         
         deinit {
             self.updatesDisposable?.dispose()
             self.sendMessageDisposables.dispose()
             self.messageLifeTimer?.invalidate()
+            self.pollTopStarsDisposable?.dispose()
+            self.pendingSendStarsTimer?.invalidate()
+        }
+        
+        private func pollTopStars() {
+            let accountPeerId = self.account.peerId
+            let postbox = self.account.postbox
+            self.pollTopStarsDisposable?.dispose()
+            self.pollTopStarsDisposable = ((self.account.network.request(Api.functions.phone.getGroupCallStars(call: self.reference.apiInputGroupCall))
+            |> map(Optional.init)
+            |> `catch` { _ -> Signal<Api.phone.GroupCallStars?, NoError> in
+                return .single(nil)
+            }
+            |> then(Signal<Api.phone.GroupCallStars?, NoError>.complete() |> delay(30.0, queue: self.queue))) |> restart
+            |> mapToSignal { result -> Signal<(Api.phone.GroupCallStars, [PeerId: Peer])?, NoError> in
+                guard let result else {
+                    return .single(nil)
+                }
+                return postbox.transaction { transaction -> (Api.phone.GroupCallStars, [PeerId: Peer])? in
+                    var peers: [PeerId: Peer] = [:]
+                    switch result {
+                    case let .groupCallStars(_, topDonors, chats, users):
+                        updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: AccumulatedPeers(chats: chats, users: users))
+                        for topDonor in topDonors {
+                            switch topDonor {
+                            case let .groupCallDonor(_, peerId, _):
+                                if let peerId {
+                                    if peers[peerId.peerId] == nil, let peer = transaction.getPeer(peerId.peerId) {
+                                        peers[peer.id] = peer
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    return (result, peers)
+                }
+            }
+            |> deliverOn(self.queue)).startStrict(next: { [weak self] result in
+                guard let self else {
+                    return
+                }
+                if let (result, _) = result {
+                    switch result {
+                    case let .groupCallStars(totalStars, topDonors, _, _):
+                        var state = self.state
+                        state.topStars = topDonors.map { topDonor in
+                            switch topDonor {
+                            case let .groupCallDonor(flags, peerId, stars):
+                                return TopStarsItem(
+                                    peerId: peerId?.peerId,
+                                    amount: stars,
+                                    isTop: (flags & (1 << 0)) != 0,
+                                    isMy: (flags & (1 << 1)) != 0 || peerId?.peerId == accountPeerId,
+                                    isAnonymous: (flags & (1 << 2)) != 0
+                                )
+                            }
+                        }
+                        state.totalStars = totalStars
+                        self.state = state
+                    }
+                }
+            })
         }
         
         private func messageLifetimeTick() {
@@ -3964,6 +4084,96 @@ public final class GroupCallMessagesContext {
             
             if let updatedState {
                 self.state = updatedState
+            }
+        }
+        
+        static func addStateStars(state: inout State, peerId: EnginePeer.Id, isMy: Bool, amount: Int64) {
+            state.totalStars += amount
+            
+            var totalMyAmount: Int64 = amount
+            if isMy {
+                if let index = state.topStars.firstIndex(where: { $0.isMy }) {
+                    totalMyAmount += state.topStars[index].amount
+                    
+                    state.topStars[index] = TopStarsItem(
+                        peerId: peerId,
+                        amount: totalMyAmount,
+                        isTop: false,
+                        isMy: true,
+                        isAnonymous: state.topStars[index].isAnonymous
+                    )
+                } else {
+                    state.topStars.append(TopStarsItem(
+                        peerId: peerId,
+                        amount: totalMyAmount,
+                        isTop: false,
+                        isMy: true,
+                        isAnonymous: false
+                    ))
+                }
+            } else {
+                if let index = state.topStars.firstIndex(where: { $0.peerId == peerId }) {
+                    totalMyAmount += state.topStars[index].amount
+                    
+                    state.topStars[index] = TopStarsItem(
+                        peerId: peerId,
+                        amount: totalMyAmount,
+                        isTop: false,
+                        isMy: false,
+                        isAnonymous: state.topStars[index].isAnonymous
+                    )
+                } else {
+                    state.topStars.append(TopStarsItem(
+                        peerId: peerId,
+                        amount: totalMyAmount,
+                        isTop: false,
+                        isMy: false,
+                        isAnonymous: false
+                    ))
+                }
+            }
+            state.topStars.sort(by: { lhs, rhs in
+                if lhs.amount != rhs.amount {
+                    return lhs.amount > rhs.amount
+                }
+                if let lhsPeer = lhs.peerId, let rhsPeer = rhs.peerId {
+                    return lhsPeer < rhsPeer
+                }
+                if (lhs.peerId == nil) != (rhs.peerId == nil) {
+                    return lhs.peerId != nil
+                }
+                return !lhs.isAnonymous
+            })
+            
+            if let index = state.topStars.firstIndex(where: { item in
+                if isMy {
+                    return item.isMy
+                } else {
+                    return item.peerId == peerId
+                }
+            }) {
+                let item = state.topStars[index]
+                if index > 3 {
+                    if isMy {
+                        state.topStars[index] = TopStarsItem(
+                            peerId: item.peerId,
+                            amount: item.amount,
+                            isTop: false,
+                            isMy: item.isMy,
+                            isAnonymous: item.isAnonymous
+                        )
+                    } else {
+                        state.topStars.remove(at: index)
+                    }
+                } else {
+                    state.topStars[index] = TopStarsItem(
+                        peerId: item.peerId,
+                        amount: item.amount,
+                        isTop: true,
+                        isMy: item.isMy,
+                        isAnonymous: item.isAnonymous
+                    )
+                }
             }
         }
         
@@ -4004,18 +4214,14 @@ public final class GroupCallMessagesContext {
                 )
                 state.messages.append(message)
                 if self.isLiveStream {
-                    if paidStars != nil {
+                    if let paidStars {
                         state.pinnedMessages.append(message)
+                        if let fromPeer {
+                            Impl.addStateStars(state: &state, peerId: fromPeer.id, isMy: true, amount: paidStars)
+                        }
                     }
                 }
                 self.state = state
-                
-                #if DEBUG
-                var paidStars = paidStars
-                if "".isEmpty {
-                    paidStars = nil
-                }
-                #endif
                 
                 self.processedIds.insert(randomId)
                 
@@ -4044,7 +4250,7 @@ public final class GroupCallMessagesContext {
                         flags |= 1 << 0
                     }
                     self.sendMessageDisposables.add((self.account.network.request(Api.functions.phone.sendGroupCallMessage(
-                        flags: 0,
+                        flags: flags,
                         call: self.reference.apiInputGroupCall,
                         randomId: randomId,
                         message: .textWithEntities(
@@ -4080,7 +4286,186 @@ public final class GroupCallMessagesContext {
             })
         }
         
-        func deleteMessage(id: Message.Id) {
+        func commitSendStars() {
+            guard let pendingSendStars = self.pendingSendStars else {
+                return
+            }
+            self.pendingSendStars = nil
+            
+            if let _ = self.e2eContext {
+                return
+            }
+            if let pendingSendStarsTimer = self.pendingSendStarsTimer {
+                self.pendingSendStarsTimer = nil
+                pendingSendStarsTimer.invalidate()
+            }
+            
+            var flags: Int32 = 0
+            flags |= 1 << 0
+            self.sendMessageDisposables.add((self.account.network.request(Api.functions.phone.sendGroupCallMessage(
+                flags: flags,
+                call: self.reference.apiInputGroupCall,
+                randomId: pendingSendStars.messageId,
+                message: .textWithEntities(
+                    text: "",
+                    entities: []
+                ),
+                allowPaidStars: pendingSendStars.amount
+            )) |> deliverOn(self.queue)).startStrict(next: { [weak self] updates in
+                guard let self else {
+                    return
+                }
+                self.account.stateManager.addUpdates(updates)
+                for update in updates.allUpdates {
+                    if case let .updateMessageID(id, randomIdValue) = update {
+                        if randomIdValue == pendingSendStars.messageId {
+                            self.processedIds.insert(Int64(id))
+                            var state = self.state
+                            if let index = state.messages.firstIndex(where: { $0.id == Message.Id(space: .local, id: pendingSendStars.messageId) }) {
+                                state.messages[index] = state.messages[index].withId(Message.Id(space: .remote, id: Int64(id)))
+                            }
+                            if let index = state.pinnedMessages.firstIndex(where: { $0.id == Message.Id(space: .local, id: pendingSendStars.messageId) }) {
+                                state.pinnedMessages[index] = state.pinnedMessages[index].withId(Message.Id(space: .remote, id: Int64(id)))
+                            }
+                            Impl.addStateStars(state: &state, peerId: pendingSendStars.fromId, isMy: true, amount: pendingSendStars.amount)
+                            state.pendingMyStars = 0
+                            self.state = state
+                            break
+                        }
+                    }
+                }
+            }, error: { _ in
+            }))
+        }
+        
+        func cancelSendStars() {
+            if let pendingSendStarsTimer = self.pendingSendStarsTimer {
+                self.pendingSendStarsTimer = nil
+                pendingSendStarsTimer.invalidate()
+            }
+            
+            if let pendingSendStars = self.pendingSendStars {
+                self.pendingSendStars = nil
+                
+                var state = self.state
+                state.pendingMyStars = 0
+                if let index = state.messages.firstIndex(where: { $0.id == Message.Id(space: .local, id: pendingSendStars.messageId) }) {
+                    state.messages.remove(at: index)
+                }
+                if let index = state.pinnedMessages.firstIndex(where: { $0.id == Message.Id(space: .local, id: pendingSendStars.messageId) }) {
+                    state.pinnedMessages.remove(at: index)
+                }
+                self.state = state
+            }
+        }
+        
+        func sendStars(fromId: EnginePeer.Id, amount: Int64, delay: Bool) {
+            let _ = (self.account.postbox.transaction { transaction -> Peer? in
+                return transaction.getPeer(fromId)
+            }
+            |> deliverOn(self.queue)).startStandalone(next: { [weak self] fromPeer in
+                guard let self else {
+                    return
+                }
+                
+                let currentTime = Int32(CFAbsoluteTimeGetCurrent() + kCFAbsoluteTimeIntervalSince1970)
+                
+                let totalAmount: Int64
+                if let pendingSendStarsValue = self.pendingSendStars {
+                    totalAmount = pendingSendStarsValue.amount + amount
+                    
+                    self.pendingSendStars = (
+                        fromId: fromId,
+                        messageId: pendingSendStarsValue.messageId,
+                        amount: totalAmount
+                    )
+                } else {
+                    totalAmount = amount
+                    
+                    var randomId: Int64 = 0
+                    arc4random_buf(&randomId, 8)
+                    
+                    self.pendingSendStars = (
+                        fromId: fromId,
+                        messageId: randomId,
+                        amount: amount
+                    )
+                    
+                    self.processedIds.insert(randomId)
+                }
+                
+                let lifetime = Int32(GroupCallMessagesContext.getStarAmountParamMapping(value: totalAmount).period)
+                
+                var state = self.state
+                if let pendingSendStarsValue = self.pendingSendStars {
+                    if let index = state.messages.firstIndex(where: { $0.id == Message.Id(space: .local, id: pendingSendStarsValue.messageId) }) {
+                        let message = state.messages[index]
+                        state.messages.remove(at: index)
+                        state.messages.append(Message(
+                            id: message.id,
+                            author: message.author,
+                            text: message.text,
+                            entities: message.entities,
+                            date: currentTime,
+                            lifetime: lifetime,
+                            paidStars: totalAmount
+                        ))
+                    } else {
+                        state.messages.append(Message(
+                            id: Message.Id(space: .local, id: pendingSendStarsValue.messageId),
+                            author: fromPeer.flatMap(EnginePeer.init),
+                            text: "",
+                            entities: [],
+                            date: currentTime,
+                            lifetime: lifetime,
+                            paidStars: totalAmount
+                        ))
+                    }
+                    if let index = state.pinnedMessages.firstIndex(where: { $0.id == Message.Id(space: .local, id: pendingSendStarsValue.messageId) }) {
+                        let message = state.pinnedMessages[index]
+                        state.pinnedMessages.remove(at: index)
+                        state.pinnedMessages.append(Message(
+                            id: message.id,
+                            author: message.author,
+                            text: message.text,
+                            entities: message.entities,
+                            date: currentTime,
+                            lifetime: lifetime,
+                            paidStars: totalAmount
+                        ))
+                    } else {
+                        state.pinnedMessages.append(Message(
+                            id: Message.Id(space: .local, id: pendingSendStarsValue.messageId),
+                            author: fromPeer.flatMap(EnginePeer.init),
+                            text: "",
+                            entities: [],
+                            date: currentTime,
+                            lifetime: lifetime,
+                            paidStars: totalAmount
+                        ))
+                    }
+                }
+                
+                if delay {
+                    state.pendingMyStars += amount
+                    self.state = state
+                    
+                    self.pendingSendStarsTimer?.invalidate()
+                    self.pendingSendStarsTimer = SwiftSignalKit.Timer(timeout: 5.0, repeat: false, completion: { [weak self] in
+                        guard let self else {
+                            return
+                        }
+                        self.commitSendStars()
+                    }, queue: self.queue)
+                    self.pendingSendStarsTimer?.start()
+                } else {
+                    self.state = state
+                    self.commitSendStars()
+                }
+            })
+        }
+        
+        func deleteMessage(id: Message.Id, reportSpam: Bool) {
             var updatedState: State?
             if let index = self.state.messages.firstIndex(where: { $0.id == id }) {
                 if updatedState == nil {
@@ -4097,6 +4482,12 @@ public final class GroupCallMessagesContext {
             if let updatedState {
                 self.state = updatedState
             }
+            
+            var flags: Int32 = 0
+            if reportSpam {
+                flags |= 1 << 0
+            }
+            let _ = self.account.network.request(Api.functions.phone.deleteGroupCallMessages(flags: flags, call: self.reference.apiInputGroupCall, messages: [Int32(clamping: id.id)])).startStandalone()
         }
     }
     
@@ -4123,9 +4514,27 @@ public final class GroupCallMessagesContext {
         }
     }
     
-    public func deleteMessage(id: Message.Id) {
+    public func sendStars(fromId: EnginePeer.Id, amount: Int64, delay: Bool) {
         self.impl.with { impl in
-            impl.deleteMessage(id: id)
+            impl.sendStars(fromId: fromId, amount: amount, delay: delay)
+        }
+    }
+    
+    public func cancelSendStars() {
+        self.impl.with { impl in
+            impl.cancelSendStars()
+        }
+    }
+    
+    public func commitSendStars() {
+        self.impl.with { impl in
+            impl.commitSendStars()
+        }
+    }
+    
+    public func deleteMessage(id: Message.Id, reportSpam: Bool) {
+        self.impl.with { impl in
+            impl.deleteMessage(id: id, reportSpam: reportSpam)
         }
     }
     

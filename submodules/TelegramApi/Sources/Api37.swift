@@ -1,3 +1,65 @@
+public extension Api.premium {
+    enum MyBoosts: TypeConstructorDescription {
+        case myBoosts(myBoosts: [Api.MyBoost], chats: [Api.Chat], users: [Api.User])
+    
+    public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+    switch self {
+                case .myBoosts(let myBoosts, let chats, let users):
+                    if boxed {
+                        buffer.appendInt32(-1696454430)
+                    }
+                    buffer.appendInt32(481674261)
+                    buffer.appendInt32(Int32(myBoosts.count))
+                    for item in myBoosts {
+                        item.serialize(buffer, true)
+                    }
+                    buffer.appendInt32(481674261)
+                    buffer.appendInt32(Int32(chats.count))
+                    for item in chats {
+                        item.serialize(buffer, true)
+                    }
+                    buffer.appendInt32(481674261)
+                    buffer.appendInt32(Int32(users.count))
+                    for item in users {
+                        item.serialize(buffer, true)
+                    }
+                    break
+    }
+    }
+    
+    public func descriptionFields() -> (String, [(String, Any)]) {
+        switch self {
+                case .myBoosts(let myBoosts, let chats, let users):
+                return ("myBoosts", [("myBoosts", myBoosts as Any), ("chats", chats as Any), ("users", users as Any)])
+    }
+    }
+    
+        public static func parse_myBoosts(_ reader: BufferReader) -> MyBoosts? {
+            var _1: [Api.MyBoost]?
+            if let _ = reader.readInt32() {
+                _1 = Api.parseVector(reader, elementSignature: 0, elementType: Api.MyBoost.self)
+            }
+            var _2: [Api.Chat]?
+            if let _ = reader.readInt32() {
+                _2 = Api.parseVector(reader, elementSignature: 0, elementType: Api.Chat.self)
+            }
+            var _3: [Api.User]?
+            if let _ = reader.readInt32() {
+                _3 = Api.parseVector(reader, elementSignature: 0, elementType: Api.User.self)
+            }
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            let _c3 = _3 != nil
+            if _c1 && _c2 && _c3 {
+                return Api.premium.MyBoosts.myBoosts(myBoosts: _1!, chats: _2!, users: _3!)
+            }
+            else {
+                return nil
+            }
+        }
+    
+    }
+}
 public extension Api.smsjobs {
     enum EligibilityToJoin: TypeConstructorDescription {
         case eligibleToJoin(termsUrl: String, monthlySentSms: Int32)

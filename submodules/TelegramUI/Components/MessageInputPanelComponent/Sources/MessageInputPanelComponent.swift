@@ -182,6 +182,16 @@ public final class MessageInputPanelComponent: Component {
         }
     }
     
+    public struct StarStats: Equatable {
+        public var myStars: Int64
+        public var totalStars: Int64
+        
+        public init(myStars: Int64, totalStars: Int64) {
+            self.myStars = myStars
+            self.totalStars = totalStars
+        }
+    }
+    
     public let externalState: ExternalState
     public let context: AccountContext
     public let theme: PresentationTheme
@@ -244,6 +254,7 @@ public final class MessageInputPanelComponent: Component {
     public let liveChatState: LiveChatState?
     public let toggleLiveChatExpanded: (() -> Void)?
     public let sendStarsAction: ((UIView, Bool) -> Void)?
+    public let starStars: StarStats?
     
     public init(
         externalState: ExternalState,
@@ -307,7 +318,8 @@ public final class MessageInputPanelComponent: Component {
         chatLocation: ChatLocation?,
         liveChatState: LiveChatState? = nil,
         toggleLiveChatExpanded: (() -> Void)? = nil,
-        sendStarsAction: ((UIView, Bool) -> Void)? = nil
+        sendStarsAction: ((UIView, Bool) -> Void)? = nil,
+        starStars: StarStats? = nil
     ) {
         self.externalState = externalState
         self.context = context
@@ -371,6 +383,7 @@ public final class MessageInputPanelComponent: Component {
         self.liveChatState = liveChatState
         self.toggleLiveChatExpanded = toggleLiveChatExpanded
         self.sendStarsAction = sendStarsAction
+        self.starStars = starStars
     }
     
     public static func ==(lhs: MessageInputPanelComponent, rhs: MessageInputPanelComponent) -> Bool {
@@ -501,6 +514,9 @@ public final class MessageInputPanelComponent: Component {
             return false
         }
         if lhs.liveChatState != rhs.liveChatState {
+            return false
+        }
+        if lhs.starStars != rhs.starStars {
             return false
         }
         return true
@@ -967,7 +983,7 @@ public final class MessageInputPanelComponent: Component {
                             }
                             component.toggleLiveChatExpanded?()
                         }),
-                        rightAction: ChatTextInputPanelComponent.RightAction(kind: .stars(count: Int(component.storyItem?.views?.reactions.first(where: { $0.value == .stars })?.count ?? 0), isFilled: component.myReaction?.reaction == .stars), action: { [weak self] sourceView in
+                        rightAction: ChatTextInputPanelComponent.RightAction(kind: .stars(count: Int(component.starStars?.totalStars ?? 0), isFilled: (component.starStars?.myStars ?? 0) != 0), action: { [weak self] sourceView in
                             guard let self, let component = self.component else {
                                 return
                             }

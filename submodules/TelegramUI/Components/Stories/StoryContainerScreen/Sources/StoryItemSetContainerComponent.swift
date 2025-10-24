@@ -1628,6 +1628,12 @@ public final class StoryItemSetContainerComponent: Component {
                                     return
                                 }
                                 self.sendMessageContext.activateInlineReaction(view: self, reactionView: reactionView, reaction: reaction)
+                            },
+                            controller: { [weak self] in
+                                guard let self, let component = self.component else {
+                                    return nil
+                                }
+                                return component.controller()
                             }
                         )),
                         environment: {
@@ -2964,11 +2970,18 @@ public final class StoryItemSetContainerComponent: Component {
                 }
                 
                 var liveChatState: MessageInputPanelComponent.LiveChatState?
+                var starStats: MessageInputPanelComponent.StarStats?
                 if let visibleItemView = self.visibleItems[component.slice.item.id]?.view.view as? StoryItemContentComponent.View {
                     liveChatState = visibleItemView.liveChatState.flatMap { liveChatState in
                         return MessageInputPanelComponent.LiveChatState(
                             isExpanded: liveChatState.isExpanded,
                             hasUnseenMessages: liveChatState.hasUnseenMessages
+                        )
+                    }
+                    starStats = visibleItemView.starStars.flatMap { starStats in
+                        return MessageInputPanelComponent.StarStats(
+                            myStars: starStats.myStars,
+                            totalStars: starStats.totalStars
                         )
                     }
                 }
@@ -3220,7 +3233,8 @@ public final class StoryItemSetContainerComponent: Component {
                             } else {
                                 self.sendMessageContext.performSendStars(view: self, buttonView: sourceView, count: 1, isFromExpandedView: false)
                             }
-                        } : nil
+                        } : nil,
+                        starStars: starStats
                     )),
                     environment: {},
                     containerSize: CGSize(width: inputPanelAvailableWidth, height: 200.0)
