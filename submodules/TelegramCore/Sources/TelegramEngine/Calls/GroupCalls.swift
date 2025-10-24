@@ -4465,7 +4465,7 @@ public final class GroupCallMessagesContext {
             })
         }
         
-        func deleteMessage(id: Message.Id) {
+        func deleteMessage(id: Message.Id, reportSpam: Bool) {
             var updatedState: State?
             if let index = self.state.messages.firstIndex(where: { $0.id == id }) {
                 if updatedState == nil {
@@ -4482,6 +4482,12 @@ public final class GroupCallMessagesContext {
             if let updatedState {
                 self.state = updatedState
             }
+            
+            var flags: Int32 = 0
+            if reportSpam {
+                flags |= 1 << 0
+            }
+            let _ = self.account.network.request(Api.functions.phone.deleteGroupCallMessages(flags: flags, call: self.reference.apiInputGroupCall, messages: [Int32(clamping: id.id)])).startStandalone()
         }
     }
     
@@ -4526,9 +4532,9 @@ public final class GroupCallMessagesContext {
         }
     }
     
-    public func deleteMessage(id: Message.Id) {
+    public func deleteMessage(id: Message.Id, reportSpam: Bool) {
         self.impl.with { impl in
-            impl.deleteMessage(id: id)
+            impl.deleteMessage(id: id, reportSpam: reportSpam)
         }
     }
     

@@ -4079,9 +4079,9 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
         }
     }
     
-    public func deleteMessage(id: GroupCallMessagesContext.Message.Id) {
+    public func deleteMessage(id: GroupCallMessagesContext.Message.Id, reportSpam: Bool) {
         if let messagesContext = self.messagesContext {
-            messagesContext.deleteMessage(id: id)
+            messagesContext.deleteMessage(id: id, reportSpam: reportSpam)
         }
     }
 }

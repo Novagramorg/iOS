@@ -2094,6 +2094,8 @@ private final class ChatSendStarsScreenComponent: Component {
                         let separatorSpacing: CGFloat = 10.0
                         transition.setFrame(layer: topPeersLeftSeparator, frame: CGRect(origin: CGPoint(x: sideInset, y: separatorY), size: CGSize(width: max(0.0, topPeersBackgroundFrame.minX - separatorSpacing - sideInset), height: UIScreenPixel)))
                         transition.setFrame(layer: topPeersRightSeparator, frame: CGRect(origin: CGPoint(x: topPeersBackgroundFrame.maxX + separatorSpacing, y: separatorY), size: CGSize(width: max(0.0, availableSize.width - sideInset - (topPeersBackgroundFrame.maxX + separatorSpacing)), height: UIScreenPixel)))
+                        
+                        contentHeight += 60.0
                     }
                     
                     var mappedTopPeers = reactData.topPeers
@@ -2261,7 +2263,7 @@ private final class ChatSendStarsScreenComponent: Component {
                                 itemComponentView.alpha = 0.0
                             }
                             
-                            let itemFrame = CGRect(origin: CGPoint(x: itemX, y: contentHeight + 60.0), size: itemSize)
+                            let itemFrame = CGRect(origin: CGPoint(x: itemX, y: contentHeight), size: itemSize)
                             
                             if animateItem {
                                 itemPositionTransition.setPosition(view: itemComponentView, position: itemFrame.center)
@@ -2277,7 +2279,7 @@ private final class ChatSendStarsScreenComponent: Component {
                         itemX += itemSize.width + itemSpacing
                     }
                     
-                    contentHeight += 164.0
+                    contentHeight += 104.0
                 }
                 
                 if !reactData.topPeers.isEmpty {

@@ -17,6 +17,7 @@ import MultilineTextComponent
 import ContextUI
 import StarsParticleEffect
 import StoryLiveChatMessageComponent
+import AdminUserActionsSheet
 
 private final class PinnedBarMessageComponent: Component {
     let context: AccountContext
@@ -374,6 +375,7 @@ final class StoryContentLiveChatComponent: Component {
     let call: PresentationGroupCall
     let storyPeerId: EnginePeer.Id
     let insets: UIEdgeInsets
+    let controller: () -> ViewController?
     
     init(
         external: External,
@@ -382,7 +384,8 @@ final class StoryContentLiveChatComponent: Component {
         theme: PresentationTheme,
         call: PresentationGroupCall,
         storyPeerId: EnginePeer.Id,
-        insets: UIEdgeInsets
+        insets: UIEdgeInsets,
+        controller: @escaping () -> ViewController?
     ) {
         self.external = external
         self.context = context
@@ -391,6 +394,7 @@ final class StoryContentLiveChatComponent: Component {
         self.call = call
         self.storyPeerId = storyPeerId
         self.insets = insets
+        self.controller = controller
     }
 
     static func ==(lhs: StoryContentLiveChatComponent, rhs: StoryContentLiveChatComponent) -> Bool {
@@ -437,6 +441,7 @@ final class StoryContentLiveChatComponent: Component {
         private var stateDisposable: Disposable?
         
         private var currentListIsEmpty: Bool = true
+        private var isMessageContextMenuOpen: Bool = false
         
         public var isChatEmpty: Bool {
             guard let messagesState = self.messagesState else {
@@ -551,6 +556,60 @@ final class StoryContentLiveChatComponent: Component {
             self.state?.updated(transition: .spring(duration: 0.4))
         }
         
+        private func displayDeleteMessageAndBan(id: GroupCallMessagesContext.Message.Id) {
+            Task { @MainActor [weak self] in
+                guard let self, let component = self.component else {
+                    return
+                }
+                guard let chatPeer = await component.context.engine.data.get(
+                    TelegramEngine.EngineData.Item.Peer.Peer(id: component.storyPeerId)
+                ).get() else {
+                    return
+                }
+                guard let messagesState = self.messagesState, let message = messagesState.messages.first(where: { $0.id == id }) else {
+                    return
+                }
+                guard let author = message.author else {
+                    return
+                }
+                var totalCount = 0
+                for message in messagesState.messages {
+                    if message.author?.id == author.id {
+                        totalCount += 1
+                    }
+                }
+                guard let controller = component.controller() else {
+                    return
+                }
+                controller.push(AdminUserActionsSheet(
+                    context: component.context,
+                    chatPeer: chatPeer,
+                    peers: [RenderedChannelParticipant(
+                        participant: .member(
+                            id: author.id,
+                            invitedAt: 0,
+                            adminInfo: nil,
+                            banInfo: nil,
+                            rank: nil,
+                            subscriptionUntilDate: nil
+                        ),
+                        peer: author._asPeer()
+                    )],
+                    mode: .liveStream(
+                        messageCount: 1,
+                        deleteAllMessageCount: totalCount,
+                        completion: { [weak self] result in
+                            guard let self else {
+                                return
+                            }
+                            let _ = self
+                        }
+                    ),
+                    customTheme: defaultDarkColorPresentationTheme
+                ))
+            }
+        }
+        
         private func openMessageContextMenu(id: GroupCallMessagesContext.Message.Id, gesture: ContextGesture, sourceNode: ContextExtractedContentContainingNode) {
             Task { @MainActor [weak self] in
                 guard let self else {
@@ -583,7 +642,52 @@ final class StoryContentLiveChatComponent: Component {
                 })))
                 
                 let state = await (component.call.state |> take(1)).get()
-                if state.canManageCall || component.storyPeerId == component.context.account.peerId {
+                
+                var isAdmin = state.canManageCall
+                if component.storyPeerId == component.context.account.peerId {
+                    isAdmin = true
+                }
+                var canDelete = isAdmin
+                var isMyMessage = false
+                guard let messagesState = self.messagesState, let message = messagesState.messages.first(where: { $0.id == id }) else {
+                    return
+                }
+                if message.author?.id == component.context.account.peerId {
+                    isMyMessage = true
+                    canDelete = true
+                }
+                
+                if !isMyMessage, let author = message.author {
+                    items.append(.action(ContextMenuActionItem(text: "Open Profile", textColor: .primary, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/User"), color: theme.contextMenu.primaryColor) }, action: { [weak self] c, _ in
+                        guard let self else {
+                            return
+                        }
+                        
+                        c?.dismiss(completion: { [weak self] in
+                            guard let self, let component = self.component else {
+                                return
+                            }
+                            guard let controller = component.controller(), let navigationController = controller.navigationController as? NavigationController else {
+                                return
+                            }
+                            component.context.sharedContext.navigateToChatController(NavigateToChatControllerParams(
+                                navigationController: navigationController,
+                                context: component.context,
+                                chatLocation: .peer(author),
+                                keepStack: .always
+                            ))
+                        })
+                    })))
+                }
+                
+                #if DEBUG
+                if "".isEmpty {
+                    isAdmin = true
+                    canDelete = true
+                }
+                #endif
+                
+                if canDelete {
                     items.append(.action(ContextMenuActionItem(text: presentationData.strings.ChatList_Context_Delete, textColor: .destructive, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Delete"), color: theme.contextMenu.destructiveColor) }, action: { [weak self] c, _ in
                         guard let self else {
                             return
@@ -594,7 +698,11 @@ final class StoryContentLiveChatComponent: Component {
                                 return
                             }
                             if let call = component.call as? PresentationGroupCallImpl {
-                                call.deleteMessage(id: id)
+                                if isAdmin && !isMyMessage {
+                                    self.displayDeleteMessageAndBan(id: id)
+                                } else {
+                                    call.deleteMessage(id: id, reportSpam: false)
+                                }
                             }
                         })
                     })))
@@ -615,17 +723,18 @@ final class StoryContentLiveChatComponent: Component {
                     guard let self else {
                         return
                     }
-                    if let listView = self.list.view {
-                        let transition: ComponentTransition = .easeInOut(duration: 0.2)
-                        transition.setAlpha(view: listView, alpha: 1.0)
+                    self.isMessageContextMenuOpen = false
+                    if !self.isUpdating {
+                        self.state?.updated(transition: .easeInOut(duration: 0.2), isLocal: true)
                     }
                 }
-                if let listView = self.list.view {
-                    let transition: ComponentTransition = .easeInOut(duration: 0.2)
-                    transition.setAlpha(view: listView, alpha: 0.25)
+                
+                self.isMessageContextMenuOpen = true
+                if !self.isUpdating {
+                    self.state?.updated(transition: .easeInOut(duration: 0.2), isLocal: true)
                 }
                 
-                component.context.sharedContext.mainWindow?.presentInGlobalOverlay(contextController)
+                component.controller()?.presentInGlobalOverlay(contextController)
             }
         }
         
@@ -793,7 +902,14 @@ final class StoryContentLiveChatComponent: Component {
                 }
                 transition.setPosition(view: listView, position: listFrame.offsetBy(dx: 0.0, dy: self.isChatExpanded ? 0.0 : listFrame.height).center)
                 transition.setBounds(view: listView, bounds: CGRect(origin: CGPoint(), size: listFrame.size))
-                alphaTransition.setAlpha(view: listView, alpha: listItems.isEmpty ? 0.0 : 1.0)
+                
+                let listAlpha: CGFloat
+                if self.isMessageContextMenuOpen {
+                    listAlpha = 0.25
+                } else {
+                    listAlpha = listItems.isEmpty ? 0.0 : 1.0
+                }
+                alphaTransition.setAlpha(view: listView, alpha: listAlpha)
             }
             
             transition.setFrame(view: self.listContainer, frame: CGRect(origin: CGPoint(), size: availableSize))
