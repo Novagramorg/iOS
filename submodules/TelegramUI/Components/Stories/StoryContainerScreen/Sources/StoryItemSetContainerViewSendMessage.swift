@@ -102,6 +102,8 @@ final class StoryItemSetContainerSendMessage {
     var currentSpeechHolder: SpeechSynthesizerHolder?
     
     var currentLiveStreamMessageStars: StarsAmount?
+    var pendingLiveStreamSendStars: Int = 0
+    var pendingLiveStreamSendStarTimer: Foundation.Timer?
     
     private(set) var isMediaRecordingLocked: Bool = false
     var wasRecordingDismissed: Bool = false
@@ -116,6 +118,7 @@ final class StoryItemSetContainerSendMessage {
         self.resolvePeerByNameDisposable.dispose()
         self.inputMediaNodeDataDisposable?.dispose()
         self.currentTooltipUpdateTimer?.invalidate()
+        self.pendingLiveStreamSendStarTimer?.invalidate()
     }
     
     func setup(context: AccountContext, view: StoryItemSetContainerComponent.View, inputPanelExternalState: MessageInputPanelComponent.ExternalState, keyboardInputData: Signal<ChatEntityKeyboardInputNode.InputData, NoError>) {
@@ -422,7 +425,7 @@ final class StoryItemSetContainerSendMessage {
                         return
                     }
                     self.currentLiveStreamMessageStars = nil
-                    view.state?.updated(transition: .spring(duration: 0.3))
+                    view.state?.updated(transition: .spring(duration: 0.4))
                 })))
             }
         } else {
@@ -677,7 +680,7 @@ final class StoryItemSetContainerSendMessage {
                             
                             self.currentInputMode = .text
                             self.currentLiveStreamMessageStars = nil
-                            view.state?.updated(transition: .spring(duration: 0.3))
+                            view.state?.updated(transition: .spring(duration: 0.4))
                             
                             let controller = component.controller() as? StoryContainerScreen
                             controller?.requestLayout(forceUpdate: true, transition: .animated(duration: 0.3, curve: .spring))
@@ -759,7 +762,7 @@ final class StoryItemSetContainerSendMessage {
                             if hasFirstResponder(view) {
                                 view.endEditing(true)
                             } else {
-                                view.state?.updated(transition: .spring(duration: 0.3))
+                                view.state?.updated(transition: .spring(duration: 0.4))
                             }
                             controller?.requestLayout(forceUpdate: true, transition: .animated(duration: 0.3, curve: .spring))
                         }
@@ -826,7 +829,7 @@ final class StoryItemSetContainerSendMessage {
                 if hasFirstResponder(view) {
                     view.endEditing(true)
                 } else {
-                    view.state?.updated(transition: .spring(duration: 0.3))
+                    view.state?.updated(transition: .spring(duration: 0.4))
                 }
                 controller?.requestLayout(forceUpdate: true, transition: .animated(duration: 0.3, curve: .spring))
             })
@@ -886,7 +889,7 @@ final class StoryItemSetContainerSendMessage {
             if hasFirstResponder(view) {
                 view.endEditing(true)
             } else {
-                view.state?.updated(transition: .spring(duration: 0.3))
+                view.state?.updated(transition: .spring(duration: 0.4))
             }
             controller?.requestLayout(forceUpdate: true, transition: .animated(duration: 0.3, curve: .spring))
         })
@@ -3912,11 +3915,49 @@ final class StoryItemSetContainerSendMessage {
     }
     
     func performSendStars(view: StoryItemSetContainerComponent.View, buttonView: UIView, count: Int, isFromExpandedView: Bool) {
+        self.pendingLiveStreamSendStars += count
+        
+        if isFromExpandedView {
+            let totalCount = self.pendingLiveStreamSendStars
+            self.pendingLiveStreamSendStars = 0
+            self.pendingLiveStreamSendStarTimer?.invalidate()
+            self.pendingLiveStreamSendStarTimer = nil
+            
+            self.commitSendStars(view: view, count: totalCount)
+        } else {
+            self.pendingLiveStreamSendStarTimer?.invalidate()
+            self.pendingLiveStreamSendStarTimer = nil
+            view.state?.updated(transition: .spring(duration: 0.4))
+            
+            self.pendingLiveStreamSendStarTimer = Foundation.Timer.scheduledTimer(withTimeInterval: 5.0, repeats: false, block: { [weak self, weak view] _ in
+                guard let self, let view else {
+                    return
+                }
+                
+                let totalCount = self.pendingLiveStreamSendStars
+                self.pendingLiveStreamSendStars = 0
+                self.pendingLiveStreamSendStarTimer?.invalidate()
+                self.pendingLiveStreamSendStarTimer = nil
+                
+                self.commitSendStars(view: view, count: totalCount)
+            })
+        }
+    }
+    
+    private func commitSendStars(view: StoryItemSetContainerComponent.View, count: Int) {
         guard let component = view.component else {
             return
         }
-        
-        let _ = component.context.engine.messages.sendStoryStars(peerId: component.slice.effectivePeer.id, id: component.slice.item.storyItem.id, count: count).startStandalone()
+        guard case .liveStream = component.slice.item.storyItem.media else {
+            return
+        }
+        guard let visibleItem = view.visibleItems[component.slice.item.id], let itemView = visibleItem.view.view as? StoryItemContentComponent.View else {
+            return
+        }
+        guard let call = itemView.mediaStreamCall else {
+            return
+        }
+        call.sendStars(amount: Int64(count))
     }
 }
 

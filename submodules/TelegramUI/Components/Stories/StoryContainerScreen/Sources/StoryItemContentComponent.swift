@@ -167,6 +167,13 @@ final class StoryItemContentComponent: Component {
             )
         }
         
+        public var starStars: (myStars: Int64, totalStars: Int64)? {
+            guard let liveChatView = self.liveChat?.view as? StoryContentLiveChatComponent.View else {
+                return nil
+            }
+            return liveChatView.starStars
+        }
+        
         public func toggleLiveChatExpanded() {
             guard let liveChatView = self.liveChat?.view as? StoryContentLiveChatComponent.View else {
                 return
