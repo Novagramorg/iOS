@@ -2964,11 +2964,31 @@ public final class StoryItemSetContainerComponent: Component {
                 }
                 
                 var liveChatState: MessageInputPanelComponent.LiveChatState?
+                var starStats: MessageInputPanelComponent.StarStats?
                 if let visibleItemView = self.visibleItems[component.slice.item.id]?.view.view as? StoryItemContentComponent.View {
                     liveChatState = visibleItemView.liveChatState.flatMap { liveChatState in
                         return MessageInputPanelComponent.LiveChatState(
                             isExpanded: liveChatState.isExpanded,
                             hasUnseenMessages: liveChatState.hasUnseenMessages
+                        )
+                    }
+                    starStats = visibleItemView.starStars.flatMap { starStats in
+                        return MessageInputPanelComponent.StarStats(
+                            myStars: starStats.myStars,
+                            totalStars: starStats.totalStars
+                        )
+                    }
+                }
+                if self.sendMessageContext.pendingLiveStreamSendStars != 0 {
+                    if let starStatsValue = starStats {
+                        starStats = MessageInputPanelComponent.StarStats(
+                            myStars: starStatsValue.myStars + Int64(self.sendMessageContext.pendingLiveStreamSendStars),
+                            totalStars: starStatsValue.totalStars + Int64(self.sendMessageContext.pendingLiveStreamSendStars)
+                        )
+                    } else {
+                        starStats = MessageInputPanelComponent.StarStats(
+                            myStars: Int64(self.sendMessageContext.pendingLiveStreamSendStars),
+                            totalStars: Int64(self.sendMessageContext.pendingLiveStreamSendStars)
                         )
                     }
                 }
@@ -3220,7 +3240,8 @@ public final class StoryItemSetContainerComponent: Component {
                             } else {
                                 self.sendMessageContext.performSendStars(view: self, buttonView: sourceView, count: 1, isFromExpandedView: false)
                             }
-                        } : nil
+                        } : nil,
+                        starStars: starStats
                     )),
                     environment: {},
                     containerSize: CGSize(width: inputPanelAvailableWidth, height: 200.0)

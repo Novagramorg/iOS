@@ -446,6 +446,17 @@ final class StoryContentLiveChatComponent: Component {
         }
         private(set) var isChatExpanded: Bool = false
         
+        public var starStars: (myStars: Int64, totalStars: Int64)? {
+            guard let messagesState = self.messagesState else {
+                return nil
+            }
+            var myStars: Int64 = 0
+            if let item = messagesState.topStars.first(where: { $0.isMy }) {
+                myStars = item.amount
+            }
+            return (myStars, messagesState.totalStars)
+        }
+        
         override init(frame: CGRect) {
             self.listContainer = UIView()
 
@@ -506,7 +517,7 @@ final class StoryContentLiveChatComponent: Component {
             self.addSubview(self.listShadowView)
             self.addSubview(self.listContainer)
             
-            //self.isChatExpanded = true
+            self.isChatExpanded = true
         }
         
         required init?(coder: NSCoder) {
