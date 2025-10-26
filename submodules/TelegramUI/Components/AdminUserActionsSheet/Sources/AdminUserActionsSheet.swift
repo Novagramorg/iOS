@@ -993,7 +993,8 @@ private final class AdminUserActionsSheetComponent: Component {
                         maximumNumberOfLines: 0
                     )),
                     footer: nil,
-                    items: optionsSectionItems
+                    items: optionsSectionItems,
+                    isModal: true
                 )),
                 environment: {},
                 containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 100000.0)

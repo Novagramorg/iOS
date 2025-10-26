@@ -48,6 +48,7 @@ final class StoryTopItemsTable: Table {
     struct Entry {
         var id: Int32
         var isExact: Bool
+        var hasLiveItems: Bool
     }
     
     enum Event {
@@ -78,10 +79,12 @@ final class StoryTopItemsTable: Table {
             }
             var maxId: Int32 = 0
             buffer.read(&maxId, offset: 0, length: 4)
-            var isExact: Int8 = 0
-            buffer.read(&isExact, offset: 0, length: 1)
+            var flags: Int8 = 0
+            buffer.read(&flags, offset: 0, length: 1)
+            let isExact = (flags & (1 << 0)) != 0
+            let hasLiveItems = (flags & (1 << 1)) != 0
             
-            return Entry(id: maxId, isExact: isExact != 0)
+            return Entry(id: maxId, isExact: isExact, hasLiveItems: hasLiveItems)
         } else {
             return nil
         }
@@ -95,8 +98,14 @@ final class StoryTopItemsTable: Table {
             buffer.write(&version, length: 1)
             var maxId = entry.id
             buffer.write(&maxId, length: 4)
-            var isExact: Int8 = entry.isExact ? 1 : 0
-            buffer.write(&isExact, length: 1)
+            var flags: Int8 = 0
+            if entry.isExact {
+                flags |= 1 << 0
+            }
+            if entry.hasLiveItems {
+                flags |= 1 << 1
+            }
+            buffer.write(&flags, length: 1)
             
             self.valueBox.set(self.table, key: self.key(Key(peerId: peerId)), value: buffer.readBufferNoCopy())
         } else {
@@ -382,6 +391,8 @@ final class StoryItemsTable: Table {
             self.valueBox.remove(self.table, key: key, secure: true)
         }
         
+        var hasLiveItems = false
+        
         let buffer = WriteBuffer()
         for entry in entries {
             buffer.reset()
@@ -401,6 +412,7 @@ final class StoryItemsTable: Table {
                 flags |= (1 << 0)
             }
             if entry.isLiveStream {
+                hasLiveItems = true
                 flags |= (1 << 1)
             }
             buffer.write(&flags, length: 1)
@@ -410,7 +422,7 @@ final class StoryItemsTable: Table {
         
         events.append(.replace(peerId: peerId))
         
-        topItemTable.set(peerId: peerId, entry: StoryTopItemsTable.Entry(id: entries.last?.id ?? 0, isExact: true), events: &topItemEvents)
+        topItemTable.set(peerId: peerId, entry: StoryTopItemsTable.Entry(id: entries.last?.id ?? 0, isExact: true, hasLiveItems: hasLiveItems), events: &topItemEvents)
     }
     
     override func clearMemoryCache() {

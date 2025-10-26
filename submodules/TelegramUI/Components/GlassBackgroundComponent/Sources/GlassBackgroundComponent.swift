@@ -409,22 +409,37 @@ public class GlassBackgroundView: UIView {
             let innerBackgroundRadius = min(innerBackgroundFrame.width, innerBackgroundFrame.height) * 0.5
             
             let innerBackgroundView: UIView
+            var innerBackgroundTransition = transition
+            var animateIn = false
             if let current = self.innerBackgroundView {
                 innerBackgroundView = current
             } else {
                 innerBackgroundView = UIView()
+                innerBackgroundTransition = innerBackgroundTransition.withAnimation(.none)
                 self.innerBackgroundView = innerBackgroundView
                 self.contentView.insertSubview(innerBackgroundView, at: 0)
                 
                 innerBackgroundView.frame = innerBackgroundFrame
                 innerBackgroundView.layer.cornerRadius = innerBackgroundRadius
+                animateIn = true
             }
             
             innerBackgroundView.backgroundColor = innerColor
-            transition.setFrame(view: innerBackgroundView, frame: innerBackgroundFrame)
-            transition.setCornerRadius(layer: innerBackgroundView.layer, cornerRadius: innerBackgroundRadius)
+            innerBackgroundTransition.setFrame(view: innerBackgroundView, frame: innerBackgroundFrame)
+            innerBackgroundTransition.setCornerRadius(layer: innerBackgroundView.layer, cornerRadius: innerBackgroundRadius)
+            
+            if animateIn {
+                transition.animateAlpha(view: innerBackgroundView, from: 0.0, to: 1.0)
+                transition.animateScale(view: innerBackgroundView, from: 0.001, to: 1.0)
+            }
         } else if let innerBackgroundView = self.innerBackgroundView {
             self.innerBackgroundView = nil
+            
+            transition.setAlpha(view: innerBackgroundView, alpha: 0.0, completion: { [weak innerBackgroundView] _ in
+                innerBackgroundView?.removeFromSuperview()
+            })
+            transition.setScale(view: innerBackgroundView, scale: 0.001)
+            
             innerBackgroundView.removeFromSuperview()
         }
         

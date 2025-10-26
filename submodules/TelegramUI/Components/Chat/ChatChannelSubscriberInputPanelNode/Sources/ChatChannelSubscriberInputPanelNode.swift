@@ -424,8 +424,11 @@ public final class ChatChannelSubscriberInputPanelNode: ChatInputPanelNode {
             let (title, _) = titleAndColorForAction(action, theme: interfaceState.theme, strings: interfaceState.strings)
             
             var isAccent = false
-            if case .join = self.action {
+            switch self.action {
+            case .join, .joinGroup, .applyToJoin:
                 isAccent = true
+            default:
+                break
             }
             centerAction = (title, isAccent)
         }

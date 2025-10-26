@@ -196,7 +196,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[-531931925] = { return Api.ChannelParticipantsFilter.parse_channelParticipantsMentions($0) }
     dict[-566281095] = { return Api.ChannelParticipantsFilter.parse_channelParticipantsRecent($0) }
     dict[106343499] = { return Api.ChannelParticipantsFilter.parse_channelParticipantsSearch($0) }
-    dict[-26717355] = { return Api.Chat.parse_channel($0) }
+    dict[473084188] = { return Api.Chat.parse_channel($0) }
     dict[399807445] = { return Api.Chat.parse_channelForbidden($0) }
     dict[1103884886] = { return Api.Chat.parse_chat($0) }
     dict[693512293] = { return Api.Chat.parse_chatEmpty($0) }
@@ -857,6 +857,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[-1140172836] = { return Api.RecentMeUrl.parse_recentMeUrlStickerSet($0) }
     dict[1189204285] = { return Api.RecentMeUrl.parse_recentMeUrlUnknown($0) }
     dict[-1188296222] = { return Api.RecentMeUrl.parse_recentMeUrlUser($0) }
+    dict[1897752877] = { return Api.RecentStory.parse_recentStory($0) }
     dict[1218642516] = { return Api.ReplyMarkup.parse_replyInlineMarkup($0) }
     dict[-2035021048] = { return Api.ReplyMarkup.parse_replyKeyboardForceReply($0) }
     dict[-1606526075] = { return Api.ReplyMarkup.parse_replyKeyboardHide($0) }
@@ -1208,7 +1209,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[-1886646706] = { return Api.UrlAuthResult.parse_urlAuthResultAccepted($0) }
     dict[-1445536993] = { return Api.UrlAuthResult.parse_urlAuthResultDefault($0) }
     dict[-1831650802] = { return Api.UrlAuthResult.parse_urlAuthResultRequest($0) }
-    dict[34280482] = { return Api.User.parse_user($0) }
+    dict[829899656] = { return Api.User.parse_user($0) }
     dict[-742634630] = { return Api.User.parse_userEmpty($0) }
     dict[-1607745218] = { return Api.UserFull.parse_userFull($0) }
     dict[-2100168954] = { return Api.UserProfilePhoto.parse_userProfilePhoto($0) }
@@ -2125,6 +2126,8 @@ public extension Api {
             case let _1 as Api.ReceivedNotifyMessage:
                 _1.serialize(buffer, boxed)
             case let _1 as Api.RecentMeUrl:
+                _1.serialize(buffer, boxed)
+            case let _1 as Api.RecentStory:
                 _1.serialize(buffer, boxed)
             case let _1 as Api.ReplyMarkup:
                 _1.serialize(buffer, boxed)

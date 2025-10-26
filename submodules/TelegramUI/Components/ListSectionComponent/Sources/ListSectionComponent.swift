@@ -331,15 +331,9 @@ public final class ListSectionComponent: Component {
         case legacy
     }
     
-    public enum BackgroundColor {
-        case base
-        case modal
-    }
-    
     public let theme: PresentationTheme
     public let style: Style
     public let background: Background
-    public let backgroundColor: BackgroundColor
     public let header: AnyComponent<Empty>?
     public let footer: AnyComponent<Empty>?
     public let items: [AnyComponentWithIdentity<Empty>]
@@ -351,7 +345,6 @@ public final class ListSectionComponent: Component {
         theme: PresentationTheme,
         style: Style = .legacy,
         background: Background = .all,
-        backgroundColor: BackgroundColor = .base,
         header: AnyComponent<Empty>?,
         footer: AnyComponent<Empty>?,
         items: [AnyComponentWithIdentity<Empty>],
@@ -362,7 +355,6 @@ public final class ListSectionComponent: Component {
         self.theme = theme
         self.style = style
         self.background = background
-        self.backgroundColor = backgroundColor
         self.header = header
         self.footer = footer
         self.items = items
@@ -379,9 +371,6 @@ public final class ListSectionComponent: Component {
             return false
         }
         if lhs.background != rhs.background {
-            return false
-        }
-        if lhs.backgroundColor != rhs.backgroundColor {
             return false
         }
         if lhs.header != rhs.header {
