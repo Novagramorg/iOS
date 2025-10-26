@@ -571,6 +571,28 @@ final class StoryContentLiveChatComponent: Component {
                 return nil
             }
             
+            if let listView = self.list.view as? AsyncListComponent.View, result.isDescendant(of: listView) {
+                if let visibleItems = listView.visibleItems() {
+                    var maxItemY: CGFloat?
+                    for visibleItem in visibleItems {
+                        if let maxItemYValue = maxItemY {
+                            maxItemY = max(maxItemYValue, visibleItem.frame.maxY)
+                        } else {
+                            maxItemY = visibleItem.frame.maxY
+                        }
+                    }
+                    if let maxItemY {
+                        if self.convert(point, to: listView).y >= maxItemY {
+                            return nil
+                        }
+                    } else {
+                        return nil
+                    }
+                } else {
+                    return nil
+                }
+            }
+            
             return result
         }
         

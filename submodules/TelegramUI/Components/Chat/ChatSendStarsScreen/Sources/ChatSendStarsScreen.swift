@@ -2295,91 +2295,93 @@ private final class ChatSendStarsScreenComponent: Component {
                     contentHeight += 2.0
                 }
                 
-                if self.anonymousSeparator.superlayer == nil {
-                    self.scrollContentView.layer.addSublayer(self.anonymousSeparator)
-                }
-                
-                self.anonymousSeparator.backgroundColor = environment.theme.list.itemPlainSeparatorColor.cgColor
-                
-                let checkTheme = CheckComponent.Theme(
-                    backgroundColor: environment.theme.list.itemCheckColors.fillColor,
-                    strokeColor: environment.theme.list.itemCheckColors.foregroundColor,
-                    borderColor: environment.theme.list.itemCheckColors.strokeColor,
-                    overlayBorder: false,
-                    hasInset: false,
-                    hasShadow: false
-                )
-                let anonymousContentsSize = self.anonymousContents.update(
-                    transition: transition,
-                    component: AnyComponent(PlainButtonComponent(
-                        content: AnyComponent(HStack([
-                            AnyComponentWithIdentity(id: AnyHashable(0), component: AnyComponent(CheckComponent(
-                                theme: checkTheme,
-                                selected: self.privacyPeer != .anonymous
-                            ))),
-                            AnyComponentWithIdentity(id: AnyHashable(1), component: AnyComponent(MultilineTextComponent(
-                                text: .plain(NSAttributedString(string: environment.strings.SendStarReactions_ShowMyselfInTop, font: Font.regular(17.0), textColor: environment.theme.list.itemPrimaryTextColor))
-                            )))
-                        ], spacing: 10.0)),
-                        effectAlignment: .center,
-                        action: { [weak self] in
-                            guard let self, let component = self.component else {
-                                return
-                            }
-                            
-                            switch self.privacyPeer {
-                            case .anonymous:
-                                if let currentMyPeer = self.currentMyPeer {
-                                    if currentMyPeer.id == component.context.account.peerId {
-                                        self.privacyPeer = .account
-                                    } else {
-                                        self.privacyPeer = .peer(currentMyPeer)
-                                    }
-                                }
-                            default:
-                                self.privacyPeer = .anonymous
-                            }
-                            self.state?.updated(transition: .easeInOut(duration: 0.2))
-                            
-                            if reactData.myTopPeer != nil {
-                                switch reactData.reactSubject {
-                                case let .message(messageId):let mappedPrivacy: TelegramPaidReactionPrivacy
-                                    switch self.privacyPeer {
-                                    case .account:
-                                        mappedPrivacy = .default
-                                    case .anonymous:
-                                        mappedPrivacy = .anonymous
-                                    case let .peer(peer):
-                                        mappedPrivacy = .peer(peer.id)
-                                    }
-                                    
-                                    let _ = component.context.engine.messages.updateStarsReactionPrivacy(id: messageId, privacy: mappedPrivacy).startStandalone()
-                                case .liveStream:
-                                    //TODO:release
-                                    break
-                                }
-                            }
-                        },
-                        animateAlpha: false,
-                        animateScale: false
-                    )),
-                    environment: {},
-                    containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 1000.0)
-                )
-                
-                transition.setFrame(layer: self.anonymousSeparator, frame: CGRect(origin: CGPoint(x: sideInset, y: contentHeight), size: CGSize(width: availableSize.width - sideInset * 2.0, height: UIScreenPixel)))
-                
-                contentHeight += 21.0
-                
-                let anonymousContentsFrame = CGRect(origin: CGPoint(x: floor((availableSize.width - anonymousContentsSize.width) * 0.5), y: contentHeight), size: anonymousContentsSize)
-                if let anonymousContentsView = self.anonymousContents.view {
-                    if anonymousContentsView.superview == nil {
-                        self.scrollContentView.addSubview(anonymousContentsView)
+                if case .message = reactData.reactSubject {
+                    if self.anonymousSeparator.superlayer == nil {
+                        self.scrollContentView.layer.addSublayer(self.anonymousSeparator)
                     }
-                    transition.setFrame(view: anonymousContentsView, frame: anonymousContentsFrame)
+                    
+                    self.anonymousSeparator.backgroundColor = environment.theme.list.itemPlainSeparatorColor.cgColor
+                    
+                    let checkTheme = CheckComponent.Theme(
+                        backgroundColor: environment.theme.list.itemCheckColors.fillColor,
+                        strokeColor: environment.theme.list.itemCheckColors.foregroundColor,
+                        borderColor: environment.theme.list.itemCheckColors.strokeColor,
+                        overlayBorder: false,
+                        hasInset: false,
+                        hasShadow: false
+                    )
+                    let anonymousContentsSize = self.anonymousContents.update(
+                        transition: transition,
+                        component: AnyComponent(PlainButtonComponent(
+                            content: AnyComponent(HStack([
+                                AnyComponentWithIdentity(id: AnyHashable(0), component: AnyComponent(CheckComponent(
+                                    theme: checkTheme,
+                                    selected: self.privacyPeer != .anonymous
+                                ))),
+                                AnyComponentWithIdentity(id: AnyHashable(1), component: AnyComponent(MultilineTextComponent(
+                                    text: .plain(NSAttributedString(string: environment.strings.SendStarReactions_ShowMyselfInTop, font: Font.regular(17.0), textColor: environment.theme.list.itemPrimaryTextColor))
+                                )))
+                            ], spacing: 10.0)),
+                            effectAlignment: .center,
+                            action: { [weak self] in
+                                guard let self, let component = self.component else {
+                                    return
+                                }
+                                
+                                switch self.privacyPeer {
+                                case .anonymous:
+                                    if let currentMyPeer = self.currentMyPeer {
+                                        if currentMyPeer.id == component.context.account.peerId {
+                                            self.privacyPeer = .account
+                                        } else {
+                                            self.privacyPeer = .peer(currentMyPeer)
+                                        }
+                                    }
+                                default:
+                                    self.privacyPeer = .anonymous
+                                }
+                                self.state?.updated(transition: .easeInOut(duration: 0.2))
+                                
+                                if reactData.myTopPeer != nil {
+                                    switch reactData.reactSubject {
+                                    case let .message(messageId):let mappedPrivacy: TelegramPaidReactionPrivacy
+                                        switch self.privacyPeer {
+                                        case .account:
+                                            mappedPrivacy = .default
+                                        case .anonymous:
+                                            mappedPrivacy = .anonymous
+                                        case let .peer(peer):
+                                            mappedPrivacy = .peer(peer.id)
+                                        }
+                                        
+                                        let _ = component.context.engine.messages.updateStarsReactionPrivacy(id: messageId, privacy: mappedPrivacy).startStandalone()
+                                    case .liveStream:
+                                        //TODO:release
+                                        break
+                                    }
+                                }
+                            },
+                            animateAlpha: false,
+                            animateScale: false
+                        )),
+                        environment: {},
+                        containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 1000.0)
+                    )
+                    
+                    transition.setFrame(layer: self.anonymousSeparator, frame: CGRect(origin: CGPoint(x: sideInset, y: contentHeight), size: CGSize(width: availableSize.width - sideInset * 2.0, height: UIScreenPixel)))
+                    
+                    contentHeight += 21.0
+                    
+                    let anonymousContentsFrame = CGRect(origin: CGPoint(x: floor((availableSize.width - anonymousContentsSize.width) * 0.5), y: contentHeight), size: anonymousContentsSize)
+                    if let anonymousContentsView = self.anonymousContents.view {
+                        if anonymousContentsView.superview == nil {
+                            self.scrollContentView.addSubview(anonymousContentsView)
+                        }
+                        transition.setFrame(view: anonymousContentsView, frame: anonymousContentsFrame)
+                    }
+                    
+                    contentHeight += anonymousContentsSize.height + 16.0
                 }
-                
-                contentHeight += anonymousContentsSize.height + 16.0
             case .liveStreamMessage:
                 break
             }

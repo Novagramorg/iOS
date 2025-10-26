@@ -4062,13 +4062,25 @@ final class StoryItemSetContainerSendMessage {
                 }
             }
             
-            self.commitSendStars(view: view, count: count, delay: true)
+            guard let visibleItemView = view.visibleItems[component.slice.item.id]?.view.view as? StoryItemContentComponent.View else {
+                return
+            }
             
-            var totalStars = count
-            if let visibleItemView = view.visibleItems[component.slice.item.id]?.view.view as? StoryItemContentComponent.View {
-                if let pendingMyStars = visibleItemView.liveChatState?.starStats?.pendingMyStars {
-                    totalStars += Int(pendingMyStars)
+            var totalStars = 0
+            if let pendingMyStars = visibleItemView.liveChatState?.starStats?.pendingMyStars, pendingMyStars > 0 {
+                totalStars += count
+                totalStars += Int(pendingMyStars)
+                self.commitSendStars(view: view, count: count, delay: true)
+            } else {
+                var minAmount: Int64 = 1
+                if let minMessagePrice = visibleItemView.liveChatState?.minMessagePrice {
+                    minAmount = minMessagePrice
                 }
+                var count = count
+                count = max(Int(minAmount), count)
+                totalStars += count
+                
+                self.commitSendStars(view: view, count: count, delay: true)
             }
             
             let title: String
