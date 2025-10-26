@@ -3703,6 +3703,7 @@ public final class GroupCallMessagesContext {
         }
         
         public let id: Id
+        public let stableId: Int
         public let author: EnginePeer?
         public let text: String
         public let entities: [MessageTextEntity]
@@ -3710,8 +3711,9 @@ public final class GroupCallMessagesContext {
         public let lifetime: Int32
         public let paidStars: Int64?
         
-        public init(id: Id, author: EnginePeer?, text: String, entities: [MessageTextEntity], date: Int32, lifetime: Int32, paidStars: Int64?) {
+        public init(id: Id, stableId: Int, author: EnginePeer?, text: String, entities: [MessageTextEntity], date: Int32, lifetime: Int32, paidStars: Int64?) {
             self.id = id
+            self.stableId = stableId
             self.author = author
             self.text = text
             self.entities = entities
@@ -3723,6 +3725,7 @@ public final class GroupCallMessagesContext {
         public func withId(_ id: Id) -> Message {
             return Message(
                 id: id,
+                stableId: self.stableId,
                 author: self.author,
                 text: self.text,
                 entities: self.entities,
@@ -3733,11 +3736,14 @@ public final class GroupCallMessagesContext {
         }
         
         public static func ==(lhs: Message, rhs: Message) -> Bool {
+            if lhs === rhs {
+                return true
+            }
             if lhs.id != rhs.id {
                 return false
             }
-            if lhs === rhs {
-                return true
+            if lhs.stableId != rhs.stableId {
+                return false
             }
             if lhs.author != rhs.author {
                 return false
@@ -3837,6 +3843,7 @@ public final class GroupCallMessagesContext {
         let sendMessageDisposables = DisposableSet()
         
         var processedIds = Set<Int64>()
+        var nextStableId: Int = 0
         
         private var messageLifeTimer: SwiftSignalKit.Timer?
         
@@ -3881,6 +3888,11 @@ public final class GroupCallMessagesContext {
                 if !addedMessages.isEmpty || !addedOpaqueMessages.isEmpty {
                     let messageLifetime = self.messageLifetime
                     let isLiveStream = self.isLiveStream
+                    let allocatedStableIds = (0 ..< (addedOpaqueMessages.count + addedMessages.count)).map { _ in
+                        let value = self.nextStableId
+                        self.nextStableId += 1
+                        return value
+                    }
                     
                     let _ = (self.account.postbox.transaction { transaction -> [Message] in
                         var messages: [Message] = []
@@ -3907,8 +3919,13 @@ public final class GroupCallMessagesContext {
                                 guard let (randomId, text, entities) = deserializeGroupCallMessage(data: decryptedMessage) else {
                                     continue
                                 }
+                                if allocatedStableIds.count <= messages.count {
+                                    assertionFailure()
+                                    break
+                                }
                                 messages.append(Message(
                                     id: Message.Id(space: .remote, id: randomId),
+                                    stableId: allocatedStableIds[messages.count],
                                     author: transaction.getPeer(addedOpaqueMessage.authorId).flatMap(EnginePeer.init),
                                     text: text,
                                     entities: entities,
@@ -3930,16 +3947,21 @@ public final class GroupCallMessagesContext {
                                     lifetime = self.messageLifetime
                                 }
                                 
-                                let message = Message(
+                                if allocatedStableIds.count <= messages.count {
+                                    assertionFailure()
+                                    break
+                                }
+                                
+                                messages.append(Message(
                                     id: Message.Id(space: .remote, id: Int64(addedMessage.messageId)),
+                                    stableId: allocatedStableIds[messages.count],
                                     author: transaction.getPeer(addedMessage.authorId).flatMap(EnginePeer.init),
                                     text: addedMessage.text,
                                     entities: addedMessage.entities,
                                     date: addedMessage.timestamp,
                                     lifetime: lifetime,
                                     paidStars: addedMessage.paidMessageStars
-                                )
-                                messages.append(message)
+                                ))
                             }
                         }
                         return messages
@@ -3973,6 +3995,12 @@ public final class GroupCallMessagesContext {
                                 }
                             }
                         }
+                        state.messages.sort(by: { lhs, rhs in
+                            if lhs.date != rhs.date {
+                                return lhs.date < rhs.date
+                            }
+                            return lhs.stableId < rhs.stableId
+                        })
                         self.state = state
                         
                         self.didInitializeTopStars = true
@@ -4203,8 +4231,11 @@ public final class GroupCallMessagesContext {
                 }
                 
                 var state = self.state
+                let stableId = self.nextStableId
+                self.nextStableId += 1
                 let message = Message(
                     id: Message.Id(space: .local, id: randomId),
+                    stableId: stableId,
                     author: fromPeer.flatMap(EnginePeer.init),
                     text: text,
                     entities: entities,
@@ -4403,6 +4434,7 @@ public final class GroupCallMessagesContext {
                         state.messages.remove(at: index)
                         state.messages.append(Message(
                             id: message.id,
+                            stableId: message.stableId,
                             author: message.author,
                             text: message.text,
                             entities: message.entities,
@@ -4411,8 +4443,11 @@ public final class GroupCallMessagesContext {
                             paidStars: totalAmount
                         ))
                     } else {
+                        let stableId = self.nextStableId
+                        self.nextStableId += 1
                         state.messages.append(Message(
                             id: Message.Id(space: .local, id: pendingSendStarsValue.messageId),
+                            stableId: stableId,
                             author: fromPeer.flatMap(EnginePeer.init),
                             text: "",
                             entities: [],
@@ -4426,6 +4461,7 @@ public final class GroupCallMessagesContext {
                         state.pinnedMessages.remove(at: index)
                         state.pinnedMessages.append(Message(
                             id: message.id,
+                            stableId: message.stableId,
                             author: message.author,
                             text: message.text,
                             entities: message.entities,
@@ -4434,8 +4470,11 @@ public final class GroupCallMessagesContext {
                             paidStars: totalAmount
                         ))
                     } else {
+                        let stableId = self.nextStableId
+                        self.nextStableId += 1
                         state.pinnedMessages.append(Message(
                             id: Message.Id(space: .local, id: pendingSendStarsValue.messageId),
+                            stableId: stableId,
                             author: fromPeer.flatMap(EnginePeer.init),
                             text: "",
                             entities: [],

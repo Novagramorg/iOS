@@ -798,7 +798,7 @@ final class StoryContentLiveChatComponent: Component {
             if let messagesState = self.messagesState {
                 for message in messagesState.messages.reversed() {
                     let messageId = message.id
-                    listItems.append(AnyComponentWithIdentity(id: message.id, component: AnyComponent(StoryLiveChatMessageComponent(
+                    listItems.append(AnyComponentWithIdentity(id: message.stableId, component: AnyComponent(StoryLiveChatMessageComponent(
                         context: component.context,
                         strings: component.strings,
                         theme: component.theme,

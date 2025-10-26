@@ -218,6 +218,13 @@ public final class GlassControlPanelComponent: Component {
                 if let leftItemFrame {
                     centralLeftInset = leftItemFrame.maxX + minSpacing
                 }
+                
+                if centralRightInset <= 48.0 && centralLeftInset <= 48.0 {
+                    let maxInset = max(centralRightInset, centralLeftInset)
+                    centralLeftInset = maxInset
+                    centralRightInset = maxInset
+                }
+                
                 maxCentralItemSize.width = max(1.0, availableSize.width - centralLeftInset - centralRightInset)
                 
                 let centralItemSize = centralItemComponent.update(

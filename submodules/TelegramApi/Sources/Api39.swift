@@ -11816,19 +11816,19 @@ public extension Api.functions.stories {
                 }
 }
 public extension Api.functions.stories {
-                static func getPeerMaxIDs(id: [Api.InputPeer]) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<[Int32]>) {
+                static func getPeerMaxIDs(id: [Api.InputPeer]) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<[Api.RecentStory]>) {
                     let buffer = Buffer()
-                    buffer.appendInt32(1398375363)
+                    buffer.appendInt32(2018087280)
                     buffer.appendInt32(481674261)
                     buffer.appendInt32(Int32(id.count))
                     for item in id {
                         item.serialize(buffer, true)
                     }
-                    return (FunctionDescription(name: "stories.getPeerMaxIDs", parameters: [("id", String(describing: id))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> [Int32]? in
+                    return (FunctionDescription(name: "stories.getPeerMaxIDs", parameters: [("id", String(describing: id))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> [Api.RecentStory]? in
                         let reader = BufferReader(buffer)
-                        var result: [Int32]?
+                        var result: [Api.RecentStory]?
                         if let _ = reader.readInt32() {
-                            result = Api.parseVector(reader, elementSignature: -1471112230, elementType: Int32.self)
+                            result = Api.parseVector(reader, elementSignature: 0, elementType: Api.RecentStory.self)
                         }
                         return result
                     })

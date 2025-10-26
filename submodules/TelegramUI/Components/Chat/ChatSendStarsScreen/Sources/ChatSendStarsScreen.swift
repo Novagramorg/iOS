@@ -1959,6 +1959,7 @@ private final class ChatSendStarsScreenComponent: Component {
                         space: .local,
                         id: 1
                     ),
+                    stableId: 0,
                     author: liveStreamMessage.myPeer,
                     text: liveStreamMessage.text.string,
                     entities: entities,
@@ -1972,6 +1973,7 @@ private final class ChatSendStarsScreenComponent: Component {
                         space: .local,
                         id: 1
                     ),
+                    stableId: 0,
                     author: reactData.myPeer,
                     text: "",
                     entities: [],
