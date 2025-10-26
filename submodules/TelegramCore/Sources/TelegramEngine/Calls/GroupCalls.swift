@@ -507,7 +507,7 @@ public enum GetGroupCallParticipantsError {
     case generic
 }
 
-func _internal_getGroupCallParticipants(account: Account, reference: InternalGroupCallReference, offset: String, ssrcs: [UInt32], limit: Int32, sortAscending: Bool?) -> Signal<GroupCallParticipantsContext.State, GetGroupCallParticipantsError> {
+func _internal_getGroupCallParticipants(account: Account, reference: InternalGroupCallReference, offset: String, ssrcs: [UInt32], limit: Int32, sortAscending: Bool?, isStream: Bool) -> Signal<GroupCallParticipantsContext.State, GetGroupCallParticipantsError> {
     let accountPeerId = account.peerId
     
     let sortAscendingValue: Signal<(Bool, Int32?, Bool, GroupCallParticipantsContext.State.DefaultParticipantsAreMuted?, GroupCallParticipantsContext.State.MessagesAreEnabled?, Bool, Int, Bool, Bool), GetGroupCallParticipantsError>
@@ -525,8 +525,15 @@ func _internal_getGroupCallParticipants(account: Account, reference: InternalGro
 
     return combineLatest(
         account.network.request(Api.functions.phone.getGroupParticipants(call: reference.apiInputGroupCall, ids: [], sources: ssrcs.map { Int32(bitPattern: $0) }, offset: offset, limit: limit))
+        |> map(Optional.init)
         |> mapError { _ -> GetGroupCallParticipantsError in
             return .generic
+        }
+        |> `catch` { error -> Signal<Api.phone.GroupParticipants?, GetGroupCallParticipantsError> in
+            if isStream {
+                return .single(nil)
+            }
+            return .fail(error)
         },
         sortAscendingValue
     )
@@ -539,21 +546,27 @@ func _internal_getGroupCallParticipants(account: Account, reference: InternalGro
             
             let (sortAscendingValue, scheduleTimestamp, subscribedToScheduled, defaultParticipantsAreMuted, messagesAreEnabled, isVideoEnabled, unmutedVideoLimit, isStream, isCreator) = sortAscendingAndScheduleTimestamp
             
-            switch result {
-            case let .groupParticipants(count, participants, nextOffset, chats, users, apiVersion):
-                totalCount = Int(count)
-                version = apiVersion
-                
-                if participants.count != 0 && !nextOffset.isEmpty {
-                    nextParticipantsFetchOffset = nextOffset
-                } else {
-                    nextParticipantsFetchOffset = nil
+            if let result {
+                switch result {
+                case let .groupParticipants(count, participants, nextOffset, chats, users, apiVersion):
+                    totalCount = Int(count)
+                    version = apiVersion
+                    
+                    if participants.count != 0 && !nextOffset.isEmpty {
+                        nextParticipantsFetchOffset = nextOffset
+                    } else {
+                        nextParticipantsFetchOffset = nil
+                    }
+                    
+                    let parsedPeers = AccumulatedPeers(transaction: transaction, chats: chats, users: users)
+                    updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: parsedPeers)
+                    
+                    parsedParticipants = participants.compactMap { GroupCallParticipantsContext.Participant($0, transaction: transaction) }
                 }
-                
-                let parsedPeers = AccumulatedPeers(transaction: transaction, chats: chats, users: users)
-                updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: parsedPeers)
-                
-                parsedParticipants = participants.compactMap { GroupCallParticipantsContext.Participant($0, transaction: transaction) }
+            } else {
+                totalCount = 0
+                version = 0
+                nextParticipantsFetchOffset = nil
             }
 
             parsedParticipants.sort(by: { GroupCallParticipantsContext.Participant.compare(lhs: $0, rhs: $1, sortAscending: sortAscendingValue) })
@@ -645,7 +658,7 @@ func _internal_joinGroupCall(account: Account, peerId: PeerId?, joinAs: PeerId?,
     |> castError(InternalJoinError.self)
     |> mapToSignal { e2eData -> Signal<JoinGroupCallResult, InternalJoinError> in
         return account.postbox.transaction { transaction -> Api.InputPeer? in
-            if let joinAs = joinAs {
+            if let joinAs {
                 return transaction.getPeer(joinAs).flatMap(apiInputPeer)
             } else {
                 return .inputPeerSelf
@@ -653,7 +666,7 @@ func _internal_joinGroupCall(account: Account, peerId: PeerId?, joinAs: PeerId?,
         }
         |> castError(InternalJoinError.self)
         |> mapToSignal { inputJoinAs -> Signal<JoinGroupCallResult, InternalJoinError> in
-            guard let inputJoinAs = inputJoinAs else {
+            guard let inputJoinAs else {
                 return .fail(.error(.generic))
             }
             
@@ -719,38 +732,13 @@ func _internal_joinGroupCall(account: Account, peerId: PeerId?, joinAs: PeerId?,
                 }
             }
             
-            let getParticipantsRequest: Signal<GroupCallParticipantsContext.State, InternalJoinError>
-            if isStream {
-                getParticipantsRequest = .single(GroupCallParticipantsContext.State(
-                    participants: [],
-                    nextParticipantsFetchOffset: nil,
-                    adminIds: Set(),
-                    isCreator: false,
-                    defaultParticipantsAreMuted: .init(isMuted: true, canChange: false),
-                    messagesAreEnabled: .init(isEnabled: true, canChange: false, sendPaidMessagesStars: nil),
-                    sortAscending: true,
-                    recordingStartTimestamp: nil,
-                    title: nil,
-                    scheduleTimestamp: nil,
-                    subscribedToScheduled: false,
-                    totalCount: 0,
-                    isVideoEnabled: false,
-                    unmutedVideoLimit: 0,
-                    isStream: true,
-                    version: 0
-                ))
-            } else {
-                getParticipantsRequest = _internal_getGroupCallParticipants(account: account, reference: reference, offset: "", ssrcs: [], limit: 100, sortAscending: true)
-                |> mapError { _ -> InternalJoinError in
-                    return .error(.generic)
-                }
+            let getParticipantsRequest = _internal_getGroupCallParticipants(account: account, reference: reference, offset: "", ssrcs: [], limit: 100, sortAscending: true, isStream: isStream)
+            |> mapError { _ -> InternalJoinError in
+                return .error(.generic)
             }
             
-            return combineLatest(
-                joinRequest,
-                getParticipantsRequest
-            )
-            |> mapToSignal { updates, participantsState -> Signal<JoinGroupCallResult, InternalJoinError> in
+            return joinRequest
+            |> mapToSignal { updates -> Signal<JoinGroupCallResult, InternalJoinError> in
                 let peer = account.postbox.transaction { transaction -> Peer? in
                     return peerId.flatMap(transaction.getPeer)
                 }
@@ -758,9 +746,10 @@ func _internal_joinGroupCall(account: Account, peerId: PeerId?, joinAs: PeerId?,
                 
                 return combineLatest(
                     peerAdminIds |> castError(InternalJoinError.self) |> take(1),
-                    peer
+                    peer,
+                    getParticipantsRequest
                 )
-                |> mapToSignal { peerAdminIds, peer -> Signal<JoinGroupCallResult, InternalJoinError> in
+                |> mapToSignal { peerAdminIds, peer, participantsState -> Signal<JoinGroupCallResult, InternalJoinError> in
                     var state = participantsState
                     if let peer {
                         if let channel = peer as? TelegramChannel {
@@ -2149,7 +2138,7 @@ public final class GroupCallParticipantsContext {
 
         Logger.shared.log("GroupCallParticipantsContext", "will request ssrcs=\(ssrcs)")
         
-        self.disposable.set((_internal_getGroupCallParticipants(account: self.account, reference: self.reference, offset: "", ssrcs: Array(ssrcs), limit: 100, sortAscending: true)
+        self.disposable.set((_internal_getGroupCallParticipants(account: self.account, reference: self.reference, offset: "", ssrcs: Array(ssrcs), limit: 100, sortAscending: true, isStream: false)
         |> deliverOnMainQueue).start(next: { [weak self] state in
             guard let strongSelf = self else {
                 return
@@ -2367,7 +2356,7 @@ public final class GroupCallParticipantsContext {
         
         self.updateQueue.removeAll()
         
-        self.disposable.set((_internal_getGroupCallParticipants(account: self.account, reference: self.reference, offset: "", ssrcs: [], limit: 100, sortAscending: self.stateValue.state.sortAscending)
+        self.disposable.set((_internal_getGroupCallParticipants(account: self.account, reference: self.reference, offset: "", ssrcs: [], limit: 100, sortAscending: self.stateValue.state.sortAscending, isStream: false)
         |> deliverOnMainQueue).start(next: { [weak self] state in
             guard let strongSelf = self else {
                 return
@@ -2672,7 +2661,7 @@ public final class GroupCallParticipantsContext {
         }
         self.isLoadingMore = true
         
-        self.disposable.set((_internal_getGroupCallParticipants(account: self.account, reference: self.reference, offset: token, ssrcs: [], limit: 100, sortAscending: self.stateValue.state.sortAscending)
+        self.disposable.set((_internal_getGroupCallParticipants(account: self.account, reference: self.reference, offset: token, ssrcs: [], limit: 100, sortAscending: self.stateValue.state.sortAscending, isStream: false)
         |> deliverOnMainQueue).start(next: { [weak self] state in
             guard let strongSelf = self else {
                 return

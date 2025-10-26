@@ -788,6 +788,7 @@ private final class ChatSendStarsScreenComponent: Component {
     
     private struct Amount: Equatable {
         private let sliderSteps: [Int]
+        private let minRealValue: Int
         private let maxRealValue: Int
         let maxSliderValue: Int
         private let isLogarithmic: Bool
@@ -795,14 +796,16 @@ private final class ChatSendStarsScreenComponent: Component {
         private(set) var realValue: Int
         private(set) var sliderValue: Int
         
-        private static func makeSliderSteps(maxRealValue: Int, isLogarithmic: Bool) -> [Int] {
+        private static func makeSliderSteps(minRealValue: Int, maxRealValue: Int, isLogarithmic: Bool) -> [Int] {
             if isLogarithmic {
-                var sliderSteps: [Int] = [ 1, 10, 50, 100, 500, 1_000, 2_000, 5_000, 7_500, 10_000 ]
+                var sliderSteps: [Int] = [1, 10, 50, 100, 500, 1_000, 2_000, 5_000, 7_500, 10_000 ]
+                sliderSteps.removeAll(where: { $0 <= minRealValue })
+                sliderSteps.insert(minRealValue, at: 0)
                 sliderSteps.removeAll(where: { $0 >= maxRealValue })
                 sliderSteps.append(maxRealValue)
                 return sliderSteps
             } else {
-                return [1, maxRealValue]
+                return [minRealValue, maxRealValue]
             }
         }
         
@@ -834,8 +837,9 @@ private final class ChatSendStarsScreenComponent: Component {
             }
         }
         
-        init(realValue: Int, maxRealValue: Int, maxSliderValue: Int, isLogarithmic: Bool) {
-            self.sliderSteps = Amount.makeSliderSteps(maxRealValue: maxRealValue, isLogarithmic: isLogarithmic)
+        init(realValue: Int, minRealValue: Int, maxRealValue: Int, maxSliderValue: Int, isLogarithmic: Bool) {
+            self.sliderSteps = Amount.makeSliderSteps(minRealValue: minRealValue, maxRealValue: maxRealValue, isLogarithmic: isLogarithmic)
+            self.minRealValue = minRealValue
             self.maxRealValue = maxRealValue
             self.maxSliderValue = maxSliderValue
             self.isLogarithmic = isLogarithmic
@@ -844,8 +848,9 @@ private final class ChatSendStarsScreenComponent: Component {
             self.sliderValue = Amount.remapValueToSlider(realValue: self.realValue, maxSliderValue: self.maxSliderValue, steps: self.sliderSteps)
         }
         
-        init(sliderValue: Int, maxRealValue: Int, maxSliderValue: Int, isLogarithmic: Bool) {
-            self.sliderSteps = Amount.makeSliderSteps(maxRealValue: maxRealValue, isLogarithmic: isLogarithmic)
+        init(sliderValue: Int, minRealValue: Int, maxRealValue: Int, maxSliderValue: Int, isLogarithmic: Bool) {
+            self.sliderSteps = Amount.makeSliderSteps(minRealValue: minRealValue, maxRealValue: maxRealValue, isLogarithmic: isLogarithmic)
+            self.minRealValue = minRealValue
             self.maxRealValue = maxRealValue
             self.maxSliderValue = maxSliderValue
             self.isLogarithmic = isLogarithmic
@@ -855,11 +860,11 @@ private final class ChatSendStarsScreenComponent: Component {
         }
         
         func withRealValue(_ realValue: Int) -> Amount {
-            return Amount(realValue: realValue, maxRealValue: self.maxRealValue, maxSliderValue: self.maxSliderValue, isLogarithmic: self.isLogarithmic)
+            return Amount(realValue: realValue, minRealValue: self.minRealValue, maxRealValue: self.maxRealValue, maxSliderValue: self.maxSliderValue, isLogarithmic: self.isLogarithmic)
         }
         
         func withSliderValue(_ sliderValue: Int) -> Amount {
-            return Amount(sliderValue: sliderValue, maxRealValue: self.maxRealValue, maxSliderValue: self.maxSliderValue, isLogarithmic: self.isLogarithmic)
+            return Amount(sliderValue: sliderValue, minRealValue: self.minRealValue, maxRealValue: self.maxRealValue, maxSliderValue: self.maxSliderValue, isLogarithmic: self.isLogarithmic)
         }
     }
     
@@ -926,7 +931,7 @@ private final class ChatSendStarsScreenComponent: Component {
         
         private var balance: StarsAmount?
         
-        private var amount: Amount = Amount(realValue: 1, maxRealValue: 1000, maxSliderValue: 1000, isLogarithmic: true)
+        private var amount: Amount = Amount(realValue: 1, minRealValue: 1, maxRealValue: 1000, maxSliderValue: 1000, isLogarithmic: true)
         private var didChangeAmount: Bool = false
         
         private var privacyPeer: PrivacyPeer = .account
@@ -1423,7 +1428,7 @@ private final class ChatSendStarsScreenComponent: Component {
                 switch component.initialData.subjectInitialData {
                 case let .react(reactData):
                     self.currentMyPeer = reactData.myPeer
-                    self.amount = Amount(realValue: 50, maxRealValue: reactData.maxAmount, maxSliderValue: 999, isLogarithmic: true)
+                    self.amount = Amount(realValue: max(reactData.minAmount, 50), minRealValue: reactData.minAmount, maxRealValue: reactData.maxAmount, maxSliderValue: 999, isLogarithmic: true)
                     
                     if let myTopPeer = reactData.myTopPeer {
                         if myTopPeer.isAnonymous {
@@ -1460,7 +1465,9 @@ private final class ChatSendStarsScreenComponent: Component {
                     })
                 case let .liveStreamMessage(liveStreamMessageData):
                     self.currentMyPeer = nil
-                    self.amount = Amount(realValue: 50, maxRealValue: liveStreamMessageData.maxAmount, maxSliderValue: 999, isLogarithmic: true)
+                    
+                    let currentValue: Int = liveStreamMessageData.currentAmount ?? 50
+                    self.amount = Amount(realValue: max(currentValue, liveStreamMessageData.minAmount), minRealValue: liveStreamMessageData.minAmount, maxRealValue: liveStreamMessageData.maxAmount, maxSliderValue: 999, isLogarithmic: true)
                     
                     self.privacyPeer = .account
                 }
@@ -2614,7 +2621,7 @@ private final class ChatSendStarsScreenComponent: Component {
 public class ChatSendStarsScreen: ViewControllerComponentContainer {
     public enum ReactSubject {
         case message(EngineMessage.Id)
-        case liveStream(peerId: EnginePeer.Id, storyId: Int32)
+        case liveStream(peerId: EnginePeer.Id, storyId: Int32, minAmount: Int)
     }
     
     fileprivate enum SubjectInitialData {
@@ -2627,10 +2634,11 @@ public class ChatSendStarsScreen: ViewControllerComponentContainer {
             let currentSentAmount: Int?
             let topPeers: [ChatSendStarsScreen.TopPeer]
             let myTopPeer: ChatSendStarsScreen.TopPeer?
+            let minAmount: Int
             let maxAmount: Int
             let completion: (Int64, TelegramPaidReactionPrivacy, Bool, ChatSendStarsScreen.TransitionOut) -> Void
             
-            init(peer: EnginePeer, myPeer: EnginePeer, defaultPrivacyPeer: ChatSendStarsScreenComponent.PrivacyPeer, channelsForPublicReaction: [EnginePeer], reactSubject: ReactSubject, currentSentAmount: Int?, topPeers: [ChatSendStarsScreen.TopPeer], myTopPeer: ChatSendStarsScreen.TopPeer?, maxAmount: Int, completion: @escaping (Int64, TelegramPaidReactionPrivacy, Bool, ChatSendStarsScreen.TransitionOut) -> Void) {
+            init(peer: EnginePeer, myPeer: EnginePeer, defaultPrivacyPeer: ChatSendStarsScreenComponent.PrivacyPeer, channelsForPublicReaction: [EnginePeer], reactSubject: ReactSubject, currentSentAmount: Int?, topPeers: [ChatSendStarsScreen.TopPeer], myTopPeer: ChatSendStarsScreen.TopPeer?, minAmount: Int, maxAmount: Int, completion: @escaping (Int64, TelegramPaidReactionPrivacy, Bool, ChatSendStarsScreen.TransitionOut) -> Void) {
                 self.peer = peer
                 self.myPeer = myPeer
                 self.defaultPrivacyPeer = defaultPrivacyPeer
@@ -2639,6 +2647,7 @@ public class ChatSendStarsScreen: ViewControllerComponentContainer {
                 self.currentSentAmount = currentSentAmount
                 self.topPeers = topPeers
                 self.myTopPeer = myTopPeer
+                self.minAmount = minAmount
                 self.maxAmount = maxAmount
                 self.completion = completion
             }
@@ -2647,20 +2656,26 @@ public class ChatSendStarsScreen: ViewControllerComponentContainer {
         final class LiveStreamMessage {
             let peer: EnginePeer
             let myPeer: EnginePeer
+            let minAmount: Int
             let maxAmount: Int
+            let currentAmount: Int?
             let text: NSAttributedString
             let completion: (Int64, ChatSendStarsScreen.TransitionOut) -> Void
             
             init(
                 peer: EnginePeer,
                 myPeer: EnginePeer,
+                minAmount: Int,
                 maxAmount: Int,
+                currentAmount: Int?,
                 text: NSAttributedString,
                 completion: @escaping (Int64, ChatSendStarsScreen.TransitionOut) -> Void
             ) {
                 self.peer = peer
                 self.myPeer = myPeer
+                self.minAmount = minAmount
                 self.maxAmount = maxAmount
+                self.currentAmount = currentAmount
                 self.text = text
                 self.completion = completion
             }
@@ -2838,6 +2853,11 @@ public class ChatSendStarsScreen: ViewControllerComponentContainer {
             maxAmount = Int(value)
         }
         
+        var minAmount = 1
+        if case let .liveStream(_, _, minAmountValue) = reactSubject {
+            minAmount = minAmountValue
+        }
+        
         return combineLatest(
             context.engine.data.get(
                 TelegramEngine.EngineData.Item.Peer.Peer(id: peerId),
@@ -2911,6 +2931,7 @@ public class ChatSendStarsScreen: ViewControllerComponentContainer {
                             count: Int(topPeer.count)
                         )
                     },
+                    minAmount: minAmount,
                     maxAmount: maxAmount,
                     completion: completion
                 )),
@@ -2923,6 +2944,8 @@ public class ChatSendStarsScreen: ViewControllerComponentContainer {
         context: AccountContext,
         peerId: EnginePeer.Id,
         text: NSAttributedString,
+        minAmount: Int,
+        currentAmount: Int?,
         completion: @escaping (Int64, TransitionOut) -> Void
     ) -> Signal<InitialData?, NoError> {
         let balance: Signal<StarsAmount?, NoError>
@@ -2958,7 +2981,9 @@ public class ChatSendStarsScreen: ViewControllerComponentContainer {
                 subjectInitialData: .liveStreamMessage(SubjectInitialData.LiveStreamMessage(
                     peer: peer,
                     myPeer: myPeer,
+                    minAmount: minAmount,
                     maxAmount: maxAmount,
+                    currentAmount: currentAmount,
                     text: text,
                     completion: completion
                 )),

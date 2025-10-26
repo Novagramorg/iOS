@@ -55,7 +55,7 @@ public extension TelegramEngine {
         }
 
         public func getGroupCallParticipants(reference: InternalGroupCallReference, offset: String, ssrcs: [UInt32], limit: Int32, sortAscending: Bool?) -> Signal<GroupCallParticipantsContext.State, GetGroupCallParticipantsError> {
-            return _internal_getGroupCallParticipants(account: self.account, reference: reference, offset: offset, ssrcs: ssrcs, limit: limit, sortAscending: sortAscending)
+            return _internal_getGroupCallParticipants(account: self.account, reference: reference, offset: offset, ssrcs: ssrcs, limit: limit, sortAscending: sortAscending, isStream: false)
         }
 
         public func joinGroupCall(peerId: PeerId?, joinAs: PeerId?, callId: Int64, reference: InternalGroupCallReference, isStream: Bool, preferMuted: Bool, joinPayload: String, peerAdminIds: Signal<[PeerId], NoError>, inviteHash: String? = nil, generateE2E: ((Data?) -> JoinGroupCallE2E?)?) -> Signal<JoinGroupCallResult, JoinGroupCallError> {
