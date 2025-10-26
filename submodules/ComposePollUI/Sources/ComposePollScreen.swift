@@ -132,7 +132,6 @@ final class ComposePollScreenComponent: Component {
         private var reactionSelectionControl: ComponentView<Empty>?
         
         private var isUpdating: Bool = false
-        private var ignoreScrolling: Bool = false
         private var previousHadInputHeight: Bool = false
         
         private var component: ComposePollScreenComponent?
@@ -465,21 +464,6 @@ final class ComposePollScreenComponent: Component {
         
         func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
             self.endEditing(true)
-        }
-        
-        func scrollViewDidScroll(_ scrollView: UIScrollView) {
-            if !self.ignoreScrolling {
-                self.updateScrolling(transition: .immediate)
-            }
-        }
-        
-        private func updateScrolling(transition: ComponentTransition) {
-            let navigationAlphaDistance: CGFloat = 16.0
-            let navigationAlpha: CGFloat = max(0.0, min(1.0, self.scrollView.contentOffset.y / navigationAlphaDistance))
-            if let controller = self.environment?.controller(), let navigationBar = controller.navigationBar {
-                transition.setAlpha(layer: navigationBar.backgroundNode.layer, alpha: navigationAlpha)
-                transition.setAlpha(layer: navigationBar.stripeNode.layer, alpha: navigationAlpha)
-            }
         }
         
         func isPanGestureEnabled() -> Bool {
@@ -1627,7 +1611,6 @@ final class ComposePollScreenComponent: Component {
             }
             self.previousHadInputHeight = (inputHeight > 0.0)
             
-            self.ignoreScrolling = true
             let previousBounds = self.scrollView.bounds
             let contentSize = CGSize(width: availableSize.width, height: contentHeight)
             if self.scrollView.frame != CGRect(origin: CGPoint(), size: availableSize) {
@@ -1762,9 +1745,6 @@ final class ComposePollScreenComponent: Component {
                     transition.animateBoundsOrigin(view: self.scrollView, from: CGPoint(x: 0.0, y: offsetY), to: CGPoint(), additive: true)
                 }
             }
-            self.ignoreScrolling = false
-            
-            self.updateScrolling(transition: transition)
             
             if isEditing {
                 if let controller = environment.controller() as? ComposePollScreen {

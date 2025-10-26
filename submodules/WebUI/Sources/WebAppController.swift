@@ -1378,14 +1378,14 @@ public final class WebAppController: ViewController, AttachmentContainable {
                     let _ = (self.context.engine.messages.attachMenuBots()
                     |> take(1)
                     |> deliverOnMainQueue).startStandalone(next: { [weak self] attachMenuBots in
-                        guard let self else {
+                        guard let self, let controller = self.controller else {
                             return
                         }
                         let currentTimestamp = CACurrentMediaTime()
                         var fillData = false
                         
                         let attachMenuBot = attachMenuBots.first(where: { $0.peer.id == botId && !$0.flags.contains(.notActivated) })
-                        if isAttachMenu || attachMenuBot != nil {
+                        if isAttachMenu || attachMenuBot != nil || controller.isWhiteListedBot {
                             if let lastTouchTimestamp = self.webView?.lastTouchTimestamp, currentTimestamp < lastTouchTimestamp + 10.0 {
                                 self.webView?.lastTouchTimestamp = nil
                                 fillData = true
@@ -3488,6 +3488,18 @@ public final class WebAppController: ViewController, AttachmentContainable {
     private var isVerifyAgeBot: Bool {
         if let ageBotUsername = self.context.currentAppConfiguration.with({ $0 }).data?["verify_age_bot_username"] as? String {
             return self.botAddress == ageBotUsername
+        }
+        return false
+    }
+    
+    private var isWhiteListedBot: Bool {
+        if let whiteListedBots = self.context.currentAppConfiguration.with({ $0 }).data?["whitelisted_bots"] as? [Double] {
+            let botId = self.botId.id._internalGetInt64Value()
+            for bot in whiteListedBots {
+                if Int64(bot) == botId {
+                    return true
+                }
+            }
         }
         return false
     }

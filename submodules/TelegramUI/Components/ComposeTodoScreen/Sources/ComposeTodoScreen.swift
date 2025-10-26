@@ -85,7 +85,6 @@ final class ComposeTodoScreenComponent: Component {
         private let doneButton = ComponentView<Empty>()
                 
         private var isUpdating: Bool = false
-        private var ignoreScrolling: Bool = false
         private var previousHadInputHeight: Bool = false
         
         private var component: ComposeTodoScreenComponent?
@@ -381,23 +380,8 @@ final class ComposeTodoScreenComponent: Component {
             return true
         }
         
-        func scrollViewDidScroll(_ scrollView: UIScrollView) {
-            if !self.ignoreScrolling {
-                self.updateScrolling(transition: .immediate)
-            }
-        }
-        
         func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
             self.endEditing(true)
-        }
-        
-        private func updateScrolling(transition: ComponentTransition) {
-            let navigationAlphaDistance: CGFloat = 16.0
-            let navigationAlpha: CGFloat = max(0.0, min(1.0, self.scrollView.contentOffset.y / navigationAlphaDistance))
-            if let controller = self.environment?.controller(), let navigationBar = controller.navigationBar {
-                transition.setAlpha(layer: navigationBar.backgroundNode.layer, alpha: navigationAlpha)
-                transition.setAlpha(layer: navigationBar.stripeNode.layer, alpha: navigationAlpha)
-            }
         }
         
         func isPanGestureEnabled() -> Bool {
@@ -1511,7 +1495,6 @@ final class ComposeTodoScreenComponent: Component {
             }
             self.previousHadInputHeight = (inputHeight > 0.0)
             
-            self.ignoreScrolling = true
             let previousBounds = self.scrollView.bounds
             let contentSize = CGSize(width: availableSize.width, height: contentHeight)
             if self.scrollView.frame != CGRect(origin: CGPoint(), size: availableSize) {
@@ -1548,9 +1531,6 @@ final class ComposeTodoScreenComponent: Component {
                     transition.animateBoundsOrigin(view: self.scrollView, from: CGPoint(x: 0.0, y: offsetY), to: CGPoint(), additive: true)
                 }
             }
-            self.ignoreScrolling = false
-            
-            self.updateScrolling(transition: transition)
             
             if isEditing {
                 if let controller = environment.controller() as? ComposeTodoScreen {
@@ -1662,14 +1642,6 @@ final class ComposeTodoScreenComponent: Component {
                     self.addSubview(doneButtonView)
                 }
                 transition.setFrame(view: doneButtonView, frame: doneButtonFrame)
-                
-                if isValid {
-                    doneButtonView.layer.filters = []
-                } else {
-                    if (doneButtonView.layer.filters ?? []).isEmpty, let monochrome = CALayer.monochrome() {
-                        doneButtonView.layer.filters = [monochrome]
-                    }
-                }
             }
             
             if let currentEditingTag = self.currentEditingTag, previousEditingTag !== currentEditingTag, self.currentInputMode != .keyboard {
