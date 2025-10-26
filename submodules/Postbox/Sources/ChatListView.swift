@@ -309,7 +309,7 @@ func fetchPeerStoryStats(postbox: PostboxImpl, peerId: PeerId) -> PeerStoryStats
         let stats = postbox.storyItemsTable.getStats(peerId: peerId, maxSeenId: maxSeenId)
         return PeerStoryStats(totalCount: stats.total, unseenCount: stats.unseen, hasUnseenCloseFriends: stats.hasUnseenCloseFriends, hasLiveItems: stats.hasLiveItems)
     } else {
-        return PeerStoryStats(totalCount: 1, unseenCount: topItems.id > maxSeenId ? 1 : 0, hasUnseenCloseFriends: false, hasLiveItems: false)
+        return PeerStoryStats(totalCount: 1, unseenCount: topItems.id > maxSeenId ? 1 : 0, hasUnseenCloseFriends: false, hasLiveItems: topItems.hasLiveItems)
     }
 }
 
