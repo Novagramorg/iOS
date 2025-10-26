@@ -2961,14 +2961,6 @@ public final class StoryItemSetContainerComponent: Component {
                     displayAttachmentAction = false
                 }
                 
-                var maxInputLength = 4096
-                var maxEmojiCount: Int?
-                if isLiveStream {
-                    let params = GroupCallMessagesContext.getStarAmountParamMapping(value: self.sendMessageContext.currentLiveStreamMessageStars?.value ?? 0)
-                    maxInputLength = params.maxLength
-                    maxEmojiCount = params.emojiCount
-                }
-                
                 var liveChatState: MessageInputPanelComponent.LiveChatState?
                 var starStats: MessageInputPanelComponent.StarStats?
                 var sendPaidMessageStars = isLiveStream ? self.sendMessageContext.currentLiveStreamMessageStars : component.slice.additionalPeerData.sendPaidMessageStars
@@ -2994,6 +2986,14 @@ public final class StoryItemSetContainerComponent: Component {
                             }
                         }
                     }
+                }
+                
+                var maxInputLength = 4096
+                var maxEmojiCount: Int?
+                if isLiveStream {
+                    let params = GroupCallMessagesContext.getStarAmountParamMapping(value: sendPaidMessageStars?.value ?? 0)
+                    maxInputLength = params.maxLength
+                    maxEmojiCount = params.emojiCount
                 }
                 
                 inputPanelSize = self.inputPanel.update(
