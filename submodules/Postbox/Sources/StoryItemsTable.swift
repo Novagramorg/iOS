@@ -166,41 +166,43 @@ final class StoryItemsTable: Table {
             total += 1
             if id > maxSeenId {
                 unseen += 1
+            }
                 
-                var isCloseFriends = false
-                var isLiveStream = false
-                let readBuffer = ReadBuffer(data: value.makeData())
-                var magic: UInt32 = 0
-                readBuffer.read(&magic, offset: 0, length: 4)
-                if magic == 0xabcd1234 {
-                } else if magic == 0xabcd1235 {
-                    var length: Int32 = 0
-                    readBuffer.read(&length, offset: 0, length: 4)
-                    if length > 0 && readBuffer.offset + Int(length) <= readBuffer.length {
-                        readBuffer.skip(Int(length))
-                        if readBuffer.offset + 4 <= readBuffer.length {
-                            readBuffer.skip(4)
-                            
-                            if readBuffer.offset + 1 <= readBuffer.length {
-                                var flags: UInt8 = 0
-                                readBuffer.read(&flags, offset: 0, length: 1)
-                                isCloseFriends = (flags & (1 << 0)) != 0
-                                isLiveStream = (flags & (1 << 1)) != 0
-                            }
+            var isCloseFriends = false
+            var isLiveStream = false
+            let readBuffer = ReadBuffer(data: value.makeData())
+            var magic: UInt32 = 0
+            readBuffer.read(&magic, offset: 0, length: 4)
+            if magic == 0xabcd1234 {
+            } else if magic == 0xabcd1235 {
+                var length: Int32 = 0
+                readBuffer.read(&length, offset: 0, length: 4)
+                if length > 0 && readBuffer.offset + Int(length) <= readBuffer.length {
+                    readBuffer.skip(Int(length))
+                    if readBuffer.offset + 4 <= readBuffer.length {
+                        readBuffer.skip(4)
+                        
+                        if readBuffer.offset + 1 <= readBuffer.length {
+                            var flags: UInt8 = 0
+                            readBuffer.read(&flags, offset: 0, length: 1)
+                            isCloseFriends = (flags & (1 << 0)) != 0
+                            isLiveStream = (flags & (1 << 1)) != 0
                         }
-                    } else {
-                        assertionFailure()
                     }
                 } else {
                     assertionFailure()
                 }
-                
+            } else {
+                assertionFailure()
+            }
+            
+            if id > maxSeenId {
                 if isCloseFriends {
                     hasUnseenCloseFriends = true
                 }
-                if isLiveStream {
-                    hasLiveItems = true
-                }
+            }
+            if isLiveStream {
+                hasLiveItems = true
             }
             
             return true

@@ -692,7 +692,7 @@ public final class AvatarStoryIndicatorComponent: Component {
                 
                 if let counters = component.counters, !component.hasLiveItems, counters.totalCount > 1 {
                     if component.isRoundedRect {
-                        let lineWidth: CGFloat = component.hasUnseen ? component.activeLineWidth : component.inactiveLineWidth
+                        let lineWidth: CGFloat = (component.hasUnseen || component.hasLiveItems) ? component.activeLineWidth : component.inactiveLineWidth
                         context.setLineWidth(lineWidth)
                         let path = UIBezierPath(roundedRect: CGRect(origin: CGPoint(x: size.width * 0.5 - diameter * 0.5, y: size.height * 0.5 - diameter * 0.5), size: size).insetBy(dx: lineWidth * 0.5, dy: lineWidth * 0.5), cornerRadius: floor(diameter * 0.27))
                         
@@ -835,7 +835,7 @@ public final class AvatarStoryIndicatorComponent: Component {
                         }
                     }
                 } else {
-                    let lineWidth: CGFloat = component.hasUnseen ? component.activeLineWidth : component.inactiveLineWidth
+                    let lineWidth: CGFloat = (component.hasUnseen || component.hasLiveItems) ? component.activeLineWidth : component.inactiveLineWidth
                     context.setLineWidth(lineWidth)
                     if component.isRoundedRect {
                         let path = UIBezierPath(roundedRect: CGRect(origin: CGPoint(x: size.width * 0.5 - diameter * 0.5, y: size.height * 0.5 - diameter * 0.5), size: size).insetBy(dx: lineWidth * 0.5, dy: lineWidth * 0.5), cornerRadius: floor(diameter * 0.27))
@@ -885,7 +885,7 @@ public final class AvatarStoryIndicatorComponent: Component {
                 if case .definite = progress {
                     lineWidth = component.activeLineWidth
                 } else {
-                    lineWidth = component.hasUnseen ? component.activeLineWidth : component.inactiveLineWidth
+                    lineWidth = (component.hasUnseen || component.hasLiveItems) ? component.activeLineWidth : component.inactiveLineWidth
                 }
                 
                 colorLayer.colors = colors
