@@ -415,7 +415,17 @@ final class StoryItemSetContainerSendMessage {
                 }
                 self.performPaidMessageAction(view: view)
             })))
-            if self.currentLiveStreamMessageStars != nil {
+            
+            var canRemoveStars = self.currentLiveStreamMessageStars != nil
+            if let visibleItemView = view.visibleItems[component.slice.item.id]?.view.view as? StoryItemContentComponent.View {
+                if let liveChatStateValue = visibleItemView.liveChatState {
+                    if let minMessagePrice = liveChatStateValue.minMessagePrice, minMessagePrice > 1 {
+                        canRemoveStars = false
+                    }
+                }
+            }
+            
+            if canRemoveStars {
                 items.append(.action(ContextMenuActionItem(text: "Remove Stars", icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/RemovePrice"), color: theme.contextMenu.primaryColor)
                 }, action: { [weak self, weak view] _, a in
                     a(.default)
@@ -613,6 +623,22 @@ final class StoryItemSetContainerSendMessage {
         }
         if case .liveStream = component.slice.item.storyItem.media {
             if let visibleItem = view.visibleItems[component.slice.item.id], let itemView = visibleItem.view.view as? StoryItemContentComponent.View {
+                
+                var sendPaidMessageStars = self.currentLiveStreamMessageStars
+                if let visibleItemView = view.visibleItems[component.slice.item.id]?.view.view as? StoryItemContentComponent.View {
+                    if let liveChatStateValue = visibleItemView.liveChatState {
+                        if let minMessagePrice = liveChatStateValue.minMessagePrice {
+                            if let current = sendPaidMessageStars {
+                                if current < StarsAmount(value: minMessagePrice, nanos: 0) {
+                                    sendPaidMessageStars = StarsAmount(value: minMessagePrice, nanos: 0)
+                                }
+                            } else {
+                                sendPaidMessageStars = StarsAmount(value: minMessagePrice, nanos: 0)
+                            }
+                        }
+                    }
+                }
+                
                 if let call = itemView.mediaStreamCall {
                     let focusedItem = component.slice.item
                     guard let peerId = focusedItem.peerId else {
@@ -627,7 +653,7 @@ final class StoryItemSetContainerSendMessage {
                         if !text.string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                             var maxInputLength: Int?
                             var maxEmojiCount: Int?
-                            let params = GroupCallMessagesContext.getStarAmountParamMapping(value: self.currentLiveStreamMessageStars?.value ?? 0)
+                            let params = GroupCallMessagesContext.getStarAmountParamMapping(value: sendPaidMessageStars?.value ?? 0)
                             maxInputLength = params.maxLength
                             maxEmojiCount = params.emojiCount
                             
@@ -672,7 +698,7 @@ final class StoryItemSetContainerSendMessage {
                             
                             let entities = generateChatInputTextEntities(text)
                             
-                            call.sendMessage(text: text.string, entities: entities, paidStars: self.currentLiveStreamMessageStars?.value)
+                            call.sendMessage(text: text.string, entities: entities, paidStars: sendPaidMessageStars?.value)
                             
                             component.storyItemSharedState.replyDrafts.removeValue(forKey: StoryId(peerId: peerId, id: focusedItem.storyItem.id))
                             inputPanelView.clearSendMessageInput(updateState: true)
@@ -4063,7 +4089,7 @@ final class StoryItemSetContainerSendMessage {
             if let current = self.currentSendStarsUndoController {
                 current.content = .starsSent(context: component.context, title: title, text: textItems, hasUndo: true)
             } else {
-                let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }.withUpdated(theme: defaultDarkPresentationTheme)
+                let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }.withUpdated(theme: defaultDarkColorPresentationTheme)
                 let controller = UndoOverlayController(presentationData: presentationData, content: .starsSent(context: component.context, title: title, text: textItems, hasUndo: true), elevatedLayout: false, position: .top, action: { [weak view] action in
                     guard let view else {
                         return false
@@ -4103,11 +4129,6 @@ final class StoryItemSetContainerSendMessage {
         }
         guard let call = itemView.mediaStreamCall else {
             return
-        }
-        
-        if let current = self.currentSendStarsUndoController {
-            self.currentSendStarsUndoController = nil
-            current.dismiss()
         }
         
         call.sendStars(amount: Int64(count), delay: delay)
