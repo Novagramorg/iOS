@@ -1335,10 +1335,21 @@ final class StoryItemSetContainerSendMessage {
                 inputText = text
             }
             
+            guard let visibleItemView = view.visibleItems[component.slice.item.id]?.view.view as? StoryItemContentComponent.View else {
+                return
+            }
+            
+            var minAmount: Int64 = 1
+            if let minMessagePrice = visibleItemView.liveChatState?.minMessagePrice {
+                minAmount = minMessagePrice
+            }
+            
             let initialData = await ChatSendStarsScreen.initialDataLiveStreamMessage(
                 context: component.context,
                 peerId: peerId,
                 text: inputText,
+                minAmount: Int(minAmount),
+                currentAmount: (self.currentLiveStreamMessageStars?.value).flatMap { Int($0) },
                 completion: { [weak self, weak view] amount, _ in
                     guard let self, let view else {
                         return
@@ -3893,8 +3904,9 @@ final class StoryItemSetContainerSendMessage {
             }
             
             var topPeers: [ReactionsMessageAttribute.TopPeer] = []
+            var minAmount: Int64 = 1
             if let visibleItemView = view.visibleItems[component.slice.item.id]?.view.view as? StoryItemContentComponent.View {
-                if let topItems = visibleItemView.starStars?.topItems {
+                if let topItems = visibleItemView.liveChatState?.starStats?.topItems {
                     topPeers = topItems.map { item -> ReactionsMessageAttribute.TopPeer in
                         return ReactionsMessageAttribute.TopPeer(
                             peerId: item.peerId,
@@ -3905,12 +3917,16 @@ final class StoryItemSetContainerSendMessage {
                         )
                     }
                 }
+                
+                if let minMessagePrice = visibleItemView.liveChatState?.minMessagePrice {
+                    minAmount = minMessagePrice
+                }
             }
             
             let initialData = await ChatSendStarsScreen.initialData(
                 context: component.context,
                 peerId: peerId,
-                reactSubject: .liveStream(peerId: peerId, storyId: focusedItem.storyItem.id),
+                reactSubject: .liveStream(peerId: peerId, storyId: focusedItem.storyItem.id, minAmount: Int(minAmount)),
                 topPeers: topPeers,
                 completion: { [weak view] amount, privacy, isBecomingTop, transitionOut in
                     guard let view, let component = view.component else {
@@ -4024,7 +4040,7 @@ final class StoryItemSetContainerSendMessage {
             
             var totalStars = count
             if let visibleItemView = view.visibleItems[component.slice.item.id]?.view.view as? StoryItemContentComponent.View {
-                if let pendingMyStars = visibleItemView.starStars?.pendingMyStars {
+                if let pendingMyStars = visibleItemView.liveChatState?.starStats?.pendingMyStars {
                     totalStars += Int(pendingMyStars)
                 }
             }

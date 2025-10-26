@@ -2669,6 +2669,7 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
                     }
                     self.stateValue.messagesAreEnabled = state.messagesAreEnabled.isEnabled
                     self.stateValue.canEnableMessages = state.messagesAreEnabled.canChange
+                    self.stateValue.sendPaidMessageStars = state.messagesAreEnabled.sendPaidMessagesStars
                     self.stateValue.recordingStartTimestamp = state.recordingStartTimestamp
                     self.stateValue.title = state.title
                     self.stateValue.scheduleTimestamp = state.scheduleTimestamp

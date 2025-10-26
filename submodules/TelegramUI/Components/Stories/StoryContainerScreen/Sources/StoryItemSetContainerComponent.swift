@@ -2971,18 +2971,28 @@ public final class StoryItemSetContainerComponent: Component {
                 
                 var liveChatState: MessageInputPanelComponent.LiveChatState?
                 var starStats: MessageInputPanelComponent.StarStats?
+                var sendPaidMessageStars = isLiveStream ? self.sendMessageContext.currentLiveStreamMessageStars : component.slice.additionalPeerData.sendPaidMessageStars
                 if let visibleItemView = self.visibleItems[component.slice.item.id]?.view.view as? StoryItemContentComponent.View {
-                    liveChatState = visibleItemView.liveChatState.flatMap { liveChatState in
-                        return MessageInputPanelComponent.LiveChatState(
-                            isExpanded: liveChatState.isExpanded,
-                            hasUnseenMessages: liveChatState.hasUnseenMessages
+                    if let liveChatStateValue = visibleItemView.liveChatState {
+                        liveChatState = MessageInputPanelComponent.LiveChatState(
+                            isExpanded: liveChatStateValue.isExpanded,
+                            hasUnseenMessages: liveChatStateValue.hasUnseenMessages
                         )
-                    }
-                    starStats = visibleItemView.starStars.flatMap { starStats in
-                        return MessageInputPanelComponent.StarStats(
-                            myStars: starStats.myStars,
-                            totalStars: starStats.totalStars
-                        )
+                        starStats = liveChatStateValue.starStats.flatMap { starStats in
+                            return MessageInputPanelComponent.StarStats(
+                                myStars: starStats.myStars,
+                                totalStars: starStats.totalStars
+                            )
+                        }
+                        if let minMessagePrice = liveChatStateValue.minMessagePrice {
+                            if let current = sendPaidMessageStars {
+                                if current < StarsAmount(value: minMessagePrice, nanos: 0) {
+                                    sendPaidMessageStars = StarsAmount(value: minMessagePrice, nanos: 0)
+                                }
+                            } else {
+                                sendPaidMessageStars = StarsAmount(value: minMessagePrice, nanos: 0)
+                            }
+                        }
                     }
                 }
                 
@@ -2995,7 +3005,7 @@ public final class StoryItemSetContainerComponent: Component {
                         strings: component.strings,
                         style: .story,
                         placeholder: inputPlaceholder,
-                        sendPaidMessageStars: isLiveStream ? self.sendMessageContext.currentLiveStreamMessageStars : component.slice.additionalPeerData.sendPaidMessageStars,
+                        sendPaidMessageStars: sendPaidMessageStars,
                         maxLength: maxInputLength,
                         maxEmojiCount: maxEmojiCount,
                         queryTypes: [.mention, .hashtag, .emoji],

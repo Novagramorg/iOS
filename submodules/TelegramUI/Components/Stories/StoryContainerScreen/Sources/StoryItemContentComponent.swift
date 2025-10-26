@@ -96,13 +96,43 @@ final class StoryItemContentComponent: Component {
 		return true
 	}
     
+    struct StarStats {
+        var myStars: Int64
+        var pendingMyStars: Int64
+        var totalStars: Int64
+        var topItems: [GroupCallMessagesContext.TopStarsItem]
+        
+        init(myStars: Int64, pendingMyStars: Int64, totalStars: Int64, topItems: [GroupCallMessagesContext.TopStarsItem]) {
+            self.myStars = myStars
+            self.pendingMyStars = pendingMyStars
+            self.totalStars = totalStars
+            self.topItems = topItems
+        }
+    }
+    
     struct LiveChatState {
         var isExpanded: Bool
         var hasUnseenMessages: Bool
+        var areMessagesEnabled: Bool
+        var minMessagePrice: Int64?
+        var starStats: StarStats?
         
-        init(isExpanded: Bool, hasUnseenMessages: Bool) {
+        init(isExpanded: Bool, hasUnseenMessages: Bool, areMessagesEnabled: Bool, minMessagePrice: Int64?, starStats: StarStats?) {
             self.isExpanded = isExpanded
             self.hasUnseenMessages = hasUnseenMessages
+            self.areMessagesEnabled = areMessagesEnabled
+            self.minMessagePrice = minMessagePrice
+            self.starStats = starStats
+        }
+    }
+    
+    private struct MediaStreamCallState: Equatable {
+        var areMessagesEnabled: Bool
+        var minMessagePrice: Int64?
+        
+        init(areMessagesEnabled: Bool, minMessagePrice: Int64?) {
+            self.areMessagesEnabled = areMessagesEnabled
+            self.minMessagePrice = minMessagePrice
         }
     }
 
@@ -111,7 +141,9 @@ final class StoryItemContentComponent: Component {
         private let overlaysView: StoryItemOverlaysView
         private var videoNode: UniversalVideoNode?
         private(set) var mediaStreamCall: PresentationGroupCallImpl?
+        private var mediaStreamCallState: MediaStreamCallState?
         private var liveCallStateDisposable: Disposable?
+        private var liveCallStatsDisposable: Disposable?
         private var mediaStream: ComponentView<Empty>?
         private var loadingEffectView: StoryItemLoadingEffectView?
         private var loadingEffectAppearanceTimer: SwiftSignalKit.Timer?
@@ -160,20 +192,26 @@ final class StoryItemContentComponent: Component {
             guard let liveChatView = self.liveChat?.view as? StoryContentLiveChatComponent.View else {
                 return nil
             }
-            if liveChatView.isChatEmpty {
-                return nil
+            
+            let currentInfo = liveChatView.currentInfo
+            let mediaStreamCallState = self.mediaStreamCallState
+            
+            let starStats = currentInfo.starStats.flatMap { starStats in
+                return StarStats(
+                    myStars: starStats.myStars,
+                    pendingMyStars: starStats.pendingMyStars,
+                    totalStars: starStats.totalStars,
+                    topItems: starStats.topItems
+                )
             }
+            
             return LiveChatState(
-                isExpanded: liveChatView.isChatExpanded,
-                hasUnseenMessages: self.liveChatExternal.hasUnseenMessages
+                isExpanded: currentInfo.isChatExpanded,
+                hasUnseenMessages: self.liveChatExternal.hasUnseenMessages,
+                areMessagesEnabled: mediaStreamCallState?.areMessagesEnabled ?? false,
+                minMessagePrice: mediaStreamCallState?.minMessagePrice,
+                starStats: starStats
             )
-        }
-        
-        public var starStars: (myStars: Int64, pendingMyStars: Int64, totalStars: Int64, topItems: [GroupCallMessagesContext.TopStarsItem])? {
-            guard let liveChatView = self.liveChat?.view as? StoryContentLiveChatComponent.View else {
-                return nil
-            }
-            return liveChatView.starStars
         }
         
         public func toggleLiveChatExpanded() {
@@ -227,6 +265,7 @@ final class StoryItemContentComponent: Component {
             self.videoProgressDisposable?.dispose()
             self.currentFetchPriority?.disposable.dispose()
             self.liveCallStateDisposable?.dispose()
+            self.liveCallStatsDisposable?.dispose()
         }
         
         func allowsInstantPauseOnTouch(point: CGPoint) -> Bool {
@@ -1015,7 +1054,27 @@ final class StoryItemContentComponent: Component {
             
             if let mediaStreamCall = self.mediaStreamCall {
                 if self.liveCallStateDisposable == nil {
-                    self.liveCallStateDisposable = (mediaStreamCall.members
+                    self.liveCallStateDisposable = (mediaStreamCall.state
+                    |> deliverOnMainQueue).startStrict(next: { [weak self] state in
+                        guard let self else {
+                            return
+                        }
+                        
+                        let mappedState = MediaStreamCallState(
+                            areMessagesEnabled: state.messagesAreEnabled,
+                            minMessagePrice: state.sendPaidMessageStars
+                        )
+                        if self.mediaStreamCallState != mappedState {
+                            self.mediaStreamCallState = mappedState
+                            if !self.isUpdating {
+                                self.state?.updated(transition: .spring(duration: 0.4))
+                            }
+                        }
+                    })
+                }
+                
+                if self.liveCallStatsDisposable == nil {
+                    self.liveCallStatsDisposable = (mediaStreamCall.members
                     |> deliverOnMainQueue).startStandalone(next: { [weak self] members in
                         guard let self, let environment = self.environment else {
                             return
@@ -1033,9 +1092,15 @@ final class StoryItemContentComponent: Component {
                         }
                     })
                 }
-            } else if let liveCallStateDisposable = self.liveCallStateDisposable {
-                self.liveCallStateDisposable = nil
-                liveCallStateDisposable.dispose()
+            } else {
+                if let liveCallStateDisposable = self.liveCallStateDisposable {
+                    self.liveCallStateDisposable = nil
+                    liveCallStateDisposable.dispose()
+                }
+                if let liveCallStatsDisposable = self.liveCallStatsDisposable {
+                    self.liveCallStatsDisposable = nil
+                    liveCallStatsDisposable.dispose()
+                }
             }
             
             switch selectedMedia {

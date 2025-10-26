@@ -421,6 +421,32 @@ final class StoryContentLiveChatComponent: Component {
         }
         return true
     }
+    
+    struct StarStats {
+        var myStars: Int64
+        var pendingMyStars: Int64
+        var totalStars: Int64
+        var topItems: [GroupCallMessagesContext.TopStarsItem]
+        
+        init(myStars: Int64, pendingMyStars: Int64, totalStars: Int64, topItems: [GroupCallMessagesContext.TopStarsItem]) {
+            self.myStars = myStars
+            self.pendingMyStars = pendingMyStars
+            self.totalStars = totalStars
+            self.topItems = topItems
+        }
+    }
+    
+    struct Info {
+        var starStats: StarStats?
+        var isChatEmpty: Bool
+        var isChatExpanded: Bool
+        
+        init(starStats: StarStats?, isChatEmpty: Bool, isChatExpanded: Bool) {
+            self.starStats = starStats
+            self.isChatEmpty = isChatEmpty
+            self.isChatExpanded = isChatExpanded
+        }
+    }
 
     final class View: UIView {
         private let listContainer: UIView
@@ -443,23 +469,26 @@ final class StoryContentLiveChatComponent: Component {
         private var currentListIsEmpty: Bool = true
         private var isMessageContextMenuOpen: Bool = false
         
-        public var isChatEmpty: Bool {
-            guard let messagesState = self.messagesState else {
-                return true
-            }
-            return messagesState.messages.isEmpty
-        }
-        private(set) var isChatExpanded: Bool = false
+        private var isChatExpanded: Bool = false
         
-        public var starStars: (myStars: Int64, pendingMyStars: Int64, totalStars: Int64, topItems: [GroupCallMessagesContext.TopStarsItem])? {
-            guard let messagesState = self.messagesState else {
-                return nil
+        public var currentInfo: Info {
+            var starStats: StoryContentLiveChatComponent.StarStats?
+            var isChatEmpty = true
+            if let messagesState = self.messagesState {
+                isChatEmpty = messagesState.messages.isEmpty
+                
+                var myStars: Int64 = 0
+                if let item = messagesState.topStars.first(where: { $0.isMy }) {
+                    myStars = item.amount
+                }
+                starStats = StoryContentLiveChatComponent.StarStats(myStars: myStars + messagesState.pendingMyStars, pendingMyStars: messagesState.pendingMyStars, totalStars: messagesState.totalStars + messagesState.pendingMyStars, topItems: messagesState.topStars)
             }
-            var myStars: Int64 = 0
-            if let item = messagesState.topStars.first(where: { $0.isMy }) {
-                myStars = item.amount
-            }
-            return (myStars + messagesState.pendingMyStars, pendingMyStars: messagesState.pendingMyStars, messagesState.totalStars + messagesState.pendingMyStars, messagesState.topStars)
+            
+            return Info(
+                starStats: starStats,
+                isChatEmpty: isChatEmpty,
+                isChatExpanded: self.isChatExpanded
+            )
         }
         
         override init(frame: CGRect) {
@@ -643,10 +672,8 @@ final class StoryContentLiveChatComponent: Component {
                 
                 let state = await (component.call.state |> take(1)).get()
                 
-                var isAdmin = state.canManageCall
-                if component.storyPeerId == component.context.account.peerId {
-                    isAdmin = true
-                }
+                var isAdmin = false
+                isAdmin = state.canManageCall
                 var canDelete = isAdmin
                 var isMyMessage = false
                 guard let messagesState = self.messagesState, let message = messagesState.messages.first(where: { $0.id == id }) else {
