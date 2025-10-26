@@ -475,6 +475,13 @@ public final class AsyncListComponent: Component {
             }
         }
         
+        public func visibleItems() -> VisibleItems? {
+            guard let component = self.component else {
+                return nil
+            }
+            return VisibleItems(view: self, direction: component.direction)
+        }
+        
         func update(component: AsyncListComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
             let previousComponent = self.component
             self.component = component
