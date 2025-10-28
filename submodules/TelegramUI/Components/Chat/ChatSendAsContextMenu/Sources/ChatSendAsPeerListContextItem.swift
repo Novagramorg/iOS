@@ -13,24 +13,26 @@ import AvatarNode
 import AccountContext
 import UndoUI
 
-final class ChatSendAsPeerListContextItem: ContextMenuCustomItem {
+public final class ChatSendAsPeerListContextItem: ContextMenuCustomItem {
     let context: AccountContext
     let chatPeerId: PeerId
     let peers: [SendAsPeer]
     let selectedPeerId: PeerId?
     let isPremium: Bool
+    let action: (EnginePeer) -> Void
     let presentToast: (EnginePeer) -> Void
     
-    init(context: AccountContext, chatPeerId: PeerId, peers: [SendAsPeer], selectedPeerId: PeerId?, isPremium: Bool, presentToast: @escaping (EnginePeer) -> Void) {
+    public init(context: AccountContext, chatPeerId: PeerId, peers: [SendAsPeer], selectedPeerId: PeerId?, isPremium: Bool, action: @escaping (EnginePeer) -> Void, presentToast: @escaping (EnginePeer) -> Void) {
         self.context = context
         self.chatPeerId = chatPeerId
         self.peers = peers
         self.selectedPeerId = selectedPeerId
         self.isPremium = isPremium
+        self.action = action
         self.presentToast = presentToast
     }
     
-    func node(presentationData: PresentationData, getController: @escaping () -> ContextControllerProtocol?, actionSelected: @escaping (ContextMenuActionResult) -> Void) -> ContextMenuCustomNode {
+    public func node(presentationData: PresentationData, getController: @escaping () -> ContextControllerProtocol?, actionSelected: @escaping (ContextMenuActionResult) -> Void) -> ContextMenuCustomNode {
         return ChatSendAsPeerListContextItemNode(presentationData: presentationData, item: self, getController: getController, actionSelected: actionSelected)
     }
 }
@@ -115,7 +117,7 @@ private final class ChatSendAsPeerListContextItemNode: ASDisplayNode, ContextMen
                 }
                 
                 if peer.peer.id != item.selectedPeerId {
-                    let _ = item.context.engine.peers.updatePeerSendAsPeer(peerId: item.chatPeerId, sendAs: peer.peer.id).startStandalone()
+                    item.action(EnginePeer(peer.peer))
                 }
             })
             let actionNode = ContextActionNode(presentationData: presentationData, action: action, getController: getController, actionSelected: actionSelected, requestLayout: {}, requestUpdateAction: { _, _ in

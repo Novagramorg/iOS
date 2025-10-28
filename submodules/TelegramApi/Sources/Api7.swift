@@ -1222,14 +1222,14 @@ public extension Api {
 }
 public extension Api {
     enum GroupCall: TypeConstructorDescription {
-        case groupCall(flags: Int32, id: Int64, accessHash: Int64, participantsCount: Int32, title: String?, streamDcId: Int32?, recordStartDate: Int32?, scheduleDate: Int32?, unmutedVideoCount: Int32?, unmutedVideoLimit: Int32, version: Int32, inviteLink: String?, sendPaidMessagesStars: Int64?)
+        case groupCall(flags: Int32, id: Int64, accessHash: Int64, participantsCount: Int32, title: String?, streamDcId: Int32?, recordStartDate: Int32?, scheduleDate: Int32?, unmutedVideoCount: Int32?, unmutedVideoLimit: Int32, version: Int32, inviteLink: String?, sendPaidMessagesStars: Int64?, defaultSendAs: Api.Peer?)
         case groupCallDiscarded(id: Int64, accessHash: Int64, duration: Int32)
     
     public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
     switch self {
-                case .groupCall(let flags, let id, let accessHash, let participantsCount, let title, let streamDcId, let recordStartDate, let scheduleDate, let unmutedVideoCount, let unmutedVideoLimit, let version, let inviteLink, let sendPaidMessagesStars):
+                case .groupCall(let flags, let id, let accessHash, let participantsCount, let title, let streamDcId, let recordStartDate, let scheduleDate, let unmutedVideoCount, let unmutedVideoLimit, let version, let inviteLink, let sendPaidMessagesStars, let defaultSendAs):
                     if boxed {
-                        buffer.appendInt32(-674602536)
+                        buffer.appendInt32(-273500649)
                     }
                     serializeInt32(flags, buffer: buffer, boxed: false)
                     serializeInt64(id, buffer: buffer, boxed: false)
@@ -1244,6 +1244,7 @@ public extension Api {
                     serializeInt32(version, buffer: buffer, boxed: false)
                     if Int(flags) & Int(1 << 16) != 0 {serializeString(inviteLink!, buffer: buffer, boxed: false)}
                     if Int(flags) & Int(1 << 20) != 0 {serializeInt64(sendPaidMessagesStars!, buffer: buffer, boxed: false)}
+                    if Int(flags) & Int(1 << 21) != 0 {defaultSendAs!.serialize(buffer, true)}
                     break
                 case .groupCallDiscarded(let id, let accessHash, let duration):
                     if boxed {
@@ -1258,8 +1259,8 @@ public extension Api {
     
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
-                case .groupCall(let flags, let id, let accessHash, let participantsCount, let title, let streamDcId, let recordStartDate, let scheduleDate, let unmutedVideoCount, let unmutedVideoLimit, let version, let inviteLink, let sendPaidMessagesStars):
-                return ("groupCall", [("flags", flags as Any), ("id", id as Any), ("accessHash", accessHash as Any), ("participantsCount", participantsCount as Any), ("title", title as Any), ("streamDcId", streamDcId as Any), ("recordStartDate", recordStartDate as Any), ("scheduleDate", scheduleDate as Any), ("unmutedVideoCount", unmutedVideoCount as Any), ("unmutedVideoLimit", unmutedVideoLimit as Any), ("version", version as Any), ("inviteLink", inviteLink as Any), ("sendPaidMessagesStars", sendPaidMessagesStars as Any)])
+                case .groupCall(let flags, let id, let accessHash, let participantsCount, let title, let streamDcId, let recordStartDate, let scheduleDate, let unmutedVideoCount, let unmutedVideoLimit, let version, let inviteLink, let sendPaidMessagesStars, let defaultSendAs):
+                return ("groupCall", [("flags", flags as Any), ("id", id as Any), ("accessHash", accessHash as Any), ("participantsCount", participantsCount as Any), ("title", title as Any), ("streamDcId", streamDcId as Any), ("recordStartDate", recordStartDate as Any), ("scheduleDate", scheduleDate as Any), ("unmutedVideoCount", unmutedVideoCount as Any), ("unmutedVideoLimit", unmutedVideoLimit as Any), ("version", version as Any), ("inviteLink", inviteLink as Any), ("sendPaidMessagesStars", sendPaidMessagesStars as Any), ("defaultSendAs", defaultSendAs as Any)])
                 case .groupCallDiscarded(let id, let accessHash, let duration):
                 return ("groupCallDiscarded", [("id", id as Any), ("accessHash", accessHash as Any), ("duration", duration as Any)])
     }
@@ -1292,6 +1293,10 @@ public extension Api {
             if Int(_1!) & Int(1 << 16) != 0 {_12 = parseString(reader) }
             var _13: Int64?
             if Int(_1!) & Int(1 << 20) != 0 {_13 = reader.readInt64() }
+            var _14: Api.Peer?
+            if Int(_1!) & Int(1 << 21) != 0 {if let signature = reader.readInt32() {
+                _14 = Api.parse(reader, signature: signature) as? Api.Peer
+            } }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
@@ -1305,8 +1310,9 @@ public extension Api {
             let _c11 = _11 != nil
             let _c12 = (Int(_1!) & Int(1 << 16) == 0) || _12 != nil
             let _c13 = (Int(_1!) & Int(1 << 20) == 0) || _13 != nil
-            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 && _c10 && _c11 && _c12 && _c13 {
-                return Api.GroupCall.groupCall(flags: _1!, id: _2!, accessHash: _3!, participantsCount: _4!, title: _5, streamDcId: _6, recordStartDate: _7, scheduleDate: _8, unmutedVideoCount: _9, unmutedVideoLimit: _10!, version: _11!, inviteLink: _12, sendPaidMessagesStars: _13)
+            let _c14 = (Int(_1!) & Int(1 << 21) == 0) || _14 != nil
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 && _c10 && _c11 && _c12 && _c13 && _c14 {
+                return Api.GroupCall.groupCall(flags: _1!, id: _2!, accessHash: _3!, participantsCount: _4!, title: _5, streamDcId: _6, recordStartDate: _7, scheduleDate: _8, unmutedVideoCount: _9, unmutedVideoLimit: _10!, version: _11!, inviteLink: _12, sendPaidMessagesStars: _13, defaultSendAs: _14)
             }
             else {
                 return nil
