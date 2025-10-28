@@ -2987,7 +2987,20 @@ public final class StoryItemSetContainerComponent: Component {
                             }
                         }
                         
-                        sendAsConfiguration = self.sendMessageContext.currentSendAsConfiguration
+                        sendAsConfiguration = self.sendMessageContext.currentSendAsPeer.flatMap { value in
+                            return MessageInputPanelComponent.SendAsConfiguration(
+                                currentPeer: EnginePeer(value.peer),
+                                subscriberCount: value.subscribers.flatMap(Int.init),
+                                isPremiumLocked: value.isPremiumRequired,
+                                isSelecting: self.sendMessageContext.isSelectingSendAsPeer,
+                                action: { [weak self] sourceView, gesture in
+                                    guard let self else {
+                                        return
+                                    }
+                                    self.sendMessageContext.openSendAsSelection(view: self, sourceView: sourceView, gesture: gesture)
+                                }
+                            )
+                        }
                     }
                 }
                 
