@@ -112,6 +112,7 @@ swift_library(
         "//submodules/TelegramUI/Components/AdminUserActionsSheet",
         "//submodules/TelegramUI/Components/Chat/ChatSendAsContextMenu",
         "//submodules/Components/HierarchyTrackingLayer",
+        "//submodules/Utils/LokiRng",
     ],
     visibility = [
         "//visibility:public",
