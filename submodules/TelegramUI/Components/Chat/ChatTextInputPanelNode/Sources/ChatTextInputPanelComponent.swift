@@ -103,6 +103,38 @@ public final class ChatTextInputPanelComponent: Component {
         }
     }
     
+    public final class SendAsConfiguration: Equatable {
+        public let currentPeer: EnginePeer
+        public let subscriberCount: Int?
+        public let isPremiumLocked: Bool
+        public let isSelecting: Bool
+        public let action: (UIView, ContextGesture?) -> Void
+        
+        public init(currentPeer: EnginePeer, subscriberCount: Int?, isPremiumLocked: Bool, isSelecting: Bool, action: @escaping (UIView, ContextGesture?) -> Void) {
+            self.currentPeer = currentPeer
+            self.subscriberCount = subscriberCount
+            self.isPremiumLocked = isPremiumLocked
+            self.isSelecting = isSelecting
+            self.action = action
+        }
+        
+        public static func ==(lhs: SendAsConfiguration, rhs: SendAsConfiguration) -> Bool {
+            if lhs.currentPeer != rhs.currentPeer {
+                return false
+            }
+            if lhs.subscriberCount != rhs.subscriberCount {
+                return false
+            }
+            if lhs.isPremiumLocked != rhs.isPremiumLocked {
+                return false
+            }
+            if lhs.isSelecting != rhs.isSelecting {
+                return false
+            }
+            return true
+        }
+    }
+    
     let externalState: ExternalState
     let context: AccountContext
     let theme: PresentationTheme
@@ -111,6 +143,7 @@ public final class ChatTextInputPanelComponent: Component {
     let inlineActions: [InlineAction]
     let leftAction: LeftAction?
     let rightAction: RightAction?
+    let sendAsConfiguration: SendAsConfiguration?
     let placeholder: String
     let paidMessagePrice: StarsAmount?
     let sendColor: UIColor?
@@ -131,6 +164,7 @@ public final class ChatTextInputPanelComponent: Component {
         inlineActions: [InlineAction],
         leftAction: LeftAction?,
         rightAction: RightAction?,
+        sendAsConfiguration: SendAsConfiguration?,
         placeholder: String,
         paidMessagePrice: StarsAmount?,
         sendColor: UIColor?,
@@ -150,6 +184,7 @@ public final class ChatTextInputPanelComponent: Component {
         self.inlineActions = inlineActions
         self.leftAction = leftAction
         self.rightAction = rightAction
+        self.sendAsConfiguration = sendAsConfiguration
         self.placeholder = placeholder
         self.paidMessagePrice = paidMessagePrice
         self.sendColor = sendColor
@@ -185,6 +220,9 @@ public final class ChatTextInputPanelComponent: Component {
             return false
         }
         if lhs.rightAction != rhs.rightAction {
+            return false
+        }
+        if lhs.sendAsConfiguration != rhs.sendAsConfiguration {
             return false
         }
         if lhs.placeholder != rhs.placeholder {
@@ -582,7 +620,11 @@ public final class ChatTextInputPanelComponent: Component {
                     },
                     openInviteRequests: {
                     },
-                    openSendAsPeer: { _, _ in
+                    openSendAsPeer: { [weak self] sourceNode, gesture in
+                        guard let self, let component = self.component, let sendAsConfiguration = component.sendAsConfiguration else {
+                            return
+                        }
+                        sendAsConfiguration.action(sourceNode.view, gesture)
                     },
                     presentChatRequestAdminInfo: {
                     },
@@ -721,6 +763,14 @@ public final class ChatTextInputPanelComponent: Component {
                 return interfaceState.withUpdatedEffectiveInputState(component.externalState.textInputState)
             }
             presentationInterfaceState = presentationInterfaceState.updatedSendPaidMessageStars(component.paidMessagePrice)
+            
+            if let sendAsConfiguration = component.sendAsConfiguration {
+                presentationInterfaceState = presentationInterfaceState.updatedSendAsPeers([SendAsPeer(
+                    peer: sendAsConfiguration.currentPeer._asPeer(),
+                    subscribers: sendAsConfiguration.subscriberCount.flatMap(Int32.init(clamping:)),
+                    isPremiumRequired: sendAsConfiguration.isPremiumLocked
+                )]).updatedShowSendAsPeers(sendAsConfiguration.isSelecting).updatedCurrentSendAsPeerId(sendAsConfiguration.currentPeer.id)
+            }
             
             let panelNode: ChatTextInputPanelNode
             if let current = self.panelNode {

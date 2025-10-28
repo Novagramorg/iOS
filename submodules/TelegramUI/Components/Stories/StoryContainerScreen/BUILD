@@ -110,6 +110,7 @@ swift_library(
         "//submodules/TelegramUI/Components/StarsParticleEffect",
         "//submodules/TelegramUI/Components/AnimatedTextComponent",
         "//submodules/TelegramUI/Components/AdminUserActionsSheet",
+        "//submodules/TelegramUI/Components/Chat/ChatSendAsContextMenu",
     ],
     visibility = [
         "//visibility:public",

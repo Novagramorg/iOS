@@ -1689,7 +1689,8 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
                     isVideoEnabled: callInfo.isVideoEnabled,
                     unmutedVideoLimit: callInfo.unmutedVideoLimit,
                     isStream: callInfo.isStream,
-                    isCreator: callInfo.isCreator
+                    isCreator: callInfo.isCreator,
+                    defaultSendAs: callInfo.defaultSendAs
                 )), audioSessionControl: self.audioSessionControl)
             } else {
                 self.summaryInfoState.set(.single(SummaryInfoState(info: GroupCallInfo(
@@ -1707,7 +1708,8 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
                     isVideoEnabled: state.isVideoEnabled,
                     unmutedVideoLimit: state.unmutedVideoLimit,
                     isStream: callInfo.isStream,
-                    isCreator: callInfo.isCreator
+                    isCreator: callInfo.isCreator,
+                    defaultSendAs: callInfo.defaultSendAs
                 ))))
                 
                 self.summaryParticipantsState.set(.single(SummaryParticipantsState(
@@ -1787,7 +1789,8 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
                             isVideoEnabled: false,
                             unmutedVideoLimit: 0,
                             isStream: true,
-                            isCreator: false
+                            isCreator: false,
+                            defaultSendAs: nil
                         )
                     } else {
                         activeCallInfo = nil
@@ -2691,7 +2694,8 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
                         isVideoEnabled: state.isVideoEnabled,
                         unmutedVideoLimit: state.unmutedVideoLimit,
                         isStream: callInfo.isStream,
-                        isCreator: callInfo.isCreator
+                        isCreator: callInfo.isCreator,
+                        defaultSendAs: callInfo.defaultSendAs
                     ))))
                     
                     self.summaryParticipantsState.set(.single(SummaryParticipantsState(

@@ -123,6 +123,7 @@ import ChatMediaInputStickerGridItem
 import AdsInfoScreen
 import PostSuggestionsSettingsScreen
 import ChatSendStarsScreen
+import ChatSendAsContextMenu
 
 extension ChatControllerImpl {
     func reloadChatLocation(chatLocation: ChatLocation, chatLocationContextHolder: Atomic<ChatLocationContextHolder?>, historyNode: ChatHistoryListNodeImpl, apply: @escaping ((ContainedViewLayoutTransition?) -> Void) -> Void) {
@@ -3896,7 +3897,12 @@ extension ChatControllerImpl {
             
             var items: [ContextMenuItem] = []
             items.append(.custom(ChatSendAsPeerTitleContextItem(text: strongSelf.presentationInterfaceState.strings.Conversation_SendMesageAs.uppercased()), false))
-            items.append(.custom(ChatSendAsPeerListContextItem(context: strongSelf.context, chatPeerId: peerId, peers: peers, selectedPeerId: myPeerId, isPremium: isPremium, presentToast: { [weak self] peer in
+            items.append(.custom(ChatSendAsPeerListContextItem(context: strongSelf.context, chatPeerId: peerId, peers: peers, selectedPeerId: myPeerId, isPremium: isPremium, action: { [weak self] peer in
+                guard let self else {
+                    return
+                }
+                let _ = self.context.engine.peers.updatePeerSendAsPeer(peerId: peerId, sendAs: peer.id).startStandalone()
+            }, presentToast: { [weak self] peer in
                 if let strongSelf = self {
                     HapticFeedback().impact()
                     

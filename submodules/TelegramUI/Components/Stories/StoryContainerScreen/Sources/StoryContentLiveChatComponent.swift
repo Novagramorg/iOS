@@ -302,6 +302,7 @@ private final class PinnedBarComponent: Component {
                 self.isUpdating = false
             }
             
+            let previousComponent = self.component
             self.component = component
             self.state = state
             
@@ -325,8 +326,21 @@ private final class PinnedBarComponent: Component {
             
             let listInsets = UIEdgeInsets(top: 0.0, left: insets.left, bottom: 0.0, right: insets.right)
             let listFrame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: size.width, height: size.height))
+            
+            var listTransition = transition
+            var animateIn = false
+            if let previousComponent {
+                if previousComponent.messages.isEmpty {
+                    listTransition = listTransition.withAnimation(.none)
+                    animateIn = true
+                }
+            } else {
+                listTransition = listTransition.withAnimation(.none)
+                animateIn = true
+            }
+            
             let _ = self.list.update(
-                transition: transition,
+                transition: listTransition,
                 component: AnyComponent(AsyncListComponent(
                     externalState: self.listState,
                     items: listItems,
@@ -343,6 +357,10 @@ private final class PinnedBarComponent: Component {
                 }
                 transition.setPosition(view: listView, position: CGRect(origin: CGPoint(), size: listFrame.size).center)
                 transition.setBounds(view: listView, bounds: CGRect(origin: CGPoint(), size: listFrame.size))
+                
+                if animateIn {
+                    transition.animateAlpha(view: listView, from: 0.0, to: 1.0)
+                }
             }
             
             transition.setFrame(view: self.listContainer, frame: listFrame)
