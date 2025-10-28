@@ -934,21 +934,6 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
             
             if isStream {
                 messageLifetime = Int32.max
-                
-                if self.isStream {
-                    var allowLiveChat = false
-                    if let data = self.accountContext.currentAppConfiguration.with({ $0 }).data {
-                        if let dev = data["dev"] as? Double, dev != 0.0 {
-                            allowLiveChat = true
-                        }
-                        if data["ios_can_join_streams"] != nil {
-                            allowLiveChat = true
-                        }
-                    }
-                    if !allowLiveChat {
-                        preconditionFailure()
-                    }
-                }
             }
             
             self.messagesContext = accountContext.engine.messages.groupCallMessages(

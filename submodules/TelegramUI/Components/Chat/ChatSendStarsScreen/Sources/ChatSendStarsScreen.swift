@@ -2803,7 +2803,7 @@ public class ChatSendStarsScreen: ViewControllerComponentContainer {
         }
     }
     
-    public static func initialData(context: AccountContext, peerId: EnginePeer.Id, reactSubject: ReactSubject, topPeers: [ReactionsMessageAttribute.TopPeer], completion: @escaping (Int64, TelegramPaidReactionPrivacy, Bool, TransitionOut) -> Void) -> Signal<InitialData?, NoError> {
+    public static func initialData(context: AccountContext, peerId: EnginePeer.Id, myPeer: EnginePeer? = nil, reactSubject: ReactSubject, topPeers: [ReactionsMessageAttribute.TopPeer], completion: @escaping (Int64, TelegramPaidReactionPrivacy, Bool, TransitionOut) -> Void) -> Signal<InitialData?, NoError> {
         let balance: Signal<StarsAmount?, NoError>
         if let starsContext = context.starsContext {
             balance = starsContext.state
@@ -2875,7 +2875,8 @@ public class ChatSendStarsScreen: ViewControllerComponentContainer {
             defaultPrivacyPeer
         )
         |> map { peerAndTopPeerMap, balance, channelsForPublicReaction, defaultPrivacyPeer -> InitialData? in
-            let (peer, myPeer, topPeerMap) = peerAndTopPeerMap
+            let (peer, myPeerValue, topPeerMap) = peerAndTopPeerMap
+            let myPeer = myPeer ?? myPeerValue
             guard let peer, let myPeer else {
                 return nil
             }

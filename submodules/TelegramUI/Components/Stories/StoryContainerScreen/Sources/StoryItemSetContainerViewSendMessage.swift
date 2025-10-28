@@ -4008,6 +4008,7 @@ final class StoryItemSetContainerSendMessage {
             let initialData = await ChatSendStarsScreen.initialData(
                 context: component.context,
                 peerId: peerId,
+                myPeer: (self.currentSendAsPeer?.peer).flatMap(EnginePeer.init),
                 reactSubject: .liveStream(peerId: peerId, storyId: focusedItem.storyItem.id, minAmount: Int(minAmount)),
                 topPeers: topPeers,
                 completion: { [weak self, weak view] amount, _, _, _ in
