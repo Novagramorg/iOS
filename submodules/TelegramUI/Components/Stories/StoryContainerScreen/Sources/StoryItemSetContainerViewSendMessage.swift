@@ -105,9 +105,9 @@ final class StoryItemSetContainerSendMessage {
     var currentLiveStreamMessageStars: StarsAmount?
     weak var currentSendStarsUndoController: UndoOverlayController?
     
-    var sendAsData: (isPremium: Bool, availablePeers: [(peer: EnginePeer, subscriberCount: Int?, isPremiumRequired: Bool)])?
-    var currentSendAsConfiguration: MessageInputPanelComponent.SendAsConfiguration?
-    var sendAsContextPeerId: EnginePeer.Id?
+    var sendAsData: (isPremium: Bool, availablePeers: [SendAsPeer])?
+    var currentSendAsPeer: SendAsPeer?
+    var isSelectingSendAsPeer: Bool = false
     var sendAsDisposable: Disposable?
     
     private(set) var isMediaRecordingLocked: Bool = false
@@ -229,21 +229,17 @@ final class StoryItemSetContainerSendMessage {
                 
                 let isPremium = accountPeer.isPremium
                 
-                var availablePeers: [(peer: EnginePeer, subscriberCount: Int?, isPremiumRequired: Bool)] = []
-                availablePeers.append((
-                    peer: accountPeer,
-                    subscriberCount: nil,
+                var availablePeers: [SendAsPeer] = []
+                availablePeers.append(SendAsPeer(
+                    peer: accountPeer._asPeer(),
+                    subscribers: nil,
                     isPremiumRequired: false
                 ))
                 for peer in peers {
                     if peer.peer.id == accountPeer.id {
                         continue
                     }
-                    availablePeers.append((
-                        peer: EnginePeer(peer.peer),
-                        subscriberCount: peer.subscribers.flatMap(Int.init),
-                        isPremiumRequired: peer.isPremiumRequired
-                    ))
+                    availablePeers.append(peer)
                 }
                 
                 self.sendAsData = (
@@ -251,29 +247,16 @@ final class StoryItemSetContainerSendMessage {
                     availablePeers: availablePeers
                 )
                 
-                //TODO:localize
-                if "".isEmpty {
-                    let sendAsConfiguration = MessageInputPanelComponent.SendAsConfiguration(
-                        currentPeer: accountPeer,
-                        subscriberCount: nil,
-                        isPremiumLocked: false,
-                        isSelecting: false,
-                        action: { [weak self, weak view] sourceView, gesture in
-                            guard let self, let view else {
-                                return
-                            }
-                            self.openSendAsSelection(view: view, sourceView: sourceView, gesture: gesture)
-                        }
-                    )
-                    if self.currentSendAsConfiguration != sendAsConfiguration {
-                        self.currentSendAsConfiguration = sendAsConfiguration
+                if availablePeers.count > 1 {
+                    if self.currentSendAsPeer == nil {
+                        self.currentSendAsPeer = availablePeers.first
                         if !view.isUpdatingComponent {
                             view.state?.updated(transition: .spring(duration: 0.4))
                         }
                     }
                 } else {
-                    if self.currentSendAsConfiguration != nil {
-                        self.currentSendAsConfiguration = nil
+                    if self.currentSendAsPeer != nil {
+                        self.currentSendAsPeer = nil
                         if !view.isUpdatingComponent {
                             view.state?.updated(transition: .spring(duration: 0.4))
                         }
@@ -771,7 +754,7 @@ final class StoryItemSetContainerSendMessage {
                             
                             let entities = generateChatInputTextEntities(text)
                             
-                            call.sendMessage(text: text.string, entities: entities, paidStars: sendPaidMessageStars?.value)
+                            call.sendMessage(fromId: self.currentSendAsPeer?.peer.id, text: text.string, entities: entities, paidStars: sendPaidMessageStars?.value)
                             
                             component.storyItemSharedState.replyDrafts.removeValue(forKey: StoryId(peerId: peerId, id: focusedItem.storyItem.id))
                             inputPanelView.clearSendMessageInput(updateState: true)
@@ -4221,11 +4204,11 @@ final class StoryItemSetContainerSendMessage {
             return
         }
         
-        call.sendStars(amount: Int64(count), delay: delay)
+        call.sendStars(fromId: self.currentSendAsPeer?.peer.id, amount: Int64(count), delay: delay)
     }
     
-    private func openSendAsSelection(view: StoryItemSetContainerComponent.View, sourceView: UIView, gesture: ContextGesture?) {
-        guard let component = view.component, let sendAsData = self.sendAsData, let currentSendAsConfiguration = self.currentSendAsConfiguration, let controller = component.controller() else {
+    func openSendAsSelection(view: StoryItemSetContainerComponent.View, sourceView: UIView, gesture: ContextGesture?) {
+        guard let component = view.component, let sendAsData = self.sendAsData, let currentSendAsPeer = self.currentSendAsPeer, let controller = component.controller() else {
             return
         }
         
@@ -4235,27 +4218,22 @@ final class StoryItemSetContainerSendMessage {
         }
         let isPremium = sendAsData.isPremium
         
-        let mappedPeers = sendAsData.availablePeers.map { peer in
-            return SendAsPeer(
-                peer: peer.peer._asPeer(),
-                subscribers: peer.subscriberCount.flatMap(Int32.init(clamping:)),
-                isPremiumRequired: peer.isPremiumRequired
-            )
-        }
-        
         var items: [ContextMenuItem] = []
         items.append(.custom(ChatSendAsPeerTitleContextItem(text: component.strings.Conversation_SendMesageAs.uppercased()), false))
         items.append(.custom(ChatSendAsPeerListContextItem(
             context: component.context,
             chatPeerId: peerId,
-            peers: mappedPeers,
-            selectedPeerId: currentSendAsConfiguration.currentPeer.id,
+            peers: sendAsData.availablePeers,
+            selectedPeerId: currentSendAsPeer.peer.id,
             isPremium: isPremium,
-            action: { [weak self] peer in
-                guard let self else {
+            action: { [weak self, weak view] peer in
+                guard let self, let view else {
                     return
                 }
-                let _ = self
+                if let foundPeer = self.sendAsData?.availablePeers.first(where: { $0.peer.id == peer.id }) {
+                    self.currentSendAsPeer = foundPeer
+                    view.state?.updated(transition: .spring(duration: 0.4))
+                }
             },
             presentToast: { [weak view] peer in
                 guard let view, let component = view.component, let controller = component.controller() else {
@@ -4304,11 +4282,12 @@ final class StoryItemSetContainerSendMessage {
             guard let self, let view else {
                 return
             }
-            let _ = self
+            self.isSelectingSendAsPeer = false
             view.state?.updated(transition: .spring(duration: 0.4))
         }
         controller.presentInGlobalOverlay(contextController)
         
+        self.isSelectingSendAsPeer = true
         view.state?.updated(transition: .spring(duration: 0.4))
     }
 }

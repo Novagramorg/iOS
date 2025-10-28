@@ -111,6 +111,7 @@ swift_library(
         "//submodules/TelegramUI/Components/AnimatedTextComponent",
         "//submodules/TelegramUI/Components/AdminUserActionsSheet",
         "//submodules/TelegramUI/Components/Chat/ChatSendAsContextMenu",
+        "//submodules/Components/HierarchyTrackingLayer",
     ],
     visibility = [
         "//visibility:public",

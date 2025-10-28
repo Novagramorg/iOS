@@ -1755,35 +1755,37 @@ private final class ChatSendStarsScreenComponent: Component {
             
             switch component.initialData.subjectInitialData {
             case let .react(reactData):
-                var sendAsPeers: [EnginePeer] = [reactData.myPeer]
-                sendAsPeers.append(contentsOf: self.channelsForPublicReaction)
-                
-                let currentMyPeer = self.currentMyPeer ?? reactData.myPeer
-                
-                let peerSelectorButtonSize = self.peerSelectorButton.update(
-                    transition: transition,
-                    component: AnyComponent(PeerSelectorBadgeComponent(
-                        context: component.context,
-                        theme: environment.theme,
-                        strings: environment.strings,
-                        peer: currentMyPeer,
-                        action: { [weak self] sourceView in
-                            guard let self else {
-                                return
+                if case .message = reactData.reactSubject {
+                    var sendAsPeers: [EnginePeer] = [reactData.myPeer]
+                    sendAsPeers.append(contentsOf: self.channelsForPublicReaction)
+                    
+                    let currentMyPeer = self.currentMyPeer ?? reactData.myPeer
+                    
+                    let peerSelectorButtonSize = self.peerSelectorButton.update(
+                        transition: transition,
+                        component: AnyComponent(PeerSelectorBadgeComponent(
+                            context: component.context,
+                            theme: environment.theme,
+                            strings: environment.strings,
+                            peer: currentMyPeer,
+                            action: { [weak self] sourceView in
+                                guard let self else {
+                                    return
+                                }
+                                self.displayTargetSelectionMenu(sourceView: sourceView)
                             }
-                            self.displayTargetSelectionMenu(sourceView: sourceView)
+                        )),
+                        environment: {},
+                        containerSize: CGSize(width: 120.0, height: 100.0)
+                    )
+                    let peerSelectorButtonFrame = CGRect(origin: CGPoint(x: availableSize.width - sideInset - peerSelectorButtonSize.width, y: floor((78.0 - peerSelectorButtonSize.height) * 0.5)), size: peerSelectorButtonSize)
+                    if let peerSelectorButtonView = self.peerSelectorButton.view {
+                        if peerSelectorButtonView.superview == nil {
+                            self.navigationBarContainer.addSubview(peerSelectorButtonView)
                         }
-                    )),
-                    environment: {},
-                    containerSize: CGSize(width: 120.0, height: 100.0)
-                )
-                let peerSelectorButtonFrame = CGRect(origin: CGPoint(x: availableSize.width - sideInset - peerSelectorButtonSize.width, y: floor((78.0 - peerSelectorButtonSize.height) * 0.5)), size: peerSelectorButtonSize)
-                if let peerSelectorButtonView = self.peerSelectorButton.view {
-                    if peerSelectorButtonView.superview == nil {
-                        self.navigationBarContainer.addSubview(peerSelectorButtonView)
+                        transition.setFrame(view: peerSelectorButtonView, frame: peerSelectorButtonFrame)
+                        peerSelectorButtonView.isHidden = sendAsPeers.count <= 1
                     }
-                    transition.setFrame(view: peerSelectorButtonView, frame: peerSelectorButtonFrame)
-                    peerSelectorButtonView.isHidden = sendAsPeers.count <= 1
                 }
             case .liveStreamMessage:
                 break
@@ -1967,6 +1969,7 @@ private final class ChatSendStarsScreenComponent: Component {
                         id: 1
                     ),
                     stableId: 0,
+                    isIncoming: false,
                     author: liveStreamMessage.myPeer,
                     text: liveStreamMessage.text.string,
                     entities: entities,
@@ -1981,6 +1984,7 @@ private final class ChatSendStarsScreenComponent: Component {
                         id: 1
                     ),
                     stableId: 0,
+                    isIncoming: false,
                     author: reactData.myPeer,
                     text: "",
                     entities: [],

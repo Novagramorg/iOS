@@ -3699,6 +3699,7 @@ public final class GroupCallMessagesContext {
         
         public let id: Id
         public let stableId: Int
+        public let isIncoming: Bool
         public let author: EnginePeer?
         public let text: String
         public let entities: [MessageTextEntity]
@@ -3706,9 +3707,10 @@ public final class GroupCallMessagesContext {
         public let lifetime: Int32
         public let paidStars: Int64?
         
-        public init(id: Id, stableId: Int, author: EnginePeer?, text: String, entities: [MessageTextEntity], date: Int32, lifetime: Int32, paidStars: Int64?) {
+        public init(id: Id, stableId: Int, isIncoming: Bool, author: EnginePeer?, text: String, entities: [MessageTextEntity], date: Int32, lifetime: Int32, paidStars: Int64?) {
             self.id = id
             self.stableId = stableId
+            self.isIncoming = isIncoming
             self.author = author
             self.text = text
             self.entities = entities
@@ -3721,6 +3723,7 @@ public final class GroupCallMessagesContext {
             return Message(
                 id: id,
                 stableId: self.stableId,
+                isIncoming: self.isIncoming,
                 author: self.author,
                 text: self.text,
                 entities: self.entities,
@@ -3738,6 +3741,9 @@ public final class GroupCallMessagesContext {
                 return false
             }
             if lhs.stableId != rhs.stableId {
+                return false
+            }
+            if lhs.isIncoming != rhs.isIncoming {
                 return false
             }
             if lhs.author != rhs.author {
@@ -3921,6 +3927,7 @@ public final class GroupCallMessagesContext {
                                 messages.append(Message(
                                     id: Message.Id(space: .remote, id: randomId),
                                     stableId: allocatedStableIds[messages.count],
+                                    isIncoming: addedOpaqueMessage.authorId != accountPeerId,
                                     author: transaction.getPeer(addedOpaqueMessage.authorId).flatMap(EnginePeer.init),
                                     text: text,
                                     entities: entities,
@@ -3950,6 +3957,7 @@ public final class GroupCallMessagesContext {
                                 messages.append(Message(
                                     id: Message.Id(space: .remote, id: Int64(addedMessage.messageId)),
                                     stableId: allocatedStableIds[messages.count],
+                                    isIncoming: addedMessage.authorId != accountPeerId,
                                     author: transaction.getPeer(addedMessage.authorId).flatMap(EnginePeer.init),
                                     text: addedMessage.text,
                                     entities: addedMessage.entities,
@@ -4231,6 +4239,7 @@ public final class GroupCallMessagesContext {
                 let message = Message(
                     id: Message.Id(space: .local, id: randomId),
                     stableId: stableId,
+                    isIncoming: false,
                     author: fromPeer.flatMap(EnginePeer.init),
                     text: text,
                     entities: entities,
@@ -4449,6 +4458,7 @@ public final class GroupCallMessagesContext {
                         state.messages.append(Message(
                             id: message.id,
                             stableId: message.stableId,
+                            isIncoming: false,
                             author: message.author,
                             text: message.text,
                             entities: message.entities,
@@ -4462,6 +4472,7 @@ public final class GroupCallMessagesContext {
                         state.messages.append(Message(
                             id: Message.Id(space: .local, id: pendingSendStarsValue.messageId),
                             stableId: stableId,
+                            isIncoming: false,
                             author: EnginePeer(fromPeer),
                             text: "",
                             entities: [],
@@ -4476,6 +4487,7 @@ public final class GroupCallMessagesContext {
                         state.pinnedMessages.append(Message(
                             id: message.id,
                             stableId: message.stableId,
+                            isIncoming: message.isIncoming,
                             author: message.author,
                             text: message.text,
                             entities: message.entities,
@@ -4489,6 +4501,7 @@ public final class GroupCallMessagesContext {
                         state.pinnedMessages.append(Message(
                             id: Message.Id(space: .local, id: pendingSendStarsValue.messageId),
                             stableId: stableId,
+                            isIncoming: false,
                             author: EnginePeer(fromPeer),
                             text: "",
                             entities: [],

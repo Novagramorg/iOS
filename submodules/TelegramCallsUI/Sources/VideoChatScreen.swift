@@ -1416,7 +1416,7 @@ final class VideoChatScreenComponent: Component {
                     return
                 }
                 let entities = generateTextEntities(text.string, enabledTypes: [.mention, .hashtag], currentEntities: generateChatInputTextEntities(text))
-                call.sendMessage(randomId: randomId, text: text.string, entities: entities, paidStars: nil)
+                call.sendMessage(fromId: nil, randomId: randomId, text: text.string, entities: entities, paidStars: nil)
             }
             
             inputPanelView.clearSendMessageInput(updateState: true)
@@ -3836,7 +3836,7 @@ final class VideoChatScreenComponent: Component {
                             guard case let .group(groupCall) = self.currentCall, let call = groupCall as? PresentationGroupCallImpl else {
                                 return
                             }
-                            call.sendMessage(text: text, entities: entities, paidStars: nil)
+                            call.sendMessage(fromId: nil, text: text, entities: entities, paidStars: nil)
                         })
                     }
                     
