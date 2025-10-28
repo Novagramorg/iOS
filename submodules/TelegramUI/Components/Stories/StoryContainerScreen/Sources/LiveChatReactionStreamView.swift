@@ -169,7 +169,18 @@ private actor LiveChatReactionItemTaskQueue {
 
 final class LiveChatReactionStreamView: UIView {
     private final class ItemLayer: SimpleLayer {
-        init(image: UIImage) {
+        let amplitude: CGFloat
+        let period: CGFloat
+        let phaseOffset: CGFloat
+        let baseX: CGFloat
+        var timeValue: CGFloat = 0.0
+        
+        init(image: UIImage, amplitude: CGFloat, period: CGFloat, phaseOffset: CGFloat, baseX: CGFloat) {
+            self.amplitude = amplitude
+            self.period = period
+            self.phaseOffset = phaseOffset
+            self.baseX = baseX
+            
             super.init()
             
             self.contents = image.cgImage
@@ -177,6 +188,11 @@ final class LiveChatReactionStreamView: UIView {
         }
 
         override init(layer: Any) {
+            self.amplitude = 0.0
+            self.period = 0.0
+            self.phaseOffset = 0.0
+            self.baseX = 0.0
+            
             super.init(layer: layer)
         }
         
@@ -233,7 +249,7 @@ final class LiveChatReactionStreamView: UIView {
             return
         }
         let timestamp = CFAbsoluteTimeGetCurrent()
-        if timestamp < self.previousTimestamp + 1.0 / 30.0 {
+        if timestamp < self.previousTimestamp + 0.2 {
             return
         }
         self.previousTimestamp = timestamp
@@ -253,22 +269,35 @@ final class LiveChatReactionStreamView: UIView {
         let id = self.nextId
         self.nextId += 1
         
-        let itemLayer = ItemLayer(image: image)
-        itemLayer.frame = CGRect(origin: CGPoint(x: -image.size.width - 30.0, y: -image.size.height * 0.5), size: image.size).offsetBy(dx: 20.0 * CGFloat(LokiRng.random(withSeed0: UInt(id), seed1: 0, seed2: 0)) - 0.5, dy: 0.0)
-        itemLayer.transform = CATransform3DMakeRotation(CGFloat(LokiRng.random(withSeed0: UInt(id), seed1: 1, seed2: 0) - 0.5) * CGFloat.pi * 0.2, 0.0, 0.0, 1.0)
+        let random = LokiRng(seed0: UInt(id), seed1: 1, seed2: 0)
+        let itemX: CGFloat = -image.size.width - 8.0 + 20.0 * CGFloat(LokiRng.random(withSeed0: UInt(id), seed1: 0, seed2: 0) - 0.5)
+        let phaseOffset: CGFloat = CGFloat(random.next())
+        let itemLayer = ItemLayer(image: image, amplitude: 0.0 + CGFloat(random.next()) * 6.0, period: 1.0 + CGFloat(random.next()) * 1.0, phaseOffset: phaseOffset, baseX: itemX)
+        itemLayer.frame = CGRect(origin: CGPoint(x: itemX, y: -image.size.height * 0.5), size: image.size)
+        itemLayer.transform = CATransform3DMakeRotation(CGFloat(random.next() - 0.5) * CGFloat.pi * 0.2, 0.0, 0.0, 1.0)
         self.itemLayers[id] = itemLayer
         self.itemLayerContainer.addSublayer(itemLayer)
         
-        //itemLayer.animatePosition(from: CGPoint(), to: CGPoint(x: 0.0, y: -200.0), duration: 2.0, timingFunction: CAMediaTimingFunctionName.linear.rawValue, removeOnCompletion: false, additive: true)
+        itemLayer.animatePosition(from: CGPoint(), to: CGPoint(x: 0.0, y: -200.0), duration: 2.0, timingFunction: CAMediaTimingFunctionName.linear.rawValue, removeOnCompletion: false, additive: true)
         
-        itemLayer.animateAlpha(from: 1.0, to: 0.0, duration: 0.18, delay: 2.0 - 0.18, removeOnCompletion: false, completion: { [weak self] _ in
-            guard let self else {
+        itemLayer.animateScale(from: 0.001, to: 1.0, duration: 0.2)
+        itemLayer.animateAlpha(from: 0.0, to: 1.0, duration: 0.1, completion: { [weak self, weak itemLayer] _ in
+            guard let itemLayer else {
                 return
             }
-            if let itemLayer = self.itemLayers[id] {
-                self.itemLayers.removeValue(forKey: id)
-                itemLayer.removeFromSuperlayer()
-            }
+            
+            let delay: Double = 2.0 - 0.1 - 0.18
+            
+            itemLayer.animateScale(from: 1.0, to: 0.001, duration: 0.18, delay: delay, removeOnCompletion: false)
+            itemLayer.animateAlpha(from: 1.0, to: 0.0, duration: 0.18, delay: delay, removeOnCompletion: false, completion: { [weak self] _ in
+                guard let self else {
+                    return
+                }
+                if let itemLayer = self.itemLayers[id] {
+                    self.itemLayers.removeValue(forKey: id)
+                    itemLayer.removeFromSuperlayer()
+                }
+            })
         })
     }
     
@@ -276,59 +305,12 @@ final class LiveChatReactionStreamView: UIView {
         let timestamp = CACurrentMediaTime()
         let dt = max(1.0 / 120.0, min(1.0 / 30.0, timestamp - self.previousPhysicsTimestamp))
         self.previousPhysicsTimestamp = timestamp
-        
-        let cellSize: CGFloat = 16.0
-        let forceScale: CGFloat = 60.0
-        let falloffDistance: CGFloat = 24.0
 
-        for (id, itemLayer) in self.itemLayers {
-            let px = itemLayer.position.x
-            let py = itemLayer.position.y
-
-            // Grid coordinates (no abs; keep sign, use floor)
-            let gx = Int(floor(px / cellSize))
-            let gy = Int(floor(py / cellSize))
-
-            // Fractional position within the cell
-            let fx = (px / cellSize) - CGFloat(gx)
-            let fy = (py / cellSize) - CGFloat(gy)
-
-            // Bilinear weights for the 4 corners
-            let w00 = (1 - fx) * (1 - fy)
-            let w10 = (fx)     * (1 - fy)
-            let w01 = (1 - fx) * (fy)
-            let w11 = (fx)     * (fy)
-
-            func n(_ ix: Int, _ iy: Int) -> CGFloat {
-                // random in [0,1), shift to [-0.5, 0.5)
-                let r = LokiRng.random(
-                    withSeed0: UInt(abs(ix)),
-                    seed1: UInt(abs(iy)),
-                    seed2: UInt(id)
-                )
-                return CGFloat(r) - 0.5
-            }
-
-            let n00x = n(gx + 0, gy + 0)
-            let n10x = n(gx + 1, gy + 0)
-            let n01x = n(gx + 0, gy + 1)
-            let n11x = n(gx + 1, gy + 1)
-
-            // Bilinear interpolation (smooth, limited cancellation)
-            var fxForce = w00*n00x + w10*n10x + w01*n01x + w11*n11x
-
-            // Optional local radial falloff from the nearest lattice center
-            // (invert the original: strongest at center)
-            let cx = (CGFloat(gx) + 0.5) * cellSize
-            let cy = (CGFloat(gy) + 0.5) * cellSize
-            let d = hypot(px - cx, py - cy)
-            let t = max(0.0, 1.0 - d / falloffDistance)
-            let weight = t * t
-            fxForce *= weight
-
-            // Apply force directly to position (or integrate velocity if you have it)
-            itemLayer.position.x += fxForce * forceScale * dt
-            itemLayer.position.y -= dt * 100.0
+        for (_, itemLayer) in self.itemLayers {
+            itemLayer.timeValue += dt
+            let itemPhase = (itemLayer.timeValue.truncatingRemainder(dividingBy: itemLayer.period) / itemLayer.period + itemLayer.phaseOffset).truncatingRemainder(dividingBy: 1.0)
+            let phaseFraction = sin(itemPhase * CGFloat.pi * 2.0)
+            itemLayer.position.x = itemLayer.baseX + phaseFraction * itemLayer.amplitude
         }
     }
 
