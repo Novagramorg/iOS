@@ -934,21 +934,6 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
             
             if isStream {
                 messageLifetime = Int32.max
-                
-                if self.isStream {
-                    var allowLiveChat = false
-                    if let data = self.accountContext.currentAppConfiguration.with({ $0 }).data {
-                        if let dev = data["dev"] as? Double, dev != 0.0 {
-                            allowLiveChat = true
-                        }
-                        if data["ios_can_join_streams"] != nil {
-                            allowLiveChat = true
-                        }
-                    }
-                    if !allowLiveChat {
-                        preconditionFailure()
-                    }
-                }
             }
             
             self.messagesContext = accountContext.engine.messages.groupCallMessages(
@@ -1689,7 +1674,8 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
                     isVideoEnabled: callInfo.isVideoEnabled,
                     unmutedVideoLimit: callInfo.unmutedVideoLimit,
                     isStream: callInfo.isStream,
-                    isCreator: callInfo.isCreator
+                    isCreator: callInfo.isCreator,
+                    defaultSendAs: callInfo.defaultSendAs
                 )), audioSessionControl: self.audioSessionControl)
             } else {
                 self.summaryInfoState.set(.single(SummaryInfoState(info: GroupCallInfo(
@@ -1707,7 +1693,8 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
                     isVideoEnabled: state.isVideoEnabled,
                     unmutedVideoLimit: state.unmutedVideoLimit,
                     isStream: callInfo.isStream,
-                    isCreator: callInfo.isCreator
+                    isCreator: callInfo.isCreator,
+                    defaultSendAs: callInfo.defaultSendAs
                 ))))
                 
                 self.summaryParticipantsState.set(.single(SummaryParticipantsState(
@@ -1787,7 +1774,8 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
                             isVideoEnabled: false,
                             unmutedVideoLimit: 0,
                             isStream: true,
-                            isCreator: false
+                            isCreator: false,
+                            defaultSendAs: nil
                         )
                     } else {
                         activeCallInfo = nil
@@ -2691,7 +2679,8 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
                         isVideoEnabled: state.isVideoEnabled,
                         unmutedVideoLimit: state.unmutedVideoLimit,
                         isStream: callInfo.isStream,
-                        isCreator: callInfo.isCreator
+                        isCreator: callInfo.isCreator,
+                        defaultSendAs: callInfo.defaultSendAs
                     ))))
                     
                     self.summaryParticipantsState.set(.single(SummaryParticipantsState(
@@ -4060,15 +4049,15 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
         })
     }
     
-    public func sendMessage(randomId: Int64? = nil, text: String, entities: [MessageTextEntity], paidStars: Int64?) {
+    public func sendMessage(fromId: PeerId?, randomId: Int64? = nil, text: String, entities: [MessageTextEntity], paidStars: Int64?) {
         if let messagesContext = self.messagesContext {
-            messagesContext.send(fromId: self.joinAsPeerId, randomId: randomId, text: text, entities: entities, paidStars: paidStars)
+            messagesContext.send(fromId: fromId ?? self.joinAsPeerId, randomId: randomId, text: text, entities: entities, paidStars: paidStars)
         }
     }
     
-    public func sendStars(amount: Int64, delay: Bool) {
+    public func sendStars(fromId: PeerId?, amount: Int64, delay: Bool) {
         if let messagesContext = self.messagesContext {
-            messagesContext.sendStars(fromId: self.joinAsPeerId, amount: amount, delay: delay)
+            messagesContext.sendStars(fromId: fromId ?? self.joinAsPeerId, amount: amount, delay: delay)
         }
     }
     

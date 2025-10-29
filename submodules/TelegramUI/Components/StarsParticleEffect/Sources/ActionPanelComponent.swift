@@ -23,7 +23,7 @@ public final class StarsParticleEffectLayer: SimpleLayer {
         fatalError("init(coder:) has not been implemented")
     }
     
-    private func setup() {
+    private func setup(rate: CGFloat) {
         guard let currentColor = self.currentColor else {
             return
         }
@@ -32,7 +32,7 @@ public final class StarsParticleEffectLayer: SimpleLayer {
         let emitter = CAEmitterCell()
         emitter.name = "emitter"
         emitter.contents = UIImage(bundleImageName: "Premium/Stars/Particle")?.cgImage
-        emitter.birthRate = 25.0
+        emitter.birthRate = Float(rate)
         emitter.lifetime = 2.0
         emitter.velocity = 12.0
         emitter.velocityRange = 3
@@ -56,10 +56,10 @@ public final class StarsParticleEffectLayer: SimpleLayer {
         self.emitterLayer.emitterCells = [emitter]
     }
     
-    public func update(color: UIColor, size: CGSize, cornerRadius: CGFloat, transition: ComponentTransition) {
+    public func update(color: UIColor, rate: CGFloat = 25.0, size: CGSize, cornerRadius: CGFloat, transition: ComponentTransition) {
         if self.emitterLayer.emitterCells == nil || self.currentColor != color {
             self.currentColor = color
-            self.setup()
+            self.setup(rate: rate)
         }
         self.emitterLayer.emitterShape = .circle
         self.emitterLayer.emitterSize = CGSize(width: size.width * 0.7, height: size.height * 0.7)

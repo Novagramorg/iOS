@@ -302,6 +302,7 @@ private final class PinnedBarComponent: Component {
                 self.isUpdating = false
             }
             
+            let previousComponent = self.component
             self.component = component
             self.state = state
             
@@ -325,8 +326,21 @@ private final class PinnedBarComponent: Component {
             
             let listInsets = UIEdgeInsets(top: 0.0, left: insets.left, bottom: 0.0, right: insets.right)
             let listFrame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: size.width, height: size.height))
+            
+            var listTransition = transition
+            var animateIn = false
+            if let previousComponent {
+                if previousComponent.messages.isEmpty {
+                    listTransition = listTransition.withAnimation(.none)
+                    animateIn = true
+                }
+            } else {
+                listTransition = listTransition.withAnimation(.none)
+                animateIn = true
+            }
+            
             let _ = self.list.update(
-                transition: transition,
+                transition: listTransition,
                 component: AnyComponent(AsyncListComponent(
                     externalState: self.listState,
                     items: listItems,
@@ -343,6 +357,10 @@ private final class PinnedBarComponent: Component {
                 }
                 transition.setPosition(view: listView, position: CGRect(origin: CGPoint(), size: listFrame.size).center)
                 transition.setBounds(view: listView, bounds: CGRect(origin: CGPoint(), size: listFrame.size))
+                
+                if animateIn {
+                    transition.animateAlpha(view: listView, from: 0.0, to: 1.0)
+                }
             }
             
             transition.setFrame(view: self.listContainer, frame: listFrame)
@@ -458,6 +476,8 @@ final class StoryContentLiveChatComponent: Component {
         private let listState = AsyncListComponent.ExternalState()
         private let list = ComponentView<Empty>()
         private let listShadowView: UIView
+        
+        private var reactionStreamView: LiveChatReactionStreamView?
 
         private var component: StoryContentLiveChatComponent?
         private weak var state: EmptyComponentState?
@@ -808,20 +828,25 @@ final class StoryContentLiveChatComponent: Component {
                             updateTransition = .immediate
                         }
                         
-                        if let component = self.component, let previousMessagesState = self.messagesState, !self.isChatExpanded {
-                            var hasNewMessages = false
-                            for message in state.messages {
-                                //TODO:release
-                                //if message.author?.id != component.context.account.peerId {
-                                do {
-                                    if !previousMessagesState.messages.contains(where: { $0.id == message.id }) {
+                        if let component = self.component, let previousMessagesState = self.messagesState {
+                            if !self.isChatExpanded {
+                                var hasNewMessages = false
+                                for message in state.messages {
+                                    if message.isIncoming && !previousMessagesState.messages.contains(where: { $0.id == message.id }) {
                                         hasNewMessages = true
-                                        break
+                                        
+                                        if message.isIncoming, let paidStars = message.paidStars, let author = message.author {
+                                            self.reactionStreamView?.add(peer: author, count: Int(paidStars))
+                                        }
                                     }
                                 }
+                                if hasNewMessages {
+                                    component.external.hasUnseenMessages = true
+                                }
                             }
-                            if hasNewMessages {
-                                component.external.hasUnseenMessages = true
+                            
+                            if state.pendingMyStars > previousMessagesState.pendingMyStars, let message = state.messages.first(where: { $0.paidStars != nil && !$0.isIncoming }), let peer = message.author {
+                                self.reactionStreamView?.add(peer: peer, count: Int(state.pendingMyStars - previousMessagesState.pendingMyStars))
                             }
                         }
                         self.messagesState = state
@@ -972,6 +997,16 @@ final class StoryContentLiveChatComponent: Component {
             
             self.listShadowView.backgroundColor = UIColor(white: 0.0, alpha: 0.3)
             transition.setAlpha(view: self.listShadowView, alpha: self.isChatExpanded ? 1.0 : 0.0)
+            
+            let reactionStreamView: LiveChatReactionStreamView
+            if let current = self.reactionStreamView {
+                reactionStreamView = current
+            } else {
+                reactionStreamView = LiveChatReactionStreamView(context: component.context)
+                self.reactionStreamView = reactionStreamView
+                self.addSubview(reactionStreamView)
+            }
+            reactionStreamView.update(size: availableSize, sourcePoint: CGPoint(x: availableSize.width, y: availableSize.height), transition: transition)
             
             return availableSize
         }

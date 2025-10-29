@@ -37,7 +37,6 @@ import TextFieldComponent
 import StickerPackPreviewUI
 import OpenInExternalAppUI
 import SafariServices
-//import MediaPasteboardUI
 import WebPBinding
 import ContextUI
 import ChatScheduleTimeController
@@ -53,6 +52,7 @@ import AudioWaveform
 import ChatMessagePaymentAlertController
 import ChatSendStarsScreen
 import AnimatedTextComponent
+import ChatSendAsContextMenu
 
 private var ObjCKey_DeinitWatcher: Int?
 
@@ -105,6 +105,11 @@ final class StoryItemSetContainerSendMessage {
     var currentLiveStreamMessageStars: StarsAmount?
     weak var currentSendStarsUndoController: UndoOverlayController?
     
+    var sendAsData: (isPremium: Bool, availablePeers: [SendAsPeer])?
+    var currentSendAsPeer: SendAsPeer?
+    var isSelectingSendAsPeer: Bool = false
+    var sendAsDisposable: Disposable?
+    
     private(set) var isMediaRecordingLocked: Bool = false
     var wasRecordingDismissed: Bool = false
     
@@ -118,10 +123,11 @@ final class StoryItemSetContainerSendMessage {
         self.resolvePeerByNameDisposable.dispose()
         self.inputMediaNodeDataDisposable?.dispose()
         self.currentTooltipUpdateTimer?.invalidate()
+        self.sendAsDisposable?.dispose()
     }
     
-    func setup(context: AccountContext, view: StoryItemSetContainerComponent.View, inputPanelExternalState: MessageInputPanelComponent.ExternalState, keyboardInputData: Signal<ChatEntityKeyboardInputNode.InputData, NoError>) {
-        self.context = context
+    func setup(component: StoryItemSetContainerComponent, view: StoryItemSetContainerComponent.View, inputPanelExternalState: MessageInputPanelComponent.ExternalState, keyboardInputData: Signal<ChatEntityKeyboardInputNode.InputData, NoError>) {
+        self.context = component.context
         self.inputPanelExternalState = inputPanelExternalState
         self.view = view
         
@@ -208,6 +214,56 @@ final class StoryItemSetContainerSendMessage {
             }
         )
         self.inputMediaInteraction?.forceTheme = defaultDarkColorPresentationTheme
+        
+        if let peerId = component.slice.item.peerId {
+            self.sendAsDisposable = combineLatest(
+                queue: Queue.mainQueue(),
+                component.context.engine.data.subscribe(
+                    TelegramEngine.EngineData.Item.Peer.Peer(id: component.context.account.peerId)
+                ),
+                component.context.engine.peers.liveStorySendAsAvailablePeers(peerId: peerId)
+            ).startStrict(next: { [weak self, weak view] accountPeer, peers in
+                guard let self, let view, let accountPeer else {
+                    return
+                }
+                
+                let isPremium = accountPeer.isPremium
+                
+                var availablePeers: [SendAsPeer] = []
+                availablePeers.append(SendAsPeer(
+                    peer: accountPeer._asPeer(),
+                    subscribers: nil,
+                    isPremiumRequired: false
+                ))
+                for peer in peers {
+                    if peer.peer.id == accountPeer.id {
+                        continue
+                    }
+                    availablePeers.append(peer)
+                }
+                
+                self.sendAsData = (
+                    isPremium: isPremium,
+                    availablePeers: availablePeers
+                )
+                
+                if availablePeers.count > 1 {
+                    if self.currentSendAsPeer == nil {
+                        self.currentSendAsPeer = availablePeers.first
+                        if !view.isUpdatingComponent {
+                            view.state?.updated(transition: .spring(duration: 0.4))
+                        }
+                    }
+                } else {
+                    if self.currentSendAsPeer != nil {
+                        self.currentSendAsPeer = nil
+                        if !view.isUpdatingComponent {
+                            view.state?.updated(transition: .spring(duration: 0.4))
+                        }
+                    }
+                }
+            })
+        }
     }
     
     func toggleInputMode() {
@@ -281,7 +337,7 @@ final class StoryItemSetContainerSendMessage {
                 self.inputMediaNode = inputMediaNode
             }
             
-            let presentationData = context.sharedContext.currentPresentationData.with { $0 }.withUpdated(theme: defaultDarkPresentationTheme)
+            let presentationData = context.sharedContext.currentPresentationData.with { $0 }.withUpdated(theme: defaultDarkColorPresentationTheme)
             let presentationInterfaceState = ChatPresentationInterfaceState(
                 chatWallpaper: .builtin(WallpaperSettings()),
                 theme: presentationData.theme,
@@ -698,7 +754,7 @@ final class StoryItemSetContainerSendMessage {
                             
                             let entities = generateChatInputTextEntities(text)
                             
-                            call.sendMessage(text: text.string, entities: entities, paidStars: sendPaidMessageStars?.value)
+                            call.sendMessage(fromId: self.currentSendAsPeer?.peer.id, text: text.string, entities: entities, paidStars: sendPaidMessageStars?.value)
                             
                             component.storyItemSharedState.replyDrafts.removeValue(forKey: StoryId(peerId: peerId, id: focusedItem.storyItem.id))
                             inputPanelView.clearSendMessageInput(updateState: true)
@@ -3952,13 +4008,14 @@ final class StoryItemSetContainerSendMessage {
             let initialData = await ChatSendStarsScreen.initialData(
                 context: component.context,
                 peerId: peerId,
+                myPeer: (self.currentSendAsPeer?.peer).flatMap(EnginePeer.init),
                 reactSubject: .liveStream(peerId: peerId, storyId: focusedItem.storyItem.id, minAmount: Int(minAmount)),
                 topPeers: topPeers,
-                completion: { [weak view] amount, privacy, isBecomingTop, transitionOut in
-                    guard let view, let component = view.component else {
+                completion: { [weak self, weak view] amount, _, _, _ in
+                    guard let self, let view else {
                         return
                     }
-                    let _ = component.context.engine.messages.sendStoryStars(peerId: component.slice.effectivePeer.id, id: component.slice.item.storyItem.id, count: Int(amount)).startStandalone()
+                    self.performSendStars(view: view, buttonView: nil, count: Int(amount), isFromExpandedView: true)
                 }).get()
             if let initialData {
                 controller.push(ChatSendStarsScreen(
@@ -3970,12 +4027,17 @@ final class StoryItemSetContainerSendMessage {
         }
     }
     
-    func performSendStars(view: StoryItemSetContainerComponent.View, buttonView: UIView, count: Int, isFromExpandedView: Bool) {
+    func performSendStars(view: StoryItemSetContainerComponent.View, buttonView: UIView?, count: Int, isFromExpandedView: Bool) {
         guard let component = view.component else {
             return
         }
         
         if isFromExpandedView {
+            if let currentSendStarsUndoController = self.currentSendStarsUndoController {
+                self.currentSendStarsUndoController = nil
+                currentSendStarsUndoController.dismiss()
+            }
+            
             self.commitSendStars(view: view, count: count, delay: false)
         } else {
             Task { @MainActor [weak view] in
@@ -4009,7 +4071,7 @@ final class StoryItemSetContainerSendMessage {
                     }
                 }
                 
-                if let reactionItem {
+                if let reactionItem, let buttonView {
                     let targetFrame = buttonView.convert(buttonView.bounds, to: view)
                     
                     let targetView = UIView(frame: targetFrame)
@@ -4143,7 +4205,91 @@ final class StoryItemSetContainerSendMessage {
             return
         }
         
-        call.sendStars(amount: Int64(count), delay: delay)
+        call.sendStars(fromId: self.currentSendAsPeer?.peer.id, amount: Int64(count), delay: delay)
+    }
+    
+    func openSendAsSelection(view: StoryItemSetContainerComponent.View, sourceView: UIView, gesture: ContextGesture?) {
+        guard let component = view.component, let sendAsData = self.sendAsData, let currentSendAsPeer = self.currentSendAsPeer, let controller = component.controller() else {
+            return
+        }
+        
+        let focusedItem = component.slice.item
+        guard let peerId = focusedItem.peerId else {
+            return
+        }
+        let isPremium = sendAsData.isPremium
+        
+        var items: [ContextMenuItem] = []
+        items.append(.custom(ChatSendAsPeerTitleContextItem(text: component.strings.Conversation_SendMesageAs.uppercased()), false))
+        items.append(.custom(ChatSendAsPeerListContextItem(
+            context: component.context,
+            chatPeerId: peerId,
+            peers: sendAsData.availablePeers,
+            selectedPeerId: currentSendAsPeer.peer.id,
+            isPremium: isPremium,
+            action: { [weak self, weak view] peer in
+                guard let self, let view else {
+                    return
+                }
+                if let foundPeer = self.sendAsData?.availablePeers.first(where: { $0.peer.id == peer.id }) {
+                    self.currentSendAsPeer = foundPeer
+                    view.state?.updated(transition: .spring(duration: 0.4))
+                }
+            },
+            presentToast: { [weak view] peer in
+                guard let view, let component = view.component, let controller = component.controller() else {
+                    return
+                }
+                HapticFeedback().impact()
+                
+                let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }.withUpdated(theme: defaultDarkColorPresentationTheme)
+                controller.present(UndoOverlayController(presentationData: presentationData, content: .invitedToVoiceChat(context: component.context, peer: peer, title: nil, text: presentationData.strings.Conversation_SendMesageAsPremiumInfo, action: presentationData.strings.EmojiInput_PremiumEmojiToast_Action, duration: 3), elevatedLayout: false, action: { [weak view] action in
+                    guard let view, let component = view.component, let controller = component.controller() else {
+                        return true
+                    }
+                    if case .undo = action {
+                        view.endEditing(true)
+                        
+                        let introScreen = PremiumIntroScreen(context: component.context, source: .settings)
+                        controller.push(introScreen)
+                    }
+                    return true
+                }), in: .current)
+            }),
+            false
+        ))
+        
+        final class ReferenceSource: ContextReferenceContentSource {
+            let controller: ViewController
+            let sourceView: UIView
+            let insets: UIEdgeInsets
+            let contentInsets: UIEdgeInsets
+            
+            init(controller: ViewController, sourceView: UIView, insets: UIEdgeInsets, contentInsets: UIEdgeInsets = UIEdgeInsets()) {
+                self.controller = controller
+                self.sourceView = sourceView
+                self.insets = insets
+                self.contentInsets = contentInsets
+            }
+            
+            func transitionInfo() -> ContextControllerReferenceViewInfo? {
+                return ContextControllerReferenceViewInfo(referenceView: self.sourceView, contentAreaInScreenSpace: UIScreen.main.bounds.inset(by: self.insets), insets: self.contentInsets, actionsPosition: .top)
+            }
+        }
+        
+        let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }.withUpdated(theme: defaultDarkColorPresentationTheme)
+        let contextController = ContextController(presentationData: presentationData, source: .reference(ReferenceSource(controller: controller, sourceView: sourceView, insets: UIEdgeInsets(top: 0.0, left: 0.0, bottom: 0.0, right: 0.0), contentInsets: UIEdgeInsets(top: 0.0, left: 0.0, bottom: 0.0, right: 0.0))), items: .single(ContextController.Items(content: .list(items))), gesture: gesture, workaroundUseLegacyImplementation: false)
+        contextController.dismissed = { [weak self, weak view] in
+            guard let self, let view else {
+                return
+            }
+            self.isSelectingSendAsPeer = false
+            view.state?.updated(transition: .spring(duration: 0.4))
+        }
+        controller.presentInGlobalOverlay(contextController)
+        
+        self.isSelectingSendAsPeer = true
+        view.state?.updated(transition: .spring(duration: 0.4))
     }
 }
 

@@ -5,6 +5,109 @@ import TelegramPresentationData
 import ComponentFlow
 import GlassBackgroundComponent
 import AnimatedTextComponent
+import StarsParticleEffect
+
+final class StarReactionButtonBadgeComponent: Component {
+    let theme: PresentationTheme
+    let count: Int
+    let isFilled: Bool
+    
+    init(
+        theme: PresentationTheme,
+        count: Int,
+        isFilled: Bool
+    ) {
+        self.theme = theme
+        self.count = count
+        self.isFilled = isFilled
+    }
+    
+    static func ==(lhs: StarReactionButtonBadgeComponent, rhs: StarReactionButtonBadgeComponent) -> Bool {
+        if lhs.theme !== rhs.theme {
+            return false
+        }
+        if lhs.count != rhs.count {
+            return false
+        }
+        if lhs.isFilled != rhs.isFilled {
+            return false
+        }
+        return true
+    }
+    
+    final class View: UIView {
+        private let backgroundView: GlassBackgroundView
+        private let text = ComponentView<Empty>()
+        
+        private var component: StarReactionButtonBadgeComponent?
+        private weak var state: EmptyComponentState?
+        
+        override init(frame: CGRect) {
+            self.backgroundView = GlassBackgroundView()
+            
+            super.init(frame: frame)
+            
+            self.addSubview(self.backgroundView)
+        }
+        
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
+        
+        func update(component: StarReactionButtonBadgeComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
+            self.component = component
+            self.state = state
+            
+            let height: CGFloat = 15.0
+            let sideInset: CGFloat = 4.0
+            
+            let textSize = self.text.update(
+                transition: transition,
+                component: AnyComponent(AnimatedTextComponent(
+                    font: Font.semibold(10.0),
+                    color: component.theme.chat.inputPanel.panelControlColor,
+                    items: [AnimatedTextComponent.Item(id: AnyHashable(0), content: .text(countString(Int64(component.count))))],
+                    noDelay: true
+                )),
+                environment: {},
+                containerSize: CGSize(width: 100.0, height: 100.0)
+            )
+            
+            let size = CGSize(width: textSize.width + sideInset * 2.0, height: height)
+            let backgroundFrame = CGRect(origin: CGPoint(), size: size)
+            
+            let backgroundTintColor: GlassBackgroundView.TintColor
+            if component.isFilled {
+                backgroundTintColor = .init(kind: .custom, color: UIColor(rgb: 0xFFB10D))
+            } else {
+                backgroundTintColor = .init(kind: .panel, color: component.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7))
+            }
+            
+            self.backgroundView.update(size: backgroundFrame.size, cornerRadius: backgroundFrame.height * 0.5, isDark: component.theme.overallDarkAppearance, tintColor: backgroundTintColor, isInteractive: true, transition: transition)
+            
+            if let textView = self.text.view {
+                let textFrame = textSize.centered(in: CGRect(origin: CGPoint(), size: size))
+                
+                if textView.superview == nil {
+                    textView.isUserInteractionEnabled = false
+                    self.backgroundView.contentView.addSubview(textView)
+                }
+                transition.setFrame(view: textView, frame: textFrame)
+            }
+            
+            return size
+        }
+    }
+    
+    func makeView() -> View {
+        return View(frame: CGRect())
+    }
+    
+    func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
+        return view.update(component: self, availableSize: availableSize, state: state, environment: environment, transition: transition)
+    }
+}
+
 
 final class StarReactionButtonComponent: Component {
     let theme: PresentationTheme
@@ -45,8 +148,11 @@ final class StarReactionButtonComponent: Component {
     
     final class View: UIView {
         private let backgroundView: GlassBackgroundView
+        private let backgroundEffectLayer: StarsParticleEffectLayer
+        private let backgroundMaskView: UIView
+        private let backgroundBadgeMask: UIImageView
         private let iconView: UIImageView
-        private var text: ComponentView<Empty>?
+        private var badge: ComponentView<Empty>?
         
         private var longTapRecognizer: TapLongTapOrDoubleTapGestureRecognizer?
         
@@ -55,6 +161,20 @@ final class StarReactionButtonComponent: Component {
         
         override init(frame: CGRect) {
             self.backgroundView = GlassBackgroundView()
+            self.backgroundMaskView = UIView()
+            self.backgroundBadgeMask = UIImageView()
+            self.backgroundMaskView.addSubview(self.backgroundBadgeMask)
+            
+            self.backgroundEffectLayer = StarsParticleEffectLayer()
+            self.backgroundView.contentView.layer.addSublayer(self.backgroundEffectLayer)
+            
+            //self.backgroundView.mask = self.backgroundMaskView
+            
+            self.backgroundMaskView.backgroundColor = .white
+            if let filter = CALayer.luminanceToAlpha() {
+                self.backgroundMaskView.layer.filters = [filter]
+            }
+            
             self.iconView = UIImageView()
             
             super.init(frame: frame)
@@ -96,48 +216,53 @@ final class StarReactionButtonComponent: Component {
             self.component = component
             self.state = state
             
-            let leftInset: CGFloat = 12.0
-            let rightInset: CGFloat = 12.0
-            let textSpacing: CGFloat = 2.0
-            
-            var size = CGSize(width: 40.0, height: 40.0)
-            var textSize: CGSize?
+            let size = CGSize(width: 40.0, height: 40.0)
             
             if self.iconView.image == nil {
                 self.iconView.image = UIImage(bundleImageName: "Premium/Stars/ButtonStar")?.withRenderingMode(.alwaysTemplate)
             }
             
             if component.count != 0 {
-                let text: ComponentView<Empty>
-                var textTransition = transition
-                if let current = self.text {
-                    text = current
+                let badge: ComponentView<Empty>
+                var badgeTransition = transition
+                if let current = self.badge {
+                    badge = current
                 } else {
-                    textTransition = textTransition.withAnimation(.none)
-                    text = ComponentView()
-                    self.text = text
+                    badgeTransition = badgeTransition.withAnimation(.none)
+                    badge = ComponentView()
+                    self.badge = badge
                 }
-                let textSizeValue = text.update(
-                    transition: textTransition,
-                    component: AnyComponent(AnimatedTextComponent(
-                        font: Font.regular(17.0),
-                        color: component.theme.chat.inputPanel.panelControlColor,
-                        items: [AnimatedTextComponent.Item(id: AnyHashable(0), content: .number(component.count, minDigits: 1))],
-                        noDelay: true
+                let badgeSize = badge.update(
+                    transition: badgeTransition,
+                    component: AnyComponent(StarReactionButtonBadgeComponent(
+                        theme: component.theme,
+                        count: component.count,
+                        isFilled: component.isFilled
                     )),
                     environment: {},
                     containerSize: CGSize(width: 100.0, height: 100.0)
                 )
-                textSize = textSizeValue
-                if let image = self.iconView.image {
-                    size.width = leftInset + image.size.width + textSpacing + textSizeValue.width + rightInset
+                if let badgeView = badge.view {
+                    var badgeFrame = CGRect(origin: CGPoint(x: min(size.width + 6.0 - badgeSize.width, floorToScreenPixels(size.width - 4.0 - badgeSize.width * 0.5)), y: -3.0), size: badgeSize)
+                    if badgeSize.width > size.width * 0.8 {
+                        badgeFrame.origin.x = floor((size.width - badgeSize.width) * 0.5)
+                    }
+                    
+                    if badgeView.superview == nil {
+                        badgeView.isUserInteractionEnabled = false
+                        self.backgroundView.contentView.addSubview(badgeView)
+                        badgeView.frame = badgeFrame
+                        transition.animateScale(view: badgeView, from: 0.001, to: 1.0)
+                        transition.animateAlpha(view: badgeView, from: 0.0, to: 1.0)
+                    }
+                    transition.setFrame(view: badgeView, frame: badgeFrame)
                 }
-            } else if let text = self.text {
-                self.text = nil
-                if let textView = text.view {
-                    transition.setScale(view: textView, scale: 0.001)
-                    transition.setAlpha(view: textView, alpha: 0.0, completion: { [weak textView] _ in
-                        textView?.removeFromSuperview()
+            } else if let badge = self.badge {
+                self.badge = nil
+                if let badgeView = badge.view {
+                    transition.setScale(view: badgeView, scale: 0.001)
+                    transition.setAlpha(view: badgeView, alpha: 0.0, completion: { [weak badgeView] _ in
+                        badgeView?.removeFromSuperview()
                     })
                 }
             }
@@ -153,30 +278,24 @@ final class StarReactionButtonComponent: Component {
             
             self.backgroundView.update(size: backgroundFrame.size, cornerRadius: backgroundFrame.height * 0.5, isDark: component.theme.overallDarkAppearance, tintColor: backgroundTintColor, isInteractive: true, transition: transition)
             transition.setFrame(view: self.backgroundView, frame: backgroundFrame)
+            transition.setFrame(view: self.backgroundMaskView, frame: CGRect(origin: CGPoint(), size: backgroundFrame.size))
+            
+            transition.setFrame(layer: self.backgroundEffectLayer, frame: CGRect(origin: CGPoint(), size: backgroundFrame.size))
+            self.backgroundEffectLayer.update(color: UIColor(white: 1.0, alpha: 0.25), rate: 10.0, size: backgroundFrame.size, cornerRadius: backgroundFrame.height * 0.5, transition: transition)
+            
+            let badgeDiameter: CGFloat = 15.0
+            if self.backgroundBadgeMask.image == nil {
+                self.backgroundBadgeMask.image = generateStretchableFilledCircleImage(diameter: badgeDiameter + 1.0 * 2.0, color: .black)
+            }
+            let badgeWidth: CGFloat = 20.0
+            let badgeFrame = CGRect(origin: CGPoint(x: backgroundFrame.width - badgeWidth, y: 0.0), size: CGSize(width: badgeWidth, height: badgeDiameter))
+            transition.setFrame(view: self.backgroundBadgeMask, frame: badgeFrame.insetBy(dx: -1.0, dy: -1.0))
             
             self.iconView.tintColor = component.theme.chat.inputPanel.panelControlColor
             
             if let image = self.iconView.image {
-                let iconFrame: CGRect
-                if textSize == nil {
-                    iconFrame = image.size.centered(in: CGRect(origin: CGPoint(), size: backgroundFrame.size))
-                } else {
-                    iconFrame = CGRect(origin: CGPoint(x: leftInset, y: floor((backgroundFrame.height - image.size.height) * 0.5)), size: image.size)
-                }
+                let iconFrame = image.size.centered(in: CGRect(origin: CGPoint(), size: backgroundFrame.size))
                 transition.setFrame(view: self.iconView, frame: iconFrame)
-                
-                if let textView = self.text?.view, let textSize {
-                    let textFrame = CGRect(origin: CGPoint(x: iconFrame.maxX + textSpacing, y: floor((backgroundFrame.height - textSize.height) * 0.5)), size: textSize)
-                    
-                    if textView.superview == nil {
-                        textView.isUserInteractionEnabled = false
-                        self.backgroundView.contentView.addSubview(textView)
-                        textView.frame = textFrame
-                        transition.animateScale(view: textView, from: 0.001, to: 1.0)
-                        transition.animateAlpha(view: textView, from: 0.0, to: 1.0)
-                    }
-                    transition.setFrame(view: textView, frame: textFrame)
-                }
             }
             
             return size
