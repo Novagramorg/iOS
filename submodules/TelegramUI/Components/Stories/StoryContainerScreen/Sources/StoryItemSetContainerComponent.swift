@@ -2628,7 +2628,7 @@ public final class StoryItemSetContainerComponent: Component {
             let isFirstTime = self.component == nil
                         
             if self.component == nil {
-                self.sendMessageContext.setup(context: component.context, view: self, inputPanelExternalState: self.inputPanelExternalState, keyboardInputData: component.keyboardInputData)
+                self.sendMessageContext.setup(component: component, view: self, inputPanelExternalState: self.inputPanelExternalState, keyboardInputData: component.keyboardInputData)
                 
                 /*#if DEBUG
                 class Target: NSObject {
@@ -2963,6 +2963,7 @@ public final class StoryItemSetContainerComponent: Component {
                 
                 var liveChatState: MessageInputPanelComponent.LiveChatState?
                 var starStats: MessageInputPanelComponent.StarStats?
+                var sendAsConfiguration: MessageInputPanelComponent.SendAsConfiguration?
                 var sendPaidMessageStars = isLiveStream ? self.sendMessageContext.currentLiveStreamMessageStars : component.slice.additionalPeerData.sendPaidMessageStars
                 if let visibleItemView = self.visibleItems[component.slice.item.id]?.view.view as? StoryItemContentComponent.View {
                     if let liveChatStateValue = visibleItemView.liveChatState {
@@ -2984,6 +2985,21 @@ public final class StoryItemSetContainerComponent: Component {
                             } else {
                                 sendPaidMessageStars = StarsAmount(value: minMessagePrice, nanos: 0)
                             }
+                        }
+                        
+                        sendAsConfiguration = self.sendMessageContext.currentSendAsPeer.flatMap { value in
+                            return MessageInputPanelComponent.SendAsConfiguration(
+                                currentPeer: EnginePeer(value.peer),
+                                subscriberCount: value.subscribers.flatMap(Int.init),
+                                isPremiumLocked: value.isPremiumRequired,
+                                isSelecting: self.sendMessageContext.isSelectingSendAsPeer,
+                                action: { [weak self] sourceView, gesture in
+                                    guard let self else {
+                                        return
+                                    }
+                                    self.sendMessageContext.openSendAsSelection(view: self, sourceView: sourceView, gesture: gesture)
+                                }
+                            )
                         }
                     }
                 }
@@ -3244,7 +3260,8 @@ public final class StoryItemSetContainerComponent: Component {
                                 self.sendMessageContext.performSendStars(view: self, buttonView: sourceView, count: 1, isFromExpandedView: false)
                             }
                         } : nil,
-                        starStars: starStats
+                        starStars: starStats,
+                        sendAsConfiguration: sendAsConfiguration
                     )),
                     environment: {},
                     containerSize: CGSize(width: inputPanelAvailableWidth, height: 200.0)

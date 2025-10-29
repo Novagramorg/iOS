@@ -192,6 +192,38 @@ public final class MessageInputPanelComponent: Component {
         }
     }
     
+    public final class SendAsConfiguration: Equatable {
+        public let currentPeer: EnginePeer
+        public let subscriberCount: Int?
+        public let isPremiumLocked: Bool
+        public let isSelecting: Bool
+        public let action: (UIView, ContextGesture?) -> Void
+        
+        public init(currentPeer: EnginePeer, subscriberCount: Int?, isPremiumLocked: Bool, isSelecting: Bool, action: @escaping (UIView, ContextGesture?) -> Void) {
+            self.currentPeer = currentPeer
+            self.subscriberCount = subscriberCount
+            self.isPremiumLocked = isPremiumLocked
+            self.isSelecting = isSelecting
+            self.action = action
+        }
+        
+        public static func ==(lhs: SendAsConfiguration, rhs: SendAsConfiguration) -> Bool {
+            if lhs.currentPeer != rhs.currentPeer {
+                return false
+            }
+            if lhs.subscriberCount != rhs.subscriberCount {
+                return false
+            }
+            if lhs.isPremiumLocked != rhs.isPremiumLocked {
+                return false
+            }
+            if lhs.isSelecting != rhs.isSelecting {
+                return false
+            }
+            return true
+        }
+    }
+    
     public let externalState: ExternalState
     public let context: AccountContext
     public let theme: PresentationTheme
@@ -255,6 +287,7 @@ public final class MessageInputPanelComponent: Component {
     public let toggleLiveChatExpanded: (() -> Void)?
     public let sendStarsAction: ((UIView, Bool) -> Void)?
     public let starStars: StarStats?
+    public let sendAsConfiguration: SendAsConfiguration?
     
     public init(
         externalState: ExternalState,
@@ -319,7 +352,8 @@ public final class MessageInputPanelComponent: Component {
         liveChatState: LiveChatState? = nil,
         toggleLiveChatExpanded: (() -> Void)? = nil,
         sendStarsAction: ((UIView, Bool) -> Void)? = nil,
-        starStars: StarStats? = nil
+        starStars: StarStats? = nil,
+        sendAsConfiguration: SendAsConfiguration? = nil
     ) {
         self.externalState = externalState
         self.context = context
@@ -384,6 +418,7 @@ public final class MessageInputPanelComponent: Component {
         self.toggleLiveChatExpanded = toggleLiveChatExpanded
         self.sendStarsAction = sendStarsAction
         self.starStars = starStars
+        self.sendAsConfiguration = sendAsConfiguration
     }
     
     public static func ==(lhs: MessageInputPanelComponent, rhs: MessageInputPanelComponent) -> Bool {
@@ -517,6 +552,9 @@ public final class MessageInputPanelComponent: Component {
             return false
         }
         if lhs.starStars != rhs.starStars {
+            return false
+        }
+        if lhs.sendAsConfiguration != rhs.sendAsConfiguration {
             return false
         }
         return true
@@ -968,6 +1006,16 @@ public final class MessageInputPanelComponent: Component {
                     }
                 }
                 
+                let sendAsConfiguration = component.sendAsConfiguration.flatMap { value in
+                    return ChatTextInputPanelComponent.SendAsConfiguration(
+                        currentPeer: value.currentPeer,
+                        subscriberCount: value.subscriberCount,
+                        isPremiumLocked: value.isPremiumLocked,
+                        isSelecting: value.isSelecting,
+                        action: value.action
+                    )
+                }
+                
                 let inputPanelSize = inputPanel.update(
                     transition: transition,
                     component: AnyComponent(ChatTextInputPanelComponent(
@@ -994,6 +1042,7 @@ public final class MessageInputPanelComponent: Component {
                             }
                             component.sendStarsAction?(sourceView, true)
                         }),
+                        sendAsConfiguration: sendAsConfiguration,
                         placeholder: placeholder,
                         paidMessagePrice: component.sendPaidMessageStars,
                         sendColor: component.sendPaidMessageStars.flatMap { value in

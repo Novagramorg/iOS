@@ -383,7 +383,6 @@ public class GlassBackgroundView: UIView {
                 nativeView.layer.cornerRadius = cornerRadius
                 nativeView.frame = CGRect(origin: CGPoint(), size: size)
             } else {
-                //nativeView.layer.cornerRadius = cornerRadius
                 transition.setCornerRadius(layer: nativeView.layer, cornerRadius: cornerRadius)
                 
                 let nativeFrame = CGRect(origin: CGPoint(), size: size)

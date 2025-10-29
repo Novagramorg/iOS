@@ -99,6 +99,7 @@ public struct GroupCallInfo: Equatable {
     public var unmutedVideoLimit: Int
     public var isStream: Bool
     public var isCreator: Bool
+    public var defaultSendAs: EnginePeer.Id?
     
     public init(
         id: Int64,
@@ -115,7 +116,8 @@ public struct GroupCallInfo: Equatable {
         isVideoEnabled: Bool,
         unmutedVideoLimit: Int,
         isStream: Bool,
-        isCreator: Bool
+        isCreator: Bool,
+        defaultSendAs: EnginePeer.Id?
     ) {
         self.id = id
         self.accessHash = accessHash
@@ -132,6 +134,7 @@ public struct GroupCallInfo: Equatable {
         self.unmutedVideoLimit = unmutedVideoLimit
         self.isStream = isStream
         self.isCreator = isCreator
+        self.defaultSendAs = defaultSendAs
     }
 }
 
@@ -143,7 +146,7 @@ public struct GroupCallSummary: Equatable {
 extension GroupCallInfo {
     init?(_ call: Api.GroupCall) {
         switch call {
-        case let .groupCall(flags, id, accessHash, participantsCount, title, streamDcId, recordStartDate, scheduleDate, _, unmutedVideoLimit, _, _, sendPaidMessagesStars, _):
+        case let .groupCall(flags, id, accessHash, participantsCount, title, streamDcId, recordStartDate, scheduleDate, _, unmutedVideoLimit, _, _, sendPaidMessagesStars, defaultSendAs):
             self.init(
                 id: id,
                 accessHash: accessHash,
@@ -159,7 +162,8 @@ extension GroupCallInfo {
                 isVideoEnabled: (flags & (1 << 9)) != 0,
                 unmutedVideoLimit: Int(unmutedVideoLimit),
                 isStream: (flags & (1 << 12)) != 0,
-                isCreator: (flags & (1 << 15)) != 0
+                isCreator: (flags & (1 << 15)) != 0,
+                defaultSendAs: defaultSendAs?.peerId
             )
         case .groupCallDiscarded:
             return nil
@@ -773,7 +777,7 @@ func _internal_joinGroupCall(account: Account, peerId: PeerId?, joinAs: PeerId?,
                             maybeParsedCall = GroupCallInfo(call)
                             
                             switch call {
-                            case let .groupCall(flags, _, _, _, title, _, recordStartDate, scheduleDate, _, unmutedVideoLimit, _, _, sendPaidMessagesStars, _):
+                            case let .groupCall(flags, _, _, _, title, _, recordStartDate, scheduleDate, _, unmutedVideoLimit, _, _, sendPaidMessagesStars, defaultSendAs):
                                 let isMin = (flags & (1 << 19)) != 0
                                 let isMuted = (flags & (1 << 1)) != 0
                                 let canChange = (flags & (1 << 2)) != 0
@@ -787,6 +791,7 @@ func _internal_joinGroupCall(account: Account, peerId: PeerId?, joinAs: PeerId?,
                                 state.scheduleTimestamp = scheduleDate
                                 state.isVideoEnabled = isMin ? state.isVideoEnabled : isVideoEnabled
                                 state.unmutedVideoLimit = Int(unmutedVideoLimit)
+                                state.defaultSendAs = defaultSendAs?.peerId
                             default:
                                 break
                             }
@@ -1429,6 +1434,7 @@ public final class GroupCallParticipantsContext {
         public var unmutedVideoLimit: Int
         public var isStream: Bool
         public var sendPaidMessagesStars: Int64?
+        public var defaultSendAs: PeerId?
         public var version: Int32
         
         public mutating func mergeActivity(from other: State, myPeerId: PeerId?, previousMyPeerId: PeerId?, mergeActivityTimestamps: Bool) {
@@ -3693,6 +3699,7 @@ public final class GroupCallMessagesContext {
         
         public let id: Id
         public let stableId: Int
+        public let isIncoming: Bool
         public let author: EnginePeer?
         public let text: String
         public let entities: [MessageTextEntity]
@@ -3700,9 +3707,10 @@ public final class GroupCallMessagesContext {
         public let lifetime: Int32
         public let paidStars: Int64?
         
-        public init(id: Id, stableId: Int, author: EnginePeer?, text: String, entities: [MessageTextEntity], date: Int32, lifetime: Int32, paidStars: Int64?) {
+        public init(id: Id, stableId: Int, isIncoming: Bool, author: EnginePeer?, text: String, entities: [MessageTextEntity], date: Int32, lifetime: Int32, paidStars: Int64?) {
             self.id = id
             self.stableId = stableId
+            self.isIncoming = isIncoming
             self.author = author
             self.text = text
             self.entities = entities
@@ -3715,6 +3723,7 @@ public final class GroupCallMessagesContext {
             return Message(
                 id: id,
                 stableId: self.stableId,
+                isIncoming: self.isIncoming,
                 author: self.author,
                 text: self.text,
                 entities: self.entities,
@@ -3732,6 +3741,9 @@ public final class GroupCallMessagesContext {
                 return false
             }
             if lhs.stableId != rhs.stableId {
+                return false
+            }
+            if lhs.isIncoming != rhs.isIncoming {
                 return false
             }
             if lhs.author != rhs.author {
@@ -3836,7 +3848,7 @@ public final class GroupCallMessagesContext {
         
         private var messageLifeTimer: SwiftSignalKit.Timer?
         
-        private var pendingSendStars: (fromId: PeerId, messageId: Int64, amount: Int64)?
+        private var pendingSendStars: (fromPeer: Peer, messageId: Int64, amount: Int64)?
         private var pendingSendStarsTimer: SwiftSignalKit.Timer?
         
         init(queue: Queue, account: Account, callId: Int64, reference: InternalGroupCallReference, e2eContext: ConferenceCallE2EContext?, messageLifetime: Int32, isLiveStream: Bool) {
@@ -3915,6 +3927,7 @@ public final class GroupCallMessagesContext {
                                 messages.append(Message(
                                     id: Message.Id(space: .remote, id: randomId),
                                     stableId: allocatedStableIds[messages.count],
+                                    isIncoming: addedOpaqueMessage.authorId != accountPeerId,
                                     author: transaction.getPeer(addedOpaqueMessage.authorId).flatMap(EnginePeer.init),
                                     text: text,
                                     entities: entities,
@@ -3944,6 +3957,7 @@ public final class GroupCallMessagesContext {
                                 messages.append(Message(
                                     id: Message.Id(space: .remote, id: Int64(addedMessage.messageId)),
                                     stableId: allocatedStableIds[messages.count],
+                                    isIncoming: addedMessage.authorId != accountPeerId,
                                     author: transaction.getPeer(addedMessage.authorId).flatMap(EnginePeer.init),
                                     text: addedMessage.text,
                                     entities: addedMessage.entities,
@@ -4225,6 +4239,7 @@ public final class GroupCallMessagesContext {
                 let message = Message(
                     id: Message.Id(space: .local, id: randomId),
                     stableId: stableId,
+                    isIncoming: false,
                     author: fromPeer.flatMap(EnginePeer.init),
                     text: text,
                     entities: entities,
@@ -4269,6 +4284,16 @@ public final class GroupCallMessagesContext {
                     if paidStars != nil {
                         flags |= 1 << 0
                     }
+                    var sendAs: Api.InputPeer?
+                    if fromId != self.account.peerId {
+                        guard let fromPeer else {
+                            return
+                        }
+                        sendAs = apiInputPeer(fromPeer)
+                    }
+                    if sendAs != nil {
+                        flags |= 1 << 1
+                    }
                     self.sendMessageDisposables.add((self.account.network.request(Api.functions.phone.sendGroupCallMessage(
                         flags: flags,
                         call: self.reference.apiInputGroupCall,
@@ -4278,7 +4303,7 @@ public final class GroupCallMessagesContext {
                             entities: apiEntitiesFromMessageTextEntities(entities, associatedPeers: SimpleDictionary())
                         ),
                         allowPaidStars: paidStars,
-                        sendAs: nil
+                        sendAs: sendAs
                     )) |> deliverOn(self.queue)).startStrict(next: { [weak self] updates in
                         guard let self else {
                             return
@@ -4323,6 +4348,13 @@ public final class GroupCallMessagesContext {
             
             var flags: Int32 = 0
             flags |= 1 << 0
+            var sendAs: Api.InputPeer?
+            if pendingSendStars.fromPeer.id != self.account.peerId {
+                sendAs = apiInputPeer(pendingSendStars.fromPeer)
+            }
+            if sendAs != nil {
+                flags |= 1 << 1
+            }
             self.sendMessageDisposables.add((self.account.network.request(Api.functions.phone.sendGroupCallMessage(
                 flags: flags,
                 call: self.reference.apiInputGroupCall,
@@ -4332,7 +4364,7 @@ public final class GroupCallMessagesContext {
                     entities: []
                 ),
                 allowPaidStars: pendingSendStars.amount,
-                sendAs: nil
+                sendAs: sendAs
             )) |> deliverOn(self.queue)).startStrict(next: { [weak self] updates in
                 guard let self else {
                     return
@@ -4349,7 +4381,7 @@ public final class GroupCallMessagesContext {
                             if let index = state.pinnedMessages.firstIndex(where: { $0.id == Message.Id(space: .local, id: pendingSendStars.messageId) }) {
                                 state.pinnedMessages[index] = state.pinnedMessages[index].withId(Message.Id(space: .remote, id: Int64(id)))
                             }
-                            Impl.addStateStars(state: &state, peerId: pendingSendStars.fromId, isMy: true, amount: pendingSendStars.amount)
+                            Impl.addStateStars(state: &state, peerId: pendingSendStars.fromPeer.id, isMy: true, amount: pendingSendStars.amount)
                             state.pendingMyStars = 0
                             self.state = state
                             break
@@ -4386,7 +4418,7 @@ public final class GroupCallMessagesContext {
                 return transaction.getPeer(fromId)
             }
             |> deliverOn(self.queue)).startStandalone(next: { [weak self] fromPeer in
-                guard let self else {
+                guard let self, let fromPeer else {
                     return
                 }
                 
@@ -4397,7 +4429,7 @@ public final class GroupCallMessagesContext {
                     totalAmount = pendingSendStarsValue.amount + amount
                     
                     self.pendingSendStars = (
-                        fromId: fromId,
+                        fromPeer: fromPeer,
                         messageId: pendingSendStarsValue.messageId,
                         amount: totalAmount
                     )
@@ -4408,7 +4440,7 @@ public final class GroupCallMessagesContext {
                     arc4random_buf(&randomId, 8)
                     
                     self.pendingSendStars = (
-                        fromId: fromId,
+                        fromPeer: fromPeer,
                         messageId: randomId,
                         amount: amount
                     )
@@ -4426,6 +4458,7 @@ public final class GroupCallMessagesContext {
                         state.messages.append(Message(
                             id: message.id,
                             stableId: message.stableId,
+                            isIncoming: false,
                             author: message.author,
                             text: message.text,
                             entities: message.entities,
@@ -4439,7 +4472,8 @@ public final class GroupCallMessagesContext {
                         state.messages.append(Message(
                             id: Message.Id(space: .local, id: pendingSendStarsValue.messageId),
                             stableId: stableId,
-                            author: fromPeer.flatMap(EnginePeer.init),
+                            isIncoming: false,
+                            author: EnginePeer(fromPeer),
                             text: "",
                             entities: [],
                             date: currentTime,
@@ -4453,6 +4487,7 @@ public final class GroupCallMessagesContext {
                         state.pinnedMessages.append(Message(
                             id: message.id,
                             stableId: message.stableId,
+                            isIncoming: message.isIncoming,
                             author: message.author,
                             text: message.text,
                             entities: message.entities,
@@ -4466,7 +4501,8 @@ public final class GroupCallMessagesContext {
                         state.pinnedMessages.append(Message(
                             id: Message.Id(space: .local, id: pendingSendStarsValue.messageId),
                             stableId: stableId,
-                            author: fromPeer.flatMap(EnginePeer.init),
+                            isIncoming: false,
+                            author: EnginePeer(fromPeer),
                             text: "",
                             entities: [],
                             date: currentTime,

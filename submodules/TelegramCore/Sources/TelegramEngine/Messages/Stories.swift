@@ -520,23 +520,27 @@ public enum Stories {
             case timestamp
             case expirationTimestamp
             case isCloseFriends = "clf"
+            case isLiveItem = "liv"
         }
         
         public let id: Int32
         public let timestamp: Int32
         public let expirationTimestamp: Int32
         public let isCloseFriends: Bool
+        public let isLiveItem: Bool
         
         public init(
             id: Int32,
             timestamp: Int32,
             expirationTimestamp: Int32,
-            isCloseFriends: Bool
+            isCloseFriends: Bool,
+            isLiveItem: Bool
         ) {
             self.id = id
             self.timestamp = timestamp
             self.expirationTimestamp = expirationTimestamp
             self.isCloseFriends = isCloseFriends
+            self.isLiveItem = isLiveItem
         }
         
         public init(from decoder: Decoder) throws {
@@ -546,6 +550,7 @@ public enum Stories {
             self.timestamp = try container.decode(Int32.self, forKey: .timestamp)
             self.expirationTimestamp = try container.decode(Int32.self, forKey: .expirationTimestamp)
             self.isCloseFriends = try container.decodeIfPresent(Bool.self, forKey: .isCloseFriends) ?? false
+            self.isLiveItem = try container.decodeIfPresent(Bool.self, forKey: .isLiveItem) ?? false
         }
         
         public func encode(to encoder: Encoder) throws {
@@ -555,6 +560,7 @@ public enum Stories {
             try container.encode(self.timestamp, forKey: .timestamp)
             try container.encode(self.expirationTimestamp, forKey: .expirationTimestamp)
             try container.encode(self.isCloseFriends, forKey: .isCloseFriends)
+            try container.encode(self.isLiveItem, forKey: .isLiveItem)
         }
         
         public static func ==(lhs: Placeholder, rhs: Placeholder) -> Bool {
@@ -568,6 +574,9 @@ public enum Stories {
                 return false
             }
             if lhs.isCloseFriends != rhs.isCloseFriends {
+                return false
+            }
+            if lhs.isLiveItem != rhs.isLiveItem {
                 return false
             }
             return true
@@ -628,8 +637,8 @@ public enum Stories {
             switch self {
             case let .item(item):
                 return item.media is TelegramMediaLiveStream
-            case .placeholder:
-                return false
+            case let .placeholder(placeholder):
+                return placeholder.isLiveItem
             }
         }
         
@@ -2326,7 +2335,8 @@ extension Stories.StoredItem {
             }
         case let .storyItemSkipped(flags, id, date, expireDate):
             let isCloseFriends = (flags & (1 << 8)) != 0
-            self = .placeholder(Stories.Placeholder(id: id, timestamp: date, expirationTimestamp: expireDate, isCloseFriends: isCloseFriends))
+            let isLiveItem = (flags & (1 << 9)) != 0
+            self = .placeholder(Stories.Placeholder(id: id, timestamp: date, expirationTimestamp: expireDate, isCloseFriends: isCloseFriends, isLiveItem: isLiveItem))
         case .storyItemDeleted:
             return nil
         }
