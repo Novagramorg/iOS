@@ -323,7 +323,7 @@ private final class AttachButtonComponent: CombinedComponent {
                     truncationType: .end,
                     maximumNumberOfLines: 1
                 ),
-                availableSize: CGSize(width: 60.0, height: context.availableSize.height),
+                availableSize: CGSize(width: 64.0, height: context.availableSize.height),
                 transition: .immediate
             )
             
@@ -1892,7 +1892,7 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate {
         
         let textPanelSideInset: CGFloat = 8.0
         let defaultPanelSideInset: CGFloat = glassPanelSideInset
-        let panelSideInset: CGFloat = isSelecting ? textPanelSideInset : defaultPanelSideInset
+        let panelSideInset: CGFloat = (isSelecting ? textPanelSideInset : defaultPanelSideInset) + layout.safeInsets.left
         var textPanelHeight: CGFloat = 0.0
         var textPanelWidth: CGFloat = 0.0
         if let textInputPanelNode = self.textInputPanelNode {

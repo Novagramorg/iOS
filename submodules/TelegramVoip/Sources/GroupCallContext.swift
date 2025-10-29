@@ -100,17 +100,25 @@ final class NetworkBroadcastPartSource: BroadcastPartSource {
             
             return (dataSource
             |> deliverOn(self.queue)
-            |> mapToSignal { [weak self] dataSource -> Signal<EngineCallStreamState?, NoError> in
+            |> mapToSignal { [weak self] dataSource -> Signal<Int64?, NoError> in
                 if let dataSource = dataSource {
                     self?.dataSource = dataSource
                     return engine.calls.requestStreamState(dataSource: dataSource, callId: callId, accessHash: accessHash)
+                    |> mapToSignal { value in
+                        if let value {
+                            return .single(value.channels.first?.latestTimestamp ?? 0)
+                        } else {
+                            return engine.calls.serverTime()
+                            |> map(Optional.init)
+                        }
+                    }
                 } else {
                     return .single(nil)
                 }
             }
             |> deliverOn(self.queue)).start(next: { result in
-                if let channel = result?.channels.first {
-                    completion(channel.latestTimestamp)
+                if let result {
+                    completion(result)
                 } else {
                     completion(0)
                 }

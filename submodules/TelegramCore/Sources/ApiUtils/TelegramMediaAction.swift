@@ -111,7 +111,7 @@ func telegramMediaActionFromApiAction(_ action: Api.MessageAction) -> TelegramMe
         return TelegramMediaAction(action: .joinedByRequest)
     case let .messageActionWebViewDataSentMe(text, _), let .messageActionWebViewDataSent(text):
         return TelegramMediaAction(action: .webViewData(text))
-    case let .messageActionGiftPremium(_, currency, amount, months, cryptoCurrency, cryptoAmount, message):
+    case let .messageActionGiftPremium(_, currency, amount, days, cryptoCurrency, cryptoAmount, message):
         let text: String?
         let entities: [MessageTextEntity]?
         switch message {
@@ -122,7 +122,7 @@ func telegramMediaActionFromApiAction(_ action: Api.MessageAction) -> TelegramMe
             text = nil
             entities = nil
         }
-        return TelegramMediaAction(action: .giftPremium(currency: currency, amount: amount, months: months, cryptoCurrency: cryptoCurrency, cryptoAmount: cryptoAmount, text: text, entities: entities))
+        return TelegramMediaAction(action: .giftPremium(currency: currency, amount: amount, days: days, cryptoCurrency: cryptoCurrency, cryptoAmount: cryptoAmount, text: text, entities: entities))
     case let .messageActionGiftStars(_, currency, amount, stars, cryptoCurrency, cryptoAmount, transactionId):
         return TelegramMediaAction(action: .giftStars(currency: currency, amount: amount, count: stars, cryptoCurrency: cryptoCurrency, cryptoAmount: cryptoAmount, transactionId: transactionId))
     case let .messageActionTopicCreate(_, title, iconColor, iconEmojiId):

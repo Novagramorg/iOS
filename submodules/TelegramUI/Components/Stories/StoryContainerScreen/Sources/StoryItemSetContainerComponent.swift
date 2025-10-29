@@ -4218,6 +4218,7 @@ public final class StoryItemSetContainerComponent: Component {
                 let centerInfoComponent = AnyComponent(StoryAuthorInfoComponent(
                     context: component.context,
                     strings: component.strings,
+                    isEmbeddedInCamera: component.isEmbeddedInCamera,
                     peer: component.slice.effectivePeer,
                     forwardInfo: component.slice.item.storyItem.forwardInfo,
                     author: component.slice.item.storyItem.author,

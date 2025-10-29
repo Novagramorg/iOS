@@ -452,8 +452,8 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                 for media in item.message.media {
                     if let action = media as? TelegramMediaAction {
                         switch action.action {
-                        case let .giftPremium(_, _, monthsValue, _, _, giftText, giftEntities):
-                            months = monthsValue
+                        case let .giftPremium(_, _, daysValue, _, _, giftText, giftEntities):
+                            months = max(3, Int32(round(Float(daysValue) / 30.0)))
                             if months == 12 {
                                 title = item.presentationData.strings.Notification_PremiumGift_YearsTitle(1)
                             } else {

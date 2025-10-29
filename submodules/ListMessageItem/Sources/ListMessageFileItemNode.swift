@@ -1225,7 +1225,7 @@ public final class ListMessageFileItemNode: ListMessageNode {
 
                         strongSelf.maskNode.image = hasCorners ? PresentationResourcesItemList.cornersImage(item.presentationData.theme.theme, top: hasTopCorners, bottom: hasBottomCorners, glass: item.systemStyle == .glass) : nil
                         if let backgroundNode = strongSelf.backgroundNode {
-                            strongSelf.maskNode.frame = backgroundNode.frame.insetBy(dx: params.leftInset, dy: 0.0)
+                            strongSelf.maskNode.frame = backgroundNode.frame.insetBy(dx: params.leftInset, dy: -UIScreenPixel)
                         }
                     }
                     

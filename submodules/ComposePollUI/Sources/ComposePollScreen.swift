@@ -280,7 +280,7 @@ final class ComposePollScreenComponent: Component {
                     
                     let theme = environment.theme.withModalBlocksBackground()
                     let backgroundView = UIImageView(image: generateReorderingBackgroundImage(backgroundColor: theme.list.itemBlocksBackgroundColor))
-                    backgroundView.frame = wrapperView.bounds.insetBy(dx: -10.0, dy: -10.0)
+                    backgroundView.frame = wrapperView.bounds.insetBy(dx: -16.0, dy: -16.0)
                     snapshotView.frame = snapshotView.bounds
                     
                     wrapperView.addSubview(backgroundView)

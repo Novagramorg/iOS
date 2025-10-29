@@ -44,6 +44,7 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
             public static let isBirthdayGift = Flags(rawValue: 1 << 0)
             public static let requiresPremium = Flags(rawValue: 1 << 1)
             public static let peerColorAvailable = Flags(rawValue: 1 << 2)
+            public static let isAuction = Flags(rawValue: 1 << 3)
         }
         
         enum CodingKeys: String, CodingKey {
@@ -969,6 +970,9 @@ extension StarGift {
             }
             if (apiFlags & (1 << 10)) != 0 {
                 flags.insert(.peerColorAvailable)
+            }
+            if (apiFlags & (1 << 11)) != 0 {
+                flags.insert(.isAuction)
             }
             
             var availability: StarGift.Gift.Availability?

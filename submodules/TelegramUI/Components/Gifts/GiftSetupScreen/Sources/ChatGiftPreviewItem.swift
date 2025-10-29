@@ -233,7 +233,7 @@ final class ChatGiftPreviewItemNode: ListViewItemNode {
                 case let .premium(months, amount, currency):
                     media = [
                         TelegramMediaAction(
-                            action: .giftPremium(currency: currency, amount: amount, months: months, cryptoCurrency: nil, cryptoAmount: nil, text: item.text, entities: item.entities)
+                            action: .giftPremium(currency: currency, amount: amount, days: months * 30, cryptoCurrency: nil, cryptoAmount: nil, text: item.text, entities: item.entities)
                         )
                     ]
                 case let .starGift(gift):

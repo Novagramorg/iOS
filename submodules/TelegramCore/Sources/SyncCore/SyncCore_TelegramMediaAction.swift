@@ -227,7 +227,7 @@ public enum TelegramMediaActionType: PostboxCoding, Equatable {
     case setChatTheme(chatTheme: ChatTheme)
     case joinedByRequest
     case webViewData(String)
-    case giftPremium(currency: String, amount: Int64, months: Int32, cryptoCurrency: String?, cryptoAmount: Int64?, text: String?, entities: [MessageTextEntity]?)
+    case giftPremium(currency: String, amount: Int64, days: Int32, cryptoCurrency: String?, cryptoAmount: Int64?, text: String?, entities: [MessageTextEntity]?)
     case topicCreated(title: String, iconColor: Int32, iconFileId: Int64?)
     case topicEdited(components: [ForumTopicEditComponent])
     case suggestedProfilePhoto(image: TelegramMediaImage?)
@@ -330,7 +330,7 @@ public enum TelegramMediaActionType: PostboxCoding, Equatable {
         case 26:
             self = .webViewData(decoder.decodeStringForKey("t", orElse: ""))
         case 27:
-            self = .giftPremium(currency: decoder.decodeStringForKey("currency", orElse: ""), amount: decoder.decodeInt64ForKey("amount", orElse: 0), months: decoder.decodeInt32ForKey("months", orElse: 0), cryptoCurrency: decoder.decodeOptionalStringForKey("cryptoCurrency"), cryptoAmount: decoder.decodeOptionalInt64ForKey("cryptoAmount"), text: decoder.decodeOptionalStringForKey("text"), entities: decoder.decodeOptionalObjectArrayWithDecoderForKey("entities"))
+            self = .giftPremium(currency: decoder.decodeStringForKey("currency", orElse: ""), amount: decoder.decodeInt64ForKey("amount", orElse: 0), days: decoder.decodeInt32ForKey("days", orElse: decoder.decodeInt32ForKey("months", orElse: 0) * 30), cryptoCurrency: decoder.decodeOptionalStringForKey("cryptoCurrency"), cryptoAmount: decoder.decodeOptionalInt64ForKey("cryptoAmount"), text: decoder.decodeOptionalStringForKey("text"), entities: decoder.decodeOptionalObjectArrayWithDecoderForKey("entities"))
         case 28:
             self = .topicCreated(title: decoder.decodeStringForKey("title", orElse: ""), iconColor: decoder.decodeInt32ForKey("iconColor", orElse: 0), iconFileId: decoder.decodeOptionalInt64ForKey("iconFileId"))
         case 29:
@@ -553,11 +553,11 @@ public enum TelegramMediaActionType: PostboxCoding, Equatable {
         case let .webViewData(text):
             encoder.encodeInt32(26, forKey: "_rawValue")
             encoder.encodeString(text, forKey: "t")
-        case let .giftPremium(currency, amount, months, cryptoCurrency, cryptoAmount, text, entities):
+        case let .giftPremium(currency, amount, days, cryptoCurrency, cryptoAmount, text, entities):
             encoder.encodeInt32(27, forKey: "_rawValue")
             encoder.encodeString(currency, forKey: "currency")
             encoder.encodeInt64(amount, forKey: "amount")
-            encoder.encodeInt32(months, forKey: "months")
+            encoder.encodeInt32(days, forKey: "days")
             if let cryptoCurrency = cryptoCurrency, let cryptoAmount = cryptoAmount {
                 encoder.encodeString(cryptoCurrency, forKey: "cryptoCurrency")
                 encoder.encodeInt64(cryptoAmount, forKey: "cryptoAmount")

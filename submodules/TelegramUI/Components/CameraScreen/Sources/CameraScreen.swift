@@ -29,6 +29,7 @@ import ShareWithPeersScreen
 import TelegramVoip
 import TelegramCallsUI
 import GlassBarButtonComponent
+import PlainButtonComponent
 
 let videoRedColor = UIColor(rgb: 0xff3b30)
 let collageGrids: [Camera.CollageGrid] = [
@@ -298,6 +299,23 @@ private final class CameraScreenComponent: CombinedComponent {
         
         private var volumeButtonsListener: VolumeButtonsListener?
         private let volumeButtonsListenerShouldBeActive = ValuePromise<Bool>(false, ignoreRepeated: true)
+
+        private var closeFriends = Promise<[EnginePeer]>()
+        private var adminedChannels = Promise<[EnginePeer]>()
+        private var storiesBlockedPeers: BlockedPeersContext?
+        
+        fileprivate var sendAsPeerId: EnginePeer.Id?
+        private var privacy: EngineStoryPrivacy = EngineStoryPrivacy(base: .everyone, additionallyIncludePeers: [])
+        private var allowComments = true
+        private var isForwardingDisabled = false
+        private var pin = true
+        private var paidMessageStars: Int64 = 0
+        
+        private(set) var liveStreamStory: EngineStoryItem?
+        private weak var liveStreamCall: PresentationGroupCall?
+        private var liveStreamVideoCapturer: OngoingCallVideoCapturer?
+        private var liveStreamVideoDisposable: Disposable?
+        private var liveStreamAudioDisposable: Disposable?
         
         var cameraState: CameraState?
         var swipeHint: CaptureControlsComponent.SwipeHint = .none
@@ -352,6 +370,7 @@ private final class CameraScreenComponent: CombinedComponent {
             self.lastGalleryAssetsDisposable?.dispose()
             self.resultDisposable.dispose()
             self.liveStreamVideoDisposable?.dispose()
+            self.liveStreamAudioDisposable?.dispose()
         }
         
         func setupRecentAssetSubscription() {
@@ -478,6 +497,12 @@ private final class CameraScreenComponent: CombinedComponent {
         func updateCameraMode(_ mode: CameraMode) {
             guard let controller = self.getController(), let camera = controller.camera else {
                 return
+            }
+            
+            if mode == .live && self.storiesBlockedPeers == nil {
+                self.storiesBlockedPeers = BlockedPeersContext(account: self.context.account, subject: .stories)
+                self.adminedChannels.set(.single([]) |> then(self.context.engine.peers.channelsForStories()))
+                self.closeFriends.set(self.context.engine.data.get(TelegramEngine.EngineData.Item.Contacts.CloseFriends()))
             }
             
             controller.updateCameraState({ $0.updatedMode(mode) }, transition: .spring(duration: 0.3))
@@ -873,41 +898,283 @@ private final class CameraScreenComponent: CombinedComponent {
             controller.updateCameraState({ $0.updatedRecording(.handsFree) }, transition: .spring(duration: 0.4))
         }
         
-        private(set) var liveStreamStory: EngineStoryItem?
-        func startLiveStream() {
+        fileprivate func presentStreamAsPeer() {
+            let _ = combineLatest(
+                queue: Queue.mainQueue(),
+                self.adminedChannels.get(),
+                self.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: self.context.account.peerId))
+            ).start(next: { [weak self] sendAsPeers, accountPeer in
+                guard let self, let accountPeer else {
+                    return
+                }
+                var peers = [accountPeer]
+                peers.append(contentsOf: sendAsPeers)
+                
+                let stateContext = ShareWithPeersScreen.StateContext(
+                    context: self.context,
+                    subject: .peers(peers: peers, peerId: self.sendAsPeerId),
+                    liveStream: true,
+                    editing: false
+                )
+                let _ = (stateContext.ready |> filter { $0 } |> take(1) |> deliverOnMainQueue).start(next: { [weak self] _ in
+                    guard let self, let controller = self.getController() else {
+                        return
+                    }
+                    let peersController = ShareWithPeersScreen(
+                        context: self.context,
+                        initialPrivacy: EngineStoryPrivacy(base: .nobody, additionallyIncludePeers: []),
+                        stateContext: stateContext,
+                        completion: { _, _, _, _, _, _, _ in },
+                        editCategory: { _, _, _, _ in },
+                        editBlockedPeers: { _, _, _, _ in },
+                        peerCompletion: { [weak self] peerId in
+                            guard let self else {
+                                return
+                            }
+                            self.sendAsPeerId = peerId
+                            self.updated()
+                        }
+                    )
+                    controller.push(peersController)
+                })
+            })
+        }
+        
+        fileprivate func presentLiveSettings() {
+            let stateContext = LiveStreamSettingsScreen.StateContext(
+                context: self.context,
+                mode: .create(
+                    sendAsPeerId: self.sendAsPeerId,
+                    privacy: self.privacy,
+                    allowComments: self.allowComments,
+                    isForwardingDisabled: self.isForwardingDisabled,
+                    pin: self.pin,
+                    paidMessageStars: self.paidMessageStars
+                ),
+                closeFriends: self.closeFriends.get(),
+                adminedChannels: self.adminedChannels.get(),
+                blockedPeersContext: self.storiesBlockedPeers
+            )
+            let _ = (stateContext.ready |> filter { $0 } |> take(1) |> deliverOnMainQueue).startStandalone(next: { [weak self] _ in
+                guard let self, let controller = self.getController() else {
+                    return
+                }
+                let settingsController = LiveStreamSettingsScreen(
+                    context: self.context,
+                    stateContext: stateContext,
+                    editCategory: { [weak self] privacy, allowComments, isForwardingDisabled, pin, paidMessageStars in
+                        guard let self else {
+                            return
+                        }
+                        self.openEditCategory(privacy: privacy, blockedPeers: false, completion: { [weak self] privacy in
+                            guard let self else {
+                                return
+                            }
+                            self.privacy = privacy
+                            self.allowComments = allowComments
+                            self.isForwardingDisabled = isForwardingDisabled
+                            self.pin = pin
+                            self.paidMessageStars = paidMessageStars
+                            self.presentLiveSettings()
+                        })
+                    },
+                    editBlockedPeers: { [weak self] privacy, allowComments, isForwardingDisabled, pin, paidMessageStars in
+                        guard let self else {
+                            return
+                        }
+                        self.openEditCategory(privacy: privacy, blockedPeers: true, completion: { [weak self] privacy in
+                            guard let self else {
+                                return
+                            }
+                            self.allowComments = allowComments
+                            self.isForwardingDisabled = isForwardingDisabled
+                            self.pin = pin
+                            self.paidMessageStars = paidMessageStars
+                            self.presentLiveSettings()
+                        })
+                    },
+                    completion: { [weak self] result in
+                        guard let self else {
+                            return
+                        }
+                        self.sendAsPeerId = result.sendAsPeerId
+                        self.privacy = result.privacy
+                        self.allowComments = result.allowComments
+                        self.isForwardingDisabled = result.isForwardingDisabled
+                        self.pin = result.pin
+                        self.paidMessageStars = result.paidMessageStars
+                        if result.startRtmpStream {
+                            self.startLiveStream(rtmp: true)
+                        }
+                    }
+                )
+                controller.push(settingsController)
+            })
+        }
+        
+        private func openEditCategory(privacy: EngineStoryPrivacy, blockedPeers: Bool, completion: @escaping (EngineStoryPrivacy) -> Void) {
+            let subject: ShareWithPeersScreen.StateContext.Subject
+            if blockedPeers {
+                subject = .chats(blocked: true)
+            } else if privacy.base == .nobody {
+                subject = .chats(blocked: false)
+            } else {
+                subject = .contacts(base: privacy.base)
+            }
+            let stateContext = ShareWithPeersScreen.StateContext(
+                context: self.context,
+                subject: subject,
+                editing: false,
+                initialPeerIds: Set(privacy.additionallyIncludePeers),
+                blockedPeersContext: self.storiesBlockedPeers
+            )
+            let _ = (stateContext.ready |> filter { $0 } |> take(1) |> deliverOnMainQueue).start(next: { [weak self] _ in
+                guard let self, let controller = self.getController() else {
+                    return
+                }
+                let categoryController = ShareWithPeersScreen(
+                    context: self.context,
+                    initialPrivacy: privacy,
+                    stateContext: stateContext,
+                    completion: { [weak self] _, result, _, _, peers, _, completed in
+                        guard let self, completed else {
+                            return
+                        }
+                        if blockedPeers {
+                            let _ = self.storiesBlockedPeers?.updatePeerIds(result.additionallyIncludePeers).start()
+                            completion(privacy)
+                        } else if case .closeFriends = privacy.base {
+                            let _ = self.context.engine.privacy.updateCloseFriends(peerIds: result.additionallyIncludePeers).start()
+                            self.closeFriends.set(.single(peers))
+                            completion(EngineStoryPrivacy(base: .closeFriends, additionallyIncludePeers: []))
+                        } else {
+                            completion(result)
+                        }
+                    },
+                    editCategory: { _, _, _, _ in },
+                    editBlockedPeers: { _, _, _, _ in }
+                )
+                controller.push(categoryController)
+            })
+        }
+        
+        func startLiveStream(rtmp: Bool) {
             guard let controller = self.getController() else {
                 return
             }
             
-            let _ = (self.context.engine.messages.beginStoryLivestream(peerId: self.context.account.peerId, privacy: EngineStoryPrivacy(base: .nobody, additionallyIncludePeers: []), isForwardingDisabled: false)
-            |> deliverOnMainQueue).start(next: { [weak self, weak controller] story in
-                guard let self else {
+            let peerId = self.sendAsPeerId ?? self.context.account.peerId
+            
+            let startNewLiveStream = { [weak self, weak controller] in
+                guard let self, let controller else {
                     return
                 }
-                self.liveStreamStory = story
-                controller?.updateCameraState({ $0.updatedIsStreaming(true) }, transition: .spring(duration: 0.4))
-                self.updated(transition: .immediate)
-            })
+                
+                if rtmp {
+                    controller.node.pauseCameraCapture()
+                }
+                
+                let _ = (self.context.engine.messages.beginStoryLivestream(peerId: peerId, rtmp: rtmp, privacy: self.privacy, isForwardingDisabled: self.isForwardingDisabled, messagesEnabled: self.allowComments, sendPaidMessageStars: self.paidMessageStars)
+                |> deliverOnMainQueue).start(next: { [weak self, weak controller] story in
+                    guard let self else {
+                        return
+                    }
+                    self.liveStreamStory = story
+                    controller?.updateCameraState({ $0.updatedIsStreaming(true) }, transition: .spring(duration: 0.4))
+                    self.updated(transition: .immediate)
+                })
+            }
+            
+//            let _ = (self.context.engine.messages.storySubscriptions(isHidden: false)
+//            |> take(1)
+//            |> deliverOnMainQueue).start(next: { [weak self, weak controller] subscriptions in
+//                guard let self else {
+//                    return
+//                }
+//                if subscriptions.accountItem?.hasLiveItems == true {
+//                    let storyList = PeerExpiringStoryListContext(account: self.context.account, peerId: peerId)
+//                    let _ = (storyList.state
+//                    |> filter { !$0.isLoading }
+//                    |> take(1)
+//                    |> deliverOnMainQueue).start(next: { [weak self, weak controller] state in
+//                        guard let self else {
+//                            return
+//                        }
+//                        for item in state.items.reversed() {
+//                            let _ = (self.context.engine.messages.getStory(peerId: peerId, id: item.id)
+//                            |> deliverOnMainQueue).start(next: { [weak self, weak controller] item in
+//                                guard let self, let item else {
+//                                    return
+//                                }
+//                                if case .liveStream = item.media {
+//                                    self.liveStreamStory = item
+//                                    controller?.updateCameraState({ $0.updatedIsStreaming(true) }, transition: .spring(duration: 0.4))
+//                                    self.updated(transition: .immediate)
+//                                    return
+//                                }
+//                            })
+//                        }
+//                        startNewStream()
+//                    })
+//                } else {
+                    startNewLiveStream()
+//                }
+//            })
         }
         
-        private var liveStreamVideoCapturer: OngoingCallVideoCapturer?
-        private var liveStreamVideoDisposable: Disposable?
+        func endLiveStream() {
+            guard let controller = self.getController() else {
+                return
+            }
+            
+            let presentationData = self.context.sharedContext.currentPresentationData.with { $0 }
+            let alertController = textAlertController(
+                context: self.context,
+                forceTheme: defaultDarkColorPresentationTheme,
+                title: "End Live Stream",
+                text: "Are you sure you want to end this live stream?",
+                actions: [
+                    TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_Cancel, action: {}),
+                    TextAlertAction(type: .genericAction, title: "End", action: { [weak self, weak controller] in
+                        guard let self, let controller else {
+                            return
+                        }
+                        
+                        let _ = self.liveStreamCall?.leave(terminateIfPossible: true).startStandalone()
+                        controller.dismiss(animated: true)
+                    })
+                ]
+            )
+            controller.present(alertController, in: .window(.root))
+        }
+        
         func setupStreamCamera(call: PresentationGroupCall) {
             guard self.liveStreamVideoCapturer == nil, let call = call as? PresentationGroupCallImpl, let controller = self.getController() else {
                 return
             }
-            let cameraVideoSource = controller.node.cameraVideoSource
+            self.liveStreamCall = call
+            
+            let liveStreamMediaSource = controller.node.liveStreamMediaSource
             let videoCapturer = OngoingCallVideoCapturer(keepLandscape: false, isCustom: true)
             self.liveStreamVideoCapturer = videoCapturer
             
-            self.liveStreamVideoDisposable = cameraVideoSource.addOnUpdated { [weak self, weak cameraVideoSource] in
-                guard let self, let cameraVideoSource, let videoCapturer = self.liveStreamVideoCapturer else {
+            self.liveStreamVideoDisposable = liveStreamMediaSource.addOnVideoUpdated { [weak self, weak liveStreamMediaSource] in
+                guard let self, let liveStreamMediaSource, let videoCapturer = self.liveStreamVideoCapturer else {
                     return
                 }
-                if let currentOutput = cameraVideoSource.currentOutput, let pixelBuffer = currentOutput.dataBuffer.pixelBuffer, let sampleBuffer = sampleBufferFromPixelBuffer(pixelBuffer: pixelBuffer) {
+                if let pixelBuffer = liveStreamMediaSource.currentVideoOutput, let sampleBuffer = sampleBufferFromPixelBuffer(pixelBuffer: pixelBuffer) {
                     videoCapturer.injectSampleBuffer(sampleBuffer, rotation: .up, completion: {})
                 }
             }
+            self.liveStreamAudioDisposable = liveStreamMediaSource.addOnAudioUpdated { [weak self, weak liveStreamMediaSource] in
+                guard let self, let liveStreamMediaSource, let call = self.liveStreamCall as? PresentationGroupCallImpl else {
+                    return
+                }
+                if let audioData = liveStreamMediaSource.currentAudioOutput {
+                    call.addExternalAudioData(data: audioData)
+                }
+            }
+            
             Queue.mainQueue().after(1.0) {
                 call.requestVideo(capturer: videoCapturer, useFrontCamera: false)
             }
@@ -942,6 +1209,7 @@ private final class CameraScreenComponent: CombinedComponent {
         let endStreamButton = Child(GlassBarButtonComponent.self)
         let captureControls = Child(CaptureControlsComponent.self)
         let zoomControl = Child(ZoomComponent.self)
+        let streamAsButton = Child(PlainButtonComponent.self)
         let flashButton = Child(CameraButton.self)
         let flipButton = Child(CameraButton.self)
         let dualButton = Child(CameraButton.self)
@@ -1135,7 +1403,7 @@ private final class CameraScreenComponent: CombinedComponent {
                             case .video:
                                 state.startVideoRecording(pressing: false)
                             case .live:
-                                state.startLiveStream()
+                                state.startLiveStream(rtmp: false)
                             }
                         } else {
                             state.stopVideoRecording()
@@ -1173,11 +1441,10 @@ private final class CameraScreenComponent: CombinedComponent {
                             controller.presentGallery()
                         }
                     },
-                    settingsTapped: {
-                        guard let controller = environment.controller() as? CameraScreenImpl else {
-                            return
+                    settingsTapped: { [weak state] in
+                        if let state {
+                            state.presentLiveSettings()
                         }
-                        controller.presentLiveSettings()
                     },
                     swipeHintUpdated: { [weak state] hint in
                         if let state {
@@ -1229,6 +1496,7 @@ private final class CameraScreenComponent: CombinedComponent {
                         story: state.liveStreamStory,
                         statusBarHeight: environment.statusBarHeight,
                         inputHeight: environment.inputHeight,
+                        safeInsets: environment.safeInsets,
                         metrics: environment.metrics,
                         deviceMetrics: environment.deviceMetrics,
                         didSetupMediaStream: { [weak state] call in
@@ -1247,6 +1515,30 @@ private final class CameraScreenComponent: CombinedComponent {
             let topControlSideInset: CGFloat = 9.0
             let topControlVerticalInset: CGFloat = 12.0
             let topButtonSpacing: CGFloat = 15.0
+            
+            if component.cameraState.mode == .live && !component.cameraState.isStreaming {
+                let streamAsButton = streamAsButton.update(
+                    component: PlainButtonComponent(
+                        content: AnyComponent(
+                            StreamAsComponent(context: component.context, peerId: state.sendAsPeerId ?? component.context.account.peerId)
+                        ),
+                        action: { [weak state] in
+                            if let state {
+                                state.presentStreamAsPeer()
+                            }
+                        },
+                        animateAlpha: true,
+                        animateScale: false
+                    ),
+                    availableSize: CGSize(width: 200.0, height: 40.0),
+                    transition: .immediate
+                )
+                context.add(streamAsButton
+                    .position(CGPoint(x: topControlSideInset + streamAsButton.size.width / 2.0 + 7.0, y: max(environment.statusBarHeight + 5.0, environment.safeInsets.top + topControlVerticalInset) + streamAsButton.size.height / 2.0 + 4.0))
+                    .appear(.default(scale: true))
+                    .disappear(.default(scale: true))
+                )
+            }
                         
             if component.cameraState.isStreaming {
                 let endStreamButton = endStreamButton.update(
@@ -1256,11 +1548,10 @@ private final class CameraScreenComponent: CombinedComponent {
                         isDark: true,
                         state: .glass,
                         component: AnyComponentWithIdentity(id: "label", component: AnyComponent(Text(text: "End", font: Font.semibold(17.0), color: .white))),
-                        action: { _ in
-                            guard let controller = controller() as? CameraScreenImpl else {
-                                return
+                        action: { [weak state] _ in
+                            if let state {
+                                state.endLiveStream()
                             }
-                            controller.requestDismiss(animated: true)
                         }
                     ),
                     availableSize: CGSize(width: 40.0, height: 40.0),
@@ -1921,9 +2212,22 @@ public class CameraScreenImpl: ViewController, CameraScreen {
                 return current
             } else {
                 let cameraVideoSource = CameraVideoSource()
-                self.camera?.setVideoOutput(cameraVideoSource.cameraVideoOutput)
+                self.camera?.setMainVideoOutput(cameraVideoSource.cameraVideoOutput)
                 self._cameraVideoSource = cameraVideoSource
                 return cameraVideoSource
+            }
+        }
+        
+        private var _livestreamMediaSource: LiveStreamMediaSource?
+        var liveStreamMediaSource: LiveStreamMediaSource {
+            if let current = self._livestreamMediaSource {
+                return current
+            } else {
+                let livestreamMediaSource = LiveStreamMediaSource()
+                self.camera?.setMainVideoOutput(livestreamMediaSource.mainVideoOutput)
+                self.camera?.setAdditionalVideoOutput(livestreamMediaSource.additionalVideoOutput)
+                self._livestreamMediaSource = livestreamMediaSource
+                return livestreamMediaSource
             }
         }
         
@@ -3965,41 +4269,6 @@ public class CameraScreenImpl: ViewController, CameraScreen {
         self.push(controller)
         
         self.requestLayout(transition: .immediate)
-    }
-    
-    func presentLiveSettings() {
-        let stateContext = ShareWithPeersScreen.StateContext(
-            context: self.context,
-            subject: .stories(editing: false, count: 1)
-        )
-        let _ = (stateContext.ready |> filter { $0 } |> take(1) |> deliverOnMainQueue).startStandalone(next: { [weak self] _ in
-            guard let self else {
-                return
-            }
-            let controller = ShareWithPeersScreen(
-                context: self.context,
-                initialPrivacy: EngineStoryPrivacy(base: .everyone, additionallyIncludePeers: []),
-                stateContext: stateContext,
-                completion: { sendAsPeerId, privacy, allowScreenshots, pin, _, folders, completed in
-                   
-                },
-                editCategory: { privacy, allowScreenshots, pin, folders in
-                },
-                editBlockedPeers: { privacy, allowScreenshots, pin, folders in
-                  
-                }
-            )
-//            controller.customModalStyleOverlayTransitionFactorUpdated = { [weak self, weak controller] transition in
-//                if let self, let controller {
-//                    let transitionFactor = controller.modalStyleOverlayTransitionFactor
-//                    self.node.updateModalTransitionFactor(transitionFactor, transition: transition)
-//                }
-//            }
-//            controller.dismissed = {
-//                self.node.mediaEditor?.play()
-//            }
-            self.push(controller)
-        })
     }
     
     public func presentDraftTooltip() {

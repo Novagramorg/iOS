@@ -58,6 +58,5 @@ fragment float4 bt709ToRGBFragmentShader(RasterizerData in [[stage_in]],
 
     float4 pixel = BT709Decode(Y, Cb, Cr);
     pixel = sRGBGammaDecode(pixel);
-    //pixel.rgb = pow(pixel.rgb, 1.0 / 2.2);
     return pixel;
 }

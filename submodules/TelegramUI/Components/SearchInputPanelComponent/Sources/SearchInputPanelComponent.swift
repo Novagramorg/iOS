@@ -29,6 +29,7 @@ public final class SearchInputPanelComponent: Component {
     public let theme: PresentationTheme
     public let strings: PresentationStrings
     public let metrics: LayoutMetrics
+    public let safeInsets: UIEdgeInsets
     public let placeholder: String?
     public let resetText: ResetText?
     public let updated: ((String) -> Void)
@@ -38,6 +39,7 @@ public final class SearchInputPanelComponent: Component {
         theme: PresentationTheme,
         strings: PresentationStrings,
         metrics: LayoutMetrics,
+        safeInsets: UIEdgeInsets,
         placeholder: String? = nil,
         resetText: ResetText? = nil,
         updated: @escaping ((String) -> Void),
@@ -46,6 +48,7 @@ public final class SearchInputPanelComponent: Component {
         self.theme = theme
         self.strings = strings
         self.metrics = metrics
+        self.safeInsets = safeInsets
         self.placeholder = placeholder
         self.resetText = resetText
         self.updated = updated
@@ -60,6 +63,9 @@ public final class SearchInputPanelComponent: Component {
             return false
         }
         if lhs.metrics != rhs.metrics {
+            return false
+        }
+        if lhs.safeInsets != rhs.safeInsets {
             return false
         }
         if lhs.placeholder != rhs.placeholder {
@@ -189,7 +195,7 @@ public final class SearchInputPanelComponent: Component {
         
             let backgroundColor = component.theme.list.plainBackgroundColor.withMultipliedAlpha(0.75)
             
-            var edgeInsets = UIEdgeInsets(top: 10.0, left: 11.0, bottom: 10.0, right: 11.0)
+            var edgeInsets = UIEdgeInsets(top: 10.0, left: 11.0 + component.safeInsets.left, bottom: 10.0, right: 11.0 + component.safeInsets.right)
             if case .regular = component.metrics.widthClass {
                 edgeInsets.bottom += 18.0
             }

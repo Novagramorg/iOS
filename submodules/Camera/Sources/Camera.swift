@@ -126,7 +126,8 @@ private final class CameraContext {
     private let audioLevelPipe = ValuePipe<Float>()
     fileprivate let modeChangePromise = ValuePromise<Camera.ModeChange>(.none)
     
-    var videoOutput: CameraVideoOutput?
+    var mainVideoOutput: CameraVideoOutput?
+    var additionalVideoOutput: CameraVideoOutput?
     
     var simplePreviewView: CameraSimplePreviewView?
     var secondaryPreviewView: CameraSimplePreviewView?
@@ -345,10 +346,20 @@ private final class CameraContext {
                     if #available(iOS 13.0, *) {
                         front = connection.inputPorts.first?.sourceDevicePosition == .front
                     }
+                    
+                    if sampleBuffer.type == kCMMediaType_Video {
+                        Queue.mainQueue().async {
+                            self.mainVideoOutput?.push(sampleBuffer, mirror: front)
+                        }
+                    }
+                    
                     self.savePreviewSnapshot(pixelBuffer: pixelBuffer, front: front)
                     self.lastSnapshotTimestamp = timestamp
                     self.savedSnapshot = true
                 }
+            }
+            self.mainDeviceContext?.output.processAudioBuffer = { [weak self] sampleBuffer in
+                let _ = self
             }
             self.additionalDeviceContext?.output.processSampleBuffer = { [weak self] sampleBuffer, pixelBuffer, connection in
                 guard let self, let additionalDeviceContext = self.additionalDeviceContext else {
@@ -360,6 +371,11 @@ private final class CameraContext {
                     if #available(iOS 13.0, *) {
                         front = connection.inputPorts.first?.sourceDevicePosition == .front
                     }
+                    
+                    Queue.mainQueue().async {
+                        self.additionalVideoOutput?.push(sampleBuffer, mirror: front)
+                    }
+                    
                     self.savePreviewSnapshot(pixelBuffer: pixelBuffer, front: front)
                     self.lastAdditionalSnapshotTimestamp = timestamp
                     self.savedAdditionalSnapshot = true
@@ -387,10 +403,8 @@ private final class CameraContext {
                     front = connection.inputPorts.first?.sourceDevicePosition == .front
                 }
                 
-                if sampleBuffer.type == kCMMediaType_Video {
-                    Queue.mainQueue().async {
-                        self.videoOutput?.push(sampleBuffer, mirror: front)
-                    }
+                Queue.mainQueue().async {
+                    self.mainVideoOutput?.push(sampleBuffer, mirror: front)
                 }
                 
                 let timestamp = CACurrentMediaTime()
@@ -400,48 +414,52 @@ private final class CameraContext {
                     self.savedSnapshot = true
                 }
             }
-            if self.initialConfiguration.reportAudioLevel {
-                self.mainDeviceContext?.output.processAudioBuffer = { [weak self] sampleBuffer in
-                    guard let self else {
-                        return
-                    }
-                    var blockBuffer = CMSampleBufferGetDataBuffer(sampleBuffer)
-                    let numSamplesInBuffer = CMSampleBufferGetNumSamples(sampleBuffer)
-                    var audioBufferList = AudioBufferList()
-
-                    CMSampleBufferGetAudioBufferListWithRetainedBlockBuffer(sampleBuffer, bufferListSizeNeededOut: nil, bufferListOut: &audioBufferList, bufferListSize: MemoryLayout<AudioBufferList>.size, blockBufferAllocator: nil, blockBufferMemoryAllocator: nil, flags: kCMSampleBufferFlag_AudioBufferList_Assure16ByteAlignment, blockBufferOut: &blockBuffer)
-
-//                    for bufferCount in 0..<Int(audioBufferList.mNumberBuffers) {
-                        let buffer = audioBufferList.mBuffers.mData
-                        let size = audioBufferList.mBuffers.mDataByteSize
-                        if let data = buffer?.bindMemory(to: Int16.self, capacity: Int(size)) {
-                            processWaveformPreview(samples: data, count: numSamplesInBuffer)
-                        }
-//                    }
-                    
-                    func processWaveformPreview(samples: UnsafePointer<Int16>, count: Int) {
-                        for i in 0..<count {
-                            var sample = samples[i]
-                            if sample < 0 {
-                                sample = -sample
-                            }
-
-                            if self.micLevelPeak < sample {
-                                self.micLevelPeak = sample
-                            }
-                            self.micLevelPeakCount += 1
-
-                            if self.micLevelPeakCount >= 1200 {
-                                let level = Float(self.micLevelPeak) / 4000.0
-                                self.audioLevelPipe.putNext(level)
-                     
-                                self.micLevelPeak = 0
-                                self.micLevelPeakCount = 0
-                            }
-                        }
-                    }
-                }
+            self.mainDeviceContext?.output.processAudioBuffer = { [weak self] sampleBuffer in
+                let _ = self
             }
+            
+//            if self.initialConfiguration.reportAudioLevel {
+//                self.mainDeviceContext?.output.processAudioBuffer = { [weak self] sampleBuffer in
+//                    guard let self else {
+//                        return
+//                    }
+//                    var blockBuffer = CMSampleBufferGetDataBuffer(sampleBuffer)
+//                    let numSamplesInBuffer = CMSampleBufferGetNumSamples(sampleBuffer)
+//                    var audioBufferList = AudioBufferList()
+//
+//                    CMSampleBufferGetAudioBufferListWithRetainedBlockBuffer(sampleBuffer, bufferListSizeNeededOut: nil, bufferListOut: &audioBufferList, bufferListSize: MemoryLayout<AudioBufferList>.size, blockBufferAllocator: nil, blockBufferMemoryAllocator: nil, flags: kCMSampleBufferFlag_AudioBufferList_Assure16ByteAlignment, blockBufferOut: &blockBuffer)
+//
+////                    for bufferCount in 0..<Int(audioBufferList.mNumberBuffers) {
+//                        let buffer = audioBufferList.mBuffers.mData
+//                        let size = audioBufferList.mBuffers.mDataByteSize
+//                        if let data = buffer?.bindMemory(to: Int16.self, capacity: Int(size)) {
+//                            processWaveformPreview(samples: data, count: numSamplesInBuffer)
+//                        }
+////                    }
+//                    
+//                    func processWaveformPreview(samples: UnsafePointer<Int16>, count: Int) {
+//                        for i in 0..<count {
+//                            var sample = samples[i]
+//                            if sample < 0 {
+//                                sample = -sample
+//                            }
+//
+//                            if self.micLevelPeak < sample {
+//                                self.micLevelPeak = sample
+//                            }
+//                            self.micLevelPeakCount += 1
+//
+//                            if self.micLevelPeakCount >= 1200 {
+//                                let level = Float(self.micLevelPeak) / 4000.0
+//                                self.audioLevelPipe.putNext(level)
+//                     
+//                                self.micLevelPeak = 0
+//                                self.micLevelPeakCount = 0
+//                            }
+//                        }
+//                    }
+//                }
+//            }
             self.mainDeviceContext?.output.processCodes = { [weak self] codes in
                 self?.detectedCodesPipe.putNext(codes)
             }
@@ -1016,15 +1034,33 @@ public final class Camera {
         }
     }
     
-    public func setVideoOutput(_ output: CameraVideoOutput?) {
+    public func setMainVideoOutput(_ output: CameraVideoOutput?) {
         let outputRef: Unmanaged<CameraVideoOutput>? = output.flatMap { Unmanaged.passRetained($0) }
         self.queue.async {
             if let context = self.contextRef?.takeUnretainedValue() {
                 if let outputRef {
-                    context.videoOutput = outputRef.takeUnretainedValue()
+                    context.mainVideoOutput = outputRef.takeUnretainedValue()
                     outputRef.release()
                 } else {
-                    context.videoOutput = nil
+                    context.mainVideoOutput = nil
+                }
+            } else {
+                Queue.mainQueue().async {
+                    outputRef?.release()
+                }
+            }
+        }
+    }
+    
+    public func setAdditionalVideoOutput(_ output: CameraVideoOutput?) {
+        let outputRef: Unmanaged<CameraVideoOutput>? = output.flatMap { Unmanaged.passRetained($0) }
+        self.queue.async {
+            if let context = self.contextRef?.takeUnretainedValue() {
+                if let outputRef {
+                    context.additionalVideoOutput = outputRef.takeUnretainedValue()
+                    outputRef.release()
+                } else {
+                    context.additionalVideoOutput = nil
                 }
             } else {
                 Queue.mainQueue().async {

@@ -368,6 +368,7 @@ private final class GiftViewSheetContent: CombinedComponent {
         deinit {
             self.disposable?.dispose()
             self.upgradePreviewDisposable.dispose()
+            self.upgradePreviewTimer?.invalidate()
             self.upgradeFormDisposable?.dispose()
             self.upgradeDisposable?.dispose()
             self.buyFormDisposable?.dispose()
@@ -4555,7 +4556,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                         buttonAnimatedTitleItems.append(
                             AnimatedTextComponent.Item(
                                 id: AnyHashable(buttonAnimatedTitleItems.count),
-                                content: .icon("Item List/PremiumIcon", offset: CGPoint(x: 1.0, y: 2.0 + UIScreenPixel))
+                                content: .icon("Item List/PremiumIcon", tint: true, offset: CGPoint(x: 1.0, y: 2.0 + UIScreenPixel))
                             )
                         )
                         
@@ -4607,7 +4608,6 @@ private final class GiftViewSheetContent: CombinedComponent {
                     } else {
                         buttonTitleItems.append(AnyComponentWithIdentity(id: "static_label", component: AnyComponent(MultilineTextComponent(text: .plain(buttonAttributedString)))))
                     }
-
                     
                     let minutes = Int(upgradeTimeout / 60)
                     let seconds = Int(upgradeTimeout % 60)

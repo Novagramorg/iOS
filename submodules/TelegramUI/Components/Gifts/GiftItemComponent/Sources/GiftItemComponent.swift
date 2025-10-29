@@ -626,15 +626,21 @@ public final class GiftItemComponent: Component {
                 let price: String
                 switch component.subject {
                 case let .premium(_, priceValue), let .starGift(_, priceValue):
-                    if priceValue.contains("#") {
+                    if case let .starGift(gift, _) = component.subject, gift.flags.contains(.isAuction) {
                         buttonColor = component.theme.overallDarkAppearance ? UIColor(rgb: 0xffc337) : UIColor(rgb: 0xd3720a)
-                        if !component.isSoldOut {
-                            starsColor = UIColor(rgb: 0xffbe27)
-                        }
+                        //todo:localize
+                        price = "Place a Bid"
                     } else {
-                        buttonColor = component.theme.list.itemAccentColor
+                        if priceValue.contains("#") {
+                            buttonColor = component.theme.overallDarkAppearance ? UIColor(rgb: 0xffc337) : UIColor(rgb: 0xd3720a)
+                            if !component.isSoldOut {
+                                starsColor = UIColor(rgb: 0xffbe27)
+                            }
+                        } else {
+                            buttonColor = component.theme.list.itemAccentColor
+                        }
+                        price = priceValue
                     }
-                    price = priceValue
                 case let .uniqueGift(_, priceValue):
                     if let ribbon = component.ribbon, case let .custom(bottomValue, topValue) = ribbon.color {
                         let topColor = UIColor(rgb: UInt32(bitPattern: topValue)).withMultiplied(hue: 1.01, saturation: 1.22, brightness: 1.04)

@@ -17,6 +17,7 @@ final class StoryAuthorInfoComponent: Component {
     
 	let context: AccountContext
     let strings: PresentationStrings
+    let isEmbeddedInCamera: Bool
 	let peer: EnginePeer?
     let forwardInfo: EngineStoryItem.ForwardInfo?
     let author: EnginePeer?
@@ -26,9 +27,10 @@ final class StoryAuthorInfoComponent: Component {
     let isLiveStream: Bool
     let customSubtitle: String?
     
-    init(context: AccountContext, strings: PresentationStrings, peer: EnginePeer?, forwardInfo: EngineStoryItem.ForwardInfo?, author: EnginePeer?, timestamp: Int32, counters: Counters?, isEdited: Bool, isLiveStream: Bool, customSubtitle: String?) {
+    init(context: AccountContext, strings: PresentationStrings, isEmbeddedInCamera: Bool, peer: EnginePeer?, forwardInfo: EngineStoryItem.ForwardInfo?, author: EnginePeer?, timestamp: Int32, counters: Counters?, isEdited: Bool, isLiveStream: Bool, customSubtitle: String?) {
         self.context = context
         self.strings = strings
+        self.isEmbeddedInCamera = isEmbeddedInCamera
         self.peer = peer
         self.forwardInfo = forwardInfo
         self.author = author
@@ -44,6 +46,9 @@ final class StoryAuthorInfoComponent: Component {
 			return false
 		}
         if lhs.strings !== rhs.strings {
+            return false
+        }
+        if lhs.isEmbeddedInCamera != rhs.isEmbeddedInCamera {
             return false
         }
 		if lhs.peer != rhs.peer {
@@ -105,7 +110,7 @@ final class StoryAuthorInfoComponent: Component {
             let presentationData = component.context.sharedContext.currentPresentationData.with({ $0 })
 
             let title: String
-            if component.peer?.id == component.context.account.peerId {
+            if component.peer?.id == component.context.account.peerId, !component.isEmbeddedInCamera {
                 title = component.strings.Story_HeaderYourStory
             } else {
                 if let _ = component.counters {

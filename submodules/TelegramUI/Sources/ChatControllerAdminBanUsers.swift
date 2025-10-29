@@ -527,7 +527,9 @@ extension ChatControllerImpl {
             if options.contains(.deleteLocally) {
                 var localOptionText = self.presentationData.strings.Conversation_DeleteMessagesForMe
                 if self.chatLocation.peerId == self.context.account.peerId {
-                    if case .peer(self.context.account.peerId) = self.chatLocation, messages.values.allSatisfy({ message in message?._asMessage().effectivelyIncoming(self.context.account.peerId) ?? false }) {
+                    if case .scheduledMessages = self.presentationInterfaceState.subject {
+                        localOptionText = messageIds.count > 1 ? self.presentationData.strings.ScheduledMessages_Reminder_DeleteMany : self.presentationData.strings.ScheduledMessages_Reminder_Delete
+                    } else if case .peer(self.context.account.peerId) = self.chatLocation, messages.values.allSatisfy({ message in message?._asMessage().effectivelyIncoming(self.context.account.peerId) ?? false }) {
                         localOptionText = self.presentationData.strings.Chat_ConfirmationRemoveFromSavedMessages
                     } else {
                         localOptionText = self.presentationData.strings.Chat_ConfirmationDeleteFromSavedMessages

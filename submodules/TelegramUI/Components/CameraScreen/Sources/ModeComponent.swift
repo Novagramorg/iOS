@@ -224,10 +224,12 @@ final class ModeComponent: Component {
                 totalSize = CGSize(width: itemFrame.minX - spacing + inset, height: buttonSize.height)
                 transition.setFrame(view: self.backgroundView, frame: CGRect(origin: CGPoint(x: floorToScreenPixels((availableSize.width - totalSize.width) / 2.0), y: 0.0), size: totalSize))
             }
-            transition.setFrame(view: self.glassContainerView, frame: CGRect(origin: .zero, size: self.backgroundView.frame.size))
+            
+            let containerFrame = CGRect(origin: .zero, size: self.backgroundView.frame.size)
+            transition.setFrame(view: self.glassContainerView, frame: containerFrame)
             
             let selectionFrame = selectedFrame.insetBy(dx: -20.0, dy: 3.0)
-            self.glassContainerView.alpha = 0.5
+            self.glassContainerView.update(size: containerFrame.size, isDark: true, transition: .immediate)
             self.selectionView.update(size: selectionFrame.size, cornerRadius: selectionFrame.height * 0.5, isDark: true, tintColor: .init(kind: .custom, color: UIColor(rgb: 0xffffff, alpha: 0.16)), transition: transition)
             transition.setFrame(view: self.selectionView, frame: selectionFrame)
             
