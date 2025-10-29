@@ -1414,8 +1414,8 @@ public extension TelegramEngine {
             return _internal_uploadStory(account: self.account, target: target, media: media, mediaAreas: mediaAreas, text: text, entities: entities, pin: pin, privacy: privacy, isForwardingDisabled: isForwardingDisabled, period: period, randomId: randomId, forwardInfo: forwardInfo, folders: folders, uploadInfo: uploadInfo)
         }
         
-        public func beginStoryLivestream(peerId: EnginePeer.Id, privacy: EngineStoryPrivacy, isForwardingDisabled: Bool) -> Signal<EngineStoryItem?, NoError> {
-            return _internal_beginStoryLivestream(account: self.account, peerId: peerId, privacy: privacy, isForwardingDisabled: isForwardingDisabled)
+        public func beginStoryLivestream(peerId: EnginePeer.Id, rtmp: Bool, privacy: EngineStoryPrivacy, isForwardingDisabled: Bool, messagesEnabled: Bool, sendPaidMessageStars: Int64?) -> Signal<EngineStoryItem?, NoError> {
+            return _internal_beginStoryLivestream(account: self.account, peerId: peerId, rtmp: rtmp, privacy: privacy, isForwardingDisabled: isForwardingDisabled, messagesEnabled: messagesEnabled, sendPaidMessageStars: sendPaidMessageStars)
         }
         
         public func allStoriesUploadEvents() -> Signal<(Int32, Int32), NoError> {

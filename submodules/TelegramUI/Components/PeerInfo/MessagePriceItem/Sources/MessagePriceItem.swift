@@ -250,7 +250,6 @@ private class MessagePriceItemNode: ListViewItemNode {
         self.addSubnode(self.leftTextNode)
         self.addSubnode(self.rightTextNode)
         self.addSubnode(self.centerTextButtonNode)
-        self.centerTextButtonNode.view.addSubview(self.centerTextButtonBackground)
         self.centerTextButtonNode.addSubnode(self.centerLeftTextNode)
         self.centerTextButtonNode.addSubnode(self.centerRightTextNode)
         self.addSubnode(self.lockIconNode)
@@ -285,6 +284,8 @@ private class MessagePriceItemNode: ListViewItemNode {
         self.view.addSubview(sliderView)
         sliderView.addTarget(self, action: #selector(self.sliderValueChanged), for: .valueChanged)
         self.sliderView = sliderView
+        
+        self.centerTextButtonNode.view.insertSubview(self.centerTextButtonBackground, at: 0)
     }
     
     @objc private func centerTextButtonPressed() {

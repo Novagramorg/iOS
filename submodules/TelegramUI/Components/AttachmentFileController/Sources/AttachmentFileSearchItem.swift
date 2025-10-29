@@ -143,8 +143,8 @@ private final class AttachmentFileSearchItemNode: ItemListControllerSearchNode {
                     theme: self.theme,
                     strings: self.strings,
                     metrics: layout.metrics,
+                    safeInsets: layout.safeInsets,
                     placeholder: self.strings.Attachment_FilesSearchPlaceholder,
-                    resetText: nil,
                     updated: { [weak self] query in
                         guard let self else {
                             return
@@ -161,11 +161,11 @@ private final class AttachmentFileSearchItemNode: ItemListControllerSearchNode {
                 )
             ),
             environment: {},
-            containerSize: CGSize(width: layout.size.width - layout.safeInsets.left - layout.safeInsets.right, height: layout.size.height)
+            containerSize: CGSize(width: layout.size.width, height: layout.size.height)
         )
         
         let bottomInset: CGFloat = layout.insets(options: .input).bottom
-        let searchInputFrame = CGRect(origin: CGPoint(x: layout.safeInsets.left, y: layout.size.height - bottomInset - searchInputSize.height), size: searchInputSize)
+        let searchInputFrame = CGRect(origin: CGPoint(x: 0.0, y: layout.size.height - bottomInset - searchInputSize.height), size: searchInputSize)
         if let searchInputView = self.searchInput.view as? SearchInputPanelComponent.View {
             if searchInputView.superview == nil {
                 self.view.addSubview(searchInputView)

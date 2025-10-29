@@ -1190,6 +1190,7 @@ final class CaptureControlsComponent: Component {
             let hideControls = component.hideControls
             
             let galleryButtonFrame: CGRect
+            let lockReferenceFrame: CGRect
             let gallerySize: CGSize
             if component.hasGallery {
                 let galleryCornerRadius: CGFloat
@@ -1231,12 +1232,10 @@ final class CaptureControlsComponent: Component {
                 )
                 if component.isTablet {
                     galleryButtonFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((size.width - galleryButtonSize.width) / 2.0), y: size.height - galleryButtonSize.height - 56.0), size: galleryButtonSize)
+                    lockReferenceFrame = .zero
                 } else {
-                    if "".isEmpty {
-                        galleryButtonFrame = CGRect(origin: CGPoint(x: 16.0, y: size.height + 21.0), size: galleryButtonSize)
-                    } else {
-                        galleryButtonFrame = CGRect(origin: CGPoint(x: buttonSideInset, y: floorToScreenPixels((size.height - galleryButtonSize.height) / 2.0)), size: galleryButtonSize)
-                    }
+                    galleryButtonFrame = CGRect(origin: CGPoint(x: 16.0, y: size.height + 21.0), size: galleryButtonSize)
+                    lockReferenceFrame = CGRect(origin: CGPoint(x: buttonSideInset, y: floorToScreenPixels((size.height - galleryButtonSize.height) / 2.0)), size: galleryButtonSize)
                 }
                 if let galleryButtonView = self.galleryButtonView.view as? CameraButton.View {
                     galleryButtonView.contentView.clipsToBounds = true
@@ -1258,6 +1257,7 @@ final class CaptureControlsComponent: Component {
             } else {
                 galleryButtonFrame = .zero
                 gallerySize = .zero
+                lockReferenceFrame = .zero
             }
             
             if !component.isTablet && component.hasAccess {
@@ -1288,13 +1288,6 @@ final class CaptureControlsComponent: Component {
                     containerSize: availableSize
                 )
                 let flipButtonFrame = CGRect(origin: CGPoint(x: flipButtonOriginX, y: (size.height - flipButtonSize.height) / 2.0), size: flipButtonSize)
-                //if "".isEmpty {
-                //    flipButtonFrame = CGRect(origin: CGPoint(x: availableSize.width - flipButtonSize.width - 16.0, y: size.height + 21.0), size: flipButtonSize)
-                //}
-                
-                //self.flipButtonBackgroundView.update(size: CGSize(width: 48.0, height: 48.0), cornerRadius: 24.0, isDark: true, tintColor: .init(kind: .custom, color: UIColor(rgb: 0xffffff, alpha: 0.06)), transition: .immediate)
-                //self.flipButtonBackgroundView.frame = flipButtonFrame.insetBy(dx: -2.0, dy: -2.0).offsetBy(dx: 2.0, dy: 2.0)
-                
                 if let flipButtonView = self.flipButtonView.view {
                     if flipButtonView.superview == nil {
                         self.addSubview(flipButtonView)
@@ -1306,7 +1299,9 @@ final class CaptureControlsComponent: Component {
                     transition.setAlpha(view: flipButtonView, alpha: !isRecording || isTransitioning || hideControls ? 0.0 : 1.0)
                 }
                 
-                self.bottomContainerView.frame = CGRect(origin: CGPoint(x: 0.0, y: size.height), size: CGSize(width: availableSize.width, height: 21.0 + 64.0))
+                let bottomContainerFrame = CGRect(origin: CGPoint(x: 0.0, y: size.height), size: CGSize(width: availableSize.width, height: 21.0 + 64.0))
+                self.bottomContainerView.frame = bottomContainerFrame
+                self.bottomContainerView.update(size: bottomContainerFrame.size, isDark: true, transition: .immediate)
                 
                 let bottomFlipButtonSize = self.bottomFlipButton.update(
                     transition: .immediate,
@@ -1499,7 +1494,7 @@ final class CaptureControlsComponent: Component {
                     lockMaskFrame = lockMaskFrame.offsetBy(dx: 0.0, dy: -8.0)
                 }
             } else {
-                lockFrame = galleryButtonFrame.insetBy(dx: (gallerySize.width - hintIconSize.width) / 2.0, dy: (gallerySize.height - hintIconSize.height) / 2.0)
+                lockFrame = lockReferenceFrame.insetBy(dx: (gallerySize.width - hintIconSize.width) / 2.0, dy: (gallerySize.height - hintIconSize.height) / 2.0)
                 lockMaskFrame = CGRect(origin: CGPoint(x: availableSize.width / 2.0 - lockFrame.midX - 9.0 + self.shutterOffsetX, y: -9.0), size: CGSize(width: 48.0, height: 48.0))
                 if self.panBlobState == .transientToLock {
                     lockMaskFrame = lockMaskFrame.offsetBy(dx: 8.0, dy: 0.0)

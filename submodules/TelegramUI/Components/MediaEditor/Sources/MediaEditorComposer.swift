@@ -58,8 +58,8 @@ private func rectangleMaskImage(size: CGSize) -> CIImage {
     return CIImage(cgImage: image!)
 }
 
-final class MediaEditorComposer {
-    enum Input {
+public final class MediaEditorComposer {
+    public enum Input {
         case texture(MTLTexture, CMTime, Bool, CGRect?, CGFloat, CGPoint)
         case videoBuffer(VideoPixelBuffer, CGRect?, CGFloat, CGPoint)
         case ciImage(CIImage, CMTime)
@@ -105,8 +105,8 @@ final class MediaEditorComposer {
     
     private var maskImage: CIImage?
     
-    init(
-        postbox: Postbox,
+    public init(
+        postbox: Postbox?,
         values: MediaEditorValues,
         dimensions: CGSize,
         outputDimensions: CGSize,
@@ -137,8 +137,10 @@ final class MediaEditorComposer {
         }
                 
         var entities: [MediaEditorComposerEntity] = []
-        for entity in values.entities {
-            entities.append(contentsOf: composerEntitiesForDrawingEntity(postbox: postbox, textScale: textScale, entity: entity.entity, colorSpace: colorSpace))
+        if let postbox {
+            for entity in values.entities {
+                entities.append(contentsOf: composerEntitiesForDrawingEntity(postbox: postbox, textScale: textScale, entity: entity.entity, colorSpace: colorSpace))
+            }
         }
         self.entities = entities
         
@@ -161,7 +163,7 @@ final class MediaEditorComposer {
     }
         
     var previousAdditionalInput: [Int: Input] = [:]
-    func process(main: Input, additional: [Input?], timestamp: CMTime, pool: CVPixelBufferPool?, completion: @escaping (CVPixelBuffer?) -> Void) {
+    public func process(main: Input, additional: [Input?], timestamp: CMTime, pool: CVPixelBufferPool?, completion: @escaping (CVPixelBuffer?) -> Void) {
         guard let pool, let ciContext = self.ciContext else {
             completion(nil)
             return
@@ -254,7 +256,9 @@ public func makeEditorImageComposition(context: CIContext, postbox: Postbox, inp
                 return
             }
         }
-        completion(nil)
+        Queue.mainQueue().async {
+            completion(nil)
+        }
     })
 }
 

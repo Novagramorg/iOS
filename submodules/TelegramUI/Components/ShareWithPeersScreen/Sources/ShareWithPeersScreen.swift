@@ -14,7 +14,6 @@ import MultilineTextComponent
 import PresentationDataUtils
 import ButtonComponent
 import TokenListTextField
-import AvatarNode
 import LocalizedPeerData
 import PeerListItemComponent
 import LottieComponent
@@ -2770,15 +2769,6 @@ final class ShareWithPeersScreenComponent: Component {
             
             let navigationLeftButtonSize = self.navigationLeftButton.update(
                 transition: transition,
-//                component: AnyComponent(Button(
-//                    content: AnyComponent(Text(text: environment.strings.Common_Cancel, font: Font.regular(17.0), color: environment.theme.rootController.navigationBar.accentTextColor)),
-//                    action: { [weak self] in
-//                        guard let self else {
-//                            return
-//                        }
-//                        self.saveAndDismiss()
-//                    }
-//                ).minSize(CGSize(width: navigationHeight, height: navigationHeight))),
                 component: AnyComponent(GlassBarButtonComponent(
                     size: CGSize(width: 40.0, height: 40.0),
                     backgroundColor: environment.theme.rootController.navigationBar.glassBarButtonBackgroundColor,
@@ -2811,7 +2801,12 @@ final class ShareWithPeersScreenComponent: Component {
             var subtitle: String?
             switch component.stateContext.subject {
             case .peers:
-                title = environment.strings.Story_Privacy_PostStoryAs
+                //TODO:localize
+                if component.stateContext.liveStream {
+                    title = "Start Live As"
+                } else {
+                    title = environment.strings.Story_Privacy_PostStoryAs
+                }
             case let .stories(editing, count):
                 if editing {
                     title = environment.strings.Story_Privacy_EditStory
@@ -2913,7 +2908,7 @@ final class ShareWithPeersScreenComponent: Component {
                     inset = 1000.0
                 } else if case let .stories(editing, _) = component.stateContext.subject {
                     if editing {
-                        inset = 351.0
+                        inset = 383.0
                         inset += 10.0 + environment.safeInsets.bottom + 50.0 + footersTotalHeight
                     } else {
                         if !hasCategories {

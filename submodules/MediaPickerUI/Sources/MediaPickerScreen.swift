@@ -1616,9 +1616,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
             let firstTime = self.validLayout == nil
             self.validLayout = (layout, navigationBarHeight)
             
-            if firstTime {
-                self.updateSelectionState(animated: false, updateLayout: false)
-            }
+            self.updateSelectionState(animated: false, updateLayout: false)
             
             var insets = layout.insets(options: [])
             insets.top += navigationBarHeight
@@ -2592,7 +2590,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
                 environment: {},
                 containerSize: barButtonSize
             )
-            let cancelButtonFrame = CGRect(origin: CGPoint(x: barButtonSideInset, y: barButtonSideInset), size: cancelButtonSize)
+            let cancelButtonFrame = CGRect(origin: CGPoint(x: barButtonSideInset + layout.safeInsets.left, y: barButtonSideInset), size: cancelButtonSize)
             if let view = cancelButton.view {
                 if view.superview == nil {
                     self.view.addSubview(view)
@@ -2627,7 +2625,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
                 environment: {},
                 containerSize: barButtonSize
             )
-            let moreButtonFrame = CGRect(origin: CGPoint(x: layout.size.width - moreButtonSize.width - barButtonSideInset, y: barButtonSideInset), size: moreButtonSize)
+            let moreButtonFrame = CGRect(origin: CGPoint(x: layout.size.width - moreButtonSize.width - barButtonSideInset - layout.safeInsets.right, y: barButtonSideInset), size: moreButtonSize)
             if let view = moreButton.view {
                 if view.superview == nil {
                     self.view.addSubview(view)

@@ -728,7 +728,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
                 if let media {
                     #if DEBUG
                     if !"".isEmpty {
-                        let _ = context.engine.messages.beginStoryLivestream(peerId: context.account.peerId, privacy: result.options.privacy, isForwardingDisabled: false).startStandalone()
+                        let _ = context.engine.messages.beginStoryLivestream(peerId: context.account.peerId, rtmp: true, privacy: result.options.privacy, isForwardingDisabled: false, messagesEnabled: true, sendPaidMessageStars: 0).startStandalone()
                     }
                     #endif
                     

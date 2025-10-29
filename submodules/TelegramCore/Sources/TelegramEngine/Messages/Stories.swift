@@ -1112,11 +1112,12 @@ func _internal_cancelStoryUpload(account: Account, stableId: Int32) {
     }).start()
 }
 
-func _internal_beginStoryLivestream(account: Account, peerId: EnginePeer.Id, privacy: EngineStoryPrivacy, isForwardingDisabled: Bool) -> Signal<EngineStoryItem?, NoError> {
+func _internal_beginStoryLivestream(account: Account, peerId: EnginePeer.Id, rtmp: Bool, privacy: EngineStoryPrivacy, isForwardingDisabled: Bool, messagesEnabled: Bool, sendPaidMessageStars: Int64?) -> Signal<EngineStoryItem?, NoError> {
     return account.postbox.transaction { transaction in
         var flags: Int32 = 0
-        //flags |= 1 << 5
-        
+        if rtmp {
+            flags |= 1 << 5
+        }
         if isForwardingDisabled {
             flags |= 1 << 4
         }
@@ -1128,7 +1129,14 @@ func _internal_beginStoryLivestream(account: Account, peerId: EnginePeer.Id, pri
             inputPeer = .inputPeerSelf
         }
         
-        return account.network.request(Api.functions.stories.startLive(flags: flags, peer: inputPeer, caption: nil, entities: nil, privacyRules: [.inputPrivacyValueAllowAll], randomId: Int64.random(in: Int64.min ... Int64.max), messagesEnabled: nil, sendPaidMessagesStars: nil))
+        flags |= 1 << 6
+        if let sendPaidMessageStars, sendPaidMessageStars > 0 {
+            flags |= 1 << 7
+        }
+        
+        let privacyRules = apiInputPrivacyRules(privacy: privacy, transaction: transaction)
+        
+        return account.network.request(Api.functions.stories.startLive(flags: flags, peer: inputPeer, caption: nil, entities: nil, privacyRules: privacyRules, randomId: Int64.random(in: Int64.min ... Int64.max), messagesEnabled: messagesEnabled ? .boolTrue : .boolFalse, sendPaidMessagesStars: sendPaidMessageStars))
         |> map(Optional.init)
         |> `catch` { _ -> Signal<Api.Updates?, NoError> in
             return .single(nil)
@@ -1138,7 +1146,7 @@ func _internal_beginStoryLivestream(account: Account, peerId: EnginePeer.Id, pri
                 account.stateManager.addUpdates(updates)
 
                 for update in updates.allUpdates {
-                    if case let .updateStory(_, apiStory) = update {
+                    if case let .updateStory(_, apiStory) = update, case .storyItem = apiStory {
                         return account.postbox.transaction { transaction in
                             if let storedItem = Stories.StoredItem(apiStoryItem: apiStory, peerId: peerId, transaction: transaction), case let .item(item) = storedItem, let media = item.media {
                                 let mappedItem = EngineStoryItem(

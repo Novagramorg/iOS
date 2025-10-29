@@ -15163,3 +15163,8 @@ Error: %8$@";
 "Privacy.SavedMusic.CustomHelp" = "You can restrict who can see your saved music with granular precision.";
 "Privacy.SavedMusic.AlwaysShareWith.Title" = "Always Share With";
 "Privacy.SavedMusic.NeverShareWith.Title" = "Never Share With";
+
+"ScheduledMessages.Reminder.Delete" = "Delete Reminder";
+"ScheduledMessages.Reminder.DeleteMany" = "Delete Reminders";
+
+"Gift.Setup.NextDropIn" = "next drop in {m}:{s}";

@@ -33,7 +33,9 @@ public final class ListTextFieldItemComponent: Component {
     public let placeholder: String
     public let autocapitalizationType: UITextAutocapitalizationType
     public let autocorrectionType: UITextAutocorrectionType
+    public let returnKeyType: UIReturnKeyType
     public let updated: ((String) -> Void)?
+    public let onReturn: (() -> Void)?
     public let tag: AnyObject?
     
     public init(
@@ -44,7 +46,9 @@ public final class ListTextFieldItemComponent: Component {
         placeholder: String,
         autocapitalizationType: UITextAutocapitalizationType = .sentences,
         autocorrectionType: UITextAutocorrectionType = .default,
+        returnKeyType: UIReturnKeyType = .default,
         updated: ((String) -> Void)?,
+        onReturn: (() -> Void)? = nil,
         tag: AnyObject? = nil
     ) {
         self.style = style
@@ -54,7 +58,9 @@ public final class ListTextFieldItemComponent: Component {
         self.placeholder = placeholder
         self.autocapitalizationType = autocapitalizationType
         self.autocorrectionType = autocorrectionType
+        self.returnKeyType = returnKeyType
         self.updated = updated
+        self.onReturn = onReturn
         self.tag = tag
     }
     
@@ -78,6 +84,9 @@ public final class ListTextFieldItemComponent: Component {
             return false
         }
         if lhs.autocorrectionType != rhs.autocorrectionType {
+            return false
+        }
+        if lhs.returnKeyType != rhs.returnKeyType {
             return false
         }
         if (lhs.updated == nil) != (rhs.updated == nil) {
@@ -125,6 +134,7 @@ public final class ListTextFieldItemComponent: Component {
         }
         
         public func textFieldShouldReturn(_ textField: UITextField) -> Bool {
+            self.component?.onReturn?()
             return true
         }
         
@@ -159,6 +169,14 @@ public final class ListTextFieldItemComponent: Component {
             self.textField.becomeFirstResponder()
         }
         
+        public func textFieldDidBeginEditing(_ textField: UITextField) {
+            self.clearButton.view?.isHidden = false
+        }
+        
+        public func textFieldDidEndEditing(_ textField: UITextField) {
+            self.clearButton.view?.isHidden = true
+        }
+        
         func update(component: ListTextFieldItemComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
             self.isUpdating = true
             defer {
@@ -186,6 +204,9 @@ public final class ListTextFieldItemComponent: Component {
             }
             if self.textField.autocorrectionType != component.autocorrectionType {
                 self.textField.autocorrectionType = component.autocorrectionType
+            }
+            if self.textField.returnKeyType != component.returnKeyType {
+                self.textField.returnKeyType = component.returnKeyType
             }
             
             let themeUpdated = component.theme !== previousComponent?.theme
@@ -253,7 +274,7 @@ public final class ListTextFieldItemComponent: Component {
                     self.addSubview(clearButtonView)
                 }
                 transition.setFrame(view: clearButtonView, frame: CGRect(origin: CGPoint(x: availableSize.width - 0.0 - clearButtonSize.width, y: floor((contentHeight - clearButtonSize.height) * 0.5)), size: clearButtonSize))
-                clearButtonView.isHidden = self.currentText.isEmpty
+                clearButtonView.isHidden = self.currentText.isEmpty || !self.textField.isFirstResponder
             }
             
             self.separatorInset = 16.0

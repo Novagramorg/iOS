@@ -42,16 +42,13 @@ final class NewContactScreenComponent: Component {
     
     let context: AccountContext
     let initialData: NewContactScreen.InitialData
-    let completion: (TelegramMediaTodo) -> Void
 
     init(
         context: AccountContext,
-        initialData: NewContactScreen.InitialData,
-        completion: @escaping (TelegramMediaTodo) -> Void
+        initialData: NewContactScreen.InitialData
     ) {
         self.context = context
         self.initialData = initialData
-        self.completion = completion
     }
 
     static func ==(lhs: NewContactScreenComponent, rhs: NewContactScreenComponent) -> Bool {
@@ -93,6 +90,8 @@ final class NewContactScreenComponent: Component {
         private let lastNameTag = NSObject()
         private let phoneTag = NSObject()
         private let noteTag = NSObject()
+        
+        private var updateFocusTag: Any?
         
         private var syncContactToPhone = true
         
@@ -251,21 +250,30 @@ final class NewContactScreenComponent: Component {
             let theme = environment.theme
             
             var initialCountryCode: Int32?
-            var initialFocusTag: Any?
+            var updateFocusTag: Any?
             if self.component == nil {
+                if let peer = component.initialData.peer {
+                    self.resolvedPeer = .peer(peer: peer, isContact: false)
+                }
+                
                 let countryCode: Int32
                 if let phone = component.initialData.phoneNumber {
                     if let (_, code) = lookupCountryIdByNumber(phone, configuration: component.context.currentCountriesConfiguration.with { $0 }), let codeValue = Int32(code.code) {
                         countryCode = codeValue
+                    } else if phone.hasPrefix("999") {
+                        countryCode = 93
                     } else {
                         countryCode = AuthorizationSequenceCountrySelectionController.defaultCountryCode()
                     }
-                    initialFocusTag = self.firstNameTag
+                    updateFocusTag = self.firstNameTag
                 } else {
                     countryCode = AuthorizationSequenceCountrySelectionController.defaultCountryCode()
-                    initialFocusTag = self.phoneTag
+                    updateFocusTag = self.phoneTag
                 }
                 initialCountryCode = countryCode
+            } else {
+                updateFocusTag = self.updateFocusTag
+                self.updateFocusTag = nil
             }
             
             self.component = component
@@ -304,8 +312,15 @@ final class NewContactScreenComponent: Component {
                     placeholder: "First Name",
                     autocapitalizationType: .sentences,
                     autocorrectionType: .default,
+                    returnKeyType: .next,
                     updated: { value in
-                        
+                    },
+                    onReturn: { [weak self] in
+                        guard let self else {
+                            return
+                        }
+                        self.updateFocusTag = self.lastNameTag
+                        self.state?.updated()
                     },
                     tag: self.firstNameTag
                 ))),
@@ -317,8 +332,15 @@ final class NewContactScreenComponent: Component {
                     placeholder: "Last Name",
                     autocapitalizationType: .sentences,
                     autocorrectionType: .default,
+                    returnKeyType: .next,
                     updated: { value in
-                        
+                    },
+                    onReturn: { [weak self] in
+                        guard let self else {
+                            return
+                        }
+                        self.updateFocusTag = self.phoneTag
+                        self.state?.updated()
                     },
                     tag: self.lastNameTag
                 )))
@@ -483,11 +505,15 @@ final class NewContactScreenComponent: Component {
                         }
                     },
                     tapAction: { [weak self] _, _ in
-                        guard let self else {
+                        guard let self, let component = self.component else {
                             return
                         }
                         if case let .peer(peer, _) = self.resolvedPeer {
-                            let _ = peer
+                            if let infoController = component.context.sharedContext.makePeerInfoController(context: component.context, updatedPresentationData: nil, peer: peer._asPeer(), mode: .generic, avatarInitiallyExpanded: false, fromChat: false, requestsContext: nil) {
+                                if let navigationController = component.context.sharedContext.mainWindow?.viewController as? NavigationController {
+                                    navigationController.pushViewController(infoController)
+                                }
+                            }
                         } else {
                             self.sendInvite()
                         }
@@ -825,8 +851,8 @@ final class NewContactScreenComponent: Component {
                 transition.setFrame(view: doneButtonView, frame: doneButtonFrame)
             }
             
-            if let initialFocusTag {
-                self.activateInput(tag: initialFocusTag)
+            if let updateFocusTag {
+                self.activateInput(tag: updateFocusTag)
             }
                     
             return availableSize
@@ -844,15 +870,18 @@ final class NewContactScreenComponent: Component {
 
 public class NewContactScreen: ViewControllerComponentContainer {
     public final class InitialData {
+        fileprivate let peer: EnginePeer?
         fileprivate let firstName: String?
         fileprivate let lastName: String?
         fileprivate let phoneNumber: String?
         
         fileprivate init(
+            peer: EnginePeer?,
             firstName: String?,
             lastName: String?,
             phoneNumber: String?
         ) {
+            self.peer = peer
             self.firstName = firstName
             self.lastName = lastName
             self.phoneNumber = phoneNumber
@@ -860,13 +889,13 @@ public class NewContactScreen: ViewControllerComponentContainer {
     }
     
     private let context: AccountContext
-    fileprivate let completion: (TelegramMediaTodo) -> Void
+    fileprivate let completion: (EnginePeer?, DeviceContactStableId?, DeviceContactExtendedData?) -> Void
     private var isDismissed: Bool = false
             
     public init(
         context: AccountContext,
         initialData: InitialData,
-        completion: @escaping (TelegramMediaTodo) -> Void
+        completion: @escaping (EnginePeer?, DeviceContactStableId?, DeviceContactExtendedData?) -> Void
     ) {
         self.context = context
         self.completion = completion
@@ -876,8 +905,7 @@ public class NewContactScreen: ViewControllerComponentContainer {
         
         super.init(context: context, component: NewContactScreenComponent(
             context: context,
-            initialData: initialData,
-            completion: completion
+            initialData: initialData
         ), navigationBarAppearance: .none, theme: .default)
         
         self._hasGlassStyle = true
@@ -899,15 +927,24 @@ public class NewContactScreen: ViewControllerComponentContainer {
     }
     
     public static func initialData(
-        firstName: String? = nil,
-        lastName: String? = nil,
+        peer: EnginePeer? = nil,
         phoneNumber: String? = nil
     ) -> InitialData {
-        return InitialData(
-            firstName: firstName,
-            lastName: lastName,
-            phoneNumber: phoneNumber
-        )
+        if case let .user(user) = peer {
+            return InitialData(
+                peer: peer,
+                firstName: user.firstName,
+                lastName: user.lastName,
+                phoneNumber: user.phone ?? phoneNumber
+            )
+        } else {
+            return InitialData(
+                peer: nil,
+                firstName: nil,
+                lastName: nil,
+                phoneNumber: phoneNumber
+            )
+        }
     }
     
     fileprivate func complete(result: NewContactScreenComponent.Result) {
@@ -921,7 +958,11 @@ public class NewContactScreen: ViewControllerComponentContainer {
                 noteText: result.note.string,
                 noteEntities: entities,
                 addToPrivacyExceptions: false
-            ).startStandalone()
+            ).startStandalone(completed: { [weak self] in
+                if !result.syncContactToPhone {
+                    self?.completion(result.peer, nil, nil)
+                }
+            })
         } else {
             let _ = self.context.engine.contacts.importContact(
                 firstName: result.firstName,
@@ -930,6 +971,37 @@ public class NewContactScreen: ViewControllerComponentContainer {
                 noteText: result.note.string,
                 noteEntities: entities
             ).startStandalone()
+        }
+        
+        if result.syncContactToPhone, let contactDataManager = self.context.sharedContext.contactDataManager {
+            let composedContactData = DeviceContactExtendedData(
+                basicData: DeviceContactBasicData(
+                    firstName: result.firstName,
+                    lastName: result.lastName,
+                    phoneNumbers: [
+                        DeviceContactPhoneNumberData(label: "_$!<Mobile>!$_", value: result.phoneNumber)
+                    ]
+                ),
+                middleName: "",
+                prefix: "",
+                suffix: "",
+                organization: "",
+                jobTitle: "",
+                department: "",
+                emailAddresses: [],
+                urls: [],
+                addresses: [],
+                birthdayDate: nil,
+                socialProfiles: [],
+                instantMessagingProfiles: [],
+                note: ""
+            )
+            let _ = (contactDataManager.createContactWithData(composedContactData)
+            |> deliverOnMainQueue).start(next: { [weak self] contactIdAndData in
+                if let self, let contactIdAndData {
+                    self.completion(result.peer, contactIdAndData.0, contactIdAndData.1)
+                }
+            })
         }
     }
 }

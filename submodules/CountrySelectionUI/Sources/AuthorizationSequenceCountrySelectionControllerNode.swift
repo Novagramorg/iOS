@@ -211,7 +211,6 @@ final class AuthorizationSequenceCountrySelectionControllerNode: ASDisplayNode, 
     private var searchInput: ComponentView<Empty>?
     var isSearching = true
     
-    
     private var validLayout: ContainerViewLayout?
     
     init(theme: PresentationTheme, strings: PresentationStrings, displayCodes: Bool, glass: Bool, itemSelected: @escaping (((String, String), String, Int)) -> Void) {
@@ -300,12 +299,14 @@ final class AuthorizationSequenceCountrySelectionControllerNode: ASDisplayNode, 
         transition.updateFrame(view: self.tableView, frame: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: layout.size.width, height: layout.size.height)))
         transition.updateFrame(view: self.searchTableView, frame: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: layout.size.width, height: layout.size.height)))
         
-        let edgeEffectHeight: CGFloat = 88.0
-        let topEdgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: layout.size.width, height: edgeEffectHeight))
-        transition.updateFrame(view: self.topEdgeEffectView, frame: topEdgeEffectFrame)
-        self.topEdgeEffectView.update(content: .clear, blur: true, alpha: 1.0, rect: topEdgeEffectFrame, edge: .top, edgeSize: topEdgeEffectFrame.height, transition: ComponentTransition(transition))
+        if self.glass {
+            let edgeEffectHeight: CGFloat = 88.0
+            let topEdgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: layout.size.width, height: edgeEffectHeight))
+            transition.updateFrame(view: self.topEdgeEffectView, frame: topEdgeEffectFrame)
+            self.topEdgeEffectView.update(content: .clear, blur: true, alpha: 1.0, rect: topEdgeEffectFrame, edge: .top, edgeSize: topEdgeEffectFrame.height, transition: ComponentTransition(transition))
+        }
         
-        if self.isSearching {
+        if self.glass && self.isSearching {
             let searchInput: ComponentView<Empty>
             if let current = self.searchInput {
                 searchInput = current
@@ -321,6 +322,7 @@ final class AuthorizationSequenceCountrySelectionControllerNode: ASDisplayNode, 
                         theme: self.theme,
                         strings: self.strings,
                         metrics: layout.metrics,
+                        safeInsets: layout.safeInsets,
                         updated: { [weak self] query in
                             guard let self else {
                                 return
@@ -337,10 +339,10 @@ final class AuthorizationSequenceCountrySelectionControllerNode: ASDisplayNode, 
                     )
                 ),
                 environment: {},
-                containerSize: CGSize(width: layout.size.width - layout.safeInsets.left - layout.safeInsets.right, height: layout.size.height)
+                containerSize: CGSize(width: layout.size.width, height: layout.size.height)
             )
             let bottomInset: CGFloat = layout.insets(options: .input).bottom
-            let searchInputFrame = CGRect(origin: CGPoint(x: layout.safeInsets.left, y: layout.size.height - bottomInset - searchInputSize.height), size: searchInputSize)
+            let searchInputFrame = CGRect(origin: CGPoint(x: 0.0, y: layout.size.height - bottomInset - searchInputSize.height), size: searchInputSize)
             if let searchInputView = searchInput.view as? SearchInputPanelComponent.View {
                 if searchInputView.superview == nil {
                     self.view.addSubview(searchInputView)

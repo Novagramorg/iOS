@@ -920,7 +920,8 @@ final class StoryItemContentComponent: Component {
                     mediaStreamTransition.setFrame(view: liveChatView, frame: liveChatFrame)
                 }
                 
-                if !component.isEmbeddedInCamera {
+                if case .rtc = liveStream.kind, component.isEmbeddedInCamera {
+                } else {
                     let _ = mediaStream.update(
                         transition: mediaStreamTransition,
                         component: AnyComponent(MediaStreamVideoComponent(
@@ -1113,7 +1114,8 @@ final class StoryItemContentComponent: Component {
                     self.unsupportedButton = nil
                     unsupportedButton.view?.removeFromSuperview()
                 }
-                if !component.isEmbeddedInCamera {
+                if component.isEmbeddedInCamera, case let .liveStream(liveStream) = messageMedia, case .rtc = liveStream.kind {
+                } else {
                     self.backgroundColor = .black
                 }
             default:
@@ -1205,7 +1207,8 @@ final class StoryItemContentComponent: Component {
                 #endif
             }
             
-            if !component.isEmbeddedInCamera && (!self.contentLoaded || component.isVideoBuffering) {
+            if component.isEmbeddedInCamera, case let .liveStream(liveStream) = messageMedia, case .rtc = liveStream.kind {
+            } else if !self.contentLoaded || component.isVideoBuffering {
                 let loadingEffectView: StoryItemLoadingEffectView
                 if let current = self.loadingEffectView {
                     loadingEffectView = current

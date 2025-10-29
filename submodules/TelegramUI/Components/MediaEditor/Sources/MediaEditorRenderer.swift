@@ -5,12 +5,12 @@ import MetalKit
 import Photos
 import SwiftSignalKit
 
-final class VideoPixelBuffer {
+public final class VideoPixelBuffer {
     let pixelBuffer: CVPixelBuffer
     let rotation: TextureRotation
     let timestamp: CMTime
     
-    init(
+    public init(
         pixelBuffer: CVPixelBuffer,
         rotation: TextureRotation,
         timestamp: CMTime

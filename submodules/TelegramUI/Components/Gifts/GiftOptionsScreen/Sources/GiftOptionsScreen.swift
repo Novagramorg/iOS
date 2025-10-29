@@ -520,19 +520,28 @@ final class GiftOptionsScreenComponent: Component {
                                 isSoldOut = true
                             } else if let _ = gift.availability {
                                 let text: String
-                                if let perUserLimit = gift.perUserLimit {
+                                var ribbonColor: GiftItemComponent.Ribbon.Color = .blue
+                                if gift.flags.contains(.isAuction) {
+                                    //TODO:localize
+                                    text = "auction"
+                                    ribbonColor = .orange
+                                    outline = .orange
+                                } else if let perUserLimit = gift.perUserLimit {
                                     text = environment.strings.Gift_Options_Gift_Limited_Left(perUserLimit.remains)
                                 } else {
                                     text = environment.strings.Gift_Options_Gift_Limited
                                 }
                                 ribbon = GiftItemComponent.Ribbon(
                                     text: text,
-                                    color: .blue
+                                    color: ribbonColor
                                 )
                             }
                             if !isSoldOut && gift.flags.contains(.requiresPremium) {
                                 let text: String
-                                if component.context.isPremium, let perUserLimit = gift.perUserLimit {
+                                if gift.flags.contains(.isAuction) {
+                                    //TODO:localize
+                                    text = "auction"
+                                } else if component.context.isPremium, let perUserLimit = gift.perUserLimit {
                                     text = environment.strings.Gift_Options_Gift_Premium_Left(perUserLimit.remains)
                                 } else {
                                     text = environment.strings.Gift_Options_Gift_Premium

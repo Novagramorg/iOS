@@ -3790,6 +3790,14 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         return controller
     }
     
+    public func makeGiftAuctionInfoScreen(context: AccountContext, gift: StarGift, completion: (() -> Void)?) -> ViewController {
+        return GiftAuctionInfoScreen(context: context, gift: gift, completion: completion)
+    }
+    
+    public func makeGiftAuctionScreen(context: AccountContext, gift: StarGift, auctionContext: GiftAuctionContext) -> ViewController {
+        return GiftAuctionScreen(context: context, gift: gift, auctionContext: auctionContext)
+    }
+    
     public func makeStorySharingScreen(context: AccountContext, subject: StorySharingSubject, parentController: ViewController) -> ViewController {
         let editorSubject: Signal<MediaEditorScreenImpl.Subject?, NoError>
         switch subject {
@@ -3975,8 +3983,8 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         return ChannelMembersSearchControllerImpl(params: params)
     }
     
-    public func makeNewContactScreen(context: AccountContext, firstName: String?, lastName: String?, phoneNumber: String?) -> ViewController {
-        return NewContactScreen(context: context, initialData: NewContactScreen.initialData(firstName: firstName, lastName: lastName, phoneNumber: phoneNumber), completion: { _ in })
+    public func makeNewContactScreen(context: AccountContext, peer: EnginePeer?, phoneNumber: String?, completion: @escaping (EnginePeer?, DeviceContactStableId?, DeviceContactExtendedData?) -> Void) -> ViewController {
+        return NewContactScreen(context: context, initialData: NewContactScreen.initialData(peer: peer, phoneNumber: phoneNumber), completion: completion)
     }
 }
 

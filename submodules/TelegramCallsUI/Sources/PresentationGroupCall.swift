@@ -3330,6 +3330,10 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
         })
     }
     
+    public func addExternalAudioData(data: Data) {
+        self.genericCallContext?.addExternalAudioData(data: data)
+    }
+    
     public func requestVideo() {
         if self.videoCapturer == nil {
             let videoCapturer = OngoingCallVideoCapturer()

@@ -566,6 +566,7 @@ public extension Api {
         case inputInvoicePremiumGiftStars(flags: Int32, userId: Api.InputUser, months: Int32, message: Api.TextWithEntities?)
         case inputInvoiceSlug(slug: String)
         case inputInvoiceStarGift(flags: Int32, peer: Api.InputPeer, giftId: Int64, message: Api.TextWithEntities?)
+        case inputInvoiceStarGiftAuctionBid(flags: Int32, peer: Api.InputPeer, giftId: Int64, bidAmount: Int64, message: Api.TextWithEntities?)
         case inputInvoiceStarGiftDropOriginalDetails(stargift: Api.InputSavedStarGift)
         case inputInvoiceStarGiftPrepaidUpgrade(peer: Api.InputPeer, hash: String)
         case inputInvoiceStarGiftResale(flags: Int32, slug: String, toId: Api.InputPeer)
@@ -632,6 +633,16 @@ public extension Api {
                     serializeInt64(giftId, buffer: buffer, boxed: false)
                     if Int(flags) & Int(1 << 1) != 0 {message!.serialize(buffer, true)}
                     break
+                case .inputInvoiceStarGiftAuctionBid(let flags, let peer, let giftId, let bidAmount, let message):
+                    if boxed {
+                        buffer.appendInt32(2010287526)
+                    }
+                    serializeInt32(flags, buffer: buffer, boxed: false)
+                    peer.serialize(buffer, true)
+                    serializeInt64(giftId, buffer: buffer, boxed: false)
+                    serializeInt64(bidAmount, buffer: buffer, boxed: false)
+                    if Int(flags) & Int(1 << 1) != 0 {message!.serialize(buffer, true)}
+                    break
                 case .inputInvoiceStarGiftDropOriginalDetails(let stargift):
                     if boxed {
                         buffer.appendInt32(153344209)
@@ -694,6 +705,8 @@ public extension Api {
                 return ("inputInvoiceSlug", [("slug", slug as Any)])
                 case .inputInvoiceStarGift(let flags, let peer, let giftId, let message):
                 return ("inputInvoiceStarGift", [("flags", flags as Any), ("peer", peer as Any), ("giftId", giftId as Any), ("message", message as Any)])
+                case .inputInvoiceStarGiftAuctionBid(let flags, let peer, let giftId, let bidAmount, let message):
+                return ("inputInvoiceStarGiftAuctionBid", [("flags", flags as Any), ("peer", peer as Any), ("giftId", giftId as Any), ("bidAmount", bidAmount as Any), ("message", message as Any)])
                 case .inputInvoiceStarGiftDropOriginalDetails(let stargift):
                 return ("inputInvoiceStarGiftDropOriginalDetails", [("stargift", stargift as Any)])
                 case .inputInvoiceStarGiftPrepaidUpgrade(let peer, let hash):
@@ -837,6 +850,33 @@ public extension Api {
             let _c4 = (Int(_1!) & Int(1 << 1) == 0) || _4 != nil
             if _c1 && _c2 && _c3 && _c4 {
                 return Api.InputInvoice.inputInvoiceStarGift(flags: _1!, peer: _2!, giftId: _3!, message: _4)
+            }
+            else {
+                return nil
+            }
+        }
+        public static func parse_inputInvoiceStarGiftAuctionBid(_ reader: BufferReader) -> InputInvoice? {
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: Api.InputPeer?
+            if let signature = reader.readInt32() {
+                _2 = Api.parse(reader, signature: signature) as? Api.InputPeer
+            }
+            var _3: Int64?
+            _3 = reader.readInt64()
+            var _4: Int64?
+            _4 = reader.readInt64()
+            var _5: Api.TextWithEntities?
+            if Int(_1!) & Int(1 << 1) != 0 {if let signature = reader.readInt32() {
+                _5 = Api.parse(reader, signature: signature) as? Api.TextWithEntities
+            } }
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            let _c3 = _3 != nil
+            let _c4 = _4 != nil
+            let _c5 = (Int(_1!) & Int(1 << 1) == 0) || _5 != nil
+            if _c1 && _c2 && _c3 && _c4 && _c5 {
+                return Api.InputInvoice.inputInvoiceStarGiftAuctionBid(flags: _1!, peer: _2!, giftId: _3!, bidAmount: _4!, message: _5)
             }
             else {
                 return nil

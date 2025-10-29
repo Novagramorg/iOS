@@ -292,7 +292,7 @@ private final class CreateExternalMediaStreamScreenComponent: CombinedComponent 
                 transition: context.transition
             )
             
-            let bottomText = Condition(mode == .create) {
+            let bottomText = Condition(context.component.mode.isCreate) {
                 bottomText.update(
                     component: MultilineTextComponent(
                         text: .plain(NSAttributedString(string: environment.strings.CreateExternalStream_StartStreamingInfo, font: Font.regular(13.0), textColor: theme.list.itemSecondaryTextColor, paragraphAlignment: .center)),
@@ -305,15 +305,15 @@ private final class CreateExternalMediaStreamScreenComponent: CombinedComponent 
                 )
             }
             
-            let buttonAttributedString = NSMutableAttributedString(string: mode == .create ? environment.strings.CreateExternalStream_StartStreaming : environment.strings.Common_Close, font: Font.semibold(17.0), textColor: theme.list.itemCheckColors.foregroundColor, paragraphAlignment: .center)
+            let buttonAttributedString = NSMutableAttributedString(string: mode.isCreate ? environment.strings.CreateExternalStream_StartStreaming : environment.strings.Common_Close, font: Font.semibold(17.0), textColor: theme.list.itemCheckColors.foregroundColor, paragraphAlignment: .center)
             let button = button.update(
                 component: ButtonComponent(
                     background: ButtonComponent.Background(
                         style: .glass,
-                        color: mode == .create ? UIColor(rgb: 0xfa325a) : theme.list.itemCheckColors.fillColor,
-                        foreground: mode == .create ? .white : theme.list.itemCheckColors.foregroundColor,
-                        pressedColor: mode == .create ? UIColor(rgb: 0xfa325a) : theme.list.itemCheckColors.fillColor,
-                        isShimmering: mode == .create
+                        color: mode.isCreate ? UIColor(rgb: 0xfa325a) : theme.list.itemCheckColors.fillColor,
+                        foreground: mode.isCreate ? .white : theme.list.itemCheckColors.foregroundColor,
+                        pressedColor: mode.isCreate ? UIColor(rgb: 0xfa325a) : theme.list.itemCheckColors.fillColor,
+                        isShimmering: mode.isCreate
                     ),
                     content: AnyComponentWithIdentity(
                         id: AnyHashable(0),
@@ -322,15 +322,20 @@ private final class CreateExternalMediaStreamScreenComponent: CombinedComponent 
                     isEnabled: true,
                     displaysProgress: false,
                     action: { [weak state] in
-                        guard let state = state, let controller = controller() else {
+                        guard let state = state, let controller = controller() as? CreateExternalMediaStreamScreen else {
                             return
                         }
                         
                         switch mode {
-                        case .create:
-                            state.createAndJoinGroupCall(baseController: controller, completion: { [weak controller] in
-                                controller?.dismiss()
-                            })
+                        case let .create(livestream):
+                            if livestream {
+                                controller.completion?()
+                            } else {
+                                state.createAndJoinGroupCall(baseController: controller, completion: { [weak controller] in
+                                    controller?.completion?()
+                                    controller?.dismiss()
+                                })
+                            }
                         case .view:
                             controller.dismiss()
                         }
@@ -480,7 +485,7 @@ private final class CreateExternalMediaStreamScreenComponent: CombinedComponent 
             
             let buttonFrame = CGRect(origin: CGPoint(x: buttonSideInset, y: context.availableSize.height - bottomInset - button.size.height), size: button.size)
             
-            if let bottomText = bottomText {
+            if let bottomText {
                 context.add(bottomText
                     .position(CGPoint(x: context.availableSize.width / 2.0, y: buttonFrame.minY - 12.0 - bottomText.size.height / 2.0))
                 )
@@ -496,19 +501,35 @@ private final class CreateExternalMediaStreamScreenComponent: CombinedComponent 
 }
 
 public final class CreateExternalMediaStreamScreen: ViewControllerComponentContainer {
-    public enum Mode {
-        case create
+    public enum Mode: Equatable {
+        case create(liveStream: Bool)
         case view
+        
+        var isCreate: Bool {
+            if case .create = self {
+                return true
+            } else {
+                return false
+            }
+        }
     }
     
     private let context: AccountContext
     private let peerId: EnginePeer.Id
     private let mode: Mode
+    fileprivate let completion: (() -> Void)?
     
-    public init(context: AccountContext, peerId: EnginePeer.Id, credentialsPromise: Promise<GroupCallStreamCredentials>?, mode: Mode) {
+    public init(
+        context: AccountContext,
+        peerId: EnginePeer.Id,
+        credentialsPromise: Promise<GroupCallStreamCredentials>?,
+        mode: Mode,
+        completion: (() -> Void)? = nil
+    ) {
         self.context = context
         self.peerId = peerId
         self.mode = mode
+        self.completion = completion
         
         super.init(context: context, component: CreateExternalMediaStreamScreenComponent(context: context, peerId: peerId, mode: mode, credentialsPromise: credentialsPromise), navigationBarAppearance: .none, theme: .dark)
         

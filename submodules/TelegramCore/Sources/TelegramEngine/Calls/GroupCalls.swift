@@ -143,7 +143,7 @@ public struct GroupCallSummary: Equatable {
 extension GroupCallInfo {
     init?(_ call: Api.GroupCall) {
         switch call {
-        case let .groupCall(flags, id, accessHash, participantsCount, title, streamDcId, recordStartDate, scheduleDate, _, unmutedVideoLimit, _, _, sendPaidMessagesStars):
+        case let .groupCall(flags, id, accessHash, participantsCount, title, streamDcId, recordStartDate, scheduleDate, _, unmutedVideoLimit, _, _, sendPaidMessagesStars, _):
             self.init(
                 id: id,
                 accessHash: accessHash,
@@ -773,7 +773,7 @@ func _internal_joinGroupCall(account: Account, peerId: PeerId?, joinAs: PeerId?,
                             maybeParsedCall = GroupCallInfo(call)
                             
                             switch call {
-                            case let .groupCall(flags, _, _, _, title, _, recordStartDate, scheduleDate, _, unmutedVideoLimit, _, _, sendPaidMessagesStars):
+                            case let .groupCall(flags, _, _, _, title, _, recordStartDate, scheduleDate, _, unmutedVideoLimit, _, _, sendPaidMessagesStars, _):
                                 let isMin = (flags & (1 << 19)) != 0
                                 let isMuted = (flags & (1 << 1)) != 0
                                 let canChange = (flags & (1 << 2)) != 0
@@ -4277,7 +4277,8 @@ public final class GroupCallMessagesContext {
                             text: text,
                             entities: apiEntitiesFromMessageTextEntities(entities, associatedPeers: SimpleDictionary())
                         ),
-                        allowPaidStars: paidStars
+                        allowPaidStars: paidStars,
+                        sendAs: nil
                     )) |> deliverOn(self.queue)).startStrict(next: { [weak self] updates in
                         guard let self else {
                             return
@@ -4330,7 +4331,8 @@ public final class GroupCallMessagesContext {
                     text: "",
                     entities: []
                 ),
-                allowPaidStars: pendingSendStars.amount
+                allowPaidStars: pendingSendStars.amount,
+                sendAs: nil
             )) |> deliverOn(self.queue)).startStrict(next: { [weak self] updates in
                 guard let self else {
                     return

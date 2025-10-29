@@ -73,7 +73,7 @@ final class AttachmentContainer: ASDisplayNode, ASGestureRecognizerDelegate {
     
     var presentationData: PresentationData {
         didSet {
-            self.pillView.tintColor = self.presentationData.theme.rootController.navigationBar.primaryTextColor
+            self.pillView.tintColor = self.presentationData.theme.list.itemPrimaryTextColor.withMultipliedAlpha(self.presentationData.theme.overallDarkAppearance ? 0.2 : 0.07)
         }
     }
     
@@ -107,9 +107,8 @@ final class AttachmentContainer: ASDisplayNode, ASGestureRecognizerDelegate {
         self.container.shouldAnimateDisappearance = true
                 
         self.pillView = UIImageView()
-        self.pillView.alpha = 0.2
-        self.pillView.image = generateFilledRoundedRectImage(size: CGSize(width: 36.0, height: 5.0), cornerRadius: 2.5, color: .black)?.withRenderingMode(.alwaysTemplate)
-        self.pillView.tintColor = self.presentationData.theme.rootController.navigationBar.primaryTextColor
+        self.pillView.image = generateStretchableFilledCircleImage(diameter: 5.0, color: .white)?.withRenderingMode(.alwaysTemplate)
+        self.pillView.tintColor = self.presentationData.theme.list.itemPrimaryTextColor.withMultipliedAlpha(self.presentationData.theme.overallDarkAppearance ? 0.2 : 0.07)
         
         super.init()
         
@@ -620,10 +619,9 @@ final class AttachmentContainer: ASDisplayNode, ASGestureRecognizerDelegate {
         transition.updateTransformScale(node: self.container, scale: containerScale)
         self.container.update(layout: containerLayout, canBeClosed: true, controllers: controllers, transition: transition)
         
-        if let image = self.pillView.image {
-            transition.updateFrame(view: self.pillView, frame: CGRect(origin: CGPoint(x: floorToScreenPixels((clipFrame.width - image.size.width) / 2.0), y: 5.0), size: image.size))
-            self.pillView.isHidden = layout.metrics.isTablet
-        }
+        let pillSize = CGSize(width: 36.0, height: 5.0)
+        transition.updateFrame(view: self.pillView, frame: CGRect(origin: CGPoint(x: floorToScreenPixels((clipFrame.width - pillSize.width) / 2.0), y: 5.0), size: pillSize))
+        self.pillView.isHidden = layout.metrics.isTablet
         
         self.isUpdatingState = false
     }
