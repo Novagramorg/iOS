@@ -1088,6 +1088,8 @@ func openExternalUrlImpl(context: AccountContext, urlContext: OpenURLContext, ur
                             section = .enableLog
                         case "phone_privacy":
                             section = .phonePrivacy
+                        case "login_email":
+                            section = .loginEmail
                         default:
                             break
                         }

@@ -827,6 +827,11 @@ func openResolvedUrlImpl(
                         navigationController.pushViewController(controller)
                     }
                 })
+            case .loginEmail:
+                if let navigationController {
+                    let controller = loginEmailSetupController(context: context, emailPattern: nil, navigationController: navigationController, completion: {})
+                    navigationController.pushViewController(controller)
+                }
             }
         case let .premiumOffer(reference):
             dismissInput()
