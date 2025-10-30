@@ -567,6 +567,7 @@ public extension Api {
         case inputInvoiceSlug(slug: String)
         case inputInvoiceStarGift(flags: Int32, peer: Api.InputPeer, giftId: Int64, message: Api.TextWithEntities?)
         case inputInvoiceStarGiftAuctionBid(flags: Int32, peer: Api.InputPeer, giftId: Int64, bidAmount: Int64, message: Api.TextWithEntities?)
+        case inputInvoiceStarGiftAuctionUpdateBid(giftId: Int64, bidAmount: Int64)
         case inputInvoiceStarGiftDropOriginalDetails(stargift: Api.InputSavedStarGift)
         case inputInvoiceStarGiftPrepaidUpgrade(peer: Api.InputPeer, hash: String)
         case inputInvoiceStarGiftResale(flags: Int32, slug: String, toId: Api.InputPeer)
@@ -643,6 +644,13 @@ public extension Api {
                     serializeInt64(bidAmount, buffer: buffer, boxed: false)
                     if Int(flags) & Int(1 << 1) != 0 {message!.serialize(buffer, true)}
                     break
+                case .inputInvoiceStarGiftAuctionUpdateBid(let giftId, let bidAmount):
+                    if boxed {
+                        buffer.appendInt32(-2061017960)
+                    }
+                    serializeInt64(giftId, buffer: buffer, boxed: false)
+                    serializeInt64(bidAmount, buffer: buffer, boxed: false)
+                    break
                 case .inputInvoiceStarGiftDropOriginalDetails(let stargift):
                     if boxed {
                         buffer.appendInt32(153344209)
@@ -707,6 +715,8 @@ public extension Api {
                 return ("inputInvoiceStarGift", [("flags", flags as Any), ("peer", peer as Any), ("giftId", giftId as Any), ("message", message as Any)])
                 case .inputInvoiceStarGiftAuctionBid(let flags, let peer, let giftId, let bidAmount, let message):
                 return ("inputInvoiceStarGiftAuctionBid", [("flags", flags as Any), ("peer", peer as Any), ("giftId", giftId as Any), ("bidAmount", bidAmount as Any), ("message", message as Any)])
+                case .inputInvoiceStarGiftAuctionUpdateBid(let giftId, let bidAmount):
+                return ("inputInvoiceStarGiftAuctionUpdateBid", [("giftId", giftId as Any), ("bidAmount", bidAmount as Any)])
                 case .inputInvoiceStarGiftDropOriginalDetails(let stargift):
                 return ("inputInvoiceStarGiftDropOriginalDetails", [("stargift", stargift as Any)])
                 case .inputInvoiceStarGiftPrepaidUpgrade(let peer, let hash):
@@ -877,6 +887,20 @@ public extension Api {
             let _c5 = (Int(_1!) & Int(1 << 1) == 0) || _5 != nil
             if _c1 && _c2 && _c3 && _c4 && _c5 {
                 return Api.InputInvoice.inputInvoiceStarGiftAuctionBid(flags: _1!, peer: _2!, giftId: _3!, bidAmount: _4!, message: _5)
+            }
+            else {
+                return nil
+            }
+        }
+        public static func parse_inputInvoiceStarGiftAuctionUpdateBid(_ reader: BufferReader) -> InputInvoice? {
+            var _1: Int64?
+            _1 = reader.readInt64()
+            var _2: Int64?
+            _2 = reader.readInt64()
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            if _c1 && _c2 {
+                return Api.InputInvoice.inputInvoiceStarGiftAuctionUpdateBid(giftId: _1!, bidAmount: _2!)
             }
             else {
                 return nil
