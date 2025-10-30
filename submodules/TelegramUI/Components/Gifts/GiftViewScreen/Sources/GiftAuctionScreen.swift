@@ -1325,20 +1325,22 @@ private final class GiftAuctionScreenComponent: Component {
             self.isLoading = true
             self.state?.updated()
             
-            var updateBid = false
+            let source: BotPaymentInvoiceSource
             if let state = self.giftAuctionState, state.myState.bidAmount != nil {
-                updateBid = true
+                source = .starGiftAuctionUpdateBid(
+                    giftId: gift.id,
+                    bidAmount: value
+                )
+            } else {
+                source = .starGiftAuctionBid(
+                   hideName: false,
+                   peerId: component.context.account.peerId,
+                   giftId: gift.id,
+                   bidAmount: value,
+                   text: nil,
+                   entities: nil
+               )
             }
-            
-            let source: BotPaymentInvoiceSource = .starGiftAuctionBid(
-                hideName: false,
-                updateBid: updateBid,
-                peerId: component.context.account.peerId,
-                giftId: gift.id,
-                bidAmount: value,
-                text: nil,
-                entities: nil
-            )
             
             let signal = BotCheckoutController.InputData.fetch(context: component.context, source: source)
             |> `catch` { error -> Signal<BotCheckoutController.InputData, SendBotPaymentFormError> in
