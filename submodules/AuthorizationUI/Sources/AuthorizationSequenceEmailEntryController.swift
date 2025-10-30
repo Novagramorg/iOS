@@ -35,6 +35,9 @@ public final class AuthorizationSequenceEmailEntryController: ViewController {
         }
     }
     
+    public var authorization: Any?
+    public var authorizationDelegate: Any?
+    
     public init(presentationData: PresentationData, mode: Mode, back: @escaping () -> Void) {
         self.presentationData = presentationData
         self.mode = mode
