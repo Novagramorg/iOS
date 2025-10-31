@@ -346,7 +346,7 @@ extension ChatControllerImpl {
             })
         }))
     }
-    
+        
     func beginDeleteMessagesWithUndo(messageIds: Set<MessageId>, type: InteractiveMessagesDeletionType) {
         var deleteImmediately = false
         if case .forEveryone = type {
@@ -410,6 +410,68 @@ extension ChatControllerImpl {
                         text: textString,
                         actions: [
                             TextAlertAction(type: .destructiveAction, title: self.presentationData.strings.Chat_DeletePaidMessage_Action, action: { [weak self] in
+                                guard let self else {
+                                    return
+                                }
+                                self.beginDeleteMessagesWithUndo(messageIds: messageIds, type: .forEveryone)
+                            }),
+                            TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Common_Cancel, action: {})
+                        ],
+                        actionLayout: .vertical,
+                        parseMarkdown: true
+                    ), in: .window(.root))
+                }
+                if let contextController {
+                    contextController.dismiss(completion: commit)
+                } else {
+                    commit()
+                }
+                return
+            }
+            
+            if messageIds.count == 1, let message = messages.values.compactMap({ $0 }).first, let repeatAttribute = message.attributes.first(where: { $0 is ScheduledRepeatAttribute }) as? ScheduledRepeatAttribute {
+                let commit = { [weak self] in
+                    guard let self else {
+                        return
+                    }
+                    let title: String
+                    let text: String
+                    let deleteOneAction: String
+                    let deleteAllAction: String
+                    //TODO:localize
+                    if message.id.peerId == self.context.account.peerId {
+                        title = "Delete Repeating Reminder"
+                        text = "Are you sure you want to delete this reminder? This is a repeating reminder."
+                        deleteOneAction = "Delete This Reminder Only"
+                        deleteAllAction = "Delete All Future Reminders"
+                    } else {
+                        title = "Delete Repeating Message"
+                        text = "Are you sure you want to delete this scheduled message? This is a repeating message."
+                        deleteOneAction = "Delete This Message Only"
+                        deleteAllAction = "Delete All Future Messages"
+                    }
+                    self.present(standardTextAlertController(
+                        theme: AlertControllerTheme(presentationData: self.presentationData),
+                        title: title,
+                        text: text,
+                        actions: [
+                            TextAlertAction(type: .destructiveAction, title: deleteOneAction, action: { [weak self] in
+                                guard let self else {
+                                    return
+                                }
+                                var entities: TextEntitiesMessageAttribute?
+                                for attribute in message.attributes {
+                                    if let attribute = attribute as? TextEntitiesMessageAttribute {
+                                        entities = attribute
+                                        break
+                                    }
+                                }
+                                let scheduleTime = message.timestamp + repeatAttribute.repeatPeriod
+                                self.editMessageDisposable.set((self.context.engine.messages.requestEditMessage(messageId: message.id, text: message.text, media: .keep, entities: entities, inlineStickers: [:], webpagePreviewAttribute: nil, disableUrlPreview: false, scheduleInfoAttribute: OutgoingScheduleInfoMessageAttribute(scheduleTime: scheduleTime, repeatPeriod: repeatAttribute.repeatPeriod)) |> deliverOnMainQueue).startStrict(next: { result in
+                                }, error: { error in
+                                }))
+                            }),
+                            TextAlertAction(type: .destructiveAction, title: deleteAllAction, action: { [weak self] in
                                 guard let self else {
                                     return
                                 }

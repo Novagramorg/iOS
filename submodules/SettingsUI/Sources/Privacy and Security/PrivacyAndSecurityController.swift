@@ -620,7 +620,8 @@ private func privacyAndSecurityControllerEntries(
     canAutoarchive: Bool,
     isPremiumDisabled: Bool,
     isPremium: Bool,
-    loginEmail: String?
+    loginEmail: String?,
+    accountPeer: EnginePeer?
 ) -> [PrivacyAndSecurityEntry] {
     var entries: [PrivacyAndSecurityEntry] = []
     
@@ -672,9 +673,17 @@ private func privacyAndSecurityControllerEntries(
     }
     entries.append(.messageAutoremoveInfo(presentationData.theme, presentationData.strings.Settings_AutoDeleteInfo))
     
-    if loginEmail != nil {
+    var showLoginEmail = false
+    if let _ = loginEmail {
+        showLoginEmail = true
+    } else if case let .user(user) = accountPeer, let phone = user.phone, phone.hasPrefix("7") {
+        showLoginEmail = true
+    } else if presentationData.strings.baseLanguageCode == "ru" {
+        showLoginEmail = true
+    }
+    if showLoginEmail {
         entries.append(.loginEmail(presentationData.theme, presentationData.strings.PrivacySettings_LoginEmail, loginEmail))
-        entries.append(.loginEmailInfo(presentationData.theme, presentationData.strings.PrivacySettings_LoginEmailInfo))
+        entries.append(.loginEmailInfo(presentationData.theme, loginEmail == nil ? presentationData.strings.PrivacySettings_LoginEmailSetupInfo : presentationData.strings.PrivacySettings_LoginEmailInfo))
     }
     
     entries.append(.privacyHeader(presentationData.theme, presentationData.strings.PrivacySettings_PrivacyTitle))
@@ -1461,7 +1470,7 @@ public func privacyAndSecurityController(
         let isPremium = accountPeer?.isPremium ?? false
         let isPremiumDisabled = PremiumConfiguration.with(appConfiguration: context.currentAppConfiguration.with { $0 }).isPremiumDisabled
         
-        let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: privacyAndSecurityControllerEntries(presentationData: presentationData, state: state, privacySettings: privacySettings, accessChallengeData: accessChallengeData.data, blockedPeerCount: blockedPeersState.totalCount, activeWebsitesCount: activeWebsitesState.sessions.count, hasTwoStepAuth: twoStepAuth.0, twoStepAuthData: twoStepAuth.1, canAutoarchive: canAutoarchive, isPremiumDisabled: isPremiumDisabled, isPremium: isPremium, loginEmail: loginEmail), style: .blocks, ensureVisibleItemTag: focusOnItemTag, animateChanges: false)
+        let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: privacyAndSecurityControllerEntries(presentationData: presentationData, state: state, privacySettings: privacySettings, accessChallengeData: accessChallengeData.data, blockedPeerCount: blockedPeersState.totalCount, activeWebsitesCount: activeWebsitesState.sessions.count, hasTwoStepAuth: twoStepAuth.0, twoStepAuthData: twoStepAuth.1, canAutoarchive: canAutoarchive, isPremiumDisabled: isPremiumDisabled, isPremium: isPremium, loginEmail: loginEmail, accountPeer: accountPeer), style: .blocks, ensureVisibleItemTag: focusOnItemTag, animateChanges: false)
         
         return (controllerState, (listState, arguments))
     }
@@ -1531,7 +1540,7 @@ public func privacyAndSecurityController(
     }
         
     setupEmailImpl = { emailPattern in
-        let controller = loginEmailSetupController(context: context, emailPattern: emailPattern, navigationController: getNavigationControllerImpl?(), completion: {
+        let controller = loginEmailSetupController(context: context, blocking: false, emailPattern: emailPattern, navigationController: getNavigationControllerImpl?(), completion: {
             updatedTwoStepAuthData?()
         })
         pushControllerImpl?(controller, true)

@@ -33,6 +33,7 @@ private final class BadgeComponent: Component {
     let prefix: String?
     let title: String
     let subtitle: String?
+    let subtitleOnTop: Bool
     let color: UIColor
     
     init(
@@ -40,12 +41,14 @@ private final class BadgeComponent: Component {
         prefix: String?,
         title: String,
         subtitle: String?,
+        subtitleOnTop: Bool,
         color: UIColor
     ) {
         self.theme = theme
         self.prefix = prefix
         self.title = title
         self.subtitle = subtitle
+        self.subtitleOnTop = subtitleOnTop
         self.color = color
     }
     
@@ -60,6 +63,9 @@ private final class BadgeComponent: Component {
             return false
         }
         if lhs.subtitle != rhs.subtitle {
+            return false
+        }
+        if lhs.subtitleOnTop != rhs.subtitleOnTop {
             return false
         }
         if lhs.color != rhs.color {
@@ -553,7 +559,7 @@ private final class PeerComponent: Component {
                 environment: {},
                 containerSize: CGSize(width: availableSize.width, height: 100.0)
             )
-            let amountFrame = CGRect(origin: CGPoint(x: availableSize.width - amountSize.width, y: floorToScreenPixels((size.height - amountSize.height) / 2.0)), size: titleSize)
+            let amountFrame = CGRect(origin: CGPoint(x: availableSize.width - amountSize.width, y: floorToScreenPixels((size.height - amountSize.height) / 2.0)), size: amountSize)
             if let amountView = self.amount.view {
                 if amountView.superview == nil {
                     self.addSubview(amountView)
@@ -943,13 +949,7 @@ private final class GiftAuctionScreenComponent: Component {
             return Amount(sliderValue: sliderValue, minRealValue: self.minRealValue, maxRealValue: self.maxRealValue, maxSliderValue: self.maxSliderValue, isLogarithmic: self.isLogarithmic)
         }
     }
-    
-    enum PrivacyPeer: Equatable {
-        case account
-        case anonymous
-        case peer(EnginePeer)
-    }
-    
+        
     final class View: UIView, UIScrollViewDelegate {
         private let dimView: UIView
         private let containerView: UIView
@@ -989,9 +989,7 @@ private final class GiftAuctionScreenComponent: Component {
         private var peersMap: [EnginePeer.Id: EnginePeer] = [:]
         
         private let actionButton = ComponentView<Empty>()
-        
-        private let bottomOverscrollLimit: CGFloat
-        
+                
         private var ignoreScrolling: Bool = false
         
         private var component: GiftAuctionScreenComponent?
@@ -999,9 +997,7 @@ private final class GiftAuctionScreenComponent: Component {
         private var isUpdating: Bool = false
         private var environment: ViewControllerComponentContainer.Environment?
         private var itemLayout: ItemLayout?
-        
-        private var topOffsetDistance: CGFloat?
-        
+                
         private var balance: StarsAmount?
         
         private var amount: Amount = Amount(realValue: 1, minRealValue: 1, maxRealValue: 1000, maxSliderValue: 1000, isLogarithmic: true)
@@ -1014,8 +1010,6 @@ private final class GiftAuctionScreenComponent: Component {
         private var badgePhysicsLink: SharedDisplayLinkDriver.Link?
         
         override init(frame: CGRect) {
-            self.bottomOverscrollLimit = 200.0
-            
             self.dimView = UIView()
             self.containerView = UIView()
             
@@ -1109,20 +1103,6 @@ private final class GiftAuctionScreenComponent: Component {
             if !self.ignoreScrolling {
                 self.updateScrolling(transition: .immediate)
             }
-        }
-        
-        func scrollViewWillEndDragging(_ scrollView: UIScrollView, withVelocity velocity: CGPoint, targetContentOffset: UnsafeMutablePointer<CGPoint>) {
-            /*guard let itemLayout = self.itemLayout, let topOffsetDistance = self.topOffsetDistance else {
-                return
-            }
-            
-            var topOffset = -self.scrollView.bounds.minY + itemLayout.topInset
-            topOffset = max(0.0, topOffset)
-            
-            if topOffset < topOffsetDistance {
-                targetContentOffset.pointee.y = scrollView.contentOffset.y
-                scrollView.setContentOffset(CGPoint(x: 0.0, y: itemLayout.topInset), animated: true)
-            }*/
         }
         
         override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
@@ -1642,11 +1622,14 @@ private final class GiftAuctionScreenComponent: Component {
                 transition.setFrame(view: sliderBackgroundView, frame: sliderBackgroundFrame)
                 
                 var subtitle: String?
-                let badgeValue = self.amount.realValue
+                var badgeValue = self.amount.realValue
+                var subtitleOnTop = false
                 
                 if let myBidAmount = self.giftAuctionState?.myState.bidAmount {
                     if self.amount.realValue > myBidAmount {
+                        badgeValue = self.amount.realValue
                         subtitle = "+\(badgeValue - Int(myBidAmount))"
+                        subtitleOnTop = true
                     } else if myBidAmount == self.amount.realValue {
                         subtitle = "your bid"
                     }
@@ -1659,6 +1642,7 @@ private final class GiftAuctionScreenComponent: Component {
                         prefix: nil,
                         title: "\(badgeValue)",
                         subtitle: subtitle,
+                        subtitleOnTop: subtitleOnTop,
                         color: sliderColor
                     )),
                     environment: {},
@@ -1898,7 +1882,8 @@ private final class GiftAuctionScreenComponent: Component {
                         guard let self, let component = self.component else {
                             return
                         }
-                        let giftController = component.context.sharedContext.makeGiftAuctionInfoScreen(context: component.context, gift: component.gift, completion: {})
+                        //let giftController = component.context.sharedContext.makeGiftAuctionInfoScreen(context: component.context, gift: component.gift, completion: {})
+                        let giftController = GiftAuctionBoughtScreen(context: component.context, gift: component.gift)
                         self.environment?.controller()?.push(giftController)
                     }
                 )),
@@ -2122,264 +2107,7 @@ private final class GiftAuctionScreenComponent: Component {
                 }
                 self.topPeerItems = [:]
             }
-                  
-//            if !reactData.topPeers.isEmpty {
-//                contentHeight += 3.0
-//                
-//                if case .message = reactData.reactSubject {
-//                    let topPeersLeftSeparator: SimpleLayer
-//                    if let current = self.topPeersLeftSeparator {
-//                        topPeersLeftSeparator = current
-//                    } else {
-//                        topPeersLeftSeparator = SimpleLayer()
-//                        self.topPeersLeftSeparator = topPeersLeftSeparator
-//                        self.scrollContentView.layer.addSublayer(topPeersLeftSeparator)
-//                    }
-//                    
-//                    let topPeersRightSeparator: SimpleLayer
-//                    if let current = self.topPeersRightSeparator {
-//                        topPeersRightSeparator = current
-//                    } else {
-//                        topPeersRightSeparator = SimpleLayer()
-//                        self.topPeersRightSeparator = topPeersRightSeparator
-//                        self.scrollContentView.layer.addSublayer(topPeersRightSeparator)
-//                    }
-//                    
-//                    let topPeersTitleBackground: SimpleLayer
-//                    if let current = self.topPeersTitleBackground {
-//                        topPeersTitleBackground = current
-//                    } else {
-//                        topPeersTitleBackground = SimpleLayer()
-//                        self.topPeersTitleBackground = topPeersTitleBackground
-//                        self.scrollContentView.layer.addSublayer(topPeersTitleBackground)
-//                    }
-//                    
-//                    let topPeersTitle: ComponentView<Empty>
-//                    if let current = self.topPeersTitle {
-//                        topPeersTitle = current
-//                    } else {
-//                        topPeersTitle = ComponentView()
-//                        self.topPeersTitle = topPeersTitle
-//                    }
-//                    
-//                    topPeersLeftSeparator.backgroundColor = environment.theme.list.itemPlainSeparatorColor.cgColor
-//                    topPeersRightSeparator.backgroundColor = environment.theme.list.itemPlainSeparatorColor.cgColor
-//                    
-//                    let topPeersTitleSize = topPeersTitle.update(
-//                        transition: .immediate,
-//                        component: AnyComponent(MultilineTextComponent(
-//                            text: .plain(NSAttributedString(string: environment.strings.SendStarReactions_SectionTop, font: Font.semibold(15.0), textColor: .white))
-//                        )),
-//                        environment: {},
-//                        containerSize: CGSize(width: 300.0, height: 100.0)
-//                    )
-//                    let topPeersBackgroundSize = CGSize(width: topPeersTitleSize.width + 16.0 * 2.0, height: topPeersTitleSize.height + 9.0 * 2.0)
-//                    let topPeersBackgroundFrame = CGRect(origin: CGPoint(x: floor((availableSize.width - topPeersBackgroundSize.width) * 0.5), y: contentHeight), size: topPeersBackgroundSize)
-//                    
-//                    topPeersTitleBackground.backgroundColor = UIColor(rgb: 0xFFB10D).cgColor
-//                    topPeersTitleBackground.cornerRadius = topPeersBackgroundFrame.height * 0.5
-//                    transition.setFrame(layer: topPeersTitleBackground, frame: topPeersBackgroundFrame)
-//                    
-//                    let topPeersTitleFrame = CGRect(origin: CGPoint(x: topPeersBackgroundFrame.minX + floor((topPeersBackgroundFrame.width - topPeersTitleSize.width) * 0.5), y: topPeersBackgroundFrame.minY + floor((topPeersBackgroundFrame.height - topPeersTitleSize.height) * 0.5)), size: topPeersTitleSize)
-//                    if let topPeersTitleView = topPeersTitle.view {
-//                        if topPeersTitleView.superview == nil {
-//                            self.scrollContentView.addSubview(topPeersTitleView)
-//                        }
-//                        transition.setFrame(view: topPeersTitleView, frame: topPeersTitleFrame)
-//                    }
-//                    
-//                    let separatorY = topPeersBackgroundFrame.midY
-//                    let separatorSpacing: CGFloat = 10.0
-//                    transition.setFrame(layer: topPeersLeftSeparator, frame: CGRect(origin: CGPoint(x: sideInset, y: separatorY), size: CGSize(width: max(0.0, topPeersBackgroundFrame.minX - separatorSpacing - sideInset), height: UIScreenPixel)))
-//                    transition.setFrame(layer: topPeersRightSeparator, frame: CGRect(origin: CGPoint(x: topPeersBackgroundFrame.maxX + separatorSpacing, y: separatorY), size: CGSize(width: max(0.0, availableSize.width - sideInset - (topPeersBackgroundFrame.maxX + separatorSpacing)), height: UIScreenPixel)))
-//                    
-//                    contentHeight += 60.0
-//                }
-//                
-//                var mappedTopPeers = reactData.topPeers
-//                if let index = mappedTopPeers.firstIndex(where: { $0.isMy }) {
-//                    mappedTopPeers.remove(at: index)
-//                }
-//                
-//                var myCount = 0
-//                if let myTopPeer = reactData.myTopPeer {
-//                    myCount += myTopPeer.count
-//                }
-//                var myCountAddition = 0
-//                if self.didChangeAmount {
-//                    myCountAddition = Int(self.amount.realValue)
-//                }
-//                myCount += myCountAddition
-//                if myCount != 0 {
-//                    var topPeer: EnginePeer?
-//                    switch self.privacyPeer {
-//                    case .anonymous:
-//                        topPeer = nil
-//                    case .account:
-//                        topPeer = reactData.myPeer
-//                    case let .peer(peer):
-//                        topPeer = peer
-//                    }
-//                    
-//                    mappedTopPeers.append(GiftAuctionScreen.TopPeer(
-//                        randomIndex: -1,
-//                        peer: topPeer,
-//                        isMy: true,
-//                        count: myCount
-//                    ))
-//                }
-//                mappedTopPeers.sort(by: { $0.count > $1.count })
-//                if mappedTopPeers.count > 3 {
-//                    mappedTopPeers = Array(mappedTopPeers.prefix(3))
-//                }
-//                
-//                var animateItems = false
-//                var itemPositionTransition = transition
-//                var itemAlphaTransition = transition
-//                if transition.userData(IsAdjustingAmountHint.self) != nil {
-//                    animateItems = true
-//                    itemPositionTransition = .spring(duration: 0.3)
-//                    itemAlphaTransition = .easeInOut(duration: 0.15)
-//                }
-//                
-//                var validIds: [GiftAuctionScreen.TopPeer.Id] = []
-//                var items: [(itemView: ComponentView<Empty>, size: CGSize)] = []
-//                for topPeer in mappedTopPeers {
-//                    validIds.append(topPeer.id)
-//                    
-//                    let itemView: ComponentView<Empty>
-//                    if let current = self.topPeerItems[topPeer.id] {
-//                        itemView = current
-//                    } else {
-//                        itemView = ComponentView()
-//                        self.topPeerItems[topPeer.id] = itemView
-//                    }
-//                    
-//                    let itemCountString = presentationStringsFormattedNumber(Int32(topPeer.count), environment.dateTimeFormat.groupingSeparator)
-//                    
-//                    var peerColor: UIColor = UIColor(rgb: 0xFFB10D)
-//                    if case .liveStream = reactData.reactSubject {
-//                        let color = GroupCallMessagesContext.getStarAmountParamMapping(value: Int64(topPeer.count)).color ?? .purple
-//                        peerColor = StoryLiveChatMessageComponent.getMessageColor(color: color)
-//                    }
-//                    
-//                    let itemSize = itemView.update(
-//                        transition: .immediate,
-//                        component: AnyComponent(PlainButtonComponent(
-//                            content: AnyComponent(PeerComponent(
-//                                context: component.context,
-//                                theme: environment.theme,
-//                                strings: environment.strings,
-//                                peer: topPeer.peer,
-//                                count: itemCountString,
-//                                color: peerColor
-//                            )),
-//                            effectAlignment: .center,
-//                            action: { [weak self] in
-//                                guard let self, let component = self.component, let peer = topPeer.peer else {
-//                                    return
-//                                }
-//                                guard let controller = self.environment?.controller() else {
-//                                    return
-//                                }
-//                                guard let navigationController = controller.navigationController as? NavigationController else {
-//                                    return
-//                                }
-//                                var viewControllers = navigationController.viewControllers
-//                                guard let index = viewControllers.firstIndex(where: { $0 === controller }) else {
-//                                    return
-//                                }
-//                                
-//                                let context = component.context
-//                                
-//                                if case .user = peer {
-//                                    if let peerInfoController = context.sharedContext.makePeerInfoController(
-//                                        context: context,
-//                                        updatedPresentationData: nil,
-//                                        peer: peer._asPeer(),
-//                                        mode: .generic,
-//                                        avatarInitiallyExpanded: false,
-//                                        fromChat: false,
-//                                        requestsContext: nil
-//                                    ) {
-//                                        viewControllers.insert(peerInfoController, at: index)
-//                                    }
-//                                } else {
-//                                    let chatController = context.sharedContext.makeChatController(context: context, chatLocation: .peer(id: peer.id), subject: nil, botStart: nil, mode: .standard(.default), params: nil)
-//                                    viewControllers.insert(chatController, at: index)
-//                                }
-//                                navigationController.setViewControllers(viewControllers, animated: true)
-//                                controller.dismiss()
-//                            },
-//                            isEnabled: topPeer.peer != nil && topPeer.peer?.id != component.context.account.peerId,
-//                            animateAlpha: false
-//                        )),
-//                        environment: {},
-//                        containerSize: CGSize(width: 200.0, height: 200.0)
-//                    )
-//                    items.append((itemView, itemSize))
-//                }
-//                var removedIds: [GiftAuctionScreen.TopPeer.Id] = []
-//                for (id, itemView) in self.topPeerItems {
-//                    if !validIds.contains(id) {
-//                        removedIds.append(id)
-//                        
-//                        if animateItems {
-//                            if let itemComponentView = itemView.view {
-//                                itemPositionTransition.setScale(view: itemComponentView, scale: 0.001)
-//                                itemAlphaTransition.setAlpha(view: itemComponentView, alpha: 0.0, completion: { [weak itemComponentView] _ in
-//                                    itemComponentView?.removeFromSuperview()
-//                                })
-//                            }
-//                        } else {
-//                            itemView.view?.removeFromSuperview()
-//                        }
-//                    }
-//                }
-//                for id in removedIds {
-//                    self.topPeerItems.removeValue(forKey: id)
-//                }
-//                
-//                var itemsWidth: CGFloat = 0.0
-//                for (_, itemSize) in items {
-//                    itemsWidth += itemSize.width
-//                }
-//                
-//                let maxItemSpacing = 48.0
-//                var itemSpacing = floor((availableSize.width - itemsWidth) / CGFloat(items.count + 1))
-//                itemSpacing = min(itemSpacing, maxItemSpacing)
-//                
-//                let totalWidth = itemsWidth + itemSpacing * CGFloat(items.count + 1)
-//                var itemX: CGFloat = floor((availableSize.width - totalWidth) * 0.5) + itemSpacing
-//                for (itemView, itemSize) in items {
-//                    if let itemComponentView = itemView.view {
-//                        var animateItem = animateItems
-//                        if itemComponentView.superview == nil {
-//                            self.scrollContentView.addSubview(itemComponentView)
-//                            animateItem = false
-//                            ComponentTransition.immediate.setScale(view: itemComponentView, scale: 0.001)
-//                            itemComponentView.alpha = 0.0
-//                        }
-//                        
-//                        let itemFrame = CGRect(origin: CGPoint(x: itemX, y: contentHeight), size: itemSize)
-//                        
-//                        if animateItem {
-//                            itemPositionTransition.setPosition(view: itemComponentView, position: itemFrame.center)
-//                            itemPositionTransition.setBounds(view: itemComponentView, bounds: CGRect(origin: CGPoint(), size: itemFrame.size))
-//                        } else {
-//                            itemComponentView.center = itemFrame.center
-//                            itemComponentView.bounds = CGRect(origin: CGPoint(), size: itemFrame.size)
-//                        }
-//                        
-//                        itemPositionTransition.setScale(view: itemComponentView, scale: 1.0)
-//                        itemAlphaTransition.setAlpha(view: itemComponentView, alpha: 1.0)
-//                    }
-//                    itemX += itemSize.width + itemSpacing
-//                }
-//                
-//                contentHeight += 104.0
-//            }
-                        
+                                          
             initialContentHeight = contentHeight
             
             if self.cachedStarImage == nil || self.cachedStarImage?.1 !== environment.theme {
@@ -2388,15 +2116,19 @@ private final class GiftAuctionScreenComponent: Component {
             
             var formattedAmount = presentationStringsFormattedNumber(Int32(clamping: self.amount.realValue), environment.dateTimeFormat.groupingSeparator)
             let buttonString: String
+            let buttonId: String
             if let myBidAmount = self.giftAuctionState?.myState.bidAmount {
                 if myBidAmount == self.amount.realValue {
                     buttonString = environment.strings.Common_OK
+                    buttonId = "ok"
                 } else {
                     formattedAmount = presentationStringsFormattedNumber(Int32(clamping: self.amount.realValue - Int(myBidAmount)), environment.dateTimeFormat.groupingSeparator)
                     buttonString = "Add  # \(formattedAmount) to Your Bid"
+                    buttonId = "add"
                 }
             } else {
                 buttonString = "Place a  # \(formattedAmount) Bid"
+                buttonId = "bid"
             }
             let buttonAttributedString = NSMutableAttributedString(string: buttonString, font: Font.semibold(17.0), textColor: environment.theme.list.itemCheckColors.foregroundColor, paragraphAlignment: .center)
             if let range = buttonAttributedString.string.range(of: "#"), let starImage = self.cachedStarImage?.0 {
@@ -2419,7 +2151,7 @@ private final class GiftAuctionScreenComponent: Component {
                         cornerRadius: 54.0 * 0.5
                     ),
                     content: AnyComponentWithIdentity(
-                        id: AnyHashable(0),
+                        id: AnyHashable(buttonId),
                         component: AnyComponent(MultilineTextComponent(text: .plain(buttonAttributedString)))
                     ),
                     isEnabled: true,
@@ -2477,7 +2209,7 @@ private final class GiftAuctionScreenComponent: Component {
             contentHeight += bottomPanelHeight
             initialContentHeight += bottomPanelHeight
             
-            clippingY = actionButtonFrame.minY - 24.0
+            clippingY = actionButtonFrame.maxY + 24.0
             
             let topInset: CGFloat = max(0.0, availableSize.height - containerInset - initialContentHeight)
             

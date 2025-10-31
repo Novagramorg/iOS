@@ -137,6 +137,7 @@ public class RemainingCountComponent: Component {
             
             self.activeContainer = UIView()
             self.activeContainer.clipsToBounds = true
+            self.activeContainer.layer.cornerRadius = 15.0
             
             self.activeBackground = SimpleLayer()
             self.activeBackground.anchorPoint = CGPoint()
@@ -335,7 +336,7 @@ public class RemainingCountComponent: Component {
             }
             if "".isEmpty {
                 if component.invertProgress {
-                    progressTransition.setFrame(layer: self.inactiveBackground, frame: CGRect(origin: CGPoint(x: activityPosition, y: 0.0), size: CGSize(width: size.width - activityPosition, height: lineHeight)))
+                    progressTransition.setFrame(layer: self.inactiveBackground, frame: CGRect(origin: CGPoint(x: activityPosition - 15.0, y: 0.0), size: CGSize(width: size.width - activityPosition + 15.0, height: lineHeight)))
                     progressTransition.setFrame(view: self.activeContainer, frame: CGRect(origin: .zero, size: CGSize(width: activityPosition, height: lineHeight)))
                     progressTransition.setBounds(layer: self.activeBackground, bounds: CGRect(origin: .zero, size: CGSize(width: containerFrame.width * 1.35, height: lineHeight)))
                 } else {

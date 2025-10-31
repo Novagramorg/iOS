@@ -183,7 +183,7 @@ private func requestEditMessageInternal(accountPeerId: PeerId, postbox: Postbox,
                     flags |= Int32(1 << 15)
                     
                     if let scheduleInfoAttribute {
-                        effectiveScheduleRepeatPeriod = scheduleInfoAttribute.repeatPeriod
+                        effectiveScheduleRepeatPeriod = scheduleInfoAttribute.repeatPeriod ?? 0
                         flags |= Int32(1 << 18)
                     }
                 }

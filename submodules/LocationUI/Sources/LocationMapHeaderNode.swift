@@ -417,6 +417,7 @@ public final class LocationOptionsComponent: Component {
     }
 
     public final class View: HighlightTrackingButton {
+        private let containerView: GlassBackgroundContainerView
         private let backgroundView: GlassBackgroundView
         private let clippingView: UIView
         
@@ -433,6 +434,7 @@ public final class LocationOptionsComponent: Component {
         private var component: LocationOptionsComponent?
         
         public override init(frame: CGRect) {
+            self.containerView = GlassBackgroundContainerView()
             self.backgroundView = GlassBackgroundView()
             self.clippingView = UIView()
             self.clippingView.clipsToBounds = true
@@ -441,7 +443,8 @@ public final class LocationOptionsComponent: Component {
             
             super.init(frame: frame)
             
-            self.addSubview(self.backgroundView)
+            self.addSubview(self.containerView)
+            self.containerView.contentView.addSubview(self.backgroundView)
             self.addSubview(self.clippingView)
             self.clippingView.addSubview(self.collapsedContainerView)
             self.clippingView.addSubview(self.expandedContainerView)
@@ -566,7 +569,7 @@ public final class LocationOptionsComponent: Component {
             let collapsedFrame = CGRect(origin: CGPoint(x: expandedSize.width - normalSize.width, y: expandedSize.height - normalSize.height), size: normalSize)
             
             let effectiveBackgroundFrame = component.showMapModes ? expandedFrame : collapsedFrame
-            self.backgroundView.update(size: effectiveBackgroundFrame.size, cornerRadius: cornerRadius, isDark: component.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: component.theme.rootController.navigationBar.glassBarButtonBackgroundColor), transition: transition)
+            self.backgroundView.update(size: effectiveBackgroundFrame.size, cornerRadius: cornerRadius, isDark: component.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: component.theme.rootController.navigationBar.glassBarButtonBackgroundColor), isInteractive: true, transition: transition)
             transition.setFrame(view: self.backgroundView, frame: effectiveBackgroundFrame)
             
             transition.setFrame(view: self.clippingView, frame: effectiveBackgroundFrame)
@@ -634,6 +637,9 @@ public final class LocationOptionsComponent: Component {
             
             transition.setAlpha(view: self.collapsedContainerView, alpha: component.showMapModes ? 0.0 : 1.0)
             transition.setAlpha(view: self.expandedContainerView, alpha: component.showMapModes ? 1.0 : 0.0)
+            
+            self.containerView.update(size: expandedSize, isDark: component.theme.overallDarkAppearance, transition: transition)
+            transition.setFrame(view: self.containerView, frame: CGRect(origin: .zero, size: expandedSize))
             
             return expandedSize
         }
