@@ -192,6 +192,7 @@ public enum ResolvedUrlSettingsSection {
     case twoStepAuth
     case enableLog
     case phonePrivacy
+    case loginEmail
 }
 
 public struct ResolvedBotChoosePeerTypes: OptionSet {
