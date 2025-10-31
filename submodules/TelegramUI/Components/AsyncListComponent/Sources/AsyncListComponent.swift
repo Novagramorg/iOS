@@ -198,6 +198,9 @@ public final class AsyncListComponent: Component {
         if lhs.externalState !== rhs.externalState {
             return false
         }
+        if lhs.externalStateValue != rhs.externalStateValue {
+            return false
+        }
         if lhs.items != rhs.items {
             return false
         }

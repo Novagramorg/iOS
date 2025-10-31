@@ -173,13 +173,15 @@ final class LiveChatReactionStreamView: UIView {
         let period: CGFloat
         let phaseOffset: CGFloat
         let baseX: CGFloat
+        let verticalVelocity: CGFloat
         var timeValue: CGFloat = 0.0
         
-        init(image: UIImage, amplitude: CGFloat, period: CGFloat, phaseOffset: CGFloat, baseX: CGFloat) {
+        init(image: UIImage, amplitude: CGFloat, period: CGFloat, phaseOffset: CGFloat, baseX: CGFloat, verticalVelocity: CGFloat) {
             self.amplitude = amplitude
             self.period = period
             self.phaseOffset = phaseOffset
             self.baseX = baseX
+            self.verticalVelocity = verticalVelocity
             
             super.init()
             
@@ -192,6 +194,7 @@ final class LiveChatReactionStreamView: UIView {
             self.period = 0.0
             self.phaseOffset = 0.0
             self.baseX = 0.0
+            self.verticalVelocity = 0.0
             
             super.init(layer: layer)
         }
@@ -272,13 +275,12 @@ final class LiveChatReactionStreamView: UIView {
         let random = LokiRng(seed0: UInt(id), seed1: 1, seed2: 0)
         let itemX: CGFloat = -image.size.width - 8.0 + 20.0 * CGFloat(LokiRng.random(withSeed0: UInt(id), seed1: 0, seed2: 0) - 0.5)
         let phaseOffset: CGFloat = CGFloat(random.next())
-        let itemLayer = ItemLayer(image: image, amplitude: 0.0 + CGFloat(random.next()) * 6.0, period: 1.0 + CGFloat(random.next()) * 1.0, phaseOffset: phaseOffset, baseX: itemX)
+        let itemLayer = ItemLayer(image: image, amplitude: 0.0 + CGFloat(random.next()) * 6.0, period: 1.5 + CGFloat(random.next()) * 2.0, phaseOffset: phaseOffset, baseX: itemX, verticalVelocity: -(1.0 + CGFloat(random.next()) * 0.2) * 90.0)
         itemLayer.frame = CGRect(origin: CGPoint(x: itemX, y: -image.size.height * 0.5), size: image.size)
-        itemLayer.transform = CATransform3DMakeRotation(CGFloat(random.next() - 0.5) * CGFloat.pi * 0.2, 0.0, 0.0, 1.0)
         self.itemLayers[id] = itemLayer
         self.itemLayerContainer.addSublayer(itemLayer)
         
-        itemLayer.animatePosition(from: CGPoint(), to: CGPoint(x: 0.0, y: -200.0), duration: 2.0, timingFunction: CAMediaTimingFunctionName.linear.rawValue, removeOnCompletion: false, additive: true)
+        let itemDuration: Double = 1.2 + Double(random.next()) * 0.8
         
         itemLayer.animateScale(from: 0.001, to: 1.0, duration: 0.2)
         itemLayer.animateAlpha(from: 0.0, to: 1.0, duration: 0.1, completion: { [weak self, weak itemLayer] _ in
@@ -286,10 +288,13 @@ final class LiveChatReactionStreamView: UIView {
                 return
             }
             
-            let delay: Double = 2.0 - 0.1 - 0.18
+            let delay: Double = itemDuration - 0.1 - 0.18
             
-            itemLayer.animateScale(from: 1.0, to: 0.001, duration: 0.18, delay: delay, removeOnCompletion: false)
-            itemLayer.animateAlpha(from: 1.0, to: 0.0, duration: 0.18, delay: delay, removeOnCompletion: false, completion: { [weak self] _ in
+            let transition: ComponentTransition = .easeInOut(duration: 0.2)
+            transition.animateBlur(layer: itemLayer, fromRadius: 0.0, toRadius: 8.0, delay: delay)
+            
+            itemLayer.animateScale(from: 1.0, to: 0.001, duration: 0.2, delay: delay, removeOnCompletion: false)
+            itemLayer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2, delay: delay, removeOnCompletion: false, completion: { [weak self] _ in
                 guard let self else {
                     return
                 }
@@ -306,12 +311,25 @@ final class LiveChatReactionStreamView: UIView {
         let dt = max(1.0 / 120.0, min(1.0 / 30.0, timestamp - self.previousPhysicsTimestamp))
         self.previousPhysicsTimestamp = timestamp
 
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        
         for (_, itemLayer) in self.itemLayers {
             itemLayer.timeValue += dt
             let itemPhase = (itemLayer.timeValue.truncatingRemainder(dividingBy: itemLayer.period) / itemLayer.period + itemLayer.phaseOffset).truncatingRemainder(dividingBy: 1.0)
-            let phaseFraction = sin(itemPhase * CGFloat.pi * 2.0)
-            itemLayer.position.x = itemLayer.baseX + phaseFraction * itemLayer.amplitude
+            let phaseAngle = itemPhase * CGFloat.pi * 2.0
+            let phaseFraction = sin(phaseAngle)
+            
+            let newX = itemLayer.baseX + phaseFraction * itemLayer.amplitude
+            let newY = itemLayer.position.y + itemLayer.verticalVelocity * dt
+            itemLayer.position = CGPoint(x: newX, y: newY)
+
+            let horizontalVelocity = itemLayer.amplitude * cos(phaseAngle) * (CGFloat.pi * 2.0 / itemLayer.period)
+            let rotationAngle = atan2(itemLayer.verticalVelocity, horizontalVelocity) + CGFloat.pi * 0.5
+            itemLayer.setValue(rotationAngle, forKeyPath: "transform.rotation.z")
         }
+        
+        CATransaction.commit()
     }
 
     func update(size: CGSize, sourcePoint: CGPoint, transition: ComponentTransition) {

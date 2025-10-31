@@ -376,6 +376,7 @@ private final class PeerComponent: Component {
     let strings: PresentationStrings
     let peer: EnginePeer?
     let count: String
+    let topPlace: Int?
     let color: UIColor
     
     init(
@@ -384,6 +385,7 @@ private final class PeerComponent: Component {
         strings: PresentationStrings,
         peer: EnginePeer?,
         count: String,
+        topPlace: Int?,
         color: UIColor
     ) {
         self.context = context
@@ -391,6 +393,7 @@ private final class PeerComponent: Component {
         self.strings = strings
         self.peer = peer
         self.count = count
+        self.topPlace = topPlace
         self.color = color
     }
     
@@ -410,6 +413,9 @@ private final class PeerComponent: Component {
         if lhs.count != rhs.count {
             return false
         }
+        if lhs.topPlace != rhs.topPlace {
+            return false
+        }
         if lhs.color != rhs.color {
             return false
         }
@@ -419,6 +425,7 @@ private final class PeerComponent: Component {
     final class View: UIView {
         private var avatarNode: AvatarNode?
         private let badge = ComponentView<Empty>()
+        private var crownIcon: UIImageView?
         private let title = ComponentView<Empty>()
 
         private var component: PeerComponent?
@@ -432,6 +439,7 @@ private final class PeerComponent: Component {
         }
         
         func update(component: PeerComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
+            let previousComponent = self.component
             self.component = component
             
             let avatarNode: AvatarNode
@@ -469,6 +477,30 @@ private final class PeerComponent: Component {
                     self.addSubview(badgeView)
                 }
                 badgeView.frame = badgeFrame
+            }
+            
+            if let topPlace = component.topPlace {
+                let crownIcon: UIImageView
+                if let current = self.crownIcon {
+                    crownIcon = current
+                } else {
+                    crownIcon = UIImageView()
+                    self.crownIcon = crownIcon
+                    self.addSubview(crownIcon)
+                }
+                
+                if topPlace != previousComponent?.topPlace {
+                    crownIcon.image = StoryLiveChatMessageComponent.generateCrownImage(place: topPlace, backgroundColor: component.color, foregroundColor: .white, borderColor: component.theme.actionSheet.opaqueItemBackgroundColor)
+                }
+                if let image = crownIcon.image {
+                    let crownIconFrame = CGRect(origin: CGPoint(x: avatarFrame.minX + floor((avatarFrame.width - image.size.width) * 0.5), y: avatarFrame.minY - 13.0), size: image.size)
+                    crownIcon.frame = crownIconFrame
+                }
+            } else {
+                if let crownIcon = self.crownIcon {
+                    self.crownIcon = nil
+                    crownIcon.removeFromSuperview()
+                }
             }
             
             let titleSpacing: CGFloat = 8.0
@@ -1120,7 +1152,10 @@ private final class ChatSendStarsScreenComponent: Component {
             
             var containerTransform = CATransform3DIdentity
             containerTransform = CATransform3DTranslate(containerTransform, 0.0, scaledTranslation, 0.0)
+            #if DEBUG
+            #else
             containerTransform = CATransform3DScale(containerTransform, scale, scale, scale)
+            #endif
             transition.setTransform(view: self.containerView, transform: containerTransform)
             transition.setCornerRadius(layer: self.containerView.layer, cornerRadius: scaledCornerRadius)
         }
@@ -1613,12 +1648,12 @@ private final class ChatSendStarsScreenComponent: Component {
                     self.isPastTopCutoff = nil
                 }
                 
-                if case .liveStream = reactData.reactSubject {
-                    let color = GroupCallMessagesContext.getStarAmountParamMapping(value: Int64(self.amount.realValue)).color ?? .purple
+                if case let .liveStream(_, _, _, liveChatMessageParams) = reactData.reactSubject {
+                    let color = GroupCallMessagesContext.getStarAmountParamMapping(params: liveChatMessageParams, value: Int64(self.amount.realValue)).color ?? GroupCallMessagesContext.Message.Color(rawValue: 0x985FDC)
                     sliderColor = StoryLiveChatMessageComponent.getMessageColor(color: color)
                 }
-            case .liveStreamMessage:
-                let color = GroupCallMessagesContext.getStarAmountParamMapping(value: Int64(self.amount.realValue)).color ?? .purple
+            case let .liveStreamMessage(liveStreamMessage):
+                let color = GroupCallMessagesContext.getStarAmountParamMapping(params: liveStreamMessage.liveChatMessageParams, value: Int64(self.amount.realValue)).color ?? GroupCallMessagesContext.Message.Color(rawValue: 0x985FDC)
                 sliderColor = StoryLiveChatMessageComponent.getMessageColor(color: color)
             }
             
@@ -1690,9 +1725,9 @@ private final class ChatSendStarsScreenComponent: Component {
             }
             
             switch component.initialData.subjectInitialData {
-            case .liveStreamMessage:
+            case let .liveStreamMessage(liveStreamMessageData):
                 //TODO:localize
-                let params = GroupCallMessagesContext.getStarAmountParamMapping(value: Int64(self.amount.realValue))
+                let params = GroupCallMessagesContext.getStarAmountParamMapping(params: liveStreamMessageData.liveChatMessageParams, value: Int64(self.amount.realValue))
                 var perks: [(String, String)] = []
                 
                 perks.append((
@@ -1931,33 +1966,44 @@ private final class ChatSendStarsScreenComponent: Component {
                 text = "Highlight and pin a message\nby adding Stars for **\(liveStreamMessageData.peer.displayTitle(strings: environment.strings, displayOrder: .firstLast))**."
             }
             
-            let body = MarkdownAttributeSet(font: Font.regular(15.0), textColor: environment.theme.list.itemPrimaryTextColor)
-            let bold = MarkdownAttributeSet(font: Font.semibold(15.0), textColor: environment.theme.list.itemPrimaryTextColor)
-            
-            let descriptionTextSize = descriptionText.update(
-                transition: .immediate,
-                component: AnyComponent(MultilineTextComponent(
-                    text: .markdown(text: text, attributes: MarkdownAttributes(
-                        body: body,
-                        bold: bold,
-                        link: body,
-                        linkAttribute: { _ in nil }
+            let addDescriptionText: () -> Void = {
+                let body = MarkdownAttributeSet(font: Font.regular(15.0), textColor: environment.theme.list.itemPrimaryTextColor)
+                let bold = MarkdownAttributeSet(font: Font.semibold(15.0), textColor: environment.theme.list.itemPrimaryTextColor)
+                
+                let descriptionTextSize = descriptionText.update(
+                    transition: .immediate,
+                    component: AnyComponent(MultilineTextComponent(
+                        text: .markdown(text: text, attributes: MarkdownAttributes(
+                            body: body,
+                            bold: bold,
+                            link: body,
+                            linkAttribute: { _ in nil }
+                        )),
+                        horizontalAlignment: .center,
+                        maximumNumberOfLines: 0,
+                        lineSpacing: 0.2
                     )),
-                    horizontalAlignment: .center,
-                    maximumNumberOfLines: 0,
-                    lineSpacing: 0.2
-                )),
-                environment: {},
-                containerSize: CGSize(width: availableSize.width - sideInset * 2.0 - 16.0 * 2.0, height: 1000.0)
-            )
-            let descriptionTextFrame = CGRect(origin: CGPoint(x: floor((availableSize.width - descriptionTextSize.width) * 0.5), y: contentHeight), size: descriptionTextSize)
-            if let descriptionTextView = descriptionText.view {
-                if descriptionTextView.superview == nil {
-                    self.scrollContentView.addSubview(descriptionTextView)
+                    environment: {},
+                    containerSize: CGSize(width: availableSize.width - sideInset * 2.0 - 16.0 * 2.0, height: 1000.0)
+                )
+                let descriptionTextFrame = CGRect(origin: CGPoint(x: floor((availableSize.width - descriptionTextSize.width) * 0.5), y: contentHeight), size: descriptionTextSize)
+                if let descriptionTextView = descriptionText.view {
+                    if descriptionTextView.superview == nil {
+                        self.scrollContentView.addSubview(descriptionTextView)
+                    }
+                    transition.setFrame(view: descriptionTextView, frame: descriptionTextFrame)
                 }
-                transition.setFrame(view: descriptionTextView, frame: descriptionTextFrame)
+                contentHeight += descriptionTextFrame.height
             }
-            contentHeight += descriptionTextFrame.height
+            
+            switch component.initialData.subjectInitialData {
+            case .liveStreamMessage:
+                addDescriptionText()
+            case let .react(reactData):
+                if case .message = reactData.reactSubject {
+                    addDescriptionText()
+                }
+            }
             
             var liveStreamMessagePreviewData: GroupCallMessagesContext.Message?
             if case let .liveStreamMessage(liveStreamMessage) =
@@ -1994,8 +2040,10 @@ private final class ChatSendStarsScreenComponent: Component {
                 )
             }
             
-            if let liveStreamMessagePreviewData {
-                contentHeight += 29.0
+            let addLiveStreamMessagePreview: (Int?) -> Void = { topIndex in
+                guard let liveStreamMessagePreviewData else {
+                    return
+                }
                 
                 let liveStreamMessagePreview: ComponentView<Empty>
                 if let current = self.liveStreamMessagePreview {
@@ -2018,6 +2066,7 @@ private final class ChatSendStarsScreenComponent: Component {
                             transparentBackground: false
                         ),
                         message: liveStreamMessagePreviewData,
+                        topPlace: topIndex,
                         contextGesture: nil
                     )),
                     environment: {},
@@ -2031,11 +2080,21 @@ private final class ChatSendStarsScreenComponent: Component {
                     transition.setFrame(view: liveStreamMessagePreviewView, frame: liveStreamMessagePreviewFrame)
                 }
                 contentHeight += liveStreamMessagePreviewSize.height
-                contentHeight += 28.0
-            } else {
-                contentHeight += 24.0
             }
             
+            if let _ = liveStreamMessagePreviewData, case .liveStreamMessage = component.initialData.subjectInitialData {
+                contentHeight += 29.0
+                addLiveStreamMessagePreview(nil)
+                contentHeight += 10.0
+            } else if case let .react(reactData) = component.initialData.subjectInitialData {
+                if case .liveStream = reactData.reactSubject {
+                    contentHeight -= 3.0
+                } else {
+                    contentHeight += 24.0
+                }
+            }
+            
+            var mappedTopPeers: [ChatSendStarsScreen.TopPeer] = []
             switch component.initialData.subjectInitialData {
             case let .react(reactData):
                 if !reactData.topPeers.isEmpty {
@@ -2111,7 +2170,7 @@ private final class ChatSendStarsScreenComponent: Component {
                         contentHeight += 60.0
                     }
                     
-                    var mappedTopPeers = reactData.topPeers
+                    mappedTopPeers = reactData.topPeers
                     if let index = mappedTopPeers.firstIndex(where: { $0.isMy }) {
                         mappedTopPeers.remove(at: index)
                     }
@@ -2173,9 +2232,11 @@ private final class ChatSendStarsScreenComponent: Component {
                         let itemCountString = presentationStringsFormattedNumber(Int32(topPeer.count), environment.dateTimeFormat.groupingSeparator)
                         
                         var peerColor: UIColor = UIColor(rgb: 0xFFB10D)
-                        if case .liveStream = reactData.reactSubject {
-                            let color = GroupCallMessagesContext.getStarAmountParamMapping(value: Int64(topPeer.count)).color ?? .purple
+                        var topPlace: Int?
+                        if case let .liveStream(_, _, _, liveChatMessageParams) = reactData.reactSubject {
+                            let color = GroupCallMessagesContext.getStarAmountParamMapping(params: liveChatMessageParams, value: Int64(topPeer.count)).color ?? GroupCallMessagesContext.Message.Color(rawValue: 0x985FDC)
                             peerColor = StoryLiveChatMessageComponent.getMessageColor(color: color)
+                            topPlace = validIds.count - 1
                         }
                         
                         let itemSize = itemView.update(
@@ -2187,6 +2248,7 @@ private final class ChatSendStarsScreenComponent: Component {
                                     strings: environment.strings,
                                     peer: topPeer.peer,
                                     count: itemCountString,
+                                    topPlace: topPlace,
                                     color: peerColor
                                 )),
                                 effectAlignment: .center,
@@ -2388,6 +2450,28 @@ private final class ChatSendStarsScreenComponent: Component {
                 }
             case .liveStreamMessage:
                 break
+            }
+            
+            switch component.initialData.subjectInitialData {
+            case .liveStreamMessage:
+                break
+            case let .react(reactData):
+                if case .liveStream = reactData.reactSubject {
+                    contentHeight += 14.0
+                    addDescriptionText()
+                }
+            }
+            
+            if let _ = liveStreamMessagePreviewData, case let .react(reactData) = component.initialData.subjectInitialData {
+                if case .liveStream = reactData.reactSubject {
+                    contentHeight += 29.0
+                } else {
+                    contentHeight += 12.0
+                }
+                addLiveStreamMessagePreview(mappedTopPeers.firstIndex(where: { $0.isMy }))
+                contentHeight += 18.0
+            } else {
+                contentHeight += 18.0
             }
             
             initialContentHeight = contentHeight
@@ -2627,7 +2711,7 @@ private final class ChatSendStarsScreenComponent: Component {
 public class ChatSendStarsScreen: ViewControllerComponentContainer {
     public enum ReactSubject {
         case message(EngineMessage.Id)
-        case liveStream(peerId: EnginePeer.Id, storyId: Int32, minAmount: Int)
+        case liveStream(peerId: EnginePeer.Id, storyId: Int32, minAmount: Int, liveChatMessageParams: LiveChatMessageParams)
     }
     
     fileprivate enum SubjectInitialData {
@@ -2664,6 +2748,7 @@ public class ChatSendStarsScreen: ViewControllerComponentContainer {
             let myPeer: EnginePeer
             let minAmount: Int
             let maxAmount: Int
+            let liveChatMessageParams: LiveChatMessageParams
             let currentAmount: Int?
             let text: NSAttributedString
             let completion: (Int64, ChatSendStarsScreen.TransitionOut) -> Void
@@ -2673,6 +2758,7 @@ public class ChatSendStarsScreen: ViewControllerComponentContainer {
                 myPeer: EnginePeer,
                 minAmount: Int,
                 maxAmount: Int,
+                liveChatMessageParams: LiveChatMessageParams,
                 currentAmount: Int?,
                 text: NSAttributedString,
                 completion: @escaping (Int64, ChatSendStarsScreen.TransitionOut) -> Void
@@ -2681,6 +2767,7 @@ public class ChatSendStarsScreen: ViewControllerComponentContainer {
                 self.myPeer = myPeer
                 self.minAmount = minAmount
                 self.maxAmount = maxAmount
+                self.liveChatMessageParams = liveChatMessageParams
                 self.currentAmount = currentAmount
                 self.text = text
                 self.completion = completion
@@ -2860,7 +2947,7 @@ public class ChatSendStarsScreen: ViewControllerComponentContainer {
         }
         
         var minAmount = 1
-        if case let .liveStream(_, _, minAmountValue) = reactSubject {
+        if case let .liveStream(_, _, minAmountValue, _) = reactSubject {
             minAmount = minAmountValue
         }
         
@@ -2990,6 +3077,7 @@ public class ChatSendStarsScreen: ViewControllerComponentContainer {
                     myPeer: myPeer,
                     minAmount: minAmount,
                     maxAmount: maxAmount,
+                    liveChatMessageParams: LiveChatMessageParams(appConfig: context.currentAppConfiguration.with({ $0 })),
                     currentAmount: currentAmount,
                     text: text,
                     completion: completion

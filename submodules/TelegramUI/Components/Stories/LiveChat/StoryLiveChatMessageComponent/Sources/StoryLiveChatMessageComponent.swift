@@ -35,6 +35,7 @@ public final class StoryLiveChatMessageComponent: Component {
     let theme: PresentationTheme
     let layout: Layout
     let message: GroupCallMessagesContext.Message
+    let topPlace: Int?
     let contextGesture: ((ContextGesture, ContextExtractedContentContainingNode) -> Void)?
     
     public init(
@@ -43,6 +44,7 @@ public final class StoryLiveChatMessageComponent: Component {
         theme: PresentationTheme,
         layout: Layout,
         message: GroupCallMessagesContext.Message,
+        topPlace: Int?,
         contextGesture: ((ContextGesture, ContextExtractedContentContainingNode) -> Void)?
     ) {
         self.context = context
@@ -50,6 +52,7 @@ public final class StoryLiveChatMessageComponent: Component {
         self.theme = theme
         self.layout = layout
         self.message = message
+        self.topPlace = topPlace
         self.contextGesture = contextGesture
     }
     
@@ -72,6 +75,9 @@ public final class StoryLiveChatMessageComponent: Component {
         if lhs.message != rhs.message {
             return false
         }
+        if lhs.topPlace != rhs.topPlace {
+            return false
+        }
         return true
     }
     
@@ -83,6 +89,7 @@ public final class StoryLiveChatMessageComponent: Component {
         private var avatarNode: AvatarNode?
         private let textExternal = MultilineTextWithEntitiesComponent.External()
         private let text = ComponentView<Empty>()
+        private var crownIcon: UIImageView?
         private var backgroundView: UIImageView?
         private var effectLayer: StarsParticleEffectLayer?
         private var starsAmountBackgroundView: UIImageView?
@@ -142,6 +149,7 @@ public final class StoryLiveChatMessageComponent: Component {
                 self.isUpdating = false
             }
             
+            let previousComponent = self.component
             self.component = component
             self.state = state
             
@@ -200,7 +208,7 @@ public final class StoryLiveChatMessageComponent: Component {
                 }
             }
             
-            if displayStarsAmountBackground, let paidStars = component.message.paidStars, let baseColor = GroupCallMessagesContext.getStarAmountParamMapping(value: paidStars).color {
+            if displayStarsAmountBackground, let paidStars = component.message.paidStars, let baseColor = GroupCallMessagesContext.getStarAmountParamMapping(params: LiveChatMessageParams(appConfig: component.context.currentAppConfiguration.with({ $0 })), value: paidStars).color {
                 let starsAmountBackgroundView: UIImageView
                 if let current = self.starsAmountBackgroundView {
                     starsAmountBackgroundView = current
@@ -230,15 +238,47 @@ public final class StoryLiveChatMessageComponent: Component {
                 textString.append(NSAttributedString(string: component.message.text, font: Font.regular(15.0), textColor: primaryTextColor))
             }
             
-            var textCutout: TextNodeCutout?
-            if let starsAmountTextSize {
-                var cutoutWidth: CGFloat = starsAmountTextSize.width + 20.0
-                if displayStarsAmountBackground {
-                    cutoutWidth += 10.0
+            var textTopLeftCutout: CGFloat?
+            if let topPlace = component.topPlace {
+                let crownIcon: UIImageView
+                if let current = self.crownIcon {
+                    crownIcon = current
+                } else {
+                    crownIcon = UIImageView()
+                    self.crownIcon = crownIcon
+                    self.extractedContainerNode.contentNode.view.addSubview(crownIcon)
                 }
-                textCutout = TextNodeCutout(bottomRight: CGSize(width: cutoutWidth, height: 4.0))
+                if topPlace != previousComponent?.topPlace {
+                    crownIcon.image = generateCrownImage(place: topPlace, backgroundColor: .white, foregroundColor: .clear, borderColor: nil)
+                }
+                crownIcon.tintColor = secondaryTextColor
+                
+                if let image = crownIcon.image {
+                    textTopLeftCutout = image.size.width + 4.0
+                }
+            } else {
+                if let crownIcon = self.crownIcon {
+                    self.crownIcon = nil
+                    crownIcon.removeFromSuperview()
+                }
             }
             
+            var textBottomRightCutout: CGFloat?
+            if let starsAmountTextSize, !displayStarsAmountBackground {
+                textBottomRightCutout = starsAmountTextSize.width + 20.0
+            }
+            
+            var textCutout: TextNodeCutout?
+            if textBottomRightCutout != nil || textTopLeftCutout != nil {
+                textCutout = TextNodeCutout(topLeft: textTopLeftCutout.flatMap({ CGSize(width: $0, height: 8.0) }), bottomRight: textBottomRightCutout.flatMap({ CGSize(width: $0, height: 8.0) }))
+            }
+            
+            var maxTextWidth: CGFloat = availableSize.width - insets.left - insets.right - avatarSize - avatarSpacing
+            if let starsAmountTextSize, displayStarsAmountBackground {
+                var cutoutWidth: CGFloat = starsAmountTextSize.width + 20.0
+                cutoutWidth += 30.0
+                maxTextWidth -= cutoutWidth
+            }
             let textSize = self.text.update(
                 transition: .immediate,
                 component: AnyComponent(MultilineTextWithEntitiesComponent(
@@ -253,7 +293,7 @@ public final class StoryLiveChatMessageComponent: Component {
                     cutout: textCutout
                 )),
                 environment: {},
-                containerSize: CGSize(width: availableSize.width - insets.left - insets.right - avatarSize - avatarSpacing, height: 100000.0)
+                containerSize: CGSize(width: maxTextWidth, height: 100000.0)
             )
             
             var avatarFrame = CGRect(origin: CGPoint(x: insets.left, y: insets.top), size: CGSize(width: avatarSize, height: avatarSize))
@@ -285,7 +325,7 @@ public final class StoryLiveChatMessageComponent: Component {
                 }
             }
             
-            let textFrame = CGRect(origin: CGPoint(x: insets.left + avatarSize + avatarSpacing, y: avatarFrame.minY + 4.0), size: textSize)
+            let textFrame = CGRect(origin: CGPoint(x: insets.left + avatarSize + avatarSpacing, y: avatarFrame.minY + 3.0), size: textSize)
             if let textView = self.text.view {
                 if textView.superview == nil {
                     textView.layer.anchorPoint = CGPoint()
@@ -295,8 +335,15 @@ public final class StoryLiveChatMessageComponent: Component {
                 textView.bounds = CGRect(origin: CGPoint(), size: textFrame.size)
             }
             
+            if let crownIcon = self.crownIcon, let image = crownIcon.image {
+                crownIcon.frame = CGRect(origin: CGPoint(x: textFrame.minX, y: textFrame.minY - 1.0), size: image.size)
+            }
+            
             let backgroundOrigin = CGPoint(x: avatarFrame.minX - avatarBackgroundInset, y: avatarFrame.minY - avatarBackgroundInset)
             var backgroundFrame = CGRect(origin: backgroundOrigin, size: CGSize(width: textFrame.maxX + 8.0 - backgroundOrigin.x, height: avatarFrame.maxY + avatarBackgroundInset - backgroundOrigin.y))
+            if let starsAmountTextSize, displayStarsAmountBackground {
+                backgroundFrame.size.width += starsAmountTextSize.width + 30.0
+            }
             if let textLayout = self.textExternal.layout {
                 if textLayout.numberOfLines > 1 {
                     backgroundFrame.size.height = max(backgroundFrame.size.height, textFrame.maxY + 8.0 - backgroundOrigin.y)
@@ -333,7 +380,7 @@ public final class StoryLiveChatMessageComponent: Component {
             
             let backgroundCornerRadius = (avatarSize + avatarBackgroundInset * 2.0) * 0.5
             
-            if let paidStars = component.message.paidStars, let baseColor = GroupCallMessagesContext.getStarAmountParamMapping(value: paidStars).color {
+            if let paidStars = component.message.paidStars, let baseColor = GroupCallMessagesContext.getStarAmountParamMapping(params: LiveChatMessageParams(appConfig: component.context.currentAppConfiguration.with({ $0 })), value: paidStars).color {
                 let backgroundView: UIImageView
                 if let current = self.backgroundView {
                     backgroundView = current
@@ -374,7 +421,7 @@ public final class StoryLiveChatMessageComponent: Component {
             
             self.extractedContainerNode.frame = CGRect(origin: CGPoint(), size: size)
             self.extractedContainerNode.contentNode.frame = CGRect(origin: CGPoint(), size: size)
-            self.extractedContainerNode.contentRect = backgroundFrame.insetBy(dx: -4.0, dy: 0.0)
+            self.extractedContainerNode.contentRect = backgroundFrame.insetBy(dx: -2.0, dy: 0.0)
             self.containerNode.frame = CGRect(origin: CGPoint(), size: size)
             
             return size
@@ -390,21 +437,98 @@ public final class StoryLiveChatMessageComponent: Component {
     }
 
     public static func getMessageColor(color: GroupCallMessagesContext.Message.Color) -> UIColor {
-        switch color {
-        case .silver:
-            return UIColor(rgb: 0x7C8695)
-        case .red:
-            return UIColor(rgb: 0xE6514E)
-        case .orange:
-            return UIColor(rgb: 0xEE7E20)
-        case .yellow:
-            return UIColor(rgb: 0xE4A20A)
-        case .green:
-            return UIColor(rgb: 0x5AB03D)
-        case .blue:
-            return UIColor(rgb: 0x3E9CDF)
-        case .purple:
-            return UIColor(rgb: 0x985FDC)
+        return UIColor(rgb: color.rawValue)
+    }
+    
+    private static let crownTemplateImage: UIImage = {
+        return generateTintedImage(image: UIImage(bundleImageName: "Stories/LiveChatCrown"), color: .white)!
+    }()
+    
+    private static let crownFont: UIFont = {
+        let weight: CGFloat = UIFont.Weight.semibold.rawValue
+        let width: CGFloat = -0.1
+        let descriptor: UIFontDescriptor
+        if #available(iOS 14.0, *) {
+            descriptor = UIFont.systemFont(ofSize: 10.0).fontDescriptor
+        } else {
+            descriptor = UIFont.systemFont(ofSize: 10.0, weight: UIFont.Weight.semibold).fontDescriptor
+        }
+        let symbolicTraits = descriptor.symbolicTraits
+        var updatedDescriptor: UIFontDescriptor? = descriptor.withSymbolicTraits(symbolicTraits)
+        updatedDescriptor = updatedDescriptor?.withDesign(.default)
+        if #available(iOS 14.0, *) {
+            updatedDescriptor = updatedDescriptor?.addingAttributes([
+                UIFontDescriptor.AttributeName.traits: [UIFontDescriptor.TraitKey.weight: weight]
+            ])
+        }
+        if #available(iOS 16.0, *) {
+            updatedDescriptor = updatedDescriptor?.addingAttributes([
+                UIFontDescriptor.AttributeName.traits: [UIFontDescriptor.TraitKey.width: width]
+            ])
+        }
+        
+        let font: UIFont
+        if let updatedDescriptor {
+            font = UIFont(descriptor: updatedDescriptor, size: 9.0)
+        } else {
+            font = UIFont(descriptor: descriptor, size: 9.0)
+        }
+        return font
+    }()
+    
+    public static func generateCrownImage(place: Int, backgroundColor: UIColor, foregroundColor: UIColor, borderColor: UIColor?) -> UIImage {
+        let baseSize = crownTemplateImage.size
+        var borderWidth: CGFloat = 0.0
+        if borderColor != nil {
+            borderWidth = 2.0
+        }
+        
+        var size = baseSize
+        size.width += borderWidth * 2.0
+        size.height += borderWidth * 2.0
+        
+        let image = generateImage(size, rotatedContext: { size, context in
+            UIGraphicsPushContext(context)
+            defer {
+                UIGraphicsPopContext()
+            }
+            
+            context.clear(CGRect(origin: CGPoint(), size: size))
+            
+            if let borderColor {
+                generateTintedImage(image: UIImage(bundleImageName: "Stories/LiveChatCrown"), color: borderColor)!.draw(in: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: size))
+            }
+            
+            if backgroundColor != .white {
+                generateTintedImage(image: UIImage(bundleImageName: "Stories/LiveChatCrown"), color: backgroundColor)!.draw(in: CGRect(origin: CGPoint(x: borderWidth, y: borderWidth), size: baseSize))
+            } else {
+                crownTemplateImage.draw(in: CGRect(origin: CGPoint(x: borderWidth, y: borderWidth), size: baseSize))
+            }
+            
+            if foregroundColor.alpha < 1.0 {
+                context.setBlendMode(.copy)
+            }
+            
+            let string = NSAttributedString(string: "\(place + 1)", font: crownFont, textColor: foregroundColor)
+            let stringSize = string.boundingRect(with: CGSize(width: 100.0, height: 100.0), options: .usesLineFragmentOrigin, context: nil)
+            
+            let stringOffsets: [CGPoint] = [
+                CGPoint(x: 0.25, y: -0.33),
+                CGPoint(x: 0.24749999999999983, y: -0.495),
+                CGPoint(x: 0.0, y: -1.4025),
+            ]
+            var stringPosition = CGPoint(x: borderWidth + floorToScreenPixels((baseSize.width - stringSize.width) * 0.5), y: borderWidth + floorToScreenPixels((baseSize.height - stringSize.height) * 0.5) + 1.0)
+            if place < stringOffsets.count {
+                stringPosition.x += stringOffsets[place].x * 0.8
+                stringPosition.y += stringOffsets[place].y * 0.8
+            }
+            string.draw(at: stringPosition)
+        })!
+        
+        if backgroundColor == .white && foregroundColor == .clear && borderColor == nil {
+            return image.withRenderingMode(.alwaysTemplate)
+        } else {
+            return image
         }
     }
 }

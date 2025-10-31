@@ -76,9 +76,8 @@ public final class ChatFloatingTopicsPanel: Component {
     public final class View: UIView {
         private let containerView: GlassBackgroundContainerView
         
-        private var sidePanelBackgroundView: GlassBackgroundView?
+        private var sharedPanelBackgroundView: GlassBackgroundView?
         private var sidePanel: ComponentView<ChatSidePanelEnvironment>?
-        private var topPanelBackgroundView: GlassBackgroundView?
         private var topPanel: ComponentView<ChatSidePanelEnvironment>?
         
         override public init(frame: CGRect) {
@@ -106,6 +105,8 @@ public final class ChatFloatingTopicsPanel: Component {
         func update(component: ChatFloatingTopicsPanel, availableSize: CGSize, state: EmptyComponentState, environment: Environment<ChatSidePanelEnvironment>, transition: ComponentTransition) -> CGSize {
             let environment = environment[ChatSidePanelEnvironment.self].value
             
+            var currentPanelBackgroundFrame: CGRect?
+            
             if case .side = component.location {
                 let sidePanel: ComponentView<ChatSidePanelEnvironment>
                 var sidePanelTransition = transition
@@ -115,13 +116,6 @@ public final class ChatFloatingTopicsPanel: Component {
                     sidePanelTransition = sidePanelTransition.withAnimation(.none)
                     sidePanel = ComponentView()
                     self.sidePanel = sidePanel
-                }
-                let sidePanelBackgroundView: GlassBackgroundView
-                if let current = self.sidePanelBackgroundView {
-                    sidePanelBackgroundView = current
-                } else {
-                    sidePanelBackgroundView = GlassBackgroundView()
-                    self.sidePanelBackgroundView = sidePanelBackgroundView
                 }
                 let sidePanelSize = sidePanel.update(
                     transition: sidePanelTransition,
@@ -148,41 +142,22 @@ public final class ChatFloatingTopicsPanel: Component {
                     },
                     containerSize: CGSize(width: 72.0 + 8.0, height: availableSize.height)
                 )
-                let sidePanelFrame = CGRect(origin: CGPoint(), size: CGSize(width: 8.0 + 80.0, height: availableSize.height - 8.0 - 8.0 - environment.insets.bottom))
-                let sidePanelBackgroundFrame = CGRect(origin: CGPoint(x: 8.0, y: 8.0), size: CGSize(width: 80.0, height: availableSize.height - 8.0 - 8.0 - 8.0 - environment.insets.bottom))
+                let sidePanelFrame = CGRect(origin: CGPoint(), size: CGSize(width: 8.0 + 80.0, height: availableSize.height - 8.0 - environment.insets.bottom))
+                let sidePanelBackgroundFrame = CGRect(origin: CGPoint(x: 8.0, y: 8.0), size: CGSize(width: 80.0, height: availableSize.height - 8.0 - 8.0 - environment.insets.bottom))
+                currentPanelBackgroundFrame = sidePanelBackgroundFrame
                 if let sidePanelView = sidePanel.view as? ChatSideTopicsPanel.View {
                     if sidePanelView.superview == nil {
                         sidePanelView.layer.cornerRadius = 20.0
                         sidePanelView.clipsToBounds = true
                         self.addSubview(sidePanelView)
-                        self.containerView.contentView.addSubview(sidePanelBackgroundView)
                         
                         sidePanelView.frame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: sidePanelSize.height, height: 8.0 + 40.0))
-                        
-                        sidePanelBackgroundView.frame = CGRect(origin: sidePanelBackgroundFrame.origin, size: CGSize(width: sidePanelBackgroundFrame.width, height: 40.0))
-                        sidePanelBackgroundView.update(size: sidePanelBackgroundView.frame.size, cornerRadius: 20.0, isDark: component.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: component.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7)), transition: .immediate)
                     }
-                    transition.setFrame(view: sidePanelView, frame: sidePanelFrame, completion: { [weak sidePanelView] flag in
-                        if flag {
-                            sidePanelView?.clipsToBounds = false
-                        }
-                    })
-                    
-                    transition.setFrame(view: sidePanelBackgroundView, frame: sidePanelBackgroundFrame)
-                    sidePanelBackgroundView.update(size: sidePanelBackgroundFrame.size, cornerRadius: 20.0, isDark: component.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: component.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7)), transition: transition)
+                    transition.setFrame(view: sidePanelView, frame: sidePanelFrame)
                 }
             } else if let sidePanel = self.sidePanel {
                 self.sidePanel = nil
                 if let sidePanelView = sidePanel.view as? ChatSideTopicsPanel.View {
-                    let sidePanelBackgroundView = self.sidePanelBackgroundView
-                    self.sidePanelBackgroundView = nil
-                    if let sidePanelBackgroundView {
-                        transition.setFrame(view: sidePanelBackgroundView, frame: CGRect(origin: sidePanelBackgroundView.frame.origin, size: CGSize(width: sidePanelBackgroundView.bounds.width, height: 40.0)), completion: { [weak sidePanelBackgroundView] _ in
-                            sidePanelBackgroundView?.removeFromSuperview()
-                        })
-                        sidePanelBackgroundView.update(size: sidePanelBackgroundView.bounds.size, cornerRadius: 20.0, isDark: component.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: component.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7)), transition: transition)
-                    }
-                    
                     sidePanelView.clipsToBounds = true
                     transition.setFrame(view: sidePanelView, frame: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: sidePanelView.bounds.width, height: 8.0 + 40.0)), completion: { [weak sidePanelView] _ in
                         sidePanelView?.removeFromSuperview()
@@ -199,13 +174,6 @@ public final class ChatFloatingTopicsPanel: Component {
                     topPanelTransition = topPanelTransition.withAnimation(.none)
                     topPanel = ComponentView()
                     self.topPanel = topPanel
-                }
-                let topPanelBackgroundView: GlassBackgroundView
-                if let current = self.topPanelBackgroundView {
-                    topPanelBackgroundView = current
-                } else {
-                    topPanelBackgroundView = GlassBackgroundView()
-                    self.topPanelBackgroundView = topPanelBackgroundView
                 }
                 let _ = topPanel.update(
                     transition: topPanelTransition,
@@ -234,42 +202,38 @@ public final class ChatFloatingTopicsPanel: Component {
                 )
                 let topPanelFrame = CGRect(origin: CGPoint(), size: CGSize(width: availableSize.width - 8.0, height: 8.0 + 40.0))
                 let topPanelBackgroundFrame = CGRect(origin: CGPoint(x: 8.0, y: 8.0), size: CGSize(width: availableSize.width - 8.0 - 8.0, height: 40.0))
+                currentPanelBackgroundFrame = topPanelBackgroundFrame
                 if let topPanelView = topPanel.view as? ChatSideTopicsPanel.View {
                     if topPanelView.superview == nil {
                         topPanelView.clipsToBounds = true
                         topPanelView.layer.cornerRadius = 20.0
                         self.addSubview(topPanelView)
-                        self.containerView.contentView.addSubview(topPanelBackgroundView)
                         topPanelView.frame = CGRect(origin: CGPoint(), size: CGSize(width: 80.0 + 8.0, height: topPanelFrame.height))
-                        
-                        topPanelBackgroundView.frame = CGRect(origin: topPanelBackgroundFrame.origin, size: CGSize(width: 80.0, height: topPanelBackgroundFrame.height))
-                        topPanelBackgroundView.update(size: topPanelBackgroundView.bounds.size, cornerRadius: 20.0, isDark: component.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: component.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7)), transition: .immediate)
                     }
-                    transition.setFrame(view: topPanelView, frame: topPanelFrame, completion: { [weak topPanelView] flag in
-                        if flag {
-                            topPanelView?.clipsToBounds = false
-                        }
-                    })
-                    
-                    transition.setFrame(view: topPanelBackgroundView, frame: topPanelBackgroundFrame)
-                    topPanelBackgroundView.update(size: topPanelBackgroundFrame.size, cornerRadius: 20.0, isDark: component.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: component.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7)), transition: transition)
+                    transition.setFrame(view: topPanelView, frame: topPanelFrame)
                 }
             } else if let topPanel = self.topPanel {
                 self.topPanel = nil
                 if let topPanelView = topPanel.view as? ChatSideTopicsPanel.View {
-                    if let topPanelBackgroundView = self.topPanelBackgroundView {
-                        self.topPanelBackgroundView = nil
-                        
-                        transition.setFrame(view: topPanelBackgroundView, frame: CGRect(origin: topPanelBackgroundView.frame.origin, size: CGSize(width: 80.0, height: topPanelBackgroundView.bounds.height)), completion: { [weak topPanelBackgroundView] _ in
-                            topPanelBackgroundView?.removeFromSuperview()
-                        })
-                        topPanelBackgroundView.update(size: topPanelBackgroundView.bounds.size, cornerRadius: 20.0, isDark: component.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: component.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7)), transition: transition)
-                    }
                     topPanelView.clipsToBounds = true
                     transition.setFrame(view: topPanelView, frame: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: 8.0 + 72.0, height: topPanelView.bounds.height)), completion: { [weak topPanelView] _ in
                         topPanelView?.removeFromSuperview()
                     })
                 }
+            }
+            
+            if let currentPanelBackgroundFrame {
+                let sharedPanelBackgroundView: GlassBackgroundView
+                if let current = self.sharedPanelBackgroundView {
+                    sharedPanelBackgroundView = current
+                } else {
+                    sharedPanelBackgroundView = GlassBackgroundView()
+                    self.sharedPanelBackgroundView = sharedPanelBackgroundView
+                    self.containerView.contentView.insertSubview(sharedPanelBackgroundView, at: 0)
+                }
+                
+                transition.setFrame(view: sharedPanelBackgroundView, frame: currentPanelBackgroundFrame)
+                sharedPanelBackgroundView.update(size: currentPanelBackgroundFrame.size, cornerRadius: 20.0, isDark: component.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: component.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7)), transition: transition)
             }
             
             transition.setFrame(view: self.containerView, frame: CGRect(origin: CGPoint(), size: availableSize))

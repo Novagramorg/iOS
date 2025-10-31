@@ -3687,14 +3687,12 @@ public final class GroupCallMessagesContext {
             }
         }
         
-        public enum Color {
-            case purple
-            case blue
-            case green
-            case yellow
-            case orange
-            case red
-            case silver
+        public struct Color: RawRepresentable {
+            public var rawValue: UInt32
+            
+            public init(rawValue: UInt32) {
+                self.rawValue = rawValue
+            }
         }
         
         public let id: Id
@@ -3824,6 +3822,7 @@ public final class GroupCallMessagesContext {
         private let isLiveStream: Bool
         
         let queue: Queue
+        let params: LiveChatMessageParams
         let account: Account
         let callId: Int64
         let reference: InternalGroupCallReference
@@ -3851,8 +3850,9 @@ public final class GroupCallMessagesContext {
         private var pendingSendStars: (fromPeer: Peer, messageId: Int64, amount: Int64)?
         private var pendingSendStarsTimer: SwiftSignalKit.Timer?
         
-        init(queue: Queue, account: Account, callId: Int64, reference: InternalGroupCallReference, e2eContext: ConferenceCallE2EContext?, messageLifetime: Int32, isLiveStream: Bool) {
+        init(queue: Queue, appConfig: AppConfiguration, account: Account, callId: Int64, reference: InternalGroupCallReference, e2eContext: ConferenceCallE2EContext?, messageLifetime: Int32, isLiveStream: Bool) {
             self.queue = queue
+            self.params = LiveChatMessageParams(appConfig: appConfig)
             self.account = account
             self.callId = callId
             self.reference = reference
@@ -3944,7 +3944,7 @@ public final class GroupCallMessagesContext {
                                 
                                 let lifetime: Int32
                                 if isLiveStream {
-                                    lifetime = Int32(GroupCallMessagesContext.getStarAmountParamMapping(value: addedMessage.paidMessageStars ?? 0).period)
+                                    lifetime = Int32(GroupCallMessagesContext.getStarAmountParamMapping(params: self.params, value: addedMessage.paidMessageStars ?? 0).period)
                                 } else {
                                     lifetime = self.messageLifetime
                                 }
@@ -4228,7 +4228,7 @@ public final class GroupCallMessagesContext {
                 
                 let lifetime: Int32
                 if isLiveStream {
-                    lifetime = Int32(GroupCallMessagesContext.getStarAmountParamMapping(value: paidStars ?? 0).period)
+                    lifetime = Int32(GroupCallMessagesContext.getStarAmountParamMapping(params: self.params, value: paidStars ?? 0).period)
                 } else {
                     lifetime = self.messageLifetime
                 }
@@ -4448,7 +4448,7 @@ public final class GroupCallMessagesContext {
                     self.processedIds.insert(randomId)
                 }
                 
-                let lifetime = Int32(GroupCallMessagesContext.getStarAmountParamMapping(value: totalAmount).period)
+                let lifetime = Int32(GroupCallMessagesContext.getStarAmountParamMapping(params: self.params, value: totalAmount).period)
                 
                 var state = self.state
                 if let pendingSendStarsValue = self.pendingSendStars {
@@ -4555,6 +4555,42 @@ public final class GroupCallMessagesContext {
             }
             let _ = self.account.network.request(Api.functions.phone.deleteGroupCallMessages(flags: flags, call: self.reference.apiInputGroupCall, messages: [Int32(clamping: id.id)])).startStandalone()
         }
+        
+        func deleteAllMessages(authorId: EnginePeer.Id, reportSpam: Bool) {
+            let _ = (self.account.postbox.transaction { transaction -> Api.InputPeer? in
+                return transaction.getPeer(authorId).flatMap(apiInputPeer)
+            }
+            |> deliverOn(self.queue)).startStandalone(next: { [weak self] inputPeer in
+                guard let self else {
+                    return
+                }
+                
+                var updatedState: State?
+                if self.state.messages.contains(where: { $0.author?.id == authorId }) {
+                    if updatedState == nil {
+                        updatedState = self.state
+                    }
+                    updatedState?.messages.removeAll(where: { $0.author?.id == authorId })
+                }
+                if self.state.pinnedMessages.contains(where: { $0.author?.id == authorId }) {
+                    if updatedState == nil {
+                        updatedState = self.state
+                    }
+                    updatedState?.pinnedMessages.removeAll(where: { $0.author?.id == authorId })
+                }
+                if let updatedState {
+                    self.state = updatedState
+                }
+                
+                if let inputPeer {
+                    var flags: Int32 = 0
+                    if reportSpam {
+                        flags |= 1 << 0
+                    }
+                    let _ = self.account.network.request(Api.functions.phone.deleteGroupCallParticipantMessages(flags: flags, call: self.reference.apiInputGroupCall, participant: inputPeer)).startStandalone()
+                }
+            })
+        }
     }
     
     private let queue: Queue
@@ -4566,11 +4602,11 @@ public final class GroupCallMessagesContext {
         }
     }
     
-    init(account: Account, callId: Int64, reference: InternalGroupCallReference, e2eContext: ConferenceCallE2EContext?, messageLifetime: Int32, isLiveStream: Bool) {
+    init(account: Account, appConfig: AppConfiguration, callId: Int64, reference: InternalGroupCallReference, e2eContext: ConferenceCallE2EContext?, messageLifetime: Int32, isLiveStream: Bool) {
         let queue = Queue(name: "GroupCallMessagesContext")
         self.queue = queue
         self.impl = QueueLocalObject(queue: queue, generate: {
-            return Impl(queue: queue, account: account, callId: callId, reference: reference, e2eContext: e2eContext, messageLifetime: messageLifetime, isLiveStream: isLiveStream)
+            return Impl(queue: queue, appConfig: appConfig, account: account, callId: callId, reference: reference, e2eContext: e2eContext, messageLifetime: messageLifetime, isLiveStream: isLiveStream)
         })
     }
     
@@ -4604,28 +4640,107 @@ public final class GroupCallMessagesContext {
         }
     }
     
-    public static func getStarAmountParamMapping(value: Int64) -> (period: Int, maxLength: Int, emojiCount: Int, color: Message.Color?) {
-        if value >= 10000 {
-            return (3600, 400, 20, .silver)
+    public func deleteAllMessages(authorId: EnginePeer.Id, reportSpam: Bool) {
+        self.impl.with { impl in
+            impl.deleteAllMessages(authorId: authorId, reportSpam: reportSpam)
         }
-        if value >= 2000 {
-            return (1800, 280, 10, .red)
-        }
-        if value >= 500 {
-            return (900, 200, 7, .orange)
-        }
-        if value >= 250 {
-            return (600, 150, 4, .yellow)
-        }
-        if value >= 100 {
-            return (300, 110, 3, .green)
-        }
-        if value >= 50 {
-            return (120, 80, 2, .blue)
-        }
-        if value >= 1 {
-            return (60, 60, 1, .purple)
+    }
+    
+    public static func getStarAmountParamMapping(params: LiveChatMessageParams, value: Int64) -> (period: Int, maxLength: Int, emojiCount: Int, color: Message.Color?) {
+        for item in params.paramSets.reversed() {
+            if value >= item.minStars {
+                return (item.pinPeriod ?? 0, item.maxMessageLength, item.maxEmojiCount, item.color.flatMap(Message.Color.init(rawValue:)))
+            }
         }
         return (30, 30, 0, nil)
+    }
+}
+
+private func colorFromHex(_ string: String) -> UInt32? {
+    guard let value = UInt32(string, radix: 16) else {
+        return nil
+    }
+    return value
+}
+
+public struct LiveChatMessageParams: Equatable {
+    public struct ParamSet: Equatable {
+        public var minStars: Int64
+        public var pinPeriod: Int?
+        public var maxMessageLength: Int
+        public var maxEmojiCount: Int
+        public var color: UInt32?
+        
+        public init(minStars: Int64, pinPeriod: Int?, maxMessageLength: Int, maxEmojiCount: Int, color: UInt32?) {
+            self.minStars = minStars
+            self.pinPeriod = pinPeriod
+            self.maxMessageLength = maxMessageLength
+            self.maxEmojiCount = maxEmojiCount
+            self.color = color
+        }
+    }
+    
+    public var paramSets: [ParamSet]
+    
+    public init(paramSets: [ParamSet]) {
+        self.paramSets = paramSets
+    }
+    
+    public init(appConfig: AppConfiguration) {
+        var paramSets: [ParamSet] = []
+        if let list = appConfig.data?["stars_groupcall_message_limits"] as? [[String: Any]] {
+            for item in list {
+                guard let stars = item["stars"] as? Int64 else {
+                    continue
+                }
+                let pinPeriod = item["pin_period"] as? Int
+                guard let maxMessageLength = item["text_length_max"] as? Int else {
+                    continue
+                }
+                guard let maxEmojiCount = item["emoji_max"] as? Int else {
+                    continue
+                }
+                guard let colorBgString = item["color_bg"] as? String, let colorBg = colorFromHex(colorBgString) else {
+                    continue
+                }
+                paramSets.append(ParamSet(
+                    minStars: stars,
+                    pinPeriod: pinPeriod == 0 ? nil : 0,
+                    maxMessageLength: maxMessageLength,
+                    maxEmojiCount: maxEmojiCount,
+                    color: colorBg
+                ))
+            }
+        }
+        if paramSets.isEmpty {
+            paramSets = [
+                ParamSet(
+                    minStars: 0, pinPeriod: nil, maxMessageLength: 30, maxEmojiCount: 0, color: nil
+                ),
+                ParamSet(
+                    minStars: 1, pinPeriod: 60, maxMessageLength: 60, maxEmojiCount: 1, color: 0x985FDC
+                ),
+                ParamSet(
+                    minStars: 50, pinPeriod: 120, maxMessageLength: 80, maxEmojiCount: 2, color: 0x3E9CDF
+                ),
+                ParamSet(
+                    minStars: 100, pinPeriod: 300, maxMessageLength: 110, maxEmojiCount: 3, color: 0x5AB03D
+                ),
+                ParamSet(
+                    minStars: 250, pinPeriod: 600, maxMessageLength: 150, maxEmojiCount: 4, color: 0xE4A20A
+                ),
+                ParamSet(
+                    minStars: 500, pinPeriod: 900, maxMessageLength: 200, maxEmojiCount: 7, color: 0xEE7E20
+                ),
+                ParamSet(
+                    minStars: 2000, pinPeriod: 1800, maxMessageLength: 280, maxEmojiCount: 10, color: 0xE6514E
+                ),
+                ParamSet(
+                    minStars: 10000, pinPeriod: 3600, maxMessageLength: 400, maxEmojiCount: 20, color: 0x7C8695
+                ),
+            ]
+        }
+        paramSets.sort(by: { lhs, rhs in return lhs.minStars < rhs.minStars })
+        self.paramSets = paramSets
     }
 }
