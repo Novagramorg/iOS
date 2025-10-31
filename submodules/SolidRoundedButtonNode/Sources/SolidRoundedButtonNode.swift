@@ -166,6 +166,7 @@ private final class BadgeNode: ASDisplayNode {
 public final class SolidRoundedButtonNode: ASDisplayNode {
     private var theme: SolidRoundedButtonTheme
     private var glass: Bool
+    private var glassInset: Bool
     private var fontSize: CGFloat
     private let isShimmering: Bool
     
@@ -342,9 +343,10 @@ public final class SolidRoundedButtonNode: ASDisplayNode {
         }
     }
     
-    public init(title: String? = nil, icon: UIImage? = nil, theme: SolidRoundedButtonTheme, glass: Bool = false, font: SolidRoundedButtonFont = .bold, fontSize: CGFloat = 17.0, height: CGFloat = 48.0, cornerRadius: CGFloat = 24.0, isShimmering: Bool = false) {
+    public init(title: String? = nil, icon: UIImage? = nil, theme: SolidRoundedButtonTheme, glass: Bool = false, glassInset: Bool = false, font: SolidRoundedButtonFont = .bold, fontSize: CGFloat = 17.0, height: CGFloat = 48.0, cornerRadius: CGFloat = 24.0, isShimmering: Bool = false) {
         self.theme = theme
         self.glass = glass
+        self.glassInset = glassInset
         self.font = font
         self.fontSize = fontSize
         self.buttonHeight = height

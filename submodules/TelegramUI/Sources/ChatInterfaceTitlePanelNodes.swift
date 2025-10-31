@@ -233,9 +233,21 @@ func floatingTopicsPanelForChatPresentationInterfaceState(_ chatPresentationInte
     guard let peerId = chatPresentationInterfaceState.chatLocation.peerId else {
         return nil
     }
-    
     if chatPresentationInterfaceState.subject?.isService ?? false {
         return nil
+    }
+    if peerId.namespace == Namespaces.Peer.CloudUser {
+        guard let chatHistoryState = chatPresentationInterfaceState.chatHistoryState else {
+            return nil
+        }
+        switch chatHistoryState {
+        case .loading:
+            return nil
+        case let .loaded(isEmpty, _):
+            if isEmpty {
+                return nil
+            }
+        }
     }
     
     if let channel = chatPresentationInterfaceState.renderedPeer?.peer as? TelegramChannel, channel.isMonoForum, let linkedMonoforumId = channel.linkedMonoforumId, let mainChannel = chatPresentationInterfaceState.renderedPeer?.peers[linkedMonoforumId] as? TelegramChannel, mainChannel.hasPermission(.manageDirect), chatPresentationInterfaceState.search == nil {
