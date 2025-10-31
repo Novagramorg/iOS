@@ -4555,6 +4555,42 @@ public final class GroupCallMessagesContext {
             }
             let _ = self.account.network.request(Api.functions.phone.deleteGroupCallMessages(flags: flags, call: self.reference.apiInputGroupCall, messages: [Int32(clamping: id.id)])).startStandalone()
         }
+        
+        func deleteAllMessages(authorId: EnginePeer.Id, reportSpam: Bool) {
+            let _ = (self.account.postbox.transaction { transaction -> Api.InputPeer? in
+                return transaction.getPeer(authorId).flatMap(apiInputPeer)
+            }
+            |> deliverOn(self.queue)).startStandalone(next: { [weak self] inputPeer in
+                guard let self else {
+                    return
+                }
+                
+                var updatedState: State?
+                if self.state.messages.contains(where: { $0.author?.id == authorId }) {
+                    if updatedState == nil {
+                        updatedState = self.state
+                    }
+                    updatedState?.messages.removeAll(where: { $0.author?.id == authorId })
+                }
+                if self.state.pinnedMessages.contains(where: { $0.author?.id == authorId }) {
+                    if updatedState == nil {
+                        updatedState = self.state
+                    }
+                    updatedState?.pinnedMessages.removeAll(where: { $0.author?.id == authorId })
+                }
+                if let updatedState {
+                    self.state = updatedState
+                }
+                
+                if let inputPeer {
+                    var flags: Int32 = 0
+                    if reportSpam {
+                        flags |= 1 << 0
+                    }
+                    let _ = self.account.network.request(Api.functions.phone.deleteGroupCallParticipantMessages(flags: flags, call: self.reference.apiInputGroupCall, participant: inputPeer)).startStandalone()
+                }
+            })
+        }
     }
     
     private let queue: Queue
@@ -4601,6 +4637,12 @@ public final class GroupCallMessagesContext {
     public func deleteMessage(id: Message.Id, reportSpam: Bool) {
         self.impl.with { impl in
             impl.deleteMessage(id: id, reportSpam: reportSpam)
+        }
+    }
+    
+    public func deleteAllMessages(authorId: EnginePeer.Id, reportSpam: Bool) {
+        self.impl.with { impl in
+            impl.deleteAllMessages(authorId: authorId, reportSpam: reportSpam)
         }
     }
     
