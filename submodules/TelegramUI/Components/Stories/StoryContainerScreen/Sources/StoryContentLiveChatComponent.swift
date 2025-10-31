@@ -19,365 +19,6 @@ import StarsParticleEffect
 import StoryLiveChatMessageComponent
 import AdminUserActionsSheet
 
-private final class PinnedBarMessageComponent: Component {
-    let context: AccountContext
-    let strings: PresentationStrings
-    let theme: PresentationTheme
-    let message: GroupCallMessagesContext.Message
-    
-    init(context: AccountContext, strings: PresentationStrings, theme: PresentationTheme, message: GroupCallMessagesContext.Message) {
-        self.context = context
-        self.strings = strings
-        self.theme = theme
-        self.message = message
-    }
-    
-    static func ==(lhs: PinnedBarMessageComponent, rhs: PinnedBarMessageComponent) -> Bool {
-        if lhs === rhs {
-            return true
-        }
-        if lhs.context !== rhs.context {
-            return false
-        }
-        if lhs.strings !== rhs.strings {
-            return false
-        }
-        if lhs.theme !== rhs.theme {
-            return false
-        }
-        if lhs.message != rhs.message {
-            return false
-        }
-        return true
-    }
-    
-    final class View: UIView {
-        private let backgroundView: UIImageView
-        private let foregroundClippingView: UIView
-        private let foregroundView: UIImageView
-        private let effectLayer: StarsParticleEffectLayer
-        
-        private var avatarNode: AvatarNode?
-        private let title = ComponentView<Empty>()
-
-        private var component: PinnedBarMessageComponent?
-        private weak var state: EmptyComponentState?
-        private var isUpdating: Bool = false
-        
-        private var updateTimer: Foundation.Timer?
-        
-        override init(frame: CGRect) {
-            self.backgroundView = UIImageView()
-            self.foregroundClippingView = UIView()
-            self.foregroundClippingView.clipsToBounds = true
-            self.foregroundView = UIImageView()
-            self.effectLayer = StarsParticleEffectLayer()
-            
-            super.init(frame: frame)
-            
-            self.addSubview(self.backgroundView)
-            
-            self.foregroundClippingView.addSubview(self.foregroundView)
-            self.addSubview(self.foregroundClippingView)
-            self.layer.addSublayer(self.effectLayer)
-        }
-        
-        required init?(coder: NSCoder) {
-            fatalError("init(coder:) has not been implemented")
-        }
-        
-        deinit {
-            self.updateTimer?.invalidate()
-        }
-        
-        override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
-            if !self.bounds.contains(point) {
-                return nil
-            }
-            
-            guard let result = super.hitTest(point, with: event) else {
-                return nil
-            }
-            
-            return result
-        }
-        
-        func update(component: PinnedBarMessageComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
-            self.isUpdating = true
-            defer {
-                self.isUpdating = false
-            }
-            
-            if self.updateTimer == nil {
-                self.updateTimer = Foundation.Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true, block: { [weak self] _ in
-                    guard let self else {
-                        return
-                    }
-                    if !self.isUpdating {
-                        self.state?.updated(transition: .immediate, isLocal: true)
-                    }
-                })
-            }
-            
-            self.component = component
-            self.state = state
-            
-            let itemHeight: CGFloat = 32.0
-            let avatarInset: CGFloat = 4.0
-            let avatarSize: CGFloat = 24.0
-            let avatarSpacing: CGFloat = 6.0
-            let rightInset: CGFloat = 10.0
-            
-            let titleSize = self.title.update(
-                transition: .immediate,
-                component: AnyComponent(MultilineTextComponent(
-                    text: .plain(NSAttributedString(string: component.message.author?.displayTitle(strings: component.strings, displayOrder: .firstLast) ?? " ", font: Font.semibold(15.0), textColor: .white))
-                )),
-                environment: {},
-                containerSize: CGSize(width: 1000.0, height: itemHeight)
-            )
-            
-            let size = CGSize(width: avatarInset + avatarSize + avatarSpacing + titleSize.width + rightInset, height: itemHeight)
-            
-            if self.backgroundView.image == nil {
-                self.backgroundView.image = generateStretchableFilledCircleImage(diameter: itemHeight, color: .white)?.withRenderingMode(.alwaysTemplate)
-                self.foregroundView.image = self.backgroundView.image
-            }
-            
-            let baseColor = StoryLiveChatMessageComponent.getMessageColor(color: GroupCallMessagesContext.getStarAmountParamMapping(value: component.message.paidStars ?? 0).color ?? .purple)
-            self.backgroundView.tintColor = baseColor.withMultipliedBrightnessBy(0.7)
-            self.foregroundView.tintColor = baseColor
-            
-            let timestamp = CFAbsoluteTimeGetCurrent()
-            let currentDuration = max(0.0, timestamp - Double(component.message.date))
-            let timeFraction: CGFloat = 1.0 - min(1.0, currentDuration / Double(component.message.lifetime))
-            
-            transition.setFrame(view: self.backgroundView, frame: CGRect(origin: CGPoint(), size: size))
-            transition.setFrame(view: self.foregroundView, frame: CGRect(origin: CGPoint(), size: size))
-            transition.setFrame(view: self.foregroundClippingView, frame: CGRect(origin: CGPoint(), size: CGSize(width: floorToScreenPixels(size.width * timeFraction), height: size.height)))
-            
-            transition.setFrame(layer: self.effectLayer, frame: CGRect(origin: CGPoint(), size: size))
-            self.effectLayer.update(color: UIColor(white: 1.0, alpha: 0.5), size: size, cornerRadius: size.height * 0.5, transition: transition)
-            
-            let avatarFrame = CGRect(origin: CGPoint(x: avatarInset, y: floor((itemHeight - avatarSize) * 0.5)), size: CGSize(width: avatarSize, height: avatarSize))
-            do {
-                let avatarNode: AvatarNode
-                if let current = self.avatarNode {
-                    avatarNode = current
-                } else {
-                    avatarNode = AvatarNode(font: avatarPlaceholderFont(size: 10.0))
-                    self.avatarNode = avatarNode
-                    self.addSubview(avatarNode.view)
-                }
-                transition.setFrame(view: avatarNode.view, frame: avatarFrame)
-                avatarNode.updateSize(size: avatarFrame.size)
-                if let peer = component.message.author {
-                    if peer.smallProfileImage != nil {
-                        avatarNode.setPeerV2(context: component.context, theme: component.theme, peer: peer, displayDimensions: CGSize(width: avatarSize, height: avatarSize))
-                    } else {
-                        avatarNode.setPeer(context: component.context, theme: component.theme, peer: peer, displayDimensions: CGSize(width: avatarSize, height: avatarSize))
-                    }
-                } else {
-                    avatarNode.setCustomLetters([" "])
-                }
-            }
-            
-            let titleFrame = CGRect(origin: CGPoint(x: avatarInset + avatarSize + avatarSpacing, y: floor((itemHeight - titleSize.height) * 0.5)), size: titleSize)
-            if let titleView = self.title.view {
-                if titleView.superview == nil {
-                    titleView.layer.anchorPoint = CGPoint()
-                    self.addSubview(titleView)
-                }
-                transition.setPosition(view: titleView, position: titleFrame.origin)
-                titleView.bounds = CGRect(origin: CGPoint(), size: titleFrame.size)
-            }
-            
-            return CGSize(width: size.width + 10.0, height: size.height)
-        }
-    }
-
-    func makeView() -> View {
-        return View(frame: CGRect())
-    }
-    
-    func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
-        return view.update(component: self, availableSize: availableSize, state: state, environment: environment, transition: transition)
-    }
-}
-
-private final class PinnedBarComponent: Component {
-    let context: AccountContext
-    let strings: PresentationStrings
-    let theme: PresentationTheme
-    let isExpanded: Bool
-    let messages: [GroupCallMessagesContext.Message]
-    let toggleExpandedAction: () -> Void
-    
-    init(context: AccountContext, strings: PresentationStrings, theme: PresentationTheme, isExpanded: Bool, messages: [GroupCallMessagesContext.Message], toggleExpandedAction: @escaping () -> Void) {
-        self.context = context
-        self.strings = strings
-        self.theme = theme
-        self.isExpanded = isExpanded
-        self.messages = messages
-        self.toggleExpandedAction = toggleExpandedAction
-    }
-    
-    static func ==(lhs: PinnedBarComponent, rhs: PinnedBarComponent) -> Bool {
-        if lhs === rhs {
-            return true
-        }
-        if lhs.context !== rhs.context {
-            return false
-        }
-        if lhs.strings !== rhs.strings {
-            return false
-        }
-        if lhs.theme !== rhs.theme {
-            return false
-        }
-        if lhs.isExpanded != rhs.isExpanded {
-            return false
-        }
-        if lhs.messages != rhs.messages {
-            return false
-        }
-        return true
-    }
-    
-    final class View: UIView {
-        private let listContainer: UIView
-        private let listState = AsyncListComponent.ExternalState()
-        private let list = ComponentView<Empty>()
-        
-        private let toggleButtonBackground: GlassBackgroundView
-        private let toggleButton: HighlightTrackingButton
-        private let toggleButtonIcon: UIImageView
-
-        private var component: PinnedBarComponent?
-        private weak var state: EmptyComponentState?
-        private var isUpdating: Bool = false
-        
-        override init(frame: CGRect) {
-            self.listContainer = UIView()
-            self.listContainer.clipsToBounds = true
-            
-            self.toggleButtonBackground = GlassBackgroundView()
-            self.toggleButton = HighlightTrackingButton()
-            self.toggleButtonIcon = UIImageView()
-            
-            super.init(frame: frame)
-            
-            self.addSubview(self.listContainer)
-        }
-        
-        required init?(coder: NSCoder) {
-            fatalError("init(coder:) has not been implemented")
-        }
-        
-        deinit {
-        }
-        
-        @objc private func toggleButtonPressed() {
-            guard let component = self.component else {
-                return
-            }
-            component.toggleExpandedAction()
-        }
-        
-        override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
-            if !self.bounds.contains(point) {
-                return nil
-            }
-            
-            guard let result = super.hitTest(point, with: event) else {
-                return nil
-            }
-            
-            return result
-        }
-        
-        func update(component: PinnedBarComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
-            self.isUpdating = true
-            defer {
-                self.isUpdating = false
-            }
-            
-            let previousComponent = self.component
-            self.component = component
-            self.state = state
-            
-            let itemHeight: CGFloat = 32.0
-            
-            let insets = UIEdgeInsets(top: 13.0, left: 20.0, bottom: 13.0, right: 20.0)
-            
-            let size = CGSize(width: availableSize.width, height: insets.top + itemHeight + insets.bottom)
-            
-            var listItems: [AnyComponentWithIdentity<Empty>] = []
-            for message in component.messages {
-                if let author = message.author {
-                    listItems.append(AnyComponentWithIdentity(id: author.id, component: AnyComponent(PinnedBarMessageComponent(
-                        context: component.context,
-                        strings: component.strings,
-                        theme: component.theme,
-                        message: message
-                    ))))
-                }
-            }
-            
-            let listInsets = UIEdgeInsets(top: 0.0, left: insets.left, bottom: 0.0, right: insets.right)
-            let listFrame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: size.width, height: size.height))
-            
-            var listTransition = transition
-            var animateIn = false
-            if let previousComponent {
-                if previousComponent.messages.isEmpty {
-                    listTransition = listTransition.withAnimation(.none)
-                    animateIn = true
-                }
-            } else {
-                listTransition = listTransition.withAnimation(.none)
-                animateIn = true
-            }
-            
-            let _ = self.list.update(
-                transition: listTransition,
-                component: AnyComponent(AsyncListComponent(
-                    externalState: self.listState,
-                    items: listItems,
-                    itemSetId: AnyHashable(0),
-                    direction: .horizontal,
-                    insets: listInsets
-                )),
-                environment: {},
-                containerSize: listFrame.size
-            )
-            if let listView = self.list.view {
-                if listView.superview == nil {
-                    self.listContainer.addSubview(listView)
-                }
-                transition.setPosition(view: listView, position: CGRect(origin: CGPoint(), size: listFrame.size).center)
-                transition.setBounds(view: listView, bounds: CGRect(origin: CGPoint(), size: listFrame.size))
-                
-                if animateIn {
-                    transition.animateAlpha(view: listView, from: 0.0, to: 1.0)
-                }
-            }
-            
-            transition.setFrame(view: self.listContainer, frame: listFrame)
-            
-            return size
-        }
-    }
-
-    func makeView() -> View {
-        return View(frame: CGRect())
-    }
-    
-    func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
-        return view.update(component: self, availableSize: availableSize, state: state, environment: environment, transition: transition)
-    }
-}
-
 final class StoryContentLiveChatComponent: Component {
     final class External {
         fileprivate(set) var hasUnseenMessages: Bool = false
@@ -681,7 +322,15 @@ final class StoryContentLiveChatComponent: Component {
             }
         }
         
-        private func openMessageContextMenu(id: GroupCallMessagesContext.Message.Id, gesture: ContextGesture, sourceNode: ContextExtractedContentContainingNode) {
+        private func scrollToMessage(id: GroupCallMessagesContext.Message.Id) {
+            guard let messagesState = self.messagesState, let message = messagesState.messages.first(where: { $0.id == id }) else {
+                return
+            }
+            self.listState.resetScrolling(id: AnyHashable(message.stableId))
+            self.state?.updated(transition: .spring(duration: 0.4), isLocal: true)
+        }
+        
+        private func openMessageContextMenu(id: GroupCallMessagesContext.Message.Id, isPinned: Bool, gesture: ContextGesture, sourceNode: ContextExtractedContentContainingNode) {
             Task { @MainActor [weak self] in
                 guard let self else {
                     return
@@ -697,20 +346,22 @@ final class StoryContentLiveChatComponent: Component {
                 
                 var items: [ContextMenuItem] = []
                 //TODO:localize
-                items.append(.action(ContextMenuActionItem(text: "Copy", textColor: .primary, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Copy"), color: theme.contextMenu.primaryColor) }, action: { [weak self] c, _ in
-                    guard let self else {
-                        return
-                    }
-                    
-                    c?.dismiss(completion: { [weak self] in
+                if !isPinned {
+                    items.append(.action(ContextMenuActionItem(text: "Copy", textColor: .primary, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Copy"), color: theme.contextMenu.primaryColor) }, action: { [weak self] c, _ in
                         guard let self else {
                             return
                         }
-                        if let messagesState = self.messagesState, let message = messagesState.messages.first(where: { $0.id == id }) {
-                            UIPasteboard.general.string = message.text
-                        }
-                    })
-                })))
+                        
+                        c?.dismiss(completion: { [weak self] in
+                            guard let self else {
+                                return
+                            }
+                            if let messagesState = self.messagesState, let message = messagesState.messages.first(where: { $0.id == id }) {
+                                UIPasteboard.general.string = message.text
+                            }
+                        })
+                    })))
+                }
                 
                 let state = await (component.call.state |> take(1)).get()
                 
@@ -872,6 +523,10 @@ final class StoryContentLiveChatComponent: Component {
             if let messagesState = self.messagesState {
                 for message in messagesState.messages.reversed() {
                     let messageId = message.id
+                    var topPlace = self.messagesState?.topStars.firstIndex(where: { $0.peerId != nil && $0.peerId == message.author?.id })
+                    if let topPlaceValue = topPlace, topPlaceValue >= 3 {
+                        topPlace = nil
+                    }
                     listItems.append(AnyComponentWithIdentity(id: message.stableId, component: AnyComponent(StoryLiveChatMessageComponent(
                         context: component.context,
                         strings: component.strings,
@@ -883,11 +538,12 @@ final class StoryContentLiveChatComponent: Component {
                             transparentBackground: true
                         ),
                         message: message,
+                        topPlace: topPlace,
                         contextGesture: { [weak self] gesture, sourceNode in
                             guard let self else {
                                 return
                             }
-                            self.openMessageContextMenu(id: messageId, gesture: gesture, sourceNode: sourceNode)
+                            self.openMessageContextMenu(id: messageId, isPinned: false, gesture: gesture, sourceNode: sourceNode)
                         }
                     ))))
                 }
@@ -913,6 +569,17 @@ final class StoryContentLiveChatComponent: Component {
                 return lhs.date > rhs.date
             })
             
+            var topIndices: [EnginePeer.Id: Int] = [:]
+            if let messagesState = self.messagesState {
+                for topMessage in topMessages {
+                    if let author = topMessage.author, topIndices[author.id] == nil {
+                        if let index = messagesState.topStars.firstIndex(where: { $0.peerId != nil && $0.peerId == author.id }), index < 3 {
+                            topIndices[author.id] = index
+                        }
+                    }
+                }
+            }
+            
             self.currentListIsEmpty = listItems.isEmpty
             
             let pinnedBarSize = self.pinnedBar.update(
@@ -923,14 +590,18 @@ final class StoryContentLiveChatComponent: Component {
                     theme: component.theme,
                     isExpanded: self.isChatExpanded,
                     messages: topMessages,
-                    toggleExpandedAction: { [weak self] in
+                    topIndices: topIndices,
+                    action: { [weak self] message in
                         guard let self else {
                             return
                         }
-                        self.isChatExpanded = !self.isChatExpanded
-                        if !self.isUpdating {
-                            self.state?.updated(transition: .spring(duration: 0.4))
+                        self.scrollToMessage(id: message.id)
+                    },
+                    contextGesture: { [weak self] message, gesture, sourceNode in
+                        guard let self else {
+                            return
                         }
+                        self.openMessageContextMenu(id: message.id, isPinned: true, gesture: gesture, sourceNode: sourceNode)
                     }
                 )),
                 environment: {},
@@ -942,7 +613,14 @@ final class StoryContentLiveChatComponent: Component {
                     self.addSubview(pinnedBarView)
                 }
                 transition.setFrame(view: pinnedBarView, frame: pinnedBarFrame)
-                transition.setAlpha(view: pinnedBarView, alpha: topMessages.isEmpty ? 0.0 : 1.0)
+                
+                let pinnedBarAlpha: CGFloat
+                if self.isMessageContextMenuOpen {
+                    pinnedBarAlpha = 0.25
+                } else {
+                    pinnedBarAlpha = topMessages.isEmpty ? 0.0 : 1.0
+                }
+                transition.setAlpha(view: pinnedBarView, alpha: pinnedBarAlpha)
             }
             
             var listInsets = UIEdgeInsets(top: component.insets.bottom + 8.0, left: component.insets.right, bottom: component.insets.top + 8.0, right: component.insets.left)
