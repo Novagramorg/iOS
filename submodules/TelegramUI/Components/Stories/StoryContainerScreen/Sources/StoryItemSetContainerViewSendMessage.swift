@@ -104,6 +104,8 @@ final class StoryItemSetContainerSendMessage {
     
     var currentLiveStreamMessageStars: StarsAmount?
     weak var currentSendStarsUndoController: UndoOverlayController?
+    var currentLiveStreamStarsIsActive: Bool = false
+    var currentLiveStreamStarsIsActiveTimer: Foundation.Timer?
     
     var sendAsData: (isPremium: Bool, availablePeers: [SendAsPeer])?
     var currentSendAsPeer: SendAsPeer?
@@ -709,7 +711,7 @@ final class StoryItemSetContainerSendMessage {
                         if !text.string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                             var maxInputLength: Int?
                             var maxEmojiCount: Int?
-                            let params = GroupCallMessagesContext.getStarAmountParamMapping(value: sendPaidMessageStars?.value ?? 0)
+                            let params = GroupCallMessagesContext.getStarAmountParamMapping(params: LiveChatMessageParams(appConfig: component.context.currentAppConfiguration.with({ $0 })), value: sendPaidMessageStars?.value ?? 0)
                             maxInputLength = params.maxLength
                             maxEmojiCount = params.emojiCount
                             
@@ -4009,7 +4011,7 @@ final class StoryItemSetContainerSendMessage {
                 context: component.context,
                 peerId: peerId,
                 myPeer: (self.currentSendAsPeer?.peer).flatMap(EnginePeer.init),
-                reactSubject: .liveStream(peerId: peerId, storyId: focusedItem.storyItem.id, minAmount: Int(minAmount)),
+                reactSubject: .liveStream(peerId: peerId, storyId: focusedItem.storyItem.id, minAmount: Int(minAmount), liveChatMessageParams: LiveChatMessageParams(appConfig: component.context.currentAppConfiguration.with({ $0 }))),
                 topPeers: topPeers,
                 completion: { [weak self, weak view] amount, _, _, _ in
                     guard let self, let view else {
@@ -4128,16 +4130,23 @@ final class StoryItemSetContainerSendMessage {
                 return
             }
             
+            self.currentLiveStreamStarsIsActive = true
+            self.currentLiveStreamStarsIsActiveTimer?.invalidate()
+            self.currentLiveStreamStarsIsActiveTimer = Foundation.Timer.scheduledTimer(withTimeInterval: 5.0, repeats: false, block: { [weak self, weak view] _ in
+                guard let self, let view else {
+                    return
+                }
+                self.currentLiveStreamStarsIsActive = false
+                view.state?.updated(transition: .spring(duration: 0.4))
+            })
+            
             var totalStars = 0
             if let pendingMyStars = visibleItemView.liveChatState?.starStats?.pendingMyStars, pendingMyStars > 0 {
                 totalStars += count
                 totalStars += Int(pendingMyStars)
                 self.commitSendStars(view: view, count: count, delay: true)
             } else {
-                var minAmount: Int64 = 1
-                if let minMessagePrice = visibleItemView.liveChatState?.minMessagePrice {
-                    minAmount = minMessagePrice
-                }
+                let minAmount: Int64 = 1
                 var count = count
                 count = max(Int(minAmount), count)
                 totalStars += count

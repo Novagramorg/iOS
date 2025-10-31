@@ -183,11 +183,11 @@ public final class MessageInputPanelComponent: Component {
     }
     
     public struct StarStats: Equatable {
-        public var myStars: Int64
+        public var hasOutgoingStars: Bool
         public var totalStars: Int64
         
-        public init(myStars: Int64, totalStars: Int64) {
-            self.myStars = myStars
+        public init(hasOutgoingStars: Bool, totalStars: Int64) {
+            self.hasOutgoingStars = hasOutgoingStars
             self.totalStars = totalStars
         }
     }
@@ -1031,7 +1031,7 @@ public final class MessageInputPanelComponent: Component {
                             }
                             component.toggleLiveChatExpanded?()
                         }),
-                        rightAction: ChatTextInputPanelComponent.RightAction(kind: .stars(count: Int(component.starStars?.totalStars ?? 0), isFilled: (component.starStars?.myStars ?? 0) != 0), action: { [weak self] sourceView in
+                        rightAction: ChatTextInputPanelComponent.RightAction(kind: .stars(count: Int(component.starStars?.totalStars ?? 0), isFilled: component.starStars?.hasOutgoingStars ?? false), action: { [weak self] sourceView in
                             guard let self, let component = self.component else {
                                 return
                             }
@@ -1046,7 +1046,8 @@ public final class MessageInputPanelComponent: Component {
                         placeholder: placeholder,
                         paidMessagePrice: component.sendPaidMessageStars,
                         sendColor: component.sendPaidMessageStars.flatMap { value in
-                            let color = GroupCallMessagesContext.getStarAmountParamMapping(value: value.value).color ?? .purple
+                            let params = LiveChatMessageParams(appConfig: component.context.currentAppConfiguration.with({ $0 }))
+                            let color = GroupCallMessagesContext.getStarAmountParamMapping(params: params, value: value.value).color ?? GroupCallMessagesContext.Message.Color(rawValue: 0x985FDC)
                             return StoryLiveChatMessageComponent.getMessageColor(color: color)
                         },
                         isSendDisabled: isSendDisabled,
