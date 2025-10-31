@@ -300,7 +300,9 @@ public final class LocationPickerController: ViewController, AttachmentContainab
             navigationBar.setContentNode(nil, animated: true)
             self.controllerNode.deactivateSearch()
             
-            self.updateTabBarVisibility(true, .animated(duration: 0.4, curve: .spring))
+            if !self.controllerNode.isPickingLocation {
+                self.updateTabBarVisibility(true, .animated(duration: 0.4, curve: .spring))
+            }
         }, dismissInput: { [weak self] in
             guard let self else {
                 return

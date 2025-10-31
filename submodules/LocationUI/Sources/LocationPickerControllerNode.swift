@@ -1007,6 +1007,19 @@ final class LocationPickerControllerNode: ViewControllerTracingNode, CLLocationM
             }
         }
                 
+        self.headerNode.mapNode.onTouch = { [weak self] in
+            guard let self else {
+                return
+            }
+            if self.state.displayingMapModeOptions {
+                self.updateState { state in
+                    var state = state
+                    state.displayingMapModeOptions = false
+                    return state
+                }
+            }
+        }
+        
         self.headerNode.mapNode.beganInteractiveDragging = { [weak self] in
             guard let self, let controller = self.controller else {
                 return
@@ -1133,10 +1146,15 @@ final class LocationPickerControllerNode: ViewControllerTracingNode, CLLocationM
         let searchContainerNode = LocationSearchContainerNode(context: self.context, updatedPresentationData: self.controller?.updatedPresentationData, coordinate: coordinate, interaction: self.interaction, story: self.source == .story)
         self.insertSubnode(searchContainerNode, belowSubnode: navigationBar)
         self.searchContainerNode = searchContainerNode
-        
+                
         searchContainerNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.3)
         
         self.requestLayout(transition: .animated(duration: 0.4, curve: .spring))
+        
+        if let sendButtonView = self.sendButton?.view {
+            self.view.insertSubview(sendButtonView, belowSubview: searchContainerNode.view)
+            self.view.insertSubview(self.bottomEdgeEffectView, belowSubview: sendButtonView)
+        }
         
         return searchContainerNode.isSearching
     }
@@ -1188,7 +1206,7 @@ final class LocationPickerControllerNode: ViewControllerTracingNode, CLLocationM
         transition.updateFrame(node: self.emptyResultsTextNode, frame: CGRect(origin: CGPoint(x: floor((layout.size.width - emptyTextSize.width) / 2.0), y: headerHeight + actionsInset + floor((layout.size.height - headerHeight - actionsInset - emptyTextSize.height - layout.intrinsicInsets.bottom - layout.additionalInsets.bottom) / 2.0)), size: emptyTextSize))
     }
     
-    private var isPickingLocation: Bool {
+    var isPickingLocation: Bool {
         return (self.state.selectedLocation.isCustom || self.state.forceSelection) && !self.state.searchingVenuesAround
     }
     

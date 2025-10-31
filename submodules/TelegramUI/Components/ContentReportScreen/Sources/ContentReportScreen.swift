@@ -262,10 +262,15 @@ private final class SheetPageContent: CombinedComponent {
                 .position(CGPoint(x: context.availableSize.width / 2.0, y: contentSize.height + section.size.height / 2.0))
             )
             contentSize.height += section.size.height
-            contentSize.height += 16.0
+            
+            let bottomInsets = ContainerViewLayout.concentricInsets(bottomInset: environment.safeInsets.bottom, innerDiameter: 26.0, sideInset: 16.0)
+            contentSize.height += bottomInsets.bottom
             
             if case let .comment(isOptional, option) = component.content {
-                contentSize.height -= 16.0
+                contentSize.height -= bottomInsets.bottom
+                contentSize.height += 24.0
+                
+                let bottomInsets = ContainerViewLayout.concentricInsets(bottomInset: environment.safeInsets.bottom, innerDiameter: 52.0, sideInset: 30.0)
                 
                 let action = component.action
                 let button = button.update(
@@ -285,17 +290,18 @@ private final class SheetPageContent: CombinedComponent {
                         }
                     ),
                     environment: {},
-                    availableSize: CGSize(width: context.availableSize.width - sideInset * 2.0, height: 52.0),
+                    availableSize: CGSize(width: context.availableSize.width - bottomInsets.left - bottomInsets.right, height: 52.0),
                     transition: context.transition
                 )
                 context.add(button
                     .position(CGPoint(x: context.availableSize.width / 2.0, y: contentSize.height + button.size.height / 2.0))
                 )
                 contentSize.height += button.size.height
-                contentSize.height += 16.0
                 
-                if environment.inputHeight.isZero && environment.safeInsets.bottom > 0.0 {
-                    contentSize.height += environment.safeInsets.bottom
+                if environment.inputHeight > 0.0 {
+                    contentSize.height += 8.0
+                } else {
+                    contentSize.height += bottomInsets.bottom
                 }
             }
             

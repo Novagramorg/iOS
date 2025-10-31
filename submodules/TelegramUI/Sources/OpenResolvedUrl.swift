@@ -829,7 +829,7 @@ func openResolvedUrlImpl(
                 })
             case .loginEmail:
                 if let navigationController {
-                    let controller = loginEmailSetupController(context: context, emailPattern: nil, navigationController: navigationController, completion: {})
+                    let controller = loginEmailSetupController(context: context, blocking: true, emailPattern: nil, navigationController: navigationController, completion: {})
                     navigationController.pushViewController(controller)
                 }
             }
