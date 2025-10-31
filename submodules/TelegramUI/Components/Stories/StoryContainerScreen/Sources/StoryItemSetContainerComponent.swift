@@ -2973,7 +2973,7 @@ public final class StoryItemSetContainerComponent: Component {
                         )
                         starStats = liveChatStateValue.starStats.flatMap { starStats in
                             return MessageInputPanelComponent.StarStats(
-                                myStars: starStats.myStars,
+                                hasOutgoingStars: self.sendMessageContext.currentLiveStreamStarsIsActive,
                                 totalStars: starStats.totalStars
                             )
                         }
@@ -3007,7 +3007,7 @@ public final class StoryItemSetContainerComponent: Component {
                 var maxInputLength = 4096
                 var maxEmojiCount: Int?
                 if isLiveStream {
-                    let params = GroupCallMessagesContext.getStarAmountParamMapping(value: sendPaidMessageStars?.value ?? 0)
+                    let params = GroupCallMessagesContext.getStarAmountParamMapping(params: LiveChatMessageParams(appConfig: component.context.currentAppConfiguration.with({ $0 })), value: sendPaidMessageStars?.value ?? 0)
                     maxInputLength = params.maxLength
                     maxEmojiCount = params.emojiCount
                 }

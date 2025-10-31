@@ -1595,7 +1595,8 @@ private final class GiftAuctionScreenComponent: Component {
                         
             var sliderColor: UIColor = UIColor(rgb: 0xFFB10D)
             
-            let color = GroupCallMessagesContext.getStarAmountParamMapping(value: Int64(self.amount.realValue)).color ?? .purple
+            let liveStreamParams = LiveChatMessageParams(appConfig: component.context.currentAppConfiguration.with({ $0 }))
+            let color = GroupCallMessagesContext.getStarAmountParamMapping(params: liveStreamParams, value: Int64(self.amount.realValue)).color ?? GroupCallMessagesContext.Message.Color(rawValue: 0x985FDC)
             sliderColor = StoryLiveChatMessageComponent.getMessageColor(color: color)
             
             let _ = self.sliderBackground.update(
@@ -2107,7 +2108,7 @@ private final class GiftAuctionScreenComponent: Component {
                 }
                 self.topPeerItems = [:]
             }
-                                          
+
             initialContentHeight = contentHeight
             
             if self.cachedStarImage == nil || self.cachedStarImage?.1 !== environment.theme {

@@ -73,7 +73,7 @@ final class StarReactionButtonBadgeComponent: Component {
                 containerSize: CGSize(width: 100.0, height: 100.0)
             )
             
-            let size = CGSize(width: textSize.width + sideInset * 2.0, height: height)
+            let size = CGSize(width: max(height, textSize.width + sideInset * 2.0), height: height)
             let backgroundFrame = CGRect(origin: CGPoint(), size: size)
             
             let backgroundTintColor: GlassBackgroundView.TintColor
@@ -86,7 +86,7 @@ final class StarReactionButtonBadgeComponent: Component {
             self.backgroundView.update(size: backgroundFrame.size, cornerRadius: backgroundFrame.height * 0.5, isDark: component.theme.overallDarkAppearance, tintColor: backgroundTintColor, isInteractive: true, transition: transition)
             
             if let textView = self.text.view {
-                let textFrame = textSize.centered(in: CGRect(origin: CGPoint(), size: size))
+                let textFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((backgroundFrame.width - textSize.width) * 0.5), y: floorToScreenPixels((backgroundFrame.height - textSize.height) * 0.5)), size: textSize)
                 
                 if textView.superview == nil {
                     textView.isUserInteractionEnabled = false
@@ -147,10 +147,11 @@ final class StarReactionButtonComponent: Component {
     }
     
     final class View: UIView {
+        private let containerView: UIView
         private let backgroundView: GlassBackgroundView
         private let backgroundEffectLayer: StarsParticleEffectLayer
         private let backgroundMaskView: UIView
-        private let backgroundBadgeMask: UIImageView
+        private var backgroundBadgeMask: UIImageView?
         private let iconView: UIImageView
         private var badge: ComponentView<Empty>?
         
@@ -160,15 +161,14 @@ final class StarReactionButtonComponent: Component {
         private weak var state: EmptyComponentState?
         
         override init(frame: CGRect) {
+            self.containerView = UIView()
             self.backgroundView = GlassBackgroundView()
             self.backgroundMaskView = UIView()
-            self.backgroundBadgeMask = UIImageView()
-            self.backgroundMaskView.addSubview(self.backgroundBadgeMask)
             
             self.backgroundEffectLayer = StarsParticleEffectLayer()
             self.backgroundView.contentView.layer.addSublayer(self.backgroundEffectLayer)
             
-            //self.backgroundView.mask = self.backgroundMaskView
+            self.backgroundView.mask = self.backgroundMaskView
             
             self.backgroundMaskView.backgroundColor = .white
             if let filter = CALayer.luminanceToAlpha() {
@@ -179,12 +179,30 @@ final class StarReactionButtonComponent: Component {
             
             super.init(frame: frame)
             
-            self.addSubview(self.backgroundView)
+            self.addSubview(self.containerView)
+            self.containerView.addSubview(self.backgroundView)
             self.backgroundView.contentView.addSubview(self.iconView)
             
             let longTapRecognizer = TapLongTapOrDoubleTapGestureRecognizer(target: self, action: #selector(self.longTapAction(_:)))
             longTapRecognizer.tapActionAtPoint = { _ in
                 return .waitForSingleTap
+            }
+            longTapRecognizer.highlight = { [weak self] point in
+                guard let self else {
+                    return
+                }
+                
+                let currentTransform: CATransform3D
+                if self.containerView.layer.animation(forKey: "transform") != nil || self.containerView.layer.animation(forKey: "transform.scale") != nil {
+                    currentTransform = self.containerView.layer.presentation()?.transform ?? layer.transform
+                } else {
+                    currentTransform = self.containerView.layer.transform
+                }
+                let currentScale = sqrt((currentTransform.m11 * currentTransform.m11) + (currentTransform.m12 * currentTransform.m12) + (currentTransform.m13 * currentTransform.m13))
+                let updatedScale: CGFloat = point != nil ? 1.35 : 1.0
+                
+                self.containerView.layer.transform = CATransform3DMakeScale(updatedScale, updatedScale, 1.0)
+                self.containerView.layer.animateSpring(from: currentScale as NSNumber, to: updatedScale as NSNumber, keyPath: "transform.scale", duration: point != nil ? 0.4 : 0.8, damping: 70.0)
             }
             self.longTapRecognizer = longTapRecognizer
             self.backgroundView.contentView.addGestureRecognizer(longTapRecognizer)
@@ -213,6 +231,7 @@ final class StarReactionButtonComponent: Component {
         }
         
         func update(component: StarReactionButtonComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
+            let previousComponent = self.component
             self.component = component
             self.state = state
             
@@ -232,6 +251,15 @@ final class StarReactionButtonComponent: Component {
                     badge = ComponentView()
                     self.badge = badge
                 }
+                
+                let backgroundBadgeMask: UIImageView
+                if let current = self.backgroundBadgeMask {
+                    backgroundBadgeMask = current
+                } else {
+                    backgroundBadgeMask = UIImageView()
+                    self.backgroundBadgeMask = backgroundBadgeMask
+                }
+                
                 let badgeSize = badge.update(
                     transition: badgeTransition,
                     component: AnyComponent(StarReactionButtonBadgeComponent(
@@ -250,19 +278,54 @@ final class StarReactionButtonComponent: Component {
                     
                     if badgeView.superview == nil {
                         badgeView.isUserInteractionEnabled = false
-                        self.backgroundView.contentView.addSubview(badgeView)
+                        self.containerView.addSubview(badgeView)
                         badgeView.frame = badgeFrame
                         transition.animateScale(view: badgeView, from: 0.001, to: 1.0)
                         transition.animateAlpha(view: badgeView, from: 0.0, to: 1.0)
                     }
                     transition.setFrame(view: badgeView, frame: badgeFrame)
+                    
+                    let badgeBorderWidth: CGFloat = 1.0
+                    if backgroundBadgeMask.image?.size.height != (badgeFrame.height + badgeBorderWidth * 2.0) {
+                        backgroundBadgeMask.image = generateStretchableFilledCircleImage(diameter: badgeFrame.height + badgeBorderWidth * 2.0, color: .black)
+                    }
+                    let backgroundBadgeFrame = badgeFrame.insetBy(dx: -badgeBorderWidth, dy: -badgeBorderWidth)
+                    if backgroundBadgeMask.superview == nil {
+                        self.backgroundMaskView.addSubview(backgroundBadgeMask)
+                        backgroundBadgeMask.frame = backgroundBadgeFrame
+                        transition.animateScale(view: backgroundBadgeMask, from: 0.001, to: 1.0)
+                        transition.animateAlpha(view: backgroundBadgeMask, from: 0.0, to: 1.0)
+                    }
+                    transition.setFrame(view: backgroundBadgeMask, frame: backgroundBadgeFrame)
                 }
-            } else if let badge = self.badge {
-                self.badge = nil
-                if let badgeView = badge.view {
-                    transition.setScale(view: badgeView, scale: 0.001)
-                    transition.setAlpha(view: badgeView, alpha: 0.0, completion: { [weak badgeView] _ in
-                        badgeView?.removeFromSuperview()
+            } else {
+                if let badge = self.badge {
+                    if let previousComponent {
+                        let _ = badge.update(
+                            transition: transition,
+                            component: AnyComponent(StarReactionButtonBadgeComponent(
+                                theme: component.theme,
+                                count: previousComponent.count,
+                                isFilled: previousComponent.isFilled
+                            )),
+                            environment: {},
+                            containerSize: CGSize(width: 100.0, height: 100.0)
+                        )
+                    }
+                    
+                    self.badge = nil
+                    if let badgeView = badge.view {
+                        transition.setScale(view: badgeView, scale: 0.001)
+                        transition.setAlpha(view: badgeView, alpha: 0.0, completion: { [weak badgeView] _ in
+                            badgeView?.removeFromSuperview()
+                        })
+                    }
+                }
+                if let backgroundBadgeMask = self.backgroundBadgeMask {
+                    self.backgroundBadgeMask = nil
+                    transition.setScale(view: backgroundBadgeMask, scale: 0.001)
+                    transition.setAlpha(view: backgroundBadgeMask, alpha: 0.0, completion: { [weak backgroundBadgeMask] _ in
+                        backgroundBadgeMask?.removeFromSuperview()
                     })
                 }
             }
@@ -276,20 +339,12 @@ final class StarReactionButtonComponent: Component {
                 backgroundTintColor = .init(kind: .panel, color: component.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7))
             }
             
-            self.backgroundView.update(size: backgroundFrame.size, cornerRadius: backgroundFrame.height * 0.5, isDark: component.theme.overallDarkAppearance, tintColor: backgroundTintColor, isInteractive: true, transition: transition)
+            self.backgroundView.update(size: backgroundFrame.size, cornerRadius: backgroundFrame.height * 0.5, isDark: component.theme.overallDarkAppearance, tintColor: backgroundTintColor, isInteractive: false, transition: transition)
             transition.setFrame(view: self.backgroundView, frame: backgroundFrame)
             transition.setFrame(view: self.backgroundMaskView, frame: CGRect(origin: CGPoint(), size: backgroundFrame.size))
             
             transition.setFrame(layer: self.backgroundEffectLayer, frame: CGRect(origin: CGPoint(), size: backgroundFrame.size))
             self.backgroundEffectLayer.update(color: UIColor(white: 1.0, alpha: 0.25), rate: 10.0, size: backgroundFrame.size, cornerRadius: backgroundFrame.height * 0.5, transition: transition)
-            
-            let badgeDiameter: CGFloat = 15.0
-            if self.backgroundBadgeMask.image == nil {
-                self.backgroundBadgeMask.image = generateStretchableFilledCircleImage(diameter: badgeDiameter + 1.0 * 2.0, color: .black)
-            }
-            let badgeWidth: CGFloat = 20.0
-            let badgeFrame = CGRect(origin: CGPoint(x: backgroundFrame.width - badgeWidth, y: 0.0), size: CGSize(width: badgeWidth, height: badgeDiameter))
-            transition.setFrame(view: self.backgroundBadgeMask, frame: badgeFrame.insetBy(dx: -1.0, dy: -1.0))
             
             self.iconView.tintColor = component.theme.chat.inputPanel.panelControlColor
             
@@ -297,6 +352,9 @@ final class StarReactionButtonComponent: Component {
                 let iconFrame = image.size.centered(in: CGRect(origin: CGPoint(), size: backgroundFrame.size))
                 transition.setFrame(view: self.iconView, frame: iconFrame)
             }
+            
+            transition.setPosition(view: self.containerView, position: CGPoint(x: size.width * 0.5, y: size.height * 0.5))
+            transition.setBounds(view: self.containerView, bounds: CGRect(origin: CGPoint(), size: size))
             
             return size
         }

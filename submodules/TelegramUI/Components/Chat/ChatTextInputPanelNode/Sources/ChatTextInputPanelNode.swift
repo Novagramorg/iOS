@@ -332,8 +332,6 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     
     private let hapticFeedback = HapticFeedback()
     
-    private var currentInputHasText: Bool = false
-    
     public var inputTextState: ChatTextInputState {
         if let textInputNode = self.textInputNode {
             let selectionRange: Range<Int> = textInputNode.selectedRange.location ..< (textInputNode.selectedRange.location + textInputNode.selectedRange.length)
@@ -1516,16 +1514,6 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         var inputHasText = false
         if let textInputNode = self.textInputNode, let attributedText = textInputNode.attributedText, attributedText.length != 0 {
             inputHasText = true
-        }
-        let inputHadText = self.currentInputHasText
-        self.currentInputHasText = inputHasText
-        
-        var useBounceAnimation = inputHasText && !inputHadText
-        if accessoryPanel != nil || self.accessoryPanel != nil {
-            useBounceAnimation = false
-        }
-        if !self.enableBounceAnimations {
-            useBounceAnimation = false
         }
         
         var hasMenuButton = false
@@ -2728,10 +2716,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         
         self.updateCounterTextNode(backgroundSize: textInputContainerBackgroundFrame.size, transition: transition)
         
-        var textInputContainerBackgroundTransition = ComponentTransition(transition)
-        if useBounceAnimation, case let .animated(_, curve) = transition, case .spring = curve {
-            textInputContainerBackgroundTransition = textInputContainerBackgroundTransition.withUserData(GlassBackgroundView.TransitionFlagBounce())
-        }
+        let textInputContainerBackgroundTransition = ComponentTransition(transition)
         self.textInputContainerBackgroundView.update(size: textInputContainerBackgroundFrame.size, cornerRadius: floor(minimalInputHeight * 0.5), isDark: interfaceState.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: interfaceState.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7)), isInteractive: true, transition: textInputContainerBackgroundTransition)
         
         transition.updateFrame(layer: self.textInputBackgroundNode.layer, frame: textInputContainerBackgroundFrame)
@@ -3018,7 +3003,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             }
             
             if starReactionButtonView.superview == nil {
-                self.glassBackgroundContainer.contentView.addSubview(starReactionButtonView)
+                self.view.addSubview(starReactionButtonView)
                 if transition.isAnimated {
                     starReactionButtonView.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
                     transition.animateTransformScale(view: starReactionButtonView, from: 0.001)
@@ -3038,13 +3023,9 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             sendActionButtonsFrame.origin.x += (sendActionButtonsSize.width - 3.0 * 2.0) * 0.5 - 3.0
         }
         
-        if useBounceAnimation, case let .animated(duration, curve) = transition, case .spring = curve {
-            ContainedViewLayoutTransition.animated(duration: duration, curve: curve).updateScaleSpring(layer: self.sendActionButtons.layer, scale: sendActionsScale)
-            ContainedViewLayoutTransition.animated(duration: duration, curve: curve).updatePositionSpring(layer: self.sendActionButtons.layer, position: sendActionButtonsFrame.center)
-        } else {
-            transition.updateTransformScale(node: self.sendActionButtons, scale: CGPoint(x: sendActionsScale, y: sendActionsScale))
-            transition.updatePosition(node: self.sendActionButtons, position: sendActionButtonsFrame.center)
-        }
+        transition.updateTransformScale(node: self.sendActionButtons, scale: CGPoint(x: sendActionsScale, y: sendActionsScale))
+        transition.updatePosition(node: self.sendActionButtons, position: sendActionButtonsFrame.center)
+        
         transition.updateBounds(node: self.sendActionButtons, bounds: CGRect(origin: CGPoint(), size: sendActionButtonsFrame.size))
         if let (rect, containerSize) = self.absoluteRect {
             self.sendActionButtons.updateAbsoluteRect(CGRect(x: rect.origin.x + sendActionButtonsFrame.origin.x, y: rect.origin.y + sendActionButtonsFrame.origin.y, width: sendActionButtonsFrame.width, height: sendActionButtonsFrame.height), within: containerSize, transition: transition)

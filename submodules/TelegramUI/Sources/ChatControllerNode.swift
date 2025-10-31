@@ -2620,10 +2620,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             let inputNodeFrame = CGRect(origin: CGPoint(x: 0.0, y: layout.size.height - inputNodeHeight), size: CGSize(width: layout.size.width, height: inputNodeHeight))
             if immediatelyLayoutInputNodeAndAnimateAppearance {
                 var adjustedForPreviousInputHeightFrame = inputNodeFrame
-                var heightDifference = inputNodeHeight - previousInputHeight
-                if previousInputHeight.isLessThanOrEqualTo(cleanInsets.bottom) {
-                    heightDifference = inputNodeHeight
-                }
+                let heightDifference = inputNodeHeight
                 adjustedForPreviousInputHeightFrame.origin.y += heightDifference
                 inputNode.frame = adjustedForPreviousInputHeightFrame
                 transition.updateFrame(node: inputNode, frame: inputNodeFrame)
@@ -2867,12 +2864,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         }
         if let dismissedInputNode = dismissedInputNode {
             self.disappearingNode = dismissedInputNode
-            let targetY: CGFloat
-            if cleanInsets.bottom.isLess(than: insets.bottom) {
-                targetY = layout.size.height - insets.bottom
-            } else {
-                targetY = layout.size.height
-            }
+            let targetY = layout.size.height
             
             if let dismissedInputNodeExternalTopPanelContainer = dismissedInputNodeExternalTopPanelContainer {
                 transition.updateFrame(view: dismissedInputNodeExternalTopPanelContainer, frame: CGRect(origin: CGPoint(x: 0.0, y: targetY), size: CGSize(width: layout.size.width, height: 0.0)), force: true, completion: { [weak self, weak dismissedInputNodeExternalTopPanelContainer] completed in

@@ -937,6 +937,7 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
             }
             
             self.messagesContext = accountContext.engine.messages.groupCallMessages(
+                appConfig: accountContext.currentAppConfiguration.with({ $0 }),
                 callId: initialCall.description.id,
                 reference: .id(id: initialCall.description.id, accessHash: initialCall.description.accessHash),
                 e2eContext: self.e2eContext,
@@ -4076,6 +4077,12 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
     public func deleteMessage(id: GroupCallMessagesContext.Message.Id, reportSpam: Bool) {
         if let messagesContext = self.messagesContext {
             messagesContext.deleteMessage(id: id, reportSpam: reportSpam)
+        }
+    }
+    
+    public func deleteAllMessages(authorId: EnginePeer.Id, reportSpam: Bool) {
+        if let messagesContext = self.messagesContext {
+            messagesContext.deleteAllMessages(authorId: authorId, reportSpam: reportSpam)
         }
     }
 }
