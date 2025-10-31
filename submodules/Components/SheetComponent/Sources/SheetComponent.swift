@@ -210,6 +210,7 @@ public final class SheetComponent<ChildEnvironmentType: Sendable & Equatable>: C
         private let scrollView: ScrollView
         private let backgroundView: BackgroundView
         private var effectView: UIVisualEffectView?
+        private let clipView: BackgroundView
         private let contentView: ComponentView<ChildEnvironmentType>
         private var headerView: ComponentView<Empty>?
         
@@ -233,6 +234,7 @@ public final class SheetComponent<ChildEnvironmentType: Sendable & Equatable>: C
             self.scrollView.alwaysBounceVertical = true
             
             self.backgroundView = BackgroundView()
+            self.clipView = BackgroundView()
             
             self.contentView = ComponentView<ChildEnvironmentType>()
             
@@ -398,14 +400,16 @@ public final class SheetComponent<ChildEnvironmentType: Sendable & Equatable>: C
             self.component = component
             self.currentHasInputHeight = sheetEnvironment.hasInputHeight
             
-            let glassInset: CGFloat = 6.0
-            
+            var glassInset: CGFloat = 0.0
             var topCornerRadius: CGFloat
             var bottomCornerRadius: CGFloat
             switch component.style {
             case .glass:
                 topCornerRadius = 38.0
                 bottomCornerRadius = 56.0
+                if availableSize.width < availableSize.height {
+                    glassInset = 6.0
+                }
             case .legacy:
                 topCornerRadius = 12.0
                 bottomCornerRadius = 12.0
@@ -441,12 +445,7 @@ public final class SheetComponent<ChildEnvironmentType: Sendable & Equatable>: C
                     containerSize = regularMetricsSize
                 }
             } else {
-                switch component.style {
-                case .glass:
-                    containerSize = CGSize(width: availableSize.width - glassInset * 2.0, height: .greatestFiniteMagnitude)
-                case .legacy:
-                    containerSize = CGSize(width: availableSize.width, height: .greatestFiniteMagnitude)
-                }
+                containerSize = CGSize(width: availableSize.width - glassInset * 2.0, height: .greatestFiniteMagnitude)
             }
             
             self.contentView.parentState = state
@@ -463,14 +462,19 @@ public final class SheetComponent<ChildEnvironmentType: Sendable & Equatable>: C
             self.ignoreScrolling = true
             if let contentView = self.contentView.view {
                 if contentView.superview == nil {
-                    self.scrollView.addSubview(contentView)
+                    self.scrollView.addSubview(self.clipView)
+                    self.clipView.bottomCornersView.addSubview(contentView)
                 }
                 contentView.clipsToBounds = component.clipsContent
                 contentView.layer.cornerRadius = topCornerRadius
                 
                 if sheetEnvironment.isCentered {
                     let y: CGFloat = floorToScreenPixels((availableSize.height - contentSize.height) / 2.0)
-                    transition.setFrame(view: contentView, frame: CGRect(origin: CGPoint(x: floorToScreenPixels((availableSize.width - contentSize.width) / 2.0), y: -y), size: contentSize), completion: nil)
+                    
+                    let clipFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((availableSize.width - contentSize.width) / 2.0), y: -y), size: contentSize)
+                    self.clipView.update(size: clipFrame.size, color: .clear, topCornerRadius: topCornerRadius, bottomCornerRadius: topCornerRadius, transition: transition)
+                    transition.setFrame(view: self.clipView, frame: clipFrame, completion: nil)
+                    transition.setFrame(view: contentView, frame: CGRect(origin: .zero, size: clipFrame.size), completion: nil)
                     transition.setFrame(view: self.backgroundView, frame: CGRect(origin: CGPoint(x: floorToScreenPixels((availableSize.width - contentSize.width) / 2.0), y: -y), size: contentSize), completion: nil)
                     if let effectView = self.effectView {
                         transition.setFrame(view: effectView, frame: CGRect(origin: CGPoint(x: floorToScreenPixels((availableSize.width - contentSize.width) / 2.0), y: -y), size: contentSize), completion: nil)
@@ -479,10 +483,16 @@ public final class SheetComponent<ChildEnvironmentType: Sendable & Equatable>: C
                 } else {
                     switch component.style {
                     case .glass:
-                        transition.setFrame(view: contentView, frame: CGRect(origin: CGPoint(x: glassInset, y: -glassInset), size: CGSize(width: contentSize.width, height: contentSize.height)), completion: nil)
+                        let clipFrame = CGRect(origin: CGPoint(x: glassInset, y: -glassInset), size: CGSize(width: contentSize.width, height: contentSize.height))
+                        self.clipView.update(size: clipFrame.size, color: .clear, topCornerRadius: topCornerRadius, bottomCornerRadius: bottomCornerRadius, transition: transition)
+                        transition.setFrame(view: self.clipView, frame: clipFrame)
+                        transition.setFrame(view: contentView, frame: CGRect(origin: .zero, size: CGSize(width: contentSize.width, height: contentSize.height)), completion: nil)
                         transition.setFrame(view: self.backgroundView, frame: CGRect(origin: CGPoint(x: glassInset, y: -glassInset), size: CGSize(width: contentSize.width, height: contentSize.height)), completion: nil)
                     case .legacy:
-                        transition.setFrame(view: contentView, frame: CGRect(origin: .zero, size: CGSize(width: contentSize.width, height: contentSize.height + 100.0)), completion: nil)
+                        let clipFrame = CGRect(origin: .zero, size: CGSize(width: contentSize.width, height: contentSize.height + 100.0))
+                        self.clipView.update(size: clipFrame.size, color: .clear, topCornerRadius: topCornerRadius, bottomCornerRadius: bottomCornerRadius, transition: transition)
+                        transition.setFrame(view: self.clipView, frame: clipFrame)
+                        transition.setFrame(view: contentView, frame: CGRect(origin: .zero, size: clipFrame.size), completion: nil)
                         transition.setFrame(view: self.backgroundView, frame: CGRect(origin: .zero, size: CGSize(width: contentSize.width, height: contentSize.height + 1000.0)), completion: nil)
                         if let effectView = self.effectView {
                             transition.setFrame(view: effectView, frame: CGRect(origin: .zero, size: CGSize(width: contentSize.width, height: contentSize.height + 1000.0)), completion: nil)

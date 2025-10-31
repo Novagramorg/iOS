@@ -51,7 +51,8 @@ public final class MessageInputPanelComponent: Component {
         case story
         case editor
         case media
-        case glass
+        case videoChat
+        case gift
     }
     
     public enum InputMode: Hashable {
@@ -698,7 +699,7 @@ public final class MessageInputPanelComponent: Component {
             }
         }
         
-        public func getSendMessageInput() -> SendMessageInput {
+        public func getSendMessageInput(applyAutocorrection: Bool = true) -> SendMessageInput {
             if let inputPanelView = self.inputPanel?.view as? ChatTextInputPanelComponent.View {
                 let _ = inputPanelView
                 return .text(expandedInputStateAttributedString(self.textInputPanelExternalState.textInputState.inputText))
@@ -708,7 +709,7 @@ public final class MessageInputPanelComponent: Component {
                 return .text(NSAttributedString())
             }
             
-            return .text(textFieldView.getAttributedText())
+            return .text(textFieldView.getAttributedText(applyAutocorrection: applyAutocorrection))
         }
         
         public func setSendMessageInput(value: SendMessageInput, updateState: Bool) {
@@ -1122,14 +1123,17 @@ public final class MessageInputPanelComponent: Component {
             
             let textFieldSideInset: CGFloat
             switch component.style {
-            case .media, .glass:
+            case .media, .videoChat, .gift:
                 textFieldSideInset = 8.0
             default:
                 textFieldSideInset = 9.0
             }
             
             var mediaInsets = UIEdgeInsets(top: insets.top, left: textFieldSideInset, bottom: insets.bottom, right: 41.0)
-            if case .glass = component.style {
+            if case .gift = component.style {
+                mediaInsets.right = textFieldSideInset
+            }
+            if case .videoChat = component.style {
                 mediaInsets.right = 54.0
             }
             
@@ -1180,7 +1184,25 @@ public final class MessageInputPanelComponent: Component {
             
             let availableTextFieldSize = CGSize(width: availableSize.width - insets.left - insets.right, height: availableSize.height - insets.top - insets.bottom)
             
+            var formatMenuAvailability: TextFieldComponent.FormatMenuAvailability = .available(TextFieldComponent.FormatMenuAvailability.Action.all)
+            if component.isFormattingLocked {
+                formatMenuAvailability = .locked
+            } else if [.videoChat, .gift].contains(component.style) {
+                formatMenuAvailability = .available([.bold, .italic, .strikethrough, .underline, .spoiler])
+            }
             self.textField.parentState = state
+            
+            let textColor: UIColor
+            let accentColor: UIColor
+            switch component.style {
+            case .gift:
+                textColor = component.theme.chat.inputPanel.inputTextColor
+                accentColor = component.theme.chat.inputPanel.inputTextColor
+            default:
+                textColor = UIColor(rgb: 0xffffff)
+                accentColor = UIColor(rgb: 0xffffff)
+            }
+            
             let textFieldSize = self.textField.update(
                 transition: .immediate,
                 component: AnyComponent(TextFieldComponent(
@@ -1189,8 +1211,8 @@ public final class MessageInputPanelComponent: Component {
                     strings: component.strings,
                     externalState: self.textFieldExternalState,
                     fontSize: 17.0,
-                    textColor: UIColor(rgb: 0xffffff),
-                    accentColor: UIColor(rgb: 0xffffff),
+                    textColor: textColor,
+                    accentColor: accentColor,
                     insets: UIEdgeInsets(top: 9.0, left: 8.0, bottom: 10.0, right: 48.0),
                     hideKeyboard: component.hideKeyboard,
                     customInputView: component.customInputView,
@@ -1201,9 +1223,9 @@ public final class MessageInputPanelComponent: Component {
                         }
                     },
                     isOneLineWhenUnfocused: component.style == .media,
-                    emptyLineHandling: component.style == .glass ? .notAllowed : .allowed,
-                    formatMenuAvailability: component.isFormattingLocked ? .locked : .available(component.style == .glass ? [.bold, .italic, .strikethrough, .underline, .spoiler] : TextFieldComponent.FormatMenuAvailability.Action.all),
-                    returnKeyType: component.style == .glass ? .send : .default,
+                    emptyLineHandling: [.videoChat, .gift].contains(component.style) ? .notAllowed : .allowed,
+                    formatMenuAvailability: formatMenuAvailability,
+                    returnKeyType: [.videoChat, .gift].contains(component.style) ? .send : .default,
                     lockedFormatAction: {
                         component.presentTextFormattingTooltip?()
                     },
@@ -1213,7 +1235,7 @@ public final class MessageInputPanelComponent: Component {
                     paste: { data in
                         component.paste(data)
                     },
-                    returnKeyAction: component.style == .glass ? { [weak self] in
+                    returnKeyAction: [.videoChat, .gift].contains(component.style) ? { [weak self] in
                         self?.sendMessageAction()
                     } : nil
                 )),
@@ -1225,6 +1247,10 @@ public final class MessageInputPanelComponent: Component {
             let placeholderTransition: ComponentTransition = (previousPlaceholder != nil && previousPlaceholder != component.placeholder) ? ComponentTransition(animation: .curve(duration: 0.3, curve: .spring)) : .immediate
             let placeholderSize: CGSize
             
+            var placeholderColor = UIColor(rgb: 0xffffff, alpha: 0.4)
+            if case .gift = component.style {
+                placeholderColor = component.theme.chat.inputPanel.inputPlaceholderColor
+            }
             if case let .plain(string) = component.placeholder, string.contains("#") {
                 let placeholderType = false
                 if let currentPlaceholderType = self.currentPlaceholderType, currentPlaceholderType != placeholderType {
@@ -1235,11 +1261,11 @@ public final class MessageInputPanelComponent: Component {
                     self.vibrancyPlaceholder = ComponentView()
                 }
                 self.currentPlaceholderType = placeholderType
-                
-                let attributedPlaceholder = NSMutableAttributedString(string: string, font:Font.regular(17.0), textColor: UIColor(rgb: 0xffffff, alpha: 0.4))
+                                
+                let attributedPlaceholder = NSMutableAttributedString(string: string, font:Font.regular(17.0), textColor: placeholderColor)
                 if let range = attributedPlaceholder.string.range(of: "#") {
                     attributedPlaceholder.addAttribute(.attachment, value: PresentationResourcesChat.chatPlaceholderStarIcon(component.theme)!, range: NSRange(range, in: attributedPlaceholder.string))
-                    attributedPlaceholder.addAttribute(.foregroundColor, value: UIColor(rgb: 0xffffff, alpha: 0.4), range: NSRange(range, in: attributedPlaceholder.string))
+                    attributedPlaceholder.addAttribute(.foregroundColor, value: placeholderColor, range: NSRange(range, in: attributedPlaceholder.string))
                     attributedPlaceholder.addAttribute(.baselineOffset, value: 1.0, range: NSRange(range, in: attributedPlaceholder.string))
                 }
                 
@@ -1293,7 +1319,7 @@ public final class MessageInputPanelComponent: Component {
                     transition: placeholderTransition,
                     component: AnyComponent(AnimatedTextComponent(
                         font: Font.regular(17.0),
-                        color: UIColor(rgb: 0xffffff, alpha: 0.4),
+                        color: placeholderColor,
                         items: placeholderItems
                     )),
                     environment: {},
@@ -1380,7 +1406,7 @@ public final class MessageInputPanelComponent: Component {
             var fieldBackgroundFrame: CGRect
             if hasMediaRecording {
                 fieldBackgroundFrame = CGRect(origin: CGPoint(x: mediaInsets.left, y: insets.top), size: CGSize(width: availableSize.width - mediaInsets.left - mediaInsets.right, height: fieldFrame.height))
-            } else if case .glass = component.style {
+            } else if [.videoChat, .gift].contains(component.style) {
                 fieldBackgroundFrame = CGRect(origin: CGPoint(x: mediaInsets.left, y: insets.top), size: CGSize(width: availableSize.width - mediaInsets.left - mediaInsets.right, height: fieldFrame.height))
             } else if isEditing || component.style == .editor || component.style == .media {
                 fieldBackgroundFrame = fieldFrame
@@ -1400,7 +1426,20 @@ public final class MessageInputPanelComponent: Component {
             //transition.setFrame(view: self.vibrancyEffectView, frame: CGRect(origin: CGPoint(), size: fieldBackgroundFrame.size))
             
             switch component.style {
-            case .glass:
+            case .gift:
+                if self.fieldGlassBackgroundView == nil {
+                    let fieldGlassBackgroundView = GlassBackgroundView(frame: fieldBackgroundFrame)
+                    self.insertSubview(fieldGlassBackgroundView, aboveSubview: self.fieldBackgroundView)
+                    self.fieldGlassBackgroundView = fieldGlassBackgroundView
+                    
+                    self.fieldBackgroundView.isHidden = true
+                    self.fieldBackgroundTint.isHidden = true
+                }
+                if let fieldGlassBackgroundView = self.fieldGlassBackgroundView {
+                    fieldGlassBackgroundView.update(size: fieldBackgroundFrame.size, cornerRadius: baseFieldHeight * 0.5, isDark: component.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: component.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7)), transition: transition)
+                    transition.setFrame(view: fieldGlassBackgroundView, frame: fieldBackgroundFrame)
+                }
+            case .videoChat:
                 if self.fieldGlassBackgroundView == nil {
                     let fieldGlassBackgroundView = GlassBackgroundView(frame: fieldBackgroundFrame)
                     self.insertSubview(fieldGlassBackgroundView, aboveSubview: self.fieldBackgroundView)
@@ -1438,7 +1477,7 @@ public final class MessageInputPanelComponent: Component {
             transition.setAlpha(view: self.bottomGradientView, alpha: component.displayGradient ? 1.0 : 0.0)
 
             let placeholderOriginX: CGFloat
-            if isEditing || component.style == .story || component.style == .glass {
+            if isEditing || component.style == .story || component.style == .videoChat || component.style == .gift {
                 placeholderOriginX = 16.0
             } else {
                 placeholderOriginX = floorToScreenPixels(fieldBackgroundFrame.minX + (fieldBackgroundFrame.width - placeholderSize.width) / 2.0)
@@ -1658,7 +1697,7 @@ public final class MessageInputPanelComponent: Component {
                     containerSize: availableTextFieldSize
                 )
                 var counterFrame = CGRect(origin: CGPoint(x: availableSize.width - insets.right + floorToScreenPixels((insets.right - counterSize.width) * 0.5), y: size.height - insets.bottom - baseFieldHeight - counterSize.height - 5.0), size: counterSize)
-                if case .glass = component.style {
+                if case .videoChat = component.style {
                     counterFrame.origin.x -= 7.0
                 }
                 if let counterView = self.counter.view {
@@ -1837,7 +1876,10 @@ public final class MessageInputPanelComponent: Component {
             var inputActionButtonAvailableSize = CGSize(width: 33.0, height: 33.0)
             var inputActionButtonAlpha = 1.0
             let inputActionButtonMode: MessageInputActionButtonComponent.Mode
-            if case .editor = component.style {
+            if case .gift = component.style {
+                inputActionButtonAlpha = 0.0
+                inputActionButtonMode = .apply
+            } else if case .editor = component.style {
                 if isEditing {
                     inputActionButtonMode = .apply
                 } else {
@@ -1848,7 +1890,7 @@ public final class MessageInputPanelComponent: Component {
                 if !isEditing {
                     inputActionButtonAlpha = 0.0
                 }
-            } else if case .glass = component.style {
+            } else if case .videoChat = component.style {
                 inputActionButtonAvailableSize = CGSize(width: 40.0, height: 40.0)
                 if self.textFieldExternalState.hasText {
                     inputActionButtonMode = .send
@@ -1877,7 +1919,7 @@ public final class MessageInputPanelComponent: Component {
                 }
             }
             let inputActionButtonStyle: MessageInputActionButtonComponent.Style
-            if component.style == .glass {
+            if component.style == .videoChat {
                 inputActionButtonStyle = .glass(isTinted: true)
             } else if component.style == .story {
                 inputActionButtonStyle = .legacy
@@ -2009,9 +2051,9 @@ public final class MessageInputPanelComponent: Component {
                     inputActionButtonOriginX -= 46.0
                 }
             } else {
-                if component.setMediaRecordingActive != nil || isEditing || component.style == .glass {
+                if component.setMediaRecordingActive != nil || isEditing || component.style == .videoChat {
                     switch component.style {
-                    case .glass:
+                    case .videoChat:
                         inputActionButtonOriginX = fieldBackgroundFrame.maxX + 6.0
                     default:
                         inputActionButtonOriginX = fieldBackgroundFrame.maxX + floorToScreenPixels((41.0 - inputActionButtonSize.width) * 0.5)
@@ -2163,12 +2205,18 @@ public final class MessageInputPanelComponent: Component {
                 animationName = ""
             }
             
+            let stickerButtonColor: UIColor
+            if case .gift = component.style {
+                stickerButtonColor = component.theme.chat.inputPanel.panelControlColor
+            } else {
+                stickerButtonColor = .white
+            }
             let stickerButtonSize = self.stickerButton.update(
                 transition: transition,
                 component: AnyComponent(Button(
                     content: AnyComponent(LottieComponent(
                         content: LottieComponent.AppBundleContent(name: animationName),
-                        color: .white
+                        color: stickerButtonColor
                     )),
                     action: { [weak self] in
                         guard let self else {
@@ -2202,7 +2250,6 @@ public final class MessageInputPanelComponent: Component {
                 }
             }
             
-            let accentColor = component.theme.chat.inputPanel.panelControlAccentColor
             if let timeoutAction = component.timeoutAction, let timeoutValue = component.timeoutValue {
                 let timeoutButtonSize = self.timeoutButton.update(
                     transition: transition,
@@ -2210,7 +2257,7 @@ public final class MessageInputPanelComponent: Component {
                         content: AnyComponent(
                             TimeoutContentComponent(
                                 color: .white,
-                                accentColor: accentColor,
+                                accentColor: component.theme.chat.inputPanel.panelControlAccentColor,
                                 isSelected: component.timeoutSelected,
                                 value: timeoutValue
                             )

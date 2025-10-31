@@ -136,7 +136,7 @@ public final class DatePickerNode: ASDisplayNode {
             didSet {
                 self.selectionNode.image = generateStretchableFilledCircleImage(diameter: 44.0, color: self.theme.selectionColor)
                 if let size = self.validSize {
-                    self.updateLayout(size: size)
+                    let _ = self.updateLayout(size: size)
                 }
             }
         }
@@ -196,7 +196,7 @@ public final class DatePickerNode: ASDisplayNode {
             return nil
         }
         
-        func updateLayout(size: CGSize) {
+        func updateLayout(size: CGSize) -> CGFloat {
             var weekday = self.firstWeekday
             var started = false
             var ended = false
@@ -204,6 +204,8 @@ public final class DatePickerNode: ASDisplayNode {
             
             let sideInset: CGFloat = 12.0
             let cellSize: CGFloat = floor((size.width - sideInset * 2.0) / 7.0)
+            
+            var maxY = 0.0
             
             self.selectionNode.isHidden = true
             for i in 0 ..< 42 {
@@ -270,11 +272,13 @@ public final class DatePickerNode: ASDisplayNode {
                     
                     if count == self.numberOfDays {
                         ended = true
+                        maxY = cellFrame.maxY
                     }
                 } else {
                     textNode.isHidden = true
                 }
             }
+            return maxY
         }
     }
     
@@ -686,8 +690,8 @@ public final class DatePickerNode: ASDisplayNode {
             self.transitionFraction = transitionFraction
             if let size = self.validLayout {
                 let topInset: CGFloat = self.hasValueRow ? 78.0 + 44.0 : 65.0
-                let containerSize = CGSize(width: size.width, height: size.height - topInset)
-                self.updateItems(size: containerSize, transition: .animated(duration: 0.3, curve: .spring))
+                let constrainedSize = CGSize(width: min(390.0, size.width), height: size.height - topInset)
+                self.updateItems(size: constrainedSize, transition: .animated(duration: 0.3, curve: .spring))
             }
         case .cancelled, .ended:
             let velocity = recognizer.velocity(in: self.view)
@@ -715,6 +719,7 @@ public final class DatePickerNode: ASDisplayNode {
         }
     }
     
+    public var heightUpdated: ((CGFloat) -> Void)?
     private func updateItems(size: CGSize, update: Bool = false, transition: ContainedViewLayoutTransition) {
         var validIds: [Date] = []
         
@@ -729,7 +734,6 @@ public final class DatePickerNode: ASDisplayNode {
                     current.minimumDate = self.state.minDate
                     current.maximumDate = self.state.maxDate
                     current.date = self.state.date
-                    current.updateLayout(size: size)
                 } else {
                     wasAdded = true
                     let addedItemNode = MonthNode(theme: self.theme, month: self.months[i], minimumDate: self.state.minDate, maximumDate: self.state.maxDate, date: self.state.date)
@@ -737,16 +741,21 @@ public final class DatePickerNode: ASDisplayNode {
                     self.monthNodes[self.months[i]] = addedItemNode
                     self.contentNode.addSubnode(addedItemNode)
                 }
-                if let itemNode = itemNode {
+                if let itemNode {
                     let indexOffset = CGFloat(i - self.currentIndex)
                     let itemFrame = CGRect(origin: CGPoint(x: indexOffset * size.width + self.transitionFraction * size.width, y: 0.0), size: size)
                     
+                    var itemHeight = size.height
                     if wasAdded {
                         itemNode.frame = itemFrame
-                        itemNode.updateLayout(size: size)
+                        itemHeight = itemNode.updateLayout(size: size)
                     } else {
                         transition.updateFrame(node: itemNode, frame: itemFrame)
-                        itemNode.updateLayout(size: size)
+                        itemHeight = itemNode.updateLayout(size: size)
+                    }
+                    
+                    if i == self.currentIndex {
+                        self.heightUpdated?(itemHeight)
                     }
                 }
             }

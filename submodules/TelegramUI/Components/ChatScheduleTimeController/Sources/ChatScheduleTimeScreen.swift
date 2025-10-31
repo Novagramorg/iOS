@@ -23,15 +23,24 @@ private final class ChatScheduleTimeSheetContentComponent: Component {
     
     let context: AccountContext
     let mode: ChatScheduleTimeScreen.Mode
+    let currentTime: Int32?
+    let currentRepeatPeriod: Int32?
+    let minimalTime: Int32?
     let dismiss: () -> Void
     
     init(
         context: AccountContext,
         mode: ChatScheduleTimeScreen.Mode,
+        currentTime: Int32?,
+        currentRepeatPeriod: Int32?,
+        minimalTime: Int32?,
         dismiss: @escaping () -> Void
     ) {
         self.context = context
         self.mode = mode
+        self.currentTime = currentTime
+        self.currentRepeatPeriod = currentRepeatPeriod
+        self.minimalTime = minimalTime
         self.dismiss = dismiss
     }
     
@@ -43,6 +52,7 @@ private final class ChatScheduleTimeSheetContentComponent: Component {
         private let cancel = ComponentView<Empty>()
         private let title = ComponentView<Empty>()
         private let button = ComponentView<Empty>()
+        private let onlineButton = ComponentView<Empty>()
         
         private var datePicker: DatePickerNode?
         
@@ -56,12 +66,16 @@ private final class ChatScheduleTimeSheetContentComponent: Component {
         private let repeatTitle = ComponentView<Empty>()
         private let repeatValue = ComponentView<Empty>()
         
-        private let timePicker = ComponentView<Empty>()
-        private let repeatPicker = ComponentView<Empty>()
+        private var timePicker = ComponentView<Empty>()
+        private var repeatPicker = ComponentView<Empty>()
         
         private var component: ChatScheduleTimeSheetContentComponent?
         private(set) weak var state: EmptyComponentState?
         private var environment: EnvironmentType?
+        
+        private var isUpdating = false
+        
+        private var monthHeight: CGFloat?
         
         private var date: Date?
         private var minDate: Date?
@@ -81,16 +95,13 @@ private final class ChatScheduleTimeSheetContentComponent: Component {
             self.dateFormatter.timeZone = TimeZone.current
             
             super.init(frame: frame)
-            
-            self.layer.addSublayer(self.topSeparator)
-            self.layer.addSublayer(self.bottomSeparator)
         }
         
         required init?(coder: NSCoder) {
             fatalError("init(coder:) has not been implemented")
         }
         
-        private func updateMinimumDate(currentTime: Int32? = nil) {
+        private func updateMinimumDate(currentTime: Int32? = nil, minimalTime: Int32? = nil) {
             let timeZone = TimeZone(secondsFromGMT: 0)!
             var calendar = Calendar(identifier: .gregorian)
             calendar.timeZone = timeZone
@@ -107,9 +118,9 @@ private final class ChatScheduleTimeSheetContentComponent: Component {
             }
             
             if let next1MinDate = next1MinDate, let next5MinDate = next5MinDate {
-                let minimalTime: Double = 0 //self.minimalTime.flatMap(Double.init) ?? 0.0
-                self.minDate = max(next1MinDate, Date(timeIntervalSince1970: minimalTime))
-                if let currentTime = currentTime, Double(currentTime) > max(currentDate.timeIntervalSince1970, minimalTime) {
+                let minimalTimeValue = minimalTime.flatMap(Double.init) ?? 0.0
+                self.minDate = max(next1MinDate, Date(timeIntervalSince1970: minimalTimeValue))
+                if let currentTime = currentTime, Double(currentTime) > max(currentDate.timeIntervalSince1970, minimalTimeValue) {
                     self.date = Date(timeIntervalSince1970: Double(currentTime))
                 } else {
                     self.date = next5MinDate
@@ -118,11 +129,16 @@ private final class ChatScheduleTimeSheetContentComponent: Component {
         }
         
         func update(component: ChatScheduleTimeSheetContentComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<EnvironmentType>, transition: ComponentTransition) -> CGSize {
+            self.isUpdating = true
+            defer {
+                self.isUpdating = false
+            }
             let environment = environment[EnvironmentType.self].value
             self.environment = environment
             
             if self.component == nil {
-                self.updateMinimumDate(currentTime: nil)
+                self.updateMinimumDate(currentTime: component.currentTime, minimalTime: component.minimalTime)
+                self.repeatPeriod = component.currentRepeatPeriod
             }
             
             self.component = component
@@ -211,6 +227,21 @@ private final class ChatScheduleTimeSheetContentComponent: Component {
                 self.addSubview(datePicker.view)
                 self.datePicker = datePicker
             }
+            datePicker.heightUpdated = { [weak self] height in
+                guard let self else {
+                    return
+                }
+                var transition = ComponentTransition.spring(duration: 0.3)
+                if self.monthHeight == nil {
+                    transition = .immediate
+                }
+                if height != self.monthHeight {
+                    self.monthHeight = height
+                    if !self.isUpdating {
+                        self.state?.updated(transition: transition)
+                    }
+                }
+            }
             datePicker.displayDateSelection = true
             
             if let minDate = self.minDate {
@@ -224,15 +255,23 @@ private final class ChatScheduleTimeSheetContentComponent: Component {
             
             let constrainedWidth = min(390.0, availableSize.width)
             let cellSize = floor((constrainedWidth - 12.0 * 2.0) / 7.0)
-            let pickerHeight = 59.0 + cellSize * 5.0
+            let pickerHeight = 59.0 + cellSize * 6.0
             
             let datePickerSize = CGSize(width: availableSize.width - 22.0, height: pickerHeight)
             datePicker.frame = CGRect(origin: CGPoint(x: floorToScreenPixels((availableSize.width - datePickerSize.width) / 2.0), y: contentHeight), size: datePickerSize)
             datePicker.updateLayout(size: datePickerSize, transition: .immediate)
-            contentHeight += pickerHeight
             
-            self.topSeparator.frame = CGRect(origin: CGPoint(x: sideInset, y: contentHeight), size: CGSize(width: availableSize.width - sideInset * 2.0, height: UIScreenPixel))
+            if let monthHeight = self.monthHeight {
+                contentHeight += monthHeight + 79.0
+            } else {
+                contentHeight += pickerHeight
+            }
+            
+            transition.setFrame(layer: self.topSeparator, frame: CGRect(origin: CGPoint(x: sideInset, y: contentHeight), size: CGSize(width: availableSize.width - sideInset * 2.0, height: UIScreenPixel)))
             self.topSeparator.backgroundColor = environment.theme.list.itemBlocksSeparatorColor.cgColor
+            if self.topSeparator.superlayer == nil {
+                self.layer.addSublayer(self.topSeparator)
+            }
             
             let timeTitleSize = self.timeTitle.update(
                 transition: transition,
@@ -250,7 +289,6 @@ private final class ChatScheduleTimeSheetContentComponent: Component {
                 transition.setFrame(view: timeTitleView, frame: timeTitleFrame)
             }
             
-    
             let date = self.date ?? Date()
             
             var t: time_t = Int(date.timeIntervalSince1970)
@@ -296,43 +334,13 @@ private final class ChatScheduleTimeSheetContentComponent: Component {
                 transition.setFrame(view: timeValueView, frame: timeValueFrame)
             }
             
-            if self.isPickingTime {
-                let timePickerSize = self.timePicker.update(
-                    transition: transition,
-                    component: AnyComponent(
-                        MenuComponent(component: AnyComponent(TimeMenuComponent(
-                            value: self.date ?? Date(),
-                            valueUpdated: { [weak self] value in
-                                guard let self else {
-                                    return
-                                }
-                                self.date = value
-                                self.state?.updated()
-                            }
-                        )))
-                    ),
-                    environment: {},
-                    containerSize: availableSize
-                )
-                let timePickerFrame = CGRect(origin: CGPoint(x: timeValueFrame.maxX - timePickerSize.width + 80.0, y: timeValueFrame.minY - 20.0 - timePickerSize.height + 80.0), size: timePickerSize)
-                if let timePickerView = self.timePicker.view as? MenuComponent.View {
-                    if timePickerView.superview == nil {
-                        self.addSubview(timePickerView)
-                        
-                        timePickerView.animateIn()
-                    }
-                    transition.setFrame(view: timePickerView, frame: timePickerFrame)
-                }
-            } else if let timePicker = self.timePicker.view as? MenuComponent.View, timePicker.superview != nil {
-                timePicker.animateOut(completion: {
-                    timePicker.removeFromSuperview()
-                })
-            }
-            
             contentHeight += 56.0
             
-            self.bottomSeparator.frame = CGRect(origin: CGPoint(x: sideInset, y: contentHeight), size: CGSize(width: availableSize.width - sideInset * 2.0, height: UIScreenPixel))
+            transition.setFrame(layer: self.bottomSeparator, frame: CGRect(origin: CGPoint(x: sideInset, y: contentHeight), size: CGSize(width: availableSize.width - sideInset * 2.0, height: UIScreenPixel)))
             self.bottomSeparator.backgroundColor = environment.theme.list.itemBlocksSeparatorColor.cgColor
+            if self.bottomSeparator.superlayer == nil {
+                self.layer.addSublayer(self.bottomSeparator)
+            }
             
             let repeatTitleSize = self.repeatTitle.update(
                 transition: transition,
@@ -414,70 +422,6 @@ private final class ChatScheduleTimeSheetContentComponent: Component {
                 }
                 transition.setFrame(view: repeatValueView, frame: repeatValueFrame)
             }
-            
-            if self.isPickingRepeatPeriod {
-                let repeatPickerSize = self.repeatPicker.update(
-                    transition: transition,
-                    component: AnyComponent(
-                        MenuComponent(component: AnyComponent(RepeatMenuComponent(
-                            value: self.repeatPeriod,
-                            valueUpdated: { [weak self] value in
-                                guard let self, let component = self.component, let environment = self.environment else {
-                                    return
-                                }
-                                self.isPickingRepeatPeriod = false
-                                if component.context.isPremium {
-                                    self.repeatPeriod = value
-                                } else {
-                                    let toastController = UndoOverlayController(
-                                        presentationData: component.context.sharedContext.currentPresentationData.with { $0 },
-                                        content: .premiumPaywall(
-                                            title: "Premium Required",
-                                            text: "Subscribe to **Telegram Premium** to schedule repeating messages.",
-                                            customUndoText: nil,
-                                            timeout: nil,
-                                            linkAction: nil
-                                        ),
-                                        elevatedLayout: true,
-                                        action: { [weak environment] action in
-                                            if case .info = action {
-                                                var replaceImpl: ((ViewController) -> Void)?
-                                                let controller = component.context.sharedContext.makePremiumDemoController(context: component.context, subject: .colors, forceDark: false, action: {
-                                                    let controller = component.context.sharedContext.makePremiumIntroController(context: component.context, source: .nameColor, forceDark: false, dismissed: nil)
-                                                    replaceImpl?(controller)
-                                                }, dismissed: nil)
-                                                replaceImpl = { [weak controller] c in
-                                                    controller?.replace(with: c)
-                                                }
-                                                environment?.controller()?.push(controller)
-                                            }
-                                            return true
-                                        }
-                                    )
-                                    environment.controller()?.present(toastController, in: .current)
-                                }
-                                self.state?.updated()
-                            }
-                        )))
-                    ),
-                    environment: {},
-                    containerSize: availableSize
-                )
-                let repeatPickerFrame = CGRect(origin: CGPoint(x: repeatValueFrame.maxX - repeatPickerSize.width + 80.0, y: repeatValueFrame.minY - 20.0 - repeatPickerSize.height + 80.0), size: repeatPickerSize)
-                if let repeatPickerView = self.repeatPicker.view as? MenuComponent.View {
-                    if repeatPickerView.superview == nil {
-                        self.addSubview(repeatPickerView)
-                        
-                        repeatPickerView.animateIn()
-                    }
-                    transition.setFrame(view: repeatPickerView, frame: repeatPickerFrame)
-                }
-            } else if let repeatPicker = self.repeatPicker.view as? MenuComponent.View, repeatPicker.superview != nil {
-                repeatPicker.animateOut(completion: {
-                    repeatPicker.removeFromSuperview()
-                })
-            }
-            
             contentHeight += 70.0
             
             let time = stringForMessageTimestamp(timestamp: Int32(date.timeIntervalSince1970), dateTimeFormat: environment.dateTimeFormat)
@@ -541,9 +485,176 @@ private final class ChatScheduleTimeSheetContentComponent: Component {
             }
             contentHeight += buttonSize.height
             
+            if case .scheduledMessages(true) = component.mode {
+                contentHeight += 8.0
+                
+                let buttonSize = self.onlineButton.update(
+                    transition: transition,
+                    component: AnyComponent(ButtonComponent(
+                        background: ButtonComponent.Background(
+                            style: .glass,
+                            color: environment.theme.list.itemCheckColors.fillColor.withMultipliedAlpha(0.1),
+                            foreground: environment.theme.list.itemCheckColors.fillColor,
+                            pressedColor: environment.theme.list.itemCheckColors.fillColor.withMultipliedAlpha(0.8),
+                        ),
+                        content: AnyComponentWithIdentity(id: AnyHashable(0 as Int), component: AnyComponent(
+                            Text(text: environment.strings.Conversation_ScheduleMessage_SendWhenOnline, font: Font.semibold(17.0), color: environment.theme.list.itemCheckColors.fillColor)
+                        )),
+                        isEnabled: true,
+                        displaysProgress: false,
+                        action: { [weak self] in
+                            guard let self, let component = self.component, let controller = self.environment?.controller() as? ChatScheduleTimeScreen else {
+                                return
+                            }
+                            controller.completion(
+                                ChatScheduleTimeScreen.Result(
+                                    time: scheduleWhenOnlineTimestamp,
+                                    repeatPeriod: nil
+                                )
+                            )
+                            component.dismiss()
+                        }
+                    )),
+                    environment: {},
+                    containerSize: CGSize(width: availableSize.width - buttonSideInset * 2.0, height: 52.0)
+                )
+                let buttonFrame = CGRect(origin: CGPoint(x: buttonSideInset, y: contentHeight), size: buttonSize)
+                if let buttonView = self.onlineButton.view {
+                    if buttonView.superview == nil {
+                        self.addSubview(buttonView)
+                    }
+                    transition.setFrame(view: buttonView, frame: buttonFrame)
+                }
+                contentHeight += buttonSize.height
+            }
+            
             let bottomPanelPadding: CGFloat = 15.0
             let bottomInset: CGFloat = environment.safeInsets.bottom > 0.0 ? environment.safeInsets.bottom + 5.0 : bottomPanelPadding
             contentHeight += bottomInset
+            
+            let contentSize = CGSize(width: availableSize.width, height: contentHeight)
+            
+            if self.isPickingTime {
+                let _ = self.timePicker.update(
+                    transition: transition,
+                    component: AnyComponent(
+                        MenuComponent(
+                            theme: environment.theme,
+                            sourceFrame: timeValueFrame,
+                            component: AnyComponent(TimeMenuComponent(
+                                value: self.date ?? Date(),
+                                valueUpdated: { [weak self] value in
+                                    guard let self else {
+                                        return
+                                    }
+                                    self.date = value
+                                    self.state?.updated()
+                                }
+                            )),
+                            dismiss: { [weak self] in
+                                guard let self else {
+                                    return
+                                }
+                                self.isPickingTime = false
+                                self.state?.updated()
+                            }
+                        )
+                    ),
+                    environment: {
+                    },
+                    containerSize: contentSize
+                )
+                let timePickerFrame = CGRect(origin: .zero, size: contentSize)
+                if let timePickerView = self.timePicker.view as? MenuComponent.View {
+                    if timePickerView.superview == nil {
+                        self.addSubview(timePickerView)
+                        
+                        timePickerView.animateIn()
+                    }
+                    transition.setFrame(view: timePickerView, frame: timePickerFrame)
+                }
+            } else if let timePicker = self.timePicker.view as? MenuComponent.View, timePicker.superview != nil {
+                self.timePicker = ComponentView()
+                timePicker.animateOut(completion: {
+                    timePicker.removeFromSuperview()
+                })
+            }
+            
+            if self.isPickingRepeatPeriod {
+                let _ = self.repeatPicker.update(
+                    transition: transition,
+                    component: AnyComponent(
+                        MenuComponent(
+                            theme: environment.theme,
+                            sourceFrame: repeatValueFrame,
+                            component: AnyComponent(RepeatMenuComponent(
+                                value: self.repeatPeriod,
+                                valueUpdated: { [weak self] value in
+                                    guard let self, let component = self.component, let environment = self.environment else {
+                                        return
+                                    }
+                                    self.isPickingRepeatPeriod = false
+                                    if component.context.isPremium {
+                                        self.repeatPeriod = value
+                                    } else {
+                                        let toastController = UndoOverlayController(
+                                            presentationData: component.context.sharedContext.currentPresentationData.with { $0 },
+                                            content: .premiumPaywall(
+                                                title: "Premium Required",
+                                                text: "Subscribe to **Telegram Premium** to schedule repeating messages.",
+                                                customUndoText: nil,
+                                                timeout: nil,
+                                                linkAction: nil
+                                            ),
+                                            elevatedLayout: true,
+                                            action: { [weak environment] action in
+                                                if case .info = action {
+                                                    var replaceImpl: ((ViewController) -> Void)?
+                                                    let controller = component.context.sharedContext.makePremiumDemoController(context: component.context, subject: .colors, forceDark: false, action: {
+                                                        let controller = component.context.sharedContext.makePremiumIntroController(context: component.context, source: .nameColor, forceDark: false, dismissed: nil)
+                                                        replaceImpl?(controller)
+                                                    }, dismissed: nil)
+                                                    replaceImpl = { [weak controller] c in
+                                                        controller?.replace(with: c)
+                                                    }
+                                                    environment?.controller()?.push(controller)
+                                                }
+                                                return true
+                                            }
+                                        )
+                                        environment.controller()?.present(toastController, in: .current)
+                                    }
+                                    self.state?.updated()
+                                }
+                            )),
+                            dismiss: { [weak self] in
+                                guard let self else {
+                                    return
+                                }
+                                self.isPickingRepeatPeriod = false
+                                self.state?.updated()
+                            }
+                        )
+                    ),
+                    environment: {
+                    },
+                    containerSize: contentSize
+                )
+                let repeatPickerFrame = CGRect(origin: .zero, size: contentSize)
+                if let repeatPickerView = self.repeatPicker.view as? MenuComponent.View {
+                    if repeatPickerView.superview == nil {
+                        self.addSubview(repeatPickerView)
+                        
+                        repeatPickerView.animateIn()
+                    }
+                    transition.setFrame(view: repeatPickerView, frame: repeatPickerFrame)
+                }
+            } else if let repeatPicker = self.repeatPicker.view as? MenuComponent.View, repeatPicker.superview != nil {
+                self.repeatPicker = ComponentView()
+                repeatPicker.animateOut(completion: {
+                    repeatPicker.removeFromSuperview()
+                })
+            }
             
             
 //            if let controller = environment.controller(), !controller.automaticallyControlPresentationContextLayout {
@@ -570,7 +681,7 @@ private final class ChatScheduleTimeSheetContentComponent: Component {
 //            }
             
             
-            return CGSize(width: availableSize.width, height: contentHeight)
+            return contentSize
         }
     }
     
@@ -588,13 +699,22 @@ private final class ChatScheduleTimeScreenComponent: Component {
     
     let context: AccountContext
     let mode: ChatScheduleTimeScreen.Mode
+    let currentTime: Int32?
+    let currentRepeatPeriod: Int32?
+    let minimalTime: Int32?
     
     init(
         context: AccountContext,
-        mode: ChatScheduleTimeScreen.Mode
+        mode: ChatScheduleTimeScreen.Mode,
+        currentTime: Int32?,
+        currentRepeatPeriod: Int32?,
+        minimalTime: Int32?
     ) {
         self.context = context
         self.mode = mode
+        self.currentTime = currentTime
+        self.currentRepeatPeriod = currentRepeatPeriod
+        self.minimalTime = minimalTime
     }
     
     static func ==(lhs: ChatScheduleTimeScreenComponent, rhs: ChatScheduleTimeScreenComponent) -> Bool {
@@ -602,6 +722,15 @@ private final class ChatScheduleTimeScreenComponent: Component {
             return false
         }
         if lhs.mode != rhs.mode {
+            return false
+        }
+        if lhs.currentTime != rhs.currentTime {
+            return false
+        }
+        if lhs.currentRepeatPeriod != rhs.currentRepeatPeriod {
+            return false
+        }
+        if lhs.minimalTime != rhs.minimalTime {
             return false
         }
         return true
@@ -650,6 +779,9 @@ private final class ChatScheduleTimeScreenComponent: Component {
                     content: AnyComponent(ChatScheduleTimeSheetContentComponent(
                         context: component.context,
                         mode: component.mode,
+                        currentTime: component.currentTime,
+                        currentRepeatPeriod: component.currentRepeatPeriod,
+                        minimalTime: component.minimalTime,
                         dismiss: { [weak self] in
                             guard let self else {
                                 return
@@ -663,6 +795,7 @@ private final class ChatScheduleTimeScreenComponent: Component {
                     )),
                     style: .glass,
                     backgroundColor: .color(environment.theme.actionSheet.opaqueItemBackgroundColor),
+                    followContentSizeChanges: true,
                     animateOut: self.sheetAnimateOut
                 )),
                 environment: {
@@ -707,14 +840,21 @@ public class ChatScheduleTimeScreen: ViewControllerComponentContainer {
     public init(
         context: AccountContext,
         mode: Mode,
+        currentTime: Int32?,
+        currentRepeatPeriod: Int32?,
+        minimalTime: Int32?,
+        isDark: Bool,
         completion: @escaping (Result) -> Void
     ) {
         self.completion = completion
         
         super.init(context: context, component: ChatScheduleTimeScreenComponent(
             context: context,
-            mode: mode
-        ), navigationBarAppearance: .none)
+            mode: mode,
+            currentTime: currentTime,
+            currentRepeatPeriod: currentRepeatPeriod,
+            minimalTime: minimalTime
+        ), navigationBarAppearance: .none, theme: isDark ? .dark : .default)
         
         self.statusBar.statusBarStyle = .Ignore
         self.navigationPresentation = .flatModal
@@ -867,15 +1007,30 @@ private final class ButtonContentComponent: Component {
 
 
 private final class MenuComponent: Component {
-    public let component: AnyComponent<Empty>
+    let theme: PresentationTheme
+    let sourceFrame: CGRect
+    let component: AnyComponent<Empty>
+    let dismiss: () -> Void
 
-    public init(
-        component: AnyComponent<Empty>
+    init(
+        theme: PresentationTheme,
+        sourceFrame: CGRect,
+        component: AnyComponent<Empty>,
+        dismiss: @escaping () -> Void
     ) {
+        self.theme = theme
+        self.sourceFrame = sourceFrame
         self.component = component
+        self.dismiss = dismiss
     }
 
     public static func ==(lhs: MenuComponent, rhs: MenuComponent) -> Bool {
+        if lhs.theme !== rhs.theme {
+            return false
+        }
+        if lhs.sourceFrame != rhs.sourceFrame {
+            return false
+        }
         if lhs.component != rhs.component {
             return false
         }
@@ -883,62 +1038,67 @@ private final class MenuComponent: Component {
     }
 
     public final class View: UIView {
+        private let buttonView: UIButton
+        private let containerView: GlassBackgroundContainerView
         private let backgroundView: GlassBackgroundView
         private var componentView: ComponentView<Empty>?
         
         private var component: MenuComponent?
         
         public override init(frame: CGRect) {
+            self.buttonView = UIButton()
+            self.containerView = GlassBackgroundContainerView()
             self.backgroundView = GlassBackgroundView()
             
             super.init(frame: frame)
             
-            self.addSubview(self.backgroundView)
+            self.addSubview(self.buttonView)
+            self.addSubview(self.containerView)
+            self.containerView.contentView.addSubview(self.backgroundView)
+            
+            self.buttonView.addTarget(self, action: #selector(self.tapped), for: .touchUpInside)
         }
         
         public required init?(coder: NSCoder) {
             fatalError("init(coder:) has not been implemented")
         }
         
-        func animateIn() {
-            let duration: Double = 0.35
-            
-            self.layer.removeAllAnimations()
-            self.alpha = 0.0
-            self.transform = CGAffineTransform(scaleX: 0.001, y: 0.001)
-            self.layer.anchorPoint = CGPoint(x: 1.0, y: 1.0)
-            
-            UIView.animate(
-                withDuration: duration,
-                delay: 0.0,
-                usingSpringWithDamping: 0.75,
-                initialSpringVelocity: 0.6,
-                options: [.curveEaseOut],
-                animations: {
-                    self.transform = .identity
-                    self.alpha = 1.0
-                },
-                completion: nil
-            )
+        @objc func tapped() {
+            if let component = self.component {
+                component.dismiss()
+            }
         }
         
-        public func animateOut(duration: TimeInterval = 0.15, completion: (() -> Void)? = nil) {
-            self.layer.removeAllAnimations()
-            self.layer.anchorPoint = CGPoint(x: 1.0, y: 1.0)
+        func animateIn() {
+            guard let component = self.component else {
+                return
+            }
+            let transition = ComponentTransition.spring(duration: 0.3)
+            transition.animatePosition(view: self.backgroundView, from: component.sourceFrame.center, to: self.backgroundView.center)
+            transition.animateScale(view: self.backgroundView, from: 0.2, to: 1.0)
+            self.containerView.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.1)
+        }
+        
+        public func animateOut(completion: (() -> Void)? = nil) {
+            guard let component = self.component else {
+                return
+            }
             
-            UIView.animate(
-                withDuration: duration,
-                delay: 0.0,
-                options: [.curveEaseInOut],
-                animations: {
-                    self.transform = CGAffineTransform(scaleX: 0.001, y: 0.001)
-                },
-                completion: { _ in
-                    completion?()
-                }
-            )
+            let transition = ComponentTransition.spring(duration: 0.3)
+            transition.setPosition(view: self.backgroundView, position: component.sourceFrame.center)
+            transition.setScale(view: self.backgroundView, scale: 0.2)
+            self.containerView.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.15, removeOnCompletion: false, completion: { _ in
+                completion?()
+            })
         }
                 
+        public override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+            if !self.backgroundView.frame.contains(point) && self.buttonView.frame.contains(point) {
+                return self.buttonView
+            }
+            return super.hitTest(point, with: event)
+        }
+        
         func update(component: MenuComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
             self.component = component
             
@@ -958,25 +1118,23 @@ private final class MenuComponent: Component {
                 environment: {},
                 containerSize: availableSize
             )
-            let componentFrame = CGRect(origin: CGPoint(x: 80.0, y: 80.0), size: componentSize)
+            let backgroundFrame = CGRect(origin: CGPoint(x: component.sourceFrame.maxX - componentSize.width, y: component.sourceFrame.minY - componentSize.height - 20.0), size: componentSize)
             if let view = componentView.view {
                 if view.superview == nil {
-                    self.addSubview(view)
+                    self.backgroundView.contentView.addSubview(view)
                 }
-                componentTransition.setFrame(view: view, frame: componentFrame)
+                componentTransition.setFrame(view: view, frame: CGRect(origin: .zero, size: componentSize))
             }
             
-            let tintColor = GlassBackgroundView.TintColor(kind: .custom, color: UIColor(rgb: 0xf6f7f8))
-            
-            let backgroundFrame = CGRect(origin: CGPoint(x: 80.0, y: 80.0), size: componentSize)
-            self.backgroundView.update(size: backgroundFrame.size, cornerRadius: 30.0, isDark: false, tintColor: tintColor, transition: transition)
+            self.backgroundView.update(size: backgroundFrame.size, cornerRadius: 30.0, isDark: component.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: component.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7)), transition: transition)
             self.backgroundView.frame = backgroundFrame
             
-            return CGSize(width: componentSize.width + 80.0 * 2.0, height: componentSize.height + 80.0 * 2.0)
-        }
-        
-        public override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
-            return self.backgroundView.frame.contains(point)
+            self.containerView.frame = CGRect(origin: .zero, size: availableSize)
+            self.containerView.update(size: availableSize, isDark: component.theme.overallDarkAppearance, transition: transition)
+            
+            self.buttonView.frame = CGRect(origin: .zero, size: availableSize)
+            
+            return availableSize
         }
     }
 

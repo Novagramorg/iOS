@@ -140,6 +140,7 @@ public final class GiftItemComponent: Component {
         case grid
         case select
         case buttonIcon
+        case tableIcon
     }
     
     let context: AccountContext
@@ -403,6 +404,10 @@ public final class GiftItemComponent: Component {
                 size = CGSize(width: 26.0, height: 26.0)
                 iconSize = size
                 cornerRadius = 0.0
+            case .tableIcon:
+                size = CGSize(width: 18.0, height: 18.0)
+                iconSize = size
+                cornerRadius = 0.0
             }
             var backgroundSize = size
             if case .grid = component.mode {
@@ -504,7 +509,7 @@ public final class GiftItemComponent: Component {
                 }
             }
             
-            if case .buttonIcon = component.mode {
+            if [.buttonIcon, .tableIcon].contains(component.mode) {
                 backgroundColor = nil
                 secondBackgroundColor = nil
                 patternColor = nil
@@ -846,7 +851,11 @@ public final class GiftItemComponent: Component {
             if let backgroundColor, let _ = secondBackgroundColor {
                 self.backgroundLayer.backgroundColor = backgroundColor.cgColor
             } else {
-                self.backgroundLayer.backgroundColor = component.theme.list.itemBlocksBackgroundColor.cgColor
+                if [.buttonIcon, .tableIcon].contains(component.mode) {
+                    
+                } else {
+                    self.backgroundLayer.backgroundColor = component.theme.list.itemBlocksBackgroundColor.cgColor
+                }
             }
             
             let backgroundFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((size.width - backgroundSize.width) / 2.0), y: floorToScreenPixels((size.height - backgroundSize.height) / 2.0)), size: backgroundSize)

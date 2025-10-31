@@ -5498,7 +5498,7 @@ func formatPercentage(_ value: Float) -> String {
     return String(format: "%0.1f", value).replacingOccurrences(of: ".0", with: "").replacingOccurrences(of: ",0", with: "") + "%"
 }
 
-private final class PeerCellComponent: Component {
+final class PeerCellComponent: Component {
     let context: AccountContext
     let theme: PresentationTheme
     let strings: PresentationStrings
