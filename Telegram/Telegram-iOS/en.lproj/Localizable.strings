@@ -15168,3 +15168,11 @@ Error: %8$@";
 "ScheduledMessages.Reminder.DeleteMany" = "Delete Reminders";
 
 "Gift.Setup.NextDropIn" = "next drop in {m}:{s}";
+
+"PrivacySettings.LoginEmailSetupInfo" = "Setup your email address for Telegram login codes.";
+
+"LoginEmail.Title" = "Add Email";
+"LoginEmail.Description" = "Please add your email address to keep access to your account.";
+
+"LoginEmail.Success.Title" = "Email added";
+"LoginEmail.Success.Text" = "Your account is now protected!";

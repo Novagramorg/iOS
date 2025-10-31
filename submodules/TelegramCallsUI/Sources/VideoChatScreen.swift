@@ -3519,7 +3519,7 @@ final class VideoChatScreenComponent: Component {
                         context: call.accountContext,
                         theme: environment.theme,
                         strings: environment.strings,
-                        style: .glass,
+                        style: .videoChat,
                         placeholder: .plain(environment.strings.VoiceChat_MessagePlaceholder),
                         sendPaidMessageStars: nil,
                         maxLength: characterLimit,

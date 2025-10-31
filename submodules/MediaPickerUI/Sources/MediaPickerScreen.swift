@@ -318,6 +318,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
                 
         fileprivate var scrolledToTop = true
         fileprivate var scrolledExactlyToTop = true
+        fileprivate var isSwitchingAssetGroup = false
         
         private var didSetReady = false
         private let _ready = Promise<Bool>()
@@ -2365,6 +2366,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
                     guard let self else {
                         return
                     }
+                    self.controllerNode.isSwitchingAssetGroup = true
                     self.controllerNode.resetOnUpdate = true
                     if collection.assetCollectionSubtype == .smartAlbumUserLibrary {
                         self.selectedCollectionValue = nil
@@ -2375,6 +2377,10 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
                     }
                     self.scrollToTop?()
                     dismissImpl?()
+                    
+                    Queue.mainQueue().after(0.1) {
+                        self.controllerNode.isSwitchingAssetGroup = false
+                    }
                 }
             )
             
@@ -2539,7 +2545,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
             moreIsVisible = count > 0
         }
         
-        let useGlassButtons = isBack || !self.controllerNode.scrolledToTop
+        let useGlassButtons = (isBack || !self.controllerNode.scrolledToTop) && !self.controllerNode.isSwitchingAssetGroup
         
         let barButtonSideInset: CGFloat = 16.0
         let barButtonSize = CGSize(width: 40.0, height: 40.0)

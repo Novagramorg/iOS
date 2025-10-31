@@ -32,7 +32,7 @@ final class LoginEmailSetupDelegate: NSObject, ASAuthorizationControllerDelegate
     }
 }
 
-public func loginEmailSetupController(context: AccountContext, emailPattern: String?, navigationController: NavigationController?, completion: @escaping () -> Void) -> ViewController {
+public func loginEmailSetupController(context: AccountContext, blocking: Bool, emailPattern: String?, navigationController: NavigationController?, completion: @escaping () -> Void) -> ViewController {
     let presentationData = context.sharedContext.currentPresentationData.with { $0 }
     var dismissEmailControllerImpl: (() -> Void)?
     var presentControllerImpl: ((ViewController) -> Void)?
@@ -57,7 +57,7 @@ public func loginEmailSetupController(context: AccountContext, emailPattern: Str
                 navigationController.setViewControllers(controllers, animated: true)
                 
                 Queue.mainQueue().after(0.5, {
-                    navigationController.presentOverlay(controller: UndoOverlayController(presentationData: presentationData, content: .emoji(name: "IntroLetter", text: presentationData.strings.Login_EmailChanged), elevatedLayout: false, animateInAsReplacement: false, action: { _ in
+                    navigationController.presentOverlay(controller: UndoOverlayController(presentationData: presentationData, content: .actionSucceeded(title: presentationData.strings.LoginEmail_Success_Title, text: presentationData.strings.LoginEmail_Success_Text, cancel: nil, destructive: false), elevatedLayout: false, animateInAsReplacement: false, action: { _ in
                         return false
                     }))
                 })
@@ -65,7 +65,7 @@ public func loginEmailSetupController(context: AccountContext, emailPattern: Str
         }
     }
     
-    let emailController = AuthorizationSequenceEmailEntryController(presentationData: presentationData, mode: emailPattern != nil ? .change : .setup, back: {
+    let emailController = AuthorizationSequenceEmailEntryController(presentationData: presentationData, mode: emailPattern != nil ? .change : .setup, blocking: blocking, back: {
         dismissEmailControllerImpl?()
     })
     emailController.proceedWithEmail = { [weak emailController] email in

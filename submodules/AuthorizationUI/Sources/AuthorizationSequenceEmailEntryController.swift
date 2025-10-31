@@ -12,6 +12,7 @@ public final class AuthorizationSequenceEmailEntryController: ViewController {
     }
     
     private let mode: Mode
+    private let blocking: Bool
     
     private var controllerNode: AuthorizationSequenceEmailEntryControllerNode {
         return self.displayNode as! AuthorizationSequenceEmailEntryControllerNode
@@ -38,9 +39,10 @@ public final class AuthorizationSequenceEmailEntryController: ViewController {
     public var authorization: Any?
     public var authorizationDelegate: Any?
     
-    public init(presentationData: PresentationData, mode: Mode, back: @escaping () -> Void) {
+    public init(presentationData: PresentationData, mode: Mode, blocking: Bool = false, back: @escaping () -> Void) {
         self.presentationData = presentationData
         self.mode = mode
+        self.blocking = blocking
         
         super.init(navigationBarPresentationData: NavigationBarPresentationData(theme: AuthorizationSequenceController.navigationBarTheme(presentationData.theme), strings: NavigationBarStrings(presentationStrings: presentationData.strings)))
         
@@ -88,6 +90,10 @@ public final class AuthorizationSequenceEmailEntryController: ViewController {
     func updateNavigationItems() {
         guard let layout = self.validLayout, layout.size.width < 360.0 else {
             return
+        }
+        
+        if self.blocking {
+            self.navigationItem.leftBarButtonItem = UIBarButtonItem(customView: UIView())
         }
                 
         if self.inProgress {
