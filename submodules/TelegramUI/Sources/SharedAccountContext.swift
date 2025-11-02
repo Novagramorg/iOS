@@ -3983,8 +3983,8 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         return ChannelMembersSearchControllerImpl(params: params)
     }
     
-    public func makeNewContactScreen(context: AccountContext, peer: EnginePeer?, phoneNumber: String?, completion: @escaping (EnginePeer?, DeviceContactStableId?, DeviceContactExtendedData?) -> Void) -> ViewController {
-        return NewContactScreen(context: context, initialData: NewContactScreen.initialData(peer: peer, phoneNumber: phoneNumber), completion: completion)
+    public func makeNewContactScreen(context: AccountContext, peer: EnginePeer?, phoneNumber: String?, shareViaException: Bool, completion: @escaping (EnginePeer?, DeviceContactStableId?, DeviceContactExtendedData?) -> Void) -> ViewController {
+        return NewContactScreen(context: context, initialData: NewContactScreen.initialData(peer: peer, phoneNumber: phoneNumber, shareViaException: shareViaException), completion: completion)
     }
 }
 

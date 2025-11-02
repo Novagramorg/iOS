@@ -745,6 +745,7 @@ public class ContactsController: ViewController {
                             context: strongSelf.context,
                             peer: nil,
                             phoneNumber: nil,
+                            shareViaException: false,
                             completion: { [weak self] peer, stableId, contactData in
                                 guard let strongSelf = self else {
                                     return
