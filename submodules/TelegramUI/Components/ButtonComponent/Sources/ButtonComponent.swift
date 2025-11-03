@@ -617,7 +617,7 @@ public final class ButtonComponent: Component {
                 })
             }
             
-            if component.background.style == .glass {
+            if component.background.style == .glass, component.background.color.alpha > 0.9 {
                 let chromeView: UIImageView
                 var chromeTransition = transition
                 if let current = self.chromeView {

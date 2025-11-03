@@ -302,6 +302,7 @@ final class PostSuggestionsSettingsScreenComponent: Component {
             var switchSectionItems: [AnyComponentWithIdentity<Empty>] = []
             switchSectionItems.append(AnyComponentWithIdentity(id: 0, component: AnyComponent(ListActionItemComponent(
                 theme: environment.theme,
+                style: .glass,
                 title: AnyComponent(VStack([
                     AnyComponentWithIdentity(id: AnyHashable(0), component: AnyComponent(MultilineTextComponent(
                         text: .plain(NSAttributedString(
@@ -326,6 +327,7 @@ final class PostSuggestionsSettingsScreenComponent: Component {
                 transition: transition,
                 component: AnyComponent(ListSectionComponent(
                     theme: environment.theme,
+                    style: .glass,
                     header: nil,
                     footer: nil,
                     items: switchSectionItems
@@ -394,6 +396,7 @@ final class PostSuggestionsSettingsScreenComponent: Component {
                 transition: transition,
                 component: AnyComponent(ListSectionComponent(
                     theme: environment.theme,
+                    style: .glass,
                     header: AnyComponent(MultilineTextComponent(
                         text: .plain(NSAttributedString(
                             string: environment.strings.ChannelMessages_PriceSectionTitle,

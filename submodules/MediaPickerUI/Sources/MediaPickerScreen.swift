@@ -2649,18 +2649,20 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
             transition.updateTransformScale(node: self.moreButtonNode.iconNode, scale: moreIsVisible ? 1.0 : 0.1)
         }
         
-        if case .assets(_, .story) = self.subject, self.selectionCount > 0 {
-            let text = self.presentationData.strings.MediaPicker_CreateStory(self.selectionCount)
-            self.mainButtonStatePromise.set(.single(AttachmentMainButtonState(text: text, badge: nil, font: .bold, background: .color(self.presentationData.theme.actionSheet.controlAccentColor), textColor: self.presentationData.theme.list.itemCheckColors.foregroundColor, isVisible: true, progress: .none, isEnabled: true, hasShimmer: false, position: .top)))
-            
-            if self.selectionCount > 1 && self.selectionCount <= 6 {
-                self.secondaryButtonStatePromise.set(.single(AttachmentMainButtonState(text: self.presentationData.strings.MediaPicker_CombineIntoCollage, badge: nil, font: .regular, background: .color(.clear), textColor: self.presentationData.theme.actionSheet.controlAccentColor, isVisible: true, progress: .none, isEnabled: true, hasShimmer: false, iconName: "Media Editor/Collage", smallSpacing: true, position: .bottom)))
+        if case .assets(_, .story) = self.subject {
+            if self.selectionCount > 0 {
+                let text = self.presentationData.strings.MediaPicker_CreateStory(self.selectionCount)
+                self.mainButtonStatePromise.set(.single(AttachmentMainButtonState(text: text, badge: nil, font: .bold, background: .color(self.presentationData.theme.actionSheet.controlAccentColor), textColor: self.presentationData.theme.list.itemCheckColors.foregroundColor, isVisible: true, progress: .none, isEnabled: true, hasShimmer: false, position: .top)))
+                
+                if self.selectionCount > 1 && self.selectionCount <= 6 {
+                    self.secondaryButtonStatePromise.set(.single(AttachmentMainButtonState(text: self.presentationData.strings.MediaPicker_CombineIntoCollage, badge: nil, font: .regular, background: .color(.clear), textColor: self.presentationData.theme.actionSheet.controlAccentColor, isVisible: true, progress: .none, isEnabled: true, hasShimmer: false, iconName: "Media Editor/Collage", smallSpacing: true, position: .bottom)))
+                } else {
+                    self.secondaryButtonStatePromise.set(.single(nil))
+                }
             } else {
+                self.mainButtonStatePromise.set(.single(nil))
                 self.secondaryButtonStatePromise.set(.single(nil))
             }
-        } else {
-            self.mainButtonStatePromise.set(.single(nil))
-            self.secondaryButtonStatePromise.set(.single(nil))
         }
     }
     
@@ -3716,46 +3718,47 @@ public func stickerMediaPickerController(
         }
         mediaPickerController.openCamera = { [weak controller] cameraHolder in
             let _ = controller
-//            guard let cameraHolder = cameraHolder as? CameraHolder else {
-//                return
-//            }
-//            
-//            var returnToCameraImpl: (() -> Void)?
-//            let cameraScreen = CameraScreenImpl(
-//                context: context,
-//                mode: .sticker,
-//                holder: cameraHolder,
-//                transitionIn: CameraScreenImpl.TransitionIn(
-//                    sourceView: cameraHolder.parentView,
-//                    sourceRect: cameraHolder.parentView.bounds,
-//                    sourceCornerRadius: 0.0,
-//                    useFillAnimation: false
-//                ),
-//                transitionOut: { _ in
-//                    return CameraScreenImpl.TransitionOut(
-//                        destinationView: cameraHolder.parentView,
-//                        destinationRect: cameraHolder.parentView.bounds,
-//                        destinationCornerRadius: 0.0
-//                    )
-//                },
-//                completion: { result, _, _, commit in
-//                    completion(result, nil, .zero, nil, true, { _ in return nil }, {
-//                        returnToCameraImpl?()
-//                    })
-//                }
-//            )
-//            cameraScreen.transitionedOut = { [weak cameraHolder] in
-//                if let cameraHolder {
-//                    cameraHolder.restore()
-//                }
-//            }
-//            controller?.push(cameraScreen)
-//            
-//            returnToCameraImpl = { [weak cameraScreen] in
-//                if let cameraScreen {
-//                    cameraScreen.returnFromEditor()
-//                }
-//            }
+            guard let cameraHolder = cameraHolder as? CameraHolder else {
+                return
+            }
+            
+            var returnToCameraImpl: (() -> Void)?
+
+            let cameraScreen = context.sharedContext.makeCameraScreen(
+                context: context,
+                mode: .sticker,
+                cameraHolder: cameraHolder,
+                transitionIn: CameraScreenTransitionIn(
+                    sourceView: cameraHolder.parentView,
+                    sourceRect: cameraHolder.parentView.bounds,
+                    sourceCornerRadius: 0.0,
+                    useFillAnimation: false
+                ),
+                transitionOut: { _ in
+                    return CameraScreenTransitionOut(
+                        destinationView: cameraHolder.parentView,
+                        destinationRect: cameraHolder.parentView.bounds,
+                        destinationCornerRadius: 0.0
+                    )
+                },
+                completion: { result, commit in
+                    completion(result, nil, .zero, nil, true, { _ in return nil }, {
+                        returnToCameraImpl?()
+                    })
+                },
+                transitionedOut: { [weak cameraHolder] in
+                    if let cameraHolder {
+                        cameraHolder.restore()
+                    }
+                }
+            )
+            controller?.push(cameraScreen)
+            
+            returnToCameraImpl = { [weak cameraScreen] in
+                if let cameraScreen = cameraScreen as? CameraScreen {
+                    cameraScreen.returnFromEditor()
+                }
+            }
         }
         present(mediaPickerController, mediaPickerController.mediaPickerContext)
     }
@@ -3844,46 +3847,47 @@ public func avatarMediaPickerController(
         }
         mediaPickerController.openCamera = { [weak controller] cameraHolder in
             let _ = controller
-//            guard let cameraHolder = cameraHolder as? CameraHolder else {
-//                return
-//            }
-//            
-//            var returnToCameraImpl: (() -> Void)?
-//            let cameraScreen = CameraScreenImpl(
-//                context: context,
-//                mode: .avatar,
-//                holder: cameraHolder,
-//                transitionIn: CameraScreenImpl.TransitionIn(
-//                    sourceView: cameraHolder.parentView,
-//                    sourceRect: cameraHolder.parentView.bounds,
-//                    sourceCornerRadius: 0.0,
-//                    useFillAnimation: false
-//                ),
-//                transitionOut: { _ in
-//                    return CameraScreenImpl.TransitionOut(
-//                        destinationView: cameraHolder.parentView,
-//                        destinationRect: cameraHolder.parentView.bounds,
-//                        destinationCornerRadius: 0.0
-//                    )
-//                },
-//                completion: { result, _, _, commit in
-//                    completion(result, nil, .zero, nil, true, { _ in return nil }, {
-//                        returnToCameraImpl?()
-//                    })
-//                }
-//            )
-//            cameraScreen.transitionedOut = { [weak cameraHolder] in
-//                if let cameraHolder {
-//                    cameraHolder.restore()
-//                }
-//            }
-//            controller?.push(cameraScreen)
-//            
-//            returnToCameraImpl = { [weak cameraScreen] in
-//                if let cameraScreen {
-//                    cameraScreen.returnFromEditor()
-//                }
-//            }
+            guard let cameraHolder = cameraHolder as? CameraHolder else {
+                return
+            }
+            
+            var returnToCameraImpl: (() -> Void)?
+
+            let cameraScreen = context.sharedContext.makeCameraScreen(
+                context: context,
+                mode: .avatar,
+                cameraHolder: cameraHolder,
+                transitionIn: CameraScreenTransitionIn(
+                    sourceView: cameraHolder.parentView,
+                    sourceRect: cameraHolder.parentView.bounds,
+                    sourceCornerRadius: 0.0,
+                    useFillAnimation: false
+                ),
+                transitionOut: { _ in
+                    return CameraScreenTransitionOut(
+                        destinationView: cameraHolder.parentView,
+                        destinationRect: cameraHolder.parentView.bounds,
+                        destinationCornerRadius: 0.0
+                    )
+                },
+                completion: { result, commit in
+                    completion(result, nil, .zero, nil, true, { _ in return nil }, {
+                        returnToCameraImpl?()
+                    })
+                },
+                transitionedOut: { [weak cameraHolder] in
+                    if let cameraHolder {
+                        cameraHolder.restore()
+                    }
+                }
+            )
+            controller?.push(cameraScreen)
+            
+            returnToCameraImpl = { [weak cameraScreen] in
+                if let cameraScreen = cameraScreen as? CameraScreen {
+                    cameraScreen.returnFromEditor()
+                }
+            }
         }
         present(mediaPickerController, mediaPickerController.mediaPickerContext)
     }

@@ -610,7 +610,12 @@ public final class DatePickerNode: ASDisplayNode {
         }
         self.theme = theme
         
-        self.backgroundColor = self.theme.backgroundColor
+        self.backgroundColor = theme.backgroundColor
+        
+        self.datePickerBackgroundNode.backgroundColor = theme.backgroundColor
+        self.monthPickerBackgroundNode.backgroundColor = theme.backgroundColor
+        self.timePickerBackgroundNode.backgroundColor = theme.backgroundColor
+        
         self.monthArrowNode.image = generateSmallArrowImage(color: theme.accentColor)
         self.previousButtonNode.setImage(generateNavigationArrowImage(color: theme.accentColor, mirror: true), for: .normal)
         self.nextButtonNode.setImage(generateNavigationArrowImage(color: theme.accentColor, mirror: false), for: .normal)
