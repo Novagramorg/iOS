@@ -742,6 +742,7 @@ final class ChatbotSetupScreenComponent: Component {
             self.resetQueryText = nil
             var nameSectionItems: [AnyComponentWithIdentity<Empty>] = []
             nameSectionItems.append(AnyComponentWithIdentity(id: 0, component: AnyComponent(ListTextFieldItemComponent(
+                style: .glass,
                 theme: environment.theme,
                 initialText: "",
                 resetText: resetQueryText.flatMap { ListTextFieldItemComponent.ResetText(value: $0) },

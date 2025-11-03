@@ -645,7 +645,7 @@ private final class PeerInfoScreenBusinessHoursItemNode: PeerInfoScreenItemNode 
         let hasTopCorners = hasCorners && topItem == nil
         let hasBottomCorners = hasCorners && bottomItem == nil
         
-        self.maskNode.image = hasCorners ? PresentationResourcesItemList.cornersImage(presentationData.theme, top: hasTopCorners, bottom: hasBottomCorners) : nil
+        self.maskNode.image = hasCorners ? PresentationResourcesItemList.cornersImage(presentationData.theme, top: hasTopCorners, bottom: hasBottomCorners, glass: true) : nil
         transition.updateFrame(node: self.maskNode, frame: CGRect(origin: CGPoint(x: safeInsets.left, y: 0.0), size: CGSize(width: width - safeInsets.left - safeInsets.right, height: height)))
         self.bottomSeparatorNode.isHidden = hasBottomCorners
         

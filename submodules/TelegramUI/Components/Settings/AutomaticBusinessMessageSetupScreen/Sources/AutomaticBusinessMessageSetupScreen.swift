@@ -1492,7 +1492,8 @@ final class AutomaticBusinessMessageSetupScreenComponent: Component {
                                         self.inactivityDays = valueList[index]
                                         self.state?.updated(transition: .immediate)
                                     }
-                                ))
+                                )),
+                                preferNative: true
                             )))
                         ]
                     )),

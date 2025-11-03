@@ -1293,7 +1293,8 @@ final class PeerAllowedReactionsScreenComponent: Component {
                                         self.allowedReactionCount = index
                                         self.state?.updated(transition: .immediate)
                                     }
-                                ))
+                                )),
+                                preferNative: true
                             )))
                         ],
                         displaySeparators: false

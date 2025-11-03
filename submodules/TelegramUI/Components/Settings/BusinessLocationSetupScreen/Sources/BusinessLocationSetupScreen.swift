@@ -395,6 +395,7 @@ final class BusinessLocationSetupScreenComponent: Component {
             var addressSectionItems: [AnyComponentWithIdentity<Empty>] = []
             addressSectionItems.append(AnyComponentWithIdentity(id: 0, component: AnyComponent(ListMultilineTextFieldItemComponent(
                 externalState: self.addressTextInputState,
+                style: .glass,
                 context: component.context,
                 theme: environment.theme,
                 strings: environment.strings,
