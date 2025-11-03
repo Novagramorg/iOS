@@ -27,6 +27,7 @@ import CountrySelectionUI
 import PhoneNumberFormat
 import QrCodeUI
 import MessageUI
+import AvatarNode
 
 final class NewContactScreenComponent: Component {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
@@ -37,6 +38,7 @@ final class NewContactScreenComponent: Component {
         let lastName: String
         let phoneNumber: String
         let syncContactToPhone: Bool
+        let addToPrivacyExceptions: Bool
         let note: NSAttributedString
     }
     
@@ -67,9 +69,10 @@ final class NewContactScreenComponent: Component {
         
         private let nameSection = ComponentView<Empty>()
         private let phoneSection = ComponentView<Empty>()
-        private let syncContactSection = ComponentView<Empty>()
+        private let optionsSection = ComponentView<Empty>()
         private let noteSection = ComponentView<Empty>()
         private let qrSection = ComponentView<Empty>()
+        private var avatarNode: AvatarNode?
         
         private let title = ComponentView<Empty>()
         private let cancelButton = ComponentView<Empty>()
@@ -94,6 +97,7 @@ final class NewContactScreenComponent: Component {
         private var updateFocusTag: Any?
         
         private var syncContactToPhone = true
+        private var addToPrivacyExceptions = false
         
         private var cachedChevronImage: (UIImage, PresentationTheme)?
         
@@ -166,6 +170,7 @@ final class NewContactScreenComponent: Component {
                 lastName: lastName,
                 phoneNumber: phoneNumber,
                 syncContactToPhone: self.syncContactToPhone,
+                addToPrivacyExceptions: self.addToPrivacyExceptions,
                 note: note
             )
         }
@@ -256,6 +261,10 @@ final class NewContactScreenComponent: Component {
                     self.resolvedPeer = .peer(peer: peer, isContact: false)
                 }
                 
+                if component.initialData.shareViaException {
+                    self.addToPrivacyExceptions = true
+                }
+                
                 let countryCode: Int32
                 if let phone = component.initialData.phoneNumber {
                     if let (_, code) = lookupCountryIdByNumber(phone, configuration: component.context.currentCountriesConfiguration.with { $0 }), let codeValue = Int32(code.code) {
@@ -265,7 +274,10 @@ final class NewContactScreenComponent: Component {
                     } else {
                         countryCode = AuthorizationSequenceCountrySelectionController.defaultCountryCode()
                     }
-                    updateFocusTag = self.firstNameTag
+                    if let _ = component.initialData.peer {   
+                    } else {
+                        updateFocusTag = self.firstNameTag
+                    }
                 } else {
                     countryCode = AuthorizationSequenceCountrySelectionController.defaultCountryCode()
                     updateFocusTag = self.phoneTag
@@ -302,6 +314,11 @@ final class NewContactScreenComponent: Component {
             var contentHeight: CGFloat = 0.0
             contentHeight += environment.navigationHeight
             contentHeight += topInset
+            
+            var avatarInset: CGFloat = 0.0
+            if let _ = component.initialData.peer {
+                avatarInset = 84.0
+            }
                     
             let nameSectionItems: [AnyComponentWithIdentity<Empty>] = [
                 AnyComponentWithIdentity(id: "firstName", component: AnyComponent(ListTextFieldItemComponent(
@@ -313,6 +330,7 @@ final class NewContactScreenComponent: Component {
                     autocapitalizationType: .sentences,
                     autocorrectionType: .default,
                     returnKeyType: .next,
+                    contentInsets: UIEdgeInsets(top: 0.0, left: avatarInset, bottom: 0.0, right: 0.0),
                     updated: { value in
                     },
                     onReturn: { [weak self] in
@@ -333,6 +351,7 @@ final class NewContactScreenComponent: Component {
                     autocapitalizationType: .sentences,
                     autocorrectionType: .default,
                     returnKeyType: .next,
+                    contentInsets: UIEdgeInsets(top: 0.0, left: avatarInset, bottom: 0.0, right: 0.0),
                     updated: { value in
                     },
                     onReturn: { [weak self] in
@@ -365,6 +384,20 @@ final class NewContactScreenComponent: Component {
                 }
                 transition.setFrame(view: nameSectionView, frame: nameSectionFrame)
             }
+            
+            if let peer = component.initialData.peer {
+                let avatarNode: AvatarNode
+                if let current = self.avatarNode {
+                    avatarNode = current
+                } else {
+                    avatarNode = AvatarNode(font: avatarPlaceholderFont(size: 28.0))
+                    avatarNode.setPeer(context: component.context, theme: theme, peer: peer)
+                    self.scrollView.addSubview(avatarNode.view)
+                    self.avatarNode = avatarNode
+                }
+                avatarNode.frame = CGRect(origin: CGPoint(x: sideInset + 15.0, y: contentHeight + floorToScreenPixels((nameSectionFrame.height - 66.0) / 2.0)), size: CGSize(width: 66.0, height: 66.0))
+            }
+            
             contentHeight += nameSectionSize.height
             contentHeight += sectionSpacing
             
@@ -378,8 +411,46 @@ final class NewContactScreenComponent: Component {
                 phoneAccesory = nil
             }
             
-            let phoneSectionItems: [AnyComponentWithIdentity<Empty>] = [
-                AnyComponentWithIdentity(id: "phone", component: AnyComponent(
+            var phoneSectionItems: [AnyComponentWithIdentity<Empty>] = []
+            
+            var phoneFooterComponent: AnyComponent<Empty>?
+            
+            if let peer = component.initialData.peer {
+                if let phone = component.initialData.phoneNumber {
+                    phoneSectionItems.append(AnyComponentWithIdentity(id: "phone", component: AnyComponent(
+                        ListActionItemComponent(
+                            theme: theme,
+                            style: .glass,
+                            title: AnyComponent(VStack([
+                                AnyComponentWithIdentity(id: "title", component: AnyComponent(MultilineTextComponent(text: .plain(NSAttributedString(string: "mobile", font: Font.regular(14.0), textColor: theme.list.itemPrimaryTextColor))))),
+                                AnyComponentWithIdentity(id: "value", component: AnyComponent(MultilineTextComponent(text: .plain(NSAttributedString(string: formatPhoneNumber(context: component.context, number: phone), font: Font.regular(17.0), textColor: theme.list.itemAccentColor)))))
+                            ], alignment: .left, spacing: 4.0)),
+                            contentInsets: UIEdgeInsets(top: 15.0, left: 0.0, bottom: 15.0, right: 0.0),
+                            accessory: nil,
+                            action: nil
+                        )))
+                    )
+                } else {
+                    phoneSectionItems.append(AnyComponentWithIdentity(id: "phone", component: AnyComponent(
+                        ListActionItemComponent(
+                            theme: theme,
+                            style: .glass,
+                            title: AnyComponent(VStack([
+                                AnyComponentWithIdentity(id: "title", component: AnyComponent(MultilineTextComponent(text: .plain(NSAttributedString(string: "mobile", font: Font.regular(14.0), textColor: theme.list.itemPrimaryTextColor))))),
+                                AnyComponentWithIdentity(id: "value", component: AnyComponent(MultilineTextComponent(text: .plain(NSAttributedString(string: environment.strings.ContactInfo_PhoneNumberHidden, font: Font.regular(17.0), textColor: theme.list.itemAccentColor)))))
+                            ], alignment: .left, spacing: 4.0)),
+                            contentInsets: UIEdgeInsets(top: 15.0, left: 0.0, bottom: 15.0, right: 0.0),
+                            accessory: nil,
+                            action: nil
+                        )))
+                    )
+                    phoneFooterComponent = AnyComponent(MultilineTextComponent(
+                        text: .plain(NSAttributedString(string: environment.strings.AddContact_ContactWillBeSharedAfterMutual(peer.compactDisplayTitle).string, font: Font.regular(13.0), textColor: environment.theme.list.freeTextColor)),
+                        maximumNumberOfLines: 0
+                    ))
+                }
+            } else {
+                phoneSectionItems.append(AnyComponentWithIdentity(id: "phone", component: AnyComponent(
                     ListItemComponentAdaptor(
                         itemGenerator: PhoneInputItem(
                             theme: theme,
@@ -426,7 +497,7 @@ final class NewContactScreenComponent: Component {
                                 if scheduleResolve {
                                     self.resolvedPeerDisposable.set(
                                         ((Signal.complete() |> delay(resolveDelay, queue: Queue.mainQueue()))
-                                        |> then(
+                                         |> then(
                                             component.context.engine.peers.resolvePeerByPhone(phone: number)
                                             |> beforeStarted({ [weak self] in
                                                 guard let self else {
@@ -437,28 +508,28 @@ final class NewContactScreenComponent: Component {
                                                     self.state?.updated(transition: .easeInOut(duration: 0.2))
                                                 }
                                             })
-                                        )
-                                        |> deliverOnMainQueue).start(next: { [weak self] peer in
-                                            guard let self, let component = self.component else {
-                                                return
-                                            }
-                                            if let peer {
-                                                self.resolvedPeerDisposable.set((component.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.IsContact(id: peer.id)) |> deliverOnMainQueue).start(next: { [weak self] isContact in
-                                                    guard let self else {
-                                                        return
-                                                    }
-                                                    self.resolvedPeer = .peer(peer: peer, isContact: isContact)
-                                                    if !self.isUpdating {
-                                                        self.state?.updated(transition: .easeInOut(duration: 0.2))
-                                                    }
-                                                }))
-                                            } else {
-                                                self.resolvedPeer = .notFound
-                                                if !self.isUpdating {
-                                                    self.state?.updated(transition: .easeInOut(duration: 0.2))
-                                                }
-                                            }
-                                        })
+                                         )
+                                         |> deliverOnMainQueue).start(next: { [weak self] peer in
+                                             guard let self, let component = self.component else {
+                                                 return
+                                             }
+                                             if let peer {
+                                                 self.resolvedPeerDisposable.set((component.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.IsContact(id: peer.id)) |> deliverOnMainQueue).start(next: { [weak self] isContact in
+                                                     guard let self else {
+                                                         return
+                                                     }
+                                                     self.resolvedPeer = .peer(peer: peer, isContact: isContact)
+                                                     if !self.isUpdating {
+                                                         self.state?.updated(transition: .easeInOut(duration: 0.2))
+                                                     }
+                                                 }))
+                                             } else {
+                                                 self.resolvedPeer = .notFound
+                                                 if !self.isUpdating {
+                                                     self.state?.updated(transition: .easeInOut(duration: 0.2))
+                                                 }
+                                             }
+                                         })
                                     )
                                 }
                             }
@@ -466,59 +537,58 @@ final class NewContactScreenComponent: Component {
                         params: ListViewItemLayoutParams(width: availableSize.width - sideInset * 2.0, leftInset: 0.0, rightInset: 0.0, availableHeight: 10000.0, isStandalone: true),
                         tag: self.phoneTag
                     )
-                ))
-            ]
-            
-            var phoneFooterComponent: AnyComponent<Empty>?
-            if let resolvedPeer = self.resolvedPeer {
-                if self.cachedChevronImage == nil || self.cachedChevronImage?.1 !== environment.theme {
-                    self.cachedChevronImage = (generateTintedImage(image: UIImage(bundleImageName: "Item List/InlineTextRightArrow"), color: environment.theme.list.itemAccentColor)!, environment.theme)
-                }
+                )))
                 
-                let phoneFooterRawText: String
-                switch resolvedPeer {
-                case .resolving:
-                    phoneFooterRawText = ""
-                case let .peer(_, isContact):
-                    if isContact {
-                        phoneFooterRawText = "This phone number is already in your contacts. [View >]()"
-                    } else {
-                        phoneFooterRawText = "This phone number is on Telegram."
+                if let resolvedPeer = self.resolvedPeer {
+                    if self.cachedChevronImage == nil || self.cachedChevronImage?.1 !== environment.theme {
+                        self.cachedChevronImage = (generateTintedImage(image: UIImage(bundleImageName: "Item List/InlineTextRightArrow"), color: environment.theme.list.itemAccentColor)!, environment.theme)
                     }
-                case .notFound:
-                    phoneFooterRawText = "This phone number is not on Telegram. [Invite >]()"
-                }
-                let phoneFooterText = NSMutableAttributedString(attributedString: parseMarkdownIntoAttributedString(phoneFooterRawText, attributes: footerAttributes))
-                if let range = phoneFooterText.string.range(of: ">"), let chevronImage = self.cachedChevronImage?.0 {
-                    phoneFooterText.addAttribute(.attachment, value: chevronImage, range: NSRange(range, in: phoneFooterText.string))
-                }
-                phoneFooterComponent = AnyComponent(MultilineTextComponent(
-                    text: .plain(phoneFooterText),
-                    maximumNumberOfLines: 0,
-                    highlightColor: environment.theme.list.itemAccentColor.withAlphaComponent(0.1),
-                    highlightInset: UIEdgeInsets(top: 0.0, left: 0.0, bottom: 0.0, right: -8.0),
-                    highlightAction: { attributes in
-                        if let _ = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.URL)] {
-                            return NSAttributedString.Key(rawValue: TelegramTextAttributes.URL)
+                    
+                    let phoneFooterRawText: String
+                    switch resolvedPeer {
+                    case .resolving:
+                        phoneFooterRawText = ""
+                    case let .peer(_, isContact):
+                        if isContact {
+                            phoneFooterRawText = "This phone number is already in your contacts. [View >]()"
                         } else {
-                            return nil
+                            phoneFooterRawText = "This phone number is on Telegram."
                         }
-                    },
-                    tapAction: { [weak self] _, _ in
-                        guard let self, let component = self.component else {
-                            return
-                        }
-                        if case let .peer(peer, _) = self.resolvedPeer {
-                            if let infoController = component.context.sharedContext.makePeerInfoController(context: component.context, updatedPresentationData: nil, peer: peer._asPeer(), mode: .generic, avatarInitiallyExpanded: false, fromChat: false, requestsContext: nil) {
-                                if let navigationController = component.context.sharedContext.mainWindow?.viewController as? NavigationController {
-                                    navigationController.pushViewController(infoController)
-                                }
+                    case .notFound:
+                        phoneFooterRawText = "This phone number is not on Telegram. [Invite >]()"
+                    }
+                    let phoneFooterText = NSMutableAttributedString(attributedString: parseMarkdownIntoAttributedString(phoneFooterRawText, attributes: footerAttributes))
+                    if let range = phoneFooterText.string.range(of: ">"), let chevronImage = self.cachedChevronImage?.0 {
+                        phoneFooterText.addAttribute(.attachment, value: chevronImage, range: NSRange(range, in: phoneFooterText.string))
+                    }
+                    phoneFooterComponent = AnyComponent(MultilineTextComponent(
+                        text: .plain(phoneFooterText),
+                        maximumNumberOfLines: 0,
+                        highlightColor: environment.theme.list.itemAccentColor.withAlphaComponent(0.1),
+                        highlightInset: UIEdgeInsets(top: 0.0, left: 0.0, bottom: 0.0, right: -8.0),
+                        highlightAction: { attributes in
+                            if let _ = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.URL)] {
+                                return NSAttributedString.Key(rawValue: TelegramTextAttributes.URL)
+                            } else {
+                                return nil
                             }
-                        } else {
-                            self.sendInvite()
+                        },
+                        tapAction: { [weak self] _, _ in
+                            guard let self, let component = self.component else {
+                                return
+                            }
+                            if case let .peer(peer, _) = self.resolvedPeer {
+                                if let infoController = component.context.sharedContext.makePeerInfoController(context: component.context, updatedPresentationData: nil, peer: peer._asPeer(), mode: .generic, avatarInitiallyExpanded: false, fromChat: false, requestsContext: nil) {
+                                    if let navigationController = component.context.sharedContext.mainWindow?.viewController as? NavigationController {
+                                        navigationController.pushViewController(infoController)
+                                    }
+                                }
+                            } else {
+                                self.sendInvite()
+                            }
                         }
-                    }
-                ))
+                    ))
+                }
             }
             
             let phoneSectionSize = self.phoneSection.update(
@@ -548,7 +618,8 @@ final class NewContactScreenComponent: Component {
                 self.updateCountryCode(code: initialCountryCode, name: "")
             }
             
-            let syncContactSectionItems: [AnyComponentWithIdentity<Empty>] = [
+
+            var optionsSectionItems: [AnyComponentWithIdentity<Empty>] = [
                 AnyComponentWithIdentity(id: "syncContact", component: AnyComponent(ListActionItemComponent(
                     theme: theme,
                     style: .glass,
@@ -570,29 +641,59 @@ final class NewContactScreenComponent: Component {
                     action: nil
                 )))
             ]
-            let syncContactSectionSize = self.syncContactSection.update(
+            var optionsFooterComponent: AnyComponent<Empty>?
+            if let peer = component.initialData.peer, component.initialData.shareViaException {
+                optionsSectionItems.append(
+                    AnyComponentWithIdentity(id: "privacy", component: AnyComponent(ListActionItemComponent(
+                        theme: theme,
+                        style: .glass,
+                        title: AnyComponent(MultilineTextComponent(
+                            text: .plain(NSAttributedString(
+                                string: environment.strings.AddContact_SharedContactException,
+                                font: Font.regular(presentationData.listsFontSize.baseDisplaySize),
+                                textColor: theme.list.itemPrimaryTextColor
+                            )),
+                            maximumNumberOfLines: 1
+                        )),
+                        accessory: .toggle(ListActionItemComponent.Toggle(style: .regular, isOn: self.addToPrivacyExceptions, action: { [weak self] _ in
+                            guard let self else {
+                                return
+                            }
+                            self.addToPrivacyExceptions = !self.addToPrivacyExceptions
+                            self.state?.updated(transition: .spring(duration: 0.4))
+                        })),
+                        action: nil
+                    )))
+                )
+                optionsFooterComponent = AnyComponent(MultilineTextComponent(
+                    text: .plain(NSAttributedString(string: environment.strings.AddContact_SharedContactExceptionInfo(peer.compactDisplayTitle).string, font: Font.regular(13.0), textColor: environment.theme.list.freeTextColor)),
+                    maximumNumberOfLines: 0
+                ))
+            }
+            
+            let optionsSectionSize = self.optionsSection.update(
                 transition: transition,
                 component: AnyComponent(ListSectionComponent(
                     theme: theme,
                     style: .glass,
                     header: nil,
-                    footer: nil,
-                    items: syncContactSectionItems
+                    footer: optionsFooterComponent,
+                    items: optionsSectionItems
                 )),
                 environment: {},
                 containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 10000.0)
             )
-            let syncContactSectionFrame = CGRect(origin: CGPoint(x: sideInset, y: contentHeight), size: syncContactSectionSize)
-            if let syncContactSectionView = self.syncContactSection.view {
-                if syncContactSectionView.superview == nil {
-                    self.scrollView.addSubview(syncContactSectionView)
-                    self.syncContactSection.parentState = state
+            let optionsSectionFrame = CGRect(origin: CGPoint(x: sideInset, y: contentHeight), size: optionsSectionSize)
+            if let optionsSectionView = self.optionsSection.view {
+                if optionsSectionView.superview == nil {
+                    self.scrollView.addSubview(optionsSectionView)
+                    self.optionsSection.parentState = state
                 }
-                transition.setFrame(view: syncContactSectionView, frame: syncContactSectionFrame)
+                transition.setFrame(view: optionsSectionView, frame: optionsSectionFrame)
             }
-            contentHeight += syncContactSectionSize.height
+            contentHeight += optionsSectionSize.height
             contentHeight += sectionSpacing
-            
+
             if case .peer = self.resolvedPeer {
                 if let qrSectionView = self.qrSection.view, qrSectionView.superview != nil {
                     transition.setAlpha(view: qrSectionView, alpha: 0.0, completion: { _ in
@@ -647,7 +748,7 @@ final class NewContactScreenComponent: Component {
                 if let noteSectionView = self.noteSection.view {
                     if noteSectionView.superview == nil {
                         self.scrollView.addSubview(noteSectionView)
-                        self.syncContactSection.parentState = state
+                        self.optionsSection.parentState = state
                         
                         noteSectionTransition = .immediate
                         transition.setAlpha(view: noteSectionView, alpha: 1.0)
@@ -664,7 +765,7 @@ final class NewContactScreenComponent: Component {
                 }
                 
                 let qrSectionItems: [AnyComponentWithIdentity<Empty>] = [
-                    AnyComponentWithIdentity(id: "syncContact", component: AnyComponent(ListActionItemComponent(
+                    AnyComponentWithIdentity(id: "qr", component: AnyComponent(ListActionItemComponent(
                         theme: theme,
                         style: .glass,
                         title: AnyComponent(VStack([
@@ -711,7 +812,7 @@ final class NewContactScreenComponent: Component {
                     var qrSectionTransition = transition
                     if qrSectionView.superview == nil {
                         self.scrollView.addSubview(qrSectionView)
-                        self.syncContactSection.parentState = state
+                        self.optionsSection.parentState = state
                         
                         qrSectionTransition = .immediate
                         transition.setAlpha(view: qrSectionView, alpha: 1.0)
@@ -874,17 +975,20 @@ public class NewContactScreen: ViewControllerComponentContainer {
         fileprivate let firstName: String?
         fileprivate let lastName: String?
         fileprivate let phoneNumber: String?
+        fileprivate let shareViaException: Bool
         
         fileprivate init(
             peer: EnginePeer?,
             firstName: String?,
             lastName: String?,
-            phoneNumber: String?
+            phoneNumber: String?,
+            shareViaException: Bool
         ) {
             self.peer = peer
             self.firstName = firstName
             self.lastName = lastName
             self.phoneNumber = phoneNumber
+            self.shareViaException = shareViaException
         }
     }
     
@@ -928,21 +1032,24 @@ public class NewContactScreen: ViewControllerComponentContainer {
     
     public static func initialData(
         peer: EnginePeer? = nil,
-        phoneNumber: String? = nil
+        phoneNumber: String? = nil,
+        shareViaException: Bool = false
     ) -> InitialData {
         if case let .user(user) = peer {
             return InitialData(
                 peer: peer,
                 firstName: user.firstName,
                 lastName: user.lastName,
-                phoneNumber: user.phone ?? phoneNumber
+                phoneNumber: user.phone ?? phoneNumber,
+                shareViaException: shareViaException
             )
         } else {
             return InitialData(
                 peer: nil,
                 firstName: nil,
                 lastName: nil,
-                phoneNumber: phoneNumber
+                phoneNumber: phoneNumber,
+                shareViaException: false
             )
         }
     }
@@ -957,7 +1064,7 @@ public class NewContactScreen: ViewControllerComponentContainer {
                 phoneNumber: result.phoneNumber,
                 noteText: result.note.string,
                 noteEntities: entities,
-                addToPrivacyExceptions: false
+                addToPrivacyExceptions: result.addToPrivacyExceptions
             ).startStandalone(completed: { [weak self] in
                 if !result.syncContactToPhone {
                     self?.completion(result.peer, nil, nil)
@@ -974,13 +1081,30 @@ public class NewContactScreen: ViewControllerComponentContainer {
         }
         
         if result.syncContactToPhone, let contactDataManager = self.context.sharedContext.contactDataManager {
+            var urls: [DeviceContactUrlData] = []
+            if let peer = result.peer {
+                let appProfile = DeviceContactUrlData(appProfile: peer.id)
+                var found = false
+                for url in urls {
+                    if url.label == appProfile.label && url.value == appProfile.value {
+                        found = true
+                        break
+                    }
+                }
+                if !found {
+                    urls.append(appProfile)
+                }
+            }
+            
+            var phoneNumbers: [DeviceContactPhoneNumberData] = []
+            if !result.phoneNumber.isEmpty {
+                phoneNumbers.append(DeviceContactPhoneNumberData(label: defaultContactLabel, value: result.phoneNumber))
+            }
             let composedContactData = DeviceContactExtendedData(
                 basicData: DeviceContactBasicData(
                     firstName: result.firstName,
                     lastName: result.lastName,
-                    phoneNumbers: [
-                        DeviceContactPhoneNumberData(label: "_$!<Mobile>!$_", value: result.phoneNumber)
-                    ]
+                    phoneNumbers: phoneNumbers
                 ),
                 middleName: "",
                 prefix: "",
@@ -989,7 +1113,7 @@ public class NewContactScreen: ViewControllerComponentContainer {
                 jobTitle: "",
                 department: "",
                 emailAddresses: [],
-                urls: [],
+                urls: urls,
                 addresses: [],
                 birthdayDate: nil,
                 socialProfiles: [],

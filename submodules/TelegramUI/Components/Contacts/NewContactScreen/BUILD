@@ -44,6 +44,7 @@ swift_library(
         "//submodules/TelegramUI/Components/GlassBarButtonComponent",
         "//submodules/PhoneNumberFormat",
         "//submodules/QrCodeUI",
+        "//submodules/AvatarNode",
     ],
     visibility = [
         "//visibility:public",

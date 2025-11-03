@@ -59,12 +59,11 @@ public func openAddPersonContactImpl(context: AccountContext, updatedPresentatio
             shareViaException = statusSettings.contains(.addExceptionWhenAddingContact)
         }
 
-        
-        let _ = shareViaException
         let controller = context.sharedContext.makeNewContactScreen(
             context: context,
             peer: peer,
             phoneNumber: user.phone,
+            shareViaException: shareViaException,
             completion: { peer, _, _ in
                 if let peer {
                     completion()
@@ -75,14 +74,5 @@ public func openAddPersonContactImpl(context: AccountContext, updatedPresentatio
             }
         )
         pushController(controller)
-        
-//        pushController(deviceContactInfoController(context: ShareControllerAppAccountContext(context: context), environment: ShareControllerAppEnvironment(sharedContext: context.sharedContext), updatedPresentationData: updatedPresentationData, subject: .create(peer: user, contactData: contactData, isSharing: true, shareViaException: shareViaException, completion: { peer, stableId, contactData in
-//            if let peer = peer as? TelegramUser {
-//                completion()
-//                
-//                let presentationData = context.sharedContext.currentPresentationData.with { $0 }
-//                present(OverlayStatusController(theme: presentationData.theme, type: .genericSuccess(presentationData.strings.AddContact_StatusSuccess(EnginePeer(peer).compactDisplayTitle).string, true)), nil)
-//            }
-//        }), completed: nil, cancelled: nil))
     })
 }
