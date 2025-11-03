@@ -909,8 +909,52 @@ public class MediaEditorTransitionOutExternalState {
     }
 }
 
-public protocol CameraScreen: ViewController {
+public enum CameraScreenMode {
+    case story
+    case sticker
+    case avatar
+}
+
+public final class CameraScreenTransitionIn {
+    public weak var sourceView: UIView?
+    public let sourceRect: CGRect
+    public let sourceCornerRadius: CGFloat
+    public let useFillAnimation: Bool
     
+    public init(
+        sourceView: UIView,
+        sourceRect: CGRect,
+        sourceCornerRadius: CGFloat,
+        useFillAnimation: Bool
+    ) {
+        self.sourceView = sourceView
+        self.sourceRect = sourceRect
+        self.sourceCornerRadius = sourceCornerRadius
+        self.useFillAnimation = useFillAnimation
+    }
+}
+
+public final class CameraScreenTransitionOut {
+    public weak var destinationView: UIView?
+    public let destinationRect: CGRect
+    public let destinationCornerRadius: CGFloat
+    public let completion: (() -> Void)?
+    
+    public init(
+        destinationView: UIView,
+        destinationRect: CGRect,
+        destinationCornerRadius: CGFloat,
+        completion: (() -> Void)? = nil
+    ) {
+        self.destinationView = destinationView
+        self.destinationRect = destinationRect
+        self.destinationCornerRadius = destinationCornerRadius
+        self.completion = completion
+    }
+}
+
+public protocol CameraScreen: ViewController {
+    func returnFromEditor()
 }
 
 public protocol MediaEditorScreen: ViewController {
@@ -1329,6 +1373,8 @@ public protocol SharedAccountContext: AnyObject {
     func makePremiumBoostLevelsController(context: AccountContext, peerId: EnginePeer.Id, subject: BoostSubject, boostStatus: ChannelBoostStatus, myBoostStatus: MyBoostStatus, forceDark: Bool, openStats: (() -> Void)?) -> ViewController
     
     func makeStickerPackScreen(context: AccountContext, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)?, mainStickerPack: StickerPackReference, stickerPacks: [StickerPackReference], loadedStickerPacks: [LoadedStickerPack], actionTitle: String?, isEditing: Bool, expandIfNeeded: Bool, parentNavigationController: NavigationController?, sendSticker: ((FileMediaReference, UIView, CGRect) -> Bool)?, actionPerformed: ((Bool) -> Void)?) -> ViewController
+    
+    func makeCameraScreen(context: AccountContext, mode: CameraScreenMode, cameraHolder: Any?, transitionIn: CameraScreenTransitionIn?, transitionOut: @escaping (Bool) -> CameraScreenTransitionOut?, completion: @escaping (Any, @escaping () -> Void) -> Void, transitionedOut: (() -> Void)?) -> ViewController
     
     func makeMediaPickerScreen(context: AccountContext, hasSearch: Bool, completion: @escaping (Any) -> Void) -> ViewController
     

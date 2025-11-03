@@ -21,11 +21,20 @@ private let calendar = Calendar(identifier: .gregorian)
 private final class ChatScheduleTimeSheetContentComponent: Component {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
     
+    public class ExternalState {
+        public fileprivate(set) var repeatValueFrame: CGRect
+        
+        public init() {
+            self.repeatValueFrame = .zero
+        }
+    }
+    
     let context: AccountContext
     let mode: ChatScheduleTimeScreen.Mode
     let currentTime: Int32?
     let currentRepeatPeriod: Int32?
     let minimalTime: Int32?
+    let externalState: ExternalState
     let dismiss: () -> Void
     
     init(
@@ -34,6 +43,7 @@ private final class ChatScheduleTimeSheetContentComponent: Component {
         currentTime: Int32?,
         currentRepeatPeriod: Int32?,
         minimalTime: Int32?,
+        externalState: ExternalState,
         dismiss: @escaping () -> Void
     ) {
         self.context = context
@@ -41,6 +51,7 @@ private final class ChatScheduleTimeSheetContentComponent: Component {
         self.currentTime = currentTime
         self.currentRepeatPeriod = currentRepeatPeriod
         self.minimalTime = minimalTime
+        self.externalState = externalState
         self.dismiss = dismiss
     }
     
@@ -133,14 +144,18 @@ private final class ChatScheduleTimeSheetContentComponent: Component {
             defer {
                 self.isUpdating = false
             }
+            
             let environment = environment[EnvironmentType.self].value
+            
+            let themeUpdated = self.environment?.theme != environment.theme
+            
             self.environment = environment
             
             if self.component == nil {
                 self.updateMinimumDate(currentTime: component.currentTime, minimalTime: component.minimalTime)
                 self.repeatPeriod = component.currentRepeatPeriod
             }
-            
+                        
             self.component = component
             self.state = state
             
@@ -210,6 +225,10 @@ private final class ChatScheduleTimeSheetContentComponent: Component {
             let datePicker: DatePickerNode
             if let current = self.datePicker {
                 datePicker = current
+                
+                if themeUpdated {
+                    datePicker.updateTheme(DatePickerTheme(theme: environment.theme))
+                }
             } else {
                 datePicker = DatePickerNode(
                     theme: DatePickerTheme(theme: environment.theme),
@@ -588,6 +607,7 @@ private final class ChatScheduleTimeSheetContentComponent: Component {
                             theme: environment.theme,
                             sourceFrame: repeatValueFrame,
                             component: AnyComponent(RepeatMenuComponent(
+                                theme: environment.theme,
                                 value: self.repeatPeriod,
                                 valueUpdated: { [weak self] value in
                                     guard let self, let component = self.component, let environment = self.environment else {
@@ -602,13 +622,13 @@ private final class ChatScheduleTimeSheetContentComponent: Component {
                                             content: .premiumPaywall(
                                                 title: "Premium Required",
                                                 text: "Subscribe to **Telegram Premium** to schedule repeating messages.",
-                                                customUndoText: nil,
+                                                customUndoText: "Add",
                                                 timeout: nil,
                                                 linkAction: nil
                                             ),
-                                            elevatedLayout: true,
+                                            elevatedLayout: false,
                                             action: { [weak environment] action in
-                                                if case .info = action {
+                                                if case .undo = action {
                                                     var replaceImpl: ((ViewController) -> Void)?
                                                     let controller = component.context.sharedContext.makePremiumDemoController(context: component.context, subject: .colors, forceDark: false, action: {
                                                         let controller = component.context.sharedContext.makePremiumIntroController(context: component.context, source: .nameColor, forceDark: false, dismissed: nil)
@@ -656,30 +676,7 @@ private final class ChatScheduleTimeSheetContentComponent: Component {
                 })
             }
             
-            
-//            if let controller = environment.controller(), !controller.automaticallyControlPresentationContextLayout {
-//                let sideInset: CGFloat = 0.0
-//                let bottomInset: CGFloat = max(environment.safeInsets.bottom, contentHeight)
-////                if case .regular = environment.metrics.widthClass {
-////                    sideInset = floor((context.availableSize.width - 430.0) / 2.0) - 12.0
-////                    bottomInset = (context.availableSize.height - sheetExternalState.contentHeight) / 2.0 + sheetExternalState.contentHeight
-////                }
-//                
-//                let layout = ContainerViewLayout(
-//                    size: availableSize,
-//                    metrics: environment.metrics,
-//                    deviceMetrics: environment.deviceMetrics,
-//                    intrinsicInsets: UIEdgeInsets(top: 0.0, left: 0.0, bottom: bottomInset, right: 0.0),
-//                    safeInsets: UIEdgeInsets(top: 0.0, left: max(sideInset, environment.safeInsets.left), bottom: 0.0, right: max(sideInset, environment.safeInsets.right)),
-//                    additionalInsets: .zero,
-//                    statusBarHeight: environment.statusBarHeight,
-//                    inputHeight: nil,
-//                    inputHeightIsInteractivellyChanging: false,
-//                    inVoiceOver: false
-//                )
-//                controller.presentationContext.containerLayoutUpdated(layout, transition: transition.containedViewLayoutTransition)
-//            }
-            
+            component.externalState.repeatValueFrame = repeatValueFrame
             
             return contentSize
         }
@@ -739,6 +736,8 @@ private final class ChatScheduleTimeScreenComponent: Component {
     final class View: UIView {
         private let sheet = ComponentView<(ViewControllerComponentContainer.Environment, SheetComponentEnvironment)>()
         private let sheetAnimateOut = ActionSlot<Action<Void>>()
+        private let sheetExternalState = SheetComponent<EnvironmentType>.ExternalState()
+        private let contentExternalState = ChatScheduleTimeSheetContentComponent.ExternalState()
         
         private var component: ChatScheduleTimeScreenComponent?
         private var environment: EnvironmentType?
@@ -782,6 +781,7 @@ private final class ChatScheduleTimeScreenComponent: Component {
                         currentTime: component.currentTime,
                         currentRepeatPeriod: component.currentRepeatPeriod,
                         minimalTime: component.minimalTime,
+                        externalState: self.contentExternalState,
                         dismiss: { [weak self] in
                             guard let self else {
                                 return
@@ -796,6 +796,7 @@ private final class ChatScheduleTimeScreenComponent: Component {
                     style: .glass,
                     backgroundColor: .color(environment.theme.actionSheet.opaqueItemBackgroundColor),
                     followContentSizeChanges: true,
+                    externalState: self.sheetExternalState,
                     animateOut: self.sheetAnimateOut
                 )),
                 environment: {
@@ -809,6 +810,25 @@ private final class ChatScheduleTimeScreenComponent: Component {
                     self.addSubview(sheetView)
                 }
                 transition.setFrame(view: sheetView, frame: CGRect(origin: CGPoint(), size: availableSize))
+            }
+            
+            if let controller = environment.controller(), !controller.automaticallyControlPresentationContextLayout {
+                let sideInset: CGFloat = 20.0
+                let bottomInset: CGFloat = self.sheetExternalState.contentHeight - self.contentExternalState.repeatValueFrame.minY + 14.0
+
+                let layout = ContainerViewLayout(
+                    size: availableSize,
+                    metrics: environment.metrics,
+                    deviceMetrics: environment.deviceMetrics,
+                    intrinsicInsets: UIEdgeInsets(top: 0.0, left: 0.0, bottom: bottomInset, right: 0.0),
+                    safeInsets: UIEdgeInsets(top: 0.0, left: max(sideInset, environment.safeInsets.left), bottom: 0.0, right: max(sideInset, environment.safeInsets.right)),
+                    additionalInsets: .zero,
+                    statusBarHeight: environment.statusBarHeight,
+                    inputHeight: nil,
+                    inputHeightIsInteractivellyChanging: false,
+                    inVoiceOver: false
+                )
+                controller.presentationContext.containerLayoutUpdated(layout, transition: transition.containedViewLayoutTransition)
             }
             
             return availableSize
@@ -860,7 +880,7 @@ public class ChatScheduleTimeScreen: ViewControllerComponentContainer {
         self.navigationPresentation = .flatModal
         self.blocksBackgroundWhenInOverlay = true
         
-        //self.automaticallyControlPresentationContextLayout = false
+        self.automaticallyControlPresentationContextLayout = false
     }
     
     required public init(coder aDecoder: NSCoder) {
@@ -1148,18 +1168,24 @@ private final class MenuComponent: Component {
 }
 
 private final class RepeatMenuComponent: Component {
+    let theme: PresentationTheme
     let value: Int32?
     let valueUpdated: (Int32?) -> Void
     
     init(
+        theme: PresentationTheme,
         value: Int32?,
         valueUpdated: @escaping (Int32?) -> Void
     ) {
+        self.theme = theme
         self.value = value
         self.valueUpdated = valueUpdated
     }
 
     public static func ==(lhs: RepeatMenuComponent, rhs: RepeatMenuComponent) -> Bool {
+        if lhs.theme !== rhs.theme {
+            return false
+        }
         if lhs.value != rhs.value {
             return false
         }
@@ -1205,14 +1231,16 @@ private final class RepeatMenuComponent: Component {
             let sideInset: CGFloat = 18.0
             let itemInset: CGFloat = 60.0
             
-            self.checkIcon.tintColor = .black
+            let textColor = component.theme.contextMenu.primaryColor
             
+            self.checkIcon.tintColor = textColor
+                        
             let neverSize = self.never.update(
                 transition: transition,
                 component: AnyComponent(
                     PlainButtonComponent(
                         content: AnyComponent(
-                            Text(text: "Never", font: Font.regular(17.0), color: .black)
+                            Text(text: "Never", font: Font.regular(17.0), color: textColor)
                         ),
                         action: { [weak self] in
                             guard let self else {
@@ -1277,7 +1305,7 @@ private final class RepeatMenuComponent: Component {
                     component: AnyComponent(
                         PlainButtonComponent(
                             content: AnyComponent(
-                                Text(text: repeatString, font: Font.regular(17.0), color: .black)
+                                Text(text: repeatString, font: Font.regular(17.0), color: textColor)
                             ),
                             action: { [weak self] in
                                 guard let self else {
@@ -1311,7 +1339,7 @@ private final class RepeatMenuComponent: Component {
             
             let size = CGSize(width: itemInset + maxWidth + 40.0, height: originY)
             
-            self.separator.backgroundColor = UIColor(rgb: 0xdddddd).cgColor
+            self.separator.backgroundColor = textColor.withMultipliedAlpha(0.6).cgColor
             self.separator.frame = CGRect(origin: CGPoint(x: sideInset, y: 62.0), size: CGSize(width: size.width - sideInset * 2.0, height: UIScreenPixel))
                         
             return size

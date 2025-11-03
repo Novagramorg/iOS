@@ -374,8 +374,8 @@ private class MessagePriceItemNode: ListViewItemNode {
                     
                     let centralLeftText = item.value == 0 ? item.strings.Stars_SendMessage_PriceFree : item.strings.Privacy_Messages_Stars(Int32(clamping: item.value))
                     
-                    strongSelf.centerLeftTextNode.attributedText = NSAttributedString(string: centralLeftText, font: textFont, textColor: item.openSetCustom != nil ? item.theme.list.itemAccentColor : item.theme.list.itemPrimaryTextColor)
-                    strongSelf.centerRightTextNode.attributedText = NSAttributedString(string: item.price, font: smallTextFont, textColor: item.openSetCustom != nil ? item.theme.list.itemAccentColor.withMultipliedAlpha(0.5) : item.theme.list.itemSecondaryTextColor)
+                    strongSelf.centerLeftTextNode.attributedText = NSAttributedString(string: centralLeftText, font: textFont, textColor: item.openSetCustom != nil && item.isEnabled ? item.theme.list.itemAccentColor : item.theme.list.itemPrimaryTextColor)
+                    strongSelf.centerRightTextNode.attributedText = NSAttributedString(string: item.price, font: smallTextFont, textColor: item.openSetCustom != nil && item.isEnabled ? item.theme.list.itemAccentColor.withMultipliedAlpha(0.5) : item.theme.list.itemSecondaryTextColor)
                     
                     let leftTextSize = strongSelf.leftTextNode.updateLayout(CGSize(width: 100.0, height: 100.0))
                     let rightTextSize = strongSelf.rightTextNode.updateLayout(CGSize(width: 100.0, height: 100.0))
@@ -402,7 +402,7 @@ private class MessagePriceItemNode: ListViewItemNode {
                     }
                     strongSelf.centerTextButtonBackground.tintColor = item.theme.list.itemAccentColor.withMultipliedAlpha(0.1)
                     
-                    if item.openSetCustom != nil {
+                    if item.openSetCustom != nil && item.isEnabled {
                         strongSelf.centerTextButtonNode.isEnabled = true
                         strongSelf.centerTextButtonBackground.isHidden = false
                     } else {
@@ -446,12 +446,13 @@ private class MessagePriceItemNode: ListViewItemNode {
                         }
                         
                         let sideInset: CGFloat = 16.0
-                        let buttonSize = CGSize(width: params.width - params.leftInset - params.rightInset - sideInset * 2.0, height: 50.0)
+                        let buttonSize = CGSize(width: params.width - params.leftInset - params.rightInset - sideInset * 2.0, height: 52.0)
                         let _ = strongSelf.button.update(
                             transition: .immediate,
                             component: AnyComponent(
                                 ButtonComponent(
                                     background: ButtonComponent.Background(
+                                        style: .glass,
                                         color: item.theme.list.itemCheckColors.fillColor,
                                         foreground: item.theme.list.itemCheckColors.foregroundColor,
                                         pressedColor: item.theme.list.itemCheckColors.fillColor.withMultipliedAlpha(0.9)

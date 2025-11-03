@@ -777,7 +777,7 @@ final class StarsStatisticsScreenComponent: Component {
             let panelTransition = transition
             if !panelItems.isEmpty {
                 let panelContainerInset: CGFloat = self.listIsExpanded ? 0.0 : 16.0
-                let panelContainerCornerRadius: CGFloat = self.listIsExpanded ? 0.0 : 11.0
+                let panelContainerCornerRadius: CGFloat = self.listIsExpanded ? 0.0 : 26.0
                 
                 let panelContainerSize = self.panelContainer.update(
                     transition: panelTransition,
