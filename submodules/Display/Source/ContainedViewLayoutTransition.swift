@@ -2217,11 +2217,77 @@ extension CGColor: AnyValueProviding {
 
 extension CGPath: AnyValueProviding {
     func interpolate(with other: CGPath, fraction: CGFloat) -> CGPath {
-        if fraction == 0.0 {
+        if fraction <= 0.0 {
             return self
-        } else {
+        } else if fraction >= 1.0 {
             return other
         }
+
+        enum PathElement {
+            case move(to: CGPoint)
+            case addLine(to: CGPoint)
+            case addQuad(control: CGPoint, to: CGPoint)
+            case addCurve(control1: CGPoint, control2: CGPoint, to: CGPoint)
+            case close
+        }
+
+        func elements(for path: CGPath) -> [PathElement] {
+            var elements: [PathElement] = []
+            path.applyWithBlock { elementPointer in
+                let element = elementPointer.pointee
+                let points = element.points
+                switch element.type {
+                case .moveToPoint:
+                    elements.append(.move(to: points[0]))
+                case .addLineToPoint:
+                    elements.append(.addLine(to: points[0]))
+                case .addQuadCurveToPoint:
+                    elements.append(.addQuad(control: points[0], to: points[1]))
+                case .addCurveToPoint:
+                    elements.append(.addCurve(control1: points[0], control2: points[1], to: points[2]))
+                case .closeSubpath:
+                    elements.append(.close)
+                @unknown default:
+                    break
+                }
+            }
+            return elements
+        }
+
+        let lhsElements = elements(for: self)
+        let rhsElements = elements(for: other)
+
+        guard lhsElements.count == rhsElements.count else {
+            return fraction < 0.5 ? self : other
+        }
+
+        func interpolatedPoint(_ lhs: CGPoint, _ rhs: CGPoint) -> CGPoint {
+            return lhs.interpolate(with: rhs, fraction: fraction)
+        }
+
+        let mutablePath = CGMutablePath()
+        for (lhs, rhs) in zip(lhsElements, rhsElements) {
+            switch (lhs, rhs) {
+            case let (.move(to: lhsPoint), .move(to: rhsPoint)):
+                mutablePath.move(to: interpolatedPoint(lhsPoint, rhsPoint))
+            case let (.addLine(to: lhsPoint), .addLine(to: rhsPoint)):
+                mutablePath.addLine(to: interpolatedPoint(lhsPoint, rhsPoint))
+            case let (.addQuad(control: lhsControl, to: lhsPoint), .addQuad(control: rhsControl, to: rhsPoint)):
+                mutablePath.addQuadCurve(to: interpolatedPoint(lhsPoint, rhsPoint), control: interpolatedPoint(lhsControl, rhsControl))
+            case let (.addCurve(control1: lhsControl1, control2: lhsControl2, to: lhsPoint), .addCurve(control1: rhsControl1, control2: rhsControl2, to: rhsPoint)):
+                mutablePath.addCurve(
+                    to: interpolatedPoint(lhsPoint, rhsPoint),
+                    control1: interpolatedPoint(lhsControl1, rhsControl1),
+                    control2: interpolatedPoint(lhsControl2, rhsControl2)
+                )
+            case (.close, .close):
+                mutablePath.closeSubpath()
+            default:
+                return fraction <= 0.0 ? self : other
+            }
+        }
+
+        return mutablePath.copy() ?? mutablePath
     }
     
     var anyValue: ControlledTransitionProperty.AnyValue {
@@ -2237,7 +2303,7 @@ extension CGPath: AnyValueProviding {
                 }
             },
             interpolate: { other, fraction in
-                guard CFGetTypeID(other.value as CFTypeRef) == CGColor.typeID else {
+                guard CFGetTypeID(other.value as CFTypeRef) == CGPath.typeID else {
                     preconditionFailure()
                 }
                 return self.interpolate(with: other.value as! CGPath, fraction: fraction).anyValue

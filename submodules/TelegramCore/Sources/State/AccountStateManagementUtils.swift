@@ -3865,7 +3865,12 @@ func replayFinalState(
                             }
 
                             if id.namespace == Namespaces.Message.Cloud && id.peerId.namespace == Namespaces.Peer.CloudUser {
-                                addedConferenceInvitationMessagesIds.append(id)
+                                inner: for media in message.media {
+                                    if let action = media as? TelegramMediaAction, case .conferenceCall = action.action {
+                                        addedConferenceInvitationMessagesIds.append(id)
+                                        break inner
+                                    }
+                                }
                             }
                         }
                         if message.flags.contains(.WasScheduled) {
