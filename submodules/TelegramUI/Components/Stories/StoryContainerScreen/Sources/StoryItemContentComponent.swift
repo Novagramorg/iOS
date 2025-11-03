@@ -135,6 +135,14 @@ final class StoryItemContentComponent: Component {
             self.minMessagePrice = minMessagePrice
         }
     }
+    
+    private struct MediaStreamCallVideoState: Equatable {
+        var videoEndpointId: String?
+        
+        init(videoEndpointId: String?) {
+            self.videoEndpointId = videoEndpointId
+        }
+    }
 
     final class View: StoryContentItem.View {
         private let imageView: StoryItemImageView
@@ -142,6 +150,7 @@ final class StoryItemContentComponent: Component {
         private var videoNode: UniversalVideoNode?
         private(set) var mediaStreamCall: PresentationGroupCallImpl?
         private var mediaStreamCallState: MediaStreamCallState?
+        private var mediaStreamCallVideoState: MediaStreamCallVideoState?
         private var liveCallStateDisposable: Disposable?
         private var liveCallStatsDisposable: Disposable?
         private var mediaStream: ComponentView<Empty>?
@@ -922,11 +931,15 @@ final class StoryItemContentComponent: Component {
                 
                 if case .rtc = liveStream.kind, component.isEmbeddedInCamera {
                 } else {
+                    var videoEndpointId: String?
+                    if let mediaStreamCallVideoState = self.mediaStreamCallVideoState {
+                        videoEndpointId = mediaStreamCallVideoState.videoEndpointId
+                    }
                     let _ = mediaStream.update(
                         transition: mediaStreamTransition,
                         component: AnyComponent(MediaStreamVideoComponent(
                             call: mediaStreamCall,
-                            hasVideo: true,
+                            videoEndpointId: videoEndpointId,
                             isVisible: true,
                             isAdmin: false,
                             peerTitle: "",
@@ -1089,7 +1102,36 @@ final class StoryItemContentComponent: Component {
                         }
                         if self.customSubtitle != subtitle {
                             self.customSubtitle = subtitle
-                            environment.customItemSubtitleUpdated()
+                            if !self.isUpdating {
+                                environment.customItemSubtitleUpdated()
+                            }
+                        }
+                        
+                        var video: PresentationGroupCallRequestedVideo?
+                        if let members {
+                            if let participant = members.participants.first(where: { $0.videoEndpointId != nil }), let videoValue = participant.requestedVideoChannel(minQuality: .full, maxQuality: .full) {
+                                video = videoValue
+                            }
+                        }
+                        let mediaStreamCallVideoState = MediaStreamCallVideoState(videoEndpointId: video?.endpointId)
+                        if self.mediaStreamCallVideoState != mediaStreamCallVideoState {
+                            self.mediaStreamCallVideoState = mediaStreamCallVideoState
+                            
+                            if let mediaStreamCall = self.mediaStreamCall {
+                                if let video {
+                                    mediaStreamCall.setRequestedVideoList(items: [video])
+                                } else {
+                                    mediaStreamCall.setRequestedVideoList(items: [])
+                                }
+                            }
+                            
+                            if video != nil {
+                                print("updating with video")
+                            }
+                            
+                            if !self.isUpdating {
+                                self.state?.updated(transition: .immediate)
+                            }
                         }
                     })
                 }

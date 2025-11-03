@@ -363,7 +363,7 @@ public final class MediaStreamComponent: CombinedComponent {
             let video = video.update(
                 component: MediaStreamVideoComponent(
                     call: context.component.call,
-                    hasVideo: context.state.hasVideo,
+                    videoEndpointId: context.state.hasVideo ? "unified" : nil,
                     isVisible: environment.isVisible && context.state.isVisibleInHierarchy,
                     isAdmin: context.state.canManageCall,
                     peerTitle: context.state.peerTitle,
