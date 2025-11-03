@@ -15,7 +15,7 @@ import ComponentDisplayAdapters
 
 public final class MediaStreamVideoComponent: Component {
     let call: PresentationGroupCallImpl
-    let hasVideo: Bool
+    let videoEndpointId: String?
     let isVisible: Bool
     let isAdmin: Bool
     let peerTitle: String
@@ -32,7 +32,7 @@ public final class MediaStreamVideoComponent: Component {
     
     public init(
         call: PresentationGroupCallImpl,
-        hasVideo: Bool,
+        videoEndpointId: String?,
         isVisible: Bool,
         isAdmin: Bool,
         peerTitle: String,
@@ -48,7 +48,7 @@ public final class MediaStreamVideoComponent: Component {
         onVideoPlaybackLiveChange: @escaping (Bool) -> Void
     ) {
         self.call = call
-        self.hasVideo = hasVideo
+        self.videoEndpointId = videoEndpointId
         self.isVisible = isVisible
         self.isAdmin = isAdmin
         self.peerTitle = peerTitle
@@ -69,7 +69,7 @@ public final class MediaStreamVideoComponent: Component {
         if lhs.call !== rhs.call {
             return false
         }
-        if lhs.hasVideo != rhs.hasVideo {
+        if lhs.videoEndpointId != rhs.videoEndpointId {
             return false
         }
         if lhs.isVisible != rhs.isVisible {
@@ -308,14 +308,14 @@ public final class MediaStreamVideoComponent: Component {
                 })
             }
             
-            if !component.hasVideo || component.videoLoading || self.videoStalled {
+            if component.videoEndpointId == nil || component.videoLoading || self.videoStalled {
                 updateVideoStalled(isStalled: true, transition: transition)
             } else {
                 updateVideoStalled(isStalled: false, transition: transition)
             }
             
-            if component.hasVideo, self.videoView == nil {
-                if let input = component.call.video(endpointId: "unified") {
+            if let videoEndpointId = component.videoEndpointId, self.videoView == nil {
+                if let input = component.call.video(endpointId: videoEndpointId) {
                     var _stallTimer: Foundation.Timer { Foundation.Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] timer in
                         guard let strongSelf = self else { return timer.invalidate() }
                         

@@ -514,17 +514,17 @@ public enum GetGroupCallParticipantsError {
 func _internal_getGroupCallParticipants(account: Account, reference: InternalGroupCallReference, offset: String, ssrcs: [UInt32], limit: Int32, sortAscending: Bool?, isStream: Bool) -> Signal<GroupCallParticipantsContext.State, GetGroupCallParticipantsError> {
     let accountPeerId = account.peerId
     
-    let sortAscendingValue: Signal<(Bool, Int32?, Bool, GroupCallParticipantsContext.State.DefaultParticipantsAreMuted?, GroupCallParticipantsContext.State.MessagesAreEnabled?, Bool, Int, Bool, Bool), GetGroupCallParticipantsError>
+    let sortAscendingValue: Signal<(Bool, Int32?, Bool, GroupCallParticipantsContext.State.DefaultParticipantsAreMuted?, GroupCallParticipantsContext.State.MessagesAreEnabled?, Bool, Int, Bool, Bool, [GroupCallParticipantsContext.Participant]), GetGroupCallParticipantsError>
     
     sortAscendingValue = _internal_getCurrentGroupCall(account: account, reference: reference)
     |> mapError { _ -> GetGroupCallParticipantsError in
         return .generic
     }
-    |> mapToSignal { result -> Signal<(Bool, Int32?, Bool, GroupCallParticipantsContext.State.DefaultParticipantsAreMuted?, GroupCallParticipantsContext.State.MessagesAreEnabled?, Bool, Int, Bool, Bool), GetGroupCallParticipantsError> in
-        guard let result = result else {
+    |> mapToSignal { result -> Signal<(Bool, Int32?, Bool, GroupCallParticipantsContext.State.DefaultParticipantsAreMuted?, GroupCallParticipantsContext.State.MessagesAreEnabled?, Bool, Int, Bool, Bool, [GroupCallParticipantsContext.Participant]), GetGroupCallParticipantsError> in
+        guard let result else {
             return .fail(.generic)
         }
-        return .single((sortAscending ?? result.info.sortAscending, result.info.scheduleTimestamp, result.info.subscribedToScheduled, result.info.defaultParticipantsAreMuted, result.info.messagesAreEnabled, result.info.isVideoEnabled, result.info.unmutedVideoLimit, result.info.isStream, result.info.isCreator))
+        return .single((sortAscending ?? result.info.sortAscending, result.info.scheduleTimestamp, result.info.subscribedToScheduled, result.info.defaultParticipantsAreMuted, result.info.messagesAreEnabled, result.info.isVideoEnabled, result.info.unmutedVideoLimit, result.info.isStream, result.info.isCreator, result.topParticipants))
     }
 
     return combineLatest(
@@ -548,7 +548,7 @@ func _internal_getGroupCallParticipants(account: Account, reference: InternalGro
             let version: Int32
             let nextParticipantsFetchOffset: String?
             
-            let (sortAscendingValue, scheduleTimestamp, subscribedToScheduled, defaultParticipantsAreMuted, messagesAreEnabled, isVideoEnabled, unmutedVideoLimit, isStream, isCreator) = sortAscendingAndScheduleTimestamp
+            let (sortAscendingValue, scheduleTimestamp, subscribedToScheduled, defaultParticipantsAreMuted, messagesAreEnabled, isVideoEnabled, unmutedVideoLimit, isStream, isCreator, topParticipants) = sortAscendingAndScheduleTimestamp
             
             if let result {
                 switch result {
@@ -568,6 +568,10 @@ func _internal_getGroupCallParticipants(account: Account, reference: InternalGro
                     parsedParticipants = participants.compactMap { GroupCallParticipantsContext.Participant($0, transaction: transaction) }
                 }
             } else {
+                if !topParticipants.isEmpty {
+                    parsedParticipants = topParticipants
+                }
+                
                 totalCount = 0
                 version = 0
                 nextParticipantsFetchOffset = nil

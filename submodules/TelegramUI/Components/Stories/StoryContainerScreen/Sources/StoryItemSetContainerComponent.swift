@@ -6581,6 +6581,19 @@ public final class StoryItemSetContainerComponent: Component {
                     })))
                 }
                 
+                if case .liveStream = component.slice.item.storyItem.media {
+                    items.append(.action(ContextMenuActionItem(text: presentationData.strings.Common_Delete, textColor: .destructive, icon: { theme in
+                        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Delete"), color: theme.contextMenu.destructiveColor)
+                    }, action: { [weak self] _, a in
+                        a(.default)
+                        
+                        guard let self else {
+                            return
+                        }
+                        self.performDeleteAction()
+                    })))
+                }
+                
                 let (tip, tipSignal) = self.getLinkedStickerPacks()
                 
                 return .single(ContextController.Items(id: 0, content: .list(items), tip: tip, tipSignal: tipSignal))
