@@ -167,6 +167,9 @@ func _internal_dismissServerProvidedSuggestion(account: Account, suggestion: Str
     } else {
         dismissedSuggestions[account.id] = Set([suggestion])
     }
+    if suggestion == ServerProvidedSuggestion.setupLoginEmailBlocking.id {
+        return .complete()
+    }
     return account.network.request(Api.functions.help.dismissSuggestion(peer: .inputPeerEmpty, suggestion: suggestion))
     |> `catch` { _ -> Signal<Api.Bool, NoError> in
         return .single(.boolFalse)

@@ -136,6 +136,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
     private let suggestAutoarchiveDisposable = MetaDisposable()
     private let dismissAutoarchiveDisposable = MetaDisposable()
     private var didSuggestAutoarchive = false
+    private var didSuggestLoginEmailSetup = false
     
     private var presentationData: PresentationData
     private let presentationDataValue = Promise<PresentationData>()
@@ -2551,6 +2552,35 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                 guard let strongSelf = self else {
                     return
                 }
+                
+                let context = strongSelf.context
+                if values.contains(.setupLoginEmail) || values.contains(.setupLoginEmailBlocking) {
+                    if strongSelf.didSuggestLoginEmailSetup {
+                        return
+                    }
+                    
+                    strongSelf.didSuggestLoginEmailSetup = true
+                                        
+                    let _ = (context.engine.notices.getServerProvidedSuggestions(reload: true)
+                    |> deliverOnMainQueue).start(next: { [weak self] currentValues in
+                        guard let strongSelf = self, currentValues.contains(.setupLoginEmail) || currentValues.contains(.setupLoginEmailBlocking) else {
+                            return
+                        }
+                        if let navigationController = strongSelf.navigationController as? NavigationController {
+                            let blocking = currentValues.contains(.setupLoginEmailBlocking)
+                            let controller = strongSelf.context.sharedContext.makeLoginEmailSetupController(context: strongSelf.context, blocking: blocking, emailPattern: nil, canAutoDismissIfNeeded: true, navigationController: navigationController, completion: {
+                                let _ = context.engine.notices.dismissServerProvidedSuggestion(suggestion: blocking ? ServerProvidedSuggestion.setupLoginEmailBlocking.id : ServerProvidedSuggestion.setupLoginEmail.id).startStandalone()
+                            }, dismiss: {
+                                if !blocking {
+                                    let _ = context.engine.notices.dismissServerProvidedSuggestion(suggestion: ServerProvidedSuggestion.setupLoginEmail.id).startStandalone()
+                                }
+                            })
+                            navigationController.pushViewController(controller)
+                        }
+                    })
+                    return
+                }
+                
                 if strongSelf.didSuggestAutoarchive {
                     return
                 }

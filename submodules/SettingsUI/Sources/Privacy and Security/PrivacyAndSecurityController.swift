@@ -682,8 +682,12 @@ private func privacyAndSecurityControllerEntries(
         showLoginEmail = true
     }
     if showLoginEmail {
+        var hasLoginEmail = false
+        if let loginEmail {
+            hasLoginEmail = !loginEmail.contains(" ")
+        }
         entries.append(.loginEmail(presentationData.theme, presentationData.strings.PrivacySettings_LoginEmail, loginEmail))
-        entries.append(.loginEmailInfo(presentationData.theme, loginEmail == nil ? presentationData.strings.PrivacySettings_LoginEmailSetupInfo : presentationData.strings.PrivacySettings_LoginEmailInfo))
+        entries.append(.loginEmailInfo(presentationData.theme, !hasLoginEmail ? presentationData.strings.PrivacySettings_LoginEmailSetupInfo : presentationData.strings.PrivacySettings_LoginEmailInfo))
     }
     
     entries.append(.privacyHeader(presentationData.theme, presentationData.strings.PrivacySettings_PrivacyTitle))
@@ -1329,7 +1333,7 @@ public func privacyAndSecurityController(
     }, openDataSettings: {
         pushControllerImpl?(dataPrivacyController(context: context), true)
     }, openEmailSettings: { emailPattern in
-        if let emailPattern = emailPattern {
+        if let emailPattern, !emailPattern.contains(" ") {
             let presentationData = context.sharedContext.currentPresentationData.with { $0 }
             let controller = textAlertController(
                 context: context, title: emailPattern, text: presentationData.strings.PrivacySettings_LoginEmailAlertText, actions: [
@@ -1542,7 +1546,7 @@ public func privacyAndSecurityController(
     setupEmailImpl = { emailPattern in
         let controller = loginEmailSetupController(context: context, blocking: false, emailPattern: emailPattern, navigationController: getNavigationControllerImpl?(), completion: {
             updatedTwoStepAuthData?()
-        })
+        }, dismiss: {})
         pushControllerImpl?(controller, true)
     }
     
