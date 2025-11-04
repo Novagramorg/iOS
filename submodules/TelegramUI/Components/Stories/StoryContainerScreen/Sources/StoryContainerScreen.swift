@@ -1624,6 +1624,7 @@ private final class StoryContainerScreenComponent: Component {
                                 hideUI: (i == focusedIndex && (self.itemSetPanState?.didBegin == false || self.itemSetPinchState != nil)),
                                 visibilityFraction: 1.0 - abs(panFraction + cubeAdditionalRotationFraction),
                                 isPanning: self.itemSetPanState?.didBegin == true,
+                                isCentral: i == focusedIndex,
                                 pinchState: self.itemSetPinchState,
                                 presentController: { [weak self] c, a in
                                     guard let self, let environment = self.environment else {

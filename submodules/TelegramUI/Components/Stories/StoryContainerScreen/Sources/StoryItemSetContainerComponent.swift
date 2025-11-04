@@ -115,6 +115,7 @@ public final class StoryItemSetContainerComponent: Component {
     public let hideUI: Bool
     public let visibilityFraction: CGFloat
     public let isPanning: Bool
+    public let isCentral: Bool
     public let pinchState: PinchState?
     public let presentController: (ViewController, Any?) -> Void
     public let presentInGlobalOverlay: (ViewController, Any?) -> Void
@@ -155,6 +156,7 @@ public final class StoryItemSetContainerComponent: Component {
         hideUI: Bool,
         visibilityFraction: CGFloat,
         isPanning: Bool,
+        isCentral: Bool,
         pinchState: PinchState?,
         presentController: @escaping (ViewController, Any?) -> Void,
         presentInGlobalOverlay: @escaping (ViewController, Any?) -> Void,
@@ -194,6 +196,7 @@ public final class StoryItemSetContainerComponent: Component {
         self.hideUI = hideUI
         self.visibilityFraction = visibilityFraction
         self.isPanning = isPanning
+        self.isCentral = isCentral
         self.pinchState = pinchState
         self.presentController = presentController
         self.presentInGlobalOverlay = presentInGlobalOverlay
@@ -267,6 +270,9 @@ public final class StoryItemSetContainerComponent: Component {
             return false
         }
         if lhs.isPanning != rhs.isPanning {
+            return false
+        }
+        if lhs.isCentral != rhs.isCentral {
             return false
         }
         if lhs.pinchState != rhs.pinchState {
@@ -1715,7 +1721,7 @@ public final class StoryItemSetContainerComponent: Component {
                             itemProgressMode = .pause
                         }
 
-                        view.setProgressMode(itemProgressMode)
+                        view.setProgressMode(mode: itemProgressMode, isCentral: index == centralIndex && component.isCentral)
                         
                         var isChannel = false
                         var canShare = true
@@ -1952,6 +1958,9 @@ public final class StoryItemSetContainerComponent: Component {
         }
         
         func updateIsProgressPaused() {
+            guard let component = self.component else {
+                return
+            }
             let progressMode = self.itemProgressMode()
             var centralId: StoryId?
             if let component = self.component {
@@ -1965,7 +1974,7 @@ public final class StoryItemSetContainerComponent: Component {
                         if id != centralId {
                             itemMode = .pause
                         }
-                        view.setProgressMode(itemMode)
+                        view.setProgressMode(mode: itemMode, isCentral: id == centralId && component.isCentral)
                     }
                 }
             }
@@ -2865,7 +2874,7 @@ public final class StoryItemSetContainerComponent: Component {
             }
             
             let inputPlaceholder: MessageInputPanelComponent.Placeholder
-            if let stealthModeTimeout = component.stealthModeTimeout {
+            if let stealthModeTimeout = component.stealthModeTimeout, !isLiveStream {
                 let minutes = Int(stealthModeTimeout / 60)
                 let seconds = Int(stealthModeTimeout % 60)
                 
