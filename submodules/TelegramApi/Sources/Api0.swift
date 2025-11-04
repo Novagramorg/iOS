@@ -617,6 +617,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[1348510708] = { return Api.MessageAction.parse_messageActionSetChatWallPaper($0) }
     dict[1007897979] = { return Api.MessageAction.parse_messageActionSetMessagesTTL($0) }
     dict[-229775366] = { return Api.MessageAction.parse_messageActionStarGift($0) }
+    dict[965651149] = { return Api.MessageAction.parse_messageActionStarGiftAuctionBid($0) }
     dict[-1787656893] = { return Api.MessageAction.parse_messageActionStarGiftUnique($0) }
     dict[747579941] = { return Api.MessageAction.parse_messageActionSuggestBirthday($0) }
     dict[1474192222] = { return Api.MessageAction.parse_messageActionSuggestProfilePhoto($0) }
@@ -973,7 +974,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[2109703795] = { return Api.SponsoredMessage.parse_sponsoredMessage($0) }
     dict[1124938064] = { return Api.SponsoredMessageReportOption.parse_sponsoredMessageReportOption($0) }
     dict[-963180333] = { return Api.SponsoredPeer.parse_sponsoredPeer($0) }
-    dict[-2136190013] = { return Api.StarGift.parse_starGift($0) }
+    dict[761666756] = { return Api.StarGift.parse_starGift($0) }
     dict[-1329630181] = { return Api.StarGift.parse_starGiftUnique($0) }
     dict[-650279524] = { return Api.StarGiftAttribute.parse_starGiftAttributeBackdrop($0) }
     dict[970559507] = { return Api.StarGiftAttribute.parse_starGiftAttributeModel($0) }
@@ -983,7 +984,8 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[520210263] = { return Api.StarGiftAttributeId.parse_starGiftAttributeIdBackdrop($0) }
     dict[1219145276] = { return Api.StarGiftAttributeId.parse_starGiftAttributeIdModel($0) }
     dict[1242965043] = { return Api.StarGiftAttributeId.parse_starGiftAttributeIdPattern($0) }
-    dict[-483580782] = { return Api.StarGiftAuctionState.parse_starGiftAuctionState($0) }
+    dict[1219300270] = { return Api.StarGiftAuctionAcquiredGift.parse_starGiftAuctionAcquiredGift($0) }
+    dict[-1707438777] = { return Api.StarGiftAuctionState.parse_starGiftAuctionState($0) }
     dict[676935593] = { return Api.StarGiftAuctionState.parse_starGiftAuctionStateFinished($0) }
     dict[-30197422] = { return Api.StarGiftAuctionState.parse_starGiftAuctionStateNotModified($0) }
     dict[-165829476] = { return Api.StarGiftAuctionUserState.parse_starGiftAuctionUserState($0) }
@@ -1480,6 +1482,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[-1803939105] = { return Api.payments.ResaleStarGifts.parse_resaleStarGifts($0) }
     dict[-74456004] = { return Api.payments.SavedInfo.parse_savedInfo($0) }
     dict[-1779201615] = { return Api.payments.SavedStarGifts.parse_savedStarGifts($0) }
+    dict[2103169520] = { return Api.payments.StarGiftAuctionAcquiredGifts.parse_starGiftAuctionAcquiredGifts($0) }
     dict[-2061303084] = { return Api.payments.StarGiftAuctionState.parse_starGiftAuctionState($0) }
     dict[-1977011469] = { return Api.payments.StarGiftCollections.parse_starGiftCollections($0) }
     dict[-1598402793] = { return Api.payments.StarGiftCollections.parse_starGiftCollectionsNotModified($0) }
@@ -2215,6 +2218,8 @@ public extension Api {
                 _1.serialize(buffer, boxed)
             case let _1 as Api.StarGiftAttributeId:
                 _1.serialize(buffer, boxed)
+            case let _1 as Api.StarGiftAuctionAcquiredGift:
+                _1.serialize(buffer, boxed)
             case let _1 as Api.StarGiftAuctionState:
                 _1.serialize(buffer, boxed)
             case let _1 as Api.StarGiftAuctionUserState:
@@ -2634,6 +2639,8 @@ public extension Api {
             case let _1 as Api.payments.SavedInfo:
                 _1.serialize(buffer, boxed)
             case let _1 as Api.payments.SavedStarGifts:
+                _1.serialize(buffer, boxed)
+            case let _1 as Api.payments.StarGiftAuctionAcquiredGifts:
                 _1.serialize(buffer, boxed)
             case let _1 as Api.payments.StarGiftAuctionState:
                 _1.serialize(buffer, boxed)

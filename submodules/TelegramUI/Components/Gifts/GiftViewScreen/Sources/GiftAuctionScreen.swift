@@ -27,6 +27,7 @@ import GlassBarButtonComponent
 import AnimatedTextComponent
 import BotPaymentsUI
 import UndoUI
+import GiftItemComponent
 
 private final class BadgeComponent: Component {
     let theme: PresentationTheme
@@ -977,6 +978,8 @@ private final class GiftAuctionScreenComponent: Component {
         private var liveStreamPerks: [ComponentView<Empty>] = []
         private var liveStreamMessagePreview: ComponentView<Empty>?
         
+        private let myGifts = ComponentView<Empty>()
+        
         private var myPeerTitle: ComponentView<Empty>?
         private var myPeerItem: ComponentView<Empty>?
         
@@ -987,6 +990,9 @@ private final class GiftAuctionScreenComponent: Component {
         private var giftAuctionDisposable: Disposable?
         private var giftAuctionTimer: SwiftSignalKit.Timer?
         private var peersMap: [EnginePeer.Id: EnginePeer] = [:]
+        
+        private var giftAuctionAcquiredGifts: [GiftAuctionAcquiredGift] = []
+        private var giftAuctionAcquiredGiftsDisposable: Disposable?
         
         private let actionButton = ComponentView<Empty>()
                 
@@ -1097,6 +1103,9 @@ private final class GiftAuctionScreenComponent: Component {
         
         deinit {
             self.balanceDisposable?.dispose()
+            self.giftAuctionDisposable?.dispose()
+            self.giftAuctionAcquiredGiftsDisposable?.dispose()
+            self.giftAuctionTimer?.invalidate()
         }
         
         func scrollViewDidScroll(_ scrollView: UIScrollView) {
@@ -1503,6 +1512,17 @@ private final class GiftAuctionScreenComponent: Component {
                     self?.state?.updated()
                 }, queue: Queue.mainQueue())
                 self.giftAuctionTimer?.start()
+                
+                if case let .generic(gift) = component.gift {
+                    self.giftAuctionAcquiredGiftsDisposable = (component.context.engine.payments.getGiftAuctionAcquiredGifts(giftId: gift.id)
+                    |> deliverOnMainQueue).startStrict(next: { [weak self] acquiredGifts in
+                        guard let self else {
+                            return
+                        }
+                        self.giftAuctionAcquiredGifts = acquiredGifts
+                        self.state?.updated(transition: .easeInOut(duration: 0.25))
+                    })
+                }
             }
             
             self.component = component
@@ -1690,7 +1710,7 @@ private final class GiftAuctionScreenComponent: Component {
             var dropsLeftAnimatedItems: [AnimatedTextComponent.Item] = []
             
             if let auctionState = self.giftAuctionState?.auctionState {
-                if case let .ongoing(_, minBidAmount, _, _, _, nextDropDate, dropsLeft, _) = auctionState {
+                if case let .ongoing(_, minBidAmount, _, _, nextDropDate, _, dropsLeft, _) = auctionState {
                     var minBidAmount = minBidAmount
                     if let myMinBidAmmount = self.giftAuctionState?.myState.minBidAmount {
                         minBidAmount = myMinBidAmmount
@@ -1825,6 +1845,67 @@ private final class GiftAuctionScreenComponent: Component {
             contentHeight += perkHeight
             contentHeight += 24.0
             
+            if self.giftAuctionAcquiredGifts.count > 0, case let .generic(gift) = component.gift {
+                var text = "\(self.giftAuctionAcquiredGifts.count)"
+                if self.giftAuctionAcquiredGifts.count == 1 {
+                    text += " item bought"
+                } else {
+                    text += " items bought"
+                }
+                
+                var myGiftsTransition = transition
+                let myGiftsSize = self.myGifts.update(
+                    transition: .immediate,
+                    component: AnyComponent(
+                        PlainButtonComponent(content: AnyComponent(
+                            HStack([
+                                AnyComponentWithIdentity(id: "icon", component: AnyComponent(
+                                    GiftItemComponent(
+                                        context: component.context,
+                                        theme: environment.theme,
+                                        strings: environment.strings,
+                                        peer: nil,
+                                        subject: .starGift(gift: gift, price: ""),
+                                        mode: .tableIcon
+                                    )
+                                )),
+                                AnyComponentWithIdentity(id: "text", component: AnyComponent(
+                                    MultilineTextComponent(text: .plain(NSAttributedString(string: text, font: Font.regular(15.0), textColor: environment.theme.actionSheet.controlAccentColor)))
+                                )),
+                                AnyComponentWithIdentity(id: "chevron", component: AnyComponent(
+                                    BundleIconComponent(name: "Settings/TextArrowRight", tintColor: environment.theme.actionSheet.controlAccentColor)
+                                ))
+                            ], spacing: 6.0)
+                        ), action: { [weak self] in
+                            guard let self, let component = self.component else {
+                                return
+                            }
+                            let giftController = GiftAuctionBoughtScreen(context: component.context, gift: component.gift, acquiredGifts: self.giftAuctionAcquiredGifts)
+                            self.environment?.controller()?.push(giftController)
+                        }, animateScale: false)
+                    ),
+                    environment: {},
+                    containerSize: availableSize
+                )
+                let myGiftsFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((availableSize.width - myGiftsSize.width) / 2.0), y: contentHeight), size: myGiftsSize)
+                if let myGiftsView = self.myGifts.view {
+                    if myGiftsView.superview == nil {
+                        myGiftsTransition = .immediate
+                        
+                        self.scrollContentView.addSubview(myGiftsView)
+                        
+                        if !transition.animation.isImmediate {
+                            transition.animateAlpha(view: myGiftsView, from: 0.0, to: 1.0)
+                        }
+                    }
+                    myGiftsTransition.setFrame(view: myGiftsView, frame: myGiftsFrame)
+                }
+                contentHeight += myGiftsSize.height
+                contentHeight += 15.0
+            } else {
+                
+            }
+            
             if self.backgroundHandleView.image == nil {
                 self.backgroundHandleView.image = generateStretchableFilledCircleImage(diameter: 5.0, color: .white)?.withRenderingMode(.alwaysTemplate)
             }
@@ -1883,8 +1964,7 @@ private final class GiftAuctionScreenComponent: Component {
                         guard let self, let component = self.component else {
                             return
                         }
-                        //let giftController = component.context.sharedContext.makeGiftAuctionInfoScreen(context: component.context, gift: component.gift, completion: {})
-                        let giftController = GiftAuctionBoughtScreen(context: component.context, gift: component.gift)
+                        let giftController = component.context.sharedContext.makeGiftAuctionInfoScreen(context: component.context, gift: component.gift, completion: {})
                         self.environment?.controller()?.push(giftController)
                     }
                 )),

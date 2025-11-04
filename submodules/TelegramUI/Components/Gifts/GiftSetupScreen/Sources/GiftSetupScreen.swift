@@ -1873,7 +1873,7 @@ private final class GiftSetupScreenComponent: Component {
                 )))
                 if let giftAuctionState = self.giftAuctionState {
                     switch giftAuctionState.auctionState {
-                    case let .ongoing(_, _, _, _, _, nextDropDate, _, _):
+                    case let .ongoing(_, _, _, _, nextDropDate, _, _, _):
                         let currentTime = Int32(CFAbsoluteTimeGetCurrent() + kCFAbsoluteTimeIntervalSince1970)
                         let dropTimeout = nextDropDate - currentTime
                         
