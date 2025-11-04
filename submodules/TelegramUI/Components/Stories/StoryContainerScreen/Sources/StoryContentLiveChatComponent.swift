@@ -21,6 +21,7 @@ import AdminUserActionsSheet
 
 final class StoryContentLiveChatComponent: Component {
     final class External {
+        fileprivate(set) var isEmpty: Bool = false
         fileprivate(set) var hasUnseenMessages: Bool = false
         
         init() {
@@ -268,6 +269,35 @@ final class StoryContentLiveChatComponent: Component {
             self.state?.updated(transition: .spring(duration: 0.4))
         }
         
+        private func displayDeleteMessageConfirmation(id: GroupCallMessagesContext.Message.Id) {
+            guard let component = self.component else {
+                return
+            }
+            
+            let presentationData = component.context.sharedContext.currentPresentationData.with({ $0 }).withUpdated(theme: component.theme)
+            let actionSheet = ActionSheetController(presentationData: presentationData)
+            
+            actionSheet.setItemGroups([
+                ActionSheetItemGroup(items: [
+                    ActionSheetButtonItem(title: component.strings.Chat_DeleteMessagesConfirmation(1), color: .destructive, action: { [weak self, weak actionSheet] in
+                        actionSheet?.dismissAnimated()
+                        
+                        guard let self, let component = self.component, let call = component.call as? PresentationGroupCallImpl else {
+                            return
+                        }
+                        call.deleteMessage(id: id, reportSpam: false)
+                    })
+                ]),
+                ActionSheetItemGroup(items: [
+                    ActionSheetButtonItem(title: presentationData.strings.Common_Cancel, color: .accent, font: .bold, action: { [weak actionSheet] in
+                        actionSheet?.dismissAnimated()
+                    })
+                ])
+            ])
+            
+            component.controller()?.present(actionSheet, in: .window(.root))
+        }
+        
         private func displayDeleteMessageAndBan(id: GroupCallMessagesContext.Message.Id) {
             Task { @MainActor [weak self] in
                 guard let self, let component = self.component else {
@@ -279,6 +309,10 @@ final class StoryContentLiveChatComponent: Component {
                     return
                 }
                 guard let messagesState = self.messagesState, let message = messagesState.messages.first(where: { $0.id == id }) else {
+                    return
+                }
+                if message.isFromAdmin {
+                    self.displayDeleteMessageConfirmation(id: id)
                     return
                 }
                 guard let author = message.author else {
@@ -311,10 +345,23 @@ final class StoryContentLiveChatComponent: Component {
                         messageCount: 1,
                         deleteAllMessageCount: totalCount,
                         completion: { [weak self] result in
-                            guard let self else {
+                            guard let self, let component = self.component, let call = component.call as? PresentationGroupCallImpl else {
                                 return
                             }
-                            let _ = self
+                            
+                            if result.deleteAll {
+                                call.deleteAllMessages(authorId: author.id, reportSpam: result.reportSpam)
+                            } else {
+                                call.deleteMessage(id: id, reportSpam: result.reportSpam)
+                            }
+                            
+                            if result.ban {
+                                if component.storyPeerId == component.context.account.peerId {
+                                    let _ = component.context.engine.privacy.requestUpdatePeerIsBlocked(peerId: author.id, isBlocked: true).startStandalone()
+                                } else {
+                                    let _ = component.context.engine.peers.updateChannelMemberBannedRights(peerId: component.storyPeerId, memberId: author.id, rights: TelegramChatBannedRights(flags: .banReadMessages, untilDate: Int32.max)).startStandalone()
+                                }
+                            }
                         }
                     ),
                     customTheme: defaultDarkColorPresentationTheme
@@ -414,15 +461,13 @@ final class StoryContentLiveChatComponent: Component {
                         }
                         
                         c?.dismiss(completion: { [weak self] in
-                            guard let self, let component = self.component else {
+                            guard let self else {
                                 return
                             }
-                            if let call = component.call as? PresentationGroupCallImpl {
-                                if isAdmin && !isMyMessage {
-                                    self.displayDeleteMessageAndBan(id: id)
-                                } else {
-                                    call.deleteMessage(id: id, reportSpam: false)
-                                }
+                            if isAdmin && !isMyMessage {
+                                self.displayDeleteMessageAndBan(id: id)
+                            } else {
+                                self.displayDeleteMessageConfirmation(id: id)
                             }
                         })
                     })))
@@ -500,6 +545,7 @@ final class StoryContentLiveChatComponent: Component {
                                 self.reactionStreamView?.add(peer: peer, count: Int(state.pendingMyStars - previousMessagesState.pendingMyStars))
                             }
                         }
+                        component.external.isEmpty = state.messages.isEmpty
                         self.messagesState = state
                         
                         if !self.isUpdating {

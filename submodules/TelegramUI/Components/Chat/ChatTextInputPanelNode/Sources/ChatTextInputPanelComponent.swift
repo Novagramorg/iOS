@@ -145,6 +145,7 @@ public final class ChatTextInputPanelComponent: Component {
     let rightAction: RightAction?
     let sendAsConfiguration: SendAsConfiguration?
     let placeholder: String
+    let isEnabled: Bool
     let paidMessagePrice: StarsAmount?
     let sendColor: UIColor?
     let isSendDisabled: Bool
@@ -166,6 +167,7 @@ public final class ChatTextInputPanelComponent: Component {
         rightAction: RightAction?,
         sendAsConfiguration: SendAsConfiguration?,
         placeholder: String,
+        isEnabled: Bool,
         paidMessagePrice: StarsAmount?,
         sendColor: UIColor?,
         isSendDisabled: Bool,
@@ -186,6 +188,7 @@ public final class ChatTextInputPanelComponent: Component {
         self.rightAction = rightAction
         self.sendAsConfiguration = sendAsConfiguration
         self.placeholder = placeholder
+        self.isEnabled = isEnabled
         self.paidMessagePrice = paidMessagePrice
         self.sendColor = sendColor
         self.isSendDisabled = isSendDisabled
@@ -226,6 +229,9 @@ public final class ChatTextInputPanelComponent: Component {
             return false
         }
         if lhs.placeholder != rhs.placeholder {
+            return false
+        }
+        if lhs.isEnabled != rhs.isEnabled {
             return false
         }
         if lhs.paidMessagePrice != rhs.paidMessagePrice {
@@ -829,6 +835,7 @@ public final class ChatTextInputPanelComponent: Component {
             }
             
             panelNode.customPlaceholder = component.placeholder
+            panelNode.customIsDisabled = !component.isEnabled
             
             if let leftAction = component.leftAction {
                 switch leftAction.kind {

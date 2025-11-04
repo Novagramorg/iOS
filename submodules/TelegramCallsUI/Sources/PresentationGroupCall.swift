@@ -38,7 +38,8 @@ private extension PresentationGroupCallState {
             subscribedToScheduled: subscribedToScheduled,
             isVideoEnabled: false,
             isVideoWatchersLimitReached: false,
-            isMyVideoActive: false
+            isMyVideoActive: false,
+            isUnifiedStream: false
         )
     }
 }
@@ -2664,6 +2665,7 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
                     self.stateValue.scheduleTimestamp = state.scheduleTimestamp
                     self.stateValue.isVideoEnabled = state.isVideoEnabled && otherParticipantsWithVideo < state.unmutedVideoLimit
                     self.stateValue.isVideoWatchersLimitReached = videoWatchingParticipants >= configuration.videoParticipantsMaxCount
+                    self.stateValue.isUnifiedStream = state.isStream
                     
                     self.summaryInfoState.set(.single(SummaryInfoState(info: GroupCallInfo(
                         id: callInfo.id,
