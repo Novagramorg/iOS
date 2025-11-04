@@ -1994,7 +1994,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 if let image = commentsButtonCenterIcon.image {
                     commentsButtonCenterIcon.bounds = image.size.centered(in: iconFrame)
                 }
-                transition.updateTransformRotation(view: commentsButtonCenterIcon, angle: !isExpanded ? (CGFloat.pi * 3.0 / 4.0) : 0.0)
+                transition.updateTransformRotation(view: commentsButtonCenterIcon, angle: isExpanded ? (CGFloat.pi * 3.0 / 4.0) : 0.0)
                 
                 commentsButtonIcon.contentsLayer.position = CGRect(origin: CGPoint(), size: iconFrame.size).center
                 commentsButtonIcon.contentsLayer.bounds = CGRect(origin: CGPoint(), size: iconFrame.size)
