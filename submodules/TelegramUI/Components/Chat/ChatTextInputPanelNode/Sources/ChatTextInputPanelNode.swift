@@ -264,6 +264,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     public let attachmentButtonBackground: GlassBackgroundView
     public let attachmentButtonIcon: GlassBackgroundView.ContentImageView
     private var commentsButtonIcon: RasterizedCompositionMonochromeLayer?
+    private var commentsButtonCenterIcon: UIImageView?
     private var commentsButtonContentsLayer: RasterizedCompositionImageLayer?
     private var commentsButtonDotLayer: RasterizedCompositionImageLayer?
     private var attachmentButtonUnseenIcon: UIImageView?
@@ -393,6 +394,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     }
     
     public var customPlaceholder: String?
+    public var customIsDisabled: Bool = false
     public var customLeftAction: LeftAction?
     public var customRightAction: RightAction?
     public var customSendColor: UIColor?
@@ -1495,6 +1497,9 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 }
             }
         }
+        if self.customIsDisabled {
+            sendingTextDisabled = true
+        }
         self.sendingTextDisabled = sendingTextDisabled
         
         self.textInputNode?.isUserInteractionEnabled = !sendingTextDisabled
@@ -1941,7 +1946,6 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         if let customLeftAction = self.customLeftAction {
             switch customLeftAction {
             case let .toggleExpanded(_, isExpanded, hasUnseen):
-                let _ = isExpanded
                 let commentsButtonIcon: RasterizedCompositionMonochromeLayer
                 if let current = self.commentsButtonIcon {
                     commentsButtonIcon = current
@@ -1950,6 +1954,17 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                     self.commentsButtonIcon = commentsButtonIcon
                     self.attachmentButtonBackground.contentView.layer.addSublayer(commentsButtonIcon)
                 }
+                
+                let commentsButtonCenterIcon: UIImageView
+                if let current = self.commentsButtonCenterIcon {
+                    commentsButtonCenterIcon = current
+                } else {
+                    commentsButtonCenterIcon = UIImageView()
+                    self.commentsButtonCenterIcon = commentsButtonCenterIcon
+                    self.attachmentButtonBackground.contentView.addSubview(commentsButtonCenterIcon)
+                    commentsButtonCenterIcon.image = UIImage(bundleImageName: "Chat/Input/Text/CommensCross")?.withRenderingMode(.alwaysTemplate)
+                }
+                commentsButtonCenterIcon.tintColor = interfaceState.theme.chat.inputPanel.panelControlColor
                 
                 let commentsButtonContentsLayer: RasterizedCompositionImageLayer
                 if let current = self.commentsButtonContentsLayer {
@@ -1974,6 +1989,12 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 let iconFrame = CGRect(origin: CGPoint(), size: CGSize(width: 40.0, height: 40.0))
                 commentsButtonIcon.position = iconFrame.center
                 commentsButtonIcon.bounds = CGRect(origin: CGPoint(), size: iconFrame.size)
+                
+                commentsButtonCenterIcon.center = iconFrame.center
+                if let image = commentsButtonCenterIcon.image {
+                    commentsButtonCenterIcon.bounds = image.size.centered(in: iconFrame)
+                }
+                transition.updateTransformRotation(view: commentsButtonCenterIcon, angle: !isExpanded ? (CGFloat.pi * 3.0 / 4.0) : 0.0)
                 
                 commentsButtonIcon.contentsLayer.position = CGRect(origin: CGPoint(), size: iconFrame.size).center
                 commentsButtonIcon.contentsLayer.bounds = CGRect(origin: CGPoint(), size: iconFrame.size)
@@ -2034,6 +2055,13 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 transition.updateTransformScale(layer: attachmentButtonUnseenIcon.layer, scale: 0.001)
                 transition.updateAlpha(layer: attachmentButtonUnseenIcon.layer, alpha: 0.0, completion: { [weak attachmentButtonUnseenIcon] _ in
                     attachmentButtonUnseenIcon?.removeFromSuperview()
+                })
+            }
+            if let commentsButtonCenterIcon = self.commentsButtonCenterIcon {
+                self.commentsButtonCenterIcon = nil
+                transition.updateTransformScale(layer: commentsButtonCenterIcon.layer, scale: 0.001)
+                transition.updateAlpha(layer: commentsButtonCenterIcon.layer, alpha: 0.0, completion: { [weak commentsButtonCenterIcon] _ in
+                    commentsButtonCenterIcon?.removeFromSuperview()
                 })
             }
         }

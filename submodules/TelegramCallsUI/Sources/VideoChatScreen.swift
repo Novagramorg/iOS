@@ -1218,7 +1218,8 @@ final class VideoChatScreenComponent: Component {
                     subscribedToScheduled: false,
                     isVideoEnabled: true,
                     isVideoWatchersLimitReached: false,
-                    isMyVideoActive: false
+                    isMyVideoActive: false,
+                    isUnifiedStream: false
                 )
                 
                 return .single((callState, invitedPeers.compactMap({ peer -> VideoChatScreenComponent.InvitedPeer? in

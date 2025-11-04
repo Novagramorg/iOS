@@ -233,6 +233,7 @@ public struct PresentationGroupCallState: Equatable {
     public var isVideoEnabled: Bool
     public var isVideoWatchersLimitReached: Bool
     public var isMyVideoActive: Bool
+    public var isUnifiedStream: Bool
     
     public init(
         myPeerId: EnginePeer.Id,
@@ -251,7 +252,8 @@ public struct PresentationGroupCallState: Equatable {
         subscribedToScheduled: Bool,
         isVideoEnabled: Bool,
         isVideoWatchersLimitReached: Bool,
-        isMyVideoActive: Bool
+        isMyVideoActive: Bool,
+        isUnifiedStream: Bool
     ) {
         self.myPeerId = myPeerId
         self.networkState = networkState
@@ -270,6 +272,7 @@ public struct PresentationGroupCallState: Equatable {
         self.isVideoEnabled = isVideoEnabled
         self.isVideoWatchersLimitReached = isVideoWatchersLimitReached
         self.isMyVideoActive = isMyVideoActive
+        self.isUnifiedStream = isUnifiedStream
     }
 }
 
