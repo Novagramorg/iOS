@@ -683,6 +683,7 @@ final class StoryItemSetContainerSendMessage {
             if let visibleItem = view.visibleItems[component.slice.item.id], let itemView = visibleItem.view.view as? StoryItemContentComponent.View {
                 
                 var sendPaidMessageStars = self.currentLiveStreamMessageStars
+                var isAdmin = false
                 if let visibleItemView = view.visibleItems[component.slice.item.id]?.view.view as? StoryItemContentComponent.View {
                     if let liveChatStateValue = visibleItemView.liveChatState {
                         if let minMessagePrice = liveChatStateValue.minMessagePrice {
@@ -694,6 +695,7 @@ final class StoryItemSetContainerSendMessage {
                                 sendPaidMessageStars = StarsAmount(value: minMessagePrice, nanos: 0)
                             }
                         }
+                        isAdmin = liveChatStateValue.isAdmin
                     }
                 }
                 
@@ -756,7 +758,7 @@ final class StoryItemSetContainerSendMessage {
                             
                             let entities = generateChatInputTextEntities(text)
                             
-                            call.sendMessage(fromId: self.currentSendAsPeer?.peer.id, text: text.string, entities: entities, paidStars: sendPaidMessageStars?.value)
+                            call.sendMessage(fromId: self.currentSendAsPeer?.peer.id, isAdmin: isAdmin, text: text.string, entities: entities, paidStars: sendPaidMessageStars?.value)
                             
                             component.storyItemSharedState.replyDrafts.removeValue(forKey: StoryId(peerId: peerId, id: focusedItem.storyItem.id))
                             inputPanelView.clearSendMessageInput(updateState: true)
@@ -4207,14 +4209,18 @@ final class StoryItemSetContainerSendMessage {
         guard case .liveStream = component.slice.item.storyItem.media else {
             return
         }
+        var isAdmin = false
         guard let visibleItem = view.visibleItems[component.slice.item.id], let itemView = visibleItem.view.view as? StoryItemContentComponent.View else {
             return
         }
         guard let call = itemView.mediaStreamCall else {
             return
         }
+        if let liveChatStateValue = itemView.liveChatState {
+            isAdmin = liveChatStateValue.isAdmin
+        }
         
-        call.sendStars(fromId: self.currentSendAsPeer?.peer.id, amount: Int64(count), delay: delay)
+        call.sendStars(fromId: self.currentSendAsPeer?.peer.id, isAdmin: isAdmin, amount: Int64(count), delay: delay)
     }
     
     func openSendAsSelection(view: StoryItemSetContainerComponent.View, sourceView: UIView, gesture: ContextGesture?) {
