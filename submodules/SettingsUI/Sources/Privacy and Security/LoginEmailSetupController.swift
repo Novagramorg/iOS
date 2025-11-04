@@ -32,7 +32,7 @@ final class LoginEmailSetupDelegate: NSObject, ASAuthorizationControllerDelegate
     }
 }
 
-public func loginEmailSetupController(context: AccountContext, blocking: Bool, emailPattern: String?, navigationController: NavigationController?, completion: @escaping () -> Void) -> ViewController {
+public func loginEmailSetupController(context: AccountContext, blocking: Bool, emailPattern: String?, canAutoDismissIfNeeded: Bool = false, navigationController: NavigationController?, completion: @escaping () -> Void, dismiss: @escaping () -> Void) -> ViewController {
     let presentationData = context.sharedContext.currentPresentationData.with { $0 }
     var dismissEmailControllerImpl: (() -> Void)?
     var presentControllerImpl: ((ViewController) -> Void)?
@@ -65,7 +65,7 @@ public func loginEmailSetupController(context: AccountContext, blocking: Bool, e
         }
     }
     
-    let emailController = AuthorizationSequenceEmailEntryController(presentationData: presentationData, mode: emailPattern != nil ? .change : .setup, blocking: blocking, back: {
+    let emailController = AuthorizationSequenceEmailEntryController(context: canAutoDismissIfNeeded ? context : nil, presentationData: presentationData, mode: emailPattern != nil ? .change : .setup, blocking: blocking, back: {
         dismissEmailControllerImpl?()
     })
     emailController.proceedWithEmail = { [weak emailController] email in
@@ -78,6 +78,7 @@ public func loginEmailSetupController(context: AccountContext, blocking: Bool, e
             
             let codeController = AuthorizationSequenceCodeEntryController(presentationData: presentationData, back: {
                 dismissCodeControllerImpl?()
+                dismiss()
             })
             
             presentControllerImpl = { [weak codeController] c in
