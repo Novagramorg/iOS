@@ -315,7 +315,6 @@ private final class CameraScreenComponent: CombinedComponent {
         private weak var liveStreamCall: PresentationGroupCall?
         private var liveStreamVideoCapturer: OngoingCallVideoCapturer?
         private var liveStreamVideoDisposable: Disposable?
-        private var liveStreamAudioDisposable: Disposable?
         
         var cameraState: CameraState?
         var swipeHint: CaptureControlsComponent.SwipeHint = .none
@@ -370,7 +369,6 @@ private final class CameraScreenComponent: CombinedComponent {
             self.lastGalleryAssetsDisposable?.dispose()
             self.resultDisposable.dispose()
             self.liveStreamVideoDisposable?.dispose()
-            self.liveStreamAudioDisposable?.dispose()
         }
         
         func setupRecentAssetSubscription() {
@@ -1148,11 +1146,13 @@ private final class CameraScreenComponent: CombinedComponent {
             controller.present(alertController, in: .window(.root))
         }
         
-        func setupStreamCamera(call: PresentationGroupCall) {
+        func setupLiveStreamCamera(call: PresentationGroupCall) {
             guard self.liveStreamVideoCapturer == nil, let call = call as? PresentationGroupCallImpl, let controller = self.getController() else {
                 return
             }
             self.liveStreamCall = call
+            
+            call.setIsMuted(action: .unmuted)
             
             let liveStreamMediaSource = controller.node.liveStreamMediaSource
             let videoCapturer = OngoingCallVideoCapturer(keepLandscape: false, isCustom: true)
@@ -1166,15 +1166,6 @@ private final class CameraScreenComponent: CombinedComponent {
                     videoCapturer.injectSampleBuffer(sampleBuffer, rotation: .up, completion: {})
                 }
             }
-            self.liveStreamAudioDisposable = liveStreamMediaSource.addOnAudioUpdated { [weak self, weak liveStreamMediaSource] in
-                guard let self, let liveStreamMediaSource, let call = self.liveStreamCall as? PresentationGroupCallImpl else {
-                    return
-                }
-                if let audioData = liveStreamMediaSource.currentAudioOutput {
-                    call.addExternalAudioData(data: audioData)
-                }
-            }
-            
             Queue.mainQueue().after(1.0) {
                 call.requestVideo(capturer: videoCapturer, useFrontCamera: false)
             }
@@ -1500,7 +1491,7 @@ private final class CameraScreenComponent: CombinedComponent {
                         metrics: environment.metrics,
                         deviceMetrics: environment.deviceMetrics,
                         didSetupMediaStream: { [weak state] call in
-                            state?.setupStreamCamera(call: call)
+                            state?.setupLiveStreamCamera(call: call)
                         }
                     ),
                     availableSize: availableSize,
@@ -1540,7 +1531,7 @@ private final class CameraScreenComponent: CombinedComponent {
                 )
             }
                         
-            if component.cameraState.isStreaming {
+            if component.cameraState.mode == .live && component.cameraState.isStreaming {
                 let endStreamButton = endStreamButton.update(
                     component: GlassBarButtonComponent(
                         size: CGSize(width: 56.0, height: 40.0),

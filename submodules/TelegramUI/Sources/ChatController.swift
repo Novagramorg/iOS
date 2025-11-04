@@ -8780,18 +8780,20 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     }
     
     func addPeerContact() {
-        if let peer = self.presentationInterfaceState.renderedPeer?.chatMainPeer as? TelegramUser, let peerStatusSettings = self.presentationInterfaceState.contactStatus?.peerStatusSettings, let contactData = DeviceContactExtendedData(peer: EnginePeer(peer)) {
-            self.present(context.sharedContext.makeDeviceContactInfoController(context: ShareControllerAppAccountContext(context: self.context), environment: ShareControllerAppEnvironment(sharedContext: self.context.sharedContext), subject: .create(peer: peer, contactData: contactData, isSharing: true, shareViaException: peerStatusSettings.contains(.addExceptionWhenAddingContact), completion: { [weak self] peer, stableId, contactData in
-                guard let strongSelf = self else {
-                    return
-                }
-                if let peer = peer as? TelegramUser {
-                    if let phone = peer.phone, !phone.isEmpty {
+        if let peer = self.presentationInterfaceState.renderedPeer?.chatMainPeer as? TelegramUser, let peerStatusSettings = self.presentationInterfaceState.contactStatus?.peerStatusSettings {
+            let controller = self.context.sharedContext.makeNewContactScreen(
+                context: self.context,
+                peer: EnginePeer(peer),
+                phoneNumber: nil,
+                shareViaException: peerStatusSettings.contains(.addExceptionWhenAddingContact),
+                completion: { [weak self] peer, _, _ in
+                    guard let self, let peer else {
+                        return
                     }
-                    
-                    self?.present(OverlayStatusController(theme: strongSelf.presentationData.theme, type: .genericSuccess(strongSelf.presentationData.strings.AddContact_StatusSuccess(EnginePeer(peer).compactDisplayTitle).string, true)), in: .window(.root))
+                    self.present(OverlayStatusController(theme: self.presentationData.theme, type: .genericSuccess(self.presentationData.strings.AddContact_StatusSuccess(peer.compactDisplayTitle).string, true)), in: .window(.root))
                 }
-            }), completed: nil, cancelled: nil), in: .window(.root), with: ViewControllerPresentationArguments(presentationAnimation: .modalSheet))
+            )
+            self.push(controller)
         }
     }
     
@@ -9777,7 +9779,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                 }
             )
             strongSelf.chatDisplayNode.dismissInput()
-            strongSelf.present(controller, in: .window(.root))
+            strongSelf.push(controller)
         })
     }
     

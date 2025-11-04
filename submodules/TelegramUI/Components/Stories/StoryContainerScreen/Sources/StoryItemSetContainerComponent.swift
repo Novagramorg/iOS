@@ -5588,14 +5588,7 @@ public final class StoryItemSetContainerComponent: Component {
             guard let component = self.component else {
                 return
             }
-        
-            #if DEBUG
-            if "".isEmpty {
-                self.performDeleteAction()
-                return
-            }
-            #endif
-            
+                    
             self.isEditingStory = true
             self.updateIsProgressPaused()
             self.state?.updated(transition: .easeInOut(duration: 0.2))
