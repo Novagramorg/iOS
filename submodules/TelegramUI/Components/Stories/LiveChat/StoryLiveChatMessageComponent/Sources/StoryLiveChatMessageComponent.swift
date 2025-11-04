@@ -88,6 +88,8 @@ public final class StoryLiveChatMessageComponent: Component {
         private let contentContainer: UIView
         private var avatarNode: AvatarNode?
         private let textExternal = MultilineTextWithEntitiesComponent.External()
+        private let authorTitle = ComponentView<Empty>()
+        private var adminBadgeText: ComponentView<Empty>?
         private let text = ComponentView<Empty>()
         private var crownIcon: UIImageView?
         private var backgroundView: UIImageView?
@@ -232,13 +234,11 @@ public final class StoryLiveChatMessageComponent: Component {
             }
             
             let textString = NSMutableAttributedString()
-            textString.append(NSAttributedString(string: component.message.author?.displayTitle(strings: component.strings, displayOrder: .firstLast) ?? " ", font: Font.semibold(15.0), textColor: secondaryTextColor))
             if !component.message.text.isEmpty {
-                textString.append(NSAttributedString(string: "  ", font: Font.semibold(15.0), textColor: secondaryTextColor))
                 textString.append(NSAttributedString(string: component.message.text, font: Font.regular(15.0), textColor: primaryTextColor))
             }
             
-            var textTopLeftCutout: CGFloat?
+            var textTopLeftCutout: CGFloat = 0.0
             if let topPlace = component.topPlace {
                 let crownIcon: UIImageView
                 if let current = self.crownIcon {
@@ -254,7 +254,9 @@ public final class StoryLiveChatMessageComponent: Component {
                 crownIcon.tintColor = secondaryTextColor
                 
                 if let image = crownIcon.image {
-                    textTopLeftCutout = image.size.width + 4.0
+                    if !component.message.isFromAdmin {
+                        textTopLeftCutout = image.size.width + 4.0
+                    }
                 }
             } else {
                 if let crownIcon = self.crownIcon {
@@ -268,17 +270,58 @@ public final class StoryLiveChatMessageComponent: Component {
                 textBottomRightCutout = starsAmountTextSize.width + 20.0
             }
             
-            var textCutout: TextNodeCutout?
-            if textBottomRightCutout != nil || textTopLeftCutout != nil {
-                textCutout = TextNodeCutout(topLeft: textTopLeftCutout.flatMap({ CGSize(width: $0, height: 8.0) }), bottomRight: textBottomRightCutout.flatMap({ CGSize(width: $0, height: 8.0) }))
-            }
-            
             var maxTextWidth: CGFloat = availableSize.width - insets.left - insets.right - avatarSize - avatarSpacing
             if let starsAmountTextSize, displayStarsAmountBackground {
                 var cutoutWidth: CGFloat = starsAmountTextSize.width + 20.0
                 cutoutWidth += 30.0
                 maxTextWidth -= cutoutWidth
             }
+            
+            let authorTitleSize = self.authorTitle.update(
+                transition: .immediate,
+                component: AnyComponent(MultilineTextWithEntitiesComponent(
+                    context: component.context,
+                    animationCache: component.context.animationCache,
+                    animationRenderer: component.context.animationRenderer,
+                    placeholderColor: .gray,
+                    text: .plain(NSAttributedString(string: component.message.author?.displayTitle(strings: component.strings, displayOrder: .firstLast) ?? " ", font: Font.semibold(15.0), textColor: secondaryTextColor)),
+                    maximumNumberOfLines: 1,
+                    lineSpacing: 0.1
+                )),
+                environment: {},
+                containerSize: CGSize(width: min(maxTextWidth - 80.0, 180.0), height: 100000.0)
+            )
+            
+            if !component.message.isFromAdmin {
+                textTopLeftCutout += authorTitleSize.width + 6.0
+            }
+            
+            var adminBadgeTextSize: CGSize?
+            if component.message.isFromAdmin && !displayStarsAmountBackground {
+                let adminBadgeText: ComponentView<Empty>
+                if let current = self.adminBadgeText {
+                    adminBadgeText = current
+                } else {
+                    adminBadgeText = ComponentView()
+                    self.adminBadgeText = adminBadgeText
+                }
+                adminBadgeTextSize = adminBadgeText.update(
+                    transition: .immediate,
+                    component: AnyComponent(MultilineTextComponent(
+                        text: .plain(NSAttributedString(string: component.strings.ChatAdmins_AdminLabel, font: Font.regular(11.0), textColor: secondaryTextColor))
+                    )),
+                    environment: {},
+                    containerSize: CGSize(width: 200.0, height: 100.0)
+                )
+            } else {
+                if let adminBadgeText = self.adminBadgeText {
+                    self.adminBadgeText = nil
+                    adminBadgeText.view?.removeFromSuperview()
+                }
+            }
+            
+            let textCutout = TextNodeCutout(topLeft: CGSize(width: textTopLeftCutout, height: 8.0), bottomRight: textBottomRightCutout.flatMap({ CGSize(width: $0, height: 8.0) }))
+            
             let textSize = self.text.update(
                 transition: .immediate,
                 component: AnyComponent(MultilineTextWithEntitiesComponent(
@@ -320,23 +363,48 @@ public final class StoryLiveChatMessageComponent: Component {
                     } else {
                         avatarNode.setPeer(context: component.context, theme: component.theme, peer: peer, displayDimensions: CGSize(width: avatarSize, height: avatarSize))
                     }
+                    if component.message.isFromAdmin {
+                        avatarNode.setStoryStats(storyStats: AvatarNode.StoryStats(totalCount: 1, unseenCount: 1, hasUnseenCloseFriendsItems: false, hasLiveItems: true), presentationParams: AvatarNode.StoryPresentationParams(colors: AvatarNode.Colors(theme: component.theme), lineWidth: 1.0, inactiveLineWidth: 1.0), transition: .immediate)
+                    } else {
+                        avatarNode.setStoryStats(storyStats: nil, presentationParams: AvatarNode.StoryPresentationParams(colors: AvatarNode.Colors(theme: component.theme), lineWidth: 1.0, inactiveLineWidth: 1.0), transition: .immediate)
+                    }
                 } else {
                     avatarNode.setCustomLetters([" "])
+                    avatarNode.setStoryStats(storyStats: nil, presentationParams: AvatarNode.StoryPresentationParams(colors: AvatarNode.Colors(theme: component.theme), lineWidth: 2.0, inactiveLineWidth: 2.0), transition: .immediate)
                 }
             }
             
-            let textFrame = CGRect(origin: CGPoint(x: insets.left + avatarSize + avatarSpacing, y: avatarFrame.minY + 3.0), size: textSize)
+            var authorTitleFrame = CGRect(origin: CGPoint(x: insets.left + avatarSize + avatarSpacing, y: avatarFrame.minY + 3.0), size: authorTitleSize)
+            if let image = self.crownIcon?.image {
+                authorTitleFrame.origin.x += image.size.width + 4.0
+            }
+            if let authorTitleView = self.authorTitle.view {
+                if authorTitleView.superview == nil {
+                    authorTitleView.layer.anchorPoint = CGPoint()
+                    self.extractedContainerNode.contentNode.view.addSubview(authorTitleView)
+                }
+                transition.setPosition(view: authorTitleView, position: authorTitleFrame.origin)
+                authorTitleView.bounds = CGRect(origin: CGPoint(), size: authorTitleFrame.size)
+            }
+            
+            var textFrame = CGRect(origin: CGPoint(x: insets.left + avatarSize + avatarSpacing, y: avatarFrame.minY + 3.0), size: textSize)
+            if component.message.isFromAdmin {
+                textFrame.origin.y = authorTitleFrame.maxY
+                textFrame.size.width = max(textFrame.width, authorTitleFrame.maxX - textFrame.minX)
+                textFrame.size.height = max(textFrame.height, authorTitleFrame.height)
+            }
+            textFrame.size.width = max(textFrame.width, textTopLeftCutout + (textBottomRightCutout ?? 0.0))
             if let textView = self.text.view {
                 if textView.superview == nil {
                     textView.layer.anchorPoint = CGPoint()
                     self.extractedContainerNode.contentNode.view.addSubview(textView)
                 }
                 transition.setPosition(view: textView, position: textFrame.origin)
-                textView.bounds = CGRect(origin: CGPoint(), size: textFrame.size)
+                textView.bounds = CGRect(origin: CGPoint(), size: textSize)
             }
             
             if let crownIcon = self.crownIcon, let image = crownIcon.image {
-                crownIcon.frame = CGRect(origin: CGPoint(x: textFrame.minX, y: textFrame.minY - 1.0), size: image.size)
+                crownIcon.frame = CGRect(origin: CGPoint(x: authorTitleFrame.minX - 4.0 - image.size.width, y: authorTitleFrame.minY - 1.0), size: image.size)
             }
             
             let backgroundOrigin = CGPoint(x: avatarFrame.minX - avatarBackgroundInset, y: avatarFrame.minY - avatarBackgroundInset)
@@ -344,8 +412,11 @@ public final class StoryLiveChatMessageComponent: Component {
             if let starsAmountTextSize, displayStarsAmountBackground {
                 backgroundFrame.size.width += starsAmountTextSize.width + 30.0
             }
+            if let adminBadgeTextSize {
+                backgroundFrame.size.width = max(backgroundFrame.width, authorTitleFrame.maxX + 4.0 + adminBadgeTextSize.width + 10.0)
+            }
             if let textLayout = self.textExternal.layout {
-                if textLayout.numberOfLines > 1 {
+                if textLayout.numberOfLines > 1 || (component.message.isFromAdmin && !displayStarsAmountBackground) {
                     backgroundFrame.size.height = max(backgroundFrame.size.height, textFrame.maxY + 8.0 - backgroundOrigin.y)
                 }
             }
@@ -380,7 +451,14 @@ public final class StoryLiveChatMessageComponent: Component {
             
             let backgroundCornerRadius = (avatarSize + avatarBackgroundInset * 2.0) * 0.5
             
-            if let paidStars = component.message.paidStars, let baseColor = GroupCallMessagesContext.getStarAmountParamMapping(params: LiveChatMessageParams(appConfig: component.context.currentAppConfiguration.with({ $0 })), value: paidStars).color {
+            var displayBackground = false
+            if component.message.paidStars != nil {
+                displayBackground = true
+            } else if component.message.isFromAdmin {
+                displayBackground = true
+            }
+            
+            if displayBackground {
                 let backgroundView: UIImageView
                 if let current = self.backgroundView {
                     backgroundView = current
@@ -392,19 +470,30 @@ public final class StoryLiveChatMessageComponent: Component {
                 }
                 transition.setFrame(view: backgroundView, frame: backgroundFrame)
                 
-                backgroundView.tintColor = StoryLiveChatMessageComponent.getMessageColor(color: baseColor).withAlphaComponent(component.layout.transparentBackground ? 0.7 : 1.0)
-                
-                let effectLayer: StarsParticleEffectLayer
-                if let current = self.effectLayer {
-                    effectLayer = current
+                if let paidStars = component.message.paidStars, let baseColor = GroupCallMessagesContext.getStarAmountParamMapping(params: LiveChatMessageParams(appConfig: component.context.currentAppConfiguration.with({ $0 })), value: paidStars).color {
+                    backgroundView.tintColor = StoryLiveChatMessageComponent.getMessageColor(color: baseColor).withAlphaComponent(component.layout.transparentBackground ? 0.7 : 1.0)
                 } else {
-                    effectLayer = StarsParticleEffectLayer()
-                    self.effectLayer = effectLayer
-                    backgroundView.layer.addSublayer(effectLayer)
+                    backgroundView.tintColor = UIColor(white: 0.0, alpha: 0.3)
                 }
                 
-                transition.setFrame(layer: effectLayer, frame: CGRect(origin: CGPoint(), size: backgroundFrame.size))
-                effectLayer.update(color: UIColor(white: 1.0, alpha: 0.5), size: backgroundFrame.size, cornerRadius: backgroundCornerRadius, transition: transition)
+                if component.message.paidStars != nil {
+                    let effectLayer: StarsParticleEffectLayer
+                    if let current = self.effectLayer {
+                        effectLayer = current
+                    } else {
+                        effectLayer = StarsParticleEffectLayer()
+                        self.effectLayer = effectLayer
+                        backgroundView.layer.addSublayer(effectLayer)
+                    }
+                    
+                    transition.setFrame(layer: effectLayer, frame: CGRect(origin: CGPoint(), size: backgroundFrame.size))
+                    effectLayer.update(color: UIColor(white: 1.0, alpha: 0.5), size: backgroundFrame.size, cornerRadius: backgroundCornerRadius, transition: transition)
+                } else {
+                    if let effectLayer = self.effectLayer {
+                        self.effectLayer = nil
+                        effectLayer.removeFromSuperlayer()
+                    }
+                }
             } else if let backgroundView = self.backgroundView {
                 self.backgroundView = nil
                 backgroundView.removeFromSuperview()
@@ -413,6 +502,14 @@ public final class StoryLiveChatMessageComponent: Component {
                     self.effectLayer = nil
                     effectLayer.removeFromSuperlayer()
                 }
+            }
+            
+            if let adminBadgeTextView = self.adminBadgeText?.view, let adminBadgeTextSize {
+                let adminBadgeTextFrame = CGRect(origin: CGPoint(x: backgroundFrame.maxX - 10.0 - adminBadgeTextSize.width, y: backgroundFrame.minY + 9.0), size: adminBadgeTextSize)
+                if adminBadgeTextView.superview == nil {
+                    self.extractedContainerNode.contentNode.view.addSubview(adminBadgeTextView)
+                }
+                transition.setFrame(view: adminBadgeTextView, frame: adminBadgeTextFrame)
             }
             
             let contentFrame = CGRect(origin: CGPoint(), size: size)
