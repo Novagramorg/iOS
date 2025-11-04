@@ -173,6 +173,10 @@ public extension TelegramEngine {
             return _internal_updateStarGiftResalePrice(account: self.account, reference: reference, price: price)
         }
         
+        public func getGiftAuctionAcquiredGifts(giftId: Int64) -> Signal<[GiftAuctionAcquiredGift], NoError> {
+            return _internal_getGiftAuctionAcquiredGifts(account: self.account, giftId: giftId)
+        }
+        
         public func getStarsTransaction(reference: StarsTransactionReference) -> Signal<StarsContext.State.Transaction?, NoError> {
             return _internal_getStarsTransaction(accountPeerId: self.account.peerId, postbox: self.account.postbox, network: self.account.network, transactionReference: reference)
         }

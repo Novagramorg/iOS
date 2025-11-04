@@ -1614,6 +1614,15 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                         attributedString = addAttributesToStringWithRanges(strings.Notification_StarsGift_Sent(authorName, price)._tuple, body: bodyAttributes, argumentAttributes: attributes)
                     }
                 }
+            case let .starGiftAuctionBid(gift, bidAmount, text, entities, peerId, nextDropAt, flags):
+                let _ = gift
+                let _ = bidAmount
+                let _ = text
+                let _ = entities
+                let _ = peerId
+                let _ = nextDropAt
+                let _ = flags
+                attributedString = nil
             case .unknown:
                 attributedString = nil
             }
