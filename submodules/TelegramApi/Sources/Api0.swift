@@ -976,6 +976,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[-963180333] = { return Api.SponsoredPeer.parse_sponsoredPeer($0) }
     dict[761666756] = { return Api.StarGift.parse_starGift($0) }
     dict[-1329630181] = { return Api.StarGift.parse_starGiftUnique($0) }
+    dict[-286450743] = { return Api.StarGiftActiveAuctionState.parse_starGiftActiveAuctionState($0) }
     dict[-650279524] = { return Api.StarGiftAttribute.parse_starGiftAttributeBackdrop($0) }
     dict[970559507] = { return Api.StarGiftAttribute.parse_starGiftAttributeModel($0) }
     dict[-524291476] = { return Api.StarGiftAttribute.parse_starGiftAttributeOriginalDetails($0) }
@@ -1482,6 +1483,8 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[-1803939105] = { return Api.payments.ResaleStarGifts.parse_resaleStarGifts($0) }
     dict[-74456004] = { return Api.payments.SavedInfo.parse_savedInfo($0) }
     dict[-1779201615] = { return Api.payments.SavedStarGifts.parse_savedStarGifts($0) }
+    dict[-1745778728] = { return Api.payments.StarGiftActiveAuctions.parse_starGiftActiveAuctions($0) }
+    dict[-617358640] = { return Api.payments.StarGiftActiveAuctions.parse_starGiftActiveAuctionsNotModified($0) }
     dict[2103169520] = { return Api.payments.StarGiftAuctionAcquiredGifts.parse_starGiftAuctionAcquiredGifts($0) }
     dict[-2061303084] = { return Api.payments.StarGiftAuctionState.parse_starGiftAuctionState($0) }
     dict[-1977011469] = { return Api.payments.StarGiftCollections.parse_starGiftCollections($0) }
@@ -2212,6 +2215,8 @@ public extension Api {
                 _1.serialize(buffer, boxed)
             case let _1 as Api.StarGift:
                 _1.serialize(buffer, boxed)
+            case let _1 as Api.StarGiftActiveAuctionState:
+                _1.serialize(buffer, boxed)
             case let _1 as Api.StarGiftAttribute:
                 _1.serialize(buffer, boxed)
             case let _1 as Api.StarGiftAttributeCounter:
@@ -2639,6 +2644,8 @@ public extension Api {
             case let _1 as Api.payments.SavedInfo:
                 _1.serialize(buffer, boxed)
             case let _1 as Api.payments.SavedStarGifts:
+                _1.serialize(buffer, boxed)
+            case let _1 as Api.payments.StarGiftActiveAuctions:
                 _1.serialize(buffer, boxed)
             case let _1 as Api.payments.StarGiftAuctionAcquiredGifts:
                 _1.serialize(buffer, boxed)

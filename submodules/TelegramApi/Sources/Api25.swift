@@ -513,6 +513,54 @@ public extension Api {
     }
 }
 public extension Api {
+    enum StarGiftActiveAuctionState: TypeConstructorDescription {
+        case starGiftActiveAuctionState(giftId: Int64, state: Api.StarGiftAuctionState, userState: Api.StarGiftAuctionUserState)
+    
+    public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+    switch self {
+                case .starGiftActiveAuctionState(let giftId, let state, let userState):
+                    if boxed {
+                        buffer.appendInt32(-286450743)
+                    }
+                    serializeInt64(giftId, buffer: buffer, boxed: false)
+                    state.serialize(buffer, true)
+                    userState.serialize(buffer, true)
+                    break
+    }
+    }
+    
+    public func descriptionFields() -> (String, [(String, Any)]) {
+        switch self {
+                case .starGiftActiveAuctionState(let giftId, let state, let userState):
+                return ("starGiftActiveAuctionState", [("giftId", giftId as Any), ("state", state as Any), ("userState", userState as Any)])
+    }
+    }
+    
+        public static func parse_starGiftActiveAuctionState(_ reader: BufferReader) -> StarGiftActiveAuctionState? {
+            var _1: Int64?
+            _1 = reader.readInt64()
+            var _2: Api.StarGiftAuctionState?
+            if let signature = reader.readInt32() {
+                _2 = Api.parse(reader, signature: signature) as? Api.StarGiftAuctionState
+            }
+            var _3: Api.StarGiftAuctionUserState?
+            if let signature = reader.readInt32() {
+                _3 = Api.parse(reader, signature: signature) as? Api.StarGiftAuctionUserState
+            }
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            let _c3 = _3 != nil
+            if _c1 && _c2 && _c3 {
+                return Api.StarGiftActiveAuctionState.starGiftActiveAuctionState(giftId: _1!, state: _2!, userState: _3!)
+            }
+            else {
+                return nil
+            }
+        }
+    
+    }
+}
+public extension Api {
     enum StarGiftAttribute: TypeConstructorDescription {
         case starGiftAttributeBackdrop(name: String, backdropId: Int32, centerColor: Int32, edgeColor: Int32, patternColor: Int32, textColor: Int32, rarityPermille: Int32)
         case starGiftAttributeModel(name: String, document: Api.Document, rarityPermille: Int32)
@@ -1558,46 +1606,6 @@ public extension Api {
             let _c9 = (Int(_1!) & Int(1 << 6) == 0) || _9 != nil
             if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 {
                 return Api.StarsSubscription.starsSubscription(flags: _1!, id: _2!, peer: _3!, untilDate: _4!, pricing: _5!, chatInviteHash: _6, title: _7, photo: _8, invoiceSlug: _9)
-            }
-            else {
-                return nil
-            }
-        }
-    
-    }
-}
-public extension Api {
-    enum StarsSubscriptionPricing: TypeConstructorDescription {
-        case starsSubscriptionPricing(period: Int32, amount: Int64)
-    
-    public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-    switch self {
-                case .starsSubscriptionPricing(let period, let amount):
-                    if boxed {
-                        buffer.appendInt32(88173912)
-                    }
-                    serializeInt32(period, buffer: buffer, boxed: false)
-                    serializeInt64(amount, buffer: buffer, boxed: false)
-                    break
-    }
-    }
-    
-    public func descriptionFields() -> (String, [(String, Any)]) {
-        switch self {
-                case .starsSubscriptionPricing(let period, let amount):
-                return ("starsSubscriptionPricing", [("period", period as Any), ("amount", amount as Any)])
-    }
-    }
-    
-        public static func parse_starsSubscriptionPricing(_ reader: BufferReader) -> StarsSubscriptionPricing? {
-            var _1: Int32?
-            _1 = reader.readInt32()
-            var _2: Int64?
-            _2 = reader.readInt64()
-            let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            if _c1 && _c2 {
-                return Api.StarsSubscriptionPricing.starsSubscriptionPricing(period: _1!, amount: _2!)
             }
             else {
                 return nil

@@ -1,4 +1,44 @@
 public extension Api {
+    enum StarsSubscriptionPricing: TypeConstructorDescription {
+        case starsSubscriptionPricing(period: Int32, amount: Int64)
+    
+    public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+    switch self {
+                case .starsSubscriptionPricing(let period, let amount):
+                    if boxed {
+                        buffer.appendInt32(88173912)
+                    }
+                    serializeInt32(period, buffer: buffer, boxed: false)
+                    serializeInt64(amount, buffer: buffer, boxed: false)
+                    break
+    }
+    }
+    
+    public func descriptionFields() -> (String, [(String, Any)]) {
+        switch self {
+                case .starsSubscriptionPricing(let period, let amount):
+                return ("starsSubscriptionPricing", [("period", period as Any), ("amount", amount as Any)])
+    }
+    }
+    
+        public static func parse_starsSubscriptionPricing(_ reader: BufferReader) -> StarsSubscriptionPricing? {
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: Int64?
+            _2 = reader.readInt64()
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            if _c1 && _c2 {
+                return Api.StarsSubscriptionPricing.starsSubscriptionPricing(period: _1!, amount: _2!)
+            }
+            else {
+                return nil
+            }
+        }
+    
+    }
+}
+public extension Api {
     enum StarsTopupOption: TypeConstructorDescription {
         case starsTopupOption(flags: Int32, stars: Int64, storeProduct: String?, currency: String, amount: Int64)
     
