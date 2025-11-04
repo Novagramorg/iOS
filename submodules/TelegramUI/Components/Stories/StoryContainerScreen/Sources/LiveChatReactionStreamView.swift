@@ -8,6 +8,7 @@ import AppBundle
 import AccountContext
 import HierarchyTrackingLayer
 import LokiRng
+import SwiftSignalKit
 
 private let gradientColors: [NSArray] = [
     [UIColor(rgb: 0xff516a).cgColor, UIColor(rgb: 0xff885e).cgColor],
@@ -104,6 +105,28 @@ private func makePeerBadgeImage(engine: TelegramEngine, peer: EnginePeer, count:
     textSize.width = ceil(textSize.width)
     textSize.height = ceil(textSize.height)
     
+    var avatarSourceImage: UIImage?
+    if let resource = smallestImageRepresentation(peer.profileImageRepresentations)?.resource, let peerReference = PeerReference(peer._asPeer()) {
+        let disposable = fetchedMediaResource(mediaBox: engine.account.postbox.mediaBox, userLocation: .peer(peer.id), userContentType: .avatar, reference: .avatar(peer: peerReference, resource: resource)).startStrict()
+        let signal = engine.account.postbox.mediaBox.resourceData(resource)
+        |> filter { $0.complete }
+        |> map { value -> Data? in
+            if value.complete {
+                return try? Data(contentsOf: URL(fileURLWithPath: value.path))
+            } else {
+                return nil
+            }
+        }
+        |> take(1)
+        |> timeout(0.9, queue: Queue.concurrentDefaultQueue(), alternate: .single(nil))
+        
+        if let imageData = await signal.get() {
+            avatarSourceImage = UIImage(data: imageData)
+        }
+        
+        disposable.dispose()
+    }
+    
     let size = CGSize(width: avatarInset + avatarSize + avatarIconSpacing + iconSize + iconTextSpacing + textSize.height + rightInset, height: avatarSize + avatarInset * 2.0)
     return generateImage(size, rotatedContext: { size, context in
         UIGraphicsPushContext(context)
@@ -116,8 +139,15 @@ private func makePeerBadgeImage(engine: TelegramEngine, peer: EnginePeer, count:
         context.addPath(UIBezierPath(roundedRect: CGRect(origin: CGPoint(), size: size), cornerRadius: size.height * 0.5).cgPath)
         context.fillPath()
         
-        if let image = avatarViewLettersImage(size: CGSize(width: avatarSize, height: avatarSize), peerId: peer.id, letters: peer.displayLetters, isStory: false) {
-            image.draw(in: CGRect(origin: CGPoint(x: avatarInset, y: avatarInset), size: CGSize(width: avatarSize, height: avatarSize)))
+        let avatarRect = CGRect(origin: CGPoint(x: avatarInset, y: avatarInset), size: CGSize(width: avatarSize, height: avatarSize))
+        
+        if let avatarSourceImage {
+            context.addEllipse(in: avatarRect)
+            context.clip()
+            avatarSourceImage.draw(in: avatarRect)
+            context.resetClip()
+        } else if let image = avatarViewLettersImage(size: CGSize(width: avatarSize, height: avatarSize), peerId: peer.id, letters: peer.displayLetters, isStory: false) {
+            image.draw(in: avatarRect)
         }
         
         if let image = generateTintedImage(image: UIImage(bundleImageName: "Premium/Stars/ButtonStar"), color: .white) {

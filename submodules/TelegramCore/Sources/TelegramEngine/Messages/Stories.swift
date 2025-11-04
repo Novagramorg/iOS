@@ -2597,7 +2597,7 @@ func _internal_exportStoryLink(account: Account, peerId: EnginePeer.Id, id: Int3
 func _internal_refreshStories(account: Account, peerId: PeerId, ids: [Int32]) -> Signal<Never, NoError> {
     return _internal_getStoriesById(accountPeerId: account.peerId, postbox: account.postbox, source: .network(account.network), peerId: peerId, peerReference: nil, ids: ids, allowFloodWait: true)
     |> mapToSignal { result -> Signal<Never, NoError> in
-        guard let result = result else {
+        guard let result else {
             return .complete()
         }
         return account.postbox.transaction { transaction -> Void in
@@ -2663,6 +2663,20 @@ func _internal_refreshSeenStories(postbox: Postbox, network: Network) -> Signal<
         }
         |> ignoreValues
     }
+}
+
+func _internal_pollAndGetLiveStory(account: Account, peerId: PeerId) -> Signal<Int32?, NoError> {
+    return _internal_pollPeerStories(postbox: account.postbox, network: account.network, accountPeerId: account.peerId, peerId: peerId)
+    |> map { _ -> Int32? in }
+    |> then(account.postbox.transaction { transaction -> Int32? in
+        for item in transaction.getStoryItems(peerId: peerId) {
+            if item.isLiveStream {
+                return item.id
+            }
+        }
+        
+        return nil
+    })
 }
 
 extension Stories.ConfigurationState {

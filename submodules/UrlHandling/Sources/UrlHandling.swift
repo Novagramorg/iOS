@@ -67,6 +67,11 @@ extension ResolvedBotAdminRights {
 }
 
 public enum ParsedInternalPeerUrlParameter {
+    public enum Story {
+        case live
+        case id(Int32)
+    }
+    
     case botStart(String)
     case groupBotStart(String, ResolvedBotAdminRights?)
     case channelBotStart(String, ResolvedBotAdminRights?)
@@ -76,7 +81,7 @@ public enum ParsedInternalPeerUrlParameter {
     case replyThread(Int32, Int32)
     case voiceChat(String?)
     case appStart(String, String?, ResolvedStartAppMode)
-    case story(Int32)
+    case story(Story)
     case boost
     case text(String)
     case profile
@@ -342,8 +347,10 @@ public func parseInternalUrl(sharedContext: SharedAccountContext, context: Accou
                                      }
                                      return .peer(.name(peerName), .appStart("", queryItem.value, mode))
                                  } else if queryItem.name == "story" {
-                                    if let id = Int32(value) {
-                                        return .peer(.name(peerName), .story(id))
+                                    if value == "live" {
+                                        return .peer(.name(peerName), .story(.live))
+                                    } else if let id = Int32(value) {
+                                        return .peer(.name(peerName), .story(.id(id)))
                                     }
                                  } else if queryItem.name == "album" {
                                     if let id = Int64(value) {
@@ -599,8 +606,10 @@ public func parseInternalUrl(sharedContext: SharedAccountContext, context: Accou
                         return nil
                     }
                 } else if pathComponents.count >= 3 && pathComponents[1] == "s" {
-                    if let storyId = Int32(pathComponents[2]) {
-                        return .peer(.name(pathComponents[0]), .story(storyId))
+                    if pathComponents[2] == "live" {
+                        return .peer(.name(pathComponents[0]), .story(.live))
+                    } else if let storyId = Int32(pathComponents[2]) {
+                        return .peer(.name(pathComponents[0]), .story(.id(storyId)))
                     } else {
                         return nil
                     }
@@ -939,11 +948,25 @@ private func resolveInternalUrl(context: AccountContext, url: ParsedInternalUrl)
                                 }
                             case let .voiceChat(invite):
                                 return .single(.result(.joinVoiceChat(peer.id, invite)))
-                            case let .story(id):
-                                return .single(.progress) |> then(context.engine.messages.refreshStories(peerId: peer.id, ids: [id])
-                                |> map { _ -> ResolveInternalUrlResult in
+                            case let .story(story):
+                                switch story {
+                                case .live:
+                                    return .single(.progress)
+                                    |> then(context.engine.messages.pollAndGetLiveStory(peerId: peer.id)
+                                    |> map { id -> ResolveInternalUrlResult in
+                                        if let id {
+                                            return .result(.story(peerId: peer.id, id: id))
+                                        } else {
+                                            return .result(nil)
+                                        }
+                                    })
+                                case let .id(id):
+                                    return .single(.progress)
+                                    |> then(context.engine.messages.refreshStories(peerId: peer.id, ids: [id])
+                                    |> map { _ -> ResolveInternalUrlResult in
+                                    }
+                                    |> then(.single(.result(.story(peerId: peer.id, id: id)))))
                                 }
-                                |> then(.single(.result(.story(peerId: peer.id, id: id)))))
                             case .boost:
                                 return .single(.progress) 
                                 |> then(
