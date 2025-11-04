@@ -174,11 +174,15 @@ public final class MessageInputPanelComponent: Component {
     }
     
     public struct LiveChatState: Equatable {
+        public var isEnabled: Bool
         public var isExpanded: Bool
+        public var isEmpty: Bool
         public var hasUnseenMessages: Bool
         
-        public init(isExpanded: Bool, hasUnseenMessages: Bool) {
+        public init(isEnabled: Bool, isExpanded: Bool, isEmpty: Bool, hasUnseenMessages: Bool) {
+            self.isEnabled = isEnabled
             self.isExpanded = isExpanded
+            self.isEmpty = isEmpty
             self.hasUnseenMessages = hasUnseenMessages
         }
     }
@@ -929,35 +933,37 @@ public final class MessageInputPanelComponent: Component {
                 self.currentInputMode = inputMode
                 
                 var inlineActions: [ChatTextInputPanelComponent.InlineAction] = []
-                if component.paidMessageAction != nil && self.textInputPanelExternalState.textInputState.inputText.length == 0 {
-                    inlineActions.append(ChatTextInputPanelComponent.InlineAction(
-                        kind: .paidMessage,
-                        action: { [weak self] in
-                            guard let self else {
-                                return
+                if component.liveChatState?.isEnabled == true {
+                    if component.paidMessageAction != nil && self.textInputPanelExternalState.textInputState.inputText.length == 0 {
+                        inlineActions.append(ChatTextInputPanelComponent.InlineAction(
+                            kind: .paidMessage,
+                            action: { [weak self] in
+                                guard let self else {
+                                    return
+                                }
+                                self.component?.paidMessageAction?()
                             }
-                            self.component?.paidMessageAction?()
+                        ))
+                    } else if let inputMode {
+                        let mappedInputMode: ChatTextInputPanelComponent.InputMode
+                        switch inputMode {
+                        case .text:
+                            mappedInputMode = .text
+                        case .emoji:
+                            mappedInputMode = .emoji
+                        case .stickers:
+                            mappedInputMode = .stickers
                         }
-                    ))
-                } else if let inputMode {
-                    let mappedInputMode: ChatTextInputPanelComponent.InputMode
-                    switch inputMode {
-                    case .text:
-                        mappedInputMode = .text
-                    case .emoji:
-                        mappedInputMode = .emoji
-                    case .stickers:
-                        mappedInputMode = .stickers
+                        inlineActions.append(ChatTextInputPanelComponent.InlineAction(
+                            kind: .inputMode(mappedInputMode),
+                            action: { [weak self] in
+                                guard let self, let component = self.component else {
+                                    return
+                                }
+                                component.inputModeAction?()
+                            }
+                        ))
                     }
-                    inlineActions.append(ChatTextInputPanelComponent.InlineAction(
-                        kind: .inputMode(mappedInputMode),
-                        action: { [weak self] in
-                            guard let self, let component = self.component else {
-                                return
-                            }
-                            component.inputModeAction?()
-                        }
-                    ))
                 }
                 
                 let placeholder: String
@@ -1026,11 +1032,18 @@ public final class MessageInputPanelComponent: Component {
                         strings: component.strings,
                         chatPeerId: component.chatLocation?.peerId ?? component.context.account.peerId,
                         inlineActions: inlineActions,
-                        leftAction: ChatTextInputPanelComponent.LeftAction(kind:  .toggleExpanded(isVisible: component.liveChatState != nil, isExpanded: component.liveChatState?.isExpanded ?? true, hasUnseen: component.liveChatState?.hasUnseenMessages ?? false), action: { [weak self] in
+                        leftAction: ChatTextInputPanelComponent.LeftAction(kind:  .toggleExpanded(isVisible: component.liveChatState?.isEnabled == true, isExpanded: component.liveChatState?.isExpanded ?? true, hasUnseen: component.liveChatState?.hasUnseenMessages ?? false), action: { [weak self] in
                             guard let self, let component = self.component else {
                                 return
                             }
-                            component.toggleLiveChatExpanded?()
+                            guard let inputPanelView = self.inputPanel?.view as? ChatTextInputPanelComponent.View else {
+                                return
+                            }
+                            if let liveChatState = component.liveChatState, liveChatState.isEmpty {
+                                inputPanelView.activateInput()
+                            } else {
+                                component.toggleLiveChatExpanded?()
+                            }
                         }),
                         rightAction: ChatTextInputPanelComponent.RightAction(kind: .stars(count: Int(component.starStars?.totalStars ?? 0), isFilled: component.starStars?.hasOutgoingStars ?? false), action: { [weak self] sourceView in
                             guard let self, let component = self.component else {
@@ -1043,8 +1056,10 @@ public final class MessageInputPanelComponent: Component {
                             }
                             component.sendStarsAction?(sourceView, true)
                         }),
-                        sendAsConfiguration: sendAsConfiguration,
-                        placeholder: placeholder,
+                        sendAsConfiguration: component.liveChatState?.isEnabled == true ? sendAsConfiguration : nil,
+                        //TODO:localize
+                        placeholder: component.liveChatState?.isEnabled == true ? placeholder : "Comments are disabled",
+                        isEnabled: component.liveChatState?.isEnabled == true,
                         paidMessagePrice: component.sendPaidMessageStars,
                         sendColor: component.sendPaidMessageStars.flatMap { value in
                             let params = LiveChatMessageParams(appConfig: component.context.currentAppConfiguration.with({ $0 }))

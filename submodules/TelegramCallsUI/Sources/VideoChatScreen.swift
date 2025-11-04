@@ -1218,7 +1218,8 @@ final class VideoChatScreenComponent: Component {
                     subscribedToScheduled: false,
                     isVideoEnabled: true,
                     isVideoWatchersLimitReached: false,
-                    isMyVideoActive: false
+                    isMyVideoActive: false,
+                    isUnifiedStream: false
                 )
                 
                 return .single((callState, invitedPeers.compactMap({ peer -> VideoChatScreenComponent.InvitedPeer? in
@@ -1416,7 +1417,7 @@ final class VideoChatScreenComponent: Component {
                     return
                 }
                 let entities = generateTextEntities(text.string, enabledTypes: [.mention, .hashtag], currentEntities: generateChatInputTextEntities(text))
-                call.sendMessage(fromId: nil, randomId: randomId, text: text.string, entities: entities, paidStars: nil)
+                call.sendMessage(fromId: nil, isAdmin: false, randomId: randomId, text: text.string, entities: entities, paidStars: nil)
             }
             
             inputPanelView.clearSendMessageInput(updateState: true)
@@ -3836,7 +3837,7 @@ final class VideoChatScreenComponent: Component {
                             guard case let .group(groupCall) = self.currentCall, let call = groupCall as? PresentationGroupCallImpl else {
                                 return
                             }
-                            call.sendMessage(fromId: nil, text: text, entities: entities, paidStars: nil)
+                            call.sendMessage(fromId: nil, isAdmin: false, text: text, entities: entities, paidStars: nil)
                         })
                     }
                     

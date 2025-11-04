@@ -112,27 +112,35 @@ final class StoryItemContentComponent: Component {
     
     struct LiveChatState {
         var isExpanded: Bool
+        var isEmpty: Bool
         var hasUnseenMessages: Bool
         var areMessagesEnabled: Bool
         var minMessagePrice: Int64?
         var starStats: StarStats?
+        var isAdmin: Bool
         
-        init(isExpanded: Bool, hasUnseenMessages: Bool, areMessagesEnabled: Bool, minMessagePrice: Int64?, starStats: StarStats?) {
+        init(isExpanded: Bool, isEmpty: Bool, hasUnseenMessages: Bool, areMessagesEnabled: Bool, minMessagePrice: Int64?, starStats: StarStats?, isAdmin: Bool) {
             self.isExpanded = isExpanded
+            self.isEmpty = isEmpty
             self.hasUnseenMessages = hasUnseenMessages
             self.areMessagesEnabled = areMessagesEnabled
             self.minMessagePrice = minMessagePrice
             self.starStats = starStats
+            self.isAdmin = isAdmin
         }
     }
     
     private struct MediaStreamCallState: Equatable {
         var areMessagesEnabled: Bool
         var minMessagePrice: Int64?
+        var isAdmin: Bool
+        var isUnifiedStream: Bool
         
-        init(areMessagesEnabled: Bool, minMessagePrice: Int64?) {
+        init(areMessagesEnabled: Bool, minMessagePrice: Int64?, isAdmin: Bool, isUnifiedStream: Bool) {
             self.areMessagesEnabled = areMessagesEnabled
             self.minMessagePrice = minMessagePrice
+            self.isAdmin = isAdmin
+            self.isUnifiedStream = isUnifiedStream
         }
     }
     
@@ -216,10 +224,12 @@ final class StoryItemContentComponent: Component {
             
             return LiveChatState(
                 isExpanded: currentInfo.isChatExpanded,
+                isEmpty: self.liveChatExternal.isEmpty,
                 hasUnseenMessages: self.liveChatExternal.hasUnseenMessages,
                 areMessagesEnabled: mediaStreamCallState?.areMessagesEnabled ?? false,
                 minMessagePrice: mediaStreamCallState?.minMessagePrice,
-                starStats: starStats
+                starStats: starStats,
+                isAdmin: mediaStreamCallState?.isAdmin ?? false
             )
         }
         
@@ -932,7 +942,9 @@ final class StoryItemContentComponent: Component {
                 if case .rtc = liveStream.kind, component.isEmbeddedInCamera {
                 } else {
                     var videoEndpointId: String?
-                    if let mediaStreamCallVideoState = self.mediaStreamCallVideoState {
+                    if let mediaStreamCallState = self.mediaStreamCallState, mediaStreamCallState.isUnifiedStream {
+                        videoEndpointId = "unified"
+                    } else if let mediaStreamCallVideoState = self.mediaStreamCallVideoState {
                         videoEndpointId = mediaStreamCallVideoState.videoEndpointId
                     }
                     let _ = mediaStream.update(
@@ -1076,7 +1088,9 @@ final class StoryItemContentComponent: Component {
                         
                         let mappedState = MediaStreamCallState(
                             areMessagesEnabled: state.messagesAreEnabled,
-                            minMessagePrice: state.sendPaidMessageStars
+                            minMessagePrice: state.sendPaidMessageStars,
+                            isAdmin: state.canManageCall,
+                            isUnifiedStream: state.isUnifiedStream
                         )
                         if self.mediaStreamCallState != mappedState {
                             self.mediaStreamCallState = mappedState
