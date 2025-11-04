@@ -4049,7 +4049,7 @@ final class StoryItemSetContainerSendMessage: @unchecked(Sendable) {
                 
                 self.commitSendStars(view: view, count: count, delay: false)
             } else {
-                let starsContextState = await component.context.starsContext?.state.get()
+                /*let starsContextState = await component.context.starsContext?.state.get()
                 guard let balance = starsContextState?.balance else {
                     return
                 }
@@ -4080,7 +4080,7 @@ final class StoryItemSetContainerSendMessage: @unchecked(Sendable) {
                     navigationController.pushViewController(controller)
                     
                     return
-                }
+                }*/
                 
                 var reactionItem: ReactionItem?
                 if let availableReactions = await component.context.availableReactions.get() {

@@ -1361,6 +1361,10 @@ public extension TelegramEngine {
             return _internal_refreshStories(account: self.account, peerId: peerId, ids: ids)
         }
         
+        public func pollAndGetLiveStory(peerId: EnginePeer.Id) -> Signal<Int32?, NoError> {
+            return _internal_pollAndGetLiveStory(account: self.account, peerId: peerId)
+        }
+        
         public func refreshStoryViews(peerId: EnginePeer.Id, ids: [Int32]) -> Signal<Never, NoError> {
             if peerId != self.account.peerId && peerId.namespace != Namespaces.Peer.CloudChannel {
                 return .complete()
