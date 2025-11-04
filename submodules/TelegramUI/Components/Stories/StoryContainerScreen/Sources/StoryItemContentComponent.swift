@@ -183,7 +183,7 @@ final class StoryItemContentComponent: Component {
         private var unsupportedText: ComponentView<Empty>?
         private var unsupportedButton: ComponentView<Empty>?
         
-        private var progressMode: StoryContentItem.ProgressMode = .pause
+        private var progressMode: (mode: StoryContentItem.ProgressMode, isCentral: Bool) = (.pause, false)
         private var currentProgressTimer: SwiftSignalKit.Timer?
         private var currentProgressTimerValue: Double = 0.0
         private var videoProgressDisposable: Disposable?
@@ -302,7 +302,7 @@ final class StoryItemContentComponent: Component {
             if self.videoNode != nil {
                 return
             }
-            if case .pause = self.progressMode {
+            if case .pause = self.progressMode.mode {
                 return
             }
             
@@ -357,7 +357,7 @@ final class StoryItemContentComponent: Component {
                         }
                         
                         var shouldLoop = false
-                        if self.progressMode == .blurred {
+                        if self.progressMode.mode == .blurred {
                             shouldLoop = true
                         } else if let component = self.component, component.item.isPending {
                             shouldLoop = true
@@ -410,11 +410,62 @@ final class StoryItemContentComponent: Component {
                     })
                 }
             }
+            
+            if case let .liveStream(liveStream) = currentMessageMedia {
+                let mediaStreamCall: PresentationGroupCallImpl
+                if let current = self.mediaStreamCall {
+                    mediaStreamCall = current
+                } else {
+                    let initialCall = EngineGroupCallDescription(
+                        id: liveStream.call.id,
+                        accessHash: liveStream.call.accessHash,
+                        title: nil,
+                        scheduleTimestamp: nil,
+                        subscribedToScheduled: false,
+                        isStream: true
+                    )
+                    let presentationData = component.context.sharedContext.currentPresentationData.with({ $0 })
+                    mediaStreamCall = PresentationGroupCallImpl(
+                        accountContext: component.context,
+                        audioSession: component.context.sharedContext.mediaManager.audioSession,
+                        callKitIntegration: nil,
+                        getDeviceAccessData: {
+                            (
+                                presentationData: presentationData,
+                                present: { c, a in
+                                    
+                                },
+                                openSettings: {
+                                    
+                                }
+                            )
+                        },
+                        initialCall: (initialCall, .id(id: liveStream.call.id, accessHash: liveStream.call.accessHash)),
+                        internalId: CallSessionInternalId(),
+                        peerId: nil,
+                        isChannel: false,
+                        invite: nil,
+                        joinAsPeerId: nil,
+                        isStream: true,
+                        keyPair: nil,
+                        conferenceSourceId: nil,
+                        isConference: false,
+                        beginWithVideo: false,
+                        sharedAudioContext: nil,
+                        unmuteByDefault: false
+                    )
+                    self.mediaStreamCall = mediaStreamCall
+                    
+                    if update && !self.isUpdating {
+                        self.state?.updated(transition: .immediate, isLocal: true)
+                    }
+                }
+            }
         }
         
-        override func setProgressMode(_ progressMode: StoryContentItem.ProgressMode) {
-            if self.progressMode != progressMode {
-                self.progressMode = progressMode
+        override func setProgressMode(mode: StoryContentItem.ProgressMode, isCentral: Bool) {
+            if self.progressMode.mode != mode || self.progressMode.isCentral != isCentral {
+                self.progressMode = (mode, isCentral)
                 self.updateProgressMode(update: true)
                 
                 if let component = self.component, !self.overlaysView.bounds.isEmpty {
@@ -459,8 +510,10 @@ final class StoryItemContentComponent: Component {
         
         private func updateProgressMode(update: Bool) {
             if let videoNode = self.videoNode {
-                let canPlay = self.progressMode != .pause && self.contentLoaded && self.hierarchyTrackingLayer.isInHierarchy
-                
+                var canPlay = self.contentLoaded && self.hierarchyTrackingLayer.isInHierarchy
+                if case .pause = self.progressMode.mode {
+                    canPlay = false
+                }
                 if canPlay {
                     videoNode.play()
                 } else {
@@ -468,13 +521,32 @@ final class StoryItemContentComponent: Component {
                 }
             }
             
+            var shouldUpdate = false
+            if let mediaStreamCall = self.mediaStreamCall {
+                //print("call progressMode: \(self.progressMode)")
+                var canPlay = true
+                if case .pause = self.progressMode.mode, (!self.progressMode.isCentral || !self.hierarchyTrackingLayer.isInHierarchy) {
+                    canPlay = false
+                }
+                if !canPlay {
+                    self.mediaStreamCall = nil
+                    shouldUpdate = true
+                    
+                    let _ = mediaStreamCall.leave(terminateIfPossible: false).startStandalone()
+                }
+            }
+            
             self.initializeVideoIfReady(update: update)
             self.updateVideoPlaybackProgress()
             self.updateProgressTimer()
+            
+            if shouldUpdate {
+                self.state?.updated(transition: .immediate, isLocal: true)
+            }
         }
         
         private func updateProgressTimer() {
-            var needsTimer = self.progressMode != .pause && self.contentLoaded && self.hierarchyTrackingLayer.isInHierarchy
+            var needsTimer = self.progressMode.mode != .pause && self.contentLoaded && self.hierarchyTrackingLayer.isInHierarchy
             if let component = self.component {
                 if component.item.isPending {
                     if case .file = self.currentMessageMedia {
@@ -490,7 +562,7 @@ final class StoryItemContentComponent: Component {
                         timeout: 1.0 / 60.0,
                         repeat: true,
                         completion: { [weak self] in
-                            guard let self, self.progressMode != .pause, self.contentLoaded, self.hierarchyTrackingLayer.isInHierarchy else {
+                            guard let self, self.progressMode.mode != .pause, self.contentLoaded, self.hierarchyTrackingLayer.isInHierarchy else {
                                 return
                             }
                             
@@ -510,7 +582,7 @@ final class StoryItemContentComponent: Component {
                                     }
                                 }
                                 
-                                if self.progressMode != .play {
+                                if self.progressMode.mode != .play {
                                     return
                                 }
                                 
@@ -681,7 +753,7 @@ final class StoryItemContentComponent: Component {
                 size: size,
                 isCaptureProtected: component.item.isForwardingDisabled,
                 attemptSynchronous: synchronousLoad,
-                isActive: self.progressMode == .play,
+                isActive: self.progressMode.mode == .play,
                 transition: transition
             )
         }
@@ -842,7 +914,7 @@ final class StoryItemContentComponent: Component {
                 }
             }
             
-            if case let .liveStream(liveStream) = messageMedia {
+            if case let .liveStream(liveStream) = messageMedia, let mediaStreamCall = self.mediaStreamCall {
                 var mediaStreamTransition = transition
                 let mediaStream: ComponentView<Empty>
                 if let current = self.mediaStream {
@@ -851,55 +923,6 @@ final class StoryItemContentComponent: Component {
                     mediaStreamTransition = mediaStreamTransition.withAnimation(.none)
                     mediaStream = ComponentView()
                     self.mediaStream = mediaStream
-                }
-                
-                let mediaStreamCall: PresentationGroupCallImpl
-                if let current = self.mediaStreamCall {
-                    mediaStreamCall = current
-                } else {
-                    let initialCall = EngineGroupCallDescription(
-                        id: liveStream.call.id,
-                        accessHash: liveStream.call.accessHash,
-                        title: nil,
-                        scheduleTimestamp: nil,
-                        subscribedToScheduled: false,
-                        isStream: true
-                    )
-                    let presentationData = component.context.sharedContext.currentPresentationData.with({ $0 })
-                    mediaStreamCall = PresentationGroupCallImpl(
-                        accountContext: component.context,
-                        audioSession: component.context.sharedContext.mediaManager.audioSession,
-                        callKitIntegration: nil,
-                        getDeviceAccessData: {
-                            (
-                                presentationData: presentationData,
-                                present: { c, a in
-                                    
-                                },
-                                openSettings: {
-                                    
-                                }
-                            )
-                        },
-                        initialCall: (initialCall, .id(id: liveStream.call.id, accessHash: liveStream.call.accessHash)),
-                        internalId: CallSessionInternalId(),
-                        peerId: nil,
-                        isChannel: false,
-                        invite: nil,
-                        joinAsPeerId: nil,
-                        isStream: true,
-                        keyPair: nil,
-                        conferenceSourceId: nil,
-                        isConference: false,
-                        beginWithVideo: false,
-                        sharedAudioContext: nil,
-                        unmuteByDefault: false
-                    )
-                    self.mediaStreamCall = mediaStreamCall
-                    
-                    let _ = mediaStreamCall.accountContext.engine.calls.getGroupCallStreamCredentials(peerId: mediaStreamCall.accountContext.account.peerId, isLiveStream: true, revokePreviousCredentials: false).startStandalone(next: { params in
-                        print("url: \(params.url), streamKey: \(params.streamKey)")
-                    })
                 }
                 
                 let liveChat: ComponentView<Empty>
