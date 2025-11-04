@@ -9755,6 +9755,36 @@ public extension Api.functions.payments {
                 }
 }
 public extension Api.functions.payments {
+                static func getStarGiftActiveAuctions(hash: Int64) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.payments.StarGiftActiveAuctions>) {
+                    let buffer = Buffer()
+                    buffer.appendInt32(-1513074355)
+                    serializeInt64(hash, buffer: buffer, boxed: false)
+                    return (FunctionDescription(name: "payments.getStarGiftActiveAuctions", parameters: [("hash", String(describing: hash))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.payments.StarGiftActiveAuctions? in
+                        let reader = BufferReader(buffer)
+                        var result: Api.payments.StarGiftActiveAuctions?
+                        if let signature = reader.readInt32() {
+                            result = Api.parse(reader, signature: signature) as? Api.payments.StarGiftActiveAuctions
+                        }
+                        return result
+                    })
+                }
+}
+public extension Api.functions.payments {
+                static func getStarGiftAuctionAcquiredGifts(giftId: Int64) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.payments.StarGiftAuctionAcquiredGifts>) {
+                    let buffer = Buffer()
+                    buffer.appendInt32(1805831148)
+                    serializeInt64(giftId, buffer: buffer, boxed: false)
+                    return (FunctionDescription(name: "payments.getStarGiftAuctionAcquiredGifts", parameters: [("giftId", String(describing: giftId))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.payments.StarGiftAuctionAcquiredGifts? in
+                        let reader = BufferReader(buffer)
+                        var result: Api.payments.StarGiftAuctionAcquiredGifts?
+                        if let signature = reader.readInt32() {
+                            result = Api.parse(reader, signature: signature) as? Api.payments.StarGiftAuctionAcquiredGifts
+                        }
+                        return result
+                    })
+                }
+}
+public extension Api.functions.payments {
                 static func getStarGiftAuctionState(giftId: Int64, version: Int32) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.payments.StarGiftAuctionState>) {
                     let buffer = Buffer()
                     buffer.appendInt32(1352689229)

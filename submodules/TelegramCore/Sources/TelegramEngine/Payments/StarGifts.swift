@@ -60,6 +60,7 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
             case releasedBy
             case perUserLimit
             case lockedUntilDate
+            case auctionDropSize
         }
         
         public struct Availability: Equatable, Codable, PostboxCoding {
@@ -183,8 +184,9 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
         public let releasedBy: EnginePeer.Id?
         public let perUserLimit: PerUserLimit?
         public let lockedUntilDate: Int32?
+        public let auctionDropSize: Int32?
         
-        public init(id: Int64, title: String?, file: TelegramMediaFile, price: Int64, convertStars: Int64, availability: Availability?, soldOut: SoldOut?, flags: Flags, upgradeStars: Int64?, releasedBy: EnginePeer.Id?, perUserLimit: PerUserLimit?, lockedUntilDate: Int32?) {
+        public init(id: Int64, title: String?, file: TelegramMediaFile, price: Int64, convertStars: Int64, availability: Availability?, soldOut: SoldOut?, flags: Flags, upgradeStars: Int64?, releasedBy: EnginePeer.Id?, perUserLimit: PerUserLimit?, lockedUntilDate: Int32?, auctionDropSize: Int32?) {
             self.id = id
             self.title = title
             self.file = file
@@ -197,6 +199,7 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
             self.releasedBy = releasedBy
             self.perUserLimit = perUserLimit
             self.lockedUntilDate = lockedUntilDate
+            self.auctionDropSize = auctionDropSize
         }
         
         public init(from decoder: Decoder) throws {
@@ -219,6 +222,7 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
             self.releasedBy = try container.decodeIfPresent(EnginePeer.Id.self, forKey: .releasedBy)
             self.perUserLimit = try container.decodeIfPresent(PerUserLimit.self, forKey: .perUserLimit)
             self.lockedUntilDate = try container.decodeIfPresent(Int32.self, forKey: .lockedUntilDate)
+            self.auctionDropSize = try container.decodeIfPresent(Int32.self, forKey: .auctionDropSize)
         }
         
         public init(decoder: PostboxDecoder) {
@@ -234,6 +238,7 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
             self.releasedBy = decoder.decodeOptionalInt64ForKey(CodingKeys.releasedBy.rawValue).flatMap { EnginePeer.Id($0) }
             self.perUserLimit = decoder.decodeObjectForKey(CodingKeys.perUserLimit.rawValue, decoder: { StarGift.Gift.PerUserLimit(decoder: $0) }) as? StarGift.Gift.PerUserLimit
             self.lockedUntilDate = decoder.decodeOptionalInt32ForKey(CodingKeys.lockedUntilDate.rawValue)
+            self.auctionDropSize = decoder.decodeOptionalInt32ForKey(CodingKeys.auctionDropSize.rawValue)
         }
         
         public func encode(to encoder: Encoder) throws {
@@ -255,6 +260,7 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
             try container.encodeIfPresent(self.releasedBy, forKey: .releasedBy)
             try container.encodeIfPresent(self.perUserLimit, forKey: .perUserLimit)
             try container.encodeIfPresent(self.lockedUntilDate, forKey: .lockedUntilDate)
+            try container.encodeIfPresent(self.auctionDropSize, forKey: .auctionDropSize)
         }
         
         public func encode(_ encoder: PostboxEncoder) {
@@ -297,6 +303,11 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
                 encoder.encodeInt32(lockedUntilDate, forKey: CodingKeys.lockedUntilDate.rawValue)
             } else {
                 encoder.encodeNil(forKey: CodingKeys.lockedUntilDate.rawValue)
+            }
+            if let auctionDropSize = self.auctionDropSize {
+                encoder.encodeInt32(auctionDropSize, forKey: CodingKeys.auctionDropSize.rawValue)
+            } else {
+                encoder.encodeNil(forKey: CodingKeys.auctionDropSize.rawValue)
             }
         }
     }
@@ -960,7 +971,7 @@ public extension StarGift {
 extension StarGift {
     init?(apiStarGift: Api.StarGift) {
         switch apiStarGift {
-        case let .starGift(apiFlags, id, sticker, stars, availabilityRemains, availabilityTotal, availabilityResale, convertStars, firstSale, lastSale, upgradeStars, minResaleStars, title, releasedBy, perUserTotal, perUserRemains, lockedUntilDate):
+        case let .starGift(apiFlags, id, sticker, stars, availabilityRemains, availabilityTotal, availabilityResale, convertStars, firstSale, lastSale, upgradeStars, minResaleStars, title, releasedBy, perUserTotal, perUserRemains, lockedUntilDate, dropSize):
             var flags = StarGift.Gift.Flags()
             if (apiFlags & (1 << 2)) != 0 {
                 flags.insert(.isBirthdayGift)
@@ -995,7 +1006,7 @@ extension StarGift {
             guard let file = telegramMediaFileFromApiDocument(sticker, altDocuments: nil) else {
                 return nil
             }
-            self = .generic(StarGift.Gift(id: id, title: title, file: file, price: stars, convertStars: convertStars, availability: availability, soldOut: soldOut, flags: flags, upgradeStars: upgradeStars, releasedBy: releasedBy?.peerId, perUserLimit: perUserLimit, lockedUntilDate: lockedUntilDate))
+            self = .generic(StarGift.Gift(id: id, title: title, file: file, price: stars, convertStars: convertStars, availability: availability, soldOut: soldOut, flags: flags, upgradeStars: upgradeStars, releasedBy: releasedBy?.peerId, perUserLimit: perUserLimit, lockedUntilDate: lockedUntilDate, auctionDropSize: dropSize))
         case let .starGiftUnique(apiFlags, id, giftId, title, slug, num, ownerPeerId, ownerName, ownerAddress, attributes, availabilityIssued, availabilityTotal, giftAddress, resellAmounts, releasedBy, valueAmount, valueCurrency, themePeer, peerColor, hostPeerId):
             let owner: StarGift.UniqueGift.Owner
             if let ownerAddress {

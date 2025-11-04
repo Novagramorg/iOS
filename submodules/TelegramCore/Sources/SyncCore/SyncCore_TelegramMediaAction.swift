@@ -199,6 +199,18 @@ public enum TelegramMediaActionType: PostboxCoding, Equatable {
         }
     }
     
+    public struct StarGiftAuctionBidFlags: OptionSet {
+        public var rawValue: Int32
+        public init(rawValue: Int32) {
+            self.rawValue = rawValue
+        }
+        
+        public static let isAcquired = StarGiftAuctionBidFlags(rawValue: 1 << 0)
+        public static let ioOutbid = StarGiftAuctionBidFlags(rawValue: 1 << 1)
+        public static let isReturned = StarGiftAuctionBidFlags(rawValue: 1 << 2)
+        public static let isFinal = StarGiftAuctionBidFlags(rawValue: 1 << 3)
+    }
+    
     case unknown
     case groupCreated(title: String)
     case addedMembers(peerIds: [PeerId])
@@ -255,6 +267,7 @@ public enum TelegramMediaActionType: PostboxCoding, Equatable {
     case suggestedPostSuccess(amount: CurrencyAmount)
     case suggestedPostRefund(SuggestedPostRefund)
     case suggestedBirthday(TelegramBirthday)
+    case starGiftAuctionBid(gift: StarGift, bidAmount: Int64, text: String?, entities: [MessageTextEntity]?, peerId: EnginePeer.Id?, nextDropAt: Int32?, flags: StarGiftAuctionBidFlags)
     
     public init(decoder: PostboxDecoder) {
         let rawValue: Int32 = decoder.decodeInt32ForKey("_rawValue", orElse: 0)
@@ -422,6 +435,8 @@ public enum TelegramMediaActionType: PostboxCoding, Equatable {
             self = .suggestedPostRefund(decoder.decodeCodable(SuggestedPostRefund.self, forKey: "s") ?? SuggestedPostRefund(isUserInitiated: true))
         case 55:
             self = .suggestedBirthday(decoder.decodeCodable(TelegramBirthday.self, forKey: "birthday") ?? TelegramBirthday(day: 1, month: 1, year: nil))
+        case 56:
+            self = .starGiftAuctionBid(gift: decoder.decodeObjectForKey("gift", decoder: { StarGift(decoder: $0) }) as! StarGift, bidAmount: decoder.decodeInt64ForKey("bidAmount", orElse: 0), text: decoder.decodeOptionalStringForKey("text"), entities: decoder.decodeOptionalObjectArrayWithDecoderForKey("entities"), peerId: decoder.decodeOptionalInt64ForKey("peerId").flatMap { EnginePeer.Id($0) }, nextDropAt: decoder.decodeOptionalInt32ForKey("nextDropAt"), flags: StarGiftAuctionBidFlags(rawValue: decoder.decodeInt32ForKey("flags", orElse: 0)))
         default:
             self = .unknown
         }
@@ -881,6 +896,28 @@ public enum TelegramMediaActionType: PostboxCoding, Equatable {
         case let .suggestedBirthday(birthday):
             encoder.encodeInt32(55, forKey: "_rawValue")
             encoder.encodeCodable(birthday, forKey: "birthday")
+        case let .starGiftAuctionBid(gift, bidAmount, text, entities, peerId, nextDropAt, flags):
+            encoder.encodeInt32(56, forKey: "_rawValue")
+            encoder.encodeObject(gift, forKey: "gift")
+            encoder.encodeInt64(bidAmount, forKey: "bidAmount")
+            if let text, let entities {
+                encoder.encodeString(text, forKey: "text")
+                encoder.encodeObjectArray(entities, forKey: "entities")
+            } else {
+                encoder.encodeNil(forKey: "text")
+                encoder.encodeNil(forKey: "entities")
+            }
+            if let peerId {
+                encoder.encodeInt64(peerId.toInt64(), forKey: "peerId")
+            } else {
+                encoder.encodeNil(forKey: "peerId")
+            }
+            if let nextDropAt {
+                encoder.encodeInt32(nextDropAt, forKey: "nextDropAt")
+            } else {
+                encoder.encodeNil(forKey: "nextDropAt")
+            }
+            encoder.encodeInt32(flags.rawValue, forKey: "flags")
         }
     }
     
@@ -934,6 +971,12 @@ public enum TelegramMediaActionType: PostboxCoding, Equatable {
             return peerIds
         case let .conferenceCall(conferenceCall):
             return conferenceCall.otherParticipants
+        case let .starGiftAuctionBid(_, _, _, _, peerId, _, _):
+            var peerIds: [PeerId] = []
+            if let peerId {
+                peerIds.append(peerId)
+            }
+            return peerIds
         default:
             return []
         }

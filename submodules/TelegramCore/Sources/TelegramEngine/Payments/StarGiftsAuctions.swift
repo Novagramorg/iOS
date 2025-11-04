@@ -38,11 +38,12 @@ public final class GiftAuctionContext {
         }
         
         public enum AuctionState: Equatable {
-            case ongoing(version: Int32, minBidAmount: Int64, bidLevels: [BidLevel], topBidders: [EnginePeer.Id], dropSize: Int32, nextDropDate: Int32, dropsLeft: Int32, dropsTotal: Int32)
+            case ongoing(version: Int32, minBidAmount: Int64, bidLevels: [BidLevel], topBidders: [EnginePeer.Id], nextDropDate: Int32, giftsLeft: Int32, dropsLeft: Int32, dropsTotal: Int32)
             case finished
         }
         
         public struct MyState: Equatable {
+            public var isOutbid: Bool
             public var bidAmount: Int64?
             public var bidDate: Int32?
             public var minBidAmount: Int64?
@@ -184,8 +185,8 @@ extension GiftAuctionContext.State.BidLevel {
 extension GiftAuctionContext.State.AuctionState {
     init?(apiAuctionState: Api.StarGiftAuctionState) {
         switch apiAuctionState {
-        case let .starGiftAuctionState(version, minBidAmount, bidLevels, topBidders, dropSize, nextDropAt, dropsLeft, dropsTotal):
-            self = .ongoing(version: version, minBidAmount: minBidAmount, bidLevels: bidLevels.map(GiftAuctionContext.State.BidLevel.init(apiBidLevel:)), topBidders: topBidders.map { EnginePeer.Id(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value($0)) }, dropSize: dropSize, nextDropDate: nextDropAt, dropsLeft: dropsLeft, dropsTotal: dropsTotal)
+        case let .starGiftAuctionState(version, minBidAmount, bidLevels, topBidders, nextDropAt, giftsLeft, dropsLeft, dropsTotal):
+            self = .ongoing(version: version, minBidAmount: minBidAmount, bidLevels: bidLevels.map(GiftAuctionContext.State.BidLevel.init(apiBidLevel:)), topBidders: topBidders.map { EnginePeer.Id(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value($0)) }, nextDropDate: nextDropAt, giftsLeft: giftsLeft, dropsLeft: dropsLeft, dropsTotal: dropsTotal)
         case .starGiftAuctionStateFinished:
             self = .finished
         case .starGiftAuctionStateNotModified:
@@ -197,11 +198,70 @@ extension GiftAuctionContext.State.AuctionState {
 extension GiftAuctionContext.State.MyState {
     init(apiAuctionUserState: Api.StarGiftAuctionUserState) {
         switch apiAuctionUserState {
-        case let .starGiftAuctionUserState(_, bidAmount, bidDate, minBidAmount, acquiredCount):
+        case let .starGiftAuctionUserState(flags, bidAmount, bidDate, minBidAmount, acquiredCount):
+            self.isOutbid = (flags & (1 << 1)) != 0
             self.bidAmount = bidAmount
             self.bidDate = bidDate
             self.minBidAmount = minBidAmount
             self.acquiredCount = acquiredCount
+        }
+    }
+}
+
+public struct GiftAuctionAcquiredGift {
+    public var nameHidden: Bool
+    public let peer: EnginePeer
+    public let date: Int32
+    public let bidAmount: Int64
+    public let position: Int32
+    public let text: String?
+    public let entities: [MessageTextEntity]?
+}
+
+func _internal_getGiftAuctionAcquiredGifts(account: Account, giftId: Int64) -> Signal<[GiftAuctionAcquiredGift], NoError> {
+    return account.network.request(Api.functions.payments.getStarGiftAuctionAcquiredGifts(giftId: giftId))
+    |> map(Optional.init)
+    |> `catch` { _ in
+        return .single(nil)
+    }
+    |> mapToSignal { result in
+        guard let result else {
+            return .single([])
+        }
+        return account.postbox.transaction { transaction -> [GiftAuctionAcquiredGift] in
+            switch result {
+            case let .starGiftAuctionAcquiredGifts(gifts, users, chats):
+                let parsedPeers = AccumulatedPeers(transaction: transaction, chats: chats, users: users)
+                updatePeers(transaction: transaction, accountPeerId: account.peerId, peers: parsedPeers)
+                
+                var mappedGifts: [GiftAuctionAcquiredGift] = []
+                for gift in gifts {
+                    switch gift {
+                    case let .starGiftAuctionAcquiredGift(flags, peerId, date, bidAmount, pos, message):
+                        if let peer = transaction.getPeer(peerId.peerId) {
+                            var text: String?
+                            var entities: [MessageTextEntity]?
+                            switch message {
+                            case let .textWithEntities(textValue, entitiesValue):
+                                text = textValue
+                                entities = messageTextEntitiesFromApiEntities(entitiesValue)
+                            default:
+                                break
+                            }
+                            mappedGifts.append(GiftAuctionAcquiredGift(
+                                nameHidden: (flags & (1 << 0)) != 0,
+                                peer: EnginePeer(peer),
+                                date: date,
+                                bidAmount: bidAmount,
+                                position: pos,
+                                text: text,
+                                entities: entities
+                            ))
+                        }
+                    }
+                }
+                return mappedGifts
+            }
         }
     }
 }
