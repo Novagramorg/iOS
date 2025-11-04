@@ -2974,6 +2974,9 @@ public final class StoryItemSetContainerComponent: Component {
                 var starStats: MessageInputPanelComponent.StarStats?
                 var sendAsConfiguration: MessageInputPanelComponent.SendAsConfiguration?
                 var sendPaidMessageStars = isLiveStream ? self.sendMessageContext.currentLiveStreamMessageStars : component.slice.additionalPeerData.sendPaidMessageStars
+                var maxInputLength = 4096
+                var maxEmojiCount: Int?
+                
                 if let visibleItemView = self.visibleItems[component.slice.item.id]?.view.view as? StoryItemContentComponent.View {
                     if let liveChatStateValue = visibleItemView.liveChatState {
                         liveChatState = MessageInputPanelComponent.LiveChatState(
@@ -3012,15 +3015,19 @@ public final class StoryItemSetContainerComponent: Component {
                                 }
                             )
                         }
+                        
+                        if liveChatStateValue.isAdmin {
+                            let params = GroupCallMessagesContext.getStarAmountParamMapping(params: LiveChatMessageParams(appConfig: component.context.currentAppConfiguration.with({ $0 })), value: 1000000000)
+                            
+                            maxInputLength = params.maxLength
+                            maxEmojiCount = params.emojiCount
+                        } else {
+                            let params = GroupCallMessagesContext.getStarAmountParamMapping(params: LiveChatMessageParams(appConfig: component.context.currentAppConfiguration.with({ $0 })), value: sendPaidMessageStars?.value ?? 0)
+                            
+                            maxInputLength = params.maxLength
+                            maxEmojiCount = params.emojiCount
+                        }
                     }
-                }
-                
-                var maxInputLength = 4096
-                var maxEmojiCount: Int?
-                if isLiveStream {
-                    let params = GroupCallMessagesContext.getStarAmountParamMapping(params: LiveChatMessageParams(appConfig: component.context.currentAppConfiguration.with({ $0 })), value: sendPaidMessageStars?.value ?? 0)
-                    maxInputLength = params.maxLength
-                    maxEmojiCount = params.emojiCount
                 }
                 
                 inputPanelSize = self.inputPanel.update(
