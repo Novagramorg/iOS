@@ -101,8 +101,8 @@ final class LiveStreamMediaSource {
     private var onAudioUpdatedListeners = Bag<() -> Void>()
             
     public init() {
-        let width: Int32 = 1080
-        let height: Int32 = 1920
+        let width: Int32 = 720
+        let height: Int32 = 1280
         
         let dimensions = CGSize(width: CGFloat(width), height: CGFloat(height))
         
@@ -165,7 +165,7 @@ final class LiveStreamMediaSource {
                 qualityPreset: nil
             ),
             dimensions: CGSize(width: 1080.0, height: 1920.0),
-            outputDimensions: CGSize(width: 1080.0, height: 1920.0),
+            outputDimensions: CGSize(width: 720.0, height: 1280.0),
             textScale: 1.0,
             videoDuration: nil,
             additionalVideoDuration: nil

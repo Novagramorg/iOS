@@ -4038,6 +4038,10 @@ public final class SharedAccountContextImpl: SharedAccountContext {
     public func makeNewContactScreen(context: AccountContext, peer: EnginePeer?, phoneNumber: String?, shareViaException: Bool, completion: @escaping (EnginePeer?, DeviceContactStableId?, DeviceContactExtendedData?) -> Void) -> ViewController {
         return NewContactScreen(context: context, initialData: NewContactScreen.initialData(peer: peer, phoneNumber: phoneNumber, shareViaException: shareViaException), completion: completion)
     }
+    
+    public func makeLoginEmailSetupController(context: AccountContext, blocking: Bool, emailPattern: String?, canAutoDismissIfNeeded: Bool, navigationController: NavigationController?, completion: @escaping () -> Void, dismiss: @escaping () -> Void) -> ViewController {
+        return loginEmailSetupController(context: context, blocking: blocking, emailPattern: emailPattern, canAutoDismissIfNeeded: canAutoDismissIfNeeded, navigationController: navigationController, completion: completion, dismiss: dismiss)
+    }
 }
 
 private func peerInfoControllerImpl(context: AccountContext, updatedPresentationData: (PresentationData, Signal<PresentationData, NoError>)?, peer: Peer, mode: PeerInfoControllerMode, avatarInitiallyExpanded: Bool, isOpenedFromChat: Bool, requestsContext: PeerInvitationImportersContext? = nil) -> ViewController? {
