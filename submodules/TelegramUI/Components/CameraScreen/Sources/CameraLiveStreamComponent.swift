@@ -178,6 +178,7 @@ final class CameraLiveStreamComponent: Component {
                             hideUI: false,
                             visibilityFraction: 1.0,
                             isPanning: false,
+                            isCentral: true,
                             pinchState: nil,
                             presentController: { c, a in
                                 //                            guard let self, let environment = self.environment else {

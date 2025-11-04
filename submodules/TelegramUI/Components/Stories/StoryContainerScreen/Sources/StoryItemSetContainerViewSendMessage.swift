@@ -56,7 +56,7 @@ import ChatSendAsContextMenu
 
 private var ObjCKey_DeinitWatcher: Int?
 
-final class StoryItemSetContainerSendMessage {
+final class StoryItemSetContainerSendMessage: @unchecked(Sendable) {
     enum InputMode {
         case text
         case media
@@ -4032,20 +4032,53 @@ final class StoryItemSetContainerSendMessage {
     }
     
     func performSendStars(view: StoryItemSetContainerComponent.View, buttonView: UIView?, count: Int, isFromExpandedView: Bool) {
-        guard let component = view.component else {
-            return
-        }
-        
-        if isFromExpandedView {
-            if let currentSendStarsUndoController = self.currentSendStarsUndoController {
-                self.currentSendStarsUndoController = nil
-                currentSendStarsUndoController.dismiss()
+        Task { @MainActor [weak self, weak view] in
+            guard let self, let view, let component = view.component else {
+                return
             }
             
-            self.commitSendStars(view: view, count: count, delay: false)
-        } else {
-            Task { @MainActor [weak view] in
-                guard let view, let component = view.component else {
+            guard let visibleItemView = view.visibleItems[component.slice.item.id]?.view.view as? StoryItemContentComponent.View else {
+                return
+            }
+            
+            if isFromExpandedView {
+                if let currentSendStarsUndoController = self.currentSendStarsUndoController {
+                    self.currentSendStarsUndoController = nil
+                    currentSendStarsUndoController.dismiss()
+                }
+                
+                self.commitSendStars(view: view, count: count, delay: false)
+            } else {
+                let starsContextState = await component.context.starsContext?.state.get()
+                guard let balance = starsContextState?.balance else {
+                    return
+                }
+                
+                var totalExpectedStars = count
+                if let pendingMyStars = visibleItemView.liveChatState?.starStats?.pendingMyStars, pendingMyStars > 0 {
+                    totalExpectedStars += Int(pendingMyStars)
+                }
+                if Int64(totalExpectedStars) > balance.value {
+                    guard let starsContext = component.context.starsContext, let navigationController = component.controller()?.navigationController as? NavigationController else {
+                        return
+                    }
+                    guard let targetPeerId = component.slice.item.peerId else {
+                        return
+                    }
+                    
+                    let customTheme = component.theme
+                    let options = await component.context.engine.payments.starsTopUpOptions().get()
+                    let controller = component.context.sharedContext.makeStarsPurchaseScreen(
+                        context: component.context,
+                        starsContext: starsContext,
+                        options: options,
+                        purpose: .generic,
+                        targetPeerId: targetPeerId,
+                        customTheme: customTheme,
+                        completion: { _ in }
+                    )
+                    navigationController.pushViewController(controller)
+                    
                     return
                 }
                 
@@ -4126,78 +4159,74 @@ final class StoryItemSetContainerSendMessage {
                         }
                     )
                 }
-            }
-            
-            guard let visibleItemView = view.visibleItems[component.slice.item.id]?.view.view as? StoryItemContentComponent.View else {
-                return
-            }
-            
-            self.currentLiveStreamStarsIsActive = true
-            self.currentLiveStreamStarsIsActiveTimer?.invalidate()
-            self.currentLiveStreamStarsIsActiveTimer = Foundation.Timer.scheduledTimer(withTimeInterval: 5.0, repeats: false, block: { [weak self, weak view] _ in
-                guard let self, let view else {
-                    return
-                }
-                self.currentLiveStreamStarsIsActive = false
-                view.state?.updated(transition: .spring(duration: 0.4))
-            })
-            
-            var totalStars = 0
-            if let pendingMyStars = visibleItemView.liveChatState?.starStats?.pendingMyStars, pendingMyStars > 0 {
-                totalStars += count
-                totalStars += Int(pendingMyStars)
-                self.commitSendStars(view: view, count: count, delay: true)
-            } else {
-                let minAmount: Int64 = 1
-                var count = count
-                count = max(Int(minAmount), count)
-                totalStars += count
                 
-                self.commitSendStars(view: view, count: count, delay: true)
-            }
-            
-            let title: String
-            /*if case .anonymous = privacy {
-                title = self.presentationData.strings.Chat_ToastStarsSent_AnonymousTitle(Int32(self.currentSendStarsUndoCount))
-            } else if case .peer = privacy, let privacyPeer {
-                let rawTitle = self.presentationData.strings.Chat_ToastStarsSent_TitleChannel(Int32(self.currentSendStarsUndoCount))
-                title = rawTitle.replacingOccurrences(of: "{name}", with: privacyPeer.compactDisplayTitle)
-            } else*/ do {
-                title = component.strings.Chat_ToastStarsSent_Title(Int32(totalStars))
-            }
-            
-            let textItems = AnimatedTextComponent.extractAnimatedTextString(string: component.strings.Chat_ToastStarsSent_Text("", ""), id: "text", mapping: [
-                0: .number(totalStars, minDigits: 1),
-                1: .text(component.strings.Chat_ToastStarsSent_TextStarAmount(Int32(totalStars)))
-            ])
-            
-            if let current = self.currentSendStarsUndoController {
-                current.content = .starsSent(context: component.context, title: title, text: textItems, hasUndo: true)
-            } else {
-                let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }.withUpdated(theme: defaultDarkColorPresentationTheme)
-                let controller = UndoOverlayController(presentationData: presentationData, content: .starsSent(context: component.context, title: title, text: textItems, hasUndo: true), elevatedLayout: false, position: .top, action: { [weak view] action in
-                    guard let view else {
-                        return false
+                self.currentLiveStreamStarsIsActive = true
+                self.currentLiveStreamStarsIsActiveTimer?.invalidate()
+                self.currentLiveStreamStarsIsActiveTimer = Foundation.Timer.scheduledTimer(withTimeInterval: 5.0, repeats: false, block: { [weak self, weak view] _ in
+                    guard let self, let view else {
+                        return
                     }
-                    if case .undo = action {
-                        guard let component = view.component else {
-                            return false
-                        }
-                        guard case .liveStream = component.slice.item.storyItem.media else {
-                            return false
-                        }
-                        guard let visibleItem = view.visibleItems[component.slice.item.id], let itemView = visibleItem.view.view as? StoryItemContentComponent.View else {
-                            return false
-                        }
-                        guard let call = itemView.mediaStreamCall else {
-                            return false
-                        }
-                        call.cancelSendStars()
-                    }
-                    return false
+                    self.currentLiveStreamStarsIsActive = false
+                    view.state?.updated(transition: .spring(duration: 0.4))
                 })
-                self.currentSendStarsUndoController = controller
-                self.view?.component?.controller()?.present(controller, in: .current)
+                
+                var totalStars = 0
+                if let pendingMyStars = visibleItemView.liveChatState?.starStats?.pendingMyStars, pendingMyStars > 0 {
+                    totalStars += count
+                    totalStars += Int(pendingMyStars)
+                    self.commitSendStars(view: view, count: count, delay: true)
+                } else {
+                    let minAmount: Int64 = 1
+                    var count = count
+                    count = max(Int(minAmount), count)
+                    totalStars += count
+                    
+                    self.commitSendStars(view: view, count: count, delay: true)
+                }
+                
+                let title: String
+                /*if case .anonymous = privacy {
+                 title = self.presentationData.strings.Chat_ToastStarsSent_AnonymousTitle(Int32(self.currentSendStarsUndoCount))
+                 } else if case .peer = privacy, let privacyPeer {
+                 let rawTitle = self.presentationData.strings.Chat_ToastStarsSent_TitleChannel(Int32(self.currentSendStarsUndoCount))
+                 title = rawTitle.replacingOccurrences(of: "{name}", with: privacyPeer.compactDisplayTitle)
+                 } else*/ do {
+                     title = component.strings.Chat_ToastStarsSent_Title(Int32(totalStars))
+                 }
+                
+                let textItems = AnimatedTextComponent.extractAnimatedTextString(string: component.strings.Chat_ToastStarsSent_Text("", ""), id: "text", mapping: [
+                    0: .number(totalStars, minDigits: 1),
+                    1: .text(component.strings.Chat_ToastStarsSent_TextStarAmount(Int32(totalStars)))
+                ])
+                
+                if let current = self.currentSendStarsUndoController {
+                    current.content = .starsSent(context: component.context, title: title, text: textItems, hasUndo: true)
+                } else {
+                    let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }.withUpdated(theme: defaultDarkColorPresentationTheme)
+                    let controller = UndoOverlayController(presentationData: presentationData, content: .starsSent(context: component.context, title: title, text: textItems, hasUndo: true), elevatedLayout: false, position: .top, action: { [weak view] action in
+                        guard let view else {
+                            return false
+                        }
+                        if case .undo = action {
+                            guard let component = view.component else {
+                                return false
+                            }
+                            guard case .liveStream = component.slice.item.storyItem.media else {
+                                return false
+                            }
+                            guard let visibleItem = view.visibleItems[component.slice.item.id], let itemView = visibleItem.view.view as? StoryItemContentComponent.View else {
+                                return false
+                            }
+                            guard let call = itemView.mediaStreamCall else {
+                                return false
+                            }
+                            call.cancelSendStars()
+                        }
+                        return false
+                    })
+                    self.currentSendStarsUndoController = controller
+                    self.view?.component?.controller()?.present(controller, in: .current)
+                }
             }
         }
     }
