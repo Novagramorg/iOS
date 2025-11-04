@@ -713,7 +713,7 @@ final class StoryItemSetContainerSendMessage: @unchecked(Sendable) {
                         if !text.string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                             var maxInputLength: Int?
                             var maxEmojiCount: Int?
-                            let params = GroupCallMessagesContext.getStarAmountParamMapping(params: LiveChatMessageParams(appConfig: component.context.currentAppConfiguration.with({ $0 })), value: sendPaidMessageStars?.value ?? 0)
+                            let params = GroupCallMessagesContext.getStarAmountParamMapping(params: LiveChatMessageParams(appConfig: component.context.currentAppConfiguration.with({ $0 })), value: isAdmin ? 1000000000 : sendPaidMessageStars?.value ?? 0)
                             maxInputLength = params.maxLength
                             maxEmojiCount = params.emojiCount
                             
