@@ -116,23 +116,27 @@ final class StoryItemContentComponent: Component {
         var areMessagesEnabled: Bool
         var minMessagePrice: Int64?
         var starStats: StarStats?
+        var isAdmin: Bool
         
-        init(isExpanded: Bool, hasUnseenMessages: Bool, areMessagesEnabled: Bool, minMessagePrice: Int64?, starStats: StarStats?) {
+        init(isExpanded: Bool, hasUnseenMessages: Bool, areMessagesEnabled: Bool, minMessagePrice: Int64?, starStats: StarStats?, isAdmin: Bool) {
             self.isExpanded = isExpanded
             self.hasUnseenMessages = hasUnseenMessages
             self.areMessagesEnabled = areMessagesEnabled
             self.minMessagePrice = minMessagePrice
             self.starStats = starStats
+            self.isAdmin = isAdmin
         }
     }
     
     private struct MediaStreamCallState: Equatable {
         var areMessagesEnabled: Bool
         var minMessagePrice: Int64?
+        var isAdmin: Bool
         
-        init(areMessagesEnabled: Bool, minMessagePrice: Int64?) {
+        init(areMessagesEnabled: Bool, minMessagePrice: Int64?, isAdmin: Bool) {
             self.areMessagesEnabled = areMessagesEnabled
             self.minMessagePrice = minMessagePrice
+            self.isAdmin = isAdmin
         }
     }
     
@@ -219,7 +223,8 @@ final class StoryItemContentComponent: Component {
                 hasUnseenMessages: self.liveChatExternal.hasUnseenMessages,
                 areMessagesEnabled: mediaStreamCallState?.areMessagesEnabled ?? false,
                 minMessagePrice: mediaStreamCallState?.minMessagePrice,
-                starStats: starStats
+                starStats: starStats,
+                isAdmin: mediaStreamCallState?.isAdmin ?? false
             )
         }
         
@@ -1076,7 +1081,8 @@ final class StoryItemContentComponent: Component {
                         
                         let mappedState = MediaStreamCallState(
                             areMessagesEnabled: state.messagesAreEnabled,
-                            minMessagePrice: state.sendPaidMessageStars
+                            minMessagePrice: state.sendPaidMessageStars,
+                            isAdmin: state.canManageCall
                         )
                         if self.mediaStreamCallState != mappedState {
                             self.mediaStreamCallState = mappedState
