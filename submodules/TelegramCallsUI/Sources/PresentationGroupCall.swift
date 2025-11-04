@@ -4050,15 +4050,15 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
         })
     }
     
-    public func sendMessage(fromId: PeerId?, randomId: Int64? = nil, text: String, entities: [MessageTextEntity], paidStars: Int64?) {
+    public func sendMessage(fromId: PeerId?, isAdmin: Bool, randomId: Int64? = nil, text: String, entities: [MessageTextEntity], paidStars: Int64?) {
         if let messagesContext = self.messagesContext {
-            messagesContext.send(fromId: fromId ?? self.joinAsPeerId, randomId: randomId, text: text, entities: entities, paidStars: paidStars)
+            messagesContext.send(fromId: fromId ?? self.joinAsPeerId, isAdmin: isAdmin, randomId: randomId, text: text, entities: entities, paidStars: paidStars)
         }
     }
     
-    public func sendStars(fromId: PeerId?, amount: Int64, delay: Bool) {
+    public func sendStars(fromId: PeerId?, isAdmin: Bool, amount: Int64, delay: Bool) {
         if let messagesContext = self.messagesContext {
-            messagesContext.sendStars(fromId: fromId ?? self.joinAsPeerId, amount: amount, delay: delay)
+            messagesContext.sendStars(fromId: fromId ?? self.joinAsPeerId, isAdmin: isAdmin, amount: amount, delay: delay)
         }
     }
     

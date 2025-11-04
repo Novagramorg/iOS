@@ -3462,7 +3462,7 @@ func _internal_refreshInlineGroupCall(account: Account, messageId: MessageId) ->
 
 struct GroupCallMessageUpdate {
     enum Update {
-        case newPlaintextMessage(authorId: PeerId, messageId: Int32, text: String, entities: [MessageTextEntity], timestamp: Int32, paidMessageStars: Int64?)
+        case newPlaintextMessage(authorId: PeerId, isFromAdmin: Bool, messageId: Int32, text: String, entities: [MessageTextEntity], timestamp: Int32, paidMessageStars: Int64?)
         case newOpaqueMessage(authorId: PeerId, data: Data)
     }
     
@@ -3703,17 +3703,19 @@ public final class GroupCallMessagesContext {
         public let stableId: Int
         public let isIncoming: Bool
         public let author: EnginePeer?
+        public let isFromAdmin: Bool
         public let text: String
         public let entities: [MessageTextEntity]
         public let date: Int32
         public let lifetime: Int32
         public let paidStars: Int64?
         
-        public init(id: Id, stableId: Int, isIncoming: Bool, author: EnginePeer?, text: String, entities: [MessageTextEntity], date: Int32, lifetime: Int32, paidStars: Int64?) {
+        public init(id: Id, stableId: Int, isIncoming: Bool, author: EnginePeer?, isFromAdmin: Bool, text: String, entities: [MessageTextEntity], date: Int32, lifetime: Int32, paidStars: Int64?) {
             self.id = id
             self.stableId = stableId
             self.isIncoming = isIncoming
             self.author = author
+            self.isFromAdmin = isFromAdmin
             self.text = text
             self.entities = entities
             self.date = date
@@ -3727,6 +3729,7 @@ public final class GroupCallMessagesContext {
                 stableId: self.stableId,
                 isIncoming: self.isIncoming,
                 author: self.author,
+                isFromAdmin: self.isFromAdmin,
                 text: self.text,
                 entities: self.entities,
                 date: self.date,
@@ -3749,6 +3752,9 @@ public final class GroupCallMessagesContext {
                 return false
             }
             if lhs.author != rhs.author {
+                return false
+            }
+            if lhs.isFromAdmin != rhs.isFromAdmin {
                 return false
             }
             if lhs.text != rhs.text {
@@ -3874,15 +3880,15 @@ public final class GroupCallMessagesContext {
                     return
                 }
                 let currentTime = Int32(CFAbsoluteTimeGetCurrent() + kCFAbsoluteTimeIntervalSince1970)
-                var addedMessages: [(authorId: PeerId, messageId: Int32, text: String, entities: [MessageTextEntity], timestamp: Int32, paidMessageStars: Int64?)] = []
+                var addedMessages: [(authorId: PeerId, isFromAdmin: Bool, messageId: Int32, text: String, entities: [MessageTextEntity], timestamp: Int32, paidMessageStars: Int64?)] = []
                 var addedOpaqueMessages: [(authorId: PeerId, data: Data)] = []
                 for update in updates {
                     if update.callId != self.callId {
                         continue
                     }
                     switch update.update {
-                    case let .newPlaintextMessage(authorId, messageId, text, entities, timestamp, paidMessageStars):
-                        addedMessages.append((authorId, messageId, text, entities, timestamp, paidMessageStars))
+                    case let .newPlaintextMessage(authorId, isFromAdmin, messageId, text, entities, timestamp, paidMessageStars):
+                        addedMessages.append((authorId, isFromAdmin, messageId, text, entities, timestamp, paidMessageStars))
                     case let .newOpaqueMessage(authorId, data):
                         if authorId != self.account.peerId {
                             addedOpaqueMessages.append((authorId, data))
@@ -3933,6 +3939,7 @@ public final class GroupCallMessagesContext {
                                     stableId: allocatedStableIds[messages.count],
                                     isIncoming: addedOpaqueMessage.authorId != accountPeerId,
                                     author: transaction.getPeer(addedOpaqueMessage.authorId).flatMap(EnginePeer.init),
+                                    isFromAdmin: false,
                                     text: text,
                                     entities: entities,
                                     date: currentTime,
@@ -3963,6 +3970,7 @@ public final class GroupCallMessagesContext {
                                     stableId: allocatedStableIds[messages.count],
                                     isIncoming: addedMessage.authorId != accountPeerId,
                                     author: transaction.getPeer(addedMessage.authorId).flatMap(EnginePeer.init),
+                                    isFromAdmin: addedMessage.isFromAdmin,
                                     text: addedMessage.text,
                                     entities: addedMessage.entities,
                                     date: addedMessage.timestamp,
@@ -4212,7 +4220,7 @@ public final class GroupCallMessagesContext {
             }
         }
         
-        func send(fromId: EnginePeer.Id, randomId requestedRandomId: Int64?, text: String, entities: [MessageTextEntity], paidStars: Int64?) {
+        func send(fromId: EnginePeer.Id, isAdmin: Bool, randomId requestedRandomId: Int64?, text: String, entities: [MessageTextEntity], paidStars: Int64?) {
             let _ = (self.account.postbox.transaction { transaction -> Peer? in
                 return transaction.getPeer(fromId)
             }
@@ -4245,6 +4253,7 @@ public final class GroupCallMessagesContext {
                     stableId: stableId,
                     isIncoming: false,
                     author: fromPeer.flatMap(EnginePeer.init),
+                    isFromAdmin: isAdmin,
                     text: text,
                     entities: entities,
                     date: currentTime,
@@ -4417,7 +4426,7 @@ public final class GroupCallMessagesContext {
             }
         }
         
-        func sendStars(fromId: EnginePeer.Id, amount: Int64, delay: Bool) {
+        func sendStars(fromId: EnginePeer.Id, isAdmin: Bool, amount: Int64, delay: Bool) {
             let _ = (self.account.postbox.transaction { transaction -> Peer? in
                 return transaction.getPeer(fromId)
             }
@@ -4464,6 +4473,7 @@ public final class GroupCallMessagesContext {
                             stableId: message.stableId,
                             isIncoming: false,
                             author: message.author,
+                            isFromAdmin: isAdmin,
                             text: message.text,
                             entities: message.entities,
                             date: currentTime,
@@ -4478,6 +4488,7 @@ public final class GroupCallMessagesContext {
                             stableId: stableId,
                             isIncoming: false,
                             author: EnginePeer(fromPeer),
+                            isFromAdmin: isAdmin,
                             text: "",
                             entities: [],
                             date: currentTime,
@@ -4493,6 +4504,7 @@ public final class GroupCallMessagesContext {
                             stableId: message.stableId,
                             isIncoming: message.isIncoming,
                             author: message.author,
+                            isFromAdmin: isAdmin,
                             text: message.text,
                             entities: message.entities,
                             date: currentTime,
@@ -4507,6 +4519,7 @@ public final class GroupCallMessagesContext {
                             stableId: stableId,
                             isIncoming: false,
                             author: EnginePeer(fromPeer),
+                            isFromAdmin: isAdmin,
                             text: "",
                             entities: [],
                             date: currentTime,
@@ -4614,15 +4627,15 @@ public final class GroupCallMessagesContext {
         })
     }
     
-    public func send(fromId: EnginePeer.Id, randomId: Int64?, text: String, entities: [MessageTextEntity], paidStars: Int64?) {
+    public func send(fromId: EnginePeer.Id, isAdmin: Bool, randomId: Int64?, text: String, entities: [MessageTextEntity], paidStars: Int64?) {
         self.impl.with { impl in
-            impl.send(fromId: fromId, randomId: randomId, text: text, entities: entities, paidStars: paidStars)
+            impl.send(fromId: fromId, isAdmin: isAdmin, randomId: randomId, text: text, entities: entities, paidStars: paidStars)
         }
     }
     
-    public func sendStars(fromId: EnginePeer.Id, amount: Int64, delay: Bool) {
+    public func sendStars(fromId: EnginePeer.Id, isAdmin: Bool, amount: Int64, delay: Bool) {
         self.impl.with { impl in
-            impl.sendStars(fromId: fromId, amount: amount, delay: delay)
+            impl.sendStars(fromId: fromId, isAdmin: isAdmin, amount: amount, delay: delay)
         }
     }
     
