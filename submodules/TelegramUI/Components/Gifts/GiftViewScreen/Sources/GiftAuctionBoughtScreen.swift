@@ -25,13 +25,16 @@ private final class GiftAuctionBoughtScreenComponent: Component {
     
     let context: AccountContext
     let gift: StarGift
+    let acquiredGifts: [GiftAuctionAcquiredGift]
     
     init(
         context: AccountContext,
-        gift: StarGift
+        gift: StarGift,
+        acquiredGifts: [GiftAuctionAcquiredGift]
     ) {
         self.context = context
         self.gift = gift
+        self.acquiredGifts = acquiredGifts
     }
     
     static func ==(lhs: GiftAuctionBoughtScreenComponent, rhs: GiftAuctionBoughtScreenComponent) -> Bool {
@@ -76,7 +79,7 @@ private final class GiftAuctionBoughtScreenComponent: Component {
         
         private let closeButton = ComponentView<Empty>()
         private let title = ComponentView<Empty>()
-        private var itemsViews: [Int64: ComponentView<Empty>] = [:]
+        private var itemsViews: [Int32: ComponentView<Empty>] = [:]
         private let actionButton = ComponentView<Empty>()
                 
         private var ignoreScrolling: Bool = false
@@ -285,10 +288,8 @@ private final class GiftAuctionBoughtScreenComponent: Component {
             
             let tableTextColor = environment.theme.list.itemPrimaryTextColor
             
-            let mockDate = Int32(Date().timeIntervalSince1970)
-            
-            for i in 0 ..< 3 {
-                let id = Int64(i)
+            for gift in component.acquiredGifts {
+                let id = gift.date
                 let itemView: ComponentView<Empty>
                 if let current = self.itemsViews[id] {
                     itemView = current
@@ -324,7 +325,7 @@ private final class GiftAuctionBoughtScreenComponent: Component {
                             AnyComponentWithIdentity(
                                 id: "title",
                                 component: AnyComponent(
-                                    MultilineTextComponent(text: .plain(NSAttributedString(string: "Round #\(3 + i * 2)", font: tableBoldFont, textColor: tableTextColor)))
+                                    MultilineTextComponent(text: .plain(NSAttributedString(string: "Round #1", font: tableBoldFont, textColor: tableTextColor)))
                                 )
                             )
                         ], spacing: 1.0))
@@ -340,7 +341,7 @@ private final class GiftAuctionBoughtScreenComponent: Component {
                                 context: component.context,
                                 theme: environment.theme,
                                 strings: environment.strings,
-                                peer: nil
+                                peer: gift.peer
                             )
                         ),
                         action: {
@@ -352,10 +353,10 @@ private final class GiftAuctionBoughtScreenComponent: Component {
                 items.append(.init(
                     id: "date",
                     title: "Date",
-                    component: AnyComponent(MultilineTextComponent(text: .plain(NSAttributedString(string: stringForMediumDate(timestamp: mockDate, strings: environment.strings, dateTimeFormat: environment.dateTimeFormat), font: tableFont, textColor: tableTextColor))))
+                    component: AnyComponent(MultilineTextComponent(text: .plain(NSAttributedString(string: stringForMediumDate(timestamp: gift.date, strings: environment.strings, dateTimeFormat: environment.dateTimeFormat), font: tableFont, textColor: tableTextColor))))
                 ))
                 
-                let valueString = "⭐️\(formatStarsAmountText(StarsAmount(value: Int64(3531 + 1000 * i + 13 * i), nanos: 0), dateTimeFormat: environment.dateTimeFormat))"
+                let valueString = "⭐️\(formatStarsAmountText(StarsAmount(value: gift.bidAmount, nanos: 0), dateTimeFormat: environment.dateTimeFormat))"
                 let valueAttributedString = NSMutableAttributedString(string: valueString, font: tableFont, textColor: tableTextColor)
                 let range = (valueAttributedString.string as NSString).range(of: "⭐️")
                 if range.location != NSNotFound {
@@ -380,7 +381,7 @@ private final class GiftAuctionBoughtScreenComponent: Component {
                             component: AnyComponent(Button(
                                 content: AnyComponent(ButtonContentComponent(
                                     context: component.context,
-                                    text: "TOP \(10 + i)",
+                                    text: "TOP \(gift.position)",
                                     color: environment.theme.list.itemAccentColor
                                 )),
                                 action: {
@@ -462,7 +463,13 @@ private final class GiftAuctionBoughtScreenComponent: Component {
             let title = self.title
             let actionButton = self.actionButton
             
-            let titleText = "3 Items Bought"
+            let titleText: String
+            if component.acquiredGifts.count == 1 {
+                titleText = "1 Item Bought"
+            } else {
+                titleText = "\(component.acquiredGifts.count) Items Bought"
+            }
+            
             let titleSize = title.update(
                 transition: .immediate,
                 component: AnyComponent(MultilineTextComponent(
@@ -623,12 +630,13 @@ public class GiftAuctionBoughtScreen: ViewControllerComponentContainer {
     private var didPlayAppearAnimation: Bool = false
     private var isDismissed: Bool = false
     
-    public init(context: AccountContext, gift: StarGift) {
+    public init(context: AccountContext, gift: StarGift, acquiredGifts: [GiftAuctionAcquiredGift]) {
         self.context = context
         
         super.init(context: context, component: GiftAuctionBoughtScreenComponent(
             context: context,
-            gift: gift
+            gift: gift,
+            acquiredGifts: acquiredGifts
         ), navigationBarAppearance: .none, theme: .default)
         
         self.statusBar.statusBarStyle = .Ignore

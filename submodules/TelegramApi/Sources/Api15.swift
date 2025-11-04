@@ -1070,6 +1070,7 @@ public extension Api {
         case messageActionSetChatWallPaper(flags: Int32, wallpaper: Api.WallPaper)
         case messageActionSetMessagesTTL(flags: Int32, period: Int32, autoSettingFrom: Int64?)
         case messageActionStarGift(flags: Int32, gift: Api.StarGift, message: Api.TextWithEntities?, convertStars: Int64?, upgradeMsgId: Int32?, upgradeStars: Int64?, fromId: Api.Peer?, peer: Api.Peer?, savedId: Int64?, prepaidUpgradeHash: String?, giftMsgId: Int32?)
+        case messageActionStarGiftAuctionBid(flags: Int32, gift: Api.StarGift, bidAmount: Int64, message: Api.TextWithEntities?, peer: Api.Peer?, nextDropAt: Int32?)
         case messageActionStarGiftUnique(flags: Int32, gift: Api.StarGift, canExportAt: Int32?, transferStars: Int64?, fromId: Api.Peer?, peer: Api.Peer?, savedId: Int64?, resaleAmount: Api.StarsAmount?, canTransferAt: Int32?, canResellAt: Int32?, dropOriginalDetailsStars: Int64?)
         case messageActionSuggestBirthday(birthday: Api.Birthday)
         case messageActionSuggestProfilePhoto(photo: Api.Photo)
@@ -1476,6 +1477,17 @@ public extension Api {
                     if Int(flags) & Int(1 << 14) != 0 {serializeString(prepaidUpgradeHash!, buffer: buffer, boxed: false)}
                     if Int(flags) & Int(1 << 15) != 0 {serializeInt32(giftMsgId!, buffer: buffer, boxed: false)}
                     break
+                case .messageActionStarGiftAuctionBid(let flags, let gift, let bidAmount, let message, let peer, let nextDropAt):
+                    if boxed {
+                        buffer.appendInt32(965651149)
+                    }
+                    serializeInt32(flags, buffer: buffer, boxed: false)
+                    gift.serialize(buffer, true)
+                    serializeInt64(bidAmount, buffer: buffer, boxed: false)
+                    if Int(flags) & Int(1 << 1) != 0 {message!.serialize(buffer, true)}
+                    if Int(flags) & Int(1 << 2) != 0 {peer!.serialize(buffer, true)}
+                    if Int(flags) & Int(1 << 3) != 0 {serializeInt32(nextDropAt!, buffer: buffer, boxed: false)}
+                    break
                 case .messageActionStarGiftUnique(let flags, let gift, let canExportAt, let transferStars, let fromId, let peer, let savedId, let resaleAmount, let canTransferAt, let canResellAt, let dropOriginalDetailsStars):
                     if boxed {
                         buffer.appendInt32(-1787656893)
@@ -1679,6 +1691,8 @@ public extension Api {
                 return ("messageActionSetMessagesTTL", [("flags", flags as Any), ("period", period as Any), ("autoSettingFrom", autoSettingFrom as Any)])
                 case .messageActionStarGift(let flags, let gift, let message, let convertStars, let upgradeMsgId, let upgradeStars, let fromId, let peer, let savedId, let prepaidUpgradeHash, let giftMsgId):
                 return ("messageActionStarGift", [("flags", flags as Any), ("gift", gift as Any), ("message", message as Any), ("convertStars", convertStars as Any), ("upgradeMsgId", upgradeMsgId as Any), ("upgradeStars", upgradeStars as Any), ("fromId", fromId as Any), ("peer", peer as Any), ("savedId", savedId as Any), ("prepaidUpgradeHash", prepaidUpgradeHash as Any), ("giftMsgId", giftMsgId as Any)])
+                case .messageActionStarGiftAuctionBid(let flags, let gift, let bidAmount, let message, let peer, let nextDropAt):
+                return ("messageActionStarGiftAuctionBid", [("flags", flags as Any), ("gift", gift as Any), ("bidAmount", bidAmount as Any), ("message", message as Any), ("peer", peer as Any), ("nextDropAt", nextDropAt as Any)])
                 case .messageActionStarGiftUnique(let flags, let gift, let canExportAt, let transferStars, let fromId, let peer, let savedId, let resaleAmount, let canTransferAt, let canResellAt, let dropOriginalDetailsStars):
                 return ("messageActionStarGiftUnique", [("flags", flags as Any), ("gift", gift as Any), ("canExportAt", canExportAt as Any), ("transferStars", transferStars as Any), ("fromId", fromId as Any), ("peer", peer as Any), ("savedId", savedId as Any), ("resaleAmount", resaleAmount as Any), ("canTransferAt", canTransferAt as Any), ("canResellAt", canResellAt as Any), ("dropOriginalDetailsStars", dropOriginalDetailsStars as Any)])
                 case .messageActionSuggestBirthday(let birthday):
@@ -2462,6 +2476,38 @@ public extension Api {
             let _c11 = (Int(_1!) & Int(1 << 15) == 0) || _11 != nil
             if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 && _c10 && _c11 {
                 return Api.MessageAction.messageActionStarGift(flags: _1!, gift: _2!, message: _3, convertStars: _4, upgradeMsgId: _5, upgradeStars: _6, fromId: _7, peer: _8, savedId: _9, prepaidUpgradeHash: _10, giftMsgId: _11)
+            }
+            else {
+                return nil
+            }
+        }
+        public static func parse_messageActionStarGiftAuctionBid(_ reader: BufferReader) -> MessageAction? {
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: Api.StarGift?
+            if let signature = reader.readInt32() {
+                _2 = Api.parse(reader, signature: signature) as? Api.StarGift
+            }
+            var _3: Int64?
+            _3 = reader.readInt64()
+            var _4: Api.TextWithEntities?
+            if Int(_1!) & Int(1 << 1) != 0 {if let signature = reader.readInt32() {
+                _4 = Api.parse(reader, signature: signature) as? Api.TextWithEntities
+            } }
+            var _5: Api.Peer?
+            if Int(_1!) & Int(1 << 2) != 0 {if let signature = reader.readInt32() {
+                _5 = Api.parse(reader, signature: signature) as? Api.Peer
+            } }
+            var _6: Int32?
+            if Int(_1!) & Int(1 << 3) != 0 {_6 = reader.readInt32() }
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            let _c3 = _3 != nil
+            let _c4 = (Int(_1!) & Int(1 << 1) == 0) || _4 != nil
+            let _c5 = (Int(_1!) & Int(1 << 2) == 0) || _5 != nil
+            let _c6 = (Int(_1!) & Int(1 << 3) == 0) || _6 != nil
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 {
+                return Api.MessageAction.messageActionStarGiftAuctionBid(flags: _1!, gift: _2!, bidAmount: _3!, message: _4, peer: _5, nextDropAt: _6)
             }
             else {
                 return nil
