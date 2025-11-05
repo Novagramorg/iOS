@@ -105,7 +105,7 @@ def remote_build_darwin_containers(darwin_containers_path, darwin_containers_hos
 
     def handle_ssh_credentials(credentials):
         with DarwinContainers.ContainerSession(credentials=credentials) as session:
-            print('Uploading data to container...')
+            print('Uploading data to container {}...'.format(session.ip_address))
 
             session_scp_upload(session=session, source_path=build_input_data_path, destination_path='telegram-build-input')
             session_scp_upload(session=session, source_path='{base_dir}/{buildbox_dir}/transient-data/source.tar'.format(base_dir=base_dir, buildbox_dir=buildbox_dir), destination_path='')
