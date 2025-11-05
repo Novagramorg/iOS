@@ -1124,26 +1124,53 @@ private final class CameraScreenComponent: CombinedComponent {
             guard let controller = self.getController() else {
                 return
             }
-            
-            let presentationData = self.context.sharedContext.currentPresentationData.with { $0 }
-            let alertController = textAlertController(
-                context: self.context,
-                forceTheme: defaultDarkColorPresentationTheme,
-                title: "End Live Stream",
-                text: "Are you sure you want to end this live stream?",
-                actions: [
-                    TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_Cancel, action: {}),
-                    TextAlertAction(type: .genericAction, title: "End", action: { [weak self, weak controller] in
-                        guard let self, let controller else {
-                            return
-                        }
                         
-                        let _ = self.liveStreamCall?.leave(terminateIfPossible: true).startStandalone()
-                        controller.dismiss(animated: true)
-                    })
-                ]
-            )
-            controller.present(alertController, in: .window(.root))
+            if case let .liveStream(livestream) = self.liveStreamStory?.media, livestream.kind == .rtmp {
+                let presentationData = self.context.sharedContext.currentPresentationData.with { $0 }
+                let alertController = textAlertController(
+                    context: self.context,
+                    forceTheme: defaultDarkColorPresentationTheme,
+                    title: "End Live Stream",
+                    text: "Are you sure you want to end this live stream?",
+                    actions: [
+                        TextAlertAction(type: .destructiveAction, title: "End", action: { [weak self, weak controller] in
+                            guard let self, let controller else {
+                                return
+                            }
+                            let _ = self.liveStreamCall?.leave(terminateIfPossible: true).startStandalone()
+                            controller.dismiss(animated: true)
+                        }),
+                        TextAlertAction(type: .genericAction, title: "Leave", action: { [weak controller] in
+                            guard let controller else {
+                                return
+                            }
+                            controller.dismiss(animated: true)
+                        }),
+                        TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_Cancel, action: {})
+                    ],
+                    actionLayout: .vertical
+                )
+                controller.present(alertController, in: .window(.root))
+            } else {
+                let presentationData = self.context.sharedContext.currentPresentationData.with { $0 }
+                let alertController = textAlertController(
+                    context: self.context,
+                    forceTheme: defaultDarkColorPresentationTheme,
+                    title: "End Live Stream",
+                    text: "Are you sure you want to end this live stream?",
+                    actions: [
+                        TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_Cancel, action: {}),
+                        TextAlertAction(type: .destructiveAction, title: "End", action: { [weak self, weak controller] in
+                            guard let self, let controller else {
+                                return
+                            }
+                            let _ = self.liveStreamCall?.leave(terminateIfPossible: true).startStandalone()
+                            controller.dismiss(animated: true)
+                        })
+                    ]
+                )
+                controller.present(alertController, in: .window(.root))
+            }
         }
         
         func setupLiveStreamCamera(call: PresentationGroupCall) {
@@ -1913,11 +1940,11 @@ private final class CameraScreenComponent: CombinedComponent {
                 }
                 
                 let availableModes: [CameraMode]
-                #if DEBUG
+                //#if DEBUG
                 availableModes = [.photo, .video, .live]
-                #else
-                availableModes = [.photo, .video]
-                #endif
+                //#else
+                //availableModes = [.photo, .video]
+                //#endif
                 
                 let modeControl = modeControl.update(
                     component: ModeComponent(
