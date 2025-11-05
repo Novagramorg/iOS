@@ -1204,6 +1204,7 @@ final class VideoChatScreenComponent: Component {
                 let callState = PresentationGroupCallState(
                     myPeerId: accountPeerId,
                     networkState: mappedNetworkState,
+                    connectionMode: .rtc,
                     canManageCall: false,
                     adminIds: Set([accountPeerId, conferenceSourcePeerId]),
                     muteState: isMuted ? GroupCallParticipantsContext.Participant.MuteState(canUnmute: true, mutedByYou: true) : nil,
