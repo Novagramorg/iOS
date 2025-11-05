@@ -24,6 +24,7 @@ private extension PresentationGroupCallState {
         return PresentationGroupCallState(
             myPeerId: myPeerId,
             networkState: .connecting,
+            connectionMode: .rtc,
             canManageCall: false,
             adminIds: Set(),
             muteState: GroupCallParticipantsContext.Participant.MuteState(canUnmute: true, mutedByYou: false),
@@ -76,7 +77,7 @@ extension CurrentImpl {
         case let .call(callContext):
             return callContext.networkState
         case .mediaStream, .externalMediaStream:
-            return .single(OngoingGroupCallContext.NetworkState(isConnected: true, isTransitioningFromBroadcastToRtc: false))
+            return .single(OngoingGroupCallContext.NetworkState(isConnected: true, isTransitioningFromBroadcastToRtc: false, isBroadcast: true))
         }
     }
     
@@ -2148,10 +2149,19 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
                 } else {
                     mappedState = .connecting
                 }
+                let mappedMode: PresentationGroupCallState.ConnectionMode
+                if state.isBroadcast {
+                    mappedMode = .stream
+                } else {
+                    mappedMode = .rtc
+                }
 
                 let wasConnecting = self.stateValue.networkState == .connecting
-                if self.stateValue.networkState != mappedState {
-                    self.stateValue.networkState = mappedState
+                if self.stateValue.networkState != mappedState || self.stateValue.connectionMode != mappedMode {
+                    var stateValue = self.stateValue
+                    stateValue.networkState = mappedState
+                    stateValue.connectionMode = mappedMode
+                    self.stateValue = stateValue
                 }
                 let isConnecting = mappedState == .connecting
                 

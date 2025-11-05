@@ -216,8 +216,14 @@ public struct PresentationGroupCallState: Equatable {
         case muted
     }
     
+    public enum ConnectionMode {
+        case rtc
+        case stream
+    }
+    
     public var myPeerId: EnginePeer.Id
     public var networkState: NetworkState
+    public var connectionMode: ConnectionMode
     public var canManageCall: Bool
     public var adminIds: Set<EnginePeer.Id>
     public var muteState: GroupCallParticipantsContext.Participant.MuteState?
@@ -238,6 +244,7 @@ public struct PresentationGroupCallState: Equatable {
     public init(
         myPeerId: EnginePeer.Id,
         networkState: NetworkState,
+        connectionMode: ConnectionMode,
         canManageCall: Bool,
         adminIds: Set<EnginePeer.Id>,
         muteState: GroupCallParticipantsContext.Participant.MuteState?,
@@ -257,6 +264,7 @@ public struct PresentationGroupCallState: Equatable {
     ) {
         self.myPeerId = myPeerId
         self.networkState = networkState
+        self.connectionMode = connectionMode
         self.canManageCall = canManageCall
         self.adminIds = adminIds
         self.muteState = muteState

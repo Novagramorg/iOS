@@ -260,10 +260,12 @@ public final class OngoingGroupCallContext {
     public struct NetworkState: Equatable {
         public var isConnected: Bool
         public var isTransitioningFromBroadcastToRtc: Bool
+        public var isBroadcast: Bool
         
-        public init(isConnected: Bool, isTransitioningFromBroadcastToRtc: Bool) {
+        public init(isConnected: Bool, isTransitioningFromBroadcastToRtc: Bool, isBroadcast: Bool) {
             self.isConnected = isConnected
             self.isTransitioningFromBroadcastToRtc = isTransitioningFromBroadcastToRtc
+            self.isBroadcast = isBroadcast
         }
     }
     
@@ -481,7 +483,7 @@ public final class OngoingGroupCallContext {
 #endif
         
         let joinPayload = Promise<(String, UInt32)>()
-        let networkState = ValuePromise<NetworkState>(NetworkState(isConnected: false, isTransitioningFromBroadcastToRtc: false), ignoreRepeated: true)
+        let networkState = ValuePromise<NetworkState>(NetworkState(isConnected: false, isTransitioningFromBroadcastToRtc: false, isBroadcast: false), ignoreRepeated: true)
         let isMuted = ValuePromise<Bool>(true, ignoreRepeated: true)
         let isNoiseSuppressionEnabled = ValuePromise<Bool>(true, ignoreRepeated: true)
         let audioLevels = ValuePipe<[(AudioLevelKey, Float, Bool)]>()
@@ -787,7 +789,7 @@ public final class OngoingGroupCallContext {
                     guard let strongSelf = self else {
                         return
                     }
-                    strongSelf.networkState.set(NetworkState(isConnected: state.isConnected, isTransitioningFromBroadcastToRtc: state.isTransitioningFromBroadcastToRtc))
+                    strongSelf.networkState.set(NetworkState(isConnected: state.isConnected, isTransitioningFromBroadcastToRtc: state.isTransitioningFromBroadcastToRtc, isBroadcast: state.isBroadcast))
                 }
             }
             

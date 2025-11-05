@@ -1113,7 +1113,7 @@ final class StoryItemContentComponent: Component {
                             areMessagesEnabled: state.messagesAreEnabled,
                             minMessagePrice: state.sendPaidMessageStars,
                             isAdmin: state.canManageCall,
-                            isUnifiedStream: state.isUnifiedStream
+                            isUnifiedStream: state.connectionMode != .rtc
                         )
                         if self.mediaStreamCallState != mappedState {
                             self.mediaStreamCallState = mappedState
