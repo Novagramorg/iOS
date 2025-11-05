@@ -32,6 +32,7 @@ def session_scp_upload(session, source_path, destination_path):
         source_path=shlex.quote(source_path),
         destination_path=shlex.quote(destination_path)
     )
+    print('Running: {}'.format(scp_command))
     if os.system(scp_command) != 0:
         print('Command {} finished with a non-zero status'.format(scp_command))
 
