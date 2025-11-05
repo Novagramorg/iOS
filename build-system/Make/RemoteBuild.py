@@ -26,7 +26,7 @@ def import_module_from_file(module_name, file_path):
 
 def session_scp_upload(session, source_path, destination_path):
     print('Using ssh private key path {}'.format(session.private_key_path))
-    scp_command = 'scp -i {privateKeyPath} -o LogLevel=ERROR -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -pr {source_path} containerhost@"{ipAddress}":{destination_path}'.format(
+    scp_command = 'scp -i {privateKeyPath} -o LogLevel=ERROR -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/dev/null -pr {source_path} containerhost@"{ipAddress}":{destination_path}'.format(
         privateKeyPath=session.private_key_path,
         ipAddress=session.ip_address,
         source_path=shlex.quote(source_path),
@@ -37,7 +37,7 @@ def session_scp_upload(session, source_path, destination_path):
 
 
 def session_scp_download(session, source_path, destination_path):
-    scp_command = 'scp -i {privateKeyPath} -o LogLevel=ERROR -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -pr containerhost@"{ipAddress}":{source_path} {destination_path}'.format(
+    scp_command = 'scp -i {privateKeyPath} -o LogLevel=ERROR -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/dev/null -pr containerhost@"{ipAddress}":{source_path} {destination_path}'.format(
         privateKeyPath=session.private_key_path,
         ipAddress=session.ip_address,
         source_path=shlex.quote(source_path),
@@ -48,7 +48,7 @@ def session_scp_download(session, source_path, destination_path):
 
 
 def session_ssh(session, command):
-    ssh_command = 'ssh -i {privateKeyPath} -o LogLevel=ERROR -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null containerhost@"{ipAddress}" -o ServerAliveInterval=60 -t "{command}"'.format(
+    ssh_command = 'ssh -i {privateKeyPath} -o LogLevel=ERROR -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/dev/null containerhost@"{ipAddress}" -o ServerAliveInterval=60 -t "{command}"'.format(
         privateKeyPath=session.private_key_path,
         ipAddress=session.ip_address,
         command=command
