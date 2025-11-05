@@ -97,6 +97,9 @@ public final class MediaEditorComposer {
     private let outputDimensions: CGSize
     private let textScale: CGFloat
     
+    private let outputsYuvBuffers: Bool
+    private let yuvPixelFormat: OSType = kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
+    
     private let renderer = MediaEditorRenderer()
     private let renderChain = MediaEditorRenderChain()
     
@@ -112,12 +115,14 @@ public final class MediaEditorComposer {
         outputDimensions: CGSize,
         textScale: CGFloat,
         videoDuration: Double?,
-        additionalVideoDuration: Double?
+        additionalVideoDuration: Double?,
+        outputsYuvBuffers: Bool = false
     ) {
         self.values = values
         self.dimensions = dimensions
         self.outputDimensions = outputDimensions
         self.textScale = textScale
+        self.outputsYuvBuffers = outputsYuvBuffers
         
         let colorSpace = CGColorSpaceCreateDeviceRGB()
         self.colorSpace = colorSpace
@@ -161,7 +166,7 @@ public final class MediaEditorComposer {
         self.renderChain.update(values: self.values)
         self.renderer.videoFinishPass.update(values: self.values, videoDuration: videoDuration, additionalVideoDuration: additionalVideoDuration)
     }
-        
+    
     var previousAdditionalInput: [Int: Input] = [:]
     public func process(main: Input, additional: [Input?], timestamp: CMTime, pool: CVPixelBufferPool?, completion: @escaping (CVPixelBuffer?) -> Void) {
         guard let pool, let ciContext = self.ciContext else {
@@ -185,26 +190,35 @@ public final class MediaEditorComposer {
         
         if let resultTexture = self.renderer.resultTexture, var ciImage = CIImage(mtlTexture: resultTexture, options: [.colorSpace: self.colorSpace]) {
             ciImage = ciImage.transformed(by: CGAffineTransformMakeScale(1.0, -1.0).translatedBy(x: 0.0, y: -ciImage.extent.height))
-            
+                        
             var pixelBuffer: CVPixelBuffer?
             CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pool, &pixelBuffer)
             
-            if let pixelBuffer {                
+            guard let pixelBuffer else {
+                completion(nil)
+                return
+            }
+            
+            if self.outputsYuvBuffers {
+                let scale = self.outputDimensions.width / ciImage.extent.width
+                ciImage = ciImage.samplingLinear().transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+                
+                ciContext.render(ciImage, to: pixelBuffer)
+                completion(pixelBuffer)
+            } else {
                 makeEditorImageFrameComposition(context: ciContext, inputImage: ciImage, drawingImage: self.drawingImage, maskImage: self.maskImage, dimensions: self.dimensions, values: self.values, entities: self.entities, time: timestamp, completion: { compositedImage in
                     if var compositedImage {
                         let scale = self.outputDimensions.width / compositedImage.extent.width
                         compositedImage = compositedImage.samplingLinear().transformed(by: CGAffineTransform(scaleX: scale, y: scale))
                         
-                        self.ciContext?.render(compositedImage, to: pixelBuffer)
+                        ciContext.render(compositedImage, to: pixelBuffer)
                         completion(pixelBuffer)
                     } else {
                         completion(nil)
                     }
                 })
-                return
             }
         }
-        completion(nil)
     }
     
     private var cachedTextures: [Int: MTLTexture] = [:]
