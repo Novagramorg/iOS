@@ -110,7 +110,8 @@ final class LiveStreamMediaSource {
             kCVPixelBufferPoolMinimumBufferCountKey as String: 3 as NSNumber
         ]
         let pixelBufferOptions: [String: Any] = [
-            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA as NSNumber,
+            //kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA as NSNumber,
+            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange as NSNumber,
             kCVPixelBufferWidthKey as String: UInt32(width),
             kCVPixelBufferHeightKey as String: UInt32(height)
         ]
@@ -168,7 +169,8 @@ final class LiveStreamMediaSource {
             outputDimensions: CGSize(width: 720.0, height: 1280.0),
             textScale: 1.0,
             videoDuration: nil,
-            additionalVideoDuration: nil
+            additionalVideoDuration: nil,
+            outputsYuvBuffers: true
         )
         
         self.mainVideoOutput = CameraVideoOutput(sink: { [weak self] buffer, mirror in
