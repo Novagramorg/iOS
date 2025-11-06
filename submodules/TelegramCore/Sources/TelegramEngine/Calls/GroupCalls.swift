@@ -788,6 +788,7 @@ func _internal_joinGroupCall(account: Account, peerId: PeerId?, joinAs: PeerId?,
                                 let isVideoEnabled = (flags & (1 << 9)) != 0
                                 let messagesEnabled = (flags & (1 << 17)) != 0
                                 let canChangeMessagesEnabled = (flags & (1 << 18)) != 0
+                                let isStream = (flags & (1 << 12)) != 0
                                 state.defaultParticipantsAreMuted = GroupCallParticipantsContext.State.DefaultParticipantsAreMuted(isMuted: isMuted, canChange: isMin ? state.defaultParticipantsAreMuted.canChange : canChange)
                                 state.messagesAreEnabled = GroupCallParticipantsContext.State.MessagesAreEnabled(isEnabled: messagesEnabled, canChange: isMin ? state.messagesAreEnabled.canChange : canChangeMessagesEnabled, sendPaidMessagesStars: sendPaidMessagesStars)
                                 state.title = title
@@ -796,6 +797,7 @@ func _internal_joinGroupCall(account: Account, peerId: PeerId?, joinAs: PeerId?,
                                 state.isVideoEnabled = isMin ? state.isVideoEnabled : isVideoEnabled
                                 state.unmutedVideoLimit = Int(unmutedVideoLimit)
                                 state.defaultSendAs = defaultSendAs?.peerId
+                                state.isStream = isStream
                             default:
                                 break
                             }

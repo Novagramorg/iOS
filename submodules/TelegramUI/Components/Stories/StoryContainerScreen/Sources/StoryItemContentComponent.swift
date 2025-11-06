@@ -963,62 +963,65 @@ final class StoryItemContentComponent: Component {
                 }
                 
                 if case .rtc = liveStream.kind, component.isEmbeddedInCamera {
-                } else {
+                } else if let mediaStreamCallState = self.mediaStreamCallState {
                     var videoEndpointId: String?
-                    if let mediaStreamCallState = self.mediaStreamCallState, mediaStreamCallState.isUnifiedStream {
+                    if mediaStreamCallState.isUnifiedStream {
                         videoEndpointId = "unified"
                     } else if let mediaStreamCallVideoState = self.mediaStreamCallVideoState {
                         videoEndpointId = mediaStreamCallVideoState.videoEndpointId
                     }
-                    let _ = mediaStream.update(
-                        transition: mediaStreamTransition,
-                        component: AnyComponent(MediaStreamVideoComponent(
-                            call: mediaStreamCall,
-                            videoEndpointId: videoEndpointId,
-                            isVisible: true,
-                            isAdmin: false,
-                            peerTitle: "",
-                            addInset: false,
-                            isFullscreen: false,
-                            videoLoading: false,
-                            callPeer: nil,
-                            activatePictureInPicture: ActionSlot(),
-                            deactivatePictureInPicture: ActionSlot(),
-                            bringBackControllerForPictureInPictureDeactivation: { f in
-                                f()
-                            },
-                            pictureInPictureClosed: {
-                            },
-                            onVideoSizeRetrieved: { _ in
-                            },
-                            onVideoPlaybackLiveChange: { [weak self] isLive in
-                                guard let self else {
-                                    return
+                    
+                    if let videoEndpointId {
+                        let _ = mediaStream.update(
+                            transition: mediaStreamTransition,
+                            component: AnyComponent(MediaStreamVideoComponent(
+                                call: mediaStreamCall,
+                                videoEndpointId: videoEndpointId,
+                                isVisible: true,
+                                isAdmin: false,
+                                peerTitle: "",
+                                addInset: false,
+                                isFullscreen: false,
+                                videoLoading: false,
+                                callPeer: nil,
+                                activatePictureInPicture: ActionSlot(),
+                                deactivatePictureInPicture: ActionSlot(),
+                                bringBackControllerForPictureInPictureDeactivation: { f in
+                                    f()
+                                },
+                                pictureInPictureClosed: {
+                                },
+                                onVideoSizeRetrieved: { _ in
+                                },
+                                onVideoPlaybackLiveChange: { [weak self] isLive in
+                                    guard let self else {
+                                        return
+                                    }
+                                    self.videoPlaybackStatus = MediaPlayerStatus(
+                                        generationTimestamp: CACurrentMediaTime(),
+                                        duration: .infinity,
+                                        dimensions: CGSize(),
+                                        timestamp: 0.0,
+                                        baseRate: 1.0,
+                                        seekId: 0,
+                                        status: isLive ? .playing : .buffering(initial: false, whilePlaying: true, progress: 0.0, display: true),
+                                        soundEnabled: true
+                                    )
+                                    if !self.isSeeking {
+                                        self.updateVideoPlaybackProgress()
+                                    }
                                 }
-                                self.videoPlaybackStatus = MediaPlayerStatus(
-                                    generationTimestamp: CACurrentMediaTime(),
-                                    duration: .infinity,
-                                    dimensions: CGSize(),
-                                    timestamp: 0.0,
-                                    baseRate: 1.0,
-                                    seekId: 0,
-                                    status: isLive ? .playing : .buffering(initial: false, whilePlaying: true, progress: 0.0, display: true),
-                                    soundEnabled: true
-                                )
-                                if !self.isSeeking {
-                                    self.updateVideoPlaybackProgress()
-                                }
+                            )),
+                            environment: {},
+                            containerSize: availableSize
+                        )
+                        let mediaStreamFrame = CGRect(origin: CGPoint(), size: availableSize)
+                        if let mediaStreamView = mediaStream.view {
+                            if mediaStreamView.superview == nil {
+                                self.insertSubview(mediaStreamView, aboveSubview: self.imageView)
                             }
-                        )),
-                        environment: {},
-                        containerSize: availableSize
-                    )
-                    let mediaStreamFrame = CGRect(origin: CGPoint(), size: availableSize)
-                    if let mediaStreamView = mediaStream.view {
-                        if mediaStreamView.superview == nil {
-                            self.insertSubview(mediaStreamView, aboveSubview: self.imageView)
+                            mediaStreamTransition.setFrame(view: mediaStreamView, frame: mediaStreamFrame)
                         }
-                        mediaStreamTransition.setFrame(view: mediaStreamView, frame: mediaStreamFrame)
                     }
                 }
             } else {
@@ -1113,7 +1116,7 @@ final class StoryItemContentComponent: Component {
                             areMessagesEnabled: state.messagesAreEnabled,
                             minMessagePrice: state.sendPaidMessageStars,
                             isAdmin: state.canManageCall,
-                            isUnifiedStream: state.connectionMode != .rtc
+                            isUnifiedStream: state.isUnifiedStream
                         )
                         if self.mediaStreamCallState != mappedState {
                             self.mediaStreamCallState = mappedState

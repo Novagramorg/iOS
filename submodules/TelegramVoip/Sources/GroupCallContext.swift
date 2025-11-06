@@ -530,7 +530,7 @@ public final class OngoingGroupCallContext {
             
 #if os(iOS)
             if sharedAudioDevice == nil && !isStream {
-                self.audioDevice = OngoingCallContext.AudioDevice.create(enableSystemMute: false)
+                self.audioDevice = OngoingCallContext.AudioDevice.create(enableSystemMute: false, enableMicrophone: true)
             } else {
                 self.audioDevice = sharedAudioDevice
             }

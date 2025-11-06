@@ -951,8 +951,8 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
         
         var sharedAudioContext = sharedAudioContext
         if sharedAudioContext == nil {
-            var useSharedAudio = !isStream
-            var canReuseCurrent = true
+            var useSharedAudio = true
+            var canReuseCurrent = !isStream
             if let data = self.accountContext.currentAppConfiguration.with({ $0 }).data {
                 if data["ios_killswitch_group_shared_audio"] != nil {
                     useSharedAudio = false
@@ -962,8 +962,12 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
                 }
             }
             
+            if isStream {
+                useSharedAudio = false
+            }
+            
             if useSharedAudio {
-                let sharedAudioContextValue = SharedCallAudioContext.get(audioSession: audioSession, callKitIntegration: callKitIntegration, defaultToSpeaker: true, reuseCurrent: canReuseCurrent && callKitIntegration == nil)
+                let sharedAudioContextValue = SharedCallAudioContext.get(audioSession: audioSession, callKitIntegration: callKitIntegration, defaultToSpeaker: true, reuseCurrent: canReuseCurrent && callKitIntegration == nil, enableMicrophone: !isStream)
                 sharedAudioContext = sharedAudioContextValue
             }
         }
@@ -2077,6 +2081,8 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
                     }
 
                     if let genericCallContext = self.genericCallContext {
+                        let callInfo = joinCallResult.callInfo
+                        
                         switch genericCallContext {
                         case let .call(callContext):
                             switch joinCallResult.connectionMode {
