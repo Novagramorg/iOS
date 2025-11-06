@@ -316,6 +316,17 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
             transitionOut: nil
         )
         
+        let mediaEditorCustomTarget = customTarget.flatMap { value -> EnginePeer.Id? in
+            switch value {
+            case .myStories:
+                return nil
+            case let .peer(id):
+                return id
+            case let .botPreview(id, _):
+                return id
+            }
+        }
+        
         var presentImpl: ((ViewController) -> Void)?
         var returnToCameraImpl: (() -> Void)?
         var dismissCameraImpl: (() -> Void)?
@@ -323,6 +334,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         let cameraController = CameraScreenImpl(
             context: context,
             mode: .story,
+            customTarget: mediaEditorCustomTarget,
             transitionIn: transitionIn.flatMap {
                 if let sourceView = $0.sourceView {
                     return CameraScreenImpl.TransitionIn(
@@ -408,17 +420,6 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
                     )
                 } else {
                     transitionIn = .camera
-                }
-                
-                let mediaEditorCustomTarget = customTarget.flatMap { value -> EnginePeer.Id? in
-                    switch value {
-                    case .myStories:
-                        return nil
-                    case let .peer(id):
-                        return id
-                    case let .botPreview(id, _):
-                        return id
-                    }
                 }
                 
                 let controller = MediaEditorScreenImpl(

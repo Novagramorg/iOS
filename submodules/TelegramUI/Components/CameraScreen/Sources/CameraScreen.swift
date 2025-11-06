@@ -305,6 +305,8 @@ private final class CameraScreenComponent: CombinedComponent {
         private var storiesBlockedPeers: BlockedPeersContext?
         
         fileprivate var sendAsPeerId: EnginePeer.Id?
+        fileprivate var isCustomTarget = false
+        
         private var privacy: EngineStoryPrivacy = EngineStoryPrivacy(base: .everyone, additionallyIncludePeers: [])
         private var allowComments = true
         private var isForwardingDisabled = false
@@ -362,6 +364,13 @@ private final class CameraScreenComponent: CombinedComponent {
             
             Queue.concurrentDefaultQueue().async {
                 self.setupRecentAssetSubscription()
+            }
+            
+            if let controller = getController() {
+                if let customTarget = controller.customTarget {
+                    self.sendAsPeerId = customTarget
+                    self.isCustomTarget = true
+                }
             }
         }
         
@@ -943,6 +952,7 @@ private final class CameraScreenComponent: CombinedComponent {
                 context: self.context,
                 mode: .create(
                     sendAsPeerId: self.sendAsPeerId,
+                    isCustomTarget: self.isCustomTarget,
                     privacy: self.privacy,
                     allowComments: self.allowComments,
                     isForwardingDisabled: self.isForwardingDisabled,
@@ -1510,7 +1520,7 @@ private final class CameraScreenComponent: CombinedComponent {
                         context: component.context,
                         theme: environment.theme,
                         strings: environment.strings,
-                        peerId: component.context.account.peerId,
+                        peerId: state.sendAsPeerId ?? component.context.account.peerId,
                         story: state.liveStreamStory,
                         statusBarHeight: environment.statusBarHeight,
                         inputHeight: environment.inputHeight,
@@ -1538,13 +1548,18 @@ private final class CameraScreenComponent: CombinedComponent {
                 let streamAsButton = streamAsButton.update(
                     component: PlainButtonComponent(
                         content: AnyComponent(
-                            StreamAsComponent(context: component.context, peerId: state.sendAsPeerId ?? component.context.account.peerId)
+                            StreamAsComponent(
+                                context: component.context,
+                                peerId: state.sendAsPeerId ?? component.context.account.peerId,
+                                isCustomTarget: state.isCustomTarget
+                            )
                         ),
                         action: { [weak state] in
                             if let state {
                                 state.presentStreamAsPeer()
                             }
                         },
+                        isEnabled: !state.isCustomTarget,
                         animateAlpha: true,
                         animateScale: false
                     ),
@@ -3836,6 +3851,7 @@ public class CameraScreenImpl: ViewController, CameraScreen {
 
     private let context: AccountContext
     fileprivate let mode: Mode
+    fileprivate let customTarget: EnginePeer.Id?
     fileprivate let holder: CameraHolder?
     fileprivate let transitionIn: TransitionIn?
     fileprivate let transitionOut: (Bool) -> TransitionOut?
@@ -3901,6 +3917,7 @@ public class CameraScreenImpl: ViewController, CameraScreen {
     public init(
         context: AccountContext,
         mode: Mode,
+        customTarget: EnginePeer.Id? = nil,
         holder: CameraHolder? = nil,
         transitionIn: TransitionIn?,
         transitionOut: @escaping (Bool) -> TransitionOut?,
@@ -3908,6 +3925,7 @@ public class CameraScreenImpl: ViewController, CameraScreen {
     ) {
         self.context = context
         self.mode = mode
+        self.customTarget = customTarget
         self.holder = holder
         self.transitionIn = transitionIn
         self.transitionOut = transitionOut

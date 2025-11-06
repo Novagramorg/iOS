@@ -909,8 +909,8 @@ private final class GiftSetupScreenComponent: Component {
                     self.hideName = true
                 }
                 
-                if case let .starGift(gift, _) = component.subject, gift.flags.contains(.isAuction) {
-                    let giftAuction = GiftAuctionContext(account: component.context.account, giftId: gift.id)
+                if case let .starGift(gift, _) = component.subject, gift.flags.contains(.isAuction), let giftAuctionsManager = component.context.giftAuctionsManager {
+                    let giftAuction = giftAuctionsManager.auctionContextForGift(giftId: gift.id)
                     self.giftAuction = giftAuction
                     self.giftAuctionDisposable = (giftAuction.state
                     |> deliverOnMainQueue).start(next: { [weak self] state in

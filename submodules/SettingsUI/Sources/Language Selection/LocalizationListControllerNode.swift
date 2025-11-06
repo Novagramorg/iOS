@@ -183,11 +183,14 @@ private final class LocalizationListSearchContainerNode: SearchDisplayController
         let foundItems = self.searchQuery.get()
         |> mapToSignal { query -> Signal<[LocalizationInfo]?, NoError> in
             if let query = query, !query.isEmpty {
-                let normalizedQuery = query.lowercased()
+                let normalizedQuery = query.folding(options: [.diacriticInsensitive, .widthInsensitive, .caseInsensitive], locale: nil)
                 var result: [LocalizationInfo] = []
                 var uniqueIds = Set<String>()
                 for info in listState.availableSavedLocalizations + listState.availableOfficialLocalizations {
-                    if info.title.lowercased().hasPrefix(normalizedQuery) || info.localizedTitle.lowercased().hasPrefix(normalizedQuery) {
+                    let title = info.title.folding(options: [.diacriticInsensitive, .widthInsensitive, .caseInsensitive], locale: nil)
+                    let localizedTitle = info.localizedTitle.folding(options: [.diacriticInsensitive, .widthInsensitive, .caseInsensitive], locale: nil)
+
+                    if title.hasPrefix(normalizedQuery) || localizedTitle.hasPrefix(normalizedQuery) {
                         if uniqueIds.contains(info.languageCode) {
                            continue
                         }

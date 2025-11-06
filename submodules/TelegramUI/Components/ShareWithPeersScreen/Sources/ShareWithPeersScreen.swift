@@ -2762,7 +2762,7 @@ final class ShareWithPeersScreenComponent: Component {
                 containerInset += 10.0
             }
                         
-            var navigationHeight: CGFloat = 66.0
+            var navigationHeight: CGFloat = 72.0
             let navigationSideInset: CGFloat = 16.0
             let buttonSideInset: CGFloat = 36.0
             var navigationButtonsWidth: CGFloat = 0.0
