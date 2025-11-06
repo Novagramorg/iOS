@@ -212,9 +212,12 @@ private final class PinnedBarMessageComponent: Component {
             self.backgroundView.tintColor = baseColor.withMultipliedBrightnessBy(0.7)
             self.foregroundView.tintColor = baseColor
             
-            let timestamp = CFAbsoluteTimeGetCurrent()
+            let timestamp = CFAbsoluteTimeGetCurrent() + kCFAbsoluteTimeIntervalSince1970
             let currentDuration = max(0.0, timestamp - Double(component.message.date))
-            let timeFraction: CGFloat = 1.0 - min(1.0, currentDuration / Double(component.message.lifetime))
+            var timeFraction: CGFloat = 1.0 - min(1.0, currentDuration / Double(component.message.lifetime))
+            if case .local = component.message.id.space {
+                timeFraction = 1.0
+            }
             
             let backgroundFrame = CGRect(origin: CGPoint(), size: size)
             transition.setFrame(view: self.backgroundView, frame: backgroundFrame)

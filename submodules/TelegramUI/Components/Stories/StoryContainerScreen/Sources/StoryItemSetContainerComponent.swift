@@ -1756,6 +1756,9 @@ public final class StoryItemSetContainerComponent: Component {
                             displayFooter = true
                             displayFooterViews = false
                         }
+                        if case .liveStream = component.slice.item.storyItem.media {
+                            displayFooter = false
+                        }
                         if component.slice.item.storyItem.isForwardingDisabled {
                             canShare = false
                         }

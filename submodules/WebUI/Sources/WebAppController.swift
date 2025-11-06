@@ -42,6 +42,7 @@ import Photos
 import GlassBarButtonComponent
 import BundleIconComponent
 import LottieComponent
+import CryptoKit
 
 private let durgerKingBotIds: [Int64] = [5104055776, 2200339955]
 
@@ -426,6 +427,47 @@ public final class WebAppController: ViewController, AttachmentContainable {
             webView.scrollView.insertSubview(self.topOverscrollNode.view, at: 0)
         }
         
+        private func load(url: URL) {
+            #if DEBUG
+            if "".isEmpty {
+                if #available(iOS 16.0, *) {
+                    let documentsPath = URL.documentsDirectory.path(percentEncoded: false)
+                    
+                    var hasher = SHA256()
+                    var urlString = url.absoluteString
+                    if let range = urlString.firstRange(of: "#") {
+                        urlString.removeSubrange(range.lowerBound...)
+                    }
+                    hasher.update(data: urlString.data(using: .utf8)!)
+                    let digest = Data(hasher.finalize())
+                    let urlHash = hexString(digest)
+                    
+                    let cachedFilePath = documentsPath.appending("\(urlHash).bin")
+                    
+                    Task {
+                        do {
+                            let data: Data
+                            if let cachedData = try? Data(contentsOf: URL(fileURLWithPath: cachedFilePath)) {
+                                data = cachedData
+                                print("Loaded from cache at \(cachedFilePath)")
+                            } else {
+                                let (loadedData, _) = try await URLSession.shared.data(from: url)
+                                data = loadedData
+                                try loadedData.write(to: URL(fileURLWithPath: cachedFilePath), options: .atomic)
+                            }
+                            self.webView?.load(data, mimeType: "text/html", characterEncodingName: "utf-8", baseURL: url)
+                        } catch let e {
+                            print("\(e)")
+                        }
+                    }
+                }
+                
+                return
+            }
+            #endif
+            self.webView?.load(URLRequest(url: url))
+        }
+        
         func setupWebView() {
             guard let controller = self.controller else {
                 return
@@ -434,7 +476,7 @@ public final class WebAppController: ViewController, AttachmentContainable {
             if let url = controller.url, controller.source != .menu {
                 self.queryId = controller.queryId
                 if let parsedUrl = URL(string: url) {
-                    self.webView?.load(URLRequest(url: parsedUrl))
+                    self.load(url: parsedUrl)
                 }
                 if let keepAliveSignal = controller.keepAliveSignal {
                     self.keepAliveDisposable = (keepAliveSignal
@@ -457,7 +499,7 @@ public final class WebAppController: ViewController, AttachmentContainable {
                         }
                         if let parsedUrl = URL(string: result.url) {
                             strongSelf.queryId = result.queryId
-                            strongSelf.webView?.load(URLRequest(url: parsedUrl))
+                            strongSelf.load(url: parsedUrl)
                         }
                     })
                 } else {
@@ -477,7 +519,7 @@ public final class WebAppController: ViewController, AttachmentContainable {
                                     return
                                 }
                                 self.controller?.titleView?.title = WebAppTitle(title: botApp.title, counter: self.presentationData.strings.WebApp_Miniapp, isVerified: controller.botVerified)
-                                self.webView?.load(URLRequest(url: parsedUrl))
+                                self.load(url: parsedUrl)
                             })
                         })
                     } else {
@@ -487,7 +529,7 @@ public final class WebAppController: ViewController, AttachmentContainable {
                                 return
                             }
                             strongSelf.queryId = result.queryId
-                            strongSelf.webView?.load(URLRequest(url: parsedUrl))
+                            strongSelf.load(url: parsedUrl)
                                                         
                             if let keepAliveSignal = result.keepAliveSignal {
                                 strongSelf.keepAliveDisposable = (keepAliveSignal
