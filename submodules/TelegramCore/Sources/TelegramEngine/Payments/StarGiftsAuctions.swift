@@ -56,7 +56,7 @@ public final class GiftAuctionContext {
     
     private let queue: Queue = .mainQueue()
     private let account: Account
-    private let giftId: Int64
+    let giftId: Int64
     
     private let disposable = MetaDisposable()
     
@@ -73,9 +73,16 @@ public final class GiftAuctionContext {
         return self.stateValue.get()
     }
     
-    public init(account: Account, giftId: Int64) {
+    public convenience init(account: Account, giftId: Int64) {
+        self.init(account: account, giftId: giftId, initialAuctionState: nil, initialMyState: nil)
+    }
+    
+    init(account: Account, giftId: Int64, initialAuctionState: State.AuctionState?, initialMyState: State.MyState?) {
         self.account = account
         self.giftId = giftId
+        
+        self.auctionState = initialAuctionState
+        self.myState = initialMyState
         
         self.load()
         
@@ -263,5 +270,81 @@ func _internal_getGiftAuctionAcquiredGifts(account: Account, giftId: Int64) -> S
                 return mappedGifts
             }
         }
+    }
+}
+
+func _internal_getActiveGiftAuctions(account: Account, hash: Int64) -> Signal<[GiftAuctionContext]?, NoError> {
+    return account.network.request(Api.functions.payments.getStarGiftActiveAuctions(hash: hash))
+    |> retryRequest
+    |> mapToSignal { result in
+        return account.postbox.transaction { transaction -> [GiftAuctionContext]? in
+            switch result {
+            case let .starGiftActiveAuctions(auctions, users):
+                let parsedPeers = AccumulatedPeers(users: users)
+                updatePeers(transaction: transaction, accountPeerId: account.peerId, peers: parsedPeers)
+                
+                var auctionContexts: [GiftAuctionContext] = []
+                for auction in auctions {
+                    switch auction {
+                    case let .starGiftActiveAuctionState(giftId, auctionState, userState):
+                        auctionContexts.append(GiftAuctionContext(
+                            account: account,
+                            giftId: giftId,
+                            initialAuctionState: GiftAuctionContext.State.AuctionState(apiAuctionState: auctionState),
+                            initialMyState: GiftAuctionContext.State.MyState(apiAuctionUserState: userState)
+                        ))
+                    }
+                }
+
+                return auctionContexts
+            case .starGiftActiveAuctionsNotModified:
+                return nil
+            }
+        }
+    }
+}
+
+public class GiftAuctionsManager {
+    private let account: Account
+    private var auctionContexts: [Int64 : GiftAuctionContext] = [:]
+    
+    private let disposable = MetaDisposable()
+    
+    public init(account: Account) {
+        self.account = account
+        
+        self.reload()
+    }
+    
+    deinit {
+        self.disposable.dispose()
+    }
+    
+    public func reload() {
+        self.disposable.set((_internal_getActiveGiftAuctions(account: self.account, hash: 0)
+        |> deliverOnMainQueue).startStrict(next: { [weak self] activeAuctions in
+            guard let self, let activeAuctions else {
+                return
+            }
+            var auctionContexts: [Int64 : GiftAuctionContext] = [:]
+            for auction in activeAuctions {
+                auctionContexts[auction.giftId] = auction
+            }
+            self.auctionContexts = auctionContexts
+        }))
+    }
+    
+    public func auctionContextForGift(giftId: Int64) -> GiftAuctionContext {
+        if let current = self.auctionContexts[giftId] {
+            return current
+        } else {
+            let auctionContext = GiftAuctionContext(account: self.account, giftId: giftId)
+            self.auctionContexts[giftId] = auctionContext
+            return auctionContext
+        }
+    }
+    
+    func storeAuctionContext(auctionContext: GiftAuctionContext) {
+        self.auctionContexts[auctionContext.giftId] = auctionContext
     }
 }
