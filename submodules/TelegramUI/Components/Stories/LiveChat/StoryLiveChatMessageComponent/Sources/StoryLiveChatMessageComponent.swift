@@ -419,6 +419,10 @@ public final class StoryLiveChatMessageComponent: Component {
                 if textLayout.numberOfLines > 1 || (component.message.isFromAdmin && !displayStarsAmountBackground) {
                     backgroundFrame.size.height = max(backgroundFrame.size.height, textFrame.maxY + 8.0 - backgroundOrigin.y)
                 }
+                
+                if let starsAmountTextSize, !displayStarsAmountBackground, let lastLineRect = textLayout.linesRects().last, textFrame.minX + lastLineRect.maxX > backgroundFrame.width - 8.0 - starsAmountTextSize.width {
+                    backgroundFrame.size.height += starsAmountTextSize.height + 2.0
+                }
             }
             
             if let starsAmountTextSize, let starsAmountTextView = self.starsAmountText?.view, let starsAmountIcon = self.starsAmountIcon {
@@ -431,7 +435,7 @@ public final class StoryLiveChatMessageComponent: Component {
                     
                     starsAmountTextFrame = CGRect(origin: CGPoint(x: starsAmountBackgroundFrame.maxX - starsAmountTextSize.width - 5.0, y: starsAmountBackgroundFrame.minY + UIScreenPixel + floor((starsAmountBackgroundFrame.height - starsAmountTextSize.height) * 0.5)), size: starsAmountTextSize)
                 } else {
-                    starsAmountTextFrame = CGRect(origin: CGPoint(x: textFrame.maxX - starsAmountTextSize.width - 1.0, y: textFrame.maxY - starsAmountTextSize.height + 1.0), size: starsAmountTextSize)
+                    starsAmountTextFrame = CGRect(origin: CGPoint(x: backgroundFrame.maxX - 8.0 - starsAmountTextSize.width, y: backgroundFrame.maxY - starsAmountTextSize.height - 8.0), size: starsAmountTextSize)
                 }
                 
                 if starsAmountTextView.superview == nil {

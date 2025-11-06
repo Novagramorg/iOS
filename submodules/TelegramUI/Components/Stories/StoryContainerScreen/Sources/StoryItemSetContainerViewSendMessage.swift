@@ -3529,9 +3529,9 @@ final class StoryItemSetContainerSendMessage: @unchecked(Sendable) {
                     }
                 )
                 tooltipScreen.tag = "no_auto_dismiss"
-                weak var tooltipScreenValue: UndoOverlayController? = tooltipScreen
+                let tooltipScreenValue: UndoOverlayController? = tooltipScreen
                 self.currentTooltipUpdateTimer?.invalidate()
-                self.currentTooltipUpdateTimer = Foundation.Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true, block: { [weak self, weak view] _ in
+                self.currentTooltipUpdateTimer = Foundation.Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true, block: { [weak self, weak view, weak tooltipScreenValue] _ in
                     guard let self, let view, let component = view.component else {
                         return
                     }
