@@ -1091,16 +1091,15 @@ public extension TelegramEngine {
                                 hasUnseen = peerState.maxReadId < lastEntry.id
                                 
                                 for item in itemsView.items {
-                                    if item.id > peerState.maxReadId {
-                                        unseenCount += 1
-                                        
-                                        if case let .item(item) = item.value.get(Stories.StoredItem.self) {
+                                    if case let .item(item) = item.value.get(Stories.StoredItem.self) {
+                                        if item.id > peerState.maxReadId {
+                                            unseenCount += 1
                                             if item.isCloseFriends {
                                                 hasUnseenCloseFriends = true
                                             }
-                                            if item.media is TelegramMediaLiveStream {
-                                                hasLiveItems = true
-                                            }
+                                        }
+                                        if item.media is TelegramMediaLiveStream {
+                                            hasLiveItems = true
                                         }
                                     }
                                 }
@@ -1176,8 +1175,8 @@ public extension TelegramEngine {
                         }
                         
                         items.sort(by: { lhs, rhs in
-                            let lhsUnseenOrPending = lhs.hasUnseen || lhs.hasPending
-                            let rhsUnseenOrPending = rhs.hasUnseen || rhs.hasPending
+                            let lhsUnseenOrPending = lhs.hasUnseen || lhs.hasLiveItems || lhs.hasPending
+                            let rhsUnseenOrPending = rhs.hasUnseen || rhs.hasLiveItems || rhs.hasPending
                             
                             if lhsUnseenOrPending != rhsUnseenOrPending {
                                 if lhsUnseenOrPending {
@@ -1255,7 +1254,7 @@ public extension TelegramEngine {
                     let _ = accountPeer
                     let _ = storiesStateView
                     
-                    var sortedItems: [(peer: Peer, item: Stories.Item, hasUnseen: Bool, lastTimestamp: Int32)] = []
+                    var sortedItems: [(peer: Peer, item: Stories.Item, hasUnseenOrLive: Bool, lastTimestamp: Int32)] = []
                     
                     for peerId in storySubscriptionsView.peerIds {
                         guard let peerView = views.views[PostboxViewKey.basicPeer(peerId)] as? BasicPeerView else {
@@ -1275,22 +1274,22 @@ public extension TelegramEngine {
                         let lastTimestamp = itemsView.items.last?.value.get(Stories.StoredItem.self)?.timestamp
                         
                         let peerState: Stories.PeerState? = stateView.value?.get(Stories.PeerState.self)
-                        var hasUnseen = false
+                        var hasUnseenOrLive = false
                         if let peerState = peerState {
-                            if let item = itemsView.items.first(where: { $0.id > peerState.maxReadId }) {
-                                hasUnseen = true
+                            if let item = itemsView.items.first(where: { $0.id > peerState.maxReadId || $0.isLiveStream }) {
+                                hasUnseenOrLive = true
                                 nextItem = item.value.get(Stories.StoredItem.self)
                             }
                         }
                         
                         if let nextItem = nextItem, case let .item(item) = nextItem, let lastTimestamp = lastTimestamp {
-                            sortedItems.append((peer, item, hasUnseen, lastTimestamp))
+                            sortedItems.append((peer, item, hasUnseenOrLive, lastTimestamp))
                         }
                     }
                     
                     sortedItems.sort(by: { lhs, rhs in
-                        if lhs.hasUnseen != rhs.hasUnseen {
-                            if lhs.hasUnseen {
+                        if lhs.hasUnseenOrLive != rhs.hasUnseenOrLive {
+                            if lhs.hasUnseenOrLive {
                                 return true
                             } else {
                                 return false
