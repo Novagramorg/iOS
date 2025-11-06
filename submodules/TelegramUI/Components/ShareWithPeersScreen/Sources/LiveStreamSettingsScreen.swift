@@ -304,10 +304,10 @@ final class LiveStreamSettingsScreenComponent: Component {
                         subtitle: subtitle.flatMap { PeerListItemComponent.Subtitle(text: $0, color: .neutral) },
                         subtitleAccessory: .none,
                         presence: nil,
-                        rightAccessory: .disclosure,
+                        rightAccessory: screenState.isCustomTarget ? .none : .disclosure,
                         selectionState: .none,
                         hasNext: false,
-                        action: { [weak self] _, _, _ in
+                        action: screenState.isCustomTarget ? nil : { [weak self] _, _, _ in
                             guard let self else {
                                 return
                             }
@@ -316,12 +316,21 @@ final class LiveStreamSettingsScreenComponent: Component {
                     )
                 ))]
                 
+                let streamAsSectionHeader = AnyComponent(MultilineTextComponent(
+                    text: .plain(NSAttributedString(
+                        string: "START LIVE AS",
+                        font: Font.regular(presentationData.listsFontSize.itemListBaseHeaderFontSize),
+                        textColor: theme.list.freeTextColor
+                    )),
+                    maximumNumberOfLines: 0
+                ))
+                
                 let streamAsSectionSize = self.streamAsSection.update(
                     transition: transition,
                     component: AnyComponent(ListSectionComponent(
                         theme: theme,
                         style: .glass,
-                        header: nil,
+                        header: streamAsSectionHeader,
                         footer: nil,
                         items: streamAsSectionItems
                     )),
@@ -1040,7 +1049,7 @@ final class LiveStreamSettingsScreenComponent: Component {
 
 public class LiveStreamSettingsScreen: ViewControllerComponentContainer {
     public enum Mode {
-        case create(sendAsPeerId: EnginePeer.Id?, privacy: EngineStoryPrivacy, allowComments: Bool, isForwardingDisabled: Bool, pin: Bool, paidMessageStars: Int64)
+        case create(sendAsPeerId: EnginePeer.Id?, isCustomTarget: Bool, privacy: EngineStoryPrivacy, allowComments: Bool, isForwardingDisabled: Bool, pin: Bool, paidMessageStars: Int64)
         case edit(PresentationGroupCall)
     }
     
@@ -1107,6 +1116,7 @@ public class LiveStreamSettingsScreen: ViewControllerComponentContainer {
         var isEdit: Bool
         var maxPaidMessageStars: Int64
         var sendAsPeerId: EnginePeer.Id?
+        var isCustomTarget: Bool
         var privacy: EngineStoryPrivacy
         var allowComments: Bool
         var isForwardingDisabled: Bool
@@ -1123,6 +1133,7 @@ public class LiveStreamSettingsScreen: ViewControllerComponentContainer {
             isEdit: Bool,
             maxPaidMessageStars: Int64,
             sendAsPeerId: EnginePeer.Id?,
+            isCustomTarget: Bool,
             privacy: EngineStoryPrivacy,
             allowComments: Bool,
             isForwardingDisabled: Bool,
@@ -1138,6 +1149,7 @@ public class LiveStreamSettingsScreen: ViewControllerComponentContainer {
             self.isEdit = isEdit
             self.maxPaidMessageStars = maxPaidMessageStars
             self.sendAsPeerId = sendAsPeerId
+            self.isCustomTarget = isCustomTarget
             self.privacy = privacy
             self.allowComments = allowComments
             self.isForwardingDisabled = isForwardingDisabled
@@ -1353,6 +1365,7 @@ public class LiveStreamSettingsScreen: ViewControllerComponentContainer {
                 let isEdit: Bool
                 let maxPaidMessageStars: Int64 = 10000
                 let sendAsPeerId: EnginePeer.Id?
+                let isCustomTarget: Bool
                 let privacy: EngineStoryPrivacy
                 let allowComments: Bool
                 let isForwardingDisabled: Bool
@@ -1362,6 +1375,7 @@ public class LiveStreamSettingsScreen: ViewControllerComponentContainer {
                 if let current = self.stateValue {
                     isEdit = current.isEdit
                     sendAsPeerId = current.sendAsPeerId
+                    isCustomTarget = current.isCustomTarget
                     privacy = current.privacy
                     allowComments = current.allowComments
                     isForwardingDisabled = current.isForwardingDisabled
@@ -1369,9 +1383,10 @@ public class LiveStreamSettingsScreen: ViewControllerComponentContainer {
                     paidMessageStars = current.paidMessageStars
                 } else {
                     switch mode {
-                    case let .create(sendAsPeerIdValue, privacyValue, allowCommentsValue, isForwardingDisabledValue, pinValue, paidMessageStarsValue):
+                    case let .create(sendAsPeerIdValue, isCustomTargetValue, privacyValue, allowCommentsValue, isForwardingDisabledValue, pinValue, paidMessageStarsValue):
                         isEdit = false
                         sendAsPeerId = sendAsPeerIdValue
+                        isCustomTarget = isCustomTargetValue
                         privacy = privacyValue
                         allowComments = allowCommentsValue
                         isForwardingDisabled = isForwardingDisabledValue
@@ -1381,6 +1396,7 @@ public class LiveStreamSettingsScreen: ViewControllerComponentContainer {
                         let _ = call
                         isEdit = true
                         sendAsPeerId = nil
+                        isCustomTarget = false
                         privacy = EngineStoryPrivacy(base: .everyone, additionallyIncludePeers: [])
                         allowComments = true
                         isForwardingDisabled = false
@@ -1393,6 +1409,7 @@ public class LiveStreamSettingsScreen: ViewControllerComponentContainer {
                     isEdit: isEdit,
                     maxPaidMessageStars: maxPaidMessageStars,
                     sendAsPeerId: sendAsPeerId,
+                    isCustomTarget: isCustomTarget,
                     privacy: privacy,
                     allowComments: allowComments,
                     isForwardingDisabled: isForwardingDisabled,
