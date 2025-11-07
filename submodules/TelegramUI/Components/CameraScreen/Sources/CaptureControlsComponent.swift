@@ -12,6 +12,7 @@ import AccountContext
 import GlassBackgroundComponent
 import GlassBarButtonComponent
 import BundleIconComponent
+import ActivityIndicator
 
 enum ShutterButtonState: Equatable {
     case disabled
@@ -20,7 +21,7 @@ enum ShutterButtonState: Equatable {
     case stopRecording
     case holdRecording(progress: Float)
     case transition
-    case live(active: Bool)
+    case live(active: Bool, progress: Bool)
 }
 
 private let maximumShutterSize = CGSize(width: 96.0, height: 96.0)
@@ -109,6 +110,7 @@ private final class ShutterButtonContentComponent: Component {
         
         private let chromeView = UIImageView()
         private let label = ComponentView<Empty>()
+        private var activityIndicator: ActivityIndicator?
         
         private let checkLayer = SimpleLayer()
         private let checkLayerMask = SimpleShapeLayer()
@@ -274,6 +276,7 @@ private final class ShutterButtonContentComponent: Component {
             var chromeAlpha: CGFloat = 0.0
             var chromeSize = CGSize(width: 60.0, height: 60.0)
             var labelAlpha: CGFloat = 0.0
+            var hasProgress = false
             switch component.shutterState {
             case .generic, .disabled:
                 innerColor = component.tintColor
@@ -297,14 +300,15 @@ private final class ShutterButtonContentComponent: Component {
                 innerSize = CGSize(width: 60.0, height: 60.0)
                 ringSize = CGSize(width: 68.0, height: 68.0)
                 recordingProgress = 0.0
-            case .live:
+            case let .live(_, progress):
                 innerColor = UIColor(rgb: 0xff375f)
                 innerSize = CGSize(width: 52.0, height: 52.0)
                 ringSize = CGSize(width: 60.0, height: 60.0)
                 glassAlpha = 0.0
                 chromeAlpha = 0.65
-                labelAlpha = 1.0
+                labelAlpha = progress ? 0.0 : 1.0
                 chromeSize = CGSize(width: 326.0, height: 53.0 - UIScreenPixel)
+                hasProgress = progress
             }
             
             if component.collageProgress > 1.0 - .ulpOfOne {
@@ -328,6 +332,30 @@ private final class ShutterButtonContentComponent: Component {
                     }
                 }
                 transition.setAlpha(view: labelView, alpha: labelAlpha)
+            }
+            
+            if hasProgress {
+                let activityIndicator: ActivityIndicator
+                var activityIndicatorTransition = transition
+                if let current = self.activityIndicator {
+                    activityIndicator = current
+                } else {
+                    activityIndicatorTransition = .immediate
+                    activityIndicator = ActivityIndicator(type: .custom(.white, 22.0, 2.0, true))
+                    activityIndicator.view.alpha = 0.0
+                    self.activityIndicator = activityIndicator
+                    self.addSubview(activityIndicator.view)
+                }
+                let indicatorSize = CGSize(width: 22.0, height: 22.0)
+                transition.setAlpha(view: activityIndicator.view, alpha: 1.0)
+                
+                let indicatorFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((maximumShutterSize.width - indicatorSize.width) / 2.0), y: floorToScreenPixels((maximumShutterSize.height - indicatorSize.height) / 2.0)), size: indicatorSize)
+                activityIndicatorTransition.setFrame(view: activityIndicator.view, frame: indicatorFrame)
+            } else if let activityIndicator = self.activityIndicator {
+                self.activityIndicator = nil
+                transition.setAlpha(view: activityIndicator.view, alpha: 0.0, completion: { [weak activityIndicator] _ in
+                    activityIndicator?.view.removeFromSuperview()
+                })
             }
             
             let buttonFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((maximumShutterSize.width - chromeSize.width) / 2.0), y: floorToScreenPixels((maximumShutterSize.height - chromeSize.height) / 2.0)), size: chromeSize)
@@ -1182,7 +1210,7 @@ final class CaptureControlsComponent: Component {
                 isHolding = true
             } else if case .transition = component.shutterState {
                 isTransitioning = true
-            } else if case let .live(active) = component.shutterState {
+            } else if case let .live(active, _) = component.shutterState {
                 isLiveStream = true
                 isLiveActive = active
             }

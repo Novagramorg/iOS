@@ -3,7 +3,6 @@ import UIKit
 import SwiftSignalKit
 import TelegramCore
 import TelegramUIPreferences
-import MediaEditor
 
 public final class MediaEditorStoredTextSettings: Codable {
     private enum CodingKeys: String, CodingKey {
@@ -111,7 +110,7 @@ public final class MediaEditorStoredState: Codable {
     }
 }
 
-func mediaEditorStoredState(engine: TelegramEngine) -> Signal<MediaEditorStoredState?, NoError> {
+public func mediaEditorStoredState(engine: TelegramEngine) -> Signal<MediaEditorStoredState?, NoError> {
     let key = EngineDataBuffer(length: 4)
     key.setInt32(0, value: 0)
     
@@ -121,7 +120,7 @@ func mediaEditorStoredState(engine: TelegramEngine) -> Signal<MediaEditorStoredS
     }
 }
 
-func updateMediaEditorStoredStateInteractively(engine: TelegramEngine, _ f: @escaping (MediaEditorStoredState?) -> MediaEditorStoredState?) -> Signal<Never, NoError> {
+public func updateMediaEditorStoredStateInteractively(engine: TelegramEngine, _ f: @escaping (MediaEditorStoredState?) -> MediaEditorStoredState?) -> Signal<Never, NoError> {
     let key = EngineDataBuffer(length: 4)
     key.setInt32(0, value: 0)
     

@@ -24,6 +24,9 @@ final class CameraLiveStreamComponent: Component {
     let safeInsets: UIEdgeInsets
     let metrics: LayoutMetrics
     let deviceMetrics: DeviceMetrics
+    let presentController: (ViewController, Any?) -> Void
+    let presentInGlobalOverlay: (ViewController, Any?) -> Void
+    let getController: () -> ViewController?
     let didSetupMediaStream: (PresentationGroupCall) -> Void
     
     init(
@@ -37,6 +40,9 @@ final class CameraLiveStreamComponent: Component {
         safeInsets: UIEdgeInsets,
         metrics: LayoutMetrics,
         deviceMetrics: DeviceMetrics,
+        presentController: @escaping (ViewController, Any?) -> Void,
+        presentInGlobalOverlay: @escaping (ViewController, Any?) -> Void,
+        getController: @escaping () -> ViewController?,
         didSetupMediaStream: @escaping (PresentationGroupCall) -> Void
     ) {
         self.context = context
@@ -49,6 +55,9 @@ final class CameraLiveStreamComponent: Component {
         self.safeInsets = safeInsets
         self.metrics = metrics
         self.deviceMetrics = deviceMetrics
+        self.presentController = presentController
+        self.presentInGlobalOverlay = presentInGlobalOverlay
+        self.getController = getController
         self.didSetupMediaStream = didSetupMediaStream
     }
     
@@ -121,6 +130,14 @@ final class CameraLiveStreamComponent: Component {
             }
             return nil
         }
+        
+        override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+            let result = super.hitTest(point, with: event)
+            if result === self {
+                return nil
+            }
+            return result
+        }
                 
         func update(component: CameraLiveStreamComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<EnvironmentType>, transition: ComponentTransition) -> CGSize {
             self.component = component
@@ -180,21 +197,17 @@ final class CameraLiveStreamComponent: Component {
                             isPanning: false,
                             isCentral: true,
                             pinchState: nil,
-                            presentController: { c, a in
-                                //                            guard let self, let environment = self.environment else {
-                                //                                return
-                                //                            }
-                                //                            if c is UndoOverlayController || c is TooltipScreen {
-                                //                                environment.controller()?.present(c, in: .current)
-                                //                            } else {
-                                //                                environment.controller()?.present(c, in: .window(.root), with: a)
-                                //                            }
+                            presentController: { [weak self] c, a in
+                                guard let self, let component = self.component else {
+                                    return
+                                }
+                                component.presentController(c, a)
                             },
-                            presentInGlobalOverlay: { c, a in
-                                //                            guard let self, let environment = self.environment else {
-                                //                                return
-                                //                            }
-                                //                            environment.controller()?.presentInGlobalOverlay(c, with: a)
+                            presentInGlobalOverlay: { [weak self] c, a in
+                                guard let self, let component = self.component else {
+                                    return
+                                }
+                                component.presentInGlobalOverlay(c, a)
                             },
                             close: {
                             },
@@ -210,8 +223,11 @@ final class CameraLiveStreamComponent: Component {
                             },
                             addToFolder: { _ in
                             },
-                            controller: {
-                                return nil //self?.environment?.controller()
+                            controller: { [weak self] in
+                                guard let self, let component = self.component else {
+                                    return nil
+                                }
+                                return component.getController()
                             },
                             toggleAmbientMode: {
                             },
@@ -312,6 +328,58 @@ public final class StreamAsComponent: Component {
             fatalError("init(coder:) has not been implemented")
         }
         
+        var scheduledAnimateIn: ComponentTransition?
+        func animateIn(transition: ComponentTransition) {
+            if self.peer == nil {
+                self.scheduledAnimateIn = transition
+                self.alpha = 0.0
+                return
+            }
+            self.alpha = 1.0
+            
+            transition.animateAlpha(view: self.avatarNode.view, from: 0.0, to: 1.0)
+            transition.animateScale(view: self.avatarNode.view, from: 0.01, to: 1.0)
+            
+            let offset: CGFloat = 24.0
+            if let titleView = self.title.view {
+                transition.animateAlpha(view: titleView, from: 0.0, to: 1.0)
+                transition.animatePosition(view: titleView, from: CGPoint(x: -titleView.bounds.width / 2.0 - offset, y: self.bounds.height / 2.0 - titleView.center.y), to: .zero, additive: true)
+                transition.animateScale(view: titleView, from: 0.01, to: 1.0)
+            }
+            if let subtitleView = self.subtitle.view {
+                transition.animateAlpha(view: subtitleView, from: 0.0, to: 1.0)
+                transition.animatePosition(view: subtitleView, from: CGPoint(x: -subtitleView.bounds.width / 2.0 - offset, y: self.bounds.height / 2.0 - subtitleView.center.y), to: .zero, additive: true)
+                transition.animateScale(view: subtitleView, from: 0.01, to: 1.0)
+                
+                transition.animateAlpha(view: self.arrow, from: 0.0, to: 1.0)
+                transition.animatePosition(view: self.arrow, from: CGPoint(x: -subtitleView.bounds.width / 2.0 - offset - 16.0, y: self.bounds.height / 2.0 - self.arrow.center.y), to: .zero, additive: true)
+                transition.animateScale(view: self.arrow, from: 0.01, to: 1.0)
+            }
+        }
+        
+        func animateOut(transition: ComponentTransition, completion: @escaping () -> Void) {
+            transition.setAlpha(view: self.avatarNode.view, alpha: 0.0, completion: { _ in
+                completion()
+            })
+            transition.setScale(view: self.avatarNode.view, scale: 0.01)
+            
+            let offset: CGFloat = 24.0
+            if let titleView = self.title.view {
+                transition.setAlpha(view: titleView, alpha: 0.0)
+                transition.setPosition(view: titleView, position: titleView.center.offsetBy(dx: -titleView.bounds.width / 2.0 - offset, dy: self.bounds.height / 2.0 - titleView.center.y))
+                transition.setScale(view: titleView, scale: 0.01)
+            }
+            if let subtitleView = self.subtitle.view {
+                transition.setAlpha(view: subtitleView, alpha: 0.0)
+                transition.setPosition(view: subtitleView, position: subtitleView.center.offsetBy(dx: -subtitleView.bounds.width / 2.0 - offset, dy: self.bounds.height / 2.0 - subtitleView.center.y))
+                transition.setScale(view: subtitleView, scale: 0.01)
+                
+                transition.setAlpha(view: self.arrow, alpha: 0.0)
+                transition.setPosition(view: self.arrow, position: self.arrow.center.offsetBy(dx: -subtitleView.bounds.width / 2.0 - offset - 16.0, dy: self.bounds.height / 2.0 - self.arrow.center.y))
+                transition.setScale(view: self.arrow, scale: 0.01)
+            }
+        }
+        
         public func update(component: StreamAsComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
             self.component = component
             self.state = state
@@ -324,6 +392,11 @@ public final class StreamAsComponent: Component {
                     }
                     self.peer = peer
                     self.state?.updated()
+                    
+                    if let scheduledAnimateIn = self.scheduledAnimateIn {
+                        self.scheduledAnimateIn = nil
+                        self.animateIn(transition: scheduledAnimateIn)
+                    }
                 })
             }
             

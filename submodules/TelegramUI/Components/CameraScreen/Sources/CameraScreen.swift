@@ -30,6 +30,7 @@ import TelegramVoip
 import TelegramCallsUI
 import GlassBarButtonComponent
 import PlainButtonComponent
+import StoryContainerScreen
 
 let videoRedColor = UIColor(rgb: 0xff3b30)
 let collageGrids: [Camera.CollageGrid] = [
@@ -87,53 +88,58 @@ struct CameraState: Equatable {
     let collageGrid: Camera.CollageGrid
     let collageProgress: Float
     let isStreaming: Bool
+    let isWaitingForStream: Bool
     
     func updatedMode(_ mode: CameraMode) -> CameraState {
-        return CameraState(mode: mode, position: self.position, flashMode: self.flashMode, flashModeDidChange: self.flashModeDidChange, flashTint: self.flashTint, flashTintSize: self.flashTintSize, recording: self.recording, duration: self.duration, isDualCameraEnabled: self.isDualCameraEnabled, isCollageEnabled: self.isCollageEnabled, collageGrid: self.collageGrid, collageProgress: self.collageProgress, isStreaming: self.isStreaming)
+        return CameraState(mode: mode, position: self.position, flashMode: self.flashMode, flashModeDidChange: self.flashModeDidChange, flashTint: self.flashTint, flashTintSize: self.flashTintSize, recording: self.recording, duration: self.duration, isDualCameraEnabled: self.isDualCameraEnabled, isCollageEnabled: self.isCollageEnabled, collageGrid: self.collageGrid, collageProgress: self.collageProgress, isStreaming: self.isStreaming, isWaitingForStream: self.isWaitingForStream)
     }
     
     func updatedPosition(_ position: Camera.Position) -> CameraState {
-        return CameraState(mode: self.mode, position: position, flashMode: self.flashMode, flashModeDidChange: self.flashModeDidChange, flashTint: self.flashTint, flashTintSize: self.flashTintSize, recording: self.recording, duration: self.duration, isDualCameraEnabled: self.isDualCameraEnabled, isCollageEnabled: self.isCollageEnabled, collageGrid: self.collageGrid, collageProgress: self.collageProgress, isStreaming: self.isStreaming)
+        return CameraState(mode: self.mode, position: position, flashMode: self.flashMode, flashModeDidChange: self.flashModeDidChange, flashTint: self.flashTint, flashTintSize: self.flashTintSize, recording: self.recording, duration: self.duration, isDualCameraEnabled: self.isDualCameraEnabled, isCollageEnabled: self.isCollageEnabled, collageGrid: self.collageGrid, collageProgress: self.collageProgress, isStreaming: self.isStreaming, isWaitingForStream: self.isWaitingForStream)
     }
     
     func updatedFlashMode(_ flashMode: Camera.FlashMode) -> CameraState {
-        return CameraState(mode: self.mode, position: self.position, flashMode: flashMode, flashModeDidChange: self.flashMode != flashMode, flashTint: self.flashTint, flashTintSize: self.flashTintSize, recording: self.recording, duration: self.duration, isDualCameraEnabled: self.isDualCameraEnabled, isCollageEnabled: self.isCollageEnabled, collageGrid: self.collageGrid, collageProgress: self.collageProgress, isStreaming: self.isStreaming)
+        return CameraState(mode: self.mode, position: self.position, flashMode: flashMode, flashModeDidChange: self.flashMode != flashMode, flashTint: self.flashTint, flashTintSize: self.flashTintSize, recording: self.recording, duration: self.duration, isDualCameraEnabled: self.isDualCameraEnabled, isCollageEnabled: self.isCollageEnabled, collageGrid: self.collageGrid, collageProgress: self.collageProgress, isStreaming: self.isStreaming, isWaitingForStream: self.isWaitingForStream)
     }
     
     func updatedFlashTint(_ flashTint: FlashTint) -> CameraState {
-        return CameraState(mode: self.mode, position: self.position, flashMode: self.flashMode, flashModeDidChange: self.flashModeDidChange, flashTint: flashTint, flashTintSize: self.flashTintSize, recording: self.recording, duration: self.duration, isDualCameraEnabled: self.isDualCameraEnabled, isCollageEnabled: self.isCollageEnabled, collageGrid: self.collageGrid, collageProgress: self.collageProgress, isStreaming: self.isStreaming)
+        return CameraState(mode: self.mode, position: self.position, flashMode: self.flashMode, flashModeDidChange: self.flashModeDidChange, flashTint: flashTint, flashTintSize: self.flashTintSize, recording: self.recording, duration: self.duration, isDualCameraEnabled: self.isDualCameraEnabled, isCollageEnabled: self.isCollageEnabled, collageGrid: self.collageGrid, collageProgress: self.collageProgress, isStreaming: self.isStreaming, isWaitingForStream: self.isWaitingForStream)
     }
     
     func updatedFlashTintSize(_ size: CGFloat) -> CameraState {
-        return CameraState(mode: self.mode, position: self.position, flashMode: self.flashMode, flashModeDidChange: self.flashModeDidChange, flashTint: self.flashTint, flashTintSize: size, recording: self.recording, duration: self.duration, isDualCameraEnabled: self.isDualCameraEnabled, isCollageEnabled: self.isCollageEnabled, collageGrid: self.collageGrid, collageProgress: self.collageProgress, isStreaming: self.isStreaming)
+        return CameraState(mode: self.mode, position: self.position, flashMode: self.flashMode, flashModeDidChange: self.flashModeDidChange, flashTint: self.flashTint, flashTintSize: size, recording: self.recording, duration: self.duration, isDualCameraEnabled: self.isDualCameraEnabled, isCollageEnabled: self.isCollageEnabled, collageGrid: self.collageGrid, collageProgress: self.collageProgress, isStreaming: self.isStreaming, isWaitingForStream: self.isWaitingForStream)
     }
     
     func updatedRecording(_ recording: Recording) -> CameraState {
-        return CameraState(mode: self.mode, position: self.position, flashMode: self.flashMode, flashModeDidChange: self.flashModeDidChange, flashTint: self.flashTint, flashTintSize: self.flashTintSize, recording: recording, duration: self.duration, isDualCameraEnabled: self.isDualCameraEnabled, isCollageEnabled: self.isCollageEnabled, collageGrid: self.collageGrid, collageProgress: self.collageProgress, isStreaming: self.isStreaming)
+        return CameraState(mode: self.mode, position: self.position, flashMode: self.flashMode, flashModeDidChange: self.flashModeDidChange, flashTint: self.flashTint, flashTintSize: self.flashTintSize, recording: recording, duration: self.duration, isDualCameraEnabled: self.isDualCameraEnabled, isCollageEnabled: self.isCollageEnabled, collageGrid: self.collageGrid, collageProgress: self.collageProgress, isStreaming: self.isStreaming, isWaitingForStream: self.isWaitingForStream)
     }
     
     func updatedDuration(_ duration: Double) -> CameraState {
-        return CameraState(mode: self.mode, position: self.position, flashMode: self.flashMode, flashModeDidChange: self.flashModeDidChange, flashTint: self.flashTint, flashTintSize: self.flashTintSize, recording: self.recording, duration: duration, isDualCameraEnabled: self.isDualCameraEnabled, isCollageEnabled: self.isCollageEnabled, collageGrid: self.collageGrid, collageProgress: self.collageProgress, isStreaming: self.isStreaming)
+        return CameraState(mode: self.mode, position: self.position, flashMode: self.flashMode, flashModeDidChange: self.flashModeDidChange, flashTint: self.flashTint, flashTintSize: self.flashTintSize, recording: self.recording, duration: duration, isDualCameraEnabled: self.isDualCameraEnabled, isCollageEnabled: self.isCollageEnabled, collageGrid: self.collageGrid, collageProgress: self.collageProgress, isStreaming: self.isStreaming, isWaitingForStream: self.isWaitingForStream)
     }
     
     func updatedIsDualCameraEnabled(_ isDualCameraEnabled: Bool) -> CameraState {
-        return CameraState(mode: self.mode, position: self.position, flashMode: self.flashMode, flashModeDidChange: self.flashModeDidChange, flashTint: self.flashTint, flashTintSize: self.flashTintSize, recording: self.recording, duration: self.duration, isDualCameraEnabled: isDualCameraEnabled, isCollageEnabled: self.isCollageEnabled, collageGrid: self.collageGrid, collageProgress: self.collageProgress, isStreaming: self.isStreaming)
+        return CameraState(mode: self.mode, position: self.position, flashMode: self.flashMode, flashModeDidChange: self.flashModeDidChange, flashTint: self.flashTint, flashTintSize: self.flashTintSize, recording: self.recording, duration: self.duration, isDualCameraEnabled: isDualCameraEnabled, isCollageEnabled: self.isCollageEnabled, collageGrid: self.collageGrid, collageProgress: self.collageProgress, isStreaming: self.isStreaming, isWaitingForStream: self.isWaitingForStream)
     }
     
     func updatedIsCollageEnabled(_ isCollageEnabled: Bool) -> CameraState {
-        return CameraState(mode: self.mode, position: self.position, flashMode: self.flashMode, flashModeDidChange: self.flashModeDidChange, flashTint: self.flashTint, flashTintSize: self.flashTintSize, recording: self.recording, duration: self.duration, isDualCameraEnabled: self.isDualCameraEnabled, isCollageEnabled: isCollageEnabled, collageGrid: self.collageGrid, collageProgress: self.collageProgress, isStreaming: self.isStreaming)
+        return CameraState(mode: self.mode, position: self.position, flashMode: self.flashMode, flashModeDidChange: self.flashModeDidChange, flashTint: self.flashTint, flashTintSize: self.flashTintSize, recording: self.recording, duration: self.duration, isDualCameraEnabled: self.isDualCameraEnabled, isCollageEnabled: isCollageEnabled, collageGrid: self.collageGrid, collageProgress: self.collageProgress, isStreaming: self.isStreaming, isWaitingForStream: self.isWaitingForStream)
     }
     
     func updatedCollageGrid(_ collageGrid: Camera.CollageGrid) -> CameraState {
-        return CameraState(mode: self.mode, position: self.position, flashMode: self.flashMode, flashModeDidChange: self.flashModeDidChange, flashTint: self.flashTint, flashTintSize: self.flashTintSize, recording: self.recording, duration: self.duration, isDualCameraEnabled: self.isDualCameraEnabled, isCollageEnabled: self.isCollageEnabled, collageGrid: collageGrid, collageProgress: self.collageProgress, isStreaming: self.isStreaming)
+        return CameraState(mode: self.mode, position: self.position, flashMode: self.flashMode, flashModeDidChange: self.flashModeDidChange, flashTint: self.flashTint, flashTintSize: self.flashTintSize, recording: self.recording, duration: self.duration, isDualCameraEnabled: self.isDualCameraEnabled, isCollageEnabled: self.isCollageEnabled, collageGrid: collageGrid, collageProgress: self.collageProgress, isStreaming: self.isStreaming, isWaitingForStream: self.isWaitingForStream)
     }
     
     func updatedCollageProgress(_ collageProgress: Float) -> CameraState {
-        return CameraState(mode: self.mode, position: self.position, flashMode: self.flashMode, flashModeDidChange: self.flashModeDidChange, flashTint: self.flashTint, flashTintSize: self.flashTintSize, recording: self.recording, duration: self.duration, isDualCameraEnabled: self.isDualCameraEnabled, isCollageEnabled: self.isCollageEnabled, collageGrid: self.collageGrid, collageProgress: collageProgress, isStreaming: self.isStreaming)
+        return CameraState(mode: self.mode, position: self.position, flashMode: self.flashMode, flashModeDidChange: self.flashModeDidChange, flashTint: self.flashTint, flashTintSize: self.flashTintSize, recording: self.recording, duration: self.duration, isDualCameraEnabled: self.isDualCameraEnabled, isCollageEnabled: self.isCollageEnabled, collageGrid: self.collageGrid, collageProgress: collageProgress, isStreaming: self.isStreaming, isWaitingForStream: self.isWaitingForStream)
     }
     
     func updatedIsStreaming(_ isStreaming: Bool) -> CameraState {
-        return CameraState(mode: self.mode, position: self.position, flashMode: self.flashMode, flashModeDidChange: self.flashModeDidChange, flashTint: self.flashTint, flashTintSize: self.flashTintSize, recording: self.recording, duration: self.duration, isDualCameraEnabled: self.isDualCameraEnabled, isCollageEnabled: self.isCollageEnabled, collageGrid: self.collageGrid, collageProgress: self.collageProgress, isStreaming: isStreaming)
+        return CameraState(mode: self.mode, position: self.position, flashMode: self.flashMode, flashModeDidChange: self.flashModeDidChange, flashTint: self.flashTint, flashTintSize: self.flashTintSize, recording: self.recording, duration: self.duration, isDualCameraEnabled: self.isDualCameraEnabled, isCollageEnabled: self.isCollageEnabled, collageGrid: self.collageGrid, collageProgress: self.collageProgress, isStreaming: isStreaming, isWaitingForStream: self.isWaitingForStream)
+    }
+    
+    func updatedIsWaitingForStream(_ isWaitingForStream: Bool) -> CameraState {
+        return CameraState(mode: self.mode, position: self.position, flashMode: self.flashMode, flashModeDidChange: self.flashModeDidChange, flashTint: self.flashTint, flashTintSize: self.flashTintSize, recording: self.recording, duration: self.duration, isDualCameraEnabled: self.isDualCameraEnabled, isCollageEnabled: self.isCollageEnabled, collageGrid: self.collageGrid, collageProgress: self.collageProgress, isStreaming: self.isStreaming, isWaitingForStream: isWaitingForStream)
     }
 }
 
@@ -314,6 +320,7 @@ private final class CameraScreenComponent: CombinedComponent {
         private var paidMessageStars: Int64 = 0
         
         private(set) var liveStreamStory: EngineStoryItem?
+        private(set) var liveStreamContent: StoryContentContext?
         private weak var liveStreamCall: PresentationGroupCall?
         private var liveStreamVideoCapturer: OngoingCallVideoCapturer?
         private var liveStreamVideoDisposable: Disposable?
@@ -371,6 +378,13 @@ private final class CameraScreenComponent: CombinedComponent {
                     self.sendAsPeerId = customTarget
                     self.isCustomTarget = true
                 }
+                
+                let _ = (mediaEditorStoredState(engine: self.context.engine)
+                |> deliverOnMainQueue).start(next: { [weak self] state in
+                    if let self, let privacy = state?.privacy {
+                        self.privacy = privacy.privacy
+                    }
+                })
             }
         }
         
@@ -1082,13 +1096,23 @@ private final class CameraScreenComponent: CombinedComponent {
                     controller.node.pauseCameraCapture()
                 }
                 
-                let _ = (self.context.engine.messages.beginStoryLivestream(peerId: peerId, rtmp: rtmp, privacy: self.privacy, isForwardingDisabled: self.isForwardingDisabled, messagesEnabled: self.allowComments, sendPaidMessageStars: self.paidMessageStars)
+                controller.updateCameraState({ $0.updatedIsWaitingForStream(true) }, transition: .spring(duration: 0.4))
+                
+                let _ = (self.context.engine.messages.beginStoryLivestream(
+                    peerId: peerId,
+                    rtmp: rtmp,
+                    privacy: self.privacy,
+                    isForwardingDisabled: self.isForwardingDisabled,
+                    messagesEnabled: self.allowComments,
+                    sendPaidMessageStars: self.paidMessageStars
+                )
                 |> deliverOnMainQueue).start(next: { [weak self, weak controller] story in
                     guard let self else {
                         return
                     }
                     self.liveStreamStory = story
-                    controller?.updateCameraState({ $0.updatedIsStreaming(true) }, transition: .spring(duration: 0.4))
+                    
+                    controller?.updateCameraState({ $0.updatedIsStreaming(true).updatedIsWaitingForStream(false) }, transition: .spring(duration: 0.4))
                     self.updated(transition: .immediate)
                 })
             }
@@ -1148,13 +1172,13 @@ private final class CameraScreenComponent: CombinedComponent {
                                 return
                             }
                             let _ = self.liveStreamCall?.leave(terminateIfPossible: true).startStandalone()
-                            controller.dismiss(animated: true)
+                            controller.requestDismiss(animated: true)
                         }),
                         TextAlertAction(type: .genericAction, title: "Leave", action: { [weak controller] in
                             guard let controller else {
                                 return
                             }
-                            controller.dismiss(animated: true)
+                            controller.requestDismiss(animated: true)
                         }),
                         TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_Cancel, action: {})
                     ],
@@ -1175,7 +1199,7 @@ private final class CameraScreenComponent: CombinedComponent {
                                 return
                             }
                             let _ = self.liveStreamCall?.leave(terminateIfPossible: true).startStandalone()
-                            controller.dismiss(animated: true)
+                            controller.requestDismiss(animated: true)
                         })
                     ]
                 )
@@ -1184,14 +1208,18 @@ private final class CameraScreenComponent: CombinedComponent {
         }
         
         func setupLiveStreamCamera(call: PresentationGroupCall) {
-            guard self.liveStreamVideoCapturer == nil, let call = call as? PresentationGroupCallImpl, let controller = self.getController() else {
+            guard self.liveStreamVideoCapturer == nil, let call = call as? PresentationGroupCallImpl, let controller = self.getController(), let cameraState = self.cameraState else {
                 return
             }
             self.liveStreamCall = call
-            
-            call.setIsMuted(action: .unmuted)
-            
+                        
             let liveStreamMediaSource = controller.node.liveStreamMediaSource
+            liveStreamMediaSource.setup(
+                isDualCameraEnabled: cameraState.isDualCameraEnabled,
+                dualCameraPosition: controller.node.pipPosition,
+                position: cameraState.position
+            )
+            
             let videoCapturer = OngoingCallVideoCapturer(keepLandscape: false, isCustom: true)
             self.liveStreamVideoCapturer = videoCapturer
             
@@ -1203,8 +1231,9 @@ private final class CameraScreenComponent: CombinedComponent {
                     videoCapturer.injectSampleBuffer(sampleBuffer, rotation: .up, completion: {})
                 }
             }
-            Queue.mainQueue().after(1.0) {
+            Queue.mainQueue().after(0.1) {
                 call.requestVideo(capturer: videoCapturer, useFrontCamera: false)
+                call.setIsMuted(action: .unmuted)
             }
         }
         
@@ -1390,7 +1419,7 @@ private final class CameraScreenComponent: CombinedComponent {
                     case .video:
                         shutterState = .video
                     case .live:
-                        shutterState = .live(active: component.cameraState.isStreaming)
+                        shutterState = .live(active: component.cameraState.isStreaming, progress: component.cameraState.isWaitingForStream)
                     }
                 }
             }
@@ -1527,6 +1556,24 @@ private final class CameraScreenComponent: CombinedComponent {
                         safeInsets: environment.safeInsets,
                         metrics: environment.metrics,
                         deviceMetrics: environment.deviceMetrics,
+                        presentController: { c, a in
+                            if let controller = controller() {
+                                if c is UndoOverlayController || c is TooltipScreen {
+                                    controller.present(c, in: .current, with: a)
+                                } else {
+                                    controller.present(c, in: .window(.root), with: a)
+                                }
+                            }
+                        },
+                        presentInGlobalOverlay: { c, a in
+                            if let controller = controller() {
+                                controller.presentInGlobalOverlay(c, with: a)
+                            }
+                        },
+                        getController: {
+                            return nil
+                            //return controller()
+                        },
                         didSetupMediaStream: { [weak state] call in
                             state?.setupLiveStreamCamera(call: call)
                         }
@@ -1568,8 +1615,18 @@ private final class CameraScreenComponent: CombinedComponent {
                 )
                 context.add(streamAsButton
                     .position(CGPoint(x: topControlSideInset + streamAsButton.size.width / 2.0 + 7.0, y: max(environment.statusBarHeight + 5.0, environment.safeInsets.top + topControlVerticalInset) + streamAsButton.size.height / 2.0 + 4.0))
-                    .appear(.default(scale: true))
-                    .disappear(.default(scale: true))
+                    .appear(ComponentTransition.Appear({ _, view, transition in
+                        if let buttonView = view as? PlainButtonComponent.View, let view = buttonView.contentView as? StreamAsComponent.View, !transition.animation.isImmediate {
+                            view.animateIn(transition: transition)
+                        }
+                    }))
+                    .disappear(ComponentTransition.Disappear({ view, transition, completion in
+                        if let buttonView = view as? PlainButtonComponent.View, let view = buttonView.contentView as? StreamAsComponent.View, !transition.animation.isImmediate {
+                            view.animateOut(transition: transition, completion: completion)
+                        } else {
+                            completion()
+                        }
+                    }))
                 )
             }
                         
@@ -2211,7 +2268,7 @@ public class CameraScreenImpl: ViewController, CameraScreen {
         fileprivate var collage: CameraCollage?
         private var collageStateDisposable: Disposable?
         
-        private var pipPosition: PIPPosition = .topRight
+        fileprivate var pipPosition: PIPPosition = .topRight
         
         fileprivate var previewBlurPromise = ValuePromise<Bool>(false)
         private let animateFlipAction = ActionSlot<Void>()
@@ -2294,6 +2351,7 @@ public class CameraScreenImpl: ViewController, CameraScreen {
                 
                 if isDualCameraEnabled && previousPosition != currentPosition {
                     self.animateDualCameraPositionSwitch()
+                    self._livestreamMediaSource?.markToggleCamera(position: currentPosition)
                 } else if dualCamWasEnabled != isDualCameraEnabled {
                     self.requestUpdateLayout(transition: .spring(duration: 0.4))
                     
@@ -2395,7 +2453,8 @@ public class CameraScreenImpl: ViewController, CameraScreen {
                 isCollageEnabled: false,
                 collageGrid: collageGrids[6],
                 collageProgress: 0.0,
-                isStreaming: false
+                isStreaming: false,
+                isWaitingForStream: false
             )
                         
             self.previewFrameLeftDimView = UIView()
@@ -2620,7 +2679,7 @@ public class CameraScreenImpl: ViewController, CameraScreen {
                         preset: .hd1920x1080,
                         position: self.cameraState.position,
                         isDualEnabled: self.cameraState.isDualCameraEnabled,
-                        audio: true,
+                        audio: false,
                         photo: true,
                         metadata: true
                     ),
@@ -2820,7 +2879,7 @@ public class CameraScreenImpl: ViewController, CameraScreen {
             case .began:
                 break
             case .changed:
-                if case .none = self.cameraState.recording {
+                if case .none = self.cameraState.recording, !self.cameraState.isStreaming && !self.cameraState.isWaitingForStream {
                     if case .compact = layout.metrics.widthClass {
                         switch controller.mode {
                         case .story:
@@ -2887,7 +2946,9 @@ public class CameraScreenImpl: ViewController, CameraScreen {
             }
             
             let location = gestureRecognizer.location(in: gestureRecognizer.view)
-            if self.cameraState.isDualCameraEnabled && self.additionalPreviewContainerView.frame.contains(location) {
+            if let layout = self.validLayout, let inputHeight = layout.inputHeight, inputHeight > 10.0 {
+                self.view.endEditing(true)
+            } else if self.cameraState.isDualCameraEnabled && self.additionalPreviewContainerView.frame.contains(location) {
                 self.toggleCameraPositionAction.invoke(Void())
             } else {
                 let location = gestureRecognizer.location(in: self.mainPreviewView)
@@ -2920,6 +2981,8 @@ public class CameraScreenImpl: ViewController, CameraScreen {
                 self.pipTranslation = nil
                 self.pipPosition = pipPositionForLocation(layout: layout, position: location, velocity: velocity)
                 self.containerLayoutUpdated(layout: layout, transition: .spring(duration: 0.4))
+                
+                self._livestreamMediaSource?.setDualCameraPosition(self.pipPosition)
                 
                 UserDefaults.standard.set(self.pipPosition.rawValue as NSNumber, forKey: "TelegramStoryCameraDualPosition")
             default:

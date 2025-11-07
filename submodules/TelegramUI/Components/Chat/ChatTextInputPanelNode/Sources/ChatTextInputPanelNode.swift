@@ -386,10 +386,12 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     }
     
     public enum LeftAction {
+        case empty
         case toggleExpanded(isVisible: Bool, isExpanded: Bool, hasUnseen: Bool)
     }
     
     public enum RightAction {
+        case empty
         case stars(count: Int, isFilled: Bool, action: (UIView) -> Void, longPressAction: ((UIView) -> Void)?)
     }
     
@@ -1749,7 +1751,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 
                 if let customLeftAction = self.customLeftAction {
                     switch customLeftAction {
-                    case .toggleExpanded:
+                    case .empty, .toggleExpanded:
                         self.attachmentButtonIcon.image = nil
                         self.attachmentButtonIcon.tintColor = interfaceState.theme.chat.inputPanel.panelControlColor
                     }
@@ -1787,10 +1789,9 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 }
                 
                 if wasEditingMedia != isEditingMedia || hadMediaDraft != hasMediaDraft || isFirstTime {
-                    
                     if let customLeftAction = self.customLeftAction {
                         switch customLeftAction {
-                        case .toggleExpanded:
+                        case .empty, .toggleExpanded:
                             self.attachmentButtonIcon.image = nil
                             self.attachmentButtonIcon.tintColor = interfaceState.theme.chat.inputPanel.panelControlColor
                         }
@@ -1943,6 +1944,8 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         
         if let customLeftAction = self.customLeftAction {
             switch customLeftAction {
+            case .empty:
+                break
             case let .toggleExpanded(_, isExpanded, hasUnseen):
                 let commentsButtonIcon: RasterizedCompositionMonochromeLayer
                 if let current = self.commentsButtonIcon {
@@ -2258,7 +2261,9 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         }
         if inputHasText || self.extendedSearchLayout || hasMediaDraft || hasForward {
         } else {
-            if let starReactionButtonSize {
+            if let customRightAction = self.customRightAction, case .empty = customRightAction {
+                textFieldInsets.right = 8.0
+            } else if let starReactionButtonSize {
                 textFieldInsets.right = 14.0 + starReactionButtonSize.width
             } else {
                 textFieldInsets.right = 54.0
@@ -2267,8 +2272,13 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         if mediaRecordingState != nil {
             textFieldInsets.left = 8.0
         }
-        if let customLeftAction = self.customLeftAction, case let .toggleExpanded(isVisible, _, _) = customLeftAction, !isVisible {
-            textFieldInsets.left = 8.0
+        if let customLeftAction = self.customLeftAction {
+            switch customLeftAction {
+            case .empty, .toggleExpanded(false, _, _):
+                textFieldInsets.left = 8.0
+            default:
+                break
+            }
         }
         
         var audioRecordingItemsAlpha: CGFloat = 1.0

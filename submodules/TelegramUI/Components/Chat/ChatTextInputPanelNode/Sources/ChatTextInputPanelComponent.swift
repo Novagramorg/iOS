@@ -57,6 +57,7 @@ public final class ChatTextInputPanelComponent: Component {
     
     public final class LeftAction: Equatable {
         public enum Kind: Equatable {
+            case empty
             case attach
             case toggleExpanded(isVisible: Bool, isExpanded: Bool, hasUnseen: Bool)
         }
@@ -79,6 +80,7 @@ public final class ChatTextInputPanelComponent: Component {
     
     public final class RightAction: Equatable {
         public enum Kind: Equatable {
+            case empty
             case stars(count: Int, isFilled: Bool)
         }
         
@@ -839,6 +841,8 @@ public final class ChatTextInputPanelComponent: Component {
             
             if let leftAction = component.leftAction {
                 switch leftAction.kind {
+                case .empty:
+                    panelNode.customLeftAction = .empty
                 case .attach:
                     panelNode.customLeftAction = nil
                 case let .toggleExpanded(isVisible, isExpanded, hasUnseen):
@@ -854,6 +858,8 @@ public final class ChatTextInputPanelComponent: Component {
             
             if let rightAction = component.rightAction {
                 switch rightAction.kind {
+                case .empty:
+                    panelNode.customRightAction = .empty
                 case let .stars(count, isFilled):
                     panelNode.customRightAction = .stars(count: count, isFilled: isFilled, action: { sourceView in
                         rightAction.action(sourceView)

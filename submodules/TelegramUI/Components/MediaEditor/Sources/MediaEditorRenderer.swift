@@ -21,19 +21,6 @@ public final class VideoPixelBuffer {
     }
 }
 
-final class RenderingContext {
-    let device: MTLDevice
-    let commandBuffer: MTLCommandBuffer
-    
-    init(
-        device: MTLDevice,
-        commandBuffer: MTLCommandBuffer
-    ) {
-        self.device = device
-        self.commandBuffer = commandBuffer
-    }
-}
-
 protocol RenderPass: AnyObject {
     func setup(device: MTLDevice, library: MTLLibrary)
     func process(input: MTLTexture, device: MTLDevice, commandBuffer: MTLCommandBuffer) -> MTLTexture?

@@ -35,6 +35,7 @@ final class StoryContentLiveChatComponent: Component {
     let call: PresentationGroupCall
     let storyPeerId: EnginePeer.Id
     let insets: UIEdgeInsets
+    let isEmbeddedInCamera: Bool
     let controller: () -> ViewController?
     
     init(
@@ -45,6 +46,7 @@ final class StoryContentLiveChatComponent: Component {
         call: PresentationGroupCall,
         storyPeerId: EnginePeer.Id,
         insets: UIEdgeInsets,
+        isEmbeddedInCamera: Bool,
         controller: @escaping () -> ViewController?
     ) {
         self.external = external
@@ -54,6 +56,7 @@ final class StoryContentLiveChatComponent: Component {
         self.call = call
         self.storyPeerId = storyPeerId
         self.insets = insets
+        self.isEmbeddedInCamera = isEmbeddedInCamera
         self.controller = controller
     }
 
@@ -77,6 +80,9 @@ final class StoryContentLiveChatComponent: Component {
             return false
         }
         if lhs.insets != rhs.insets {
+            return false
+        }
+        if lhs.isEmbeddedInCamera != rhs.isEmbeddedInCamera {
             return false
         }
         return true
@@ -253,6 +259,10 @@ final class StoryContentLiveChatComponent: Component {
                 } else {
                     return nil
                 }
+            }
+            
+            if let component = self.component, component.isEmbeddedInCamera && result === self.listContainer {
+                return nil
             }
             
             return result

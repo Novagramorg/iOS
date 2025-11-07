@@ -86,6 +86,7 @@ swift_library(
         "//submodules/UndoUI",
         "//submodules/ContextUI",
         "//submodules/AvatarNode",
+        "//submodules/ActivityIndicator",
         "//submodules/TelegramUI/Components/Utils/AnimatableProperty",
         "//submodules/TelegramUI/Components/GlassBackgroundComponent",
         "//submodules/TelegramUI/Components/GlassBarButtonComponent",
