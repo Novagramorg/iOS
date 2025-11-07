@@ -10646,7 +10646,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                     }
                     
                     if let rootController = self.context.sharedContext.mainWindow?.viewController as? TelegramRootControllerInterface {
-                        let coordinator = rootController.openStoryCamera(customTarget: self.peerId == self.context.account.peerId ? nil : .peer(self.peerId), transitionIn: cameraTransitionIn, transitionedIn: {}, transitionOut: self.storyCameraTransitionOut())
+                        let coordinator = rootController.openStoryCamera(customTarget: self.peerId == self.context.account.peerId ? nil : .peer(self.peerId), resumeLiveStream: false, transitionIn: cameraTransitionIn, transitionedIn: {}, transitionOut: self.storyCameraTransitionOut())
                         coordinator?.animateIn()
                     }
                 case .channelBoostRequired:
