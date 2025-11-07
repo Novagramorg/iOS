@@ -10,6 +10,7 @@ import AvatarNode
 import AccountContext
 import StarsParticleEffect
 import AppBundle
+import TextFormat
 
 private func generateStarsAmountImage() -> UIImage {
     return UIImage(bundleImageName: "Chat/Message/StarsCount")!.precomposed().withRenderingMode(.alwaysTemplate)
@@ -233,9 +234,36 @@ public final class StoryLiveChatMessageComponent: Component {
                 }
             }
             
-            let textString = NSMutableAttributedString()
+            var textString = NSAttributedString()
             if !component.message.text.isEmpty {
-                textString.append(NSAttributedString(string: component.message.text, font: Font.regular(15.0), textColor: primaryTextColor))
+                var underlineLinks = true
+                if !primaryTextColor.isEqual(component.theme.list.itemAccentColor) {
+                    underlineLinks = false
+                }
+                
+                let codeBlockTitleColor: UIColor
+                let codeBlockAccentColor: UIColor
+                let codeBlockBackgroundColor: UIColor
+                
+                codeBlockTitleColor = primaryTextColor
+                codeBlockAccentColor = component.theme.list.itemAccentColor
+                    
+                if component.theme.overallDarkAppearance {
+                    codeBlockBackgroundColor = UIColor(white: 0.0, alpha: 0.65)
+                } else {
+                    codeBlockBackgroundColor = UIColor(white: 0.0, alpha: 0.05)
+                }
+                
+                //let codeHighlightSpecs = extractMessageSyntaxHighlightSpecs(text: component.message.text, entities: component.message.entities)
+                
+                let textFont = Font.regular(15.0)
+                let messageBoldFont = Font.semibold(15.0)
+                let messageItalicFont = Font.italic(15.0)
+                let messageBoldItalicFont = Font.semiboldItalic(15.0)
+                let messageFixedFont = Font.monospace(15.0)
+                let messageBlockQuoteFont = Font.regular(14.0)
+                
+                textString = stringWithAppliedEntities(component.message.text, entities: component.message.entities, baseColor: primaryTextColor, linkColor: component.theme.list.itemAccentColor, baseQuoteTintColor: primaryTextColor, baseQuoteSecondaryTintColor: secondaryTextColor, baseQuoteTertiaryTintColor: secondaryTextColor, codeBlockTitleColor: codeBlockTitleColor, codeBlockAccentColor: codeBlockAccentColor, codeBlockBackgroundColor: codeBlockBackgroundColor, baseFont: textFont, linkFont: textFont, boldFont: messageBoldFont, italicFont: messageItalicFont, boldItalicFont: messageBoldItalicFont, fixedFont: messageFixedFont, blockQuoteFont: messageBlockQuoteFont, underlineLinks: underlineLinks, message: nil, adjustQuoteFontSize: true, cachedMessageSyntaxHighlight: nil)
             }
             
             var textTopLeftCutout: CGFloat = 0.0
@@ -333,7 +361,9 @@ public final class StoryLiveChatMessageComponent: Component {
                     text: .plain(textString),
                     maximumNumberOfLines: 0,
                     lineSpacing: 0.1,
-                    cutout: textCutout
+                    cutout: textCutout,
+                    handleSpoilers: true,
+                    manualVisibilityControl: true
                 )),
                 environment: {},
                 containerSize: CGSize(width: maxTextWidth, height: 100000.0)
@@ -394,13 +424,15 @@ public final class StoryLiveChatMessageComponent: Component {
                 textFrame.size.height = max(textFrame.height, authorTitleFrame.height)
             }
             textFrame.size.width = max(textFrame.width, textTopLeftCutout + (textBottomRightCutout ?? 0.0))
-            if let textView = self.text.view {
+            if let textView = self.text.view as? MultilineTextWithEntitiesComponent.View {
                 if textView.superview == nil {
                     textView.layer.anchorPoint = CGPoint()
                     self.extractedContainerNode.contentNode.view.addSubview(textView)
                 }
                 transition.setPosition(view: textView, position: textFrame.origin)
                 textView.bounds = CGRect(origin: CGPoint(), size: textSize)
+                
+                textView.updateVisibility(true)
             }
             
             if let crownIcon = self.crownIcon, let image = crownIcon.image {

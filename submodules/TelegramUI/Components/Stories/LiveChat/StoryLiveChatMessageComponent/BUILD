@@ -21,6 +21,7 @@ swift_library(
         "//submodules/AvatarNode",
         "//submodules/TelegramPresentationData",
         "//submodules/TelegramUI/Components/StarsParticleEffect",
+        "//submodules/TextFormat",
     ],
     visibility = [
         "//visibility:public",
