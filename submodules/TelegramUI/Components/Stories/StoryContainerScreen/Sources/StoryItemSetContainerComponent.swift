@@ -3012,7 +3012,16 @@ public final class StoryItemSetContainerComponent: Component {
                             }
                         }
                         
-                        sendAsConfiguration = self.sendMessageContext.currentSendAsPeer.flatMap { value in
+                        var sendAsPeer: SendAsPeer?
+                        if let currentSendAsPeer = self.sendMessageContext.currentSendAsPeer {
+                            sendAsPeer = currentSendAsPeer
+                        } else {
+                            sendAsPeer = liveChatStateValue.defaultSendAs.flatMap { defaultSendAs in
+                                return self.sendMessageContext.sendAsData?.availablePeers.first(where: { $0.peer.id == defaultSendAs })
+                            }
+                        }
+                        
+                        sendAsConfiguration = sendAsPeer.flatMap { value in
                             return MessageInputPanelComponent.SendAsConfiguration(
                                 currentPeer: EnginePeer(value.peer),
                                 subscriberCount: value.subscribers.flatMap(Int.init),
@@ -6325,102 +6334,109 @@ public final class StoryItemSetContainerComponent: Component {
                     return .complete()
                 }
                 
+                var isLiveStream = false
+                if case .liveStream = component.slice.item.storyItem.media {
+                    isLiveStream = true
+                }
+                
                 var items: [ContextMenuItem] = []
                 
-                items.append(.action(ContextMenuActionItem(text: component.strings.Stories_MenuAddToAlbum, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/AddToFolder"), color: theme.contextMenu.primaryColor) }, action: { [weak self] c, f in
-                    guard let self, let c else {
-                        f(.default)
-                        return
-                    }
-                    
-                    Task { @MainActor [weak self, weak c] in
-                        guard let self, let component = self.component, let peerId = component.slice.item.peerId, let c else {
+                if !isLiveStream {
+                    items.append(.action(ContextMenuActionItem(text: component.strings.Stories_MenuAddToAlbum, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/AddToFolder"), color: theme.contextMenu.primaryColor) }, action: { [weak self] c, f in
+                        guard let self, let c else {
+                            f(.default)
                             return
                         }
                         
-                        let (peerReference, folderPreviews) = await PeerStoryListContext.folderPreviews(peerId: peerId, account: component.context.account).get()
-                        
-                        var items: [ContextMenuItem] = []
-                        items.append(.action(ContextMenuActionItem(text: presentationData.strings.Common_Back, icon: { theme in
-                            return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Back"), color: theme.contextMenu.primaryColor)
-                        }, iconPosition: .left, action: { c ,f in
-                            c?.popItems()
-                        })))
-                        items.append(.separator)
-                        
-                        items.append(.action(ContextMenuActionItem(text: component.strings.Stories_MenuNewAlbum, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/AddFolder"), color: theme.contextMenu.primaryColor) }, iconPosition: .left, action: { [weak self] c, f in
-                            guard let self else {
-                                f(.default)
+                        Task { @MainActor [weak self, weak c] in
+                            guard let self, let component = self.component, let peerId = component.slice.item.peerId, let c else {
                                 return
                             }
                             
-                            c?.dismiss(completion: { [weak self] in
-                                guard let self, let component = self.component else {
-                                    return
-                                }
-                                self.presentAddStoryFolder(addItems: [component.slice.item.storyItem])
-                            })
-                        })))
-                        
-                        for folderPreview in folderPreviews {
-                            var iconSource: ContextMenuActionItemIconSource?
-                            if let story = folderPreview.item {
-                                var imageSignal: Signal<UIImage?, NoError>?
-                                
-                                var selectedMedia: Media?
-                                if let image = story.media._asMedia() as? TelegramMediaImage {
-                                    selectedMedia = image
-                                } else if let file = story.media._asMedia() as? TelegramMediaFile {
-                                    selectedMedia = file
-                                }
-                                
-                                if let selectedMedia {
-                                    let directMediaImageCache = DirectMediaImageCache(account: component.context.account)
-                                    if let result = directMediaImageCache.getImage(peer: peerReference, story: story, media: selectedMedia, width: 48, aspectRatio: 1.0, possibleWidths: [48], includeBlurred: false, synchronous: true) {
-                                        if let loadSignal = result.loadSignal {
-                                            imageSignal = .single(result.image) |> then(loadSignal)
-                                        } else {
-                                            imageSignal = .single(result.image)
-                                        }
-                                    }
-                                }
-                                
-                                if let imageSignal {
-                                    iconSource = ContextMenuActionItemIconSource(
-                                        size: CGSize(width: 24.0, height: 24.0),
-                                        cornerRadius: 5.0,
-                                        signal: imageSignal
-                                    )
-                                }
-                            }
+                            let (peerReference, folderPreviews) = await PeerStoryListContext.folderPreviews(peerId: peerId, account: component.context.account).get()
                             
-                            var icon: (PresentationTheme) -> UIImage? = { _ in nil }
-                            if iconSource == nil {
-                                icon = { theme in
-                                    return generateImage(CGSize(width: 24.0, height: 24.0), opaque: false, scale: nil, rotatedContext: { size, context in
-                                        context.clear(CGRect(origin: CGPoint(), size: size))
-                                        context.setFillColor(theme.contextMenu.primaryColor.withMultipliedAlpha(0.1).cgColor)
-                                        context.addPath(UIBezierPath(roundedRect: CGRect(origin: CGPoint(), size: size), cornerRadius: 5.0).cgPath)
-                                        context.fillPath()
-                                    })
-                                }
-                            }
+                            var items: [ContextMenuItem] = []
+                            items.append(.action(ContextMenuActionItem(text: presentationData.strings.Common_Back, icon: { theme in
+                                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Back"), color: theme.contextMenu.primaryColor)
+                            }, iconPosition: .left, action: { c ,f in
+                                c?.popItems()
+                            })))
+                            items.append(.separator)
                             
-                            items.append(.action(ContextMenuActionItem(text: folderPreview.folder.title, icon: icon, iconSource: iconSource, iconPosition: .left, action: { [weak self] c, f in
-                                guard let self, let component = self.component else {
+                            items.append(.action(ContextMenuActionItem(text: component.strings.Stories_MenuNewAlbum, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/AddFolder"), color: theme.contextMenu.primaryColor) }, iconPosition: .left, action: { [weak self] c, f in
+                                guard let self else {
                                     f(.default)
                                     return
                                 }
                                 
-                                c?.dismiss(completion: {})
-                                
-                                component.addToFolder(folderPreview.folder.id)
+                                c?.dismiss(completion: { [weak self] in
+                                    guard let self, let component = self.component else {
+                                        return
+                                    }
+                                    self.presentAddStoryFolder(addItems: [component.slice.item.storyItem])
+                                })
                             })))
+                            
+                            for folderPreview in folderPreviews {
+                                var iconSource: ContextMenuActionItemIconSource?
+                                if let story = folderPreview.item {
+                                    var imageSignal: Signal<UIImage?, NoError>?
+                                    
+                                    var selectedMedia: Media?
+                                    if let image = story.media._asMedia() as? TelegramMediaImage {
+                                        selectedMedia = image
+                                    } else if let file = story.media._asMedia() as? TelegramMediaFile {
+                                        selectedMedia = file
+                                    }
+                                    
+                                    if let selectedMedia {
+                                        let directMediaImageCache = DirectMediaImageCache(account: component.context.account)
+                                        if let result = directMediaImageCache.getImage(peer: peerReference, story: story, media: selectedMedia, width: 48, aspectRatio: 1.0, possibleWidths: [48], includeBlurred: false, synchronous: true) {
+                                            if let loadSignal = result.loadSignal {
+                                                imageSignal = .single(result.image) |> then(loadSignal)
+                                            } else {
+                                                imageSignal = .single(result.image)
+                                            }
+                                        }
+                                    }
+                                    
+                                    if let imageSignal {
+                                        iconSource = ContextMenuActionItemIconSource(
+                                            size: CGSize(width: 24.0, height: 24.0),
+                                            cornerRadius: 5.0,
+                                            signal: imageSignal
+                                        )
+                                    }
+                                }
+                                
+                                var icon: (PresentationTheme) -> UIImage? = { _ in nil }
+                                if iconSource == nil {
+                                    icon = { theme in
+                                        return generateImage(CGSize(width: 24.0, height: 24.0), opaque: false, scale: nil, rotatedContext: { size, context in
+                                            context.clear(CGRect(origin: CGPoint(), size: size))
+                                            context.setFillColor(theme.contextMenu.primaryColor.withMultipliedAlpha(0.1).cgColor)
+                                            context.addPath(UIBezierPath(roundedRect: CGRect(origin: CGPoint(), size: size), cornerRadius: 5.0).cgPath)
+                                            context.fillPath()
+                                        })
+                                    }
+                                }
+                                
+                                items.append(.action(ContextMenuActionItem(text: folderPreview.folder.title, icon: icon, iconSource: iconSource, iconPosition: .left, action: { [weak self] c, f in
+                                    guard let self, let component = self.component else {
+                                        f(.default)
+                                        return
+                                    }
+                                    
+                                    c?.dismiss(completion: {})
+                                    
+                                    component.addToFolder(folderPreview.folder.id)
+                                })))
+                            }
+                            
+                            c.pushItems(items: .single(ContextController.Items(content: .list(items))))
                         }
-                        
-                        c.pushItems(items: .single(ContextController.Items(content: .list(items))))
-                    }
-                })))
+                    })))
+                }
                 
                 if case .file = component.slice.item.storyItem.media {
                     var speedValue: String = presentationData.strings.PlaybackSpeed_Normal
@@ -6484,92 +6500,94 @@ public final class StoryItemSetContainerComponent: Component {
                     self.openItemPrivacySettings()
                 })))
                 
-                items.append(.action(ContextMenuActionItem(text: component.strings.Story_Context_Edit, icon: { theme in
-                    return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Edit"), color: theme.contextMenu.primaryColor)
-                }, action: { [weak self] _, a in
-                    a(.default)
-                    
-                    guard let self else {
-                        return
-                    }
-                    self.openStoryEditing()
-                })))
-                
-                if case .file = component.slice.item.storyItem.media, component.slice.item.storyItem.isPinned {
-                    items.append(.action(ContextMenuActionItem(text: component.strings.Story_Context_EditCover, icon: { theme in
-                        return generateTintedImage(image: UIImage(bundleImageName: "Stories/Context Menu/EditCover"), color: theme.contextMenu.primaryColor)
+                if !isLiveStream {
+                    items.append(.action(ContextMenuActionItem(text: component.strings.Story_Context_Edit, icon: { theme in
+                        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Edit"), color: theme.contextMenu.primaryColor)
                     }, action: { [weak self] _, a in
                         a(.default)
                         
                         guard let self else {
                             return
                         }
-                        self.openStoryEditing(cover: true)
+                        self.openStoryEditing()
                     })))
-                }
-                
-                items.append(.separator)
-
-                items.append(.action(ContextMenuActionItem(text: component.slice.item.storyItem.isPinned ? component.strings.Story_Context_RemoveFromProfile : component.strings.Story_Context_SaveToProfile, icon: { theme in
-                    return generateTintedImage(image: UIImage(bundleImageName: component.slice.item.storyItem.isPinned ? "Stories/Context Menu/Unpin" : "Stories/Context Menu/Pin"), color: theme.contextMenu.primaryColor)
-                }, action: { [weak self] _, a in
-                    a(.default)
                     
-                    guard let self, let component = self.component else {
-                        return
+                    if case .file = component.slice.item.storyItem.media, component.slice.item.storyItem.isPinned {
+                        items.append(.action(ContextMenuActionItem(text: component.strings.Story_Context_EditCover, icon: { theme in
+                            return generateTintedImage(image: UIImage(bundleImageName: "Stories/Context Menu/EditCover"), color: theme.contextMenu.primaryColor)
+                        }, action: { [weak self] _, a in
+                            a(.default)
+                            
+                            guard let self else {
+                                return
+                            }
+                            self.openStoryEditing(cover: true)
+                        })))
                     }
                     
-                    let _ = component.context.engine.messages.updateStoriesArePinned(peerId: component.slice.effectivePeer.id, ids: [component.slice.item.storyItem.id: component.slice.item.storyItem], isPinned: !component.slice.item.storyItem.isPinned).startStandalone()
+                    items.append(.separator)
                     
-                    let presentationData = component.context.sharedContext.currentPresentationData.with({ $0 }).withUpdated(theme: component.theme)
-                    if component.slice.item.storyItem.isPinned {
-                        self.component?.presentController(UndoOverlayController(
-                            presentationData: presentationData,
-                            content: .info(title: nil, text: component.strings.Story_ToastRemovedFromProfileText, timeout: nil, customUndoText: nil),
-                            elevatedLayout: false,
-                            animateInAsReplacement: false,
-                            appearance: UndoOverlayController.Appearance(isBlurred: true),
-                            action: { _ in return false }
-                        ), nil)
-                    } else {
-                        self.component?.presentController(UndoOverlayController(
-                            presentationData: presentationData,
-                            content: .info(title: component.strings.Story_ToastSavedToProfileTitle, text: component.strings.Story_ToastSavedToProfileText, timeout: nil, customUndoText: nil),
-                            elevatedLayout: false,
-                            animateInAsReplacement: false,
-                            appearance: UndoOverlayController.Appearance(isBlurred: true),
-                            action: { _ in return false }
-                        ), nil)
-                    }
-                })))
-                
-                let saveText: String = component.strings.Story_Context_SaveToGallery
-                items.append(.action(ContextMenuActionItem(text: saveText, icon: { theme in
-                    return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Save"), color: theme.contextMenu.primaryColor)
-                }, action: { [weak self] _, a in
-                    a(.default)
-                    
-                    guard let self else {
-                        return
-                    }
-                    self.requestSave()
-                })))
-                
-                if case let .user(accountUser) = component.slice.effectivePeer {
-                    items.append(.action(ContextMenuActionItem(text: component.strings.Story_ContextStealthMode, icon: { theme in
-                        return generateTintedImage(image: UIImage(bundleImageName: accountUser.isPremium ? "Chat/Context Menu/Eye" : "Chat/Context Menu/EyeLocked"), color: theme.contextMenu.primaryColor)
+                    items.append(.action(ContextMenuActionItem(text: component.slice.item.storyItem.isPinned ? component.strings.Story_Context_RemoveFromProfile : component.strings.Story_Context_SaveToProfile, icon: { theme in
+                        return generateTintedImage(image: UIImage(bundleImageName: component.slice.item.storyItem.isPinned ? "Stories/Context Menu/Unpin" : "Stories/Context Menu/Pin"), color: theme.contextMenu.primaryColor)
                     }, action: { [weak self] _, a in
                         a(.default)
                         
-                        guard let self else {
+                        guard let self, let component = self.component else {
                             return
                         }
-                        if accountUser.isPremium {
-                            self.sendMessageContext.requestStealthMode(view: self)
+                        
+                        let _ = component.context.engine.messages.updateStoriesArePinned(peerId: component.slice.effectivePeer.id, ids: [component.slice.item.storyItem.id: component.slice.item.storyItem], isPinned: !component.slice.item.storyItem.isPinned).startStandalone()
+                        
+                        let presentationData = component.context.sharedContext.currentPresentationData.with({ $0 }).withUpdated(theme: component.theme)
+                        if component.slice.item.storyItem.isPinned {
+                            self.component?.presentController(UndoOverlayController(
+                                presentationData: presentationData,
+                                content: .info(title: nil, text: component.strings.Story_ToastRemovedFromProfileText, timeout: nil, customUndoText: nil),
+                                elevatedLayout: false,
+                                animateInAsReplacement: false,
+                                appearance: UndoOverlayController.Appearance(isBlurred: true),
+                                action: { _ in return false }
+                            ), nil)
                         } else {
-                            self.presentStealthModeUpgradeScreen()
+                            self.component?.presentController(UndoOverlayController(
+                                presentationData: presentationData,
+                                content: .info(title: component.strings.Story_ToastSavedToProfileTitle, text: component.strings.Story_ToastSavedToProfileText, timeout: nil, customUndoText: nil),
+                                elevatedLayout: false,
+                                animateInAsReplacement: false,
+                                appearance: UndoOverlayController.Appearance(isBlurred: true),
+                                action: { _ in return false }
+                            ), nil)
                         }
                     })))
+                    
+                    let saveText: String = component.strings.Story_Context_SaveToGallery
+                    items.append(.action(ContextMenuActionItem(text: saveText, icon: { theme in
+                        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Save"), color: theme.contextMenu.primaryColor)
+                    }, action: { [weak self] _, a in
+                        a(.default)
+                        
+                        guard let self else {
+                            return
+                        }
+                        self.requestSave()
+                    })))
+                    
+                    if case let .user(accountUser) = component.slice.effectivePeer {
+                        items.append(.action(ContextMenuActionItem(text: component.strings.Story_ContextStealthMode, icon: { theme in
+                            return generateTintedImage(image: UIImage(bundleImageName: accountUser.isPremium ? "Chat/Context Menu/Eye" : "Chat/Context Menu/EyeLocked"), color: theme.contextMenu.primaryColor)
+                        }, action: { [weak self] _, a in
+                            a(.default)
+                            
+                            guard let self else {
+                                return
+                            }
+                            if accountUser.isPremium {
+                                self.sendMessageContext.requestStealthMode(view: self)
+                            } else {
+                                self.presentStealthModeUpgradeScreen()
+                            }
+                        })))
+                    }
                 }
                 
                 if component.slice.item.storyItem.isPublic && (component.slice.effectivePeer.addressName != nil || !component.slice.effectivePeer._asPeer().usernames.isEmpty) && (component.slice.item.storyItem.expirationTimestamp > Int32(Date().timeIntervalSince1970) || component.slice.item.storyItem.isPinned) {
@@ -6662,6 +6680,11 @@ public final class StoryItemSetContainerComponent: Component {
                 guard let self, let component else {
                     return .complete()
                 }
+                
+                var isLiveStream = false
+                if case .liveStream = component.slice.item.storyItem.media {
+                    isLiveStream = true
+                }
 
                 var items: [ContextMenuItem] = []
                 if case .file = component.slice.item.storyItem.media {
@@ -6694,7 +6717,7 @@ public final class StoryItemSetContainerComponent: Component {
                     items.append(.separator)
                 }
                 
-                if (component.slice.item.storyItem.isMy && channel.hasPermission(.postStories)) || channel.hasPermission(.editStories) {
+                if !isLiveStream && ((component.slice.item.storyItem.isMy && channel.hasPermission(.postStories)) || channel.hasPermission(.editStories)) {
                     items.append(.action(ContextMenuActionItem(text: component.strings.Story_Context_Edit, icon: { theme in
                         return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Edit"), color: theme.contextMenu.primaryColor)
                     }, action: { [weak self] _, a in
@@ -6724,7 +6747,7 @@ public final class StoryItemSetContainerComponent: Component {
                     items.append(.separator)
                 }
                 
-                if channel.hasPermission(.editStories) {
+                if !isLiveStream && channel.hasPermission(.editStories) {
                     items.append(.action(ContextMenuActionItem(text: component.slice.item.storyItem.isPinned ? component.strings.Story_Context_RemoveFromChannel : component.strings.Story_Context_SaveToChannel, icon: { theme in
                         return generateTintedImage(image: UIImage(bundleImageName: component.slice.item.storyItem.isPinned ? "Stories/Context Menu/Unpin" : "Stories/Context Menu/Pin"), color: theme.contextMenu.primaryColor)
                     }, action: { [weak self] _, a in
@@ -6764,7 +6787,7 @@ public final class StoryItemSetContainerComponent: Component {
                     })))
                 }
                 
-                if component.slice.additionalPeerData.canViewStats {
+                if !isLiveStream && component.slice.additionalPeerData.canViewStats {
                     items.append(.action(ContextMenuActionItem(text: component.strings.Story_Context_ViewStats, icon: { theme in
                         return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Statistics"), color: theme.contextMenu.primaryColor)
                     }, action: { [weak self] _, a in
@@ -6786,17 +6809,19 @@ public final class StoryItemSetContainerComponent: Component {
                     })))
                 }
                 
-                let saveText: String = component.strings.Story_Context_SaveToGallery
-                items.append(.action(ContextMenuActionItem(text: saveText, icon: { theme in
-                    return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Save"), color: theme.contextMenu.primaryColor)
-                }, action: { [weak self] _, a in
-                    a(.default)
-                    
-                    guard let self else {
-                        return
-                    }
-                    self.requestSave()
-                })))
+                if !isLiveStream {
+                    let saveText: String = component.strings.Story_Context_SaveToGallery
+                    items.append(.action(ContextMenuActionItem(text: saveText, icon: { theme in
+                        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Save"), color: theme.contextMenu.primaryColor)
+                    }, action: { [weak self] _, a in
+                        a(.default)
+                        
+                        guard let self else {
+                            return
+                        }
+                        self.requestSave()
+                    })))
+                }
                 
                 if component.slice.item.storyItem.isPublic && (component.slice.effectivePeer.addressName != nil || !component.slice.effectivePeer._asPeer().usernames.isEmpty) && (component.slice.item.storyItem.expirationTimestamp > Int32(Date().timeIntervalSince1970) || component.slice.item.storyItem.isPinned) {
                     items.append(.action(ContextMenuActionItem(text: component.strings.Story_Context_CopyLink, icon: { theme in
