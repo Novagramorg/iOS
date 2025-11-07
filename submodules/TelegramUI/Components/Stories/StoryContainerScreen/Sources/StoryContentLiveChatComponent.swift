@@ -36,6 +36,7 @@ final class StoryContentLiveChatComponent: Component {
     let storyPeerId: EnginePeer.Id
     let insets: UIEdgeInsets
     let isEmbeddedInCamera: Bool
+    let minPaidStars: Int?
     let controller: () -> ViewController?
     
     init(
@@ -47,6 +48,7 @@ final class StoryContentLiveChatComponent: Component {
         storyPeerId: EnginePeer.Id,
         insets: UIEdgeInsets,
         isEmbeddedInCamera: Bool,
+        minPaidStars: Int?,
         controller: @escaping () -> ViewController?
     ) {
         self.external = external
@@ -57,6 +59,7 @@ final class StoryContentLiveChatComponent: Component {
         self.storyPeerId = storyPeerId
         self.insets = insets
         self.isEmbeddedInCamera = isEmbeddedInCamera
+        self.minPaidStars = minPaidStars
         self.controller = controller
     }
 
@@ -83,6 +86,9 @@ final class StoryContentLiveChatComponent: Component {
             return false
         }
         if lhs.isEmbeddedInCamera != rhs.isEmbeddedInCamera {
+            return false
+        }
+        if lhs.minPaidStars != rhs.minPaidStars {
             return false
         }
         return true
@@ -436,6 +442,12 @@ final class StoryContentLiveChatComponent: Component {
                     isMyMessage = true
                     canDelete = true
                 }
+                var isMessageFromAdmin = false
+                if message.isFromAdmin {
+                    isMessageFromAdmin = true
+                } else if message.author?.id == component.storyPeerId {
+                    isMessageFromAdmin = true
+                }
                 
                 //TODO:localize
                 if !isMyMessage, let author = message.author {
@@ -467,13 +479,6 @@ final class StoryContentLiveChatComponent: Component {
                     })))
                 }
                 
-                #if DEBUG
-                if "".isEmpty {
-                    isAdmin = true
-                    canDelete = true
-                }
-                #endif
-                
                 if canDelete {
                     items.append(.action(ContextMenuActionItem(text: presentationData.strings.ChatList_Context_Delete, textColor: .destructive, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Delete"), color: theme.contextMenu.destructiveColor) }, action: { [weak self] c, _ in
                         guard let self else {
@@ -484,7 +489,7 @@ final class StoryContentLiveChatComponent: Component {
                             guard let self else {
                                 return
                             }
-                            if isAdmin && !isMyMessage {
+                            if isAdmin && !isMyMessage && !isMessageFromAdmin {
                                 self.displayDeleteMessageAndBan(id: id)
                             } else {
                                 self.displayDeleteMessageConfirmation(id: id)
@@ -616,6 +621,12 @@ final class StoryContentLiveChatComponent: Component {
                 
                 for message in messagesState.pinnedMessages.reversed() {
                     if let author = message.author, let paidStars = message.paidStars {
+                        if let minPaidStars = component.minPaidStars {
+                            if Int(paidStars) < minPaidStars {
+                                continue
+                            }
+                        }
+                        
                         if let current = topMessageByPeerId[author.id] {
                             if let currentPaidStars = current.paidStars, currentPaidStars < paidStars {
                                 topMessageByPeerId[author.id] = message

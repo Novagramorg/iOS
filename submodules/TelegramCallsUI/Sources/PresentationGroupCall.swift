@@ -807,6 +807,7 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
     private var screencastStateDisposable: Disposable?
     
     public let isStream: Bool
+    private let streamPeerId: EnginePeer.Id?
     private let sharedAudioContext: SharedCallAudioContext?
     
     public let isConference: Bool
@@ -854,6 +855,7 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
         invite: String?,
         joinAsPeerId: EnginePeer.Id?,
         isStream: Bool,
+        streamPeerId: EnginePeer.Id?,
         keyPair: TelegramKeyPair?,
         conferenceSourceId: CallSessionInternalId?,
         isConference: Bool,
@@ -888,6 +890,7 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
         self.hasVideo = false
         self.hasScreencast = false
         self.isStream = isStream
+        self.streamPeerId = streamPeerId
         self.conferenceSourceId = conferenceSourceId
         self.isConference = isConference
         self.beginWithVideo = beginWithVideo
@@ -2051,6 +2054,7 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
                     callId: callInfo.id,
                     reference: reference,
                     isStream: self.isStream,
+                    streamPeerId: self.streamPeerId,
                     preferMuted: isEffectivelyMuted,
                     joinPayload: joinPayload,
                     peerAdminIds: peerAdminIds,
@@ -2306,7 +2310,7 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
                 let accountContext = self.accountContext
                 let peerId = self.peerId
                 let rawAdminIds: Signal<Set<PeerId>, NoError>
-                if let peerId {
+                if let peerId = peerId ?? self.streamPeerId {
                     if peerId.namespace == Namespaces.Peer.CloudChannel {
                         rawAdminIds = Signal { subscriber in
                             let (disposable, _) = accountContext.peerChannelMemberCategoriesContextsManager.admins(engine: accountContext.engine, postbox: accountContext.account.postbox, network: accountContext.account.network, accountPeerId: accountContext.account.peerId, peerId: peerId, updated: { list in
@@ -2346,7 +2350,7 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
                 }
                 
                 let peer: Signal<EnginePeer?, NoError>
-                if let peerId {
+                if let peerId = peerId ?? self.streamPeerId {
                     peer = accountContext.engine.data.subscribe(TelegramEngine.EngineData.Item.Peer.Peer(id: peerId))
                 } else {
                     peer = .single(nil)

@@ -945,25 +945,13 @@ public final class MessageInputPanelComponent: Component {
                 
                 var inlineActions: [ChatTextInputPanelComponent.InlineAction] = []
                 if component.liveChatState?.isEnabled == true {
-                    if component.paidMessageAction != nil && self.textInputPanelExternalState.textInputState.inputText.length == 0 {
-                        inlineActions.append(ChatTextInputPanelComponent.InlineAction(
-                            kind: .paidMessage,
-                            action: { [weak self] in
-                                guard let self else {
-                                    return
-                                }
-                                self.component?.paidMessageAction?()
-                            }
-                        ))
-                    } else if let inputMode {
+                    if let inputMode {
                         let mappedInputMode: ChatTextInputPanelComponent.InputMode
                         switch inputMode {
                         case .text:
                             mappedInputMode = .text
-                        case .emoji:
+                        case .emoji, .stickers:
                             mappedInputMode = .emoji
-                        case .stickers:
-                            mappedInputMode = .stickers
                         }
                         inlineActions.append(ChatTextInputPanelComponent.InlineAction(
                             kind: .inputMode(mappedInputMode),
@@ -972,6 +960,17 @@ public final class MessageInputPanelComponent: Component {
                                     return
                                 }
                                 component.inputModeAction?()
+                            }
+                        ))
+                    }
+                    if component.paidMessageAction != nil && self.textInputPanelExternalState.textInputState.inputText.length == 0 {
+                        inlineActions.append(ChatTextInputPanelComponent.InlineAction(
+                            kind: .paidMessage,
+                            action: { [weak self] in
+                                guard let self else {
+                                    return
+                                }
+                                self.component?.paidMessageAction?()
                             }
                         ))
                     }
@@ -1106,15 +1105,17 @@ public final class MessageInputPanelComponent: Component {
                     containerSize: availableSize
                 )
                 let inputPanelFrame = CGRect(origin: CGPoint(), size: inputPanelSize)
-                if let inputPanelView = inputPanel.view {
+                var inputPanelViewIsActive = false
+                if let inputPanelView = inputPanel.view as? ChatTextInputPanelComponent.View {
                     if inputPanelView.superview == nil {
                         inputPanel.parentState = state
                         self.addSubview(inputPanelView)
                     }
                     transition.setFrame(view: inputPanelView, frame: inputPanelFrame)
+                    inputPanelViewIsActive = inputPanelView.isActive
                 }
                 
-                component.externalState.isEditing = self.textInputPanelExternalState.isEditing
+                component.externalState.isEditing = self.textInputPanelExternalState.isEditing || inputPanelViewIsActive
                 component.externalState.hasText = self.textInputPanelExternalState.textInputState.inputText.length != 0
                 component.externalState.isKeyboardHidden = component.hideKeyboard
                 component.externalState.insertText = { [weak self] text in
