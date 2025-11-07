@@ -124,7 +124,18 @@ public final class PeerNameTextComponent: Component {
                 containerSize: availableSize
             )
 
-            var titleX: CGFloat = 0.0
+            let titleFrame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: titleSize)
+            if let titleView = self.title.view {
+                if titleView.superview == nil {
+                    titleView.layer.anchorPoint = CGPoint()
+                    self.addSubview(titleView)
+                }
+                transition.setPosition(view: titleView, position: titleFrame.origin)
+                titleView.bounds = CGRect(origin: CGPoint(), size: titleFrame.size)
+            }
+            
+            var size = CGSize(width: titleFrame.maxX, height: titleSize.height)
+            
             if let iconContent {
                 let icon: ComponentView<Empty>
                 if let current = self.icon {
@@ -148,30 +159,21 @@ public final class PeerNameTextComponent: Component {
                     environment: {},
                     containerSize: containerSize
                 )
-                let iconFrame = CGRect(origin: CGPoint(x: titleX, y: floorToScreenPixels((titleSize.height - iconSize.height) * 0.5)), size: iconSize)
-                titleX += iconSize.width + 4.0
+                size.width += 3.0
+                let iconFrame = CGRect(origin: CGPoint(x: size.width, y: floorToScreenPixels((titleSize.height - iconSize.height) * 0.5)), size: iconSize)
                 if let iconView = icon.view {
                     if iconView.superview == nil {
                         self.addSubview(iconView)
                     }
                     transition.setFrame(view: iconView, frame: iconFrame)
                 }
+                size.width += iconSize.width
             } else if let icon = self.icon {
                 self.icon = nil
                 icon.view?.removeFromSuperview()
             }
 
-            let titleFrame = CGRect(origin: CGPoint(x: titleX, y: 0.0), size: titleSize)
-            if let titleView = self.title.view {
-                if titleView.superview == nil {
-                    titleView.layer.anchorPoint = CGPoint()
-                    self.addSubview(titleView)
-                }
-                transition.setPosition(view: titleView, position: titleFrame.origin)
-                titleView.bounds = CGRect(origin: CGPoint(), size: titleFrame.size)
-            }
-
-            return CGSize(width: titleFrame.maxX, height: titleSize.height)
+            return size
         }
     }
     

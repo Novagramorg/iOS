@@ -644,7 +644,7 @@ public class JoinGroupCallE2E {
     }
 }
 
-func _internal_joinGroupCall(account: Account, peerId: PeerId?, joinAs: PeerId?, callId: Int64, reference: InternalGroupCallReference, isStream: Bool, preferMuted: Bool, joinPayload: String, peerAdminIds: Signal<[PeerId], NoError>, inviteHash: String? = nil, generateE2E: ((Data?) -> JoinGroupCallE2E?)?) -> Signal<JoinGroupCallResult, JoinGroupCallError> {
+func _internal_joinGroupCall(account: Account, peerId: PeerId?, joinAs: PeerId?, callId: Int64, reference: InternalGroupCallReference, isStream: Bool, streamPeerId: PeerId?, preferMuted: Bool, joinPayload: String, peerAdminIds: Signal<[PeerId], NoError>, inviteHash: String? = nil, generateE2E: ((Data?) -> JoinGroupCallE2E?)?) -> Signal<JoinGroupCallResult, JoinGroupCallError> {
     enum InternalJoinError {
         case error(JoinGroupCallError)
         case restart
@@ -750,7 +750,7 @@ func _internal_joinGroupCall(account: Account, peerId: PeerId?, joinAs: PeerId?,
             return joinRequest
             |> mapToSignal { updates -> Signal<JoinGroupCallResult, InternalJoinError> in
                 let peer = account.postbox.transaction { transaction -> Peer? in
-                    return peerId.flatMap(transaction.getPeer)
+                    return (peerId ?? streamPeerId).flatMap(transaction.getPeer)
                 }
                 |> castError(InternalJoinError.self)
                 
@@ -820,6 +820,9 @@ func _internal_joinGroupCall(account: Account, peerId: PeerId?, joinAs: PeerId?,
                     state.sortAscending = parsedCall.sortAscending
                     
                     state.adminIds = Set(peerAdminIds)
+                    if isStream, let channel = peer as? TelegramChannel, channel.hasPermission(.manageCalls) {
+                        state.adminIds.insert(account.peerId)
+                    }
                     
                     let connectionMode: JoinGroupCallResult.ConnectionMode
                     if let clientParamsData = parsedClientParams.data(using: .utf8), let dict = (try? JSONSerialization.jsonObject(with: clientParamsData, options: [])) as? [String: Any] {

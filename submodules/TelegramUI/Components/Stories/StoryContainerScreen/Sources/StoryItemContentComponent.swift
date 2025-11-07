@@ -296,6 +296,9 @@ final class StoryItemContentComponent: Component {
             if let _ = self.overlaysView.hitTest(self.convert(self.convert(point, to: self.overlaysView), to: self.overlaysView), with: nil) {
                 return false
             }
+            if self.liveChat != nil {
+                return false
+            }
             return true
         }
         
@@ -452,6 +455,7 @@ final class StoryItemContentComponent: Component {
                         invite: nil,
                         joinAsPeerId: nil,
                         isStream: !(component.isEmbeddedInCamera && liveStream.kind == .rtc),
+                        streamPeerId: component.peer.id,
                         keyPair: nil,
                         conferenceSourceId: nil,
                         isConference: false,
@@ -938,6 +942,11 @@ final class StoryItemContentComponent: Component {
                     self.liveChat = liveChat
                 }
                 
+                var minPaidStars: Int?
+                if let mediaStreamCallState = self.mediaStreamCallState {
+                    minPaidStars = mediaStreamCallState.minMessagePrice.flatMap(Int.init)
+                }
+                
                 let _ = liveChat.update(
                     transition: mediaStreamTransition,
                     component: AnyComponent(StoryContentLiveChatComponent(
@@ -949,6 +958,7 @@ final class StoryItemContentComponent: Component {
                         storyPeerId: component.peer.id,
                         insets: environment.containerInsets,
                         isEmbeddedInCamera: component.isEmbeddedInCamera,
+                        minPaidStars: minPaidStars,
                         controller: { [weak self] in
                             guard let self, let component = self.component else {
                                 return nil
