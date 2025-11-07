@@ -8,6 +8,7 @@ import TelegramStringFormatting
 import MultilineTextComponent
 import TelegramPresentationData
 import AvatarNode
+import PeerNameTextComponent
 
 final class StoryAuthorInfoComponent: Component {
     struct Counters: Equatable {
@@ -16,6 +17,7 @@ final class StoryAuthorInfoComponent: Component {
     }
     
 	let context: AccountContext
+    let theme: PresentationTheme
     let strings: PresentationStrings
     let isEmbeddedInCamera: Bool
 	let peer: EnginePeer?
@@ -27,8 +29,9 @@ final class StoryAuthorInfoComponent: Component {
     let isLiveStream: Bool
     let customSubtitle: String?
     
-    init(context: AccountContext, strings: PresentationStrings, isEmbeddedInCamera: Bool, peer: EnginePeer?, forwardInfo: EngineStoryItem.ForwardInfo?, author: EnginePeer?, timestamp: Int32, counters: Counters?, isEdited: Bool, isLiveStream: Bool, customSubtitle: String?) {
+    init(context: AccountContext, theme: PresentationTheme, strings: PresentationStrings, isEmbeddedInCamera: Bool, peer: EnginePeer?, forwardInfo: EngineStoryItem.ForwardInfo?, author: EnginePeer?, timestamp: Int32, counters: Counters?, isEdited: Bool, isLiveStream: Bool, customSubtitle: String?) {
         self.context = context
+        self.theme = theme
         self.strings = strings
         self.isEmbeddedInCamera = isEmbeddedInCamera
         self.peer = peer
@@ -45,6 +48,9 @@ final class StoryAuthorInfoComponent: Component {
 		if lhs.context !== rhs.context {
 			return false
 		}
+        if lhs.theme !== rhs.theme {
+            return false
+        }
         if lhs.strings !== rhs.strings {
             return false
         }
@@ -179,10 +185,15 @@ final class StoryAuthorInfoComponent: Component {
             
             let titleSize = self.title.update(
                 transition: .immediate,
-                component: AnyComponent(MultilineTextComponent(
-                    text: .plain(NSAttributedString(string: title, font: Font.medium(14.0), textColor: .white)),
-                    truncationType: .end,
-                    maximumNumberOfLines: 1
+                component: AnyComponent(PeerNameTextComponent(
+                    context: component.context,
+                    peer: component.peer,
+                    text: .custom(title),
+                    font: Font.medium(14.0),
+                    textColor: .white,
+                    iconBackgroundColor: component.theme.list.itemCheckColors.fillColor,
+                    iconForegroundColor: component.theme.list.itemCheckColors.foregroundColor,
+                    strings: component.strings
                 )),
                 environment: {},
                 containerSize: CGSize(width: availableSize.width - leftInset, height: availableSize.height)

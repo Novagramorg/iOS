@@ -11,6 +11,7 @@ import AccountContext
 import StarsParticleEffect
 import AppBundle
 import TextFormat
+import PeerNameTextComponent
 
 private func generateStarsAmountImage() -> UIImage {
     return UIImage(bundleImageName: "Chat/Message/StarsCount")!.precomposed().withRenderingMode(.alwaysTemplate)
@@ -305,16 +306,24 @@ public final class StoryLiveChatMessageComponent: Component {
                 maxTextWidth -= cutoutWidth
             }
             
+            let textIconsForegroundColor: UIColor
+            if let paidStars = component.message.paidStars, let baseColor = GroupCallMessagesContext.getStarAmountParamMapping(params: LiveChatMessageParams(appConfig: component.context.currentAppConfiguration.with({ $0 })), value: paidStars).color {
+                textIconsForegroundColor = StoryLiveChatMessageComponent.getMessageColor(color: baseColor).withAlphaComponent(component.layout.transparentBackground ? 0.7 : 1.0)
+            } else {
+                textIconsForegroundColor = .black
+            }
+            
             let authorTitleSize = self.authorTitle.update(
                 transition: .immediate,
-                component: AnyComponent(MultilineTextWithEntitiesComponent(
+                component: AnyComponent(PeerNameTextComponent(
                     context: component.context,
-                    animationCache: component.context.animationCache,
-                    animationRenderer: component.context.animationRenderer,
-                    placeholderColor: .gray,
-                    text: .plain(NSAttributedString(string: component.message.author?.displayTitle(strings: component.strings, displayOrder: .firstLast) ?? " ", font: Font.semibold(15.0), textColor: secondaryTextColor)),
-                    maximumNumberOfLines: 1,
-                    lineSpacing: 0.1
+                    peer: component.message.author,
+                    text: .name,
+                    font: Font.semibold(15.0),
+                    textColor: secondaryTextColor,
+                    iconBackgroundColor: .white,
+                    iconForegroundColor: textIconsForegroundColor,
+                    strings: component.strings
                 )),
                 environment: {},
                 containerSize: CGSize(width: min(maxTextWidth - 80.0, 180.0), height: 100000.0)

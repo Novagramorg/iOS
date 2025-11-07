@@ -1034,6 +1034,23 @@ public final class MessageInputPanelComponent: Component {
                     )
                 }
                 
+                let rightAction: ChatTextInputPanelComponent.RightAction
+                if component.sendStarsAction != nil {
+                    rightAction = ChatTextInputPanelComponent.RightAction(kind: .stars(count: Int(component.starStars?.totalStars ?? 0), isFilled: component.starStars?.hasOutgoingStars ?? false), action: { [weak self] sourceView in
+                        guard let self, let component = self.component else {
+                            return
+                        }
+                        component.sendStarsAction?(sourceView, false)
+                    }, longPressAction: { [weak self] sourceView in
+                        guard let self, let component = self.component else {
+                            return
+                        }
+                        component.sendStarsAction?(sourceView, true)
+                    })
+                } else {
+                    rightAction = ChatTextInputPanelComponent.RightAction(kind: .empty, action: { _ in })
+                }
+                
                 let inputPanelSize = inputPanel.update(
                     transition: transition,
                     component: AnyComponent(ChatTextInputPanelComponent(
@@ -1056,17 +1073,7 @@ public final class MessageInputPanelComponent: Component {
                                 component.toggleLiveChatExpanded?()
                             }
                         }),
-                        rightAction: ChatTextInputPanelComponent.RightAction(kind: .stars(count: Int(component.starStars?.totalStars ?? 0), isFilled: component.starStars?.hasOutgoingStars ?? false), action: { [weak self] sourceView in
-                            guard let self, let component = self.component else {
-                                return
-                            }
-                            component.sendStarsAction?(sourceView, false)
-                        }, longPressAction: { [weak self] sourceView in
-                            guard let self, let component = self.component else {
-                                return
-                            }
-                            component.sendStarsAction?(sourceView, true)
-                        }),
+                        rightAction: rightAction,
                         sendAsConfiguration: component.liveChatState?.isEnabled == true ? sendAsConfiguration : nil,
                         //TODO:localize
                         placeholder: component.liveChatState?.isEnabled == true ? placeholder : "Comments are disabled",
