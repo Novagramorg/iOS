@@ -83,28 +83,29 @@ final class CameraVideoSource: VideoSource {
     }
 }
 
+private let dimensions = CGSize(width: 1080.0, height: 1920.0)
 
 final class LiveStreamMediaSource {
+    private let queue = Queue()
     private let pool: CVPixelBufferPool?
     
     private(set) var mainVideoOutput: CameraVideoOutput!
     private(set) var additionalVideoOutput: CameraVideoOutput!
     private let composer: MediaEditorComposer
     
-    private var currentMainSampleBuffer: CMSampleBuffer?
-    private var currentAdditionalSampleBuffer: CMSampleBuffer?
+    private var additionalSampleBuffer: CMSampleBuffer?
     
     public private(set) var currentVideoOutput: CVPixelBuffer?
     private var onVideoUpdatedListeners = Bag<() -> Void>()
     
-    public private(set) var currentAudioOutput: Data?
-    private var onAudioUpdatedListeners = Bag<() -> Void>()
-            
+    private var values: MediaEditorValues
+    private var cameraPosition: Camera.Position = .back
+                
     public init() {
         let width: Int32 = 720
         let height: Int32 = 1280
         
-        let dimensions = CGSize(width: CGFloat(width), height: CGFloat(height))
+        let dimensions = CGSize(width: CGFloat(1080), height: CGFloat(1920))
         
         let bufferOptions: [String: Any] = [
             kCVPixelBufferPoolMinimumBufferCountKey as String: 3 as NSNumber
@@ -120,52 +121,51 @@ final class LiveStreamMediaSource {
         CVPixelBufferPoolCreate(nil, bufferOptions as CFDictionary, pixelBufferOptions as CFDictionary, &pool)
         self.pool = pool
         
-        let topOffset = CGPoint(x: 267.0, y: 438.0)
-        let additionalVideoPosition = CGPoint(x: dimensions.width - topOffset.x, y: topOffset.y)
+        self.values = MediaEditorValues(
+            peerId: EnginePeer.Id(namespace: Namespaces.Peer.CloudUser, id: EnginePeer.Id.Id._internalFromInt64Value(0)),
+            originalDimensions: PixelDimensions(dimensions),
+            cropOffset: .zero,
+            cropRect: CGRect(origin: .zero, size: dimensions),
+            cropScale: 1.0,
+            cropRotation: 0.0,
+            cropMirroring: false,
+            cropOrientation: nil,
+            gradientColors: nil,
+            videoTrimRange: nil,
+            videoIsMuted: false,
+            videoIsFullHd: false,
+            videoIsMirrored: false,
+            videoVolume: nil,
+            additionalVideoPath: nil,
+            additionalVideoIsDual: true,
+            additionalVideoPosition: nil,
+            additionalVideoScale: 1.625,
+            additionalVideoRotation: 0.0,
+            additionalVideoPositionChanges: [],
+            additionalVideoTrimRange: nil,
+            additionalVideoOffset: nil,
+            additionalVideoVolume: nil,
+            collage: [],
+            nightTheme: false,
+            drawing: nil,
+            maskDrawing: nil,
+            entities: [],
+            toolValues: [:],
+            audioTrack: nil,
+            audioTrackTrimRange: nil,
+            audioTrackOffset: nil,
+            audioTrackVolume: nil,
+            audioTrackSamples: nil,
+            collageTrackSamples: nil,
+            coverImageTimestamp: nil,
+            coverDimensions: nil,
+            qualityPreset: nil
+        )
         
         self.composer = MediaEditorComposer(
             postbox: nil,
-            values: MediaEditorValues(
-                peerId: EnginePeer.Id(namespace: Namespaces.Peer.CloudUser, id: EnginePeer.Id.Id._internalFromInt64Value(0)),
-                originalDimensions: PixelDimensions(dimensions),
-                cropOffset: .zero,
-                cropRect: CGRect(origin: .zero, size: dimensions),
-                cropScale: 1.0,
-                cropRotation: 0.0,
-                cropMirroring: false,
-                cropOrientation: nil,
-                gradientColors: nil,
-                videoTrimRange: nil,
-                videoIsMuted: false,
-                videoIsFullHd: false,
-                videoIsMirrored: false,
-                videoVolume: nil,
-                additionalVideoPath: nil,
-                additionalVideoIsDual: true,
-                additionalVideoPosition: additionalVideoPosition,
-                additionalVideoScale: 1.625,
-                additionalVideoRotation: 0.0,
-                additionalVideoPositionChanges: [],
-                additionalVideoTrimRange: nil,
-                additionalVideoOffset: nil,
-                additionalVideoVolume: nil,
-                collage: [],
-                nightTheme: false,
-                drawing: nil,
-                maskDrawing: nil,
-                entities: [],
-                toolValues: [:],
-                audioTrack: nil,
-                audioTrackTrimRange: nil,
-                audioTrackOffset: nil,
-                audioTrackVolume: nil,
-                audioTrackSamples: nil,
-                collageTrackSamples: nil,
-                coverImageTimestamp: nil,
-                coverDimensions: nil,
-                qualityPreset: nil
-            ),
-            dimensions: CGSize(width: 1080.0, height: 1920.0),
+            values: self.values,
+            dimensions: dimensions,
             outputDimensions: CGSize(width: 720.0, height: 1280.0),
             textScale: 1.0,
             videoDuration: nil,
@@ -177,19 +177,77 @@ final class LiveStreamMediaSource {
             guard let self else {
                 return
             }
-            self.currentMainSampleBuffer = try? CMSampleBuffer(copying: buffer)
-            self.push(mainSampleBuffer: buffer, additionalSampleBuffer: self.currentAdditionalSampleBuffer)
+            self.queue.async {
+                self.push(mainSampleBuffer: buffer)
+            }
         })
         
         self.additionalVideoOutput = CameraVideoOutput(sink: { [weak self] buffer, mirror in
             guard let self else {
                 return
             }
-            self.currentAdditionalSampleBuffer = try? CMSampleBuffer(copying: buffer)
+            self.queue.async {
+                self.additionalSampleBuffer = buffer
+            }
         })
     }
     
-    public func addOnVideoUpdated(_ f: @escaping () -> Void) -> Disposable {
+    func setup(isDualCameraEnabled: Bool, dualCameraPosition: CameraScreenImpl.PIPPosition, position: Camera.Position) {
+        var additionalVideoPositionChanges: [VideoPositionChange] = []
+        if isDualCameraEnabled && position == .front {
+            additionalVideoPositionChanges.append(VideoPositionChange(additional: true, timestamp: CACurrentMediaTime()))
+        }
+        var values = self.values
+        values = values.withUpdatedAdditionalVideoPositionChanges(additionalVideoPositionChanges: additionalVideoPositionChanges)
+        values = values.withUpdatedAdditionalVideo(position: self.getAdditionalVideoPosition(dualCameraPosition), scale: 1.625, rotation: 0.0)
+        self.values = values
+        self.cameraPosition = position
+        self.composer.values = values
+    }
+    
+    func markToggleCamera(position: Camera.Position) {
+        let timestamp = self.additionalSampleBuffer?.presentationTimeStamp.seconds ?? CACurrentMediaTime()
+        
+        var values = self.values
+        var additionalVideoPositionChanges = values.additionalVideoPositionChanges
+        additionalVideoPositionChanges.append(VideoPositionChange(additional: position == .front, timestamp: timestamp))
+        values = values.withUpdatedAdditionalVideoPositionChanges(additionalVideoPositionChanges: additionalVideoPositionChanges)
+        self.values = values
+        self.cameraPosition = position
+        self.composer.values = self.values
+    }
+    
+    func setDualCameraPosition(_ pipPosition: CameraScreenImpl.PIPPosition) {
+        let timestamp = self.additionalSampleBuffer?.presentationTimeStamp.seconds ?? CACurrentMediaTime()
+        
+        var values = self.values
+        var additionalVideoPositionChanges = values.additionalVideoPositionChanges
+        additionalVideoPositionChanges.append(VideoPositionChange(additional: self.cameraPosition == .front, translationFrom: values.additionalVideoPosition ?? .zero, timestamp: timestamp))
+        values = values.withUpdatedAdditionalVideoPositionChanges(additionalVideoPositionChanges: additionalVideoPositionChanges)
+        values = values.withUpdatedAdditionalVideo(position: self.getAdditionalVideoPosition(pipPosition), scale: 1.625, rotation: 0.0)
+        self.values = values
+        self.composer.values = values
+    }
+    
+    func getAdditionalVideoPosition(_ pipPosition: CameraScreenImpl.PIPPosition) -> CGPoint {
+        let topOffset = CGPoint(x: 267.0, y: 438.0)
+        let bottomOffset = CGPoint(x: 267.0, y: 438.0)
+        
+        let position: CGPoint
+        switch pipPosition {
+        case .topLeft:
+            position = CGPoint(x: topOffset.x, y: topOffset.y)
+        case .topRight:
+            position = CGPoint(x: dimensions.width - topOffset.x, y: topOffset.y)
+        case .bottomLeft:
+            position = CGPoint(x: bottomOffset.x, y: dimensions.height - bottomOffset.y)
+        case .bottomRight:
+            position = CGPoint(x: dimensions.width - bottomOffset.x, y: dimensions.height - bottomOffset.y)
+        }
+        return position
+    }
+    
+    func addOnVideoUpdated(_ f: @escaping () -> Void) -> Disposable {
         let index = self.onVideoUpdatedListeners.add(f)
         
         return ActionDisposable { [weak self] in
@@ -202,19 +260,7 @@ final class LiveStreamMediaSource {
         }
     }
     
-    public func addOnAudioUpdated(_ f: @escaping () -> Void) -> Disposable {
-        let index = self.onAudioUpdatedListeners.add(f)
-        
-        return ActionDisposable { [weak self] in
-            DispatchQueue.main.async {
-                guard let self else {
-                    return
-                }
-                self.onAudioUpdatedListeners.remove(index)
-            }
-        }
-    }
-    private func push(mainSampleBuffer: CMSampleBuffer, additionalSampleBuffer: CMSampleBuffer?) {
+    private func push(mainSampleBuffer: CMSampleBuffer) {
         let timestamp = mainSampleBuffer.presentationTimeStamp
         
         guard let mainPixelBuffer = CMSampleBufferGetImageBuffer(mainSampleBuffer) else {
@@ -222,7 +268,7 @@ final class LiveStreamMediaSource {
         }
         let main: MediaEditorComposer.Input = .videoBuffer(VideoPixelBuffer(pixelBuffer: mainPixelBuffer, rotation: .rotate90Degrees, timestamp: timestamp), nil, 1.0, .zero)
         var additional: [MediaEditorComposer.Input?] = []
-        if let additionalPixelBuffer = additionalSampleBuffer.flatMap({ CMSampleBufferGetImageBuffer($0) }) {
+        if let additionalPixelBuffer = self.additionalSampleBuffer.flatMap({ CMSampleBufferGetImageBuffer($0) }) {
             additional.append(
                 .videoBuffer(VideoPixelBuffer(pixelBuffer: additionalPixelBuffer, rotation: .rotate90DegreesMirrored, timestamp: timestamp), nil, 1.0, .zero)
             )
@@ -236,7 +282,7 @@ final class LiveStreamMediaSource {
                 guard let self else {
                     return
                 }
-                Queue.mainQueue().async {
+                self.queue.async {
                     self.currentVideoOutput = pixelBuffer
                     for onUpdated in self.onVideoUpdatedListeners.copyItems() {
                         onUpdated()

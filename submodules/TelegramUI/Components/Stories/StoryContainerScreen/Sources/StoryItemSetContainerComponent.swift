@@ -1342,6 +1342,14 @@ public final class StoryItemSetContainerComponent: Component {
                 return self.itemsContainerView
             }
             
+            if let component = self.component, component.isEmbeddedInCamera {
+                for (_, visibleItem) in self.visibleItems {
+                    if result === visibleItem.contentContainerView {
+                        return nil
+                    }
+                }
+            }
+            
             return result
         }
         
@@ -4294,30 +4302,35 @@ public final class StoryItemSetContainerComponent: Component {
                 
                 let centerInfoItemSize = currentCenterInfoItem.view.update(
                     transition: .immediate,
-                    component: AnyComponent(PlainButtonComponent(content: currentCenterInfoItem.component, effectAlignment: .center, action: { [weak self] in
-                        guard let self, let component = self.component else {
-                            return
-                        }
-                        if let forwardInfo = component.slice.item.storyItem.forwardInfo, case let .known(peer, _, _) = forwardInfo {
-                            if peer.id == component.context.account.peerId {
-                                self.navigateToMyStories()
-                            } else {
-                                self.navigateToPeer(peer: peer, chat: false)
+                    component: AnyComponent(PlainButtonComponent(
+                        content: currentCenterInfoItem.component,
+                        effectAlignment: .center,
+                        action: { [weak self] in
+                            guard let self, let component = self.component else {
+                                return
                             }
-                        } else if let author = component.slice.item.storyItem.author {
-                            if author.id == component.context.account.peerId {
-                                self.navigateToMyStories()
+                            if let forwardInfo = component.slice.item.storyItem.forwardInfo, case let .known(peer, _, _) = forwardInfo {
+                                if peer.id == component.context.account.peerId {
+                                    self.navigateToMyStories()
+                                } else {
+                                    self.navigateToPeer(peer: peer, chat: false)
+                                }
+                            } else if let author = component.slice.item.storyItem.author {
+                                if author.id == component.context.account.peerId {
+                                    self.navigateToMyStories()
+                                } else {
+                                    self.navigateToPeer(peer: author, chat: false)
+                                }
                             } else {
-                                self.navigateToPeer(peer: author, chat: false)
+                                if component.slice.effectivePeer.id == component.context.account.peerId {
+                                    self.navigateToMyStories()
+                                } else {
+                                    self.navigateToPeer(peer: component.slice.effectivePeer, chat: false)
+                                }
                             }
-                        } else {
-                            if component.slice.effectivePeer.id == component.context.account.peerId {
-                                self.navigateToMyStories()
-                            } else {
-                                self.navigateToPeer(peer: component.slice.effectivePeer, chat: false)
-                            }
-                        }
-                    })),
+                        },
+                        isEnabled: !component.isEmbeddedInCamera
+                    )),
                     environment: {},
                     containerSize: CGSize(width: headerRightOffset - 34.0, height: 44.0)
                 )
@@ -4342,16 +4355,21 @@ public final class StoryItemSetContainerComponent: Component {
                 
                 let leftInfoItemSize = currentLeftInfoItem.view.update(
                     transition: .immediate,
-                    component: AnyComponent(PlainButtonComponent(content: currentLeftInfoItem.component, effectAlignment: .center, action: { [weak self] in
-                        guard let self, let component = self.component else {
-                            return
-                        }
-                        if component.slice.effectivePeer.id == component.context.account.peerId {
-                            self.navigateToMyStories()
-                        } else {
-                            self.navigateToPeer(peer: component.slice.effectivePeer, chat: false)
-                        }
-                    })),
+                    component: AnyComponent(PlainButtonComponent(
+                        content: currentLeftInfoItem.component,
+                        effectAlignment: .center,
+                        action: { [weak self] in
+                            guard let self, let component = self.component else {
+                                return
+                            }
+                            if component.slice.effectivePeer.id == component.context.account.peerId {
+                                self.navigateToMyStories()
+                            } else {
+                                self.navigateToPeer(peer: component.slice.effectivePeer, chat: false)
+                            }
+                        },
+                        isEnabled: !component.isEmbeddedInCamera
+                    )),
                     environment: {},
                     containerSize: CGSize(width: 32.0, height: 32.0)
                 )

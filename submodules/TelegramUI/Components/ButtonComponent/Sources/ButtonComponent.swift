@@ -634,7 +634,7 @@ public final class ButtonComponent: Component {
                     
                     chromeView.layer.compositingFilter = "overlayBlendMode"
                     chromeView.alpha = 0.8
-                    chromeView.image = GlassBackgroundView.generateForegroundImage(size: CGSize(width: 26.0 * 2.0, height: 26.0 * 2.0), isDark: component.background.color.lightness < 0.4, fillColor: .clear)
+                    chromeView.image = GlassBackgroundView.generateForegroundImage(size: CGSize(width: 26.0 * 2.0, height: 26.0 * 2.0), isDark: component.background.color.lightness < 0.36, fillColor: .clear)
                 }
                 chromeTransition.setFrame(view: chromeView, frame: CGRect(origin: .zero, size: availableSize))
             } else if let chromeView = self.chromeView {

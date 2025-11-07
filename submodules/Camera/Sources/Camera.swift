@@ -339,43 +339,34 @@ private final class CameraContext {
             self.mainDeviceContext?.output.processSampleBuffer = { [weak self] sampleBuffer, pixelBuffer, connection in
                 guard let self, let mainDeviceContext = self.mainDeviceContext else {
                     return
-                } 
+                }
+                
+                var front = false
+                if #available(iOS 13.0, *) {
+                    front = connection.inputPorts.first?.sourceDevicePosition == .front
+                }
+                self.mainVideoOutput?.push(sampleBuffer, mirror: front)
+                
                 let timestamp = CACurrentMediaTime()
                 if timestamp > self.lastSnapshotTimestamp + 2.5, !mainDeviceContext.output.isRecording || !self.savedSnapshot {
-                    var front = false
-                    if #available(iOS 13.0, *) {
-                        front = connection.inputPorts.first?.sourceDevicePosition == .front
-                    }
-                    
-                    if sampleBuffer.type == kCMMediaType_Video {
-                        Queue.mainQueue().async {
-                            self.mainVideoOutput?.push(sampleBuffer, mirror: front)
-                        }
-                    }
-                    
                     self.savePreviewSnapshot(pixelBuffer: pixelBuffer, front: front)
                     self.lastSnapshotTimestamp = timestamp
                     self.savedSnapshot = true
                 }
             }
-            self.mainDeviceContext?.output.processAudioBuffer = { [weak self] sampleBuffer in
-                let _ = self
-            }
             self.additionalDeviceContext?.output.processSampleBuffer = { [weak self] sampleBuffer, pixelBuffer, connection in
                 guard let self, let additionalDeviceContext = self.additionalDeviceContext else {
                     return
                 }
+                
+                var front = false
+                if #available(iOS 13.0, *) {
+                    front = connection.inputPorts.first?.sourceDevicePosition == .front
+                }
+                self.additionalVideoOutput?.push(sampleBuffer, mirror: front)
+                
                 let timestamp = CACurrentMediaTime()
                 if timestamp > self.lastAdditionalSnapshotTimestamp + 2.5, !additionalDeviceContext.output.isRecording || !self.savedAdditionalSnapshot {
-                    var front = false
-                    if #available(iOS 13.0, *) {
-                        front = connection.inputPorts.first?.sourceDevicePosition == .front
-                    }
-                    
-                    Queue.mainQueue().async {
-                        self.additionalVideoOutput?.push(sampleBuffer, mirror: front)
-                    }
-                    
                     self.savePreviewSnapshot(pixelBuffer: pixelBuffer, front: front)
                     self.lastAdditionalSnapshotTimestamp = timestamp
                     self.savedAdditionalSnapshot = true
@@ -402,10 +393,7 @@ private final class CameraContext {
                 if #available(iOS 13.0, *) {
                     front = connection.inputPorts.first?.sourceDevicePosition == .front
                 }
-                
-                Queue.mainQueue().async {
-                    self.mainVideoOutput?.push(sampleBuffer, mirror: front)
-                }
+                self.mainVideoOutput?.push(sampleBuffer, mirror: front)
                 
                 let timestamp = CACurrentMediaTime()
                 if timestamp > self.lastSnapshotTimestamp + 2.5, !mainDeviceContext.output.isRecording || !self.savedSnapshot {
@@ -414,10 +402,6 @@ private final class CameraContext {
                     self.savedSnapshot = true
                 }
             }
-            self.mainDeviceContext?.output.processAudioBuffer = { [weak self] sampleBuffer in
-                let _ = self
-            }
-            
 //            if self.initialConfiguration.reportAudioLevel {
 //                self.mainDeviceContext?.output.processAudioBuffer = { [weak self] sampleBuffer in
 //                    guard let self else {
