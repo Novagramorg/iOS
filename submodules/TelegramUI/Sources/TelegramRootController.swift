@@ -301,7 +301,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
     }
     
     @discardableResult
-    public func openStoryCamera(customTarget: Stories.PendingTarget?, transitionIn: StoryCameraTransitionIn?, transitionedIn: @escaping () -> Void, transitionOut: @escaping (Stories.PendingTarget?, Bool) -> StoryCameraTransitionOut?) -> StoryCameraTransitionInCoordinator? {
+    public func openStoryCamera(customTarget: Stories.PendingTarget?, resumeLiveStream: Bool, transitionIn: StoryCameraTransitionIn?, transitionedIn: @escaping () -> Void, transitionOut: @escaping (Stories.PendingTarget?, Bool) -> StoryCameraTransitionOut?) -> StoryCameraTransitionInCoordinator? {
         guard let controller = self.viewControllers.last as? ViewController else {
             return nil
         }
@@ -335,6 +335,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
             context: context,
             mode: .story,
             customTarget: mediaEditorCustomTarget,
+            resumeLiveStream: resumeLiveStream,
             transitionIn: transitionIn.flatMap {
                 if let sourceView = $0.sourceView {
                     return CameraScreenImpl.TransitionIn(

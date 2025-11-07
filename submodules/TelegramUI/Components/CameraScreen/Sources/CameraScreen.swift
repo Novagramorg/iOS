@@ -374,6 +374,11 @@ private final class CameraScreenComponent: CombinedComponent {
             }
             
             if let controller = getController() {
+                if controller.resumeLiveStream {
+                    controller.updateCameraState({ $0.updatedMode(.live).updatedIsWaitingForStream(true) }, update: false, transition: .immediate)
+                    self.startLiveStream(rtmp: false)
+                }
+                
                 if let customTarget = controller.customTarget {
                     self.sendAsPeerId = customTarget
                     self.isCustomTarget = true
@@ -1080,6 +1085,7 @@ private final class CameraScreenComponent: CombinedComponent {
             })
         }
         
+        private var storyListContext: PeerExpiringStoryListContext?
         func startLiveStream(rtmp: Bool) {
             guard let controller = self.getController() else {
                 return
@@ -1117,41 +1123,36 @@ private final class CameraScreenComponent: CombinedComponent {
                 })
             }
             
-//            let _ = (self.context.engine.messages.storySubscriptions(isHidden: false)
-//            |> take(1)
-//            |> deliverOnMainQueue).start(next: { [weak self, weak controller] subscriptions in
-//                guard let self else {
-//                    return
-//                }
-//                if subscriptions.accountItem?.hasLiveItems == true {
-//                    let storyList = PeerExpiringStoryListContext(account: self.context.account, peerId: peerId)
-//                    let _ = (storyList.state
-//                    |> filter { !$0.isLoading }
-//                    |> take(1)
-//                    |> deliverOnMainQueue).start(next: { [weak self, weak controller] state in
-//                        guard let self else {
-//                            return
-//                        }
-//                        for item in state.items.reversed() {
-//                            let _ = (self.context.engine.messages.getStory(peerId: peerId, id: item.id)
-//                            |> deliverOnMainQueue).start(next: { [weak self, weak controller] item in
-//                                guard let self, let item else {
-//                                    return
-//                                }
-//                                if case .liveStream = item.media {
-//                                    self.liveStreamStory = item
-//                                    controller?.updateCameraState({ $0.updatedIsStreaming(true) }, transition: .spring(duration: 0.4))
-//                                    self.updated(transition: .immediate)
-//                                    return
-//                                }
-//                            })
-//                        }
-//                        startNewStream()
-//                    })
-//                } else {
+            let _ = (self.context.engine.messages.storySubscriptions(isHidden: false)
+            |> take(1)
+            |> deliverOnMainQueue).start(next: { [weak self, weak controller] subscriptions in
+                guard let self else {
+                    return
+                }
+                if subscriptions.accountItem?.hasLiveItems == true {
+                    let storyList = PeerExpiringStoryListContext(account: self.context.account, peerId: peerId)
+                    self.storyListContext = storyList
+                    let _ = (storyList.state
+                    |> filter { !$0.isLoading }
+                    |> take(1)
+                    |> deliverOnMainQueue).start(next: { [weak self, weak controller] state in
+                        guard let self else {
+                            return
+                        }
+                        for item in state.items.reversed() {
+                            if case let .item(item) = item, case .liveStream = item.media {
+                                self.liveStreamStory = item
+                                controller?.updateCameraState({ $0.updatedIsStreaming(true) }, transition: .spring(duration: 0.4))
+                                self.updated(transition: .immediate)
+                                return
+                            }
+                        }
+                        startNewLiveStream()
+                    })
+                } else {
                     startNewLiveStream()
-//                }
-//            })
+                }
+            })
         }
         
         func endLiveStream() {
@@ -2815,7 +2816,7 @@ public class CameraScreenImpl: ViewController, CameraScreen {
                             return false
                         }
                     }
-                    if let code = filteredCodes.first, !self.cameraState.isCollageEnabled && self.cameraState.recording == CameraState.Recording.none {
+                    if let code = filteredCodes.first, !self.cameraState.isCollageEnabled && self.cameraState.recording == CameraState.Recording.none && self.cameraState.mode != .live {
                         self.controller?.updateFocusedCode(code)
                     } else {
                         self.controller?.updateFocusedCode(nil)
@@ -3915,6 +3916,7 @@ public class CameraScreenImpl: ViewController, CameraScreen {
     private let context: AccountContext
     fileprivate let mode: Mode
     fileprivate let customTarget: EnginePeer.Id?
+    fileprivate let resumeLiveStream: Bool
     fileprivate let holder: CameraHolder?
     fileprivate let transitionIn: TransitionIn?
     fileprivate let transitionOut: (Bool) -> TransitionOut?
@@ -3972,15 +3974,18 @@ public class CameraScreenImpl: ViewController, CameraScreen {
     
     public var isEmbedded = false
     
-    fileprivate func updateCameraState(_ f: (CameraState) -> CameraState, transition: ComponentTransition) {
+    fileprivate func updateCameraState(_ f: (CameraState) -> CameraState, update: Bool = true, transition: ComponentTransition) {
         self.node.cameraState = f(self.node.cameraState)
-        self.node.requestUpdateLayout(transition: transition)
+        if update {
+            self.node.requestUpdateLayout(transition: transition)
+        }
     }
     
     public init(
         context: AccountContext,
         mode: Mode,
         customTarget: EnginePeer.Id? = nil,
+        resumeLiveStream: Bool = false,
         holder: CameraHolder? = nil,
         transitionIn: TransitionIn?,
         transitionOut: @escaping (Bool) -> TransitionOut?,
@@ -3989,6 +3994,7 @@ public class CameraScreenImpl: ViewController, CameraScreen {
         self.context = context
         self.mode = mode
         self.customTarget = customTarget
+        self.resumeLiveStream = resumeLiveStream
         self.holder = holder
         self.transitionIn = transitionIn
         self.transitionOut = transitionOut
@@ -4030,7 +4036,7 @@ public class CameraScreenImpl: ViewController, CameraScreen {
         super.displayNodeDidLoad()
         
         self.node.didAppear = { [weak self] in
-            guard let self else {
+            guard let self, !self.resumeLiveStream else {
                 return
             }
             self.postingAvailabilityDisposable = (self.postingAvailabilityPromise.get()
