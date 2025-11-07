@@ -107,7 +107,17 @@ final class StoryItemSetContainerSendMessage: @unchecked(Sendable) {
     var currentLiveStreamStarsIsActive: Bool = false
     var currentLiveStreamStarsIsActiveTimer: Foundation.Timer?
     
-    var sendAsData: (isPremium: Bool, availablePeers: [SendAsPeer])?
+    struct SendAsData: Equatable {
+        var isPremium: Bool
+        var availablePeers: [SendAsPeer]
+        
+        init(isPremium: Bool, availablePeers: [SendAsPeer]) {
+            self.isPremium = isPremium
+            self.availablePeers = availablePeers
+        }
+    }
+    
+    var sendAsData: SendAsData?
     var currentSendAsPeer: SendAsPeer?
     var isSelectingSendAsPeer: Bool = false
     var sendAsDisposable: Disposable?
@@ -244,24 +254,14 @@ final class StoryItemSetContainerSendMessage: @unchecked(Sendable) {
                     availablePeers.append(peer)
                 }
                 
-                self.sendAsData = (
+                let sendAsData = SendAsData(
                     isPremium: isPremium,
                     availablePeers: availablePeers
                 )
-                
-                if availablePeers.count > 1 {
-                    if self.currentSendAsPeer == nil {
-                        self.currentSendAsPeer = availablePeers.first
-                        if !view.isUpdatingComponent {
-                            view.state?.updated(transition: .spring(duration: 0.4))
-                        }
-                    }
-                } else {
-                    if self.currentSendAsPeer != nil {
-                        self.currentSendAsPeer = nil
-                        if !view.isUpdatingComponent {
-                            view.state?.updated(transition: .spring(duration: 0.4))
-                        }
+                if self.sendAsData != sendAsData {
+                    self.sendAsData = sendAsData
+                    if !view.isUpdatingComponent {
+                        view.state?.updated(transition: .spring(duration: 0.4))
                     }
                 }
             })
@@ -684,6 +684,7 @@ final class StoryItemSetContainerSendMessage: @unchecked(Sendable) {
                 
                 var sendPaidMessageStars = self.currentLiveStreamMessageStars
                 var isAdmin = false
+                var sendAsPeer: SendAsPeer?
                 if let visibleItemView = view.visibleItems[component.slice.item.id]?.view.view as? StoryItemContentComponent.View {
                     if let liveChatStateValue = visibleItemView.liveChatState {
                         if let minMessagePrice = liveChatStateValue.minMessagePrice {
@@ -696,6 +697,14 @@ final class StoryItemSetContainerSendMessage: @unchecked(Sendable) {
                             }
                         }
                         isAdmin = liveChatStateValue.isAdmin
+                        
+                        if let currentSendAsPeer = self.currentSendAsPeer {
+                            sendAsPeer = currentSendAsPeer
+                        } else {
+                            sendAsPeer = liveChatStateValue.defaultSendAs.flatMap { defaultSendAs in
+                                return self.sendAsData?.availablePeers.first(where: { $0.peer.id == defaultSendAs })
+                            }
+                        }
                     }
                 }
                 
@@ -758,7 +767,7 @@ final class StoryItemSetContainerSendMessage: @unchecked(Sendable) {
                             
                             let entities = generateChatInputTextEntities(text)
                             
-                            call.sendMessage(fromId: self.currentSendAsPeer?.peer.id, isAdmin: isAdmin, text: text.string, entities: entities, paidStars: sendPaidMessageStars?.value)
+                            call.sendMessage(fromId: sendAsPeer?.peer.id, isAdmin: isAdmin, text: text.string, entities: entities, paidStars: sendPaidMessageStars?.value)
                             
                             component.storyItemSharedState.replyDrafts.removeValue(forKey: StoryId(peerId: peerId, id: focusedItem.storyItem.id))
                             inputPanelView.clearSendMessageInput(updateState: true)
@@ -3991,6 +4000,7 @@ final class StoryItemSetContainerSendMessage: @unchecked(Sendable) {
             
             var topPeers: [ReactionsMessageAttribute.TopPeer] = []
             var minAmount: Int64 = 1
+            var sendAsPeer: SendAsPeer?
             if let visibleItemView = view.visibleItems[component.slice.item.id]?.view.view as? StoryItemContentComponent.View {
                 if let topItems = visibleItemView.liveChatState?.starStats?.topItems {
                     topPeers = topItems.map { item -> ReactionsMessageAttribute.TopPeer in
@@ -4007,12 +4017,20 @@ final class StoryItemSetContainerSendMessage: @unchecked(Sendable) {
                 if let minMessagePrice = visibleItemView.liveChatState?.minMessagePrice {
                     minAmount = minMessagePrice
                 }
+                
+                if let currentSendAsPeer = self.currentSendAsPeer {
+                    sendAsPeer = currentSendAsPeer
+                } else {
+                    sendAsPeer = visibleItemView.liveChatState?.defaultSendAs.flatMap { defaultSendAs in
+                        return self.sendAsData?.availablePeers.first(where: { $0.peer.id == defaultSendAs })
+                    }
+                }
             }
             
             let initialData = await ChatSendStarsScreen.initialData(
                 context: component.context,
                 peerId: peerId,
-                myPeer: (self.currentSendAsPeer?.peer).flatMap(EnginePeer.init),
+                myPeer: (sendAsPeer?.peer).flatMap(EnginePeer.init),
                 reactSubject: .liveStream(peerId: peerId, storyId: focusedItem.storyItem.id, minAmount: Int(minAmount), liveChatMessageParams: LiveChatMessageParams(appConfig: component.context.currentAppConfiguration.with({ $0 }))),
                 topPeers: topPeers,
                 completion: { [weak self, weak view] amount, _, _, _ in
@@ -4245,16 +4263,37 @@ final class StoryItemSetContainerSendMessage: @unchecked(Sendable) {
         guard let call = itemView.mediaStreamCall else {
             return
         }
+        var sendAsPeer: SendAsPeer?
         if let liveChatStateValue = itemView.liveChatState {
             isAdmin = liveChatStateValue.isAdmin
+            
+            if let currentSendAsPeer = self.currentSendAsPeer {
+                sendAsPeer = currentSendAsPeer
+            } else {
+                sendAsPeer = liveChatStateValue.defaultSendAs.flatMap { defaultSendAs in
+                    return self.sendAsData?.availablePeers.first(where: { $0.peer.id == defaultSendAs })
+                }
+            }
         }
         
-        call.sendStars(fromId: self.currentSendAsPeer?.peer.id, isAdmin: isAdmin, amount: Int64(count), delay: delay)
+        call.sendStars(fromId: sendAsPeer?.peer.id, isAdmin: isAdmin, amount: Int64(count), delay: delay)
     }
     
     func openSendAsSelection(view: StoryItemSetContainerComponent.View, sourceView: UIView, gesture: ContextGesture?) {
-        guard let component = view.component, let sendAsData = self.sendAsData, let currentSendAsPeer = self.currentSendAsPeer, let controller = component.controller() else {
+        guard let component = view.component, let sendAsData = self.sendAsData, let controller = component.controller() else {
             return
+        }
+        guard let visibleItemView = view.visibleItems[component.slice.item.id]?.view.view as? StoryItemContentComponent.View else {
+            return
+        }
+        
+        var currentSendAsPeer: SendAsPeer?
+        if let currentSendAsPeerValue = self.currentSendAsPeer {
+            currentSendAsPeer = currentSendAsPeerValue
+        } else {
+            currentSendAsPeer = visibleItemView.liveChatState?.defaultSendAs.flatMap { defaultSendAs in
+                return self.sendAsData?.availablePeers.first(where: { $0.peer.id == defaultSendAs })
+            }
         }
         
         let focusedItem = component.slice.item
@@ -4269,7 +4308,7 @@ final class StoryItemSetContainerSendMessage: @unchecked(Sendable) {
             context: component.context,
             chatPeerId: peerId,
             peers: sendAsData.availablePeers,
-            selectedPeerId: currentSendAsPeer.peer.id,
+            selectedPeerId: currentSendAsPeer?.peer.id,
             isPremium: isPremium,
             action: { [weak self, weak view] peer in
                 guard let self, let view else {
