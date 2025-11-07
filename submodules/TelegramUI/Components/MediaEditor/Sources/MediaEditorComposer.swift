@@ -92,7 +92,12 @@ public final class MediaEditorComposer {
     let ciContext: CIContext?
     private var textureCache: CVMetalTextureCache?
     
-    private let values: MediaEditorValues
+    public var values: MediaEditorValues {
+        didSet {
+            self.renderChain.update(values: self.values)
+            self.renderer.videoFinishPass.update(values: self.values, videoDuration: nil, additionalVideoDuration: nil)
+        }
+    }
     private let dimensions: CGSize
     private let outputDimensions: CGSize
     private let textScale: CGFloat

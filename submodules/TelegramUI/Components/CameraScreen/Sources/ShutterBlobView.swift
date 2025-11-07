@@ -49,19 +49,27 @@ final class ShutterBlobView: UIView {
             }
         }
         
-        func primaryRedness(tintColor: UIColor) -> CGFloat {
+        func primaryColor(tintColor: UIColor) -> CGRect {
+            var color: UIColor
             switch self {
             case .generic:
                 if tintColor.rgb == 0x000000 {
-                    return -1.0
+                    color = UIColor(rgb: 0x000000)
                 } else {
-                    return 0.0
+                    color = UIColor(rgb: 0xffffff)
                 }
             case .live:
-                return 0.7
+                color = UIColor(rgb: 0xfa325a)
             default:
-                return 1.0
+                color = UIColor(rgb: 0xff0b18)
             }
+            var r: CGFloat = 0.0
+            var g: CGFloat = 0.0
+            var b: CGFloat = 0.0
+            if color.getRed(&r, green: &g, blue: &b, alpha: nil) {
+                return CGRect(x: r, y: g, width: b, height: 1.0)
+            }
+            return CGRect(x: 0, y: 0, width: 0, height: 1.0)
         }
         
         var primaryCornerRadius: CGFloat {
@@ -105,7 +113,7 @@ final class ShutterBlobView: UIView {
     private var primaryHeight = AnimatableProperty<CGFloat>(value: 0.63)
     private var primaryOffsetX = AnimatableProperty<CGFloat>(value: 0.0)
     private var primaryOffsetY = AnimatableProperty<CGFloat>(value: 0.0)
-    private var primaryRedness = AnimatableProperty<CGFloat>(value: 0.0)
+    private var primaryColor = AnimatableProperty<CGRect>(value: CGRect(x: 1.0, y: 1.0, width: 1.0, height: 1.0))
     private var primaryCornerRadius = AnimatableProperty<CGFloat>(value: 0.63)
     
     private var secondarySize = AnimatableProperty<CGFloat>(value: 0.34)
@@ -145,13 +153,22 @@ final class ShutterBlobView: UIView {
         pipelineStateDescriptor.vertexFunction = loadedVertexProgram
         pipelineStateDescriptor.fragmentFunction = loadedFragmentProgram
         pipelineStateDescriptor.colorAttachments[0].pixelFormat = .bgra8Unorm
+        
         pipelineStateDescriptor.colorAttachments[0].isBlendingEnabled = true
-        pipelineStateDescriptor.colorAttachments[0].rgbBlendOperation = .add
-        pipelineStateDescriptor.colorAttachments[0].alphaBlendOperation = .add
-        pipelineStateDescriptor.colorAttachments[0].sourceRGBBlendFactor = .sourceAlpha
-        pipelineStateDescriptor.colorAttachments[0].sourceAlphaBlendFactor = .sourceAlpha
+        pipelineStateDescriptor.colorAttachments[0].sourceRGBBlendFactor = .one
         pipelineStateDescriptor.colorAttachments[0].destinationRGBBlendFactor = .oneMinusSourceAlpha
+        pipelineStateDescriptor.colorAttachments[0].rgbBlendOperation = .add
+        pipelineStateDescriptor.colorAttachments[0].sourceAlphaBlendFactor = .one
         pipelineStateDescriptor.colorAttachments[0].destinationAlphaBlendFactor = .oneMinusSourceAlpha
+        pipelineStateDescriptor.colorAttachments[0].alphaBlendOperation = .add
+        
+//        pipelineStateDescriptor.colorAttachments[0].isBlendingEnabled = true
+//        pipelineStateDescriptor.colorAttachments[0].rgbBlendOperation = .add
+//        pipelineStateDescriptor.colorAttachments[0].alphaBlendOperation = .add
+//        pipelineStateDescriptor.colorAttachments[0].sourceRGBBlendFactor = .sourceAlpha
+//        pipelineStateDescriptor.colorAttachments[0].sourceAlphaBlendFactor = .sourceAlpha
+//        pipelineStateDescriptor.colorAttachments[0].destinationRGBBlendFactor = .oneMinusSourceAlpha
+//        pipelineStateDescriptor.colorAttachments[0].destinationAlphaBlendFactor = .oneMinusSourceAlpha
         
         self.drawPassthroughPipelineState = try! device.makeRenderPipelineState(descriptor: pipelineStateDescriptor)
   
@@ -184,7 +201,7 @@ final class ShutterBlobView: UIView {
         
         self.primaryWidth.update(value: state.primarySize.width, transition: transition)
         self.primaryHeight.update(value: state.primarySize.height, transition: transition)
-        self.primaryRedness.update(value: state.primaryRedness(tintColor: tintColor), transition: transition)
+        self.primaryColor.update(value: state.primaryColor(tintColor: tintColor), transition: transition)
         self.primaryCornerRadius.update(value: state.primaryCornerRadius, transition: transition)
         self.secondarySize.update(value: state.secondarySize, transition: transition)
         self.secondaryRedness.update(value: state.secondaryRedness, transition: transition)
@@ -238,7 +255,6 @@ final class ShutterBlobView: UIView {
             self.primaryHeight,
             self.primaryOffsetX,
             self.primaryOffsetY,
-            self.primaryRedness,
             self.primaryCornerRadius,
             self.secondarySize,
             self.secondaryOffsetX,
@@ -252,6 +268,9 @@ final class ShutterBlobView: UIView {
             if property.tick(timestamp: timestamp) {
                 hasAnimations = true
             }
+        }
+        if self.primaryColor.tick(timestamp: timestamp) {
+            hasAnimations = true
         }
         self.displayLink?.isPaused = !hasAnimations
     }
@@ -316,7 +335,7 @@ final class ShutterBlobView: UIView {
         var primaryParameters = simd_float4(
             Float(self.primaryWidth.presentationValue),
             Float(self.primaryHeight.presentationValue),
-            Float(self.primaryRedness.presentationValue),
+            Float(0.0),
             Float(self.primaryCornerRadius.presentationValue)
         )
         renderEncoder.setFragmentBytes(&primaryParameters, length: MemoryLayout<simd_float3>.size, index: 1)
@@ -327,17 +346,20 @@ final class ShutterBlobView: UIView {
         )
         renderEncoder.setFragmentBytes(&primaryOffset, length: MemoryLayout<simd_float2>.size, index: 2)
         
+        var primaryColor = simd_float3(Float(self.primaryColor.presentationValue.minX), Float(self.primaryColor.presentationValue.minY), Float(self.primaryColor.presentationValue.width))
+        renderEncoder.setFragmentBytes(&primaryColor, length: MemoryLayout<simd_float3>.stride, index: 3)
+        
         var secondaryParameters = simd_float2(
             Float(self.secondarySize.presentationValue),
             Float(self.secondaryRedness.presentationValue)
         )
-        renderEncoder.setFragmentBytes(&secondaryParameters, length: MemoryLayout<simd_float4>.size, index: 3)
+        renderEncoder.setFragmentBytes(&secondaryParameters, length: MemoryLayout<simd_float4>.size, index: 4)
         
         var secondaryOffset = simd_float2(
             Float(self.secondaryOffsetX.presentationValue),
             Float(self.secondaryOffsetY.presentationValue)
         )
-        renderEncoder.setFragmentBytes(&secondaryOffset, length: MemoryLayout<simd_float2>.size, index: 4)
+        renderEncoder.setFragmentBytes(&secondaryOffset, length: MemoryLayout<simd_float2>.size, index: 5)
         
         renderEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6, instanceCount: 1)
         renderEncoder.endEncoding()

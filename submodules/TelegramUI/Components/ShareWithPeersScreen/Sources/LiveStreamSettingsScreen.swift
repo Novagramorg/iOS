@@ -746,38 +746,38 @@ final class LiveStreamSettingsScreenComponent: Component {
                 action: nil
             ))))
             
-            var pinTitle = "Post to My Profile"
-            var pinInfo = "Keep this live on your profile."
-            if screenState.sendAsPeerId?.namespace == Namespaces.Peer.CloudChannel {
-                pinTitle = "Post to Channel Profile"
-                pinInfo = "Keep this live on channel profile."
-            }
-            
-            settingsSectionItems.append(AnyComponentWithIdentity(id: "pin", component: AnyComponent(ListActionItemComponent(
-                theme: theme,
-                style: .glass,
-                title: AnyComponent(MultilineTextComponent(
-                    text: .plain(NSAttributedString(
-                        string: pinTitle,
-                        font: Font.regular(presentationData.listsFontSize.baseDisplaySize),
-                        textColor: theme.list.itemPrimaryTextColor
-                    )),
-                    maximumNumberOfLines: 1
-                )),
-                accessory: .toggle(ListActionItemComponent.Toggle(style: .regular, isOn: screenState.pin, action: { [weak self] _ in
-                    guard let self else {
-                        return
-                    }
-                    component.stateContext.pin = !component.stateContext.pin
-                    self.state?.updated(transition: .spring(duration: 0.4))
-                })),
-                action: nil
-            ))))
-            
-            let settingsSectionFooterComponent = AnyComponent(MultilineTextComponent(
-                text: .plain(NSAttributedString(string: pinInfo, font: footerTextFont, textColor: footerTextColor)),
-                maximumNumberOfLines: 0
-            ))
+//            var pinTitle = "Post to My Profile"
+//            var pinInfo = "Keep this live on your profile."
+//            if screenState.sendAsPeerId?.namespace == Namespaces.Peer.CloudChannel {
+//                pinTitle = "Post to Channel Profile"
+//                pinInfo = "Keep this live on channel profile."
+//            }
+//            
+//            settingsSectionItems.append(AnyComponentWithIdentity(id: "pin", component: AnyComponent(ListActionItemComponent(
+//                theme: theme,
+//                style: .glass,
+//                title: AnyComponent(MultilineTextComponent(
+//                    text: .plain(NSAttributedString(
+//                        string: pinTitle,
+//                        font: Font.regular(presentationData.listsFontSize.baseDisplaySize),
+//                        textColor: theme.list.itemPrimaryTextColor
+//                    )),
+//                    maximumNumberOfLines: 1
+//                )),
+//                accessory: .toggle(ListActionItemComponent.Toggle(style: .regular, isOn: screenState.pin, action: { [weak self] _ in
+//                    guard let self else {
+//                        return
+//                    }
+//                    component.stateContext.pin = !component.stateContext.pin
+//                    self.state?.updated(transition: .spring(duration: 0.4))
+//                })),
+//                action: nil
+//            ))))
+//            
+//            let settingsSectionFooterComponent = AnyComponent(MultilineTextComponent(
+//                text: .plain(NSAttributedString(string: pinInfo, font: footerTextFont, textColor: footerTextColor)),
+//                maximumNumberOfLines: 0
+//            ))
             
             let settingsSectionSize = self.settingsSection.update(
                 transition: transition,
@@ -785,7 +785,7 @@ final class LiveStreamSettingsScreenComponent: Component {
                     theme: theme,
                     style: .glass,
                     header: nil,
-                    footer: settingsSectionFooterComponent,
+                    footer: nil,
                     items: settingsSectionItems
                 )),
                 environment: {},
