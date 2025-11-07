@@ -533,6 +533,18 @@ public final class StoryPeerListComponent: Component {
             }
         }
         
+        public var isLiveStreaming: Bool {
+            guard let component = self.component else {
+                return false
+            }
+            for itemSet in self.sortedItems {
+                if itemSet.peer.id == component.context.account.peerId, itemSet.hasLiveItems {
+                    return true
+                }
+            }
+            return false
+        }
+        
         public func transitionViewForItem(peerId: EnginePeer.Id) -> (UIView, StoryContainerScreen.TransitionView)? {
             if self.collapsedButton.isUserInteractionEnabled {
                 return nil
