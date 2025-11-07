@@ -1531,10 +1531,11 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             shouldDisplayMenuButton = true
         }
         
+        var displaySendAsAvatarButton = false
         let mediaRecordingState = interfaceState.inputTextPanelState.mediaRecordingState
         if let sendAsPeers = interfaceState.sendAsPeers, !sendAsPeers.isEmpty && interfaceState.editMessageState == nil {
             menuButtonExpanded = false
-            self.sendAsAvatarButtonNode.isHidden = false
+            displaySendAsAvatarButton = true
             
             var currentPeer = sendAsPeers.first(where: { $0.peer.id == interfaceState.currentSendAsPeerId})?.peer
             if currentPeer == nil {
@@ -1554,9 +1555,6 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                     break
                 }
             }
-            self.sendAsAvatarButtonNode.isHidden = true
-        } else {
-            self.sendAsAvatarButtonNode.isHidden = true
         }
         if mediaRecordingState != nil || interfaceState.interfaceState.mediaDraftState != nil {
             hasMenuButton = false
@@ -2968,11 +2966,13 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         }
         transition.updateFrame(node: self.textPlaceholderNode, frame: textPlaceholderFrame)
         
+        
         let sendAsButtonFrame = CGRect(origin: CGPoint(x: 3.0, y: textInputContainerBackgroundFrame.height - 3.0 - 34.0), size: CGSize(width: 34.0, height: 34.0))
+        let sendAsAvatarButtonAlpha: CGFloat = audioRecordingItemsAlpha * (displaySendAsAvatarButton ? 1.0 : 0.0)
         transition.updatePosition(node: self.sendAsAvatarButtonNode, position: sendAsButtonFrame.center)
         transition.updateBounds(node: self.sendAsAvatarButtonNode, bounds: CGRect(origin: CGPoint(), size: sendAsButtonFrame.size))
-        transition.updateAlpha(layer: self.sendAsAvatarButtonNode.layer, alpha: audioRecordingItemsAlpha)
-        transition.updateTransformScale(layer: self.sendAsAvatarButtonNode.layer, scale: audioRecordingItemsAlpha == 0.0 ? 0.001 : 1.0)
+        transition.updateAlpha(layer: self.sendAsAvatarButtonNode.layer, alpha: sendAsAvatarButtonAlpha)
+        transition.updateTransformScale(layer: self.sendAsAvatarButtonNode.layer, scale: sendAsAvatarButtonAlpha == 0.0 ? 0.001 : 1.0)
         transition.updateFrame(node: self.sendAsAvatarContainerNode, frame: CGRect(origin: CGPoint(), size: sendAsButtonFrame.size))
         transition.updateFrame(node: self.sendAsAvatarReferenceNode, frame: CGRect(origin: CGPoint(), size: sendAsButtonFrame.size))
         transition.updatePosition(node: self.sendAsAvatarNode, position: CGRect(origin: CGPoint(), size: sendAsButtonFrame.size).center)

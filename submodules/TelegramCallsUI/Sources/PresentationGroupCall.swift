@@ -40,7 +40,8 @@ private extension PresentationGroupCallState {
             isVideoEnabled: false,
             isVideoWatchersLimitReached: false,
             isMyVideoActive: false,
-            isUnifiedStream: false
+            isUnifiedStream: false,
+            defaultSendAs: nil
         )
     }
 }
@@ -1565,6 +1566,8 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
                 isVideoEnabled: callInfo.isVideoEnabled,
                 unmutedVideoLimit: callInfo.unmutedVideoLimit,
                 isStream: callInfo.isStream,
+                sendPaidMessagesStars: self.stateValue.sendPaidMessageStars,
+                defaultSendAs: self.stateValue.defaultSendAs,
                 version: 0
             ),
             previousServiceState: nil,
@@ -2282,19 +2285,23 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
             if case let .established(callInfo, _, _, _, initialState) = internalState {
                 self.summaryInfoState.set(.single(SummaryInfoState(info: callInfo)))
                 
-                self.stateValue.canManageCall = initialState.isCreator || initialState.adminIds.contains(self.accountContext.account.peerId)
-                if self.stateValue.canManageCall && initialState.defaultParticipantsAreMuted.canChange {
-                    self.stateValue.defaultParticipantMuteState = initialState.defaultParticipantsAreMuted.isMuted ? .muted : .unmuted
+                var stateValue = self.stateValue
+                
+                stateValue.canManageCall = initialState.isCreator || initialState.adminIds.contains(self.accountContext.account.peerId)
+                if stateValue.canManageCall && initialState.defaultParticipantsAreMuted.canChange {
+                    stateValue.defaultParticipantMuteState = initialState.defaultParticipantsAreMuted.isMuted ? .muted : .unmuted
                 }
-                if self.stateValue.recordingStartTimestamp != initialState.recordingStartTimestamp {
-                    self.stateValue.recordingStartTimestamp = initialState.recordingStartTimestamp
+                if stateValue.recordingStartTimestamp != initialState.recordingStartTimestamp {
+                    stateValue.recordingStartTimestamp = initialState.recordingStartTimestamp
                 }
-                if self.stateValue.title != initialState.title {
-                    self.stateValue.title = initialState.title
+                if stateValue.title != initialState.title {
+                    stateValue.title = initialState.title
                 }
-                if self.stateValue.scheduleTimestamp != initialState.scheduleTimestamp {
-                    self.stateValue.scheduleTimestamp = initialState.scheduleTimestamp
+                if stateValue.scheduleTimestamp != initialState.scheduleTimestamp {
+                    stateValue.scheduleTimestamp = initialState.scheduleTimestamp
                 }
+                stateValue.defaultSendAs = initialState.defaultSendAs
+                self.stateValue = stateValue
                 
                 let accountContext = self.accountContext
                 let peerId = self.peerId
@@ -2667,21 +2674,24 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
                     
                     self.membersValue = members
                     
-                    self.stateValue.adminIds = adminIds
+                    var stateValue = self.stateValue
+                    stateValue.adminIds = adminIds
                     
-                    self.stateValue.canManageCall = state.isCreator || adminIds.contains(self.accountContext.account.peerId)
-                    if (state.isCreator || self.stateValue.adminIds.contains(self.accountContext.account.peerId)) && state.defaultParticipantsAreMuted.canChange {
-                        self.stateValue.defaultParticipantMuteState = state.defaultParticipantsAreMuted.isMuted ? .muted : .unmuted
+                    stateValue.canManageCall = state.isCreator || adminIds.contains(self.accountContext.account.peerId)
+                    if (state.isCreator || stateValue.adminIds.contains(self.accountContext.account.peerId)) && state.defaultParticipantsAreMuted.canChange {
+                        stateValue.defaultParticipantMuteState = state.defaultParticipantsAreMuted.isMuted ? .muted : .unmuted
                     }
-                    self.stateValue.messagesAreEnabled = state.messagesAreEnabled.isEnabled
-                    self.stateValue.canEnableMessages = state.messagesAreEnabled.canChange
-                    self.stateValue.sendPaidMessageStars = state.messagesAreEnabled.sendPaidMessagesStars
-                    self.stateValue.recordingStartTimestamp = state.recordingStartTimestamp
-                    self.stateValue.title = state.title
-                    self.stateValue.scheduleTimestamp = state.scheduleTimestamp
-                    self.stateValue.isVideoEnabled = state.isVideoEnabled && otherParticipantsWithVideo < state.unmutedVideoLimit
-                    self.stateValue.isVideoWatchersLimitReached = videoWatchingParticipants >= configuration.videoParticipantsMaxCount
-                    self.stateValue.isUnifiedStream = state.isStream
+                    stateValue.messagesAreEnabled = state.messagesAreEnabled.isEnabled
+                    stateValue.canEnableMessages = state.messagesAreEnabled.canChange
+                    stateValue.sendPaidMessageStars = state.messagesAreEnabled.sendPaidMessagesStars
+                    stateValue.recordingStartTimestamp = state.recordingStartTimestamp
+                    stateValue.title = state.title
+                    stateValue.scheduleTimestamp = state.scheduleTimestamp
+                    stateValue.isVideoEnabled = state.isVideoEnabled && otherParticipantsWithVideo < state.unmutedVideoLimit
+                    stateValue.isVideoWatchersLimitReached = videoWatchingParticipants >= configuration.videoParticipantsMaxCount
+                    stateValue.isUnifiedStream = state.isStream
+                    stateValue.defaultSendAs = state.defaultSendAs
+                    self.stateValue = stateValue
                     
                     self.summaryInfoState.set(.single(SummaryInfoState(info: GroupCallInfo(
                         id: callInfo.id,

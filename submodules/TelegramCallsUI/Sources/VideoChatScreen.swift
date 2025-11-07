@@ -1220,7 +1220,8 @@ final class VideoChatScreenComponent: Component {
                     isVideoEnabled: true,
                     isVideoWatchersLimitReached: false,
                     isMyVideoActive: false,
-                    isUnifiedStream: false
+                    isUnifiedStream: false,
+                    defaultSendAs: nil
                 )
                 
                 return .single((callState, invitedPeers.compactMap({ peer -> VideoChatScreenComponent.InvitedPeer? in
