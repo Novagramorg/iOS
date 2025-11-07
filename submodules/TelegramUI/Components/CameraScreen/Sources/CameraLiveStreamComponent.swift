@@ -155,6 +155,19 @@ final class CameraLiveStreamComponent: Component {
                         self.storyContentState = state
                         self.state?.updated()
                     })
+                    
+                    self.inputMediaNodeDataPromise.set(
+                        ChatEntityKeyboardInputNode.inputData(
+                            context: component.context,
+                            chatPeerId: nil,
+                            areCustomEmojiEnabled: true,
+                            hasTrending: true,
+                            hasSearch: true,
+                            hideBackground: true,
+                            maskEdge: .clip,
+                            sendGif: nil
+                        )
+                    )
                 }
                 
                 if let storyContentState = self.storyContentState, let slice = storyContentState.slice {

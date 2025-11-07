@@ -634,7 +634,7 @@ public final class GiftItemComponent: Component {
                     if case let .starGift(gift, _) = component.subject, gift.flags.contains(.isAuction) {
                         buttonColor = component.theme.overallDarkAppearance ? UIColor(rgb: 0xffc337) : UIColor(rgb: 0xd3720a)
                         //todo:localize
-                        price = "Place a Bid"
+                        price = "Join"
                     } else {
                         if priceValue.contains("#") {
                             buttonColor = component.theme.overallDarkAppearance ? UIColor(rgb: 0xffc337) : UIColor(rgb: 0xd3720a)

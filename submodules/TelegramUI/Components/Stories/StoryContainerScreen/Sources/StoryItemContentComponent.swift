@@ -1147,13 +1147,21 @@ final class StoryItemContentComponent: Component {
                 if self.liveCallStatsDisposable == nil {
                     self.liveCallStatsDisposable = (mediaStreamCall.members
                     |> deliverOnMainQueue).startStandalone(next: { [weak self] members in
-                        guard let self, let environment = self.environment else {
+                        guard let self, let component = self.component, let environment = self.environment else {
                             return
                         }
                         //TODO:localize
                         let subtitle: String
                         if let members {
-                            subtitle = "\(max(1, members.totalCount)) watching"
+                            var totalCount = members.totalCount
+                            if component.isEmbeddedInCamera {
+                                totalCount -= 1
+                            }
+                            if totalCount == 0 && component.isEmbeddedInCamera {
+                                subtitle = "no viewers"
+                            } else {
+                                subtitle = "\(max(1, totalCount)) watching"
+                            }
                         } else {
                             subtitle = "loading..."
                         }
