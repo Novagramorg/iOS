@@ -446,7 +446,7 @@ final class StoryItemContentComponent: Component {
                         isChannel: false,
                         invite: nil,
                         joinAsPeerId: nil,
-                        isStream: true,
+                        isStream: !(component.isEmbeddedInCamera && liveStream.kind == .rtc),
                         keyPair: nil,
                         conferenceSourceId: nil,
                         isConference: false,
@@ -943,6 +943,7 @@ final class StoryItemContentComponent: Component {
                         call: mediaStreamCall,
                         storyPeerId: component.peer.id,
                         insets: environment.containerInsets,
+                        isEmbeddedInCamera: component.isEmbeddedInCamera,
                         controller: { [weak self] in
                             guard let self, let component = self.component else {
                                 return nil
