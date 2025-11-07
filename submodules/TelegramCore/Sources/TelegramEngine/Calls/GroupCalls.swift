@@ -595,6 +595,8 @@ func _internal_getGroupCallParticipants(account: Account, reference: InternalGro
                 isVideoEnabled: isVideoEnabled,
                 unmutedVideoLimit: unmutedVideoLimit,
                 isStream: isStream,
+                sendPaidMessagesStars: nil,
+                defaultSendAs: nil,
                 version: version
             )
         }
@@ -1479,6 +1481,8 @@ public final class GroupCallParticipantsContext {
             isVideoEnabled: Bool,
             unmutedVideoLimit: Int,
             isStream: Bool,
+            sendPaidMessagesStars: Int64?,
+            defaultSendAs: PeerId?,
             version: Int32
         ) {
             self.participants = participants
@@ -1496,6 +1500,8 @@ public final class GroupCallParticipantsContext {
             self.isVideoEnabled = isVideoEnabled
             self.unmutedVideoLimit = unmutedVideoLimit
             self.isStream = isStream
+            self.sendPaidMessagesStars = sendPaidMessagesStars
+            self.defaultSendAs = defaultSendAs
             self.version = version
         }
     }
@@ -1871,6 +1877,8 @@ public final class GroupCallParticipantsContext {
                                 isVideoEnabled: strongSelf.stateValue.state.isVideoEnabled,
                                 unmutedVideoLimit: strongSelf.stateValue.state.unmutedVideoLimit,
                                 isStream: strongSelf.stateValue.state.isStream,
+                                sendPaidMessagesStars: strongSelf.stateValue.state.sendPaidMessagesStars,
+                                defaultSendAs: strongSelf.stateValue.state.defaultSendAs,
                                 version: strongSelf.stateValue.state.version
                             ),
                             overlayState: strongSelf.stateValue.overlayState,
@@ -2102,6 +2110,8 @@ public final class GroupCallParticipantsContext {
                     isVideoEnabled: strongSelf.stateValue.state.isVideoEnabled,
                     unmutedVideoLimit: strongSelf.stateValue.state.unmutedVideoLimit,
                     isStream: strongSelf.stateValue.state.isStream,
+                    sendPaidMessagesStars: strongSelf.stateValue.state.sendPaidMessagesStars,
+                    defaultSendAs: strongSelf.stateValue.state.defaultSendAs,
                     version: strongSelf.stateValue.state.version
                 ),
                 overlayState: strongSelf.stateValue.overlayState,
@@ -2328,6 +2338,8 @@ public final class GroupCallParticipantsContext {
             let isVideoEnabled = strongSelf.stateValue.state.isVideoEnabled
             let isStream = strongSelf.stateValue.state.isStream
             let unmutedVideoLimit = strongSelf.stateValue.state.unmutedVideoLimit
+            let sendPaidMessagesStars = strongSelf.stateValue.state.sendPaidMessagesStars
+            let defaultSendAs = strongSelf.stateValue.state.defaultSendAs
             
             updatedParticipants.sort(by: { GroupCallParticipantsContext.Participant.compare(lhs: $0, rhs: $1, sortAscending: strongSelf.stateValue.state.sortAscending) })
             
@@ -2348,6 +2360,8 @@ public final class GroupCallParticipantsContext {
                     isVideoEnabled: isVideoEnabled,
                     unmutedVideoLimit: unmutedVideoLimit,
                     isStream: isStream,
+                    sendPaidMessagesStars: sendPaidMessagesStars,
+                    defaultSendAs: defaultSendAs,
                     version: update.version
                 ),
                 overlayState: updatedOverlayState,
@@ -4300,7 +4314,7 @@ public final class GroupCallMessagesContext {
                         flags |= 1 << 0
                     }
                     var sendAs: Api.InputPeer?
-                    if fromId != self.account.peerId {
+                    if fromId != self.account.peerId || self.isLiveStream {
                         guard let fromPeer else {
                             return
                         }
@@ -4364,7 +4378,7 @@ public final class GroupCallMessagesContext {
             var flags: Int32 = 0
             flags |= 1 << 0
             var sendAs: Api.InputPeer?
-            if pendingSendStars.fromPeer.id != self.account.peerId {
+            if pendingSendStars.fromPeer.id != self.account.peerId || self.isLiveStream {
                 sendAs = apiInputPeer(pendingSendStars.fromPeer)
             }
             if sendAs != nil {

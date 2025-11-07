@@ -118,8 +118,9 @@ final class StoryItemContentComponent: Component {
         var minMessagePrice: Int64?
         var starStats: StarStats?
         var isAdmin: Bool
+        var defaultSendAs: EnginePeer.Id?
         
-        init(isExpanded: Bool, isEmpty: Bool, hasUnseenMessages: Bool, areMessagesEnabled: Bool, minMessagePrice: Int64?, starStats: StarStats?, isAdmin: Bool) {
+        init(isExpanded: Bool, isEmpty: Bool, hasUnseenMessages: Bool, areMessagesEnabled: Bool, minMessagePrice: Int64?, starStats: StarStats?, isAdmin: Bool, defaultSendAs: EnginePeer.Id?) {
             self.isExpanded = isExpanded
             self.isEmpty = isEmpty
             self.hasUnseenMessages = hasUnseenMessages
@@ -127,6 +128,7 @@ final class StoryItemContentComponent: Component {
             self.minMessagePrice = minMessagePrice
             self.starStats = starStats
             self.isAdmin = isAdmin
+            self.defaultSendAs = defaultSendAs
         }
     }
     
@@ -134,12 +136,14 @@ final class StoryItemContentComponent: Component {
         var areMessagesEnabled: Bool
         var minMessagePrice: Int64?
         var isAdmin: Bool
+        var defaultSendAs: EnginePeer.Id?
         var isUnifiedStream: Bool
         
-        init(areMessagesEnabled: Bool, minMessagePrice: Int64?, isAdmin: Bool, isUnifiedStream: Bool) {
+        init(areMessagesEnabled: Bool, minMessagePrice: Int64?, isAdmin: Bool, defaultSendAs: EnginePeer.Id?, isUnifiedStream: Bool) {
             self.areMessagesEnabled = areMessagesEnabled
             self.minMessagePrice = minMessagePrice
             self.isAdmin = isAdmin
+            self.defaultSendAs = defaultSendAs
             self.isUnifiedStream = isUnifiedStream
         }
     }
@@ -229,7 +233,8 @@ final class StoryItemContentComponent: Component {
                 areMessagesEnabled: mediaStreamCallState?.areMessagesEnabled ?? false,
                 minMessagePrice: mediaStreamCallState?.minMessagePrice,
                 starStats: starStats,
-                isAdmin: mediaStreamCallState?.isAdmin ?? false
+                isAdmin: mediaStreamCallState?.isAdmin ?? false,
+                defaultSendAs: mediaStreamCallState?.defaultSendAs
             )
         }
         
@@ -1117,6 +1122,7 @@ final class StoryItemContentComponent: Component {
                             areMessagesEnabled: state.messagesAreEnabled,
                             minMessagePrice: state.sendPaidMessageStars,
                             isAdmin: state.canManageCall,
+                            defaultSendAs: state.defaultSendAs,
                             isUnifiedStream: state.isUnifiedStream
                         )
                         if self.mediaStreamCallState != mappedState {
