@@ -305,6 +305,7 @@ final class StoryContentLiveChatComponent: Component {
                 ])
             ])
             
+            component.controller()?.view.endEditing(true)
             component.controller()?.present(actionSheet, in: .window(.root))
         }
         
@@ -379,12 +380,14 @@ final class StoryContentLiveChatComponent: Component {
             }
         }
         
-        private func scrollToMessage(id: GroupCallMessagesContext.Message.Id) {
+        @discardableResult private func scrollToMessage(id: GroupCallMessagesContext.Message.Id) -> Bool {
             guard let messagesState = self.messagesState, let message = messagesState.messages.first(where: { $0.id == id }) else {
-                return
+                return false
             }
             self.listState.resetScrolling(id: AnyHashable(message.stableId))
             self.state?.updated(transition: .spring(duration: 0.4), isLocal: true)
+            
+            return true
         }
         
         private func openMessageContextMenu(id: GroupCallMessagesContext.Message.Id, isPinned: Bool, gesture: ContextGesture, sourceNode: ContextExtractedContentContainingNode) {
@@ -651,7 +654,12 @@ final class StoryContentLiveChatComponent: Component {
                         guard let self else {
                             return
                         }
-                        self.scrollToMessage(id: message.id)
+                        self.isChatExpanded = true
+                        if !self.scrollToMessage(id: message.id) {
+                            if !self.isUpdating {
+                                self.state?.updated(transition: .spring(duration: 0.4))
+                            }
+                        }
                     },
                     contextGesture: { [weak self] message, gesture, sourceNode in
                         guard let self else {
@@ -679,7 +687,7 @@ final class StoryContentLiveChatComponent: Component {
                 transition.setAlpha(view: pinnedBarView, alpha: pinnedBarAlpha)
             }
             
-            var listInsets = UIEdgeInsets(top: component.insets.bottom + 8.0, left: component.insets.right, bottom: component.insets.top + 8.0, right: component.insets.left)
+            var listInsets = UIEdgeInsets(top: component.insets.bottom + 12.0, left: component.insets.right, bottom: component.insets.top + 8.0, right: component.insets.left)
             if !topMessages.isEmpty {
                 listInsets.top = availableSize.height - pinnedBarFrame.minY
             }

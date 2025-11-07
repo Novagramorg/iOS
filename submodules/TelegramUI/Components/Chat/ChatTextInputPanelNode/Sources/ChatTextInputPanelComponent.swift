@@ -304,6 +304,20 @@ public final class ChatTextInputPanelComponent: Component {
             panelNode.ensureFocused()
         }
         
+        public func deactivateInput() {
+            guard let panelNode = self.panelNode else {
+                return
+            }
+            panelNode.ensureUnfocused()
+        }
+        
+        public var isActive: Bool {
+            guard let panelNode = self.panelNode else {
+                return false
+            }
+            return panelNode.isFocused
+        }
+        
         public func updateState(transition: ComponentTransition) {
             self.state?.updated(transition: transition)
         }

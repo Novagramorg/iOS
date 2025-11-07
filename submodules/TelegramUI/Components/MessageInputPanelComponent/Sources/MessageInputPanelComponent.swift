@@ -764,6 +764,9 @@ public final class MessageInputPanelComponent: Component {
             guard let component = self.component else {
                 return true
             }
+            if let _ = self.inputPanel?.view as? ChatTextInputPanelComponent.View {
+                return true
+            }
             if let maxLength = component.maxLength, self.textFieldExternalState.textLength > maxLength {
                 return false
             } else {
@@ -772,6 +775,9 @@ public final class MessageInputPanelComponent: Component {
         }
         
         public var isActive: Bool {
+            if let inputPanelView = self.inputPanel?.view as? ChatTextInputPanelComponent.View {
+                return inputPanelView.isActive
+            }
             if let textFieldView = self.textField.view as? TextFieldComponent.View {
                 return textFieldView.isActive
             } else {
@@ -781,6 +787,10 @@ public final class MessageInputPanelComponent: Component {
         
         public func deactivateInput(force: Bool = false) {
             if self.canDeactivateInput() || force {
+                if let inputPanelView = self.inputPanel?.view as? ChatTextInputPanelComponent.View {
+                    inputPanelView.deactivateInput()
+                    return
+                }
                 if let textFieldView = self.textField.view as? TextFieldComponent.View {
                     textFieldView.deactivateInput()
                 }
@@ -788,6 +798,7 @@ public final class MessageInputPanelComponent: Component {
         }
         
         public func animateError() {
+            self.inputPanel?.view?.layer.addShakeAnimation()
             self.textField.view?.layer.addShakeAnimation()
             self.hapticFeedback.error()
         }
