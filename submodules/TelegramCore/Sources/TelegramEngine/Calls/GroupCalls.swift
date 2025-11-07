@@ -3754,6 +3754,21 @@ public final class GroupCallMessagesContext {
             )
         }
         
+        public func withDate(_ date: Int32) -> Message {
+            return Message(
+                id: self.id,
+                stableId: self.stableId,
+                isIncoming: self.isIncoming,
+                author: self.author,
+                isFromAdmin: self.isFromAdmin,
+                text: self.text,
+                entities: self.entities,
+                date: date,
+                lifetime: self.lifetime,
+                paidStars: self.paidStars
+            )
+        }
+        
         public static func ==(lhs: Message, rhs: Message) -> Bool {
             if lhs === rhs {
                 return true
@@ -4344,10 +4359,10 @@ public final class GroupCallMessagesContext {
                                     self.processedIds.insert(Int64(id))
                                     var state = self.state
                                     if let index = state.messages.firstIndex(where: { $0.id == Message.Id(space: .local, id: randomId) }) {
-                                        state.messages[index] = state.messages[index].withId(Message.Id(space: .remote, id: Int64(id)))
+                                        state.messages[index] = state.messages[index].withId(Message.Id(space: .remote, id: Int64(id))).withDate(Int32(CFAbsoluteTimeGetCurrent() + kCFAbsoluteTimeIntervalSince1970))
                                     }
                                     if let index = state.pinnedMessages.firstIndex(where: { $0.id == Message.Id(space: .local, id: randomId) }) {
-                                        state.pinnedMessages[index] = state.pinnedMessages[index].withId(Message.Id(space: .remote, id: Int64(id)))
+                                        state.pinnedMessages[index] = state.pinnedMessages[index].withId(Message.Id(space: .remote, id: Int64(id))).withDate(Int32(CFAbsoluteTimeGetCurrent() + kCFAbsoluteTimeIntervalSince1970))
                                     }
                                     self.state = state
                                     break
@@ -4405,10 +4420,10 @@ public final class GroupCallMessagesContext {
                             self.processedIds.insert(Int64(id))
                             var state = self.state
                             if let index = state.messages.firstIndex(where: { $0.id == Message.Id(space: .local, id: pendingSendStars.messageId) }) {
-                                state.messages[index] = state.messages[index].withId(Message.Id(space: .remote, id: Int64(id)))
+                                state.messages[index] = state.messages[index].withId(Message.Id(space: .remote, id: Int64(id))).withDate(Int32(CFAbsoluteTimeGetCurrent() + kCFAbsoluteTimeIntervalSince1970))
                             }
                             if let index = state.pinnedMessages.firstIndex(where: { $0.id == Message.Id(space: .local, id: pendingSendStars.messageId) }) {
-                                state.pinnedMessages[index] = state.pinnedMessages[index].withId(Message.Id(space: .remote, id: Int64(id)))
+                                state.pinnedMessages[index] = state.pinnedMessages[index].withId(Message.Id(space: .remote, id: Int64(id))).withDate(Int32(CFAbsoluteTimeGetCurrent() + kCFAbsoluteTimeIntervalSince1970))
                             }
                             Impl.addStateStars(state: &state, peerId: pendingSendStars.fromPeer.id, isMy: true, amount: pendingSendStars.amount)
                             state.pendingMyStars = 0

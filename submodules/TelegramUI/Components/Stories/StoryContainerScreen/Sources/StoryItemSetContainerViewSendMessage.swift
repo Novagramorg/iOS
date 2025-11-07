@@ -464,7 +464,7 @@ final class StoryItemSetContainerSendMessage: @unchecked(Sendable) {
         
         if case .liveStream = component.slice.item.storyItem.media {
             //TODO:localize
-            items.append(.action(ContextMenuActionItem(text: "Edit Stars", icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Input/Text/AccessoryIconSuggestPost"), color: theme.contextMenu.primaryColor)
+            items.append(.action(ContextMenuActionItem(text: self.currentLiveStreamMessageStars != nil ? "Edit Stars" : "Add Stars", icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Input/Text/AccessoryIconSuggestPost"), color: theme.contextMenu.primaryColor)
             }, action: { [weak self, weak view] _, a in
                 a(.default)
                 
@@ -772,7 +772,6 @@ final class StoryItemSetContainerSendMessage: @unchecked(Sendable) {
                             component.storyItemSharedState.replyDrafts.removeValue(forKey: StoryId(peerId: peerId, id: focusedItem.storyItem.id))
                             inputPanelView.clearSendMessageInput(updateState: true)
                             
-                            self.currentInputMode = .text
                             self.currentLiveStreamMessageStars = nil
                             view.state?.updated(transition: .spring(duration: 0.4))
                             

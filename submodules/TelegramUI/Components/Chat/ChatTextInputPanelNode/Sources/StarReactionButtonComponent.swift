@@ -220,8 +220,10 @@ final class StarReactionButtonComponent: Component {
             case .ended:
                 if let gesture = recogizer.lastRecognizedGestureAndLocation?.0 {
                     if case .tap = gesture {
+                        HapticFeedback().tap()
                         component.action(self)
                     } else if case .longTap = gesture {
+                        HapticFeedback().impact(.medium)
                         component.longPressAction?(self)
                     }
                 }

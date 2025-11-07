@@ -405,6 +405,9 @@ public final class StoryLiveChatMessageComponent: Component {
             }
             
             var authorTitleFrame = CGRect(origin: CGPoint(x: insets.left + avatarSize + avatarSpacing, y: avatarFrame.minY + 3.0), size: authorTitleSize)
+            if component.layout.fitToWidth {
+                authorTitleFrame.origin.x += 4.0
+            }
             if let image = self.crownIcon?.image {
                 authorTitleFrame.origin.x += image.size.width + 4.0
             }
@@ -418,6 +421,9 @@ public final class StoryLiveChatMessageComponent: Component {
             }
             
             var textFrame = CGRect(origin: CGPoint(x: insets.left + avatarSize + avatarSpacing, y: avatarFrame.minY + 3.0), size: textSize)
+            if component.layout.fitToWidth {
+                textFrame.origin.x += 4.0
+            }
             if component.message.isFromAdmin {
                 textFrame.origin.y = authorTitleFrame.maxY
                 textFrame.size.width = max(textFrame.width, authorTitleFrame.maxX - textFrame.minX)
