@@ -3863,6 +3863,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         let counterSize = self.counterTextNode.updateLayout(CGSize(width: 40.0, height: 40.0))
         let counterFrame = CGRect(origin: CGPoint(x: backgroundSize.width - 11.0 - counterSize.width, y: 4.0), size: CGSize(width: counterSize.width, height: counterSize.height))
         transition.updateFrame(node: self.counterTextNode, frame: counterFrame)
+        transition.updateAlpha(node: self.counterTextNode, alpha: backgroundSize.height > 50.0 ? 1.0 : 0.0)
     }
     
     private func installEmojiSuggestionPreviewGesture(hostView: UIView) {

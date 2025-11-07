@@ -13,6 +13,7 @@ import AvatarNode
 import ContextUI
 import StarsParticleEffect
 import StoryLiveChatMessageComponent
+import PeerNameTextComponent
 
 private final class PinnedBarMessageComponent: Component {
     let context: AccountContext
@@ -161,6 +162,9 @@ private final class PinnedBarMessageComponent: Component {
             
             self.containerNode.isGestureEnabled = component.contextGesture != nil
             
+            let params = LiveChatMessageParams(appConfig: component.context.currentAppConfiguration.with({ $0 }))
+            let baseColor = StoryLiveChatMessageComponent.getMessageColor(color: GroupCallMessagesContext.getStarAmountParamMapping(params: params, value: component.message.paidStars ?? 0).color ?? GroupCallMessagesContext.Message.Color(rawValue: 0x985FDC))
+            
             let itemHeight: CGFloat = 32.0
             let avatarInset: CGFloat = 4.0
             let avatarSize: CGFloat = 24.0
@@ -169,8 +173,15 @@ private final class PinnedBarMessageComponent: Component {
             
             let titleSize = self.title.update(
                 transition: .immediate,
-                component: AnyComponent(MultilineTextComponent(
-                    text: .plain(NSAttributedString(string: component.message.author?.displayTitle(strings: component.strings, displayOrder: .firstLast) ?? " ", font: Font.semibold(15.0), textColor: .white))
+                component: AnyComponent(PeerNameTextComponent(
+                    context: component.context,
+                    peer: component.message.author,
+                    text: .name,
+                    font: Font.semibold(15.0),
+                    textColor: .white,
+                    iconBackgroundColor: .white,
+                    iconForegroundColor: baseColor,
+                    strings: component.strings
                 )),
                 environment: {},
                 containerSize: CGSize(width: 200.0, height: itemHeight)
@@ -207,8 +218,6 @@ private final class PinnedBarMessageComponent: Component {
                 self.foregroundView.image = self.backgroundView.image
             }
             
-            let params = LiveChatMessageParams(appConfig: component.context.currentAppConfiguration.with({ $0 }))
-            let baseColor = StoryLiveChatMessageComponent.getMessageColor(color: GroupCallMessagesContext.getStarAmountParamMapping(params: params, value: component.message.paidStars ?? 0).color ?? GroupCallMessagesContext.Message.Color(rawValue: 0x985FDC))
             self.backgroundView.tintColor = baseColor.withMultipliedBrightnessBy(0.7)
             self.foregroundView.tintColor = baseColor
             

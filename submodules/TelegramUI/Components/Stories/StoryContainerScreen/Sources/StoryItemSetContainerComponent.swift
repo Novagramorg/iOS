@@ -2987,6 +2987,13 @@ public final class StoryItemSetContainerComponent: Component {
                 var sendPaidMessageStars = isLiveStream ? self.sendMessageContext.currentLiveStreamMessageStars : component.slice.additionalPeerData.sendPaidMessageStars
                 var maxInputLength = 4096
                 var maxEmojiCount: Int?
+                var canSendStars = false
+                
+                if isLiveStream {
+                    if component.slice.item.peerId != component.context.account.peerId {
+                        canSendStars = true
+                    }
+                }
                 
                 if let visibleItemView = self.visibleItems[component.slice.item.id]?.view.view as? StoryItemContentComponent.View {
                     if let liveChatStateValue = visibleItemView.liveChatState {
@@ -3288,7 +3295,7 @@ public final class StoryItemSetContainerComponent: Component {
                                 visibleItemView.toggleLiveChatExpanded()
                             }
                         },
-                        sendStarsAction: isLiveStream ? { [weak self] sourceView, isLongPress in
+                        sendStarsAction: (isLiveStream && canSendStars) ? { [weak self] sourceView, isLongPress in
                             guard let self else {
                                 return
                             }
@@ -4272,6 +4279,7 @@ public final class StoryItemSetContainerComponent: Component {
                 
                 let centerInfoComponent = AnyComponent(StoryAuthorInfoComponent(
                     context: component.context,
+                    theme: component.theme,
                     strings: component.strings,
                     isEmbeddedInCamera: component.isEmbeddedInCamera,
                     peer: component.slice.effectivePeer,

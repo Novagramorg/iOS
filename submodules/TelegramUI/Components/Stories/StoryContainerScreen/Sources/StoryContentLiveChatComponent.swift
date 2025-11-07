@@ -437,8 +437,15 @@ final class StoryContentLiveChatComponent: Component {
                     canDelete = true
                 }
                 
+                //TODO:localize
                 if !isMyMessage, let author = message.author {
-                    items.append(.action(ContextMenuActionItem(text: "Open Profile", textColor: .primary, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/User"), color: theme.contextMenu.primaryColor) }, action: { [weak self] c, _ in
+                    let openProfileString: String
+                    if case .channel = author {
+                        openProfileString = "Open Channel"
+                    } else {
+                        openProfileString = "Open Profile"
+                    }
+                    items.append(.action(ContextMenuActionItem(text: openProfileString, textColor: .primary, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/User"), color: theme.contextMenu.primaryColor) }, action: { [weak self] c, _ in
                         guard let self else {
                             return
                         }
