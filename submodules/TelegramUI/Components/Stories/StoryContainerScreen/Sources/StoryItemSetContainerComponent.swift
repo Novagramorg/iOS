@@ -4351,7 +4351,7 @@ public final class StoryItemSetContainerComponent: Component {
                         self.controlsClippingView.insertSubview(view, belowSubview: self.closeButton)
                         animateIn = true
                     }
-                    transition.setFrame(view: view, frame: CGRect(origin: CGPoint(x: 0.0, y: 10.0), size: centerInfoItemSize))
+                    transition.setFrame(view: view, frame: CGRect(origin: CGPoint(x: 0.0, y: component.isEmbeddedInCamera ? 9.0 - UIScreenPixel : 10.0), size: centerInfoItemSize))
                     
                     if animateIn, !isFirstTime {
                         //view.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
@@ -4390,7 +4390,7 @@ public final class StoryItemSetContainerComponent: Component {
                         self.controlsClippingView.addSubview(view)
                         animateIn = true
                     }
-                    transition.setFrame(view: view, frame: CGRect(origin: CGPoint(x: 12.0, y: 18.0), size: leftInfoItemSize))
+                    transition.setFrame(view: view, frame: CGRect(origin: CGPoint(x: 12.0, y: component.isEmbeddedInCamera ? 17.0 - UIScreenPixel : 18.0), size: leftInfoItemSize))
                     
                     if animateIn, !isFirstTime, !transition.animation.isImmediate {
                         view.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
