@@ -404,14 +404,15 @@ public extension Api.payments {
 }
 public extension Api.payments {
     enum StarGiftAuctionState: TypeConstructorDescription {
-        case starGiftAuctionState(state: Api.StarGiftAuctionState, userState: Api.StarGiftAuctionUserState, timeout: Int32, users: [Api.User])
+        case starGiftAuctionState(gift: Api.StarGift, state: Api.StarGiftAuctionState, userState: Api.StarGiftAuctionUserState, timeout: Int32, users: [Api.User])
     
     public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
     switch self {
-                case .starGiftAuctionState(let state, let userState, let timeout, let users):
+                case .starGiftAuctionState(let gift, let state, let userState, let timeout, let users):
                     if boxed {
-                        buffer.appendInt32(-2061303084)
+                        buffer.appendInt32(244900980)
                     }
+                    gift.serialize(buffer, true)
                     state.serialize(buffer, true)
                     userState.serialize(buffer, true)
                     serializeInt32(timeout, buffer: buffer, boxed: false)
@@ -426,32 +427,37 @@ public extension Api.payments {
     
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
-                case .starGiftAuctionState(let state, let userState, let timeout, let users):
-                return ("starGiftAuctionState", [("state", state as Any), ("userState", userState as Any), ("timeout", timeout as Any), ("users", users as Any)])
+                case .starGiftAuctionState(let gift, let state, let userState, let timeout, let users):
+                return ("starGiftAuctionState", [("gift", gift as Any), ("state", state as Any), ("userState", userState as Any), ("timeout", timeout as Any), ("users", users as Any)])
     }
     }
     
         public static func parse_starGiftAuctionState(_ reader: BufferReader) -> StarGiftAuctionState? {
-            var _1: Api.StarGiftAuctionState?
+            var _1: Api.StarGift?
             if let signature = reader.readInt32() {
-                _1 = Api.parse(reader, signature: signature) as? Api.StarGiftAuctionState
+                _1 = Api.parse(reader, signature: signature) as? Api.StarGift
             }
-            var _2: Api.StarGiftAuctionUserState?
+            var _2: Api.StarGiftAuctionState?
             if let signature = reader.readInt32() {
-                _2 = Api.parse(reader, signature: signature) as? Api.StarGiftAuctionUserState
+                _2 = Api.parse(reader, signature: signature) as? Api.StarGiftAuctionState
             }
-            var _3: Int32?
-            _3 = reader.readInt32()
-            var _4: [Api.User]?
+            var _3: Api.StarGiftAuctionUserState?
+            if let signature = reader.readInt32() {
+                _3 = Api.parse(reader, signature: signature) as? Api.StarGiftAuctionUserState
+            }
+            var _4: Int32?
+            _4 = reader.readInt32()
+            var _5: [Api.User]?
             if let _ = reader.readInt32() {
-                _4 = Api.parseVector(reader, elementSignature: 0, elementType: Api.User.self)
+                _5 = Api.parseVector(reader, elementSignature: 0, elementType: Api.User.self)
             }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
             let _c4 = _4 != nil
-            if _c1 && _c2 && _c3 && _c4 {
-                return Api.payments.StarGiftAuctionState.starGiftAuctionState(state: _1!, userState: _2!, timeout: _3!, users: _4!)
+            let _c5 = _5 != nil
+            if _c1 && _c2 && _c3 && _c4 && _c5 {
+                return Api.payments.StarGiftAuctionState.starGiftAuctionState(gift: _1!, state: _2!, userState: _3!, timeout: _4!, users: _5!)
             }
             else {
                 return nil

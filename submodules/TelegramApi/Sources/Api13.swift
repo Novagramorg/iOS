@@ -491,6 +491,62 @@ public extension Api {
     }
 }
 public extension Api {
+    enum InputStarGiftAuction: TypeConstructorDescription {
+        case inputStarGiftAuction(giftId: Int64)
+        case inputStarGiftAuctionSlug(slug: String)
+    
+    public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+    switch self {
+                case .inputStarGiftAuction(let giftId):
+                    if boxed {
+                        buffer.appendInt32(48327832)
+                    }
+                    serializeInt64(giftId, buffer: buffer, boxed: false)
+                    break
+                case .inputStarGiftAuctionSlug(let slug):
+                    if boxed {
+                        buffer.appendInt32(2058715912)
+                    }
+                    serializeString(slug, buffer: buffer, boxed: false)
+                    break
+    }
+    }
+    
+    public func descriptionFields() -> (String, [(String, Any)]) {
+        switch self {
+                case .inputStarGiftAuction(let giftId):
+                return ("inputStarGiftAuction", [("giftId", giftId as Any)])
+                case .inputStarGiftAuctionSlug(let slug):
+                return ("inputStarGiftAuctionSlug", [("slug", slug as Any)])
+    }
+    }
+    
+        public static func parse_inputStarGiftAuction(_ reader: BufferReader) -> InputStarGiftAuction? {
+            var _1: Int64?
+            _1 = reader.readInt64()
+            let _c1 = _1 != nil
+            if _c1 {
+                return Api.InputStarGiftAuction.inputStarGiftAuction(giftId: _1!)
+            }
+            else {
+                return nil
+            }
+        }
+        public static func parse_inputStarGiftAuctionSlug(_ reader: BufferReader) -> InputStarGiftAuction? {
+            var _1: String?
+            _1 = parseString(reader)
+            let _c1 = _1 != nil
+            if _c1 {
+                return Api.InputStarGiftAuction.inputStarGiftAuctionSlug(slug: _1!)
+            }
+            else {
+                return nil
+            }
+        }
+    
+    }
+}
+public extension Api {
     enum InputStarsTransaction: TypeConstructorDescription {
         case inputStarsTransaction(flags: Int32, id: String)
     

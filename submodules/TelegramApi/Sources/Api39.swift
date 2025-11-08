@@ -9785,12 +9785,12 @@ public extension Api.functions.payments {
                 }
 }
 public extension Api.functions.payments {
-                static func getStarGiftAuctionState(giftId: Int64, version: Int32) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.payments.StarGiftAuctionState>) {
+                static func getStarGiftAuctionState(auction: Api.InputStarGiftAuction, version: Int32) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.payments.StarGiftAuctionState>) {
                     let buffer = Buffer()
-                    buffer.appendInt32(1352689229)
-                    serializeInt64(giftId, buffer: buffer, boxed: false)
+                    buffer.appendInt32(1553986774)
+                    auction.serialize(buffer, true)
                     serializeInt32(version, buffer: buffer, boxed: false)
-                    return (FunctionDescription(name: "payments.getStarGiftAuctionState", parameters: [("giftId", String(describing: giftId)), ("version", String(describing: version))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.payments.StarGiftAuctionState? in
+                    return (FunctionDescription(name: "payments.getStarGiftAuctionState", parameters: [("auction", String(describing: auction)), ("version", String(describing: version))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.payments.StarGiftAuctionState? in
                         let reader = BufferReader(buffer)
                         var result: Api.payments.StarGiftAuctionState?
                         if let signature = reader.readInt32() {

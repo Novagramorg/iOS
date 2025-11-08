@@ -477,6 +477,11 @@ private final class CameraScreenComponent: CombinedComponent {
             guard let controller = self.getController(), let _ = controller.camera else {
                 return
             }
+            
+            if case .live = controller.cameraState.mode {
+                return
+            }
+            
             self.isPressingButton = false
             self.buttonPressTimestamp = CACurrentMediaTime()
             
@@ -498,6 +503,11 @@ private final class CameraScreenComponent: CombinedComponent {
             guard let controller = self.getController(), let _ = controller.camera else {
                 return
             }
+            
+            if case .live = controller.cameraState.mode {
+                return
+            }
+            
             if case .none = controller.cameraState.recording {
                 switch controller.cameraState.mode {
                 case .photo:
@@ -1631,29 +1641,7 @@ private final class CameraScreenComponent: CombinedComponent {
                 )
             }
                         
-            if component.cameraState.mode == .live && component.cameraState.isStreaming {
-                let endStreamButton = endStreamButton.update(
-                    component: GlassBarButtonComponent(
-                        size: CGSize(width: 56.0, height: 40.0),
-                        backgroundColor: UIColor.black.withAlphaComponent(0.5),
-                        isDark: true,
-                        state: .glass,
-                        component: AnyComponentWithIdentity(id: "label", component: AnyComponent(Text(text: "End", font: Font.semibold(17.0), color: .white))),
-                        action: { [weak state] _ in
-                            if let state {
-                                state.endLiveStream()
-                            }
-                        }
-                    ),
-                    availableSize: CGSize(width: 40.0, height: 40.0),
-                    transition: .immediate
-                )
-                context.add(endStreamButton
-                    .position(CGPoint(x: availableSize.width - topControlSideInset - 3.0 - endStreamButton.size.width / 2.0, y: max(environment.statusBarHeight + 5.0, environment.safeInsets.top + topControlVerticalInset) + endStreamButton.size.height / 2.0))
-                    .appear(.default(scale: true))
-                    .disappear(.default(scale: true))
-                )
-            } else if case .none = component.cameraState.recording, !state.isTransitioning {
+            if case .none = component.cameraState.recording, !state.isTransitioning && !component.cameraState.isStreaming {
                 if !state.displayingCollageSelection {
                     let cancelButton = cancelButton.update(
                         component: CameraButton(
@@ -1735,6 +1723,31 @@ private final class CameraScreenComponent: CombinedComponent {
                 }
                 
                 if hasAllRequiredAccess {
+                    let isStreaming = component.cameraState.mode == .live && component.cameraState.isStreaming
+                    if isStreaming {
+                        let endStreamButton = endStreamButton.update(
+                            component: GlassBarButtonComponent(
+                                size: CGSize(width: 56.0, height: 40.0),
+                                backgroundColor: UIColor.black.withAlphaComponent(0.5),
+                                isDark: true,
+                                state: .glass,
+                                component: AnyComponentWithIdentity(id: "label", component: AnyComponent(Text(text: "End", font: Font.semibold(17.0), color: .white))),
+                                action: { [weak state] _ in
+                                    if let state {
+                                        state.endLiveStream()
+                                    }
+                                }
+                            ),
+                            availableSize: CGSize(width: 40.0, height: 40.0),
+                            transition: .immediate
+                        )
+                        context.add(endStreamButton
+                            .position(CGPoint(x: availableSize.width - topControlSideInset - 3.0 - endStreamButton.size.width / 2.0, y: max(environment.statusBarHeight + 5.0, environment.safeInsets.top + topControlVerticalInset) + endStreamButton.size.height / 2.0))
+                            .appear(.default(scale: true))
+                            .disappear(.default(scale: true))
+                        )
+                    }
+                    
                     let rightMostButtonWidth: CGFloat
                     if component.cameraState.mode == .live {
                         rightMostButtonWidth = -55.0
@@ -2680,7 +2693,7 @@ public class CameraScreenImpl: ViewController, CameraScreen {
                         preset: .hd1920x1080,
                         position: self.cameraState.position,
                         isDualEnabled: self.cameraState.isDualCameraEnabled,
-                        audio: false,
+                        audio: true,
                         photo: true,
                         metadata: true
                     ),

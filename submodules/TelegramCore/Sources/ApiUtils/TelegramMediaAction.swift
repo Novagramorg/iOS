@@ -181,7 +181,8 @@ func telegramMediaActionFromApiAction(_ action: Api.MessageAction) -> TelegramMe
         return TelegramMediaAction(action: .paymentRefunded(peerId: peer.peerId, currency: currency, totalAmount: totalAmount, payload: payload?.makeData(), transactionId: transactionId))
     case let .messageActionPrizeStars(flags, stars, transactionId, boostPeer, giveawayMsgId):
         return TelegramMediaAction(action: .prizeStars(amount: stars, isUnclaimed: (flags & (1 << 2)) != 0, boostPeerId: boostPeer.peerId, transactionId: transactionId, giveawayMessageId: MessageId(peerId: boostPeer.peerId, namespace: Namespaces.Message.Cloud, id: giveawayMsgId)))
-    case let .messageActionStarGift(flags, apiGift, message, convertStars, upgradeMessageId, upgradeStars, fromId, peer, savedId, prepaidUpgradeHash, giftMessageId):
+    case let .messageActionStarGift(flags, apiGift, message, convertStars, upgradeMessageId, upgradeStars, fromId, peer, savedId, prepaidUpgradeHash, giftMessageId, toId):
+        let _ = toId
         let text: String?
         let entities: [MessageTextEntity]?
         switch message {
@@ -274,34 +275,6 @@ func telegramMediaActionFromApiAction(_ action: Api.MessageAction) -> TelegramMe
         return TelegramMediaAction(action: .suggestedPostRefund(TelegramMediaActionType.SuggestedPostRefund(isUserInitiated: (flags & (1 << 0)) != 0)))
     case let .messageActionSuggestBirthday(birthday):
         return TelegramMediaAction(action: .suggestedBirthday(TelegramBirthday(apiBirthday: birthday)))
-    case let .messageActionStarGiftAuctionBid(flags, apiGift, bidAmount, message, peer, nextDropAt):
-        guard let gift = StarGift(apiStarGift: apiGift) else {
-            return nil
-        }
-        let text: String?
-        let entities: [MessageTextEntity]?
-        switch message {
-        case let .textWithEntities(textValue, entitiesValue):
-            text = textValue
-            entities = messageTextEntitiesFromApiEntities(entitiesValue)
-        default:
-            text = nil
-            entities = nil
-        }
-        var mappedFlags: TelegramMediaActionType.StarGiftAuctionBidFlags = []
-        if (flags & (1 << 0)) != 0 {
-            mappedFlags.insert(.isAcquired)
-        }
-        if (flags & (1 << 3)) != 0 {
-            mappedFlags.insert(.ioOutbid)
-        }
-        if (flags & (1 << 4)) != 0 {
-            mappedFlags.insert(.isReturned)
-        }
-        if (flags & (1 << 5)) != 0 {
-            mappedFlags.insert(.isFinal)
-        }        
-        return TelegramMediaAction(action: .starGiftAuctionBid(gift: gift, bidAmount: bidAmount, text: text, entities: entities, peerId: peer?.peerId, nextDropAt: nextDropAt, flags: mappedFlags))
     }
 }
 
