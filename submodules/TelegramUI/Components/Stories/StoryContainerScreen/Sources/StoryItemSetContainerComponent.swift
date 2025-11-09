@@ -1456,7 +1456,7 @@ public final class StoryItemSetContainerComponent: Component {
             if self.sendMessageContext.progressPauseContext.hasExternalController {
                 return .pause
             }
-            if let navigationController = component.controller()?.navigationController as? NavigationController {
+            if let controller = component.controller() as? StoryContainerScreen, let navigationController = controller.navigationController as? NavigationController {
                 let topViewController = navigationController.topViewController
                 if !(topViewController is StoryContainerScreen) && !(topViewController is MediaEditorScreen) && !(topViewController is ShareWithPeersScreen) && !(topViewController is AttachmentController) {
                     return .pause
@@ -3211,7 +3211,7 @@ public final class StoryItemSetContainerComponent: Component {
                             }
                             self.sendMessageContext.performShareAction(view: self)
                         } : nil,
-                        paidMessageAction: isLiveStream ? { [weak self] in
+                        paidMessageAction: isLiveStream && !component.isEmbeddedInCamera ? { [weak self] in
                             guard let self else {
                                 return
                             }
@@ -3290,6 +3290,7 @@ public final class StoryItemSetContainerComponent: Component {
                         storyItem: component.slice.item.storyItem,
                         chatLocation: nil,
                         liveChatState: liveChatState,
+                        isEmbeddedInCamera: component.isEmbeddedInCamera,
                         toggleLiveChatExpanded: { [weak self] in
                             guard let self else {
                                 return

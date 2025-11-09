@@ -289,6 +289,7 @@ public final class MessageInputPanelComponent: Component {
     public let storyItem: EngineStoryItem?
     public let chatLocation: ChatLocation?
     public let liveChatState: LiveChatState?
+    public let isEmbeddedInCamera: Bool
     public let toggleLiveChatExpanded: (() -> Void)?
     public let sendStarsAction: ((UIView, Bool) -> Void)?
     public let starStars: StarStats?
@@ -355,6 +356,7 @@ public final class MessageInputPanelComponent: Component {
         storyItem: EngineStoryItem?,
         chatLocation: ChatLocation?,
         liveChatState: LiveChatState? = nil,
+        isEmbeddedInCamera: Bool = false,
         toggleLiveChatExpanded: (() -> Void)? = nil,
         sendStarsAction: ((UIView, Bool) -> Void)? = nil,
         starStars: StarStats? = nil,
@@ -420,6 +422,7 @@ public final class MessageInputPanelComponent: Component {
         self.storyItem = storyItem
         self.chatLocation = chatLocation
         self.liveChatState = liveChatState
+        self.isEmbeddedInCamera = isEmbeddedInCamera
         self.toggleLiveChatExpanded = toggleLiveChatExpanded
         self.sendStarsAction = sendStarsAction
         self.starStars = starStars
@@ -554,6 +557,9 @@ public final class MessageInputPanelComponent: Component {
             return false
         }
         if lhs.liveChatState != rhs.liveChatState {
+            return false
+        }
+        if lhs.isEmbeddedInCamera != rhs.isEmbeddedInCamera {
             return false
         }
         if lhs.starStars != rhs.starStars {
@@ -1033,8 +1039,10 @@ public final class MessageInputPanelComponent: Component {
                     )
                 }
                 
-                let rightAction: ChatTextInputPanelComponent.RightAction
-                if component.sendStarsAction != nil {
+                let rightAction: ChatTextInputPanelComponent.RightAction?
+                if component.isEmbeddedInCamera {
+                    rightAction = nil
+                } else if component.sendStarsAction != nil {
                     rightAction = ChatTextInputPanelComponent.RightAction(kind: .stars(count: Int(component.starStars?.totalStars ?? 0), isFilled: component.starStars?.hasOutgoingStars ?? false), action: { [weak self] sourceView in
                         guard let self, let component = self.component else {
                             return
@@ -1048,6 +1056,13 @@ public final class MessageInputPanelComponent: Component {
                     })
                 } else {
                     rightAction = ChatTextInputPanelComponent.RightAction(kind: .empty, action: { _ in })
+                }
+                
+                var secondaryLeftAction: ChatTextInputPanelComponent.LeftAction?
+                if !"".isEmpty, component.isEmbeddedInCamera {
+                    secondaryLeftAction = ChatTextInputPanelComponent.LeftAction(kind: .settings, action: { [weak self] in
+                        let _ = self
+                    })
                 }
                 
                 let inputPanelSize = inputPanel.update(
@@ -1072,6 +1087,7 @@ public final class MessageInputPanelComponent: Component {
                                 component.toggleLiveChatExpanded?()
                             }
                         }),
+                        secondaryLeftAction: secondaryLeftAction,
                         rightAction: rightAction,
                         sendAsConfiguration: component.liveChatState?.isEnabled == true ? sendAsConfiguration : nil,
                         //TODO:localize

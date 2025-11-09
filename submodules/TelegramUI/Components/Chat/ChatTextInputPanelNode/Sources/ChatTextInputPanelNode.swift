@@ -263,6 +263,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     public let attachmentButton: HighlightTrackingButton
     public let attachmentButtonBackground: GlassBackgroundView
     public let attachmentButtonIcon: GlassBackgroundView.ContentImageView
+    public let secondaryLeftButtonBackground: GlassBackgroundView
     private var commentsButtonIcon: RasterizedCompositionMonochromeLayer?
     private var commentsButtonCenterIcon: UIImageView?
     private var commentsButtonContentsLayer: RasterizedCompositionImageLayer?
@@ -388,6 +389,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     public enum LeftAction {
         case empty
         case toggleExpanded(isVisible: Bool, isExpanded: Bool, hasUnseen: Bool)
+        case settings(isVisible: Bool)
     }
     
     public enum RightAction {
@@ -398,6 +400,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     public var customPlaceholder: String?
     public var customIsDisabled: Bool = false
     public var customLeftAction: LeftAction?
+    public var customSecondaryLeftAction: LeftAction?
     public var customRightAction: RightAction?
     public var customSendColor: UIColor?
     public var customSendIsDisabled: Bool = false
@@ -652,6 +655,9 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         self.attachmentButtonIcon.isUserInteractionEnabled = false
         self.attachmentButtonBackground.contentView.addSubview(self.attachmentButtonIcon)
         
+        self.secondaryLeftButtonBackground = GlassBackgroundView(frame: CGRect())
+        //self.secondaryLeftButtonBackground.contentView.addSubview(self.attachmentButton)
+        
         self.attachmentButtonDisabledNode = HighlightableButtonNode()
         self.searchLayoutClearButton = HighlightTrackingButton()
         self.searchLayoutClearButtonIcon = GlassBackgroundView.ContentImageView()
@@ -896,6 +902,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         
         self.glassBackgroundContainer.contentView.addSubview(self.menuButton.view)
         self.glassBackgroundContainer.contentView.addSubview(self.attachmentButtonBackground)
+        self.glassBackgroundContainer.contentView.addSubview(self.secondaryLeftButtonBackground)
         self.glassBackgroundContainer.contentView.addSubview(self.attachmentButtonDisabledNode.view)
         
         self.glassBackgroundContainer.contentView.addSubview(self.startButton.view)
@@ -1207,6 +1214,8 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     private func textFieldInsets(metrics: LayoutMetrics, bottomInset: CGFloat) -> UIEdgeInsets {
         var insets = UIEdgeInsets(top: 0.0, left: 54.0, bottom: 0.0, right: 8.0)
         if let customLeftAction = self.customLeftAction, case let .toggleExpanded(isVisible, _, _) = customLeftAction, !isVisible {
+            insets.left = 8.0
+        } else if let customLeftAction = self.customLeftAction, case .empty = customLeftAction {
             insets.left = 8.0
         }
         return insets
@@ -1751,7 +1760,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 
                 if let customLeftAction = self.customLeftAction {
                     switch customLeftAction {
-                    case .empty, .toggleExpanded:
+                    case .empty, .toggleExpanded, .settings:
                         self.attachmentButtonIcon.image = nil
                         self.attachmentButtonIcon.tintColor = interfaceState.theme.chat.inputPanel.panelControlColor
                     }
@@ -1791,7 +1800,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 if wasEditingMedia != isEditingMedia || hadMediaDraft != hasMediaDraft || isFirstTime {
                     if let customLeftAction = self.customLeftAction {
                         switch customLeftAction {
-                        case .empty, .toggleExpanded:
+                        case .empty, .toggleExpanded, .settings:
                             self.attachmentButtonIcon.image = nil
                             self.attachmentButtonIcon.tintColor = interfaceState.theme.chat.inputPanel.panelControlColor
                         }
@@ -1944,7 +1953,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         
         if let customLeftAction = self.customLeftAction {
             switch customLeftAction {
-            case .empty:
+            case .empty, .settings:
                 break
             case let .toggleExpanded(_, isExpanded, hasUnseen):
                 let commentsButtonIcon: RasterizedCompositionMonochromeLayer
@@ -2160,6 +2169,8 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             attachmentButtonX = -48.0
         } else if let customLeftAction = self.customLeftAction, case let .toggleExpanded(isVisible, _, _) = customLeftAction, !isVisible {
             attachmentButtonX = -48.0
+        } else if let customLeftAction = self.customLeftAction, case .empty = customLeftAction {
+            attachmentButtonX = -48.0
         }
         
         self.mediaActionButtons.micButton.updateMode(mode: interfaceState.interfaceState.mediaRecordingMode, animated: transition.isAnimated)
@@ -2279,6 +2290,9 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             default:
                 break
             }
+        }
+        if let customSecondaryLeftAction = self.customSecondaryLeftAction, case let .settings(isVisible) = customSecondaryLeftAction, isVisible {
+            textFieldInsets.left += 46.0
         }
         
         var audioRecordingItemsAlpha: CGFloat = 1.0

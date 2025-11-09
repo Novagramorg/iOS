@@ -201,7 +201,7 @@ private final class GiftAuctionInfoSheetContent: CombinedComponent {
                     component: AnyComponent(ParagraphComponent(
                         title: "Top 50 Bidders",
                         titleColor: textColor,
-                        text: "50 gifts are dropped at varying intervals to the top 50 bidders by bid amount.",
+                        text: "50 gifts are dropped in 10 rounds to the top 50 bidders by bid amount.",
                         textColor: secondaryTextColor,
                         accentColor: linkColor,
                         iconName: "Premium/Auction/Drop",
