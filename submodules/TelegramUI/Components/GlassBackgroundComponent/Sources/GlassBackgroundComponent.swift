@@ -25,6 +25,9 @@ private final class ContentContainer: UIView {
             return nil
         }
         if result === self {
+            if let gestureRecognizers = self.gestureRecognizers, !gestureRecognizers.isEmpty {
+                return result
+            }
             return nil
         }
         return result
