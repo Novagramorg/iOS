@@ -1281,7 +1281,7 @@ private final class ChatSendStarsScreenComponent: Component {
             
             var items: [ContextMenuItem] = []
             
-            let presentationData = component.context.sharedContext.currentPresentationData.with({ $0 })
+            let presentationData = component.context.sharedContext.currentPresentationData.with({ $0 }).withUpdated(theme: environment.theme)
             
             var peers: [EnginePeer] = [reactData.myPeer]
             peers.append(contentsOf: self.channelsForPublicReaction)
@@ -1486,18 +1486,23 @@ private final class ChatSendStarsScreenComponent: Component {
                         }
                     }
                     
-                    self.channelsForPublicReactionDisposable = (component.context.engine.peers.channelsForPublicReaction(useLocalCache: false)
-                    |> deliverOnMainQueue).startStrict(next: { [weak self] peers in
-                        guard let self else {
-                            return
-                        }
-                        if self.channelsForPublicReaction != peers {
-                            self.channelsForPublicReaction = peers
-                            if !self.isUpdating {
-                                self.state?.updated(transition: .immediate)
+                    switch reactData.reactSubject {
+                    case .message:
+                        self.channelsForPublicReactionDisposable = (component.context.engine.peers.channelsForPublicReaction(useLocalCache: false)
+                        |> deliverOnMainQueue).startStrict(next: { [weak self] peers in
+                            guard let self else {
+                                return
                             }
-                        }
-                    })
+                            if self.channelsForPublicReaction != peers {
+                                self.channelsForPublicReaction = peers
+                                if !self.isUpdating {
+                                    self.state?.updated(transition: .immediate)
+                                }
+                            }
+                        })
+                    case let .liveStream(_, _, _, _, availableSendAsPeers):
+                        self.channelsForPublicReaction = availableSendAsPeers.filter({ $0.id != reactData.myPeer.id })
+                    }
                 case let .liveStreamMessage(liveStreamMessageData):
                     self.currentMyPeer = nil
                     
@@ -1648,7 +1653,7 @@ private final class ChatSendStarsScreenComponent: Component {
                     self.isPastTopCutoff = nil
                 }
                 
-                if case let .liveStream(_, _, _, liveChatMessageParams) = reactData.reactSubject {
+                if case let .liveStream(_, _, _, liveChatMessageParams, _) = reactData.reactSubject {
                     let color = GroupCallMessagesContext.getStarAmountParamMapping(params: liveChatMessageParams, value: Int64(self.amount.realValue)).color ?? GroupCallMessagesContext.Message.Color(rawValue: 0x985FDC)
                     sliderColor = StoryLiveChatMessageComponent.getMessageColor(color: color)
                 }
@@ -1790,37 +1795,35 @@ private final class ChatSendStarsScreenComponent: Component {
             
             switch component.initialData.subjectInitialData {
             case let .react(reactData):
-                if case .message = reactData.reactSubject {
-                    var sendAsPeers: [EnginePeer] = [reactData.myPeer]
-                    sendAsPeers.append(contentsOf: self.channelsForPublicReaction)
-                    
-                    let currentMyPeer = self.currentMyPeer ?? reactData.myPeer
-                    
-                    let peerSelectorButtonSize = self.peerSelectorButton.update(
-                        transition: transition,
-                        component: AnyComponent(PeerSelectorBadgeComponent(
-                            context: component.context,
-                            theme: environment.theme,
-                            strings: environment.strings,
-                            peer: currentMyPeer,
-                            action: { [weak self] sourceView in
-                                guard let self else {
-                                    return
-                                }
-                                self.displayTargetSelectionMenu(sourceView: sourceView)
+                var sendAsPeers: [EnginePeer] = [reactData.myPeer]
+                sendAsPeers.append(contentsOf: self.channelsForPublicReaction)
+                
+                let currentMyPeer = self.currentMyPeer ?? reactData.myPeer
+                
+                let peerSelectorButtonSize = self.peerSelectorButton.update(
+                    transition: transition,
+                    component: AnyComponent(PeerSelectorBadgeComponent(
+                        context: component.context,
+                        theme: environment.theme,
+                        strings: environment.strings,
+                        peer: currentMyPeer,
+                        action: { [weak self] sourceView in
+                            guard let self else {
+                                return
                             }
-                        )),
-                        environment: {},
-                        containerSize: CGSize(width: 120.0, height: 100.0)
-                    )
-                    let peerSelectorButtonFrame = CGRect(origin: CGPoint(x: availableSize.width - sideInset - peerSelectorButtonSize.width, y: floor((78.0 - peerSelectorButtonSize.height) * 0.5)), size: peerSelectorButtonSize)
-                    if let peerSelectorButtonView = self.peerSelectorButton.view {
-                        if peerSelectorButtonView.superview == nil {
-                            self.navigationBarContainer.addSubview(peerSelectorButtonView)
+                            self.displayTargetSelectionMenu(sourceView: sourceView)
                         }
-                        transition.setFrame(view: peerSelectorButtonView, frame: peerSelectorButtonFrame)
-                        peerSelectorButtonView.isHidden = sendAsPeers.count <= 1
+                    )),
+                    environment: {},
+                    containerSize: CGSize(width: 120.0, height: 100.0)
+                )
+                let peerSelectorButtonFrame = CGRect(origin: CGPoint(x: availableSize.width - sideInset - peerSelectorButtonSize.width, y: floor((78.0 - peerSelectorButtonSize.height) * 0.5)), size: peerSelectorButtonSize)
+                if let peerSelectorButtonView = self.peerSelectorButton.view {
+                    if peerSelectorButtonView.superview == nil {
+                        self.navigationBarContainer.addSubview(peerSelectorButtonView)
                     }
+                    transition.setFrame(view: peerSelectorButtonView, frame: peerSelectorButtonFrame)
+                    peerSelectorButtonView.isHidden = sendAsPeers.count <= 1
                 }
             case .liveStreamMessage:
                 break
@@ -2032,7 +2035,7 @@ private final class ChatSendStarsScreenComponent: Component {
                     ),
                     stableId: 0,
                     isIncoming: false,
-                    author: reactData.myPeer,
+                    author: self.currentMyPeer ?? reactData.myPeer,
                     isFromAdmin: false,
                     text: "",
                     entities: [],
@@ -2235,7 +2238,7 @@ private final class ChatSendStarsScreenComponent: Component {
                         
                         var peerColor: UIColor = UIColor(rgb: 0xFFB10D)
                         var topPlace: Int?
-                        if case let .liveStream(_, _, _, liveChatMessageParams) = reactData.reactSubject {
+                        if case let .liveStream(_, _, _, liveChatMessageParams, _) = reactData.reactSubject {
                             let color = GroupCallMessagesContext.getStarAmountParamMapping(params: liveChatMessageParams, value: Int64(topPeer.count)).color ?? GroupCallMessagesContext.Message.Color(rawValue: 0x985FDC)
                             peerColor = StoryLiveChatMessageComponent.getMessageColor(color: color)
                             topPlace = validIds.count - 1
@@ -2713,7 +2716,7 @@ private final class ChatSendStarsScreenComponent: Component {
 public class ChatSendStarsScreen: ViewControllerComponentContainer {
     public enum ReactSubject {
         case message(EngineMessage.Id)
-        case liveStream(peerId: EnginePeer.Id, storyId: Int32, minAmount: Int, liveChatMessageParams: LiveChatMessageParams)
+        case liveStream(peerId: EnginePeer.Id, storyId: Int32, minAmount: Int, liveChatMessageParams: LiveChatMessageParams, availableSendAsPeers: [EnginePeer])
     }
     
     fileprivate enum SubjectInitialData {
@@ -2918,7 +2921,13 @@ public class ChatSendStarsScreen: ViewControllerComponentContainer {
             topPeers = Array(topPeers.prefix(3))
         }
         
-        let channelsForPublicReaction = context.engine.peers.channelsForPublicReaction(useLocalCache: true)
+        let channelsForPublicReaction: Signal<[EnginePeer], NoError>
+        switch reactSubject {
+        case .message:
+            channelsForPublicReaction = context.engine.peers.channelsForPublicReaction(useLocalCache: true)
+        case let .liveStream(_, _, _, _, availableSendAsPeers):
+            channelsForPublicReaction = .single(availableSendAsPeers)
+        }
         
         let defaultPrivacyPeer: Signal<ChatSendStarsScreenComponent.PrivacyPeer, NoError> = context.engine.data.get(
             TelegramEngine.EngineData.Item.Peer.StarsReactionDefaultPrivacy()
@@ -2949,7 +2958,7 @@ public class ChatSendStarsScreen: ViewControllerComponentContainer {
         }
         
         var minAmount = 1
-        if case let .liveStream(_, _, minAmountValue, _) = reactSubject {
+        if case let .liveStream(_, _, minAmountValue, _, _) = reactSubject {
             minAmount = minAmountValue
         }
         

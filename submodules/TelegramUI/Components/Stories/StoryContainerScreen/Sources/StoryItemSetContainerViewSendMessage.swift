@@ -722,13 +722,14 @@ final class StoryItemSetContainerSendMessage: @unchecked(Sendable) {
                         if !text.string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                             var maxInputLength: Int?
                             var maxEmojiCount: Int?
-                            let params = GroupCallMessagesContext.getStarAmountParamMapping(params: LiveChatMessageParams(appConfig: component.context.currentAppConfiguration.with({ $0 })), value: isAdmin ? 1000000000 : sendPaidMessageStars?.value ?? 0)
+                            let paramSets = LiveChatMessageParams(appConfig: component.context.currentAppConfiguration.with({ $0 }))
+                            let params = GroupCallMessagesContext.getStarAmountParamMapping(params: paramSets, value: isAdmin ? 1000000000 : sendPaidMessageStars?.value ?? 0)
                             maxInputLength = params.maxLength
                             maxEmojiCount = params.emojiCount
                             
-                            var isSendDisabled = false
+                            var sendDisabledMinStars: Int64?
                             if let maxInputLength, text.string.count > maxInputLength {
-                                isSendDisabled = true
+                                sendDisabledMinStars = paramSets.paramSets.sorted(by: { $0.minStars < $1.minStars }).first(where: { $0.maxMessageLength >= text.string.count })?.minStars ?? 1000000000
                             }
                             if let maxEmojiCount {
                                 var emojiCount = 0
@@ -750,12 +751,12 @@ final class StoryItemSetContainerSendMessage: @unchecked(Sendable) {
                                     }
                                 }
                                 if emojiCount > maxEmojiCount {
-                                    isSendDisabled = true
+                                    sendDisabledMinStars = paramSets.paramSets.sorted(by: { $0.minStars < $1.minStars }).first(where: { $0.maxEmojiCount >= emojiCount })?.minStars ?? 1000000000
                                 }
                             }
                             
-                            if isSendDisabled {
-                                self.performPaidMessageAction(view: view)
+                            if let sendDisabledMinStars {
+                                self.performPaidMessageAction(view: view, minStars: Int(sendDisabledMinStars))
                                 return
                             }
                             
@@ -1404,7 +1405,7 @@ final class StoryItemSetContainerSendMessage: @unchecked(Sendable) {
         }
     }
     
-    func performPaidMessageAction(view: StoryItemSetContainerComponent.View) {
+    func performPaidMessageAction(view: StoryItemSetContainerComponent.View, minStars: Int? = nil) {
         Task { @MainActor [weak view] in
             guard let view else {
                 return
@@ -1438,12 +1439,21 @@ final class StoryItemSetContainerSendMessage: @unchecked(Sendable) {
                 minAmount = minMessagePrice
             }
             
+            var currentAmount: Int? = (self.currentLiveStreamMessageStars?.value).flatMap { Int($0) }
+            if let minStars {
+                if let currentAmountValue = currentAmount {
+                    currentAmount = max(currentAmountValue, minStars)
+                } else {
+                    currentAmount = minStars
+                }
+            }
+            
             let initialData = await ChatSendStarsScreen.initialDataLiveStreamMessage(
                 context: component.context,
                 peerId: peerId,
                 text: inputText,
                 minAmount: Int(minAmount),
-                currentAmount: (self.currentLiveStreamMessageStars?.value).flatMap { Int($0) },
+                currentAmount: currentAmount,
                 completion: { [weak self, weak view] amount, _ in
                     guard let self, let view else {
                         return
@@ -4030,11 +4040,19 @@ final class StoryItemSetContainerSendMessage: @unchecked(Sendable) {
                 context: component.context,
                 peerId: peerId,
                 myPeer: (sendAsPeer?.peer).flatMap(EnginePeer.init),
-                reactSubject: .liveStream(peerId: peerId, storyId: focusedItem.storyItem.id, minAmount: Int(minAmount), liveChatMessageParams: LiveChatMessageParams(appConfig: component.context.currentAppConfiguration.with({ $0 }))),
+                reactSubject: .liveStream(peerId: peerId, storyId: focusedItem.storyItem.id, minAmount: Int(minAmount), liveChatMessageParams: LiveChatMessageParams(appConfig: component.context.currentAppConfiguration.with({ $0 })), availableSendAsPeers: self.sendAsData?.availablePeers.map({ EnginePeer($0.peer) }) ?? []),
                 topPeers: topPeers,
-                completion: { [weak self, weak view] amount, _, _, _ in
+                completion: { [weak self, weak view] amount, privacy, _, _ in
                     guard let self, let view else {
                         return
+                    }
+                    if case let .peer(peerId) = privacy {
+                        if let peer = self.sendAsData?.availablePeers.first(where: { $0.peer.id == peerId }) {
+                            if self.currentSendAsPeer?.peer.id != peer.peer.id {
+                                self.currentSendAsPeer = peer
+                                view.state?.updated(transition: .spring(duration: 0.4))
+                            }
+                        }
                     }
                     self.performSendStars(view: view, buttonView: nil, count: Int(amount), isFromExpandedView: true)
                 }).get()
