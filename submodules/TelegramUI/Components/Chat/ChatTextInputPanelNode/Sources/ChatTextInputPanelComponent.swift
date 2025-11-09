@@ -60,6 +60,7 @@ public final class ChatTextInputPanelComponent: Component {
             case empty
             case attach
             case toggleExpanded(isVisible: Bool, isExpanded: Bool, hasUnseen: Bool)
+            case settings
         }
         
         public let kind: Kind
@@ -144,6 +145,7 @@ public final class ChatTextInputPanelComponent: Component {
     let chatPeerId: EnginePeer.Id
     let inlineActions: [InlineAction]
     let leftAction: LeftAction?
+    let secondaryLeftAction: LeftAction?
     let rightAction: RightAction?
     let sendAsConfiguration: SendAsConfiguration?
     let placeholder: String
@@ -166,6 +168,7 @@ public final class ChatTextInputPanelComponent: Component {
         chatPeerId: EnginePeer.Id,
         inlineActions: [InlineAction],
         leftAction: LeftAction?,
+        secondaryLeftAction: LeftAction?,
         rightAction: RightAction?,
         sendAsConfiguration: SendAsConfiguration?,
         placeholder: String,
@@ -187,6 +190,7 @@ public final class ChatTextInputPanelComponent: Component {
         self.chatPeerId = chatPeerId
         self.inlineActions = inlineActions
         self.leftAction = leftAction
+        self.secondaryLeftAction = secondaryLeftAction
         self.rightAction = rightAction
         self.sendAsConfiguration = sendAsConfiguration
         self.placeholder = placeholder
@@ -222,6 +226,9 @@ public final class ChatTextInputPanelComponent: Component {
             return false
         }
         if lhs.leftAction != rhs.leftAction {
+            return false
+        }
+        if lhs.secondaryLeftAction != rhs.secondaryLeftAction {
             return false
         }
         if lhs.rightAction != rhs.rightAction {
@@ -865,9 +872,37 @@ public final class ChatTextInputPanelComponent: Component {
                         isVisible = false
                     }
                     panelNode.customLeftAction = .toggleExpanded(isVisible: isVisible, isExpanded: isExpanded, hasUnseen: hasUnseen)
+                case .settings:
+                    var isVisible = true
+                    if component.insets.bottom > 40.0 {
+                        isVisible = false
+                    }
+                    panelNode.customLeftAction = .settings(isVisible: isVisible)
                 }
             } else {
                 panelNode.customLeftAction = nil
+            }
+            if let secondaryLeftAction = component.secondaryLeftAction {
+                switch secondaryLeftAction.kind {
+                case .empty:
+                    panelNode.customSecondaryLeftAction = .empty
+                case .attach:
+                    panelNode.customSecondaryLeftAction = nil
+                case let .toggleExpanded(isVisible, isExpanded, hasUnseen):
+                    var isVisible = isVisible
+                    if component.insets.bottom > 40.0 {
+                        isVisible = false
+                    }
+                    panelNode.customSecondaryLeftAction = .toggleExpanded(isVisible: isVisible, isExpanded: isExpanded, hasUnseen: hasUnseen)
+                case .settings:
+                    var isVisible = true
+                    if component.insets.bottom > 40.0 {
+                        isVisible = false
+                    }
+                    panelNode.customSecondaryLeftAction = .settings(isVisible: isVisible)
+                }
+            } else {
+                panelNode.customSecondaryLeftAction = nil
             }
             
             if let rightAction = component.rightAction {

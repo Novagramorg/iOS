@@ -1582,8 +1582,7 @@ private final class CameraScreenComponent: CombinedComponent {
                             }
                         },
                         getController: {
-                            return nil
-                            //return controller()
+                            return controller()
                         },
                         didSetupMediaStream: { [weak state] call in
                             state?.setupLiveStreamCamera(call: call)
@@ -1641,8 +1640,8 @@ private final class CameraScreenComponent: CombinedComponent {
                 )
             }
                         
-            if case .none = component.cameraState.recording, !state.isTransitioning && !component.cameraState.isStreaming {
-                if !state.displayingCollageSelection {
+            if case .none = component.cameraState.recording, !state.isTransitioning {
+                if !state.displayingCollageSelection && !component.cameraState.isStreaming {
                     let cancelButton = cancelButton.update(
                         component: CameraButton(
                             content: AnyComponentWithIdentity(
@@ -1750,7 +1749,11 @@ private final class CameraScreenComponent: CombinedComponent {
                     
                     let rightMostButtonWidth: CGFloat
                     if component.cameraState.mode == .live {
-                        rightMostButtonWidth = -55.0
+                        if component.cameraState.isStreaming {
+                            rightMostButtonWidth = -25.0
+                        } else {
+                            rightMostButtonWidth = -55.0
+                        }
                     } else if state.displayingCollageSelection {
                         let disableCollageButton = disableCollageButton.update(
                             component: CameraButton(
