@@ -245,7 +245,11 @@ final class StoryContentLiveChatComponent: Component {
                 return nil
             }
             
-            if let listView = self.list.view as? AsyncListComponent.View, result.isDescendant(of: listView) {
+            if let listView = self.list.view as? AsyncListComponent.View, result.isDescendant(of: listView), let listComponent = listView.component {
+                let localPoint = self.convert(point, to: listView)
+                if localPoint.y > listView.bounds.height - listComponent.insets.bottom {
+                    return nil
+                }
                 if let visibleItems = listView.visibleItems() {
                     var maxItemY: CGFloat?
                     for visibleItem in visibleItems {
@@ -706,6 +710,9 @@ final class StoryContentLiveChatComponent: Component {
             }
             
             var listInsets = UIEdgeInsets(top: component.insets.bottom + 12.0, left: component.insets.right, bottom: component.insets.top + 8.0, right: component.insets.left)
+            if component.insets.bottom == 0.0 {
+                listInsets.bottom = floor(availableSize.height * 0.5)
+            }
             if !topMessages.isEmpty {
                 listInsets.top = availableSize.height - pinnedBarFrame.minY
             }
@@ -749,7 +756,7 @@ final class StoryContentLiveChatComponent: Component {
             transition.setFrame(view: self.listContainer, frame: CGRect(origin: CGPoint(), size: availableSize))
             transition.setFrame(view: self.listMaskContainer, frame: CGRect(origin: CGPoint(), size: availableSize))
             
-            let maskTopInset: CGFloat = component.insets.top - 20.0
+            let maskTopInset: CGFloat = listInsets.bottom - 20.0
             let maskBottomInset: CGFloat = listInsets.top - 26.0
             transition.setFrame(view: self.maskGradientView, frame: CGRect(origin: CGPoint(x: 0.0, y: maskTopInset), size: CGSize(width: availableSize.width, height: max(0.0, availableSize.height - maskTopInset - maskBottomInset))))
             

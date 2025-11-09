@@ -430,7 +430,7 @@ public final class AsyncListComponent: Component {
         
         private var externalStateValue: ExternalState.Value?
         private var isUpdating: Bool = false
-        private(set) var component: AsyncListComponent?
+        public private(set) var component: AsyncListComponent?
         
         private var currentEntries: [ItemEntry] = []
         
