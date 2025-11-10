@@ -145,12 +145,7 @@ private final class GiftSetupScreenComponent: Component {
                         
         private var peerMap: [EnginePeer.Id: EnginePeer] = [:]
         private var sendPaidMessageStars: StarsAmount?
-        
-        private var giftAuction: GiftAuctionContext?
-        private var giftAuctionState: GiftAuctionContext.State?
-        private var giftAuctionDisposable: Disposable?
-        private var giftAuctionTimer: SwiftSignalKit.Timer?
-        
+                
         private var cachedStarImage: (UIImage, PresentationTheme)?
         
         private var updateDisposable: Disposable?
@@ -232,8 +227,6 @@ private final class GiftSetupScreenComponent: Component {
             self.inputMediaNodeDataDisposable?.dispose()
             self.updateDisposable?.dispose()
             self.optionsDisposable?.dispose()
-            self.giftAuctionDisposable?.dispose()
-            self.giftAuctionTimer?.invalidate()
         }
         
         func scrollViewDidScroll(_ scrollView: UIScrollView) {
@@ -327,29 +320,7 @@ private final class GiftSetupScreenComponent: Component {
             guard let component = self.component, let environment = self.environment else {
                 return
             }
-            
-            if case let .starGift(gift, _) = component.subject, gift.flags.contains(.isAuction), let navigationController = environment.controller()?.navigationController as? NavigationController {
-                
-                let giftAuction = self.giftAuction
-                let openAuction = { [weak giftAuction, weak navigationController] in
-                    guard let giftAuction, let navigationController else {
-                        return
-                    }
-                    let controller = component.context.sharedContext.makeGiftAuctionScreen(context: component.context, gift: .generic(gift), auctionContext: giftAuction)
-                    navigationController.pushViewController(controller)
-                }
-                
-                //if self.openedAuction {
-                    openAuction()
-//                } else {
-//                    let controller = component.context.sharedContext.makeGiftAuctionInfoScreen(context: component.context, gift: .generic(gift), completion: {
-//                        openAuction()
-//                    })
-//                    environment.controller()?.push(controller)
-//                }
-                return
-            }
-            
+                        
             switch component.subject {
             case let .premium(product):
                 if self.payWithStars, let starsPrice = product.starsPrice, let peer = self.peerMap[component.peerId] {
@@ -908,24 +879,7 @@ private final class GiftSetupScreenComponent: Component {
                 if isSelfGift {
                     self.hideName = true
                 }
-                
-                if case let .starGift(gift, _) = component.subject, gift.flags.contains(.isAuction), let giftAuctionsManager = component.context.giftAuctionsManager, let giftAuction = giftAuctionsManager.auctionContextForGift(gift: .generic(gift)) {
-                    self.giftAuction = giftAuction
-                    self.giftAuctionDisposable = (giftAuction.state
-                    |> deliverOnMainQueue).start(next: { [weak self] state in
-                        guard let self else {
-                            return
-                        }
-                        self.giftAuctionState = state
-                        self.state?.updated()
-                    })
-                    
-                    self.giftAuctionTimer = SwiftSignalKit.Timer(timeout: 0.5, repeat: true, completion: { [weak self] in
-                        self?.state?.updated()
-                    }, queue: Queue.mainQueue())
-                    self.giftAuctionTimer?.start()
-                }
-                
+                                
                 var releasedBy: EnginePeer.Id?
                 if case let .starGift(gift, true) = component.subject, gift.upgradeStars != nil {
                     self.includeUpgrade = true
@@ -1773,51 +1727,6 @@ private final class GiftSetupScreenComponent: Component {
                 contentHeight += remainingCountSize.height
                 contentHeight += 7.0
                 
-                if starGift.flags.contains(.isAuction) {
-                    let parsedString = parseMarkdownIntoAttributedString("50 gifts are dropped at varying intervals to the top 50 bidders by bid amount. [Learn more >]()", attributes: footerAttributes)
-                    let auctionFooterText = NSMutableAttributedString(attributedString: parsedString)
-                    
-                    if self.cachedChevronImage == nil || self.cachedChevronImage?.1 !== environment.theme {
-                        self.cachedChevronImage = (generateTintedImage(image: UIImage(bundleImageName: "Item List/InlineTextRightArrow"), color: environment.theme.list.itemAccentColor)!, environment.theme)
-                    }
-                    if let range = auctionFooterText.string.range(of: ">"), let chevronImage = self.cachedChevronImage?.0 {
-                        auctionFooterText.addAttribute(.attachment, value: chevronImage, range: NSRange(range, in: auctionFooterText.string))
-                    }
-                    
-                    let auctionFooterSize = self.auctionFooter.update(
-                        transition: transition,
-                        component: AnyComponent(MultilineTextComponent(
-                            text: .plain(auctionFooterText),
-                            maximumNumberOfLines: 0,
-                            highlightColor: environment.theme.list.itemAccentColor.withAlphaComponent(0.1),
-                            highlightInset: UIEdgeInsets(top: 0.0, left: 0.0, bottom: 0.0, right: -8.0),
-                            highlightAction: { attributes in
-                                if let _ = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.URL)] {
-                                    return NSAttributedString.Key(rawValue: TelegramTextAttributes.URL)
-                                } else {
-                                    return nil
-                                }
-                            },
-                            tapAction: { [weak self] _, _ in
-                                guard let self, let component = self.component, case let .starGift(gift, _) = component.subject, let controller = self.environment?.controller() else {
-                                    return
-                                }
-                                let infoController = component.context.sharedContext.makeGiftAuctionInfoScreen(context: component.context, gift: .generic(gift), completion: nil)
-                                controller.push(infoController)
-                            }
-                        )),
-                        environment: {},
-                        containerSize: CGSize(width: availableSize.width - sideInset * 2.0 - 16.0 * 2.0, height: 10000.0)
-                    )
-                    let auctionFooterFrame = CGRect(origin: CGPoint(x: sideInset + 16.0, y: contentHeight), size: auctionFooterSize)
-                    if let auctionFooterView = self.auctionFooter.view {
-                        if auctionFooterView.superview == nil {
-                            self.scrollContentView.addSubview(auctionFooterView)
-                        }
-                        transition.setFrame(view: auctionFooterView, frame: auctionFooterFrame)
-                    }
-                    contentHeight += auctionFooterSize.height
-                }
                 contentHeight += sectionSpacing
             }
             
@@ -1863,67 +1772,9 @@ private final class GiftSetupScreenComponent: Component {
                 buttonAttributedString.addAttribute(.kern, value: 2.0, range: NSRange(range, in: buttonAttributedString.string))
             }
             
-            var buttonIsLoading = false
-            if let _ = self.giftAuction {
-                //TODO:localize
-                let buttonAttributedString = NSMutableAttributedString(string: "Place a Bid", font: Font.semibold(17.0), textColor: environment.theme.list.itemCheckColors.foregroundColor, paragraphAlignment: .center)
-                buttonTitleItems.append(AnyComponentWithIdentity(id: "bid", component: AnyComponent(
-                    MultilineTextComponent(text: .plain(buttonAttributedString))
-                )))
-                if let giftAuctionState = self.giftAuctionState {
-                    switch giftAuctionState.auctionState {
-                    case let .ongoing(_, _, _, _, nextDropDate, _, _, _):
-                        let currentTime = Int32(CFAbsoluteTimeGetCurrent() + kCFAbsoluteTimeIntervalSince1970)
-                        let dropTimeout = nextDropDate - currentTime
-                        
-                        let minutes = Int(dropTimeout / 60)
-                        let seconds = Int(dropTimeout % 60)
-                        
-                        let rawString = environment.strings.Gift_Setup_NextDropIn
-                        var buttonAnimatedTitleItems: [AnimatedTextComponent.Item] = []
-                        var startIndex = rawString.startIndex
-                        while true {
-                            if let range = rawString.range(of: "{", range: startIndex ..< rawString.endIndex) {
-                                if range.lowerBound != startIndex {
-                                    buttonAnimatedTitleItems.append(AnimatedTextComponent.Item(id: AnyHashable(buttonAnimatedTitleItems.count), content: .text(String(rawString[startIndex ..< range.lowerBound]))))
-                                }
-                                
-                                startIndex = range.upperBound
-                                if let endRange = rawString.range(of: "}", range: startIndex ..< rawString.endIndex) {
-                                    let controlString = rawString[range.upperBound ..< endRange.lowerBound]
-                                    if controlString == "m" {
-                                        buttonAnimatedTitleItems.append(AnimatedTextComponent.Item(id: AnyHashable(buttonAnimatedTitleItems.count), content: .number(minutes, minDigits: 2)))
-                                    } else if controlString == "s" {
-                                        buttonAnimatedTitleItems.append(AnimatedTextComponent.Item(id: AnyHashable(buttonAnimatedTitleItems.count), content: .number(seconds, minDigits: 2)))
-                                    }
-                                    
-                                    startIndex = endRange.upperBound
-                                }
-                            } else {
-                                break
-                            }
-                        }
-                        if startIndex != rawString.endIndex {
-                            buttonAnimatedTitleItems.append(AnimatedTextComponent.Item(id: AnyHashable(buttonAnimatedTitleItems.count), content: .text(String(rawString[startIndex ..< rawString.endIndex]))))
-                        }
-                        
-                        buttonTitleItems.append(AnyComponentWithIdentity(id: "timer", component: AnyComponent(AnimatedTextComponent(
-                            font: Font.with(size: 12.0, weight: .medium, traits: .monospacedNumbers),
-                            color: environment.theme.list.itemCheckColors.foregroundColor.withAlphaComponent(0.7),
-                            items: buttonAnimatedTitleItems,
-                            noDelay: true
-                        ))))
-                    case .finished:
-                        buttonIsEnabled = false
-                    }
-                } else {
-                    buttonIsLoading = true
-                }
-            } else {
-                buttonTitleItems.append(AnyComponentWithIdentity(id: buttonString, component: AnyComponent(
-                    MultilineTextComponent(text: .plain(buttonAttributedString))
-                )))
-            }
+            buttonTitleItems.append(AnyComponentWithIdentity(id: buttonString, component: AnyComponent(
+                MultilineTextComponent(text: .plain(buttonAttributedString))
+            )))
             
             let buttonInsets = ContainerViewLayout.concentricInsets(bottomInset: environment.safeInsets.bottom, innerDiameter: 52.0, sideInset: 32.0)
             let buttonHeight: CGFloat = 52.0
@@ -1942,7 +1793,7 @@ private final class GiftSetupScreenComponent: Component {
                         component: AnyComponent(VStack(buttonTitleItems, spacing: 1.0))
                     ),
                     isEnabled: buttonIsEnabled,
-                    displaysProgress: buttonIsLoading || self.inProgress,
+                    displaysProgress: self.inProgress,
                     action: { [weak self] in
                         self?.proceed()
                     }

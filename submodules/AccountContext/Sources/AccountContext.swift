@@ -1422,7 +1422,8 @@ public protocol SharedAccountContext: AnyObject {
     func makeGiftViewScreen(context: AccountContext, gift: StarGift.UniqueGift, shareStory: ((StarGift.UniqueGift) -> Void)?, openChatTheme: (() -> Void)?, dismissed: (() -> Void)?) -> ViewController
     func makeGiftWearPreviewScreen(context: AccountContext, gift: StarGift.UniqueGift) -> ViewController
     func makeGiftAuctionInfoScreen(context: AccountContext, gift: StarGift, completion: (() -> Void)?) -> ViewController
-    func makeGiftAuctionScreen(context: AccountContext, gift: StarGift, auctionContext: GiftAuctionContext) -> ViewController
+    func makeGiftAuctionBidScreen(context: AccountContext, auctionContext: GiftAuctionContext) -> ViewController
+    func makeGiftAuctionViewScreen(context: AccountContext, auctionContext: GiftAuctionContext) -> ViewController
         
     func makeStorySharingScreen(context: AccountContext, subject: StorySharingSubject, parentController: ViewController) -> ViewController
     
