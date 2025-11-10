@@ -746,39 +746,6 @@ final class LiveStreamSettingsScreenComponent: Component {
                 action: nil
             ))))
             
-//            var pinTitle = "Post to My Profile"
-//            var pinInfo = "Keep this live on your profile."
-//            if screenState.sendAsPeerId?.namespace == Namespaces.Peer.CloudChannel {
-//                pinTitle = "Post to Channel Profile"
-//                pinInfo = "Keep this live on channel profile."
-//            }
-//            
-//            settingsSectionItems.append(AnyComponentWithIdentity(id: "pin", component: AnyComponent(ListActionItemComponent(
-//                theme: theme,
-//                style: .glass,
-//                title: AnyComponent(MultilineTextComponent(
-//                    text: .plain(NSAttributedString(
-//                        string: pinTitle,
-//                        font: Font.regular(presentationData.listsFontSize.baseDisplaySize),
-//                        textColor: theme.list.itemPrimaryTextColor
-//                    )),
-//                    maximumNumberOfLines: 1
-//                )),
-//                accessory: .toggle(ListActionItemComponent.Toggle(style: .regular, isOn: screenState.pin, action: { [weak self] _ in
-//                    guard let self else {
-//                        return
-//                    }
-//                    component.stateContext.pin = !component.stateContext.pin
-//                    self.state?.updated(transition: .spring(duration: 0.4))
-//                })),
-//                action: nil
-//            ))))
-//            
-//            let settingsSectionFooterComponent = AnyComponent(MultilineTextComponent(
-//                text: .plain(NSAttributedString(string: pinInfo, font: footerTextFont, textColor: footerTextColor)),
-//                maximumNumberOfLines: 0
-//            ))
-            
             let settingsSectionSize = self.settingsSection.update(
                 transition: transition,
                 component: AnyComponent(ListSectionComponent(
@@ -810,7 +777,7 @@ final class LiveStreamSettingsScreenComponent: Component {
                         minValue: 0,
                         lowerBoundTitle: "0",
                         upperBoundTitle: "\(presentationStringsFormattedNumber(Int32(clamping: screenState.maxPaidMessageStars), environment.dateTimeFormat.groupingSeparator))",
-                        title: "\(screenState.paidMessageStars) Stars",
+                        title: screenState.paidMessageStars == 0 ? "Free" : "\(screenState.paidMessageStars) Stars",
                         valueUpdated: { [weak self] value in
                             guard let self, let component = self.component else {
                                 return
@@ -823,41 +790,49 @@ final class LiveStreamSettingsScreenComponent: Component {
                 )
             ))]
             
-            let paidMessageSectionHeader = AnyComponent(MultilineTextComponent(
-                text: .plain(NSAttributedString(
-                    string: "PRICE PER COMMENT",
-                    font: Font.regular(presentationData.listsFontSize.itemListBaseHeaderFontSize),
-                    textColor: theme.list.freeTextColor
-                )),
-                maximumNumberOfLines: 0
-            ))
-            
-            let paidMessageSectionFooterComponent = AnyComponent(MultilineTextComponent(
-                text: .plain(NSAttributedString(string: "The price a viewer must pay to send a comment.", font: footerTextFont, textColor: footerTextColor)),
-                maximumNumberOfLines: 0
-            ))
-            
-            let paidMessageSectionSize = self.paidMessageSection.update(
-                transition: transition,
-                component: AnyComponent(ListSectionComponent(
-                    theme: theme,
-                    style: .glass,
-                    header: paidMessageSectionHeader,
-                    footer: paidMessageSectionFooterComponent,
-                    items: paidMessageSectionItems
-                )),
-                environment: {},
-                containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 10000.0)
-            )
-            let paidMessageSectionFrame = CGRect(origin: CGPoint(x: sideInset, y: contentHeight), size: paidMessageSectionSize)
-            if let paidMessageSectionView = self.paidMessageSection.view as? ListSectionComponent.View {
-                if paidMessageSectionView.superview == nil {
-                    self.scrollView.addSubview(paidMessageSectionView)
-                    self.paidMessageSection.parentState = state
+            if screenState.allowComments {
+                let paidMessageSectionHeader = AnyComponent(MultilineTextComponent(
+                    text: .plain(NSAttributedString(
+                        string: "PRICE PER COMMENT",
+                        font: Font.regular(presentationData.listsFontSize.itemListBaseHeaderFontSize),
+                        textColor: theme.list.freeTextColor
+                    )),
+                    maximumNumberOfLines: 0
+                ))
+                
+                let paidMessageSectionFooterComponent = AnyComponent(MultilineTextComponent(
+                    text: .plain(NSAttributedString(string: "The price a viewer must pay to send a comment.", font: footerTextFont, textColor: footerTextColor)),
+                    maximumNumberOfLines: 0
+                ))
+                
+                let paidMessageSectionSize = self.paidMessageSection.update(
+                    transition: transition,
+                    component: AnyComponent(ListSectionComponent(
+                        theme: theme,
+                        style: .glass,
+                        header: paidMessageSectionHeader,
+                        footer: paidMessageSectionFooterComponent,
+                        items: paidMessageSectionItems
+                    )),
+                    environment: {},
+                    containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 10000.0)
+                )
+                let paidMessageSectionFrame = CGRect(origin: CGPoint(x: sideInset, y: contentHeight), size: paidMessageSectionSize)
+                if let paidMessageSectionView = self.paidMessageSection.view as? ListSectionComponent.View {
+                    if paidMessageSectionView.superview == nil {
+                        paidMessageSectionView.alpha = 1.0
+                        self.scrollView.addSubview(paidMessageSectionView)
+                        self.paidMessageSection.parentState = state
+                        transition.animateAlpha(view: paidMessageSectionView, from: 0.0, to: 1.0)
+                    }
+                    transition.setFrame(view: paidMessageSectionView, frame: paidMessageSectionFrame)
                 }
-                transition.setFrame(view: paidMessageSectionView, frame: paidMessageSectionFrame)
+                contentHeight += paidMessageSectionSize.height
+            } else if let paidMessageSectionView = self.paidMessageSection.view {
+                transition.setAlpha(view: paidMessageSectionView, alpha: 0.0, completion: { _ in
+                    paidMessageSectionView.removeFromSuperview()
+                })
             }
-            contentHeight += paidMessageSectionSize.height
                         
             let edgeEffectHeight: CGFloat = 80.0
             let edgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: availableSize.width, height: edgeEffectHeight))
