@@ -64,6 +64,7 @@ public final class GiftAuctionContext {
             public var bidAmount: Int64?
             public var bidDate: Int32?
             public var minBidAmount: Int64?
+            public var bidPeerId: EnginePeer.Id?
             public var acquiredCount: Int32
         }
         
@@ -203,11 +204,12 @@ extension GiftAuctionContext.State.AuctionState {
 extension GiftAuctionContext.State.MyState {
     init(apiAuctionUserState: Api.StarGiftAuctionUserState) {
         switch apiAuctionUserState {
-        case let .starGiftAuctionUserState(flags, bidAmount, bidDate, minBidAmount, acquiredCount):
+        case let .starGiftAuctionUserState(flags, bidAmount, bidDate, minBidAmount, bidPeerId, acquiredCount):
             self.isOutbid = (flags & (1 << 1)) != 0
             self.bidAmount = bidAmount
             self.bidDate = bidDate
             self.minBidAmount = minBidAmount
+            self.bidPeerId = bidPeerId?.peerId
             self.acquiredCount = acquiredCount
         }
     }
