@@ -729,7 +729,7 @@ private final class SliderBackgroundComponent: Component {
             
             let topLineFrameTransition = transition
             let topLineAlphaTransition = transition
-            /*if transition.userData(GiftAuctionScreenComponent.IsAdjustingAmountHint.self) != nil {
+            /*if transition.userData(GiftAuctionBidScreenComponent.IsAdjustingAmountHint.self) != nil {
                 topLineFrameTransition = .easeInOut(duration: 0.12)
                 topLineAlphaTransition = .easeInOut(duration: 0.12)
             }*/
@@ -786,7 +786,7 @@ private final class SliderBackgroundComponent: Component {
                 }
                 
                 var animateTopTextAdditionalX: CGFloat = 0.0
-                if transition.userData(GiftAuctionScreenComponent.IsAdjustingAmountHint.self) != nil {
+                if transition.userData(GiftAuctionBidScreenComponent.IsAdjustingAmountHint.self) != nil {
                     if let previousState = self.topTextOverflowState, previousState != topTextOverflowState, topTextOverflowState.animates(from: previousState) {
                         animateTopTextAdditionalX = topForegroundTextView.center.x - topTextFrame.origin.x
                     }
@@ -823,7 +823,7 @@ private final class SliderBackgroundComponent: Component {
     }
 }
 
-private final class GiftAuctionScreenComponent: Component {
+private final class GiftAuctionBidScreenComponent: Component {
     final class IsAdjustingAmountHint {
     }
     
@@ -843,7 +843,7 @@ private final class GiftAuctionScreenComponent: Component {
         self.auctionContext = auctionContext
     }
     
-    static func ==(lhs: GiftAuctionScreenComponent, rhs: GiftAuctionScreenComponent) -> Bool {
+    static func ==(lhs: GiftAuctionBidScreenComponent, rhs: GiftAuctionBidScreenComponent) -> Bool {
         return true
     }
     
@@ -998,7 +998,7 @@ private final class GiftAuctionScreenComponent: Component {
                 
         private var ignoreScrolling: Bool = false
         
-        private var component: GiftAuctionScreenComponent?
+        private var component: GiftAuctionBidScreenComponent?
         private weak var state: EmptyComponentState?
         private var isUpdating: Bool = false
         private var environment: ViewControllerComponentContainer.Environment?
@@ -1369,7 +1369,7 @@ private final class GiftAuctionScreenComponent: Component {
             })
         }
         
-        func update(component: GiftAuctionScreenComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<ViewControllerComponentContainer.Environment>, transition: ComponentTransition) -> CGSize {
+        func update(component: GiftAuctionBidScreenComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<ViewControllerComponentContainer.Environment>, transition: ComponentTransition) -> CGSize {
             self.isUpdating = true
             defer {
                 self.isUpdating = false
@@ -1880,7 +1880,7 @@ private final class GiftAuctionScreenComponent: Component {
                             guard let self, let component = self.component else {
                                 return
                             }
-                            let giftController = GiftAuctionBoughtScreen(context: component.context, gift: component.gift, acquiredGifts: self.giftAuctionAcquiredGifts)
+                            let giftController = GiftAuctionAcquiredScreen(context: component.context, gift: component.gift, acquiredGifts: self.giftAuctionAcquiredGifts)
                             self.environment?.controller()?.push(giftController)
                         }, animateScale: false)
                     ),
@@ -2355,7 +2355,7 @@ private final class GiftAuctionScreenComponent: Component {
     }
 }
 
-public class GiftAuctionScreen: ViewControllerComponentContainer {
+public class GiftAuctionBidScreen: ViewControllerComponentContainer {
     public final class TransitionOut {
         public let sourceView: UIView
         
@@ -2369,12 +2369,12 @@ public class GiftAuctionScreen: ViewControllerComponentContainer {
     private var didPlayAppearAnimation: Bool = false
     private var isDismissed: Bool = false
     
-    public init(context: AccountContext, gift: StarGift, auctionContext: GiftAuctionContext) {
+    public init(context: AccountContext, auctionContext: GiftAuctionContext) {
         self.context = context
         
-        super.init(context: context, component: GiftAuctionScreenComponent(
+        super.init(context: context, component: GiftAuctionBidScreenComponent(
             context: context,
-            gift: gift,
+            gift: auctionContext.gift,
             auctionContext: auctionContext
         ), navigationBarAppearance: .none, theme: .default)
         
@@ -2399,7 +2399,7 @@ public class GiftAuctionScreen: ViewControllerComponentContainer {
         if !self.didPlayAppearAnimation {
             self.didPlayAppearAnimation = true
             
-            if let componentView = self.node.hostView.componentView as? GiftAuctionScreenComponent.View {
+            if let componentView = self.node.hostView.componentView as? GiftAuctionBidScreenComponent.View {
                 componentView.animateIn()
             }
         }
@@ -2409,7 +2409,7 @@ public class GiftAuctionScreen: ViewControllerComponentContainer {
         if !self.isDismissed {
             self.isDismissed = true
             
-            if let componentView = self.node.hostView.componentView as? GiftAuctionScreenComponent.View {
+            if let componentView = self.node.hostView.componentView as? GiftAuctionBidScreenComponent.View {
                 componentView.animateOut(completion: { [weak self] in
                     completion?()
                     self?.dismiss(animated: false)

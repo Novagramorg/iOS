@@ -348,7 +348,10 @@ private final class StarsPurchaseScreenContentComponent: CombinedComponent {
                     let backgroundComponent: AnyComponent<Empty>?
                     if product.storeProduct.id == context.component.selectedProductId {
                         backgroundComponent = AnyComponent(
-                            ItemShimmeringLoadingComponent(color: environment.theme.list.itemAccentColor)
+                            ItemShimmeringLoadingComponent(
+                                color: environment.theme.list.itemAccentColor,
+                                cornerRadius: 26.0
+                            )
                         )
                     } else {
                         backgroundComponent = nil
