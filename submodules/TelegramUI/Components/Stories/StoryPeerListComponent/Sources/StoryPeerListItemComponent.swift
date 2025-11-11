@@ -846,7 +846,7 @@ public final class StoryPeerListItemComponent: Component {
                     avatarLiveBadgeTransition.setPosition(view: avatarLiveBadgeView, position: badgeFrame.center)
                     avatarLiveBadgeTransition.setBounds(view: avatarLiveBadgeView, bounds: CGRect(origin: CGPoint(), size: badgeFrame.size))
                     
-                    avatarLiveBadgeTransition.setScale(view: avatarLiveBadgeView, scale: max(0.001, component.expandedAlphaFraction))
+                    avatarLiveBadgeTransition.setScale(view: avatarLiveBadgeView, scale: max(0.00001, component.expandedAlphaFraction))
                     avatarLiveBadgeTransition.setAlpha(view: avatarLiveBadgeView, alpha: component.expandedAlphaFraction)
                     
                     avatarLiveBadgeMaskSeenLayer.frame = badgeFrame.offsetBy(dx: 8.0, dy: 8.0).insetBy(dx: -2.0, dy: -2.0)
@@ -854,10 +854,10 @@ public final class StoryPeerListItemComponent: Component {
                     avatarLiveBadgeMaskUnseenLayer.frame = badgeFrame.offsetBy(dx: 8.0, dy: 8.0).insetBy(dx: -2.0, dy: -2.0)
                     avatarLiveBadgeMaskUnseenLayer.cornerRadius = avatarLiveBadgeMaskUnseenLayer.bounds.height * 0.5
                     
-                    avatarLiveBadgeTransition.setScale(layer: avatarLiveBadgeMaskSeenLayer, scale: max(0.001, component.expandedAlphaFraction))
+                    avatarLiveBadgeTransition.setScale(layer: avatarLiveBadgeMaskSeenLayer, scale: max(0.00001, component.expandedAlphaFraction))
                     avatarLiveBadgeTransition.setAlpha(layer: avatarLiveBadgeMaskSeenLayer, alpha: component.expandedAlphaFraction)
                     
-                    avatarLiveBadgeTransition.setScale(layer: avatarLiveBadgeMaskUnseenLayer, scale: max(0.001, component.expandedAlphaFraction))
+                    avatarLiveBadgeTransition.setScale(layer: avatarLiveBadgeMaskUnseenLayer, scale: max(0.00001, component.expandedAlphaFraction))
                     avatarLiveBadgeTransition.setAlpha(layer: avatarLiveBadgeMaskUnseenLayer, alpha: component.expandedAlphaFraction)
                 }
             } else {
@@ -938,7 +938,10 @@ public final class StoryPeerListItemComponent: Component {
             let avatarPath = CGMutablePath()
             avatarPath.addEllipse(in: CGRect(origin: CGPoint(), size: avatarSize).insetBy(dx: -1.0, dy: -1.0))
             if let avatarLiveBadgeView = self.avatarLiveBadgeView {
-                avatarPath.addPath(UIBezierPath(roundedRect: avatarLiveBadgeView.frame.insetBy(dx: -2.0, dy: -2.0), cornerRadius: avatarLiveBadgeView.bounds.height * 0.5).cgPath)
+                let avatarLiveBadgeFrame = avatarLiveBadgeView.frame
+                if avatarLiveBadgeFrame.height > 4.0 {
+                    avatarPath.addPath(UIBezierPath(roundedRect: avatarLiveBadgeFrame.insetBy(dx: -2.0, dy: -2.0), cornerRadius: avatarLiveBadgeFrame.height * 0.5).cgPath)
+                }
             } else if component.peer.id == component.context.account.peerId && !component.hasItems && component.ringAnimation == nil {
                 let cutoutSize: CGFloat = 18.0 + UIScreenPixel * 2.0
                 avatarPath.addEllipse(in: CGRect(origin: CGPoint(x: avatarSize.width - cutoutSize + UIScreenPixel, y: avatarSize.height - 1.0 - cutoutSize + UIScreenPixel), size: CGSize(width: cutoutSize, height: cutoutSize)))

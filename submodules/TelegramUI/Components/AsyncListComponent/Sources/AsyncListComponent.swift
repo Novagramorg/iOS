@@ -329,7 +329,7 @@ public final class AsyncListComponent: Component {
     
     private final class ListItemNodeImpl: ListViewItemNode {
         private let contentContainer: UIView
-        private let contentsView = ComponentView<Empty>()
+        let contentsView = ComponentView<Empty>()
         private(set) var item: ListItemImpl?
         
         init() {
@@ -483,6 +483,26 @@ public final class AsyncListComponent: Component {
                 return nil
             }
             return VisibleItems(view: self, direction: component.direction)
+        }
+        
+        public func visibleItemView(id: AnyHashable) -> UIView? {
+            guard let component = self.component else {
+                return nil
+            }
+            guard let index = component.items.firstIndex(where: { $0.id == id }) else {
+                return nil
+            }
+            var foundItemNode: ListItemNodeImpl?
+            self.listNode.forEachItemNode { itemNode in
+                if let itemNode = itemNode as? ListItemNodeImpl, itemNode.index == index {
+                    foundItemNode = itemNode
+                }
+            }
+            if let foundItemNode {
+                return foundItemNode.contentsView.view
+            }
+            
+            return nil
         }
         
         func update(component: AsyncListComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
