@@ -1000,6 +1000,7 @@ final class StoryItemContentComponent: Component {
                                 isFullscreen: false,
                                 videoLoading: false,
                                 callPeer: nil,
+                                enablePictureInPicture: false,
                                 activatePictureInPicture: ActionSlot(),
                                 deactivatePictureInPicture: ActionSlot(),
                                 bringBackControllerForPictureInPictureDeactivation: { f in

@@ -951,6 +951,9 @@ public final class StoryItemSetContainerComponent: Component {
                     view.deactivateInput()
                     if self.sendMessageContext.inputMediaNode != nil {
                         self.state?.updated(transition: .spring(duration: 0.4).withUserData(TextFieldComponent.AnimationHint(view: nil, kind: .textFocusChanged(isFocused: false))))
+                        DispatchQueue.main.async { [weak self] in
+                            self?.state?.updated(transition: .spring(duration: 0.4).withUserData(TextFieldComponent.AnimationHint(view: nil, kind: .textFocusChanged(isFocused: false))))
+                        }
                     }
                 } else {
                     self.state?.updated(transition: .spring(duration: 0.4).withUserData(TextFieldComponent.AnimationHint(view: nil, kind: .textFocusChanged(isFocused: false))))
