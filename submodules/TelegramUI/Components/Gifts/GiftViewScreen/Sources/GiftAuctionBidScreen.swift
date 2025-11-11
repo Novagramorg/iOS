@@ -1460,7 +1460,7 @@ private final class GiftAuctionBidScreenComponent: Component {
                     self.giftAuctionState = state
                     
                     var peerIds: [EnginePeer.Id] = []
-                    if case let .ongoing(_, _, _, topBidders, _, _, _, _) = state?.auctionState {
+                    if case let .ongoing(_, _, _, topBidders, _, _, _, _, _, _) = state?.auctionState {
                         for bidder in topBidders {
                             if self.peersMap[bidder] == nil {
                                 peerIds.append(bidder)
@@ -1474,7 +1474,7 @@ private final class GiftAuctionBidScreenComponent: Component {
                         peerIds.append(context.account.peerId)
                         
                         var minBidAmount: Int64 = 100
-                        if case let .ongoing(_, auctionMinBidAmount, _, _, _, _, _, _) = state?.auctionState {
+                        if case let .ongoing(_, auctionMinBidAmount, _, _, _, _, _, _, _, _) = state?.auctionState {
                             minBidAmount = auctionMinBidAmount
                         }
                         var currentValue = max(Int(minBidAmount), 100)
@@ -1710,7 +1710,7 @@ private final class GiftAuctionBidScreenComponent: Component {
             var dropsLeftAnimatedItems: [AnimatedTextComponent.Item] = []
             
             if let auctionState = self.giftAuctionState?.auctionState {
-                if case let .ongoing(_, minBidAmount, _, _, nextDropDate, _, dropsLeft, _) = auctionState {
+                if case let .ongoing(_, minBidAmount, _, _, nextDropDate, _, dropsLeft, _, _, _) = auctionState {
                     var minBidAmount = minBidAmount
                     if let myMinBidAmmount = self.giftAuctionState?.myState.minBidAmount {
                         minBidAmount = myMinBidAmmount
@@ -2011,7 +2011,7 @@ private final class GiftAuctionBidScreenComponent: Component {
             var topBidsTitleComponent: AnyComponent<Empty>?
             var topBidsComponents: [(EnginePeer.Id, AnyComponent<Empty>)] = []
             
-            if let giftAuctionState = self.giftAuctionState, case let .ongoing(_, _, bidLevels, topBidders, _, _, _, _) = giftAuctionState.auctionState {
+            if let giftAuctionState = self.giftAuctionState, case let .ongoing(_, _, bidLevels, topBidders, _, _, _, _, _, _) = giftAuctionState.auctionState {
                 if let myBid = giftAuctionState.myState.bidAmount, let myBidDate = giftAuctionState.myState.bidDate, let peer = self.peersMap[component.context.account.peerId] {
                     var place: Int32 = 1
                     for level in bidLevels {

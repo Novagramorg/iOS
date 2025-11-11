@@ -280,7 +280,7 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
         for media in item.message.media {
             if let action = media as? TelegramMediaAction {
                 switch action.action {
-                case let .starGift(gift, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _):
+                case let .starGift(gift, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _):
                     releasedBy = gift.releasedBy
                 case let .starGiftUnique(gift, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _):
                     releasedBy = gift.releasedBy
@@ -554,7 +554,7 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                                 buttonTitle = item.presentationData.strings.Notification_PremiumPrize_View
                                 hasServiceMessage = false
                             }
-                        case let .starGift(gift, convertStars, giftText, giftEntities, _, savedToProfile, converted, upgraded, canUpgrade, upgradeStars, isRefunded, isPrepaidUpgrade, _, channelPeerId, senderPeerId, _, _, _, _):
+                        case let .starGift(gift, convertStars, giftText, giftEntities, _, savedToProfile, converted, upgraded, canUpgrade, upgradeStars, isRefunded, isPrepaidUpgrade, _, channelPeerId, senderPeerId, _, _, _, _, _, _):
                             if case let .generic(gift) = gift {
                                 if let releasedBy = gift.releasedBy, let peer = item.message.peers[releasedBy], let addressName = peer.addressName {
                                     creatorButtonTitle = item.presentationData.strings.Notification_StarGift_ReleasedBy("**@\(addressName)**").string
