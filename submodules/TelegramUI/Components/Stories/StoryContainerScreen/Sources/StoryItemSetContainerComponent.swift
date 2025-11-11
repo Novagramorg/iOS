@@ -1426,7 +1426,10 @@ public final class StoryItemSetContainerComponent: Component {
             if self.verticalPanState != nil {
                 return .pause
             }
-            if self.inputPanelExternalState.isEditing || component.isProgressPaused || self.sendMessageContext.actionSheet != nil || self.sendMessageContext.isViewingAttachedStickers || self.contextController != nil || self.sendMessageContext.audioRecorderValue != nil || self.sendMessageContext.videoRecorderValue != nil || self.viewListDisplayState != .hidden {
+            if self.contextController != nil {
+                return .blurred
+            }
+            if self.inputPanelExternalState.isEditing || component.isProgressPaused || self.sendMessageContext.actionSheet != nil || self.sendMessageContext.isViewingAttachedStickers || self.sendMessageContext.audioRecorderValue != nil || self.sendMessageContext.videoRecorderValue != nil || self.viewListDisplayState != .hidden {
                 return .pause
             }
             if let reactionContextNode = self.reactionContextNode, reactionContextNode.isReactionSearchActive {
@@ -6505,7 +6508,19 @@ public final class StoryItemSetContainerComponent: Component {
                     self.openItemPrivacySettings()
                 })))
                 
-                if !isLiveStream {
+                if isLiveStream {
+                    //TODO:localize
+                    items.append(.action(ContextMenuActionItem(text: "Minimize", icon: { theme in
+                        return generateTintedImage(image: UIImage(bundleImageName: "Call/pip"), color: theme.contextMenu.primaryColor)
+                    }, action: { [weak self] _, a in
+                        a(.default)
+                        
+                        guard let self else {
+                            return
+                        }
+                        self.beginPictureInPicture()
+                    })))
+                } else {
                     items.append(.action(ContextMenuActionItem(text: component.strings.Story_Context_Edit, icon: { theme in
                         return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Edit"), color: theme.contextMenu.primaryColor)
                     }, action: { [weak self] _, a in
@@ -6827,7 +6842,19 @@ public final class StoryItemSetContainerComponent: Component {
                     })))
                 }
                 
-                if !isLiveStream {
+                if isLiveStream {
+                    //TODO:localize
+                    items.append(.action(ContextMenuActionItem(text: "Minimize", icon: { theme in
+                        return generateTintedImage(image: UIImage(bundleImageName: "Call/pip"), color: theme.contextMenu.primaryColor)
+                    }, action: { [weak self] _, a in
+                        a(.default)
+                        
+                        guard let self else {
+                            return
+                        }
+                        self.beginPictureInPicture()
+                    })))
+                } else {
                     let saveText: String = component.strings.Story_Context_SaveToGallery
                     items.append(.action(ContextMenuActionItem(text: saveText, icon: { theme in
                         return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Save"), color: theme.contextMenu.primaryColor)
@@ -7300,7 +7327,19 @@ public final class StoryItemSetContainerComponent: Component {
                         })))
                     }
                     
-                    if !component.slice.item.storyItem.isForwardingDisabled && !isLiveStream {
+                    if isLiveStream {
+                        //TODO:localize
+                        items.append(.action(ContextMenuActionItem(text: "Minimize", icon: { theme in
+                            return generateTintedImage(image: UIImage(bundleImageName: "Call/pip"), color: theme.contextMenu.primaryColor)
+                        }, action: { [weak self] _, a in
+                            a(.default)
+                            
+                            guard let self else {
+                                return
+                            }
+                            self.beginPictureInPicture()
+                        })))
+                    } else if !component.slice.item.storyItem.isForwardingDisabled {
                         let saveText: String = component.strings.Story_Context_SaveToGallery
                         items.append(.action(ContextMenuActionItem(text: saveText, icon: { theme in
                             return generateTintedImage(image: UIImage(bundleImageName: accountUser.isPremium ? "Chat/Context Menu/Download" : "Chat/Context Menu/DownloadLocked"), color: theme.contextMenu.primaryColor)
@@ -7422,6 +7461,33 @@ public final class StoryItemSetContainerComponent: Component {
                 self.contextController = contextController
                 self.updateIsProgressPaused()
                 controller.present(contextController, in: .window(.root))
+            })
+        }
+        
+        private func beginPictureInPicture() {
+            guard let component = self.component, let visibleItem = self.visibleItems[component.slice.item.id] else {
+                return
+            }
+            guard let itemView = visibleItem.view.view as? StoryItemContentComponent.View else {
+                return
+            }
+            itemView.beginPictureInPicture(dismissController: { [weak self] in
+                guard let self, let component = self.component, let controller = component.controller() as? StoryContainerScreen, let navigationController = controller.navigationController as? NavigationController else {
+                    return ({ completion in
+                        completion()
+                    }, {})
+                }
+                
+                controller.dismissForPictureInPicture()
+                
+                return ({ [weak navigationController] completion in
+                    guard let navigationController else {
+                        completion()
+                        return
+                    }
+                    controller.restoreForPictureInPicture(navigationController: navigationController, completion: completion)
+                }, {
+                })
             })
         }
         

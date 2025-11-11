@@ -277,6 +277,7 @@ public final class ChatTextInputPanelComponent: Component {
         private var panelNode: ChatTextInputPanelNode?
         
         private var interfaceInteraction: ChatPanelInterfaceInteraction?
+        private var hasPendingInputTextRefresh: Bool = false
         
         private var component: ChatTextInputPanelComponent?
         private weak var state: EmptyComponentState?
@@ -406,7 +407,10 @@ public final class ChatTextInputPanelComponent: Component {
                         if let component = self.component {
                             let currentMode = inputModeFromComponent(component)
                             let (updatedTextInputState, updatedMode) = f(component.externalState.textInputState, currentMode)
-                            component.externalState.textInputState = updatedTextInputState
+                            if component.externalState.textInputState != updatedTextInputState {
+                                component.externalState.textInputState = updatedTextInputState
+                                self.hasPendingInputTextRefresh = true
+                            }
                             if !self.isUpdating {
                                 self.state?.updated(transition: .spring(duration: 0.4))
                             }
@@ -944,7 +948,10 @@ public final class ChatTextInputPanelComponent: Component {
                 component.externalState.resetInputState = nil
                 let _ = resetInputState
                 panelNode.text = ""
+            } else if self.hasPendingInputTextRefresh {
+                panelNode.updateInputTextState(component.externalState.textInputState)
             }
+            self.hasPendingInputTextRefresh = false
             
             let panelHeight = panelNode.updateLayout(
                 width: availableSize.width,
