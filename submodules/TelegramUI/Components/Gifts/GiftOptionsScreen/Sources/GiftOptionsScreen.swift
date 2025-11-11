@@ -311,7 +311,7 @@ final class GiftOptionsScreenComponent: Component {
                         }
                         
                         let _ = (component.context.engine.payments.checkCanSendStarGift(giftId: gift.id)
-                        |> deliverOnMainQueue).start(next: { [weak self, weak controller] result in
+                                 |> deliverOnMainQueue).start(next: { [weak self, weak controller] result in
                             guard let self, let controller else {
                                 return
                             }
@@ -362,38 +362,45 @@ final class GiftOptionsScreenComponent: Component {
                         return
                     }
                     
-                    if let availability = gift.availability, availability.remains == 0 {
-                        if availability.resale > 0 {
-                            let storeController = component.context.sharedContext.makeGiftStoreController(
+                    if gift.flags.contains(.isAuction) {
+//                        let giftController = component.context.sharedContext.makeGiftAuctionViewScreen(
+//                            context: component,
+//                            auctionContext: <#T##GiftAuctionContext#>
+//                        )
+                    } else {
+                        if let availability = gift.availability, availability.remains == 0 {
+                            if availability.resale > 0 {
+                                let storeController = component.context.sharedContext.makeGiftStoreController(
+                                    context: component.context,
+                                    peerId: component.peerId,
+                                    gift: gift
+                                )
+                                mainController.push(storeController)
+                            } else {
+                                let giftController = GiftViewScreen(
+                                    context: component.context,
+                                    subject: .soldOutGift(gift)
+                                )
+                                mainController.push(giftController)
+                            }
+                        } else {
+                            var forceUnique: Bool?
+                            if let disallowedGifts = self.state?.disallowedGifts {
+                                if disallowedGifts.contains(.limited) && !disallowedGifts.contains(.unique) {
+                                    forceUnique = true
+                                } else if !disallowedGifts.contains(.limited) && disallowedGifts.contains(.unique) {
+                                    forceUnique = false
+                                }
+                            }
+                            
+                            let giftController = GiftSetupScreen(
                                 context: component.context,
                                 peerId: component.peerId,
-                                gift: gift
-                            )
-                            mainController.push(storeController)
-                        } else {
-                            let giftController = GiftViewScreen(
-                                context: component.context,
-                                subject: .soldOutGift(gift)
+                                subject: .starGift(gift, forceUnique),
+                                completion: component.completion
                             )
                             mainController.push(giftController)
                         }
-                    } else {
-                        var forceUnique: Bool?
-                        if let disallowedGifts = self.state?.disallowedGifts {
-                            if disallowedGifts.contains(.limited) && !disallowedGifts.contains(.unique) {
-                                forceUnique = true
-                            } else if !disallowedGifts.contains(.limited) && disallowedGifts.contains(.unique) {
-                                forceUnique = false
-                            }
-                        }
-                        
-                        let giftController = GiftSetupScreen(
-                            context: component.context,
-                            peerId: component.peerId,
-                            subject: .starGift(gift, forceUnique),
-                            completion: component.completion
-                        )
-                        mainController.push(giftController)
                     }
                 } else if case let .unique(gift) = gift {
                     self.transferGift(gift)

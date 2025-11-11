@@ -3846,8 +3846,12 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         return GiftAuctionInfoScreen(context: context, gift: gift, completion: completion)
     }
     
-    public func makeGiftAuctionScreen(context: AccountContext, gift: StarGift, auctionContext: GiftAuctionContext) -> ViewController {
-        return GiftAuctionScreen(context: context, gift: gift, auctionContext: auctionContext)
+    public func makeGiftAuctionBidScreen(context: AccountContext, auctionContext: GiftAuctionContext) -> ViewController {
+        return GiftAuctionBidScreen(context: context, auctionContext: auctionContext)
+    }
+    
+    public func makeGiftAuctionViewScreen(context: AccountContext, auctionContext: GiftAuctionContext) -> ViewController {
+        return GiftAuctionViewScreen(context: context, auctionContext: auctionContext)
     }
     
     public func makeStorySharingScreen(context: AccountContext, subject: StorySharingSubject, parentController: ViewController) -> ViewController {

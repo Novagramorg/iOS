@@ -535,13 +535,18 @@ private final class CameraScreenComponent: CombinedComponent {
                 return
             }
             
-            if mode == .live && self.storiesBlockedPeers == nil {
-                self.storiesBlockedPeers = BlockedPeersContext(account: self.context.account, subject: .stories)
-                self.adminedChannels.set(.single([]) |> then(self.context.engine.peers.channelsForStories()))
-                self.closeFriends.set(self.context.engine.data.get(TelegramEngine.EngineData.Item.Contacts.CloseFriends()))
+            var isCollageEnabled = controller.cameraState.isCollageEnabled
+            if mode == .live {
+                if self.storiesBlockedPeers == nil {
+                    self.storiesBlockedPeers = BlockedPeersContext(account: self.context.account, subject: .stories)
+                    self.adminedChannels.set(.single([]) |> then(self.context.engine.peers.channelsForStories()))
+                    self.closeFriends.set(self.context.engine.data.get(TelegramEngine.EngineData.Item.Contacts.CloseFriends()))
+                }
+                
+                self.displayingCollageSelection = false
+                isCollageEnabled = false
             }
-            
-            controller.updateCameraState({ $0.updatedMode(mode) }, transition: .spring(duration: 0.3))
+            controller.updateCameraState({ $0.updatedMode(mode).updatedIsCollageEnabled(isCollageEnabled) }, transition: .spring(duration: 0.3))
             
             var flashOn = controller.cameraState.flashMode == .on
             if case .video = mode, case .auto = controller.cameraState.flashMode {

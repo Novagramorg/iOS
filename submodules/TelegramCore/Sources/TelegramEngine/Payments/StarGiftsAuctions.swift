@@ -4,22 +4,39 @@ import MtProtoKit
 import SwiftSignalKit
 import TelegramApi
 
-private func _internal_getStarGiftAuctionState(postbox: Postbox, network: Network, accountPeerId: EnginePeer.Id, giftId: Int64, version: Int32) -> Signal<(state: GiftAuctionContext.State.AuctionState?, myState: GiftAuctionContext.State.MyState, timeout: Int32)?, NoError> {
-    return network.request(Api.functions.payments.getStarGiftAuctionState(auction: .inputStarGiftAuction(giftId: giftId), version: version))
+public enum StarGiftAuctionReference: Equatable {
+    case giftId(Int64)
+    case slug(String)
+    
+    var apiAuction: Api.InputStarGiftAuction {
+        switch self {
+        case let .giftId(giftId):
+            return .inputStarGiftAuction(giftId: giftId)
+        case let .slug(slug):
+            return .inputStarGiftAuctionSlug(slug: slug)
+        }
+    }
+}
+
+private func _internal_getStarGiftAuctionState(postbox: Postbox, network: Network, accountPeerId: EnginePeer.Id, reference: StarGiftAuctionReference, version: Int32) -> Signal<(gift: StarGift, state: GiftAuctionContext.State.AuctionState?, myState: GiftAuctionContext.State.MyState, timeout: Int32)?, NoError> {
+    return network.request(Api.functions.payments.getStarGiftAuctionState(auction: reference.apiAuction, version: version))
     |> map(Optional.init)
     |> `catch` { _ -> Signal<Api.payments.StarGiftAuctionState?, NoError> in
         return .single(nil)
     }
-    |> mapToSignal { result -> Signal<(state: GiftAuctionContext.State.AuctionState?, myState: GiftAuctionContext.State.MyState, timeout: Int32)?, NoError> in
+    |> mapToSignal { result -> Signal<(gift: StarGift, state: GiftAuctionContext.State.AuctionState?, myState: GiftAuctionContext.State.MyState, timeout: Int32)?, NoError> in
         guard let result else {
             return .single(nil)
         }
-        return postbox.transaction { transaction -> (state: GiftAuctionContext.State.AuctionState?, myState: GiftAuctionContext.State.MyState, timeout: Int32)? in
+        return postbox.transaction { transaction -> (gift: StarGift, state: GiftAuctionContext.State.AuctionState?, myState: GiftAuctionContext.State.MyState, timeout: Int32)? in
             switch result {
-            case let .starGiftAuctionState(gift, state, userState, timeout, users):
+            case let .starGiftAuctionState(apiGift, state, userState, timeout, users):
                 updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: AccumulatedPeers(users: users))
-                let _ = gift
+                guard let gift = StarGift(apiStarGift: apiGift) else {
+                    return nil
+                }
                 return (
+                    gift: gift,
                     state: GiftAuctionContext.State.AuctionState(apiAuctionState: state),
                     myState: GiftAuctionContext.State.MyState(apiAuctionUserState: userState),
                     timeout: timeout
@@ -39,7 +56,7 @@ public final class GiftAuctionContext {
         
         public enum AuctionState: Equatable {
             case ongoing(version: Int32, minBidAmount: Int64, bidLevels: [BidLevel], topBidders: [EnginePeer.Id], nextRoundDate: Int32, giftsLeft: Int32, currentRound: Int32, totalRounds: Int32)
-            case finished
+            case finished(startDate: Int32, endDate: Int32, averagePrice: Int64)
         }
         
         public struct MyState: Equatable {
@@ -47,16 +64,18 @@ public final class GiftAuctionContext {
             public var bidAmount: Int64?
             public var bidDate: Int32?
             public var minBidAmount: Int64?
+            public var bidPeerId: EnginePeer.Id?
             public var acquiredCount: Int32
         }
         
+        public var gift: StarGift
         public var auctionState: AuctionState
         public var myState: MyState
     }
     
     private let queue: Queue = .mainQueue()
     private let account: Account
-    let gift: StarGift
+    public let gift: StarGift
     
     private let disposable = MetaDisposable()
     
@@ -64,8 +83,6 @@ public final class GiftAuctionContext {
     private var myState: State.MyState?
     private var timeout: Int32?
     
-    private var updateAuctionStateDisposable: Disposable?
-    private var updateMyStateDisposable: Disposable?
     private var updateTimer: SwiftSignalKit.Timer?
     
     private let stateValue = Promise<State?>()
@@ -74,55 +91,21 @@ public final class GiftAuctionContext {
     }
     
     public convenience init(account: Account, gift: StarGift) {
-        self.init(account: account, gift: gift, initialAuctionState: nil, initialMyState: nil)
+        self.init(account: account, gift: gift, initialAuctionState: nil, initialMyState: nil, initialTimeout: nil)
     }
     
-    init(account: Account, gift: StarGift, initialAuctionState: State.AuctionState?, initialMyState: State.MyState?) {
+    init(account: Account, gift: StarGift, initialAuctionState: State.AuctionState?, initialMyState: State.MyState?, initialTimeout: Int32?) {
         self.account = account
         self.gift = gift
         
         self.auctionState = initialAuctionState
         self.myState = initialMyState
+        self.timeout = initialTimeout
         
         self.load()
-        
-        self.updateAuctionStateDisposable = (self.account.stateManager.updatedStarGiftAuctionState()
-        |> mapToSignal { updates in
-            if let update = updates[gift.giftId] {
-                return .single(update)
-            }
-            return .complete()
-        }
-        |> deliverOnMainQueue).start(next: { [weak self] auctionState in
-            guard let self else {
-                return
-            }
-            if case let .ongoing(version, _, _, _, _, _, _, _) = auctionState, version < self.currentVersion {
-            } else {
-                self.auctionState = auctionState
-            }
-            self.pushState()
-        })
-        
-        self.updateMyStateDisposable = (self.account.stateManager.updatedStarGiftAuctionMyState()
-        |> mapToSignal { updates in
-            if let update = updates[gift.giftId] {
-                return .single(update)
-            }
-            return .complete()
-        }
-        |> deliverOnMainQueue).start(next: { [weak self] myState in
-            guard let self else {
-                return
-            }
-            self.myState = myState
-            self.pushState()
-        })
     }
     
     deinit {
-        self.updateAuctionStateDisposable?.dispose()
-        self.updateMyStateDisposable?.dispose()
         self.updateTimer?.invalidate()
         self.disposable.dispose()
     }
@@ -138,12 +121,12 @@ public final class GiftAuctionContext {
     public func load() {
         self.pushState()
 
-        self.disposable.set((_internal_getStarGiftAuctionState(postbox: self.account.postbox, network: self.account.network, accountPeerId: self.account.peerId, giftId: self.gift.giftId, version: self.currentVersion)
+        self.disposable.set((_internal_getStarGiftAuctionState(postbox: self.account.postbox, network: self.account.network, accountPeerId: self.account.peerId, reference: .giftId(self.gift.giftId), version: self.currentVersion)
         |> deliverOn(self.queue)).start(next: { [weak self] data in
             guard let self else {
                 return
             }
-            guard let (auctionState, myState, timeout) = data else {
+            guard let (_, auctionState, myState, timeout) = data else {
                 return
             }
             
@@ -166,47 +149,26 @@ public final class GiftAuctionContext {
             self.updateTimer?.start()
         }))
     }
+        
+    func updateAuctionState(_ auctionState: GiftAuctionContext.State.AuctionState) {
+        self.auctionState = auctionState
+        self.pushState()
+    }
     
-//    public func placeBid(value: Int64) {
-//        return _internal_fetchBotPaymentForm(accountPeerId: self.account.peerId, postbox: self.account.postbox, network: self.account.network, source: source, themeParams: nil)
-//        |> map(Optional.init)
-//        |> `catch` { error -> Signal<BotPaymentForm?, BuyStarGiftError> in
-//            if case let .starGiftResellTooEarly(timestamp) = error {
-//                return .fail(.starGiftResellTooEarly(timestamp))
-//            }
-//            return .fail(.generic)
-//        }
-//        |> mapToSignal { paymentForm in
-//            if let paymentForm {
-//                if let paymentPrice = paymentForm.invoice.prices.first?.amount, let price, paymentPrice > price.amount.value {
-//                    let currencyAmount: CurrencyAmount
-//                    if paymentForm.invoice.currency == "TON" {
-//                        currencyAmount = CurrencyAmount(amount: StarsAmount(value: paymentPrice, nanos: 0), currency: .ton)
-//                    } else {
-//                        currencyAmount = CurrencyAmount(amount: StarsAmount(value: paymentPrice, nanos: 0), currency: .stars)
-//                    }
-//                    return .fail(.priceChanged(currencyAmount))
-//                }
-//                return _internal_sendStarsPaymentForm(account: account, formId: paymentForm.id, source: source)
-//                |> mapError { error -> BuyStarGiftError in
-//                    if case let .serverProvided(text) = error {
-//                        return .serverProvided(text)
-//                    } else {
-//                        return .generic
-//                    }
-//                }
-//                |> ignoreValues
-//            } else {
-//                return .fail(.generic)
-//            }
-//        }
-//    }
+    func updateMyState(_ myState: GiftAuctionContext.State.MyState) {
+        self.myState = myState
+        self.pushState()
+    }
     
     private func pushState() {
         if let auctionState = self.auctionState, let myState = self.myState {
-            self.stateValue.set(.single(
-                State(auctionState: auctionState, myState: myState)
-            ))
+            self.stateValue.set(
+                .single(State(
+                    gift: self.gift,
+                    auctionState: auctionState,
+                    myState: myState
+                ))
+            )
         } else {
             self.stateValue.set(.single(nil))
         }
@@ -231,8 +193,8 @@ extension GiftAuctionContext.State.AuctionState {
             let _ = startDate
             let _ = endDate
             self = .ongoing(version: version, minBidAmount: minBidAmount, bidLevels: bidLevels.map(GiftAuctionContext.State.BidLevel.init(apiBidLevel:)), topBidders: topBidders.map { EnginePeer.Id(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value($0)) }, nextRoundDate: nextRoundAt, giftsLeft: giftsLeft, currentRound: currentRound, totalRounds: totalRounds)
-        case .starGiftAuctionStateFinished:
-            self = .finished
+        case let .starGiftAuctionStateFinished(startDate, endDate, averagePrice):
+            self = .finished(startDate: startDate, endDate: endDate, averagePrice: averagePrice)
         case .starGiftAuctionStateNotModified:
             return nil
         }
@@ -242,11 +204,12 @@ extension GiftAuctionContext.State.AuctionState {
 extension GiftAuctionContext.State.MyState {
     init(apiAuctionUserState: Api.StarGiftAuctionUserState) {
         switch apiAuctionUserState {
-        case let .starGiftAuctionUserState(flags, bidAmount, bidDate, minBidAmount, acquiredCount):
+        case let .starGiftAuctionUserState(flags, bidAmount, bidDate, minBidAmount, bidPeerId, acquiredCount):
             self.isOutbid = (flags & (1 << 1)) != 0
             self.bidAmount = bidAmount
             self.bidDate = bidDate
             self.minBidAmount = minBidAmount
+            self.bidPeerId = bidPeerId?.peerId
             self.acquiredCount = acquiredCount
         }
     }
@@ -333,7 +296,8 @@ func _internal_getActiveGiftAuctions(account: Account, hash: Int64) -> Signal<[G
                             account: account,
                             gift: gift,
                             initialAuctionState: GiftAuctionContext.State.AuctionState(apiAuctionState: auctionState),
-                            initialMyState: GiftAuctionContext.State.MyState(apiAuctionUserState: userState)
+                            initialMyState: GiftAuctionContext.State.MyState(apiAuctionUserState: userState),
+                            initialTimeout: nil
                         ))
                     }
                 }
@@ -351,15 +315,62 @@ public class GiftAuctionsManager {
     private var auctionContexts: [Int64 : GiftAuctionContext] = [:]
     
     private let disposable = MetaDisposable()
+    private var updateAuctionStateDisposable: Disposable?
+    private var updateMyStateDisposable: Disposable?
+        
+    private let statePromise = Promise<[GiftAuctionContext.State]>([])
+    public var state: Signal<[GiftAuctionContext.State], NoError> {
+        return self.statePromise.get()
+    }
     
     public init(account: Account) {
         self.account = account
+        
+        self.updateAuctionStateDisposable = (self.account.stateManager.updatedStarGiftAuctionState()
+        |> deliverOnMainQueue).start(next: { [weak self] updates in
+            guard let self else {
+                return
+            }
+            var reload = false
+            for (giftId, update) in updates {
+                if let auctionContext = self.auctionContexts[giftId] {
+                    auctionContext.updateAuctionState(update)
+                } else {
+                    reload = true
+                    break
+                }
+            }
+            if reload {
+                self.reload()
+            }
+        })
+        
+        self.updateMyStateDisposable = (self.account.stateManager.updatedStarGiftAuctionMyState()
+        |> deliverOnMainQueue).start(next: { [weak self] updates in
+            guard let self else {
+                return
+            }
+            var reload = false
+            for (giftId, update) in updates {
+                if let auctionContext = self.auctionContexts[giftId] {
+                    auctionContext.updateMyState(update)
+                } else {
+                    reload = true
+                    break
+                }
+            }
+            if reload {
+                self.reload()
+            }
+        })
         
         self.reload()
     }
     
     deinit {
         self.disposable.dispose()
+        self.updateAuctionStateDisposable?.dispose()
+        self.updateMyStateDisposable?.dispose()
     }
     
     public func reload() {
@@ -373,23 +384,65 @@ public class GiftAuctionsManager {
                 auctionContexts[auction.gift.giftId] = auction
             }
             self.auctionContexts = auctionContexts
+            self.updateState()
         }))
     }
     
-    public func auctionContextForGift(gift: StarGift) -> GiftAuctionContext? {
-        guard case .generic = gift else {
-            return nil
-        }
-        if let current = self.auctionContexts[gift.giftId] {
-            return current
+    public func auctionContext(for reference: StarGiftAuctionReference) -> Signal<GiftAuctionContext?, NoError> {
+        if case let .giftId(id) = reference, let current = self.auctionContexts[id] {
+            return .single(current)
         } else {
-            let auctionContext = GiftAuctionContext(account: self.account, gift: gift)
-            self.auctionContexts[gift.giftId] = auctionContext
-            return auctionContext
+            return _internal_getStarGiftAuctionState(
+                postbox: self.account.postbox,
+                network: self.account.network,
+                accountPeerId: self.account.peerId,
+                reference: reference,
+                version: 0
+            ) |> mapToSignal { [weak self] result in
+                if let self, let result {
+                    let auctionContext = GiftAuctionContext(account: self.account, gift: result.gift, initialAuctionState: result.state, initialMyState: result.myState, initialTimeout: result.timeout)
+                    self.auctionContexts[result.gift.giftId] = auctionContext
+                    self.updateState()
+                    return .single(auctionContext)
+                } else {
+                    return .single(nil)
+                }
+            }
         }
     }
-    
+
     func storeAuctionContext(auctionContext: GiftAuctionContext) {
         self.auctionContexts[auctionContext.gift.giftId] = auctionContext
+        self.updateState()
+    }
+    
+    private func updateState() {
+        var signals: [Signal<GiftAuctionContext.State, NoError>] = []
+        for (_, auction) in self.auctionContexts {
+            signals.append(auction.state
+            |> mapToSignal { state in
+                if let state {
+                    return .single(state)
+                } else {
+                    return .complete()
+                }
+            })
+        }
+        self.statePromise.set(combineLatest(signals))
+    }
+}
+
+public extension GiftAuctionContext.State {
+    var place: Int32? {
+        guard case let .ongoing(_, _, bidLevels, _, _, _, _, _) = self.auctionState, let myBid = self.myState.bidAmount, let myBidDate = self.myState.bidDate else {
+            return nil
+        }
+        var place: Int32 = 1
+        for level in bidLevels {
+            if myBid < level.amount || (myBid == level.amount && myBidDate > level.date) {
+                place = level.position + 1
+            }
+        }
+        return place
     }
 }
