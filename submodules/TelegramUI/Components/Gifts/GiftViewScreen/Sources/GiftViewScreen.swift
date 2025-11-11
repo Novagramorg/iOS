@@ -5108,7 +5108,7 @@ public class GiftViewScreen: ViewControllerComponentContainer {
             case let .message(message):
                 if let action = message.media.first(where: { $0 is TelegramMediaAction }) as? TelegramMediaAction {
                     switch action.action {
-                    case let .starGift(gift, convertStars, text, entities, nameHidden, savedToProfile, converted, upgraded, canUpgrade, upgradeStars, isRefunded, _, upgradeMessageId, peerId, senderId, savedId, prepaidUpgradeHash, giftMessageId, upgradeSeparate):
+                    case let .starGift(gift, convertStars, text, entities, nameHidden, savedToProfile, converted, upgraded, canUpgrade, upgradeStars, isRefunded, _, upgradeMessageId, peerId, senderId, savedId, prepaidUpgradeHash, giftMessageId, upgradeSeparate, _, _):
                         var reference: StarGiftReference
                         if let peerId, let giftMessageId {
                             reference = .message(messageId: EngineMessage.Id(peerId: peerId, namespace: Namespaces.Message.Cloud, id: giftMessageId))
