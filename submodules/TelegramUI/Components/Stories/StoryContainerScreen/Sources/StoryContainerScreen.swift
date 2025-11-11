@@ -1007,6 +1007,9 @@ private final class StoryContainerScreenComponent: Component {
         }
         
         func animateIn() {
+            self.isAnimatingOut = false
+            self.didAnimateOut = false
+            
             if let component = self.component {
                 component.focusedItemPromise.set(self.focusedItem.get())
             }
@@ -2156,6 +2159,40 @@ public class StoryContainerScreen: ViewControllerComponentContainer {
             componentView.dismissWithoutTransitionOut = true
         }
         self.dismiss(completion: completion)
+    }
+    
+    func dismissForPictureInPicture() {
+        if !self.isDismissed {
+            self.isDismissed = true
+            self.didAnimateIn = false
+            
+            /*if let componentView = self.node.hostView.componentView as? StoryContainerScreenComponent.View {
+                componentView.endEditing(true)
+                
+                componentView.animateOut(completion: { [weak self] in
+                    self?.dismiss(animated: false)
+                })
+            } else {
+                self.dismiss(animated: false)
+            }*/
+            self.dismiss(animated: false)
+        }
+    }
+    
+    func restoreForPictureInPicture(navigationController: NavigationController, completion: @escaping () -> Void) {
+        if self.isDismissed {
+            self.isDismissed = false
+            
+            navigationController.pushViewController(self, animated: false, completion: completion)
+            
+            if !self.didAnimateIn {
+                self.didAnimateIn = true
+                
+                if let componentView = self.node.hostView.componentView as? StoryContainerScreenComponent.View {
+                    componentView.animateIn()
+                }
+            }
+        }
     }
     
     override public func dismiss(completion: (() -> Void)? = nil) {
