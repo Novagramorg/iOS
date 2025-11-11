@@ -2038,6 +2038,8 @@ public func waitUntilStoryMediaPreloaded(context: AccountContext, peerId: Engine
             }
         case let .file(file):
             fetchPriorityResourceId = file.resource.id.stringRepresentation
+        case .liveStream:
+            return .complete()
         default:
             break
         }
