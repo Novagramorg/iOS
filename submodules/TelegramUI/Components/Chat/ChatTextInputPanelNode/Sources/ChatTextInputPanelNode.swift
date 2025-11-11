@@ -938,7 +938,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         
         self.glassBackgroundContainer.contentView.addSubview(self.menuButton.view)
         self.glassBackgroundContainer.contentView.addSubview(self.attachmentButtonBackground)
-        self.glassBackgroundContainer.contentView.addSubview(self.secondaryLeftButtonBackground)
+        //self.glassBackgroundContainer.contentView.addSubview(self.secondaryLeftButtonBackground)
         self.glassBackgroundContainer.contentView.addSubview(self.attachmentButtonDisabledNode.view)
         
         self.glassBackgroundContainer.contentView.addSubview(self.startButton.view)
