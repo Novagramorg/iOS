@@ -50,6 +50,7 @@ import GlassBackgroundComponent
 import ChatThemeScreen
 import ChatTextInputPanelNode
 import ChatInputAccessoryPanel
+import ChatMessageTextBubbleContentNode
 
 final class VideoNavigationControllerDropContentItem: NavigationControllerDropContentItem {
     let itemNode: OverlayMediaItemNode
@@ -4089,6 +4090,8 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                         let _ = textNode
                         return result
                     } else if let _ = node as? LinkHighlightingNode {
+                        return result
+                    } else if let _ = node as? ChatMessageTextBubbleContentNode.ContainerNode {
                         return result
                     }
                 }
