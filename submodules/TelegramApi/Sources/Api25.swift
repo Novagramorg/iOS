@@ -1036,18 +1036,19 @@ public extension Api {
 }
 public extension Api {
     enum StarGiftAuctionUserState: TypeConstructorDescription {
-        case starGiftAuctionUserState(flags: Int32, bidAmount: Int64?, bidDate: Int32?, minBidAmount: Int64?, acquiredCount: Int32)
+        case starGiftAuctionUserState(flags: Int32, bidAmount: Int64?, bidDate: Int32?, minBidAmount: Int64?, bidPeer: Api.Peer?, acquiredCount: Int32)
     
     public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
     switch self {
-                case .starGiftAuctionUserState(let flags, let bidAmount, let bidDate, let minBidAmount, let acquiredCount):
+                case .starGiftAuctionUserState(let flags, let bidAmount, let bidDate, let minBidAmount, let bidPeer, let acquiredCount):
                     if boxed {
-                        buffer.appendInt32(-165829476)
+                        buffer.appendInt32(787403204)
                     }
                     serializeInt32(flags, buffer: buffer, boxed: false)
                     if Int(flags) & Int(1 << 0) != 0 {serializeInt64(bidAmount!, buffer: buffer, boxed: false)}
                     if Int(flags) & Int(1 << 0) != 0 {serializeInt32(bidDate!, buffer: buffer, boxed: false)}
                     if Int(flags) & Int(1 << 0) != 0 {serializeInt64(minBidAmount!, buffer: buffer, boxed: false)}
+                    if Int(flags) & Int(1 << 0) != 0 {bidPeer!.serialize(buffer, true)}
                     serializeInt32(acquiredCount, buffer: buffer, boxed: false)
                     break
     }
@@ -1055,8 +1056,8 @@ public extension Api {
     
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
-                case .starGiftAuctionUserState(let flags, let bidAmount, let bidDate, let minBidAmount, let acquiredCount):
-                return ("starGiftAuctionUserState", [("flags", flags as Any), ("bidAmount", bidAmount as Any), ("bidDate", bidDate as Any), ("minBidAmount", minBidAmount as Any), ("acquiredCount", acquiredCount as Any)])
+                case .starGiftAuctionUserState(let flags, let bidAmount, let bidDate, let minBidAmount, let bidPeer, let acquiredCount):
+                return ("starGiftAuctionUserState", [("flags", flags as Any), ("bidAmount", bidAmount as Any), ("bidDate", bidDate as Any), ("minBidAmount", minBidAmount as Any), ("bidPeer", bidPeer as Any), ("acquiredCount", acquiredCount as Any)])
     }
     }
     
@@ -1069,15 +1070,20 @@ public extension Api {
             if Int(_1!) & Int(1 << 0) != 0 {_3 = reader.readInt32() }
             var _4: Int64?
             if Int(_1!) & Int(1 << 0) != 0 {_4 = reader.readInt64() }
-            var _5: Int32?
-            _5 = reader.readInt32()
+            var _5: Api.Peer?
+            if Int(_1!) & Int(1 << 0) != 0 {if let signature = reader.readInt32() {
+                _5 = Api.parse(reader, signature: signature) as? Api.Peer
+            } }
+            var _6: Int32?
+            _6 = reader.readInt32()
             let _c1 = _1 != nil
             let _c2 = (Int(_1!) & Int(1 << 0) == 0) || _2 != nil
             let _c3 = (Int(_1!) & Int(1 << 0) == 0) || _3 != nil
             let _c4 = (Int(_1!) & Int(1 << 0) == 0) || _4 != nil
-            let _c5 = _5 != nil
-            if _c1 && _c2 && _c3 && _c4 && _c5 {
-                return Api.StarGiftAuctionUserState.starGiftAuctionUserState(flags: _1!, bidAmount: _2, bidDate: _3, minBidAmount: _4, acquiredCount: _5!)
+            let _c5 = (Int(_1!) & Int(1 << 0) == 0) || _5 != nil
+            let _c6 = _6 != nil
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 {
+                return Api.StarGiftAuctionUserState.starGiftAuctionUserState(flags: _1!, bidAmount: _2, bidDate: _3, minBidAmount: _4, bidPeer: _5, acquiredCount: _6!)
             }
             else {
                 return nil
