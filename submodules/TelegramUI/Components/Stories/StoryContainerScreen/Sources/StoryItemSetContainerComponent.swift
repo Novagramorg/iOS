@@ -4249,20 +4249,10 @@ public final class StoryItemSetContainerComponent: Component {
             var currentLeftInfoItem: InfoItem?
             if focusedItem != nil {
                 let leftInfoComponent = AnyComponent(StoryAvatarInfoComponent(context: component.context, peer: component.slice.effectivePeer, isLiveStream: isLiveStream))
-                if let leftInfoItem = self.leftInfoItem, leftInfoItem.component == leftInfoComponent {
+                if let leftInfoItem = self.leftInfoItem {
                     currentLeftInfoItem = leftInfoItem
                 } else {
                     currentLeftInfoItem = InfoItem(component: leftInfoComponent)
-                }
-            }
-            
-            if let leftInfoItem = self.leftInfoItem, currentLeftInfoItem?.component != leftInfoItem.component {
-                self.leftInfoItem = nil
-                if let view = leftInfoItem.view.view {
-                    view.layer.animateScale(from: 1.0, to: 0.5, duration: 0.3, timingFunction: kCAMediaTimingFunctionSpring, removeOnCompletion: false)
-                    view.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2, removeOnCompletion: false, completion: { [weak view] _ in
-                        view?.removeFromSuperview()
-                    })
                 }
             }
             
@@ -4295,7 +4285,7 @@ public final class StoryItemSetContainerComponent: Component {
                     isLiveStream: isLiveStream,
                     customSubtitle: customSubtitle
                 ))
-                if let centerInfoItem = self.centerInfoItem, centerInfoItem.component == centerInfoComponent {
+                if let centerInfoItem = self.centerInfoItem {
                     currentCenterInfoItem = centerInfoItem
                 } else {
                     currentCenterInfoItem = InfoItem(component: centerInfoComponent)
@@ -6644,6 +6634,19 @@ public final class StoryItemSetContainerComponent: Component {
                 }
                 
                 if case .liveStream = component.slice.item.storyItem.media {
+                    //TODO:localize
+                    items.append(.action(ContextMenuActionItem(text: "Live Settings", icon: { theme in
+                        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Settings"), color: theme.contextMenu.primaryColor)
+                    }, action: { [weak self] _, a in
+                        a(.default)
+                        
+                        guard let self else {
+                            return
+                        }
+                        
+                        self.sendMessageContext.displayLiveStreamSettings(view: self)
+                    })))
+                    
                     items.append(.action(ContextMenuActionItem(text: presentationData.strings.Common_Delete, textColor: .destructive, icon: { theme in
                         return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Delete"), color: theme.contextMenu.destructiveColor)
                     }, action: { [weak self] _, a in
@@ -6920,6 +6923,21 @@ public final class StoryItemSetContainerComponent: Component {
                     self.updateIsProgressPaused()
                     component.controller()?.present(tooltipScreen, in: .current)
                 })))
+                
+                if channel.hasPermission(.postStories) {
+                    //TODO:localize
+                    items.append(.action(ContextMenuActionItem(text: "Live Settings", icon: { theme in
+                        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Settings"), color: theme.contextMenu.primaryColor)
+                    }, action: { [weak self] _, a in
+                        a(.default)
+                        
+                        guard let self else {
+                            return
+                        }
+                        
+                        self.sendMessageContext.displayLiveStreamSettings(view: self)
+                    })))
+                }
                 
                 if (component.slice.item.storyItem.isMy && channel.hasPermission(.postStories)) || channel.hasPermission(.deleteStories) {
                     items.append(.action(ContextMenuActionItem(text: component.strings.Story_ContextDeleteStory, textColor: .destructive, icon: { theme in

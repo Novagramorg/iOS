@@ -843,12 +843,22 @@ public final class StoryPeerListItemComponent: Component {
                 if let image = avatarLiveBadgeView.image {
                     let badgeSize = image.size
                     let badgeFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((avatarFrame.width - badgeSize.width) * 0.5), y: avatarFrame.height + 5.0 - badgeSize.height), size: badgeSize)
-                    avatarLiveBadgeTransition.setFrame(view: avatarLiveBadgeView, frame: badgeFrame)
+                    avatarLiveBadgeTransition.setPosition(view: avatarLiveBadgeView, position: badgeFrame.center)
+                    avatarLiveBadgeTransition.setBounds(view: avatarLiveBadgeView, bounds: CGRect(origin: CGPoint(), size: badgeFrame.size))
+                    
+                    avatarLiveBadgeTransition.setScale(view: avatarLiveBadgeView, scale: max(0.001, component.expandedAlphaFraction))
+                    avatarLiveBadgeTransition.setAlpha(view: avatarLiveBadgeView, alpha: component.expandedAlphaFraction)
                     
                     avatarLiveBadgeMaskSeenLayer.frame = badgeFrame.offsetBy(dx: 8.0, dy: 8.0).insetBy(dx: -2.0, dy: -2.0)
                     avatarLiveBadgeMaskSeenLayer.cornerRadius = avatarLiveBadgeMaskSeenLayer.bounds.height * 0.5
                     avatarLiveBadgeMaskUnseenLayer.frame = badgeFrame.offsetBy(dx: 8.0, dy: 8.0).insetBy(dx: -2.0, dy: -2.0)
                     avatarLiveBadgeMaskUnseenLayer.cornerRadius = avatarLiveBadgeMaskUnseenLayer.bounds.height * 0.5
+                    
+                    avatarLiveBadgeTransition.setScale(layer: avatarLiveBadgeMaskSeenLayer, scale: max(0.001, component.expandedAlphaFraction))
+                    avatarLiveBadgeTransition.setAlpha(layer: avatarLiveBadgeMaskSeenLayer, alpha: component.expandedAlphaFraction)
+                    
+                    avatarLiveBadgeTransition.setScale(layer: avatarLiveBadgeMaskUnseenLayer, scale: max(0.001, component.expandedAlphaFraction))
+                    avatarLiveBadgeTransition.setAlpha(layer: avatarLiveBadgeMaskUnseenLayer, alpha: component.expandedAlphaFraction)
                 }
             } else {
                 if let avatarLiveBadgeView = self.avatarLiveBadgeView {

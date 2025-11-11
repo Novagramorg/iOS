@@ -349,7 +349,14 @@ final class LiveStreamSettingsScreenComponent: Component {
                 contentHeight += sectionSpacing
             }
             
-            if screenState.sendAsPeerId?.namespace != Namespaces.Peer.CloudChannel {
+            var displayPrivacy = true
+            if screenState.sendAsPeerId?.namespace == Namespaces.Peer.CloudChannel {
+                displayPrivacy = false
+            } else if screenState.call != nil && screenState.isEdit {
+                displayPrivacy = false
+            }
+            
+            if displayPrivacy {
                 var privacySectionItems: [AnyComponentWithIdentity<Empty>] = []
                 
                 var categoryItems: [ShareWithPeersScreenComponent.CategoryItem] = []
@@ -659,7 +666,7 @@ final class LiveStreamSettingsScreenComponent: Component {
                 })
             }
             
-            if !screenState.isEdit {
+            if !screenState.isEdit || (screenState.call != nil && screenState.isEdit) {
                 let externalStreamSectionItems = [AnyComponentWithIdentity(id: 0, component: AnyComponent(
                     ListActionItemComponent(
                         theme: theme,
@@ -703,6 +710,7 @@ final class LiveStreamSettingsScreenComponent: Component {
             }
             
 
+            //TODO:localize
             var settingsSectionItems: [AnyComponentWithIdentity<Empty>] = []
             settingsSectionItems.append(AnyComponentWithIdentity(id: "comments", component: AnyComponent(ListActionItemComponent(
                 theme: theme,
@@ -725,26 +733,29 @@ final class LiveStreamSettingsScreenComponent: Component {
                 action: nil
             ))))
             
-            settingsSectionItems.append(AnyComponentWithIdentity(id: "screenshots", component: AnyComponent(ListActionItemComponent(
-                theme: theme,
-                style: .glass,
-                title: AnyComponent(MultilineTextComponent(
-                    text: .plain(NSAttributedString(
-                        string: "Allow Screenshots",
-                        font: Font.regular(presentationData.listsFontSize.baseDisplaySize),
-                        textColor: theme.list.itemPrimaryTextColor
+            if !(screenState.call != nil && screenState.isEdit) {
+                //TODO:localize
+                settingsSectionItems.append(AnyComponentWithIdentity(id: "screenshots", component: AnyComponent(ListActionItemComponent(
+                    theme: theme,
+                    style: .glass,
+                    title: AnyComponent(MultilineTextComponent(
+                        text: .plain(NSAttributedString(
+                            string: "Allow Screenshots",
+                            font: Font.regular(presentationData.listsFontSize.baseDisplaySize),
+                            textColor: theme.list.itemPrimaryTextColor
+                        )),
+                        maximumNumberOfLines: 1
                     )),
-                    maximumNumberOfLines: 1
-                )),
-                accessory: .toggle(ListActionItemComponent.Toggle(style: .regular, isOn: !screenState.isForwardingDisabled, action: { [weak self] _ in
-                    guard let self, let component = self.component else {
-                        return
-                    }
-                    component.stateContext.isForwardingDisabled = !component.stateContext.isForwardingDisabled
-                    self.state?.updated(transition: .spring(duration: 0.4))
-                })),
-                action: nil
-            ))))
+                    accessory: .toggle(ListActionItemComponent.Toggle(style: .regular, isOn: !screenState.isForwardingDisabled, action: { [weak self] _ in
+                        guard let self, let component = self.component else {
+                            return
+                        }
+                        component.stateContext.isForwardingDisabled = !component.stateContext.isForwardingDisabled
+                        self.state?.updated(transition: .spring(duration: 0.4))
+                    })),
+                    action: nil
+                ))))
+            }
             
             let settingsSectionSize = self.settingsSection.update(
                 transition: transition,
@@ -1025,7 +1036,7 @@ final class LiveStreamSettingsScreenComponent: Component {
 public class LiveStreamSettingsScreen: ViewControllerComponentContainer {
     public enum Mode {
         case create(sendAsPeerId: EnginePeer.Id?, isCustomTarget: Bool, privacy: EngineStoryPrivacy, allowComments: Bool, isForwardingDisabled: Bool, pin: Bool, paidMessageStars: Int64)
-        case edit(PresentationGroupCall)
+        case edit(call: PresentationGroupCall, displayPrivacy: Bool)
     }
     
     public struct Result {
@@ -1088,6 +1099,7 @@ public class LiveStreamSettingsScreen: ViewControllerComponentContainer {
     }
     
     final class State {
+        var call: PresentationGroupCall?
         var isEdit: Bool
         var maxPaidMessageStars: Int64
         var sendAsPeerId: EnginePeer.Id?
@@ -1105,6 +1117,7 @@ public class LiveStreamSettingsScreen: ViewControllerComponentContainer {
         var grayListPeers: [EnginePeer]
         
         init(
+            call: PresentationGroupCall?,
             isEdit: Bool,
             maxPaidMessageStars: Int64,
             sendAsPeerId: EnginePeer.Id?,
@@ -1121,6 +1134,7 @@ public class LiveStreamSettingsScreen: ViewControllerComponentContainer {
             closeFriendsPeers: [EnginePeer],
             grayListPeers: [EnginePeer]
         ) {
+            self.call = call
             self.isEdit = isEdit
             self.maxPaidMessageStars = maxPaidMessageStars
             self.sendAsPeerId = sendAsPeerId
@@ -1140,6 +1154,7 @@ public class LiveStreamSettingsScreen: ViewControllerComponentContainer {
     }
     
     public final class StateContext {
+        let mode: LiveStreamSettingsScreen.Mode
         let blockedPeersContext: BlockedPeersContext?
         
         var stateValue: State?
@@ -1211,6 +1226,7 @@ public class LiveStreamSettingsScreen: ViewControllerComponentContainer {
             adminedChannels: Signal<[EnginePeer], NoError>,
             blockedPeersContext: BlockedPeersContext?
         ) {
+            self.mode = mode
             self.blockedPeersContext = blockedPeersContext
             
             let grayListPeers: Signal<[EnginePeer], NoError>
@@ -1337,6 +1353,7 @@ public class LiveStreamSettingsScreen: ViewControllerComponentContainer {
                 savedSelectedPeers[.contacts] = contactsPeers
                 savedSelectedPeers[.nobody] = selectedPeers
                 
+                let call: PresentationGroupCall?
                 let isEdit: Bool
                 let maxPaidMessageStars: Int64 = 10000
                 let sendAsPeerId: EnginePeer.Id?
@@ -1348,6 +1365,7 @@ public class LiveStreamSettingsScreen: ViewControllerComponentContainer {
                 let paidMessageStars: Int64
                 
                 if let current = self.stateValue {
+                    call = current.call
                     isEdit = current.isEdit
                     sendAsPeerId = current.sendAsPeerId
                     isCustomTarget = current.isCustomTarget
@@ -1359,6 +1377,7 @@ public class LiveStreamSettingsScreen: ViewControllerComponentContainer {
                 } else {
                     switch mode {
                     case let .create(sendAsPeerIdValue, isCustomTargetValue, privacyValue, allowCommentsValue, isForwardingDisabledValue, pinValue, paidMessageStarsValue):
+                        call = nil
                         isEdit = false
                         sendAsPeerId = sendAsPeerIdValue
                         isCustomTarget = isCustomTargetValue
@@ -1367,8 +1386,8 @@ public class LiveStreamSettingsScreen: ViewControllerComponentContainer {
                         isForwardingDisabled = isForwardingDisabledValue
                         pin = pinValue
                         paidMessageStars = paidMessageStarsValue
-                    case let .edit(call):
-                        let _ = call
+                    case let .edit(callValue, _):
+                        call = callValue
                         isEdit = true
                         sendAsPeerId = nil
                         isCustomTarget = false
@@ -1381,6 +1400,7 @@ public class LiveStreamSettingsScreen: ViewControllerComponentContainer {
                 }
                 
                 let state = State(
+                    call: call,
                     isEdit: isEdit,
                     maxPaidMessageStars: maxPaidMessageStars,
                     sendAsPeerId: sendAsPeerId,

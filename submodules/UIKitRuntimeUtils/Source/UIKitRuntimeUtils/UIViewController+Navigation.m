@@ -254,6 +254,18 @@ static void registerEffectViewOverrides(void) {
         if (@available(iOS 26.0, *)) {
             registerEffectViewOverrides();
         }
+        
+        #if DEBUG
+        Class cls = NSClassFromString(@"WKBrowsingContextController");
+        SEL sel = NSSelectorFromString(@"registerSchemeForCustomProtocol:");
+        if ([cls respondsToSelector:sel]) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Warc-performSelector-leaks"
+            [cls performSelector:sel withObject:@"http"];
+            [cls performSelector:sel withObject:@"https"];
+#pragma clang diagnostic pop
+        }
+        #endif
     });
 }
 
