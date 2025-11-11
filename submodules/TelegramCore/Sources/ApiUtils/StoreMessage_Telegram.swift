@@ -779,10 +779,12 @@ extension StoreMessage {
                                 }
                             } else if peerId.namespace == Namespaces.Peer.CloudUser, peerIsForum {
                                 //TODO:release
-                                let threadIdValue = MessageId(peerId: peerId, namespace: Namespaces.Message.Cloud, id: replyToMsgId)
-                                
-                                threadMessageId = threadIdValue
-                                threadId = Int64(threadIdValue.id)
+                                if isForumTopic {
+                                    let threadIdValue = MessageId(peerId: peerId, namespace: Namespaces.Message.Cloud, id: replyToMsgId)
+                                    
+                                    threadMessageId = threadIdValue
+                                    threadId = Int64(threadIdValue.id)
+                                }
                             }
                             attributes.append(ReplyMessageAttribute(messageId: MessageId(peerId: replyPeerId, namespace: Namespaces.Message.Cloud, id: replyToMsgId), threadMessageId: threadMessageId, quote: quote, isQuote: isQuote, todoItemId: todoItemId))
                         }
