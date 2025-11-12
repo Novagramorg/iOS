@@ -241,6 +241,40 @@ private final class GiftAuctionAcquiredScreenComponent: Component {
             }
             self.bottomEdgeEffectView.layer.animatePosition(from: CGPoint(), to: CGPoint(x: 0.0, y: animateOffset), duration: 0.3, timingFunction: CAMediaTimingFunctionName.easeInEaseOut.rawValue, removeOnCompletion: false, additive: true)
         }
+        
+        private func openPeer(_ peer: EnginePeer, dismiss: Bool = true) {
+            guard let component = self.component, let controller = self.environment?.controller() as? GiftAuctionAcquiredScreen, let navigationController = controller.navigationController as? NavigationController else {
+                return
+            }
+                                    
+            let context = component.context
+            let action = {
+                context.sharedContext.navigateToChatController(NavigateToChatControllerParams(
+                    navigationController: navigationController,
+                    chatController: nil,
+                    context: context,
+                    chatLocation: .peer(peer),
+                    subject: nil,
+                    botStart: nil,
+                    updateTextInputState: nil,
+                    keepStack: .always,
+                    useExisting: true,
+                    purposefulAction: nil,
+                    scrollToEndIfExists: false,
+                    activateMessageSearch: nil,
+                    animated: true
+                ))
+            }
+            
+            if dismiss {
+                controller.dismiss()
+                Queue.mainQueue().after(0.4, {
+                    action()
+                })
+            } else {
+                action()
+            }
+        }
       
         func update(component: GiftAuctionAcquiredScreenComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<ViewControllerComponentContainer.Environment>, transition: ComponentTransition) -> CGSize {
             self.isUpdating = true
@@ -268,15 +302,6 @@ private final class GiftAuctionAcquiredScreenComponent: Component {
             if themeUpdated {
                 self.dimView.backgroundColor = UIColor(white: 0.0, alpha: 0.5)
                 self.backgroundLayer.backgroundColor = environment.theme.actionSheet.opaqueItemBackgroundColor.cgColor
-                
-                var locations: [NSNumber] = []
-                var colors: [CGColor] = []
-                let numStops = 6
-                for i in 0 ..< numStops {
-                    let step = CGFloat(i) / CGFloat(numStops - 1)
-                    locations.append(step as NSNumber)
-                    colors.append(environment.theme.list.blocksBackgroundColor.withAlphaComponent(1.0 - step * step).cgColor)
-                }
             }
             
             transition.setFrame(view: self.dimView, frame: CGRect(origin: CGPoint(), size: availableSize))
@@ -325,7 +350,7 @@ private final class GiftAuctionAcquiredScreenComponent: Component {
                             AnyComponentWithIdentity(
                                 id: "title",
                                 component: AnyComponent(
-                                    MultilineTextComponent(text: .plain(NSAttributedString(string: "Round #\(gift.round)", font: tableBoldFont, textColor: tableTextColor)))
+                                    MultilineTextComponent(text: .plain(NSAttributedString(string: environment.strings.Gift_Acquired_Round("\(gift.round)").string, font: tableBoldFont, textColor: tableTextColor)))
                                 )
                             )
                         ], spacing: 1.0))
@@ -334,7 +359,7 @@ private final class GiftAuctionAcquiredScreenComponent: Component {
                 
                 items.append(.init(
                     id: "recipient",
-                    title: "Recipient",
+                    title: environment.strings.Gift_Acquired_Recipient,
                     component: AnyComponent(Button(
                         content: AnyComponent(
                             PeerCellComponent(
@@ -344,15 +369,18 @@ private final class GiftAuctionAcquiredScreenComponent: Component {
                                 peer: gift.peer
                             )
                         ),
-                        action: {
-                            
+                        action: { [weak self] in
+                            guard let self else {
+                                return
+                            }
+                            self.openPeer(gift.peer, dismiss: false)
                         }
                     ))
                 ))
                 
                 items.append(.init(
                     id: "date",
-                    title: "Date",
+                    title: environment.strings.Gift_Acquired_Date,
                     component: AnyComponent(MultilineTextComponent(text: .plain(NSAttributedString(string: stringForMediumDate(timestamp: gift.date, strings: environment.strings, dateTimeFormat: environment.dateTimeFormat), font: tableFont, textColor: tableTextColor))))
                 ))
                 
@@ -366,7 +394,7 @@ private final class GiftAuctionAcquiredScreenComponent: Component {
                 
                 items.append(.init(
                     id: "bid",
-                    title: "Accepted Bid",
+                    title: environment.strings.Gift_Acquired_AcceptedBid,
                     component: AnyComponent(HStack([
                         AnyComponentWithIdentity(id: "stars", component: AnyComponent(MultilineTextWithEntitiesComponent(
                             context: component.context,
@@ -381,11 +409,10 @@ private final class GiftAuctionAcquiredScreenComponent: Component {
                             component: AnyComponent(Button(
                                 content: AnyComponent(ButtonContentComponent(
                                     context: component.context,
-                                    text: "TOP \(gift.position)",
+                                    text: environment.strings.Gift_Acquired_Top("\(gift.position)").string,
                                     color: environment.theme.list.itemAccentColor
                                 )),
                                 action: {
-                                    
                                 }
                             ))
                         )
@@ -463,13 +490,7 @@ private final class GiftAuctionAcquiredScreenComponent: Component {
             let title = self.title
             let actionButton = self.actionButton
             
-            let titleText: String
-            if component.acquiredGifts.count == 1 {
-                titleText = "1 Item Bought"
-            } else {
-                titleText = "\(component.acquiredGifts.count) Items Bought"
-            }
-            
+            let titleText = environment.strings.Gift_Acquired_Title(Int32(component.acquiredGifts.count))
             let titleSize = title.update(
                 transition: .immediate,
                 component: AnyComponent(MultilineTextComponent(
@@ -617,14 +638,6 @@ private final class GiftAuctionAcquiredScreenComponent: Component {
 }
 
 public class GiftAuctionAcquiredScreen: ViewControllerComponentContainer {
-    public final class TransitionOut {
-        public let sourceView: UIView
-        
-        init(sourceView: UIView) {
-            self.sourceView = sourceView
-        }
-    }
-    
     private let context: AccountContext
     
     private var didPlayAppearAnimation: Bool = false

@@ -2801,9 +2801,8 @@ final class ShareWithPeersScreenComponent: Component {
             var subtitle: String?
             switch component.stateContext.subject {
             case .peers:
-                //TODO:localize
                 if component.stateContext.liveStream {
-                    title = "Start Live As"
+                    title = environment.strings.Story_Privacy_StartLiveAs
                 } else {
                     title = environment.strings.Story_Privacy_PostStoryAs
                 }

@@ -15176,3 +15176,91 @@ Error: %8$@";
 
 "LoginEmail.Success.Title" = "Email added";
 "LoginEmail.Success.Text" = "Your account is now protected!";
+
+"Notification.GiftAuction.Acquired" = "You've successfully bought a gift in the auction for %@.";
+
+"Gift.Auction.Auction" = "auction";
+"Gift.Auction.Description" = "Top %@ bidders will get a **%@** this round. [Learn More >]()";
+"Gift.Auction.Ended" = "Auction ended";
+"Gift.Auction.FirstSale" = "First Sale";
+"Gift.Auction.LastSale" = "Last Sale";
+"Gift.Auction.Started" = "Started";
+"Gift.Auction.Ends" = "Ends";
+"Gift.Auction.AveragePrice" = "Average Price";
+"Gift.Auction.CurrentRound" = "Current Round";
+"Gift.Auction.Round" = "%@ of %@";
+"Gift.Auction.Availability" = "Availability";
+"Gift.Auction.AvailabilityOf" = "%@ of %@ left";
+"Gift.Auction.Join" = "Join Auction";
+"Gift.Auction.TimeLeftHours" = "{h}h {m}m left";
+"Gift.Auction.TimeLeftMinutes" = "{m}:{s} left";
+"Gift.Auction.ItemsBought_1" = "item bought";
+"Gift.Auction.ItemsBought_any" = "items bought";
+"Gift.Auction.ForSaleOnTelegram" = "for sale on Telegram";
+"Gift.Auction.ForSaleOnFragment" = "for sale on Fragment";
+"Gift.Auction.AveragePriceInfo" = "**%1$@** is the average sale price for %2$@ gifts.";
+"Gift.Auction.Stars_1" = "%@ Star";
+"Gift.Auction.Stars_any" = "%@ Stars";
+
+"Gift.AuctionBid.Title" = "Place a Bid";
+"Gift.AuctionBid.MinimumBid" = "minimum bid";
+"Gift.AuctionBid.UntilNext" = "until next round";
+"Gift.AuctionBid.Left" = "left";
+"Gift.AuctionBid.YourBid" = "your bid";
+"Gift.AuctionBid.Winning" = "You're winning";
+"Gift.AuctionBid.Outbid" = "You've been outbid";
+"Gift.AuctionBid.BidPreview" = "Your bid will be";
+"Gift.AuctionBid.TopWinners" = "Top 3 Winners";
+"Gift.AuctionBid.PlaceBid" = "Place a %@ Bid";
+"Gift.AuctionBid.AddToBid" = "Add %@ to Your Bid";
+
+"Gift.Auction.Context.About" = "About";
+"Gift.Auction.Context.CopyLink" = "Copy Link";
+"Gift.Auction.Context.Share" = "Share";
+
+"Gift.ActiveAuctions.Title_1" = "%@ Active Auction";
+"Gift.ActiveAuctions.Title_any" = "%@ Active Auctions";
+"Gift.ActiveAuctions.Round" = "Round %@ of %@";
+"Gift.ActiveAuctions.Winning" = "Your bid **%@** is ranked **#%@**";
+"Gift.ActiveAuctions.Outbid" = "Your bid **%@** is outbid";
+"Gift.ActiveAuctions.RaiseBid" = "Raise Bid";
+
+"Gift.Acquired.Title_1" = "%@ Item Bought";
+"Gift.Acquired.Title_any" = "%@ Items Bought";
+"Gift.Acquired.Round" = "Round #%@";
+"Gift.Acquired.Recipient" = "Recipient";
+"Gift.Acquired.Date" = "Date";
+"Gift.Acquired.AcceptedBid" = "Accepted Bid";
+"Gift.Acquired.Top" = "TOP %@";
+
+"Gift.Options.Gift.Auction" = "auction";
+
+"Story.Camera.Live" = "Live";
+
+"Chat.Auction" = "Gift Auction";
+"Chat.Auction.ViewResults" = "VIEW RESULTS";
+"Chat.Auction.Join" = "JOIN";
+"Chat.Auction.Finished" = "finished";
+"Chat.Auction.Gifts_1" = "%@ gift";
+"Chat.Auction.Gifts_any" = "%@ gifts";
+
+"Story.Privacy.StartLiveAs" = "Start Live As";
+
+"ChatList.Auctions.ActiveAuction_1" = "Active Auction";
+"ChatList.Auctions.ActiveAuction_any" = "%@ Active Auctions";
+"ChatList.Auctions.Status.Single.Winning" = "You're winning (%@ place).";
+"ChatList.Auctions.Status.Single.PlaceFirst" = "%@st";
+"ChatList.Auctions.Status.Single.PlaceSecond" = "%@nd";
+"ChatList.Auctions.Status.Single.PlaceThird" = "%@rd";
+"ChatList.Auctions.Status.Single.PlaceNTh" = "%@th";
+"ChatList.Auctions.Status.Single.Outbid" = "You've been outbid.";
+"ChatList.Auctions.Status.Many.WinningAll" = "You're winning all of them.";
+"ChatList.Auctions.Status.Many.Outbid_1" = "You've been outbid in %@ of them.";
+"ChatList.Auctions.Status.Many.Outbid_any" = "You've been outbid in %@ of them.";
+"ChatList.Auctions.Status.Many.OutbidAll" = "You've been outbid in all of them.";
+"ChatList.Auctions.View" = "View";
+
+"Gift.Auction.Ongoing.Title" = "One Auction at a Time";
+"Gift.Auction.Ongoing.Text" = "You’ve already bid in this gift auction for **%@**.";
+"Gift.Auction.Ongoing.TextYourself" = "You’ve already bid in this gift auction for yourself.";
+"Gift.Auction.Ongoing.View" = "View";

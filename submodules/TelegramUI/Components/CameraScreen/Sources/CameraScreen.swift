@@ -1451,6 +1451,7 @@ private final class CameraScreenComponent: CombinedComponent {
             let captureControls = captureControls.update(
                 component: CaptureControlsComponent(
                     context: component.context,
+                    strings: environment.strings,
                     isTablet: isTablet,
                     isSticker: isSticker,
                     hasGallery: !isSticker && !isAvatar,

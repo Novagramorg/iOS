@@ -328,6 +328,7 @@ public enum ResolvedUrl {
     case premiumGiftCode(slug: String)
     case premiumMultiGift(reference: String?)
     case collectible(gift: StarGift.UniqueGift?)
+    case auction(auction: GiftAuctionContext?)
     case messageLink(link: TelegramResolvedMessageLink?)
     case stars
     case ton
@@ -1424,7 +1425,8 @@ public protocol SharedAccountContext: AnyObject {
     func makeGiftAuctionInfoScreen(context: AccountContext, gift: StarGift, completion: (() -> Void)?) -> ViewController
     func makeGiftAuctionBidScreen(context: AccountContext, auctionContext: GiftAuctionContext) -> ViewController
     func makeGiftAuctionViewScreen(context: AccountContext, auctionContext: GiftAuctionContext) -> ViewController
-        
+    func makeGiftAuctionActiveBidsScreen(context: AccountContext) -> ViewController
+    
     func makeStorySharingScreen(context: AccountContext, subject: StorySharingSubject, parentController: ViewController) -> ViewController
     
     func makeContentReportScreen(context: AccountContext, subject: ReportContentSubject, forceDark: Bool, present: @escaping (ViewController) -> Void, completion: @escaping () -> Void, requestSelectMessages: ((String, Data, String?) -> Void)?)

@@ -3854,6 +3854,10 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         return GiftAuctionViewScreen(context: context, auctionContext: auctionContext)
     }
     
+    public func makeGiftAuctionActiveBidsScreen(context: AccountContext) -> ViewController {
+        return GiftAuctionActiveBidsScreen(context: context)
+    }
+    
     public func makeStorySharingScreen(context: AccountContext, subject: StorySharingSubject, parentController: ViewController) -> ViewController {
         let editorSubject: Signal<MediaEditorScreenImpl.Subject?, NoError>
         switch subject {

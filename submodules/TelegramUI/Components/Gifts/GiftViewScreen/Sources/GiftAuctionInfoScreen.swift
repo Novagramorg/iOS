@@ -17,7 +17,6 @@ import BundleIconComponent
 import Markdown
 import TextFormat
 import TelegramStringFormatting
-import GiftAnimationComponent
 import GlassBarButtonComponent
 import ButtonComponent
 import LottieComponent
@@ -89,17 +88,14 @@ private final class GiftAuctionInfoSheetContent: CombinedComponent {
     
     static var body: Body {
         let closeButton = Child(GlassBarButtonComponent.self)
-        let animation = Child(GiftCompositionComponent.self)
+        let icon = Child(BundleIconComponent.self)
         let title = Child(BalancedTextComponent.self)
         let text = Child(BalancedTextComponent.self)
         let list = Child(List<Empty>.self)
         let button = Child(ButtonComponent.self)
-                        
-        let giftCompositionExternalState = GiftCompositionComponent.ExternalState()
-        
+                                
         return { context in
             let environment = context.environment[ViewControllerComponentContainer.Environment.self].value
-            let component = context.component
             let state = context.state
             let controller = environment.controller
            
@@ -110,7 +106,7 @@ private final class GiftAuctionInfoSheetContent: CombinedComponent {
             let sideInset: CGFloat = 30.0 + environment.safeInsets.left
             let textSideInset: CGFloat = 30.0 + environment.safeInsets.left
             
-            let titleFont = Font.semibold(20.0)
+            let titleFont = Font.bold(24.0)
             let textFont = Font.regular(15.0)
             
             let textColor = theme.actionSheet.primaryTextColor
@@ -118,46 +114,26 @@ private final class GiftAuctionInfoSheetContent: CombinedComponent {
             let linkColor = theme.actionSheet.controlAccentColor
             
             let spacing: CGFloat = 16.0
-            var contentSize = CGSize(width: context.availableSize.width, height: 30.0)
+            var contentSize = CGSize(width: context.availableSize.width, height: 33.0)
             
-            var animationFile: TelegramMediaFile?
-            switch component.gift {
-            case let .generic(gift):
-                animationFile = gift.file
-            default:
-                animationFile = nil
+            var auctionGiftsPerRound: Int32 = 50
+            if case let .generic(gift) = context.component.gift, let auctionGiftsPerRoundValue = gift.auctionGiftsPerRound {
+                auctionGiftsPerRound = auctionGiftsPerRoundValue
             }
-                                         
-            let headerHeight: CGFloat = 210.0
-            let headerSubject: GiftCompositionComponent.Subject?
-            if let animationFile {
-                headerSubject = .generic(animationFile)
-            } else {
-                headerSubject = nil
-            }
-            
-            if let headerSubject {
-                let animation = animation.update(
-                    component: GiftCompositionComponent(
-                        context: component.context,
-                        theme: theme,
-                        subject: headerSubject,
-                        animationOffset: nil,
-                        animationScale: nil,
-                        displayAnimationStars: false,
-                        externalState: giftCompositionExternalState,
-                        requestUpdate: { [weak state] _ in
-                            state?.updated()
-                        }
-                    ),
-                    availableSize: CGSize(width: context.availableSize.width, height: headerHeight),
-                    transition: context.transition
-                )
-                context.add(animation
-                    .position(CGPoint(x: context.availableSize.width / 2.0, y: headerHeight / 2.0))
-                )
-            }
-            contentSize.height += headerHeight - 78.0
+                                              
+            let icon = icon.update(
+                component: BundleIconComponent(
+                    name: "Premium/Auction/BidLarge",
+                    tintColor: linkColor
+                ),
+                availableSize: context.availableSize,
+                transition: context.transition
+            )
+            context.add(icon
+                .position(CGPoint(x: context.availableSize.width / 2.0, y: contentSize.height + icon.size.height / 2.0))
+            )
+            contentSize.height += icon.size.height
+            contentSize.height += 8.0
         
             let title = title.update(
                 component: BalancedTextComponent(
@@ -173,7 +149,7 @@ private final class GiftAuctionInfoSheetContent: CombinedComponent {
                 .position(CGPoint(x: context.availableSize.width / 2.0, y: contentSize.height + title.size.height / 2.0))
             )
             contentSize.height += title.size.height
-            contentSize.height += spacing - 14.0
+            contentSize.height += spacing - 8.0
             
             let text = text.update(
                 component: BalancedTextComponent(
@@ -189,19 +165,17 @@ private final class GiftAuctionInfoSheetContent: CombinedComponent {
                 .position(CGPoint(x: context.availableSize.width / 2.0, y: contentSize.height + text.size.height / 2.0))
             )
             contentSize.height += text.size.height
-            contentSize.height += spacing + 7.0
-            
+            contentSize.height += spacing + 9.0
             
             //TODO:localize
-            
             var items: [AnyComponentWithIdentity<Empty>] = []
             items.append(
                 AnyComponentWithIdentity(
                     id: "top",
                     component: AnyComponent(ParagraphComponent(
-                        title: "Top 50 Bidders",
+                        title: "Top \(auctionGiftsPerRound) Bidders",
                         titleColor: textColor,
-                        text: "50 gifts are dropped in 10 rounds to the top 50 bidders by bid amount.",
+                        text: "\(auctionGiftsPerRound) gifts are dropped in 10 rounds to the top \(auctionGiftsPerRound) bidders by bid amount.",
                         textColor: secondaryTextColor,
                         accentColor: linkColor,
                         iconName: "Premium/Auction/Drop",
@@ -215,7 +189,7 @@ private final class GiftAuctionInfoSheetContent: CombinedComponent {
                     component: AnyComponent(ParagraphComponent(
                         title: "Bid Carryover",
                         titleColor: textColor,
-                        text: "If your bid leaves the top 50, it will automatically join the next drop.",
+                        text: "If your bid leaves the top \(auctionGiftsPerRound), it will automatically join the next drop.",
                         textColor: secondaryTextColor,
                         accentColor: linkColor,
                         iconName: "Premium/Auction/NextDrop",
