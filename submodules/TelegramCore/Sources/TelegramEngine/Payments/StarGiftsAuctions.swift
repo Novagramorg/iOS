@@ -350,7 +350,7 @@ public class GiftAuctionsManager {
             for (giftId, update) in updates {
                 if let auctionContext = self.auctionContexts[giftId] {
                     auctionContext.updateAuctionState(update)
-                } else {
+                } else if case .ongoing = update {
                     reload = true
                     break
                 }

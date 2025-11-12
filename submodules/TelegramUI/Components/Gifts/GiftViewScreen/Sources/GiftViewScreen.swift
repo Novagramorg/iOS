@@ -292,9 +292,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                             }
                         }))
                         
-                        if arguments.upgradeStars == nil {
-                            self.fetchUpgradeForm()
-                        }
+                        self.fetchUpgradeForm()
                     }
                 }
                 
@@ -2139,6 +2137,31 @@ private final class GiftViewSheetContent: CombinedComponent {
                 }
             } else {
                 self.scheduledUpgradeCommit = true
+                
+                self.inProgress = true
+                self.updated()
+                
+                Queue.mainQueue().after(5.0, {
+                    if self.scheduledUpgradeCommit {
+                        self.scheduledUpgradeCommit = false
+                        self.inProgress = false
+                        self.updated()
+                        
+                        let presentationData = self.context.sharedContext.currentPresentationData.with { $0 }
+                        let alertController = textAlertController(
+                            context: self.context,
+                            title: nil,
+                            text: presentationData.strings.Login_UnknownError,
+                            actions: [
+                                TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})
+                            ],
+                            parseMarkdown: true
+                        )
+                        if let controller = self.getController() {
+                            controller.present(alertController, in: .window(.root))
+                        }
+                    }
+                })
             }
         }
         
