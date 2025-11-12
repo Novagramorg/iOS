@@ -141,7 +141,7 @@ public func generateWebAppThemeParams(_ theme: PresentationTheme) -> [String: An
 
 #if DEBUG
 private let registeredProtocols: Void = {
-    /*class AppURLProtocol: URLProtocol {
+    class AppURLProtocol: URLProtocol {
         var urlTask: URLSessionDataTask?
         
         override class func canInit(with request: URLRequest) -> Bool {
@@ -182,7 +182,7 @@ private let registeredProtocols: Void = {
             self.urlTask?.cancel()
         }
     }
-    URLProtocol.registerClass(AppURLProtocol.self)*/
+    URLProtocol.registerClass(AppURLProtocol.self)
 }()
 #endif
 
