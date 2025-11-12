@@ -239,6 +239,7 @@ final class LiveStreamSettingsScreenComponent: Component {
             
             let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
             let theme = environment.theme.withModalBlocksBackground()
+            let strings = environment.strings
             
             guard let screenState = component.stateContext.stateValue else {
                 return CGSize()
@@ -318,7 +319,7 @@ final class LiveStreamSettingsScreenComponent: Component {
                 
                 let streamAsSectionHeader = AnyComponent(MultilineTextComponent(
                     text: .plain(NSAttributedString(
-                        string: "START LIVE AS",
+                        string: strings.LiveStreamSettings_StartLiveAs,
                         font: Font.regular(presentationData.listsFontSize.itemListBaseHeaderFontSize),
                         textColor: theme.list.freeTextColor
                     )),
@@ -587,7 +588,7 @@ final class LiveStreamSettingsScreenComponent: Component {
                 
                 let privacySectionHeader = AnyComponent(MultilineTextComponent(
                     text: .plain(NSAttributedString(
-                        string: "WHO CAN VIEW THIS LIVE",
+                        string: strings.LiveStreamSettings_WhoCanView,
                         font: Font.regular(presentationData.listsFontSize.itemListBaseHeaderFontSize),
                         textColor: theme.list.freeTextColor
                     )),
@@ -596,7 +597,7 @@ final class LiveStreamSettingsScreenComponent: Component {
                 
                 let privacySectionFooter = AnyComponent(MultilineTextComponent(
                     text: .markdown(
-                        text: "[Select people]() who won't see your live.",
+                        text: strings.LiveStreamSettings_WhoCanViewInfo,
                         attributes: MarkdownAttributes(
                             body: MarkdownAttributeSet(font: footerTextFont, textColor: footerTextColor),
                             bold: MarkdownAttributeSet(font: footerBoldTextFont, textColor: footerTextColor),
@@ -666,13 +667,12 @@ final class LiveStreamSettingsScreenComponent: Component {
                 })
             }
             
-            //TODO:localize
             if !screenState.isEdit || (screenState.call != nil && screenState.isEdit && screenState.callIsStream) {
                 let externalStreamSectionItems = [AnyComponentWithIdentity(id: 0, component: AnyComponent(
                     ListActionItemComponent(
                         theme: theme,
                         style: .glass,
-                        title: AnyComponent(MultilineTextComponent(text: .plain(NSAttributedString(string: "Connect Stream", font: Font.regular(presentationData.listsFontSize.baseDisplaySize), textColor: theme.list.itemPrimaryTextColor)))),
+                        title: AnyComponent(MultilineTextComponent(text: .plain(NSAttributedString(string: strings.LiveStreamSettings_ConnectStream, font: Font.regular(presentationData.listsFontSize.baseDisplaySize), textColor: theme.list.itemPrimaryTextColor)))),
                         action: { [weak self] _ in
                             guard let self else {
                                 return
@@ -682,7 +682,7 @@ final class LiveStreamSettingsScreenComponent: Component {
                     )
                 ))]
                 let externalStreamFooterComponent = AnyComponent(MultilineTextComponent(
-                    text: .plain(NSAttributedString(string: "Stream with a different app.", font: footerTextFont, textColor: footerTextColor)),
+                    text: .plain(NSAttributedString(string: strings.LiveStreamSettings_ConnectStreamInfo, font: footerTextFont, textColor: footerTextColor)),
                     maximumNumberOfLines: 0
                 ))
                 
@@ -710,15 +710,13 @@ final class LiveStreamSettingsScreenComponent: Component {
                 contentHeight += sectionSpacing
             }
             
-
-            //TODO:localize
             var settingsSectionItems: [AnyComponentWithIdentity<Empty>] = []
             settingsSectionItems.append(AnyComponentWithIdentity(id: "comments", component: AnyComponent(ListActionItemComponent(
                 theme: theme,
                 style: .glass,
                 title: AnyComponent(MultilineTextComponent(
                     text: .plain(NSAttributedString(
-                        string: "Allow Comments",
+                        string: strings.LiveStreamSettings_AllowComments,
                         font: Font.regular(presentationData.listsFontSize.baseDisplaySize),
                         textColor: theme.list.itemPrimaryTextColor
                     )),
@@ -735,13 +733,12 @@ final class LiveStreamSettingsScreenComponent: Component {
             ))))
             
             if !(screenState.call != nil && screenState.isEdit) {
-                //TODO:localize
                 settingsSectionItems.append(AnyComponentWithIdentity(id: "screenshots", component: AnyComponent(ListActionItemComponent(
                     theme: theme,
                     style: .glass,
                     title: AnyComponent(MultilineTextComponent(
                         text: .plain(NSAttributedString(
-                            string: "Allow Screenshots",
+                            string: strings.LiveStreamSettings_AllowScreenshots,
                             font: Font.regular(presentationData.listsFontSize.baseDisplaySize),
                             textColor: theme.list.itemPrimaryTextColor
                         )),
@@ -789,7 +786,7 @@ final class LiveStreamSettingsScreenComponent: Component {
                         minValue: 0,
                         lowerBoundTitle: "0",
                         upperBoundTitle: "\(presentationStringsFormattedNumber(Int32(clamping: screenState.maxPaidMessageStars), environment.dateTimeFormat.groupingSeparator))",
-                        title: screenState.paidMessageStars == 0 ? "Free" : "\(screenState.paidMessageStars) Stars",
+                        title: screenState.paidMessageStars == 0 ? strings.LiveStreamSettings_PricePerComment_Free : strings.LiveStreamSettings_PricePerComment_Stars(Int32(clamping: screenState.paidMessageStars)),
                         valueUpdated: { [weak self] value in
                             guard let self, let component = self.component else {
                                 return
@@ -805,7 +802,7 @@ final class LiveStreamSettingsScreenComponent: Component {
             if screenState.allowComments {
                 let paidMessageSectionHeader = AnyComponent(MultilineTextComponent(
                     text: .plain(NSAttributedString(
-                        string: "PRICE PER COMMENT",
+                        string: strings.LiveStreamSettings_PricePerComment,
                         font: Font.regular(presentationData.listsFontSize.itemListBaseHeaderFontSize),
                         textColor: theme.list.freeTextColor
                     )),
@@ -813,7 +810,7 @@ final class LiveStreamSettingsScreenComponent: Component {
                 ))
                 
                 let paidMessageSectionFooterComponent = AnyComponent(MultilineTextComponent(
-                    text: .plain(NSAttributedString(string: "The price a viewer must pay to send a comment.", font: footerTextFont, textColor: footerTextColor)),
+                    text: .plain(NSAttributedString(string: strings.LiveStreamSettings_PricePerCommentInfo, font: footerTextFont, textColor: footerTextColor)),
                     maximumNumberOfLines: 0
                 ))
                 
@@ -856,7 +853,7 @@ final class LiveStreamSettingsScreenComponent: Component {
             transition.setFrame(view: self.bottomEdgeEffectView, frame: bottomEdgeEffectFrame)
             self.bottomEdgeEffectView.update(content: theme.list.blocksBackgroundColor, blur: true, alpha: 1.0, rect: bottomEdgeEffectFrame, edge: .bottom, edgeSize: edgeEffectFrame.height, transition: transition)
             
-            let title: String = screenState.isEdit ? "Live Stream" : "Live Settings"
+            let title: String = screenState.isEdit ? strings.LiveStreamSettings_TitleEdit : strings.LiveStreamSettings_Title
             let titleSize = self.title.update(
                 transition: transition,
                 component: AnyComponent(
@@ -961,7 +958,7 @@ final class LiveStreamSettingsScreenComponent: Component {
                             content: AnyComponentWithIdentity(
                                 id: "label",
                                 component: AnyComponent(ButtonTextContentComponent(
-                                    text: "Save Settings",
+                                    text: strings.LiveStreamSettings_SaveSettings,
                                     badge: 0,
                                     textColor: theme.list.itemCheckColors.foregroundColor,
                                     badgeBackground: theme.list.itemCheckColors.foregroundColor,
