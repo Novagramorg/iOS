@@ -147,6 +147,18 @@ public final class StoryLiveChatMessageComponent: Component {
             return result
         }
         
+        public func flashHighlight() {
+            if let backgroundView = self.backgroundView, backgroundView.alpha != 1.0 {
+                let initialAlpha = backgroundView.alpha
+                backgroundView.layer.animateAlpha(from: initialAlpha, to: 1.0, duration: 0.2, removeOnCompletion: false, completion: { [weak self] _ in
+                    guard let self, let backgroundView = self.backgroundView else {
+                        return
+                    }
+                    backgroundView.layer.animateAlpha(from: 1.0, to: initialAlpha, duration: 0.2, delay: 2.0)
+                })
+            }
+        }
+        
         func update(component: StoryLiveChatMessageComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
             self.isUpdating = true
             defer {
@@ -522,9 +534,11 @@ public final class StoryLiveChatMessageComponent: Component {
                 transition.setFrame(view: backgroundView, frame: backgroundFrame)
                 
                 if let paidStars = component.message.paidStars, let baseColor = GroupCallMessagesContext.getStarAmountParamMapping(params: LiveChatMessageParams(appConfig: component.context.currentAppConfiguration.with({ $0 })), value: paidStars).color {
-                    backgroundView.tintColor = StoryLiveChatMessageComponent.getMessageColor(color: baseColor).withAlphaComponent(component.layout.transparentBackground ? 0.7 : 1.0)
+                    backgroundView.tintColor = StoryLiveChatMessageComponent.getMessageColor(color: baseColor)
+                    backgroundView.alpha = component.layout.transparentBackground ? 0.7 : 1.0
                 } else {
                     backgroundView.tintColor = UIColor(white: 0.0, alpha: 0.3)
+                    backgroundView.alpha = 1.0
                 }
                 
                 if component.message.paidStars != nil {

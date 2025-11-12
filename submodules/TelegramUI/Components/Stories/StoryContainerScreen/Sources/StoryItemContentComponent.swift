@@ -166,6 +166,10 @@ final class StoryItemContentComponent: Component {
         private var liveCallStateDisposable: Disposable?
         private var liveCallStatsDisposable: Disposable?
         private var mediaStream: ComponentView<Empty>?
+        private let activatePictureInPictureAction = ActionSlot<Action<Void>>()
+        private let deactivatePictureInPictureAction = ActionSlot<Void>()
+        private var restorePictureInPicture: ((@escaping () -> Void) -> Void)?
+        private var dismissWhileInPictureInPicture: (() -> Void)?
         private var loadingEffectView: StoryItemLoadingEffectView?
         private var loadingEffectAppearanceTimer: SwiftSignalKit.Timer?
         
@@ -534,7 +538,7 @@ final class StoryItemContentComponent: Component {
             if let mediaStreamCall = self.mediaStreamCall {
                 //print("call progressMode: \(self.progressMode)")
                 var canPlay = true
-                if case .pause = self.progressMode.mode, (!self.progressMode.isCentral || !self.hierarchyTrackingLayer.isInHierarchy) {
+                if case .pause = self.progressMode.mode, (!self.progressMode.isCentral || (!self.hierarchyTrackingLayer.isInHierarchy && self.restorePictureInPicture == nil)) {
                     canPlay = false
                 }
                 if !canPlay {
@@ -782,6 +786,22 @@ final class StoryItemContentComponent: Component {
         func seekEnded() {
             self.isSeeking = false
         }
+        
+        func beginPictureInPicture(dismissController: @escaping () -> (restore: (@escaping () -> Void) -> Void, dismissWhilePictureInPicture: () -> Void)) {
+            self.activatePictureInPictureAction.invoke(Action { [weak self] in
+                guard let self else {
+                    return
+                }
+                var restorePictureInPictureImpl: ((restore: (@escaping () -> Void) -> Void, dismissWhilePictureInPicture: () -> Void))?
+                self.restorePictureInPicture = { f in
+                    restorePictureInPictureImpl?.restore(f)
+                }
+                self.dismissWhileInPictureInPicture = {
+                    restorePictureInPictureImpl?.dismissWhilePictureInPicture()
+                }
+                restorePictureInPictureImpl = dismissController()
+            })
+        }
 
         func update(component: StoryItemContentComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<StoryContentItem.Environment>, transition: ComponentTransition) -> CGSize {
             self.isUpdating = true
@@ -1000,12 +1020,30 @@ final class StoryItemContentComponent: Component {
                                 isFullscreen: false,
                                 videoLoading: false,
                                 callPeer: nil,
-                                activatePictureInPicture: ActionSlot(),
-                                deactivatePictureInPicture: ActionSlot(),
-                                bringBackControllerForPictureInPictureDeactivation: { f in
-                                    f()
+                                enablePictureInPicture: true,
+                                activatePictureInPicture: self.activatePictureInPictureAction,
+                                deactivatePictureInPicture: self.deactivatePictureInPictureAction,
+                                bringBackControllerForPictureInPictureDeactivation: { [weak self] f in
+                                    guard let self else {
+                                        return
+                                    }
+                                    self.dismissWhileInPictureInPicture = nil
+                                    if let restorePictureInPicture = self.restorePictureInPicture {
+                                        self.restorePictureInPicture = nil
+                                        restorePictureInPicture(f)
+                                    } else {
+                                        f()
+                                    }
                                 },
-                                pictureInPictureClosed: {
+                                pictureInPictureClosed: { [weak self] in
+                                    guard let self else {
+                                        return
+                                    }
+                                    self.restorePictureInPicture = nil
+                                    if let dismissWhileInPictureInPicture = self.dismissWhileInPictureInPicture {
+                                        self.dismissWhileInPictureInPicture = nil
+                                        dismissWhileInPictureInPicture()
+                                    }
                                 },
                                 onVideoSizeRetrieved: { _ in
                                 },

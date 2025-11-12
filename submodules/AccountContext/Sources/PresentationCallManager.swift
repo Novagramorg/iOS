@@ -525,7 +525,7 @@ public protocol PresentationGroupCall: AnyObject {
     func disableScreencast()
     func switchVideoCamera()
     func updateDefaultParticipantsAreMuted(isMuted: Bool)
-    func updateMessagesEnabled(isEnabled: Bool)
+    func updateMessagesEnabled(isEnabled: Bool, sendPaidMessageStars: Int64?)
     func setVolume(peerId: EnginePeer.Id, volume: Int32, sync: Bool)
     func setRequestedVideoList(items: [PresentationGroupCallRequestedVideo])
     func setSuspendVideoChannelRequests(_ value: Bool)
