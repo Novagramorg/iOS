@@ -314,7 +314,7 @@ final class GiftOptionsScreenComponent: Component {
                         }
                         
                         let _ = (component.context.engine.payments.checkCanSendStarGift(giftId: gift.id)
-                                 |> deliverOnMainQueue).start(next: { [weak self, weak controller] result in
+                        |> deliverOnMainQueue).start(next: { [weak self, weak controller] result in
                             guard let self, let controller else {
                                 return
                             }
@@ -369,11 +369,22 @@ final class GiftOptionsScreenComponent: Component {
                         guard let giftAuctionsManager = component.context.giftAuctionsManager else {
                             return
                         }
+                        
+                        self.loadingGiftId = gift.id
+                        Queue.mainQueue().after(0.25) {
+                            if self.loadingGiftId != nil {
+                                self.state?.updated()
+                            }
+                        }
+                        
                         self.auctionDisposable.set((giftAuctionsManager.auctionContext(for: .giftId(gift.id))
                         |> deliverOnMainQueue).start(next: { [weak self, weak mainController] auctionContext in
-                            guard let auctionContext, let component = self?.component, let mainController else {
+                            guard let self, let auctionContext, let component = self.component, let mainController else {
                                 return
                             }
+                            self.loadingGiftId = nil
+                            self.state?.updated()
+                            
                             if let currentBidPeerId = auctionContext.currentBidPeerId {
                                 if currentBidPeerId == component.peerId {
                                     let giftController = component.context.sharedContext.makeGiftAuctionBidScreen(
@@ -1317,6 +1328,13 @@ final class GiftOptionsScreenComponent: Component {
             let hasAnyGifts = hasGenericGifts || hasTransferGifts
             
             if isSelfGift || isChannelGift || isPremiumDisabled {
+                if !self.premiumItems.isEmpty {
+                    for (_, itemView) in self.premiumItems {
+                        itemView.view?.removeFromSuperview()
+                    }
+                    self.premiumItems.removeAll()
+                }
+                
                 contentHeight += 6.0
             } else {
                 if let premiumProducts = state.premiumProducts {

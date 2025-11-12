@@ -553,7 +553,7 @@ open class TelegramBaseController: ViewController, KeyShortcutResponder {
                     guard let self else {
                         return
                     }
-                    if !"".isEmpty, self.giftAuctionStates.count == 1, let gift = self.giftAuctionStates.first?.gift, case let .generic(gift) = gift {
+                    if self.giftAuctionStates.count == 1, let gift = self.giftAuctionStates.first?.gift, case let .generic(gift) = gift {
                         if let giftAuctionsManager = self.context.giftAuctionsManager {
                             let _ = (giftAuctionsManager.auctionContext(for: .giftId(gift.id))
                             |> deliverOnMainQueue).start(next: { [weak self] auction in

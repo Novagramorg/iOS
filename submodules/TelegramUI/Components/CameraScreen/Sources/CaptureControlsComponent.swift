@@ -252,11 +252,10 @@ private final class ShutterButtonContentComponent: Component {
                 }
             }
             
-            //TODO:localize
             let labelSize = self.label.update(
                 transition: .immediate,
                 component: AnyComponent(
-                    Text(text: "Start Live Stream", font: Font.semibold(17.0), color: .white)
+                    Text(text: component.strings.Camera_LiveStream_StartLiveStream, font: Font.semibold(17.0), color: .white)
                 ),
                 environment: {},
                 containerSize: availableSize

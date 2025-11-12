@@ -291,6 +291,7 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
             
             let context = self.context
             let gift = self.auctionContext.gift
+            let auctionContext = self.auctionContext
             let presentationData = context.sharedContext.currentPresentationData.with { $0 }
             
             var link = ""
@@ -300,12 +301,14 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
             
             var items: [ContextMenuItem] = []
           
-            items.append(.action(ContextMenuActionItem(text: presentationData.strings.Gift_Auction_Context_About, icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Info"), color: theme.contextMenu.primaryColor) }, action: { [weak controller] c, f in
-                f(.default)
-                
-                let infoController = context.sharedContext.makeGiftAuctionInfoScreen(context: context, gift: gift, completion: nil)
-                controller?.push(infoController)
-            })))
+            if let auctionState = self.auctionState, case .ongoing = auctionState.auctionState {   
+                items.append(.action(ContextMenuActionItem(text: presentationData.strings.Gift_Auction_Context_About, icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Info"), color: theme.contextMenu.primaryColor) }, action: { [weak controller] c, f in
+                    f(.default)
+                    
+                    let infoController = context.sharedContext.makeGiftAuctionInfoScreen(context: context, auctionContext: auctionContext, completion: nil)
+                    controller?.push(infoController)
+                })))
+            }
                          
             items.append(.action(ContextMenuActionItem(text: presentationData.strings.Gift_Auction_Context_CopyLink, icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Link"), color: theme.contextMenu.primaryColor) }, action: { [weak controller] c, f in
                 f(.default)
@@ -599,7 +602,7 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
                         if let _ = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.URL)] as? String {
                             let controller = component.context.sharedContext.makeGiftAuctionInfoScreen(
                                 context: component.context,
-                                gift: component.auctionContext.gift,
+                                auctionContext: component.auctionContext,
                                 completion: nil
                             )
                             environment.controller()?.push(controller)
@@ -636,10 +639,15 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
             if state.giftAuctionAcquiredGifts.count > 0, case let .generic(gift) = component.auctionContext.gift {
                 originY += 5.0
                 
-                let text = strings.Gift_Auction_ItemsBought(Int32(state.giftAuctionAcquiredGifts.count))
                 let acquiredButton = acquiredButton.update(
                     component: PlainButtonComponent(content: AnyComponent(
                         HStack([
+                            AnyComponentWithIdentity(id: "count", component: AnyComponent(
+                                MultilineTextComponent(text: .plain(NSAttributedString(string: presentationStringsFormattedNumber(Int32(state.giftAuctionAcquiredGifts.count), dateTimeFormat.groupingSeparator), font: Font.regular(17.0), textColor: theme.actionSheet.controlAccentColor)))
+                            )),
+                            AnyComponentWithIdentity(id: "spacing", component: AnyComponent(
+                                Rectangle(color: .clear, width: 8.0, height: 1.0)
+                            )),
                             AnyComponentWithIdentity(id: "icon", component: AnyComponent(
                                 GiftItemComponent(
                                     context: component.context,
@@ -647,16 +655,16 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
                                     strings: strings,
                                     peer: nil,
                                     subject: .starGift(gift: gift, price: ""),
-                                    mode: .tableIcon
+                                    mode: .buttonIcon
                                 )
                             )),
                             AnyComponentWithIdentity(id: "text", component: AnyComponent(
-                                MultilineTextComponent(text: .plain(NSAttributedString(string: text, font: Font.regular(17.0), textColor: theme.actionSheet.controlAccentColor)))
+                                MultilineTextComponent(text: .plain(NSAttributedString(string: "  \(strings.Gift_Auction_ItemsBought(Int32(state.giftAuctionAcquiredGifts.count)))", font: Font.regular(17.0), textColor: theme.actionSheet.controlAccentColor)))
                             )),
-                            AnyComponentWithIdentity(id: "chevron", component: AnyComponent(
-                                BundleIconComponent(name: "Settings/TextArrowRight", tintColor: environment.theme.actionSheet.controlAccentColor)
+                            AnyComponentWithIdentity(id: "arrow", component: AnyComponent(
+                                BundleIconComponent(name: "Chat/Context Menu/Arrow", tintColor: theme.actionSheet.controlAccentColor)
                             ))
-                        ], spacing: 6.0)
+                        ], spacing: 0.0)
                     ), action: { [weak state] in
                         guard let state else {
                             return

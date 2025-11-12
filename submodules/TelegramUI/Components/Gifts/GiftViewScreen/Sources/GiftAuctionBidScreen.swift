@@ -29,6 +29,7 @@ import BotPaymentsUI
 import UndoUI
 import GiftItemComponent
 import LottieComponent
+import EdgeEffect
 
 private final class BadgeComponent: Component {
     let theme: PresentationTheme
@@ -810,11 +811,10 @@ private final class SliderBackgroundComponent: Component {
             topLineFrameTransition.setFrame(layer: self.topBackgroundLine, frame: topLineFrame)
             topLineAlphaTransition.setAlpha(layer: self.topBackgroundLine, alpha: topLineAlpha)
             
-            //TODO:localize
             let topTextSize = self.topForegroundText.update(
                 transition: .immediate,
                 component: AnyComponent(MultilineTextComponent(
-                    text: .plain(NSAttributedString(string: "TOP \(component.giftsPerRound)", font: Font.semibold(15.0), textColor: UIColor(white: 1.0, alpha: 0.4)))
+                    text: .plain(NSAttributedString(string: component.strings.Gift_AuctionBid_Top("\(component.giftsPerRound)").string, font: Font.semibold(15.0), textColor: UIColor(white: 1.0, alpha: 0.4)))
                 )),
                 environment: {},
                 containerSize: CGSize(width: availableSize.width, height: 100.0)
@@ -822,7 +822,7 @@ private final class SliderBackgroundComponent: Component {
             let _ = self.topBackgroundText.update(
                 transition: .immediate,
                 component: AnyComponent(MultilineTextComponent(
-                    text: .plain(NSAttributedString(string: "TOP \(component.giftsPerRound)", font: Font.semibold(15.0), textColor: component.theme.overallDarkAppearance ? UIColor(white: 1.0, alpha: 0.22) : UIColor(white: 0.0, alpha: 0.2)))
+                    text: .plain(NSAttributedString(string: component.strings.Gift_AuctionBid_Top("\(component.giftsPerRound)").string, font: Font.semibold(15.0), textColor: component.theme.overallDarkAppearance ? UIColor(white: 1.0, alpha: 0.22) : UIColor(white: 0.0, alpha: 0.2)))
                 )),
                 environment: {},
                 containerSize: CGSize(width: availableSize.width, height: 100.0)
@@ -952,7 +952,7 @@ private final class GiftAuctionBidScreenComponent: Component {
         
         private static func makeSliderSteps(minRealValue: Int, maxRealValue: Int, isLogarithmic: Bool) -> [Int] {
             if isLogarithmic {
-                var sliderSteps: [Int] = [1, 10, 50, 100, 500, 1_000, 2_000, 5_000, 7_500, 10_000, 20_000, 30_000]
+                var sliderSteps: [Int] = [1, 10, 50, 100, 500, 1_000, 2_000, 5_000, 7_500, 15_000, 20_000, 30_000, 40_000, 50_000]
                 sliderSteps.removeAll(where: { $0 <= minRealValue })
                 sliderSteps.insert(minRealValue, at: 0)
                 sliderSteps.removeAll(where: { $0 >= maxRealValue })
@@ -1028,6 +1028,10 @@ private final class GiftAuctionBidScreenComponent: Component {
         func withMinAllowedRealValue(_ minAllowedRealValue: Int) -> Amount {
             return Amount(realValue: self.realValue, minRealValue: self.minRealValue, minAllowedRealValue: minAllowedRealValue, maxRealValue: self.maxRealValue, maxSliderValue: self.maxSliderValue, isLogarithmic: self.isLogarithmic)
         }
+        
+        func withMaxRealValue(_ maxRealValue: Int) -> Amount {
+            return Amount(realValue: self.realValue, minRealValue: self.minRealValue, minAllowedRealValue: self.minAllowedRealValue, maxRealValue: maxRealValue, maxSliderValue: self.maxSliderValue, isLogarithmic: self.isLogarithmic)
+        }
     }
         
     final class View: UIView, UIScrollViewDelegate {
@@ -1039,6 +1043,9 @@ private final class GiftAuctionBidScreenComponent: Component {
         private let scrollContentClippingView: SparseContainerView
         private let scrollContentView: UIView
         private let hierarchyTrackingNode: HierarchyTrackingNode
+        
+        private let topEdgeEffectView: EdgeEffectView
+        private let bottomEdgeEffectView: EdgeEffectView
         
         private var balanceOverlay = ComponentView<Empty>()
         
@@ -1115,6 +1122,13 @@ private final class GiftAuctionBidScreenComponent: Component {
             self.scrollContentView = UIView()
             
             self.hierarchyTrackingNode = HierarchyTrackingNode()
+            
+            self.topEdgeEffectView = EdgeEffectView()
+            self.topEdgeEffectView.clipsToBounds = true
+            self.topEdgeEffectView.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
+            self.topEdgeEffectView.layer.cornerRadius = 40.0
+            
+            self.bottomEdgeEffectView = EdgeEffectView()
             
             super.init(frame: frame)
             
@@ -1359,26 +1373,34 @@ private final class GiftAuctionBidScreenComponent: Component {
         }
         
         private var isLoading = false
-        private func placeBid() {
+        private func commitBid(value: Int64) {
             guard let component = self.component, case let .generic(gift) = component.gift, let controller = self.environment?.controller() else {
                 return
             }
             
-            let value = Int64(self.amount.realValue)
+            var isUpdate = false
             if let myBidAmount = self.giftAuctionState?.myState.bidAmount {
+                isUpdate = true
                 if value == myBidAmount {
                     controller.dismiss()
                     return
                 }
             }
             
+            let giftsPerRounds = gift.auctionGiftsPerRound ?? 50
+            
+            let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
             if let myBidAmount = self.giftAuctionState?.myState.bidAmount, let myMinBidAmount = self.giftAuctionState?.myState.minBidAmount, value < myMinBidAmount {
                 HapticFeedback().error()
-                let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
                 controller.present(
                     UndoOverlayController(
                         presentationData: presentationData,
-                        content: .info(title: nil, text: "Add at least \(myMinBidAmount - myBidAmount) Stars to increase your bid.", timeout: nil, customUndoText: nil),
+                        content: .info(
+                            title: nil,
+                            text: presentationData.strings.Gift_AuctionBid_AddMoreStars(presentationData.strings.Gift_AuctionBid_AddMoreStars_Stars(Int32(clamping: myMinBidAmount - myBidAmount))).string,
+                            timeout: nil,
+                            customUndoText: nil
+                        ),
                         position: .bottom,
                         action: { _ in return true }
                     ),
@@ -1428,16 +1450,32 @@ private final class GiftAuctionBidScreenComponent: Component {
                     return
                 }
                 self.isLoading = false
+                
+                let newMaxValue = Int(Double(value) * 1.5)
+                var updatedAmount = self.amount.withMinAllowedRealValue(Int(value))
+                if newMaxValue > self.amount.maxRealValue {
+                    updatedAmount = updatedAmount.withMaxRealValue(newMaxValue)
+                }
+                self.amount = updatedAmount
                 self.state?.updated()
                 
-                self.amount = self.amount.withMinAllowedRealValue(Int(value))
+                if !isUpdate {
+                    component.auctionContext.load()
+                }
                 
-                //TODO:localize
+                let title = isUpdate ? presentationData.strings.Gift_AuctionBid_Increased_Title : presentationData.strings.Gift_AuctionBid_Placed_Title
+                let text = isUpdate ? presentationData.strings.Gift_AuctionBid_Increased_Text("\(giftsPerRounds)").string : presentationData.strings.Gift_AuctionBid_Placed_Text("\(giftsPerRounds)").string
+                
                 let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
                 controller?.present(
                     UndoOverlayController(
                         presentationData: presentationData,
-                        content: .actionSucceeded(title: "Your bid has been placed", text: "If you fall below the top 50, your bid will roll over to the next drop.", cancel: nil, destructive: false),
+                        content: .actionSucceeded(
+                            title: title,
+                            text: text,
+                            cancel: nil,
+                            destructive: false
+                        ),
                         position: .bottom,
                         action: { _ in return true }
                     ),
@@ -1571,6 +1609,7 @@ private final class GiftAuctionBidScreenComponent: Component {
             
             let context = component.context
             let gift = component.auctionContext.gift
+            let auctionContext = component.auctionContext
             let presentationData = context.sharedContext.currentPresentationData.with { $0 }
             
             var link = ""
@@ -1583,7 +1622,7 @@ private final class GiftAuctionBidScreenComponent: Component {
             items.append(.action(ContextMenuActionItem(text: presentationData.strings.Gift_Auction_Context_About, icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Info"), color: theme.contextMenu.primaryColor) }, action: { [weak controller] c, f in
                 f(.default)
                 
-                let infoController = context.sharedContext.makeGiftAuctionInfoScreen(context: context, gift: gift, completion: nil)
+                let infoController = context.sharedContext.makeGiftAuctionInfoScreen(context: context, auctionContext: auctionContext, completion: nil)
                 controller?.push(infoController)
             })))
                          
@@ -1710,8 +1749,12 @@ private final class GiftAuctionBidScreenComponent: Component {
                         peerIds.append(context.account.peerId)
                         
                         var minBidAmount: Int64 = 100
-                        if case let .ongoing(_, _, _, auctionMinBidAmount, _, _, _, _, _, _) = state?.auctionState {
+                        var maxBidAmount: Int64 = 50000
+                        if case let .ongoing(_, _, _, auctionMinBidAmount, bidLevels, _, _, _, _, _) = state?.auctionState {
                             minBidAmount = auctionMinBidAmount
+                            if let firstLevel = bidLevels.first(where: { $0.position == 1 }) {
+                                maxBidAmount = max(maxBidAmount, Int64(Double(firstLevel.amount) * 1.5))
+                            }
                         }
                         var currentValue = max(Int(minBidAmount), 100)
                         if let myBidAmount = state?.myState.bidAmount {
@@ -1723,7 +1766,7 @@ private final class GiftAuctionBidScreenComponent: Component {
                             minAllowedRealValue = myBidAmount
                         }
                         
-                        self.amount = Amount(realValue: currentValue, minRealValue: Int(minBidAmount), minAllowedRealValue: Int(minAllowedRealValue), maxRealValue: 30000, maxSliderValue: 999, isLogarithmic: true)
+                        self.amount = Amount(realValue: currentValue, minRealValue: Int(minBidAmount), minAllowedRealValue: Int(minAllowedRealValue), maxRealValue: Int(maxBidAmount), maxSliderValue: 999, isLogarithmic: true)
                         transition = .immediate
                     }
                     
@@ -1764,6 +1807,8 @@ private final class GiftAuctionBidScreenComponent: Component {
                 self.dimView.backgroundColor = UIColor(white: 0.0, alpha: 0.5)
                 self.backgroundLayer.backgroundColor = environment.theme.actionSheet.opaqueItemBackgroundColor.cgColor
             }
+            
+            let currentTime = Int32(CFAbsoluteTimeGetCurrent() + kCFAbsoluteTimeIntervalSince1970)
             
             transition.setFrame(view: self.dimView, frame: CGRect(origin: CGPoint(), size: availableSize))
             
@@ -1973,7 +2018,7 @@ private final class GiftAuctionBidScreenComponent: Component {
             var dropsLeftAnimatedItems: [AnimatedTextComponent.Item] = []
             
             if let auctionState = self.giftAuctionState?.auctionState {
-                if case let .ongoing(_, _, _, minBidAmount, _, _, nextDropDate, _, dropsLeft, _) = auctionState {
+                if case let .ongoing(_, _, _, minBidAmount, _, _, nextDropDate, dropsLeft, _, _) = auctionState {
                     var minBidAmount = minBidAmount
                     if let myMinBidAmmount = self.giftAuctionState?.myState.minBidAmount {
                         minBidAmount = myMinBidAmmount
@@ -2039,8 +2084,7 @@ private final class GiftAuctionBidScreenComponent: Component {
                         minBidAnimatedItems.append(AnimatedTextComponent.Item(id: "static", content: .text(minBidString)))
                     }
                     
-                    let currentTime = Int32(CFAbsoluteTimeGetCurrent() + kCFAbsoluteTimeIntervalSince1970)
-                    let dropTimeout = nextDropDate - currentTime
+                    let dropTimeout = max(0, nextDropDate - currentTime)
                     
                     let minutes = Int(dropTimeout / 60)
                     let seconds = Int(dropTimeout % 60)
@@ -2219,19 +2263,16 @@ private final class GiftAuctionBidScreenComponent: Component {
             var topBidsComponents: [(EnginePeer.Id, AnyComponent<Empty>)] = []
             
             if let giftAuctionState = self.giftAuctionState, case let .ongoing(_, _, _, _, bidLevels, topBidders, _, _, _, _) = giftAuctionState.auctionState {
-                if var myBidAmount = giftAuctionState.myState.bidAmount, let myBidDate = giftAuctionState.myState.bidDate, let peer = self.peersMap[component.context.account.peerId] {
+                if var myBidAmount = giftAuctionState.myState.bidAmount, var myBidDate = giftAuctionState.myState.bidDate, let peer = self.peersMap[component.context.account.peerId] {
                     var place: Int32 = 1
                     var isBiddingUp = false
                     if self.amount.realValue > myBidAmount {
                         myBidAmount = Int64(self.amount.realValue)
+                        myBidDate = currentTime
                         isBiddingUp = true
                     }
-                    for level in bidLevels {
-                        if myBidAmount < level.amount || (myBidAmount == level.amount && myBidDate > level.date) {
-                            place = level.position + 1
-                        }
-                    }
-                    
+                    place = giftAuctionState.getPlace(myBid: myBidAmount, myBidDate: myBidDate) ?? 1
+                                        
                     var bidTitle: String
                     var bidTitleColor: UIColor
                     var bidStatus: PeerComponent.Status?
@@ -2496,17 +2537,31 @@ private final class GiftAuctionBidScreenComponent: Component {
                             
                             return
                         }
-                        
-                        self.placeBid()
+                        self.commitBid(value: Int64(self.amount.realValue))
                     }
                 )),
                 environment: {},
                 containerSize: CGSize(width: availableSize.width - buttonInsets.left - buttonInsets.right, height: 54.0)
             )
             
-           
+            let edgeEffectHeight: CGFloat = 80.0
+            let edgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: availableSize.width, height: edgeEffectHeight))
+            transition.setFrame(view: self.topEdgeEffectView, frame: edgeEffectFrame)
+            self.topEdgeEffectView.update(content: environment.theme.actionSheet.opaqueItemBackgroundColor, blur: true, alpha: 1.0, rect: edgeEffectFrame, edge: .top, edgeSize: edgeEffectFrame.height, transition: transition)
+            if self.topEdgeEffectView.superview == nil {
+                self.navigationBarContainer.insertSubview(self.topEdgeEffectView, at: 0)
+            }
             
             var bottomPanelHeight = 13.0 + buttonInsets.bottom + actionButtonSize.height
+            
+            let bottomEdgeEffectHeight: CGFloat = bottomPanelHeight
+            let bottomEdgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: availableSize.height - bottomEdgeEffectHeight), size: CGSize(width: availableSize.width, height: bottomEdgeEffectHeight))
+            transition.setFrame(view: self.bottomEdgeEffectView, frame: bottomEdgeEffectFrame)
+            self.bottomEdgeEffectView.update(content: environment.theme.actionSheet.opaqueItemBackgroundColor, blur: true, alpha: 1.0, rect: bottomEdgeEffectFrame, edge: .bottom, edgeSize: bottomEdgeEffectFrame.height, transition: transition)
+            if self.bottomEdgeEffectView.superview == nil {
+                self.containerView.addSubview(self.bottomEdgeEffectView)
+            }
+            
             let actionButtonFrame = CGRect(origin: CGPoint(x: buttonInsets.left, y: availableSize.height - buttonInsets.bottom - actionButtonSize.height), size: actionButtonSize)
             bottomPanelHeight -= 1.0
             if let actionButtonView = actionButton.view {
@@ -2525,7 +2580,7 @@ private final class GiftAuctionBidScreenComponent: Component {
             
             let scrollContentHeight = max(topInset + contentHeight + containerInset, availableSize.height - containerInset)
             
-            self.scrollContentClippingView.layer.cornerRadius = 10.0
+            self.scrollContentClippingView.layer.cornerRadius = 38.0
             
             self.itemLayout = ItemLayout(containerSize: availableSize, containerInset: containerInset, containerCornerRadius: environment.deviceMetrics.screenCornerRadius, bottomInset: environment.safeInsets.bottom, topInset: topInset)
             
@@ -2626,9 +2681,25 @@ public class GiftAuctionBidScreen: ViewControllerComponentContainer {
         }
     }
         
+    fileprivate func dismissAllTooltips() {
+        self.window?.forEachController({ controller in
+            if let controller = controller as? UndoOverlayController {
+                controller.dismiss()
+            }
+        })
+        self.forEachController({ controller in
+            if let controller = controller as? UndoOverlayController {
+                controller.dismiss()
+            }
+            return true
+        })
+    }
+    
     override public func dismiss(completion: (() -> Void)? = nil) {
         if !self.isDismissed {
             self.isDismissed = true
+            
+            self.dismissAllTooltips()
             
             if let componentView = self.node.hostView.componentView as? GiftAuctionBidScreenComponent.View {
                 componentView.animateOut(completion: { [weak self] in
