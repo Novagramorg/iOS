@@ -666,7 +666,8 @@ final class LiveStreamSettingsScreenComponent: Component {
                 })
             }
             
-            if !screenState.isEdit || (screenState.call != nil && screenState.isEdit) {
+            //TODO:localize
+            if !screenState.isEdit || (screenState.call != nil && screenState.isEdit && screenState.callIsStream) {
                 let externalStreamSectionItems = [AnyComponentWithIdentity(id: 0, component: AnyComponent(
                     ListActionItemComponent(
                         theme: theme,
@@ -1036,7 +1037,7 @@ final class LiveStreamSettingsScreenComponent: Component {
 public class LiveStreamSettingsScreen: ViewControllerComponentContainer {
     public enum Mode {
         case create(sendAsPeerId: EnginePeer.Id?, isCustomTarget: Bool, privacy: EngineStoryPrivacy, allowComments: Bool, isForwardingDisabled: Bool, pin: Bool, paidMessageStars: Int64)
-        case edit(call: PresentationGroupCall, displayPrivacy: Bool)
+        case edit(call: PresentationGroupCall, displayExternalStream: Bool)
     }
     
     public struct Result {
@@ -1101,6 +1102,7 @@ public class LiveStreamSettingsScreen: ViewControllerComponentContainer {
     final class State {
         var call: PresentationGroupCall?
         var isEdit: Bool
+        var callIsStream: Bool
         var maxPaidMessageStars: Int64
         var sendAsPeerId: EnginePeer.Id?
         var isCustomTarget: Bool
@@ -1119,6 +1121,7 @@ public class LiveStreamSettingsScreen: ViewControllerComponentContainer {
         init(
             call: PresentationGroupCall?,
             isEdit: Bool,
+            callIsStream: Bool,
             maxPaidMessageStars: Int64,
             sendAsPeerId: EnginePeer.Id?,
             isCustomTarget: Bool,
@@ -1136,6 +1139,7 @@ public class LiveStreamSettingsScreen: ViewControllerComponentContainer {
         ) {
             self.call = call
             self.isEdit = isEdit
+            self.callIsStream = callIsStream
             self.maxPaidMessageStars = maxPaidMessageStars
             self.sendAsPeerId = sendAsPeerId
             self.isCustomTarget = isCustomTarget
@@ -1363,6 +1367,7 @@ public class LiveStreamSettingsScreen: ViewControllerComponentContainer {
                 let isForwardingDisabled: Bool
                 let pin: Bool
                 let paidMessageStars: Int64
+                var callIsStream = false
                 
                 if let current = self.stateValue {
                     call = current.call
@@ -1386,7 +1391,7 @@ public class LiveStreamSettingsScreen: ViewControllerComponentContainer {
                         isForwardingDisabled = isForwardingDisabledValue
                         pin = pinValue
                         paidMessageStars = paidMessageStarsValue
-                    case let .edit(callValue, _):
+                    case let .edit(callValue, callIsStreamValue):
                         call = callValue
                         isEdit = true
                         sendAsPeerId = nil
@@ -1396,12 +1401,14 @@ public class LiveStreamSettingsScreen: ViewControllerComponentContainer {
                         isForwardingDisabled = false
                         pin = true
                         paidMessageStars = 0
+                        callIsStream = callIsStreamValue
                     }
                 }
                 
                 let state = State(
                     call: call,
                     isEdit: isEdit,
+                    callIsStream: callIsStream,
                     maxPaidMessageStars: maxPaidMessageStars,
                     sendAsPeerId: sendAsPeerId,
                     isCustomTarget: isCustomTarget,

@@ -294,6 +294,8 @@ public final class MessageInputPanelComponent: Component {
     public let sendStarsAction: ((UIView, Bool) -> Void)?
     public let starStars: StarStats?
     public let sendAsConfiguration: SendAsConfiguration?
+    public let openSettings: (() -> Void)?
+    public let call: AnyObject?
     
     public init(
         externalState: ExternalState,
@@ -360,7 +362,9 @@ public final class MessageInputPanelComponent: Component {
         toggleLiveChatExpanded: (() -> Void)? = nil,
         sendStarsAction: ((UIView, Bool) -> Void)? = nil,
         starStars: StarStats? = nil,
-        sendAsConfiguration: SendAsConfiguration? = nil
+        sendAsConfiguration: SendAsConfiguration? = nil,
+        openSettings: (() -> Void)? = nil,
+        call: AnyObject? = nil
     ) {
         self.externalState = externalState
         self.context = context
@@ -427,6 +431,8 @@ public final class MessageInputPanelComponent: Component {
         self.sendStarsAction = sendStarsAction
         self.starStars = starStars
         self.sendAsConfiguration = sendAsConfiguration
+        self.openSettings = openSettings
+        self.call = call
     }
     
     public static func ==(lhs: MessageInputPanelComponent, rhs: MessageInputPanelComponent) -> Bool {
@@ -566,6 +572,9 @@ public final class MessageInputPanelComponent: Component {
             return false
         }
         if lhs.sendAsConfiguration != rhs.sendAsConfiguration {
+            return false
+        }
+        if (lhs.call == nil) != (rhs.call == nil) {
             return false
         }
         return true
@@ -1040,9 +1049,7 @@ public final class MessageInputPanelComponent: Component {
                 }
                 
                 let rightAction: ChatTextInputPanelComponent.RightAction?
-                if component.isEmbeddedInCamera {
-                    rightAction = nil
-                } else if component.sendStarsAction != nil {
+                if component.sendStarsAction != nil {
                     rightAction = ChatTextInputPanelComponent.RightAction(kind: .stars(count: Int(component.starStars?.totalStars ?? 0), isFilled: component.starStars?.hasOutgoingStars ?? false), action: { [weak self] sourceView in
                         guard let self, let component = self.component else {
                             return
@@ -1057,11 +1064,23 @@ public final class MessageInputPanelComponent: Component {
                 } else {
                     rightAction = ChatTextInputPanelComponent.RightAction(kind: .empty, action: { _ in })
                 }
+                var secondaryRightAction: ChatTextInputPanelComponent.RightAction?
+                if component.isEmbeddedInCamera, let call = component.call {
+                    secondaryRightAction = ChatTextInputPanelComponent.RightAction(kind: .liveMicrophone(call: call), action: { [weak self] sourceView in
+                        guard let self, let component = self.component else {
+                            return
+                        }
+                        let _ = component
+                    }, longPressAction: nil)
+                }
                 
                 var secondaryLeftAction: ChatTextInputPanelComponent.LeftAction?
-                if !"".isEmpty, component.isEmbeddedInCamera {
+                if component.isEmbeddedInCamera {
                     secondaryLeftAction = ChatTextInputPanelComponent.LeftAction(kind: .settings, action: { [weak self] in
-                        let _ = self
+                        guard let self, let component = self.component else {
+                            return
+                        }
+                        component.openSettings?()
                     })
                 }
                 
@@ -1089,6 +1108,7 @@ public final class MessageInputPanelComponent: Component {
                         }),
                         secondaryLeftAction: secondaryLeftAction,
                         rightAction: rightAction,
+                        secondaryRightAction: secondaryRightAction,
                         sendAsConfiguration: component.liveChatState?.isEnabled == true ? sendAsConfiguration : nil,
                         //TODO:localize
                         placeholder: (component.liveChatState == nil || component.liveChatState?.isEnabled == true) ? placeholder : "Comments are disabled",
