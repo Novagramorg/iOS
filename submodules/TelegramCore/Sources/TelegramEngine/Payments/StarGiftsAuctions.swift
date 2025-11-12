@@ -91,7 +91,7 @@ public final class GiftAuctionContext {
     }
     
     public var currentBidPeerId: EnginePeer.Id? {
-        if self.myState?.bidAmount != nil {
+        if self.myState?.bidAmount != nil, case .ongoing = self.auctionState {
             return self.myState?.bidPeerId
         } else {
             return nil
@@ -145,10 +145,19 @@ public final class GiftAuctionContext {
             self.myState = myState
             self.timeout = timeout
             
+            let currentTime = Int32(CFAbsoluteTimeGetCurrent() + kCFAbsoluteTimeIntervalSince1970)
+            var effectiveTimeout = timeout
+            if case let .ongoing(_, _, _, _, _, _, nextRoundDate, _, _, _) = auctionState {
+                let delta = nextRoundDate - currentTime
+                if delta > 0 && delta < timeout {
+                    effectiveTimeout = delta
+                }
+            }
+            
             self.pushState()
             
             self.updateTimer?.invalidate()
-            self.updateTimer = SwiftSignalKit.Timer(timeout: Double(timeout), repeat: false, completion: { [weak self] _ in
+            self.updateTimer = SwiftSignalKit.Timer(timeout: Double(effectiveTimeout), repeat: false, completion: { [weak self] _ in
                 guard let self else {
                     return
                 }
@@ -385,11 +394,11 @@ public class GiftAuctionsManager {
             guard let self, let activeAuctions else {
                 return
             }
-            var auctionContexts: [Int64 : GiftAuctionContext] = [:]
             for auction in activeAuctions {
-                auctionContexts[auction.gift.giftId] = auction
+                if self.auctionContexts[auction.gift.giftId] == nil {
+                    self.auctionContexts[auction.gift.giftId] = auction
+                }
             }
-            self.auctionContexts = auctionContexts
             self.updateState()
         }))
     }
@@ -417,7 +426,7 @@ public class GiftAuctionsManager {
         }
     }
 
-    func storeAuctionContext(auctionContext: GiftAuctionContext) {
+    public func storeAuctionContext(auctionContext: GiftAuctionContext) {
         self.auctionContexts[auctionContext.gift.giftId] = auctionContext
         self.updateState()
     }
@@ -427,7 +436,7 @@ public class GiftAuctionsManager {
         for auction in self.auctionContexts.values.sorted(by: { $0.gift.giftId < $1.gift.giftId }) {
             signals.append(auction.state
             |> mapToSignal { state in
-                if let state, state.myState.bidAmount != nil {
+                if let state, state.myState.bidAmount != nil, case .ongoing = state.auctionState {
                     return .single(state)
                 } else {
                     return .complete()
