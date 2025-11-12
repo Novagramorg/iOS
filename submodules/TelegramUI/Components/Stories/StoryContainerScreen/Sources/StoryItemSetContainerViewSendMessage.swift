@@ -4399,10 +4399,12 @@ final class StoryItemSetContainerSendMessage: @unchecked(Sendable) {
                 return
             }
             
+            let callState = await (mediaStreamCall.state |> take(1)).get()
+            
             let stateContext = LiveStreamSettingsScreen.StateContext(
                 context: component.context,
-                mode: .edit(call: mediaStreamCall, displayPrivacy: false),
-                closeFriends: component.closeFriends.get(),
+                mode: .edit(call: mediaStreamCall, displayExternalStream: callState.isUnifiedStream),
+                closeFriends: .single([]),
                 adminedChannels: .single([]),
                 blockedPeersContext: nil
             )

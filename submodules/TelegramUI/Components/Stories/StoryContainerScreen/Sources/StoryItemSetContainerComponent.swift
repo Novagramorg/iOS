@@ -354,7 +354,7 @@ public final class StoryItemSetContainerComponent: Component {
     }
     
     final class InfoItem {
-        let component: AnyComponent<Empty>
+        var component: AnyComponent<Empty>
         let view = ComponentView<Empty>()
         
         init(component: AnyComponent<Empty>) {
@@ -2999,7 +2999,7 @@ public final class StoryItemSetContainerComponent: Component {
                 var canSendStars = false
                 
                 if isLiveStream {
-                    if component.slice.item.peerId != component.context.account.peerId {
+                    if component.slice.item.peerId != component.context.account.peerId || component.isEmbeddedInCamera {
                         canSendStars = true
                     }
                 }
@@ -3316,7 +3316,14 @@ public final class StoryItemSetContainerComponent: Component {
                             }
                         } : nil,
                         starStars: starStats,
-                        sendAsConfiguration: sendAsConfiguration
+                        sendAsConfiguration: sendAsConfiguration,
+                        openSettings: component.isEmbeddedInCamera ? { [weak self] in
+                            guard let self else {
+                                return
+                            }
+                            self.sendMessageContext.displayLiveStreamSettings(view: self)
+                        } : nil,
+                        call: self.mediaStreamCall
                     )),
                     environment: {},
                     containerSize: CGSize(width: inputPanelAvailableWidth, height: 200.0)
@@ -4256,6 +4263,7 @@ public final class StoryItemSetContainerComponent: Component {
             if focusedItem != nil {
                 let leftInfoComponent = AnyComponent(StoryAvatarInfoComponent(context: component.context, peer: component.slice.effectivePeer, isLiveStream: isLiveStream))
                 if let leftInfoItem = self.leftInfoItem {
+                    leftInfoItem.component = leftInfoComponent
                     currentLeftInfoItem = leftInfoItem
                 } else {
                     currentLeftInfoItem = InfoItem(component: leftInfoComponent)
@@ -4292,6 +4300,7 @@ public final class StoryItemSetContainerComponent: Component {
                     customSubtitle: customSubtitle
                 ))
                 if let centerInfoItem = self.centerInfoItem {
+                    centerInfoItem.component = centerInfoComponent
                     currentCenterInfoItem = centerInfoItem
                 } else {
                     currentCenterInfoItem = InfoItem(component: centerInfoComponent)
