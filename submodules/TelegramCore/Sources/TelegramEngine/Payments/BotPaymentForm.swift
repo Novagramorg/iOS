@@ -20,8 +20,7 @@ public enum BotPaymentInvoiceSource {
     case starGiftResale(slug: String, toPeerId: EnginePeer.Id, ton: Bool)
     case starGiftPrepaidUpgrade(peerId: EnginePeer.Id, hash: String)
     case starGiftDropOriginalDetails(reference: StarGiftReference)
-    case starGiftAuctionBid(hideName: Bool, peerId: EnginePeer.Id, giftId: Int64, bidAmount: Int64, text: String?, entities: [MessageTextEntity]?)
-    case starGiftAuctionUpdateBid(giftId: Int64, bidAmount: Int64)
+    case starGiftAuctionBid(update: Bool, hideName: Bool, peerId: EnginePeer.Id, giftId: Int64, bidAmount: Int64, text: String?, entities: [MessageTextEntity]?)
 }
 
 public struct BotPaymentInvoiceFields: OptionSet {
@@ -426,7 +425,7 @@ func _internal_parseInputInvoice(transaction: Transaction, source: BotPaymentInv
     case let .starGiftDropOriginalDetails(reference):
         return reference.apiStarGiftReference(transaction: transaction).flatMap { .inputInvoiceStarGiftDropOriginalDetails(stargift: $0) }
         
-    case let .starGiftAuctionBid(hideName, peerId, giftId, bidAmount, text, entities):
+    case let .starGiftAuctionBid(update, hideName, peerId, giftId, bidAmount, text, entities):
         guard let peer = transaction.getPeer(peerId), let inputPeer = apiInputPeer(peer) else {
             return nil
         }
@@ -434,14 +433,17 @@ func _internal_parseInputInvoice(transaction: Transaction, source: BotPaymentInv
         if hideName {
             flags |= (1 << 0)
         }
+        if update {
+            flags |= (1 << 2)
+        }
+        flags |= (1 << 3)
+        
         var message: Api.TextWithEntities?
         if let text, !text.isEmpty {
             flags |= (1 << 1)
             message = .textWithEntities(text: text, entities: entities.flatMap { apiEntitiesFromMessageTextEntities($0, associatedPeers: SimpleDictionary()) } ?? [])
         }
         return .inputInvoiceStarGiftAuctionBid(flags: flags, peer: inputPeer, giftId: giftId, bidAmount: bidAmount, message: message)
-    case let .starGiftAuctionUpdateBid(giftId, bidAmount):
-        return .inputInvoiceStarGiftAuctionUpdateBid(giftId: giftId, bidAmount: bidAmount)
     }
 }
 
@@ -784,7 +786,7 @@ func _internal_sendBotPaymentForm(account: Account, formId: Int64, source: BotPa
                                                     receiptMessageId = id
                                                 }
                                             }
-                                        case .giftCode, .stars, .starsGift, .starsChatSubscription, .starGift, .starGiftUpgrade, .starGiftTransfer, .premiumGift, .starGiftResale, .starGiftPrepaidUpgrade, .starGiftDropOriginalDetails, .starGiftAuctionBid, .starGiftAuctionUpdateBid:
+                                        case .giftCode, .stars, .starsGift, .starsChatSubscription, .starGift, .starGiftUpgrade, .starGiftTransfer, .premiumGift, .starGiftResale, .starGiftPrepaidUpgrade, .starGiftDropOriginalDetails, .starGiftAuctionBid:
                                             receiptMessageId = nil
                                         }
                                     }
