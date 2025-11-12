@@ -1854,7 +1854,7 @@ private final class GiftAuctionBidScreenComponent: Component {
                 
                 self.giftAuctionTimer = SwiftSignalKit.Timer(timeout: 0.5, repeat: true, completion: { [weak self] in
                     let _ = self
-                    //self?.state?.updated()
+                    self?.state?.updated()
                 }, queue: Queue.mainQueue())
                 self.giftAuctionTimer?.start()
             }
