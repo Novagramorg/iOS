@@ -413,12 +413,13 @@ public final class StreamAsComponent: Component {
                 })
             }
             
+            let presentationData = component.context.sharedContext.currentPresentationData.with({ $0 })
             let avatarSize = CGSize(width: 32.0, height: 32.0)
             self.avatarNode.frame = CGRect(origin: .zero, size: avatarSize)
             if let peer = self.peer {
                 self.avatarNode.setPeer(
                     context: component.context,
-                    theme: component.context.sharedContext.currentPresentationData.with({ $0 }).theme,
+                    theme: presentationData.theme,
                     peer: peer,
                     synchronousLoad: true
                 )
@@ -444,12 +445,11 @@ public final class StreamAsComponent: Component {
             
             var maxWidth = titleFrame.maxX
             if !component.isCustomTarget {
-                //TODO:localize
                 let subtitleSize = self.subtitle.update(
                     transition: .immediate,
                     component: AnyComponent(
                         MultilineTextComponent(
-                            text: .plain(NSAttributedString(string: "change", font: Font.regular(11.0), textColor: UIColor(white: 1.0, alpha: 0.8), paragraphAlignment: .left))
+                            text: .plain(NSAttributedString(string: presentationData.strings.Camera_LiveStream_Change, font: Font.regular(11.0), textColor: UIColor(white: 1.0, alpha: 0.8), paragraphAlignment: .left))
                         )
                     ),
                     environment: {},

@@ -15293,3 +15293,8 @@ Error: %8$@";
 "Gift.Auction.Info.Missed.Text" = "If your bid doesn't win after the final drop, your Stars will be fully refunded.";
 
 "Gift.Auction.Info.Understood" = "Understood";
+
+"Location.SendLocation" = "Send Location";
+
+"Camera.LiveStream.Change" = "change";
+"Camera.LiveStream.StartLiveStream" = "Start Live Stream";
