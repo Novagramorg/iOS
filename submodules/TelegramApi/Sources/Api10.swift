@@ -566,8 +566,7 @@ public extension Api {
         case inputInvoicePremiumGiftStars(flags: Int32, userId: Api.InputUser, months: Int32, message: Api.TextWithEntities?)
         case inputInvoiceSlug(slug: String)
         case inputInvoiceStarGift(flags: Int32, peer: Api.InputPeer, giftId: Int64, message: Api.TextWithEntities?)
-        case inputInvoiceStarGiftAuctionBid(flags: Int32, peer: Api.InputPeer, giftId: Int64, bidAmount: Int64, message: Api.TextWithEntities?)
-        case inputInvoiceStarGiftAuctionUpdateBid(giftId: Int64, bidAmount: Int64)
+        case inputInvoiceStarGiftAuctionBid(flags: Int32, peer: Api.InputPeer?, giftId: Int64, bidAmount: Int64, message: Api.TextWithEntities?)
         case inputInvoiceStarGiftDropOriginalDetails(stargift: Api.InputSavedStarGift)
         case inputInvoiceStarGiftPrepaidUpgrade(peer: Api.InputPeer, hash: String)
         case inputInvoiceStarGiftResale(flags: Int32, slug: String, toId: Api.InputPeer)
@@ -636,20 +635,13 @@ public extension Api {
                     break
                 case .inputInvoiceStarGiftAuctionBid(let flags, let peer, let giftId, let bidAmount, let message):
                     if boxed {
-                        buffer.appendInt32(2010287526)
+                        buffer.appendInt32(516618768)
                     }
                     serializeInt32(flags, buffer: buffer, boxed: false)
-                    peer.serialize(buffer, true)
+                    if Int(flags) & Int(1 << 3) != 0 {peer!.serialize(buffer, true)}
                     serializeInt64(giftId, buffer: buffer, boxed: false)
                     serializeInt64(bidAmount, buffer: buffer, boxed: false)
                     if Int(flags) & Int(1 << 1) != 0 {message!.serialize(buffer, true)}
-                    break
-                case .inputInvoiceStarGiftAuctionUpdateBid(let giftId, let bidAmount):
-                    if boxed {
-                        buffer.appendInt32(-2061017960)
-                    }
-                    serializeInt64(giftId, buffer: buffer, boxed: false)
-                    serializeInt64(bidAmount, buffer: buffer, boxed: false)
                     break
                 case .inputInvoiceStarGiftDropOriginalDetails(let stargift):
                     if boxed {
@@ -715,8 +707,6 @@ public extension Api {
                 return ("inputInvoiceStarGift", [("flags", flags as Any), ("peer", peer as Any), ("giftId", giftId as Any), ("message", message as Any)])
                 case .inputInvoiceStarGiftAuctionBid(let flags, let peer, let giftId, let bidAmount, let message):
                 return ("inputInvoiceStarGiftAuctionBid", [("flags", flags as Any), ("peer", peer as Any), ("giftId", giftId as Any), ("bidAmount", bidAmount as Any), ("message", message as Any)])
-                case .inputInvoiceStarGiftAuctionUpdateBid(let giftId, let bidAmount):
-                return ("inputInvoiceStarGiftAuctionUpdateBid", [("giftId", giftId as Any), ("bidAmount", bidAmount as Any)])
                 case .inputInvoiceStarGiftDropOriginalDetails(let stargift):
                 return ("inputInvoiceStarGiftDropOriginalDetails", [("stargift", stargift as Any)])
                 case .inputInvoiceStarGiftPrepaidUpgrade(let peer, let hash):
@@ -869,9 +859,9 @@ public extension Api {
             var _1: Int32?
             _1 = reader.readInt32()
             var _2: Api.InputPeer?
-            if let signature = reader.readInt32() {
+            if Int(_1!) & Int(1 << 3) != 0 {if let signature = reader.readInt32() {
                 _2 = Api.parse(reader, signature: signature) as? Api.InputPeer
-            }
+            } }
             var _3: Int64?
             _3 = reader.readInt64()
             var _4: Int64?
@@ -881,26 +871,12 @@ public extension Api {
                 _5 = Api.parse(reader, signature: signature) as? Api.TextWithEntities
             } }
             let _c1 = _1 != nil
-            let _c2 = _2 != nil
+            let _c2 = (Int(_1!) & Int(1 << 3) == 0) || _2 != nil
             let _c3 = _3 != nil
             let _c4 = _4 != nil
             let _c5 = (Int(_1!) & Int(1 << 1) == 0) || _5 != nil
             if _c1 && _c2 && _c3 && _c4 && _c5 {
-                return Api.InputInvoice.inputInvoiceStarGiftAuctionBid(flags: _1!, peer: _2!, giftId: _3!, bidAmount: _4!, message: _5)
-            }
-            else {
-                return nil
-            }
-        }
-        public static func parse_inputInvoiceStarGiftAuctionUpdateBid(_ reader: BufferReader) -> InputInvoice? {
-            var _1: Int64?
-            _1 = reader.readInt64()
-            var _2: Int64?
-            _2 = reader.readInt64()
-            let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            if _c1 && _c2 {
-                return Api.InputInvoice.inputInvoiceStarGiftAuctionUpdateBid(giftId: _1!, bidAmount: _2!)
+                return Api.InputInvoice.inputInvoiceStarGiftAuctionBid(flags: _1!, peer: _2, giftId: _3!, bidAmount: _4!, message: _5)
             }
             else {
                 return nil

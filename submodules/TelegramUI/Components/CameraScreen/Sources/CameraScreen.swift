@@ -2034,12 +2034,10 @@ private final class CameraScreenComponent: CombinedComponent {
                     availableModeControlSize = availableSize
                 }
                 
-                let availableModes: [CameraMode]
-                //#if DEBUG
-                availableModes = [.photo, .video, .live]
-                //#else
-                //availableModes = [.photo, .video]
-                //#endif
+                var availableModes: [CameraMode] = [.photo, .video]
+                if !isTablet {
+                    availableModes.append(.live)
+                }
                 
                 let modeControl = modeControl.update(
                     component: ModeComponent(

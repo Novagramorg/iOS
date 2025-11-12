@@ -486,6 +486,7 @@ private final class PeerComponent: Component {
     let amount: Int64
     let status: Status?
     let isLast: Bool
+    let action: (() -> Void)?
     
     init(
         context: AccountContext,
@@ -495,7 +496,8 @@ private final class PeerComponent: Component {
         place: Int32,
         amount: Int64,
         status: Status? = nil,
-        isLast: Bool
+        isLast: Bool,
+        action: (() -> Void)?
     ) {
         self.context = context
         self.theme = theme
@@ -505,6 +507,7 @@ private final class PeerComponent: Component {
         self.amount = amount
         self.status = status
         self.isLast = isLast
+        self.action = action
     }
     
     static func ==(lhs: PeerComponent, rhs: PeerComponent) -> Bool {
@@ -533,30 +536,58 @@ private final class PeerComponent: Component {
     }
     
     final class View: UIView {
+        private let selectionLayer = SimpleLayer()
         private var avatarNode: AvatarNode?
         private let place = ComponentView<Empty>()
         private let title = ComponentView<Empty>()
         private let amount = ComponentView<Empty>()
         private let amountStar = UIImageView()
         private let separator = SimpleLayer()
+        private let button = HighlightTrackingButton()
 
         private var component: PeerComponent?
         
         override init(frame: CGRect) {
             super.init(frame: frame)
             
+            self.selectionLayer.opacity = 0.0
+            
             self.layer.addSublayer(self.separator)
+            self.layer.addSublayer(self.selectionLayer)
             
             self.amountStar.image = UIImage(bundleImageName: "Premium/Stars/StarSmall")
             self.addSubview(self.amountStar)
+            
+            self.button.addTarget(self, action: #selector(self.buttonPressed), for: .touchUpInside)
+            self.addSubview(self.button)
+            
+            self.button.highligthedChanged = { [weak self] highlighted in
+                if let self {
+                    if highlighted {
+                        self.selectionLayer.removeAnimation(forKey: "opacity")
+                        self.selectionLayer.opacity = 1.0
+                    } else {
+                        self.selectionLayer.opacity = 0.0
+                        self.selectionLayer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2)
+                    }
+                }
+            }
         }
         
         required init(coder: NSCoder) {
             preconditionFailure()
         }
         
+        @objc private func buttonPressed() {
+            if let component = self.component {
+                component.action?()
+            }
+        }
+        
         func update(component: PeerComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
             self.component = component
+            
+            self.button.isUserInteractionEnabled = component.action != nil
             
             let size = CGSize(width: availableSize.width, height: 52.0)
             
@@ -569,6 +600,7 @@ private final class PeerComponent: Component {
             default:
                 break
             }
+            self.selectionLayer.backgroundColor = component.theme.list.itemHighlightedBackgroundColor.cgColor
             
             let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
             let placeSize = self.place.update(
@@ -580,6 +612,7 @@ private final class PeerComponent: Component {
             let placeFrame = CGRect(origin: CGPoint(x: 0.0, y:  floorToScreenPixels((size.height - placeSize.height) / 2.0)), size: placeSize)
             if let placeView = self.place.view {
                 if placeView.superview == nil {
+                    placeView.isUserInteractionEnabled = false
                     self.addSubview(placeView)
                 }
                 placeView.frame = placeFrame
@@ -590,6 +623,7 @@ private final class PeerComponent: Component {
                 avatarNode = current
             } else {
                 avatarNode = AvatarNode(font: avatarPlaceholderFont(size: 16.0))
+                avatarNode.isUserInteractionEnabled = false
                 self.avatarNode = avatarNode
                 self.addSubview(avatarNode.view)
             }
@@ -611,6 +645,7 @@ private final class PeerComponent: Component {
             let titleFrame = CGRect(origin: CGPoint(x: 110.0, y: floorToScreenPixels((size.height - titleSize.height) / 2.0)), size: titleSize)
             if let titleView = self.title.view {
                 if titleView.superview == nil {
+                    titleView.isUserInteractionEnabled = false
                     self.addSubview(titleView)
                 }
                 titleView.frame = titleFrame
@@ -627,6 +662,7 @@ private final class PeerComponent: Component {
             let amountFrame = CGRect(origin: CGPoint(x: availableSize.width - amountSize.width, y: floorToScreenPixels((size.height - amountSize.height) / 2.0)), size: amountSize)
             if let amountView = self.amount.view {
                 if amountView.superview == nil {
+                    amountView.isUserInteractionEnabled = false
                     self.addSubview(amountView)
                 }
                 amountView.frame = amountFrame
@@ -637,8 +673,11 @@ private final class PeerComponent: Component {
             }
             
             self.separator.backgroundColor = component.theme.list.itemPlainSeparatorColor.cgColor
-            self.separator.frame = CGRect(origin: CGPoint(x: 110.0, y: size.height), size: CGSize(width: size.width - 110.0, height: 1.0 - UIScreenPixel))
+            self.separator.frame = CGRect(origin: CGPoint(x: 110.0, y: size.height - UIScreenPixel), size: CGSize(width: size.width - 110.0, height: UIScreenPixel))
             transition.setAlpha(layer: self.separator, alpha: component.isLast ? 0.0 : 1.0)
+            
+            self.button.frame = CGRect(origin: .zero, size: size)
+            self.selectionLayer.frame = CGRect(origin: .zero, size: size).insetBy(dx: -24.0, dy: -UIScreenPixel)
             
             return size
         }
@@ -900,15 +939,18 @@ private final class GiftAuctionBidScreenComponent: Component {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
     
     let context: AccountContext
+    let toPeerId: EnginePeer.Id
     let gift: StarGift
     let auctionContext: GiftAuctionContext
     
     init(
         context: AccountContext,
+        toPeerId: EnginePeer.Id,
         gift: StarGift,
         auctionContext: GiftAuctionContext
     ) {
         self.context = context
+        self.toPeerId = toPeerId
         self.gift = gift
         self.auctionContext = auctionContext
     }
@@ -1412,22 +1454,15 @@ private final class GiftAuctionBidScreenComponent: Component {
             self.isLoading = true
             self.state?.updated()
             
-            let source: BotPaymentInvoiceSource
-            if let state = self.giftAuctionState, state.myState.bidAmount != nil {
-                source = .starGiftAuctionUpdateBid(
-                    giftId: gift.id,
-                    bidAmount: value
-                )
-            } else {
-                source = .starGiftAuctionBid(
-                   hideName: false,
-                   peerId: component.context.account.peerId,
-                   giftId: gift.id,
-                   bidAmount: value,
-                   text: nil,
-                   entities: nil
-               )
-            }
+            let source: BotPaymentInvoiceSource = .starGiftAuctionBid(
+               update: isUpdate,
+               hideName: false,
+               peerId: component.toPeerId,
+               giftId: gift.id,
+               bidAmount: value,
+               text: nil,
+               entities: nil
+           )
             
             let signal = BotCheckoutController.InputData.fetch(context: component.context, source: source)
             |> `catch` { error -> Signal<BotCheckoutController.InputData, SendBotPaymentFormError> in
@@ -1644,6 +1679,29 @@ private final class GiftAuctionBidScreenComponent: Component {
             controller.presentInGlobalOverlay(contextController)
         }
         
+        func presentCustomBidController() {
+            guard let component = self.component else {
+                return
+            }
+            if "".isEmpty {
+                return
+            }
+            let controller = giftAuctionCustomBidController(
+                context: component.context,
+                title: "Place a Custom Bid",
+                text: "Description",
+                placeholder: "Bid",
+                value: 100,
+                apply: { [weak self] value in
+                    guard let self else {
+                        return
+                    }
+                    self.commitBid(value: value)
+                }
+            )
+            self.environment?.controller()?.present(controller, in: .window(.root))
+        }
+        
         func update(component: GiftAuctionBidScreenComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<ViewControllerComponentContainer.Environment>, transition: ComponentTransition) -> CGSize {
             self.isUpdating = true
             defer {
@@ -1661,6 +1719,7 @@ private final class GiftAuctionBidScreenComponent: Component {
             } else {
                 fillingSize = min(availableSize.width, 428.0) - environment.safeInsets.left * 2.0
             }
+            let rawSideInset = floor((availableSize.width - fillingSize) * 0.5)
             let sideInset: CGFloat = floor((availableSize.width - fillingSize) * 0.5) + 24.0
             
             let context = component.context
@@ -1794,7 +1853,8 @@ private final class GiftAuctionBidScreenComponent: Component {
                 })
                 
                 self.giftAuctionTimer = SwiftSignalKit.Timer(timeout: 0.5, repeat: true, completion: { [weak self] in
-                    self?.state?.updated()
+                    let _ = self
+                    //self?.state?.updated()
                 }, queue: Queue.mainQueue())
                 self.giftAuctionTimer?.start()
             }
@@ -1827,7 +1887,7 @@ private final class GiftAuctionBidScreenComponent: Component {
                                 return
                             }
                             
-                            let maxAmount: Int = 1000
+                            let maxAmount: Int = 999
                             
                             self.amount = self.amount.withSliderValue(value)
                             self.didChangeAmount = true
@@ -1849,6 +1909,10 @@ private final class GiftAuctionBidScreenComponent: Component {
                                 } else {
                                     self.badgeStars.update(speed: newSpeed, delta: delta)
                                 }
+                            }
+                            
+                            if sliderValue == 1.0 && self.previousSliderValue != 1.0 {
+                                self.presentCustomBidController()
                             }
                             
                             self.previousSliderValue = sliderValue
@@ -1985,7 +2049,7 @@ private final class GiftAuctionBidScreenComponent: Component {
                     let badgeOriginX = sliderBackgroundFrame.minX + sliderForegroundFrame.width - 15.0
                     badgeFrame = CGRect(origin: CGPoint(x: badgeOriginX - apparentBadgeSize.width * 0.5, y: sliderForegroundFrame.minY - 9.0 - badgeSize.height), size: apparentBadgeSize)
                     
-                    let badgeSideInset: CGFloat = 23.0
+                    let badgeSideInset: CGFloat = rawSideInset + 23.0
                     
                     let badgeOverflowWidth: CGFloat
                     if badgeFrame.minX < badgeSideInset {
@@ -2008,7 +2072,7 @@ private final class GiftAuctionBidScreenComponent: Component {
                 
                 let starsRect = CGRect(origin: .zero, size: CGSize(width: availableSize.width, height: sliderForegroundFrame.midY))
                 self.badgeStars.frame = starsRect
-                self.badgeStars.update(size: starsRect.size, color: sliderColor, emitterPosition: CGPoint(x: badgeFrame.minX, y: badgeFrame.midY - 64.0))
+                self.badgeStars.update(size: starsRect.size, color: sliderColor, emitterPosition: CGPoint(x: badgeFrame.midX, y: badgeFrame.maxY - 32.0))
             }
             
             var perks: [([AnimatedTextComponent.Item], String)] = []
@@ -2116,7 +2180,7 @@ private final class GiftAuctionBidScreenComponent: Component {
             
             let perkHeight: CGFloat = 60.0
             let perkSpacing: CGFloat = 10.0
-            let perkWidth: CGFloat = floor((fillingSize - sideInset * 2.0 - perkSpacing * CGFloat(perks.count - 1)) / CGFloat(perks.count))
+            let perkWidth: CGFloat = floor((availableSize.width - sideInset * 2.0 - perkSpacing * CGFloat(perks.count - 1)) / CGFloat(perks.count))
             
             for i in 0 ..< perks.count {
                 var perkFrame = CGRect(origin: CGPoint(x: sideInset + CGFloat(i) * (perkWidth + perkSpacing), y: contentHeight), size: CGSize(width: perkWidth, height: perkHeight))
@@ -2187,7 +2251,7 @@ private final class GiftAuctionBidScreenComponent: Component {
                 environment: {},
                 containerSize: CGSize(width: 40.0, height: 40.0)
             )
-            let closeButtonFrame = CGRect(origin: CGPoint(x: 16.0, y: 16.0), size: closeButtonSize)
+            let closeButtonFrame = CGRect(origin: CGPoint(x: rawSideInset + 16.0, y: 16.0), size: closeButtonSize)
             if let closeButtonView = self.closeButton.view {
                 if closeButtonView.superview == nil {
                     self.navigationBarContainer.addSubview(closeButtonView)
@@ -2223,7 +2287,7 @@ private final class GiftAuctionBidScreenComponent: Component {
                 environment: {},
                 containerSize: CGSize(width: 40.0, height: 40.0)
             )
-            let infoButtonFrame = CGRect(origin: CGPoint(x: availableSize.width - 16.0 - moreButtonSize.width, y: 16.0), size: moreButtonSize)
+            let infoButtonFrame = CGRect(origin: CGPoint(x: availableSize.width - rawSideInset - 16.0 - moreButtonSize.width, y: 16.0), size: moreButtonSize)
             if let infoButtonView = self.moreButton.view {
                 if infoButtonView.superview == nil {
                     self.navigationBarContainer.addSubview(infoButtonView)
@@ -2290,7 +2354,7 @@ private final class GiftAuctionBidScreenComponent: Component {
                     }
                     
                     myBidTitleComponent = AnyComponent(MultilineTextComponent(text: .plain(NSAttributedString(string: bidTitle.uppercased(), font: Font.medium(13.0), textColor: bidTitleColor))))
-                    myBidComponent = AnyComponent(PeerComponent(context: component.context, theme: environment.theme, groupingSeparator: environment.dateTimeFormat.groupingSeparator, peer: peer, place: place, amount: myBidAmount, status: bidStatus, isLast: true))
+                    myBidComponent = AnyComponent(PeerComponent(context: component.context, theme: environment.theme, groupingSeparator: environment.dateTimeFormat.groupingSeparator, peer: peer, place: place, amount: myBidAmount, status: bidStatus, isLast: true, action: nil))
                 }
                 
                 var i: Int32 = 1
@@ -2303,7 +2367,7 @@ private final class GiftAuctionBidScreenComponent: Component {
                                 break
                             }
                         }
-                        topBidsComponents.append((bidder, AnyComponent(PeerComponent(context: component.context, theme: environment.theme, groupingSeparator: environment.dateTimeFormat.groupingSeparator, peer: peer, place: i, amount: bid, isLast: i == topBidders.count))))
+                        topBidsComponents.append((bidder, AnyComponent(PeerComponent(context: component.context, theme: environment.theme, groupingSeparator: environment.dateTimeFormat.groupingSeparator, peer: peer, place: i, amount: bid, isLast: i == topBidders.count, action: peer.id != component.context.account.peerId ? { [weak self] in self?.openPeer(peer, dismiss: false) } : nil))))
                     }
                     i += 1
                 }
@@ -2541,11 +2605,11 @@ private final class GiftAuctionBidScreenComponent: Component {
                     }
                 )),
                 environment: {},
-                containerSize: CGSize(width: availableSize.width - buttonInsets.left - buttonInsets.right, height: 54.0)
+                containerSize: CGSize(width: fillingSize - buttonInsets.left - buttonInsets.right, height: 54.0)
             )
             
             let edgeEffectHeight: CGFloat = 80.0
-            let edgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: availableSize.width, height: edgeEffectHeight))
+            let edgeEffectFrame = CGRect(origin: CGPoint(x: rawSideInset, y: 0.0), size: CGSize(width: fillingSize, height: edgeEffectHeight))
             transition.setFrame(view: self.topEdgeEffectView, frame: edgeEffectFrame)
             self.topEdgeEffectView.update(content: environment.theme.actionSheet.opaqueItemBackgroundColor, blur: true, alpha: 1.0, rect: edgeEffectFrame, edge: .top, edgeSize: edgeEffectFrame.height, transition: transition)
             if self.topEdgeEffectView.superview == nil {
@@ -2555,14 +2619,14 @@ private final class GiftAuctionBidScreenComponent: Component {
             var bottomPanelHeight = 13.0 + buttonInsets.bottom + actionButtonSize.height
             
             let bottomEdgeEffectHeight: CGFloat = bottomPanelHeight
-            let bottomEdgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: availableSize.height - bottomEdgeEffectHeight), size: CGSize(width: availableSize.width, height: bottomEdgeEffectHeight))
+            let bottomEdgeEffectFrame = CGRect(origin: CGPoint(x: rawSideInset, y: availableSize.height - bottomEdgeEffectHeight), size: CGSize(width: fillingSize, height: bottomEdgeEffectHeight))
             transition.setFrame(view: self.bottomEdgeEffectView, frame: bottomEdgeEffectFrame)
             self.bottomEdgeEffectView.update(content: environment.theme.actionSheet.opaqueItemBackgroundColor, blur: true, alpha: 1.0, rect: bottomEdgeEffectFrame, edge: .bottom, edgeSize: bottomEdgeEffectFrame.height, transition: transition)
             if self.bottomEdgeEffectView.superview == nil {
                 self.containerView.addSubview(self.bottomEdgeEffectView)
             }
             
-            let actionButtonFrame = CGRect(origin: CGPoint(x: buttonInsets.left, y: availableSize.height - buttonInsets.bottom - actionButtonSize.height), size: actionButtonSize)
+            let actionButtonFrame = CGRect(origin: CGPoint(x: rawSideInset + buttonInsets.left, y: availableSize.height - buttonInsets.bottom - actionButtonSize.height), size: actionButtonSize)
             bottomPanelHeight -= 1.0
             if let actionButtonView = actionButton.view {
                 if actionButtonView.superview == nil {
@@ -2645,11 +2709,12 @@ public class GiftAuctionBidScreen: ViewControllerComponentContainer {
     private var didPlayAppearAnimation: Bool = false
     private var isDismissed: Bool = false
     
-    public init(context: AccountContext, auctionContext: GiftAuctionContext) {
+    public init(context: AccountContext, toPeerId: EnginePeer.Id, auctionContext: GiftAuctionContext) {
         self.context = context
         
         super.init(context: context, component: GiftAuctionBidScreenComponent(
             context: context,
+            toPeerId: toPeerId,
             gift: auctionContext.gift,
             auctionContext: auctionContext
         ), navigationBarAppearance: .none, theme: .default)
