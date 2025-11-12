@@ -240,6 +240,8 @@ final class GiftOptionsScreenComponent: Component {
         
         private var dismissed = false
         
+        private var auctionDisposable = MetaDisposable()
+        
         private var chevronImage: (UIImage, PresentationTheme)?
         
         private var resaleConfiguration: StarsSubscriptionConfiguration?
@@ -274,6 +276,7 @@ final class GiftOptionsScreenComponent: Component {
         
         deinit {
             self.starsStateDisposable?.dispose()
+            self.auctionDisposable.dispose()
         }
 
         func scrollToTop() {
@@ -363,10 +366,58 @@ final class GiftOptionsScreenComponent: Component {
                     }
                     
                     if gift.flags.contains(.isAuction) {
-//                        let giftController = component.context.sharedContext.makeGiftAuctionViewScreen(
-//                            context: component,
-//                            auctionContext: <#T##GiftAuctionContext#>
-//                        )
+                        guard let giftAuctionsManager = component.context.giftAuctionsManager else {
+                            return
+                        }
+                        self.auctionDisposable.set((giftAuctionsManager.auctionContext(for: .giftId(gift.id))
+                        |> deliverOnMainQueue).start(next: { [weak self, weak mainController] auctionContext in
+                            guard let auctionContext, let component = self?.component, let mainController else {
+                                return
+                            }
+                            if let currentBidPeerId = auctionContext.currentBidPeerId {
+                                if currentBidPeerId == component.peerId {
+                                    let giftController = component.context.sharedContext.makeGiftAuctionBidScreen(
+                                        context: component.context,
+                                        auctionContext: auctionContext
+                                    )
+                                    mainController.push(giftController)
+                                } else {
+                                    let _ = (component.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: currentBidPeerId))
+                                    |> deliverOnMainQueue).start(next: { [weak self, weak mainController] peer in
+                                        guard let component = self?.component, let environment = self?.environment, let mainController else {
+                                            return
+                                        }
+                                        let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+                                        let alertController = textAlertController(
+                                            context: component.context,
+                                            title: environment.strings.Gift_Auction_Ongoing_Title,
+                                            text: auctionContext.currentBidPeerId == component.context.account.peerId ? environment.strings.Gift_Auction_Ongoing_TextYourself : environment.strings.Gift_Auction_Ongoing_Text(peer?.displayTitle(strings: environment.strings, displayOrder: presentationData.nameDisplayOrder) ?? "").string,
+                                            actions: [
+                                                TextAlertAction(type: .genericAction, title: environment.strings.Common_OK, action: {}),
+                                                TextAlertAction(type: .defaultAction, title: environment.strings.Gift_Auction_Ongoing_View, action: { [weak mainController] in
+                                                    guard let mainController else {
+                                                        return
+                                                    }
+                                                    let giftController = component.context.sharedContext.makeGiftAuctionBidScreen(
+                                                        context: component.context,
+                                                        auctionContext: auctionContext
+                                                    )
+                                                    mainController.push(giftController)
+                                                })
+                                            ],
+                                            parseMarkdown: true
+                                        )
+                                        mainController.present(alertController, in: .window(.root))
+                                    })
+                                }
+                            } else {
+                                let giftController = component.context.sharedContext.makeGiftAuctionViewScreen(
+                                    context: component.context,
+                                    auctionContext: auctionContext
+                                )
+                                mainController.push(giftController)
+                            }
+                        }))
                     } else {
                         if let availability = gift.availability, availability.remains == 0 {
                             if availability.resale > 0 {
@@ -529,8 +580,7 @@ final class GiftOptionsScreenComponent: Component {
                                 let text: String
                                 var ribbonColor: GiftItemComponent.Ribbon.Color = .blue
                                 if gift.flags.contains(.isAuction) {
-                                    //TODO:localize
-                                    text = "auction"
+                                    text = environment.strings.Gift_Options_Gift_Auction
                                     ribbonColor = .orange
                                     outline = .orange
                                 } else if let perUserLimit = gift.perUserLimit {
@@ -546,8 +596,7 @@ final class GiftOptionsScreenComponent: Component {
                             if !isSoldOut && gift.flags.contains(.requiresPremium) {
                                 let text: String
                                 if gift.flags.contains(.isAuction) {
-                                    //TODO:localize
-                                    text = "auction"
+                                    text = environment.strings.Gift_Options_Gift_Auction
                                 } else if component.context.isPremium, let perUserLimit = gift.perUserLimit {
                                     text = environment.strings.Gift_Options_Gift_Premium_Left(perUserLimit.remains)
                                 } else {
@@ -582,7 +631,9 @@ final class GiftOptionsScreenComponent: Component {
                         let subject: GiftItemComponent.Subject
                         switch gift {
                         case let .generic(gift):
-                            if let availability = gift.availability, availability.remains == 0, let minResaleStars = availability.minResaleStars {
+                            if gift.flags.contains(.isAuction) {
+                                subject = .starGift(gift: gift, price: "Join")
+                            } else if let availability = gift.availability, availability.remains == 0, let minResaleStars = availability.minResaleStars {
                                 let priceString = presentationStringsFormattedNumber(Int32(minResaleStars), environment.dateTimeFormat.groupingSeparator)
                                 if let resaleConfiguration = self.resaleConfiguration, minResaleStars == resaleConfiguration.starGiftResaleMaxStarsAmount || availability.resale == 1 {
                                     subject = .starGift(gift: gift, price: "# \(priceString)")

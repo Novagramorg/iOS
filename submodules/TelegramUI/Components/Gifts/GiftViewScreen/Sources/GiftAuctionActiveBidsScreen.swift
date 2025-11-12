@@ -19,25 +19,20 @@ import TelegramStringFormatting
 import GlassBarButtonComponent
 import GiftItemComponent
 import EdgeEffect
+import AnimatedTextComponent
 
-private final class GiftAuctionAcquiredScreenComponent: Component {
+private final class GiftAuctionActiveBidsScreenComponent: Component {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
     
     let context: AccountContext
-    let gift: StarGift
-    let acquiredGifts: [GiftAuctionAcquiredGift]
     
     init(
-        context: AccountContext,
-        gift: StarGift,
-        acquiredGifts: [GiftAuctionAcquiredGift]
+        context: AccountContext
     ) {
         self.context = context
-        self.gift = gift
-        self.acquiredGifts = acquiredGifts
     }
     
-    static func ==(lhs: GiftAuctionAcquiredScreenComponent, rhs: GiftAuctionAcquiredScreenComponent) -> Bool {
+    static func ==(lhs: GiftAuctionActiveBidsScreenComponent, rhs: GiftAuctionActiveBidsScreenComponent) -> Bool {
         return true
     }
     
@@ -73,18 +68,21 @@ private final class GiftAuctionAcquiredScreenComponent: Component {
         private let scrollContentView: UIView
         
         private let topEdgeEffectView: EdgeEffectView
-        private let bottomEdgeEffectView: EdgeEffectView
         
         private let backgroundHandleView: UIImageView
         
         private let closeButton = ComponentView<Empty>()
         private let title = ComponentView<Empty>()
-        private var itemsViews: [Int32: ComponentView<Empty>] = [:]
-        private let actionButton = ComponentView<Empty>()
-                
+        private var itemsViews: [Int64: ComponentView<Empty>] = [:]
+        
+        private var auctionStates: [GiftAuctionContext.State] = []
+        private var auctionStatesDisposable: Disposable?
+        
         private var ignoreScrolling: Bool = false
         
-        private var component: GiftAuctionAcquiredScreenComponent?
+        private var giftAuctionTimer: SwiftSignalKit.Timer?
+        
+        private var component: GiftAuctionActiveBidsScreenComponent?
         private weak var state: EmptyComponentState?
         private var isUpdating: Bool = false
         private var environment: ViewControllerComponentContainer.Environment?
@@ -117,9 +115,7 @@ private final class GiftAuctionAcquiredScreenComponent: Component {
             self.topEdgeEffectView.clipsToBounds = true
             self.topEdgeEffectView.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
             self.topEdgeEffectView.layer.cornerRadius = 40.0
-            
-            self.bottomEdgeEffectView = EdgeEffectView()
-                        
+                                    
             super.init(frame: frame)
             
             self.addSubview(self.dimView)
@@ -155,6 +151,11 @@ private final class GiftAuctionAcquiredScreenComponent: Component {
         
         required init?(coder: NSCoder) {
             fatalError("init(coder:) has not been implemented")
+        }
+        
+        deinit {
+            self.auctionStatesDisposable?.dispose()
+            self.giftAuctionTimer?.invalidate()
         }
         
         func scrollViewDidScroll(_ scrollView: UIScrollView) {
@@ -221,10 +222,6 @@ private final class GiftAuctionAcquiredScreenComponent: Component {
             self.scrollContentClippingView.layer.animatePosition(from: CGPoint(x: 0.0, y: animateOffset), to: CGPoint(), duration: 0.5, timingFunction: kCAMediaTimingFunctionSpring, additive: true)
             self.backgroundLayer.animatePosition(from: CGPoint(x: 0.0, y: animateOffset), to: CGPoint(), duration: 0.5, timingFunction: kCAMediaTimingFunctionSpring, additive: true)
             self.navigationBarContainer.layer.animatePosition(from: CGPoint(x: 0.0, y: animateOffset), to: CGPoint(), duration: 0.5, timingFunction: kCAMediaTimingFunctionSpring, additive: true)
-            if let actionButtonView = self.actionButton.view {
-                actionButtonView.layer.animatePosition(from: CGPoint(x: 0.0, y: animateOffset), to: CGPoint(), duration: 0.5, timingFunction: kCAMediaTimingFunctionSpring, additive: true)
-            }
-            self.bottomEdgeEffectView.layer.animatePosition(from: CGPoint(x: 0.0, y: animateOffset), to: CGPoint(), duration: 0.5, timingFunction: kCAMediaTimingFunctionSpring, additive: true)
         }
         
         func animateOut(completion: @escaping () -> Void) {
@@ -236,47 +233,9 @@ private final class GiftAuctionAcquiredScreenComponent: Component {
             })
             self.backgroundLayer.animatePosition(from: CGPoint(), to: CGPoint(x: 0.0, y: animateOffset), duration: 0.3, timingFunction: CAMediaTimingFunctionName.easeInEaseOut.rawValue, removeOnCompletion: false, additive: true)
             self.navigationBarContainer.layer.animatePosition(from: CGPoint(), to: CGPoint(x: 0.0, y: animateOffset), duration: 0.3, timingFunction: CAMediaTimingFunctionName.easeInEaseOut.rawValue, removeOnCompletion: false, additive: true)
-            if let actionButtonView = self.actionButton.view {
-                actionButtonView.layer.animatePosition(from: CGPoint(), to: CGPoint(x: 0.0, y: animateOffset), duration: 0.3, timingFunction: CAMediaTimingFunctionName.easeInEaseOut.rawValue, removeOnCompletion: false, additive: true)
-            }
-            self.bottomEdgeEffectView.layer.animatePosition(from: CGPoint(), to: CGPoint(x: 0.0, y: animateOffset), duration: 0.3, timingFunction: CAMediaTimingFunctionName.easeInEaseOut.rawValue, removeOnCompletion: false, additive: true)
-        }
-        
-        private func openPeer(_ peer: EnginePeer, dismiss: Bool = true) {
-            guard let component = self.component, let controller = self.environment?.controller() as? GiftAuctionAcquiredScreen, let navigationController = controller.navigationController as? NavigationController else {
-                return
-            }
-                                    
-            let context = component.context
-            let action = {
-                context.sharedContext.navigateToChatController(NavigateToChatControllerParams(
-                    navigationController: navigationController,
-                    chatController: nil,
-                    context: context,
-                    chatLocation: .peer(peer),
-                    subject: nil,
-                    botStart: nil,
-                    updateTextInputState: nil,
-                    keepStack: .always,
-                    useExisting: true,
-                    purposefulAction: nil,
-                    scrollToEndIfExists: false,
-                    activateMessageSearch: nil,
-                    animated: true
-                ))
-            }
-            
-            if dismiss {
-                controller.dismiss()
-                Queue.mainQueue().after(0.4, {
-                    action()
-                })
-            } else {
-                action()
-            }
         }
       
-        func update(component: GiftAuctionAcquiredScreenComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<ViewControllerComponentContainer.Environment>, transition: ComponentTransition) -> CGSize {
+        func update(component: GiftAuctionActiveBidsScreenComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<ViewControllerComponentContainer.Environment>, transition: ComponentTransition) -> CGSize {
             self.isUpdating = true
             defer {
                 self.isUpdating = false
@@ -293,28 +252,42 @@ private final class GiftAuctionAcquiredScreenComponent: Component {
             } else {
                 fillingSize = min(availableSize.width, 428.0) - environment.safeInsets.left * 2.0
             }
-            let sideInset: CGFloat = floor((availableSize.width - fillingSize) * 0.5) + 24.0
+            let sideInset: CGFloat = floor((availableSize.width - fillingSize) * 0.5) + 16.0
+            
+            if self.component == nil, let giftAuctionsManager = component.context.giftAuctionsManager {
+                self.auctionStatesDisposable = (giftAuctionsManager.state
+                |> deliverOnMainQueue).start(next: { [weak self] auctionStates in
+                    guard let self else {
+                        return
+                    }
+                    self.auctionStates = auctionStates
+                    self.state?.updated(transition: .immediate)
+                })
+                
+                self.giftAuctionTimer = SwiftSignalKit.Timer(timeout: 0.5, repeat: true, completion: { [weak self] in
+                    self?.state?.updated()
+                }, queue: Queue.mainQueue())
+                self.giftAuctionTimer?.start()
+            }
             
             self.component = component
             self.state = state
             self.environment = environment
             
+            let theme = environment.theme.withModalBlocksBackground()
+            
             if themeUpdated {
                 self.dimView.backgroundColor = UIColor(white: 0.0, alpha: 0.5)
-                self.backgroundLayer.backgroundColor = environment.theme.actionSheet.opaqueItemBackgroundColor.cgColor
+                self.backgroundLayer.backgroundColor = theme.list.blocksBackgroundColor.cgColor
             }
             
             transition.setFrame(view: self.dimView, frame: CGRect(origin: CGPoint(), size: availableSize))
             
+            let currentTime = Int32(CFAbsoluteTimeGetCurrent() + kCFAbsoluteTimeIntervalSince1970)
+            
             var contentHeight: CGFloat = 75.0
-        
-            let tableFont = Font.regular(15.0)
-            let tableBoldFont = Font.semibold(15.0)
-            
-            let tableTextColor = environment.theme.list.itemPrimaryTextColor
-            
-            for gift in component.acquiredGifts {
-                let id = gift.date
+            for auctionState in self.auctionStates {
+                let id = auctionState.gift.giftId
                 let itemView: ComponentView<Empty>
                 if let current = self.itemsViews[id] {
                     itemView = current
@@ -323,108 +296,33 @@ private final class GiftAuctionAcquiredScreenComponent: Component {
                     self.itemsViews[id] = itemView
                 }
                 
-                var items: [TableComponent.Item] = []
-                
-                
-                var giftSubject: GiftItemComponent.Subject?
-                if case let .generic(gift) = component.gift {
-                    giftSubject = .starGift(gift: gift, price: "")
-                }
-                
-                if let giftSubject {
-                    items.append(.init(
-                        id: "header",
-                        title: nil,
-                        hasBackground: true,
-                        component: AnyComponent(HStack([
-                            AnyComponentWithIdentity(id: "icon", component: AnyComponent(
-                                GiftItemComponent(
-                                    context: component.context,
-                                    theme: environment.theme,
-                                    strings: environment.strings,
-                                    peer: nil,
-                                    subject: giftSubject,
-                                    mode: .tableIcon
-                                )
-                            )),
-                            AnyComponentWithIdentity(
-                                id: "title",
-                                component: AnyComponent(
-                                    MultilineTextComponent(text: .plain(NSAttributedString(string: environment.strings.Gift_Acquired_Round("\(gift.round)").string, font: tableBoldFont, textColor: tableTextColor)))
-                                )
-                            )
-                        ], spacing: 1.0))
-                    ))
-                }
-                
-                items.append(.init(
-                    id: "recipient",
-                    title: environment.strings.Gift_Acquired_Recipient,
-                    component: AnyComponent(Button(
-                        content: AnyComponent(
-                            PeerCellComponent(
-                                context: component.context,
-                                theme: environment.theme,
-                                strings: environment.strings,
-                                peer: gift.peer
-                            )
-                        ),
-                        action: { [weak self] in
-                            guard let self else {
-                                return
-                            }
-                            self.openPeer(gift.peer, dismiss: false)
-                        }
-                    ))
-                ))
-                
-                items.append(.init(
-                    id: "date",
-                    title: environment.strings.Gift_Acquired_Date,
-                    component: AnyComponent(MultilineTextComponent(text: .plain(NSAttributedString(string: stringForMediumDate(timestamp: gift.date, strings: environment.strings, dateTimeFormat: environment.dateTimeFormat), font: tableFont, textColor: tableTextColor))))
-                ))
-                
-                let valueString = "⭐️\(formatStarsAmountText(StarsAmount(value: gift.bidAmount, nanos: 0), dateTimeFormat: environment.dateTimeFormat))"
-                let valueAttributedString = NSMutableAttributedString(string: valueString, font: tableFont, textColor: tableTextColor)
-                let range = (valueAttributedString.string as NSString).range(of: "⭐️")
-                if range.location != NSNotFound {
-                    valueAttributedString.addAttribute(ChatTextInputAttributes.customEmoji, value: ChatTextInputTextCustomEmojiAttribute(interactivelySelectedFromPackId: nil, fileId: 0, file: nil, custom: .stars(tinted: false)), range: range)
-                    valueAttributedString.addAttribute(.baselineOffset, value: 1.0, range: range)
-                }
-                
-                items.append(.init(
-                    id: "bid",
-                    title: environment.strings.Gift_Acquired_AcceptedBid,
-                    component: AnyComponent(HStack([
-                        AnyComponentWithIdentity(id: "stars", component: AnyComponent(MultilineTextWithEntitiesComponent(
-                            context: component.context,
-                            animationCache: component.context.animationCache,
-                            animationRenderer: component.context.animationRenderer,
-                            placeholderColor: environment.theme.list.mediaPlaceholderColor,
-                            text: .plain(valueAttributedString),
-                            maximumNumberOfLines: 0
-                        ))),
-                        AnyComponentWithIdentity(
-                            id: AnyHashable("info"),
-                            component: AnyComponent(Button(
-                                content: AnyComponent(ButtonContentComponent(
-                                    context: component.context,
-                                    text: environment.strings.Gift_Acquired_Top("\(gift.position)").string,
-                                    color: environment.theme.list.itemAccentColor
-                                )),
-                                action: {
-                                }
-                            ))
-                        )
-                    ], spacing: 4.0))
-                ))
-                
                 let itemSize = itemView.update(
                     transition: transition,
                     component: AnyComponent(
-                        TableComponent(
-                            theme: environment.theme,
-                            items: items
+                        ActiveAuctionComponent(
+                            context: component.context,
+                            theme: theme,
+                            strings: environment.strings,
+                            dateTimeFormat: environment.dateTimeFormat,
+                            state: auctionState,
+                            currentTime: currentTime,
+                            action: { [weak self] in
+                                guard let self, let component = self.component else {
+                                    return
+                                }
+                                if let giftAuctionsManager = component.context.giftAuctionsManager {
+                                    let _ = (giftAuctionsManager.auctionContext(for: .giftId(id))
+                                    |> deliverOnMainQueue).start(next: { [weak self] auction in
+                                        guard let self, let component = self.component, let auction, let controller = environment.controller(), let navigationController = controller.navigationController as? NavigationController else {
+                                            return
+                                        }
+                                        controller.dismiss()
+                                        
+                                        let bidController = component.context.sharedContext.makeGiftAuctionBidScreen(context: component.context, auctionContext: auction)
+                                        navigationController.pushViewController(bidController)
+                                    })
+                                }
+                            }
                         )
                     ),
                     environment: {},
@@ -440,6 +338,7 @@ private final class GiftAuctionAcquiredScreenComponent: Component {
                 contentHeight += itemSize.height
                 contentHeight += 20.0
             }
+            contentHeight -= 10.0
             
             if self.backgroundHandleView.image == nil {
                 self.backgroundHandleView.image = generateStretchableFilledCircleImage(diameter: 5.0, color: .white)?.withRenderingMode(.alwaysTemplate)
@@ -483,15 +382,13 @@ private final class GiftAuctionAcquiredScreenComponent: Component {
             }
             
             let containerInset: CGFloat = environment.statusBarHeight + 10.0
+            contentHeight += environment.safeInsets.bottom
             
             var initialContentHeight = contentHeight
             let clippingY: CGFloat
             
-            let title = self.title
-            let actionButton = self.actionButton
-            
-            let titleText = environment.strings.Gift_Acquired_Title(Int32(component.acquiredGifts.count))
-            let titleSize = title.update(
+            let titleText: String = environment.strings.Gift_ActiveAuctions_Title(Int32(self.auctionStates.count))
+            let titleSize = self.title.update(
                 transition: .immediate,
                 component: AnyComponent(MultilineTextComponent(
                     text: .plain(NSAttributedString(string: titleText, font: Font.semibold(17.0), textColor: environment.theme.list.itemPrimaryTextColor))
@@ -501,7 +398,7 @@ private final class GiftAuctionAcquiredScreenComponent: Component {
             )
             
             let titleFrame = CGRect(origin: CGPoint(x: floor((availableSize.width - titleSize.width) * 0.5), y: 26.0), size: titleSize)
-            if let titleView = title.view {
+            if let titleView = self.title.view {
                 if titleView.superview == nil {
                     self.navigationBarContainer.addSubview(titleView)
                 }
@@ -510,38 +407,6 @@ private final class GiftAuctionAcquiredScreenComponent: Component {
                                           
             initialContentHeight = contentHeight
             
-            let buttonAttributedString = NSMutableAttributedString(string: environment.strings.Common_OK, font: Font.semibold(17.0), textColor: environment.theme.list.itemCheckColors.foregroundColor, paragraphAlignment: .center)
-          
-            let buttonInsets = ContainerViewLayout.concentricInsets(bottomInset: environment.safeInsets.bottom, innerDiameter: 54.0, sideInset: 32.0)
-            
-            let actionButtonSize = actionButton.update(
-                transition: transition,
-                component: AnyComponent(ButtonComponent(
-                    background: ButtonComponent.Background(
-                        style: .glass,
-                        color: environment.theme.list.itemCheckColors.fillColor,
-                        foreground: environment.theme.list.itemCheckColors.foregroundColor,
-                        pressedColor: environment.theme.list.itemCheckColors.fillColor.withMultipliedAlpha(0.9),
-                        cornerRadius: 54.0 * 0.5
-                    ),
-                    content: AnyComponentWithIdentity(
-                        id: AnyHashable("ok"),
-                        component: AnyComponent(MultilineTextComponent(text: .plain(buttonAttributedString)))
-                    ),
-                    isEnabled: true,
-                    displaysProgress: false,
-                    action: { [weak self] in
-                        guard let self else {
-                            return
-                        }
-                        self.environment?.controller()?.dismiss()
-                    }
-                )),
-                environment: {},
-                containerSize: CGSize(width: availableSize.width - buttonInsets.left - buttonInsets.right, height: 54.0)
-            )
-            
-           
             let edgeEffectHeight: CGFloat = 80.0
             let edgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: availableSize.width, height: edgeEffectHeight))
             transition.setFrame(view: self.topEdgeEffectView, frame: edgeEffectFrame)
@@ -549,30 +414,8 @@ private final class GiftAuctionAcquiredScreenComponent: Component {
             if self.topEdgeEffectView.superview == nil {
                 self.navigationBarContainer.insertSubview(self.topEdgeEffectView, at: 0)
             }
-            
-            var bottomPanelHeight = 13.0 + buttonInsets.bottom + actionButtonSize.height
-            
-            let bottomEdgeEffectHeight: CGFloat = bottomPanelHeight
-            let bottomEdgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: availableSize.height - bottomEdgeEffectHeight), size: CGSize(width: availableSize.width, height: bottomEdgeEffectHeight))
-            transition.setFrame(view: self.bottomEdgeEffectView, frame: bottomEdgeEffectFrame)
-            self.bottomEdgeEffectView.update(content: environment.theme.actionSheet.opaqueItemBackgroundColor, blur: true, alpha: 1.0, rect: bottomEdgeEffectFrame, edge: .bottom, edgeSize: bottomEdgeEffectFrame.height, transition: transition)
-            if self.bottomEdgeEffectView.superview == nil {
-                self.containerView.addSubview(self.bottomEdgeEffectView)
-            }
-            
-            let actionButtonFrame = CGRect(origin: CGPoint(x: buttonInsets.left, y: availableSize.height - buttonInsets.bottom - actionButtonSize.height), size: actionButtonSize)
-            bottomPanelHeight -= 1.0
-            if let actionButtonView = actionButton.view {
-                if actionButtonView.superview == nil {
-                    self.containerView.addSubview(actionButtonView)
-                }
-                transition.setFrame(view: actionButtonView, frame: actionButtonFrame)
-            }
-                        
-            contentHeight += bottomPanelHeight
-            initialContentHeight += bottomPanelHeight
-            
-            clippingY = actionButtonFrame.maxY + 24.0
+             
+            clippingY = availableSize.height
             
             let topInset: CGFloat = max(0.0, availableSize.height - containerInset - initialContentHeight)
             
@@ -637,19 +480,17 @@ private final class GiftAuctionAcquiredScreenComponent: Component {
     }
 }
 
-public class GiftAuctionAcquiredScreen: ViewControllerComponentContainer {
+public class GiftAuctionActiveBidsScreen: ViewControllerComponentContainer {
     private let context: AccountContext
     
     private var didPlayAppearAnimation: Bool = false
     private var isDismissed: Bool = false
     
-    public init(context: AccountContext, gift: StarGift, acquiredGifts: [GiftAuctionAcquiredGift]) {
+    public init(context: AccountContext) {
         self.context = context
         
-        super.init(context: context, component: GiftAuctionAcquiredScreenComponent(
-            context: context,
-            gift: gift,
-            acquiredGifts: acquiredGifts
+        super.init(context: context, component: GiftAuctionActiveBidsScreenComponent(
+            context: context
         ), navigationBarAppearance: .none, theme: .default)
         
         self.statusBar.statusBarStyle = .Ignore
@@ -673,7 +514,7 @@ public class GiftAuctionAcquiredScreen: ViewControllerComponentContainer {
         if !self.didPlayAppearAnimation {
             self.didPlayAppearAnimation = true
             
-            if let componentView = self.node.hostView.componentView as? GiftAuctionAcquiredScreenComponent.View {
+            if let componentView = self.node.hostView.componentView as? GiftAuctionActiveBidsScreenComponent.View {
                 componentView.animateIn()
             }
         }
@@ -683,7 +524,7 @@ public class GiftAuctionAcquiredScreen: ViewControllerComponentContainer {
         if !self.isDismissed {
             self.isDismissed = true
             
-            if let componentView = self.node.hostView.componentView as? GiftAuctionAcquiredScreenComponent.View {
+            if let componentView = self.node.hostView.componentView as? GiftAuctionActiveBidsScreenComponent.View {
                 componentView.animateOut(completion: { [weak self] in
                     completion?()
                     self?.dismiss(animated: false)
@@ -692,5 +533,242 @@ public class GiftAuctionAcquiredScreen: ViewControllerComponentContainer {
                 self.dismiss(animated: false)
             }
         }
+    }
+}
+
+private final class ActiveAuctionComponent: Component {
+    let context: AccountContext
+    let theme: PresentationTheme
+    let strings: PresentationStrings
+    let dateTimeFormat: PresentationDateTimeFormat
+    let state: GiftAuctionContext.State
+    let currentTime: Int32
+    let action: () -> Void
+    
+    init(
+        context: AccountContext,
+        theme: PresentationTheme,
+        strings: PresentationStrings,
+        dateTimeFormat: PresentationDateTimeFormat,
+        state: GiftAuctionContext.State,
+        currentTime: Int32,
+        action: @escaping () -> Void
+    ) {
+        self.context = context
+        self.theme = theme
+        self.strings = strings
+        self.dateTimeFormat = dateTimeFormat
+        self.state = state
+        self.currentTime = currentTime
+        self.action = action
+    }
+    
+    static func ==(lhs: ActiveAuctionComponent, rhs: ActiveAuctionComponent) -> Bool {
+        if lhs.context !== rhs.context {
+            return false
+        }
+        if lhs.theme !== rhs.theme {
+            return false
+        }
+        if lhs.state != rhs.state {
+            return false
+        }
+        if lhs.currentTime != rhs.currentTime {
+            return false
+        }
+        return true
+    }
+    
+    final class View: UIView {
+        private let icon = ComponentView<Empty>()
+        private let title = ComponentView<Empty>()
+        private let subtitle = ComponentView<Empty>()
+        private let button =  ComponentView<Empty>()
+
+        private var component: ActiveAuctionComponent?
+        
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+            
+            self.layer.cornerRadius = 26.0
+            self.clipsToBounds = true
+        }
+        
+        required init(coder: NSCoder) {
+            preconditionFailure()
+        }
+        
+        func update(component: ActiveAuctionComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
+            self.component = component
+            
+            self.backgroundColor = component.theme.list.itemBlocksBackgroundColor
+                        
+            var size = CGSize(width: availableSize.width, height: 0.0)
+            size.height += 11.0
+            
+            
+            if case let .generic(gift) = component.state.gift {
+                let titleSize = self.icon.update(
+                    transition: .immediate,
+                    component: AnyComponent(GiftItemComponent(
+                        context: component.context,
+                        theme: component.theme,
+                        strings: component.strings,
+                        subject: .starGift(gift: gift, price: ""),
+                        mode: .preview
+                    )),
+                    environment: {},
+                    containerSize: CGSize(width: 64.0, height: 64.0)
+                )
+                let iconFrame = CGRect(origin: CGPoint(x: 2.0, y: 0.0), size: titleSize)
+                if let iconView = self.icon.view {
+                    if iconView.superview == nil {
+                        self.addSubview(iconView)
+                    }
+                    iconView.frame = iconFrame
+                }
+            }
+            
+            var endTime = component.currentTime
+            
+            var titleText: String = ""
+            var subtitleText: String = ""
+            var subtitleTextColor = component.theme.list.itemPrimaryTextColor
+            if case let .ongoing(_, _, _, _, _, _, nextRoundDate, _, currentRound, totalRound) = component.state.auctionState, let myBid = component.state.myState.bidAmount {
+                titleText = component.strings.Gift_ActiveAuctions_Round("\(currentRound)", "\(totalRound)").string
+                
+                let bidString = "#\(presentationStringsFormattedNumber(Int32(clamping: myBid), component.dateTimeFormat.groupingSeparator))"
+                if let place = component.state.place, case let .generic(gift) = component.state.gift, let auctionGiftsPerRound = gift.auctionGiftsPerRound, place > auctionGiftsPerRound {
+                    subtitleText = component.strings.Gift_ActiveAuctions_Outbid(bidString).string
+                    subtitleTextColor = component.theme.list.itemDestructiveColor
+                } else {
+                    subtitleText = component.strings.Gift_ActiveAuctions_Winning(bidString, "\(component.state.place ?? 0)").string
+                }
+                
+                endTime = nextRoundDate
+            }
+            
+            let titleSize = self.title.update(
+                transition: .immediate,
+                component: AnyComponent(MultilineTextComponent(
+                    text: .plain(NSAttributedString(string: titleText, font: Font.semibold(17.0), textColor: component.theme.list.itemPrimaryTextColor)),
+                    maximumNumberOfLines: 2
+                )),
+                environment: {},
+                containerSize: CGSize(width: availableSize.width - 63.0 - 20.0, height: 100.0)
+            )
+            let titleFrame = CGRect(origin: CGPoint(x: 63.0, y: size.height), size: titleSize)
+            if let titleView = self.title.view {
+                if titleView.superview == nil {
+                    self.addSubview(titleView)
+                }
+                titleView.frame = titleFrame
+            }
+            size.height += titleSize.height
+            size.height += 2.0
+            
+            let textFont = Font.regular(15.0)
+            let boldTextFont = Font.semibold(15.0)
+            let textColor = subtitleTextColor
+            let markdownAttributes = MarkdownAttributes(body: MarkdownAttributeSet(font: textFont, textColor: textColor), bold: MarkdownAttributeSet(font: boldTextFont, textColor: textColor), link: MarkdownAttributeSet(font: textFont, textColor: textColor), linkAttribute: { contents in
+                return (TelegramTextAttributes.URL, contents)
+            })
+            let attributedString = parseMarkdownIntoAttributedString(subtitleText, attributes: markdownAttributes, textAlignment: .center).mutableCopy() as! NSMutableAttributedString
+            if let range = attributedString.string.range(of: "#") {
+                attributedString.addAttribute(ChatTextInputAttributes.customEmoji, value: ChatTextInputTextCustomEmojiAttribute(interactivelySelectedFromPackId: nil, fileId: 0, file: nil, custom: .stars(tinted: false)), range: NSRange(range, in: attributedString.string))
+                attributedString.addAttribute(.baselineOffset, value: 2.0, range: NSRange(range, in: attributedString.string))
+            }
+            
+            let subtitleSize = self.subtitle.update(
+                transition: .immediate,
+                component: AnyComponent(MultilineTextWithEntitiesComponent(context: component.context, animationCache: component.context.animationCache, animationRenderer: component.context.animationRenderer, placeholderColor: .clear, text: .plain(attributedString), maximumNumberOfLines: 2
+                )),
+                environment: {},
+                containerSize: CGSize(width: availableSize.width - 63.0 - 20.0, height: 100.0)
+            )
+            let subtitleFrame = CGRect(origin: CGPoint(x: 63.0, y: size.height), size: subtitleSize)
+            if let subtitleView = self.subtitle.view {
+                if subtitleView.superview == nil {
+                    self.addSubview(subtitleView)
+                }
+                subtitleView.frame = subtitleFrame
+            }
+            size.height += subtitleSize.height
+            size.height += 19.0
+            
+            let endTimeout = max(0, endTime - component.currentTime)
+            let hours = Int(endTimeout / 3600)
+            let minutes = Int((endTimeout % 3600) / 60)
+            let seconds = Int(endTimeout % 60)
+                   
+            var buttonAnimatedTitleItems: [AnimatedTextComponent.Item] = []
+            if hours > 0 {
+                buttonAnimatedTitleItems.append(AnimatedTextComponent.Item(id: "h", content: .number(hours, minDigits: 1)))
+                buttonAnimatedTitleItems.append(AnimatedTextComponent.Item(id: "colon1", content: .text(":")))
+                buttonAnimatedTitleItems.append(AnimatedTextComponent.Item(id: "m", content: .number(minutes, minDigits: 2)))
+                buttonAnimatedTitleItems.append(AnimatedTextComponent.Item(id: "colon2", content: .text(":")))
+                buttonAnimatedTitleItems.append(AnimatedTextComponent.Item(id: "s", content: .number(seconds, minDigits: 2)))
+            } else {
+                buttonAnimatedTitleItems.append(AnimatedTextComponent.Item(id: "m", content: .number(minutes, minDigits: 2)))
+                buttonAnimatedTitleItems.append(AnimatedTextComponent.Item(id: "colon2", content: .text(":")))
+                buttonAnimatedTitleItems.append(AnimatedTextComponent.Item(id: "s", content: .number(seconds, minDigits: 2)))
+            }
+            
+            let buttonSize = self.button.update(
+                transition: .spring(duration: 0.2),
+                component: AnyComponent(
+                    ButtonComponent(
+                        background: ButtonComponent.Background(
+                            style: .glass,
+                            color: component.theme.list.itemCheckColors.fillColor,
+                            foreground: component.theme.list.itemCheckColors.foregroundColor,
+                            pressedColor: component.theme.list.itemCheckColors.fillColor.withMultipliedAlpha(0.9)
+                        ),
+                        content: AnyComponentWithIdentity(id: "label", component: AnyComponent(
+                            HStack([
+                                AnyComponentWithIdentity(id: "icon", component: AnyComponent(
+                                    BundleIconComponent(name: "Premium/Auction/BidSmall", tintColor: component.theme.list.itemCheckColors.foregroundColor)
+                                )),
+                                AnyComponentWithIdentity(id: "label", component: AnyComponent(
+                                    MultilineTextComponent(text: .plain(NSAttributedString(string: component.strings.Gift_ActiveAuctions_RaiseBid, font: Font.semibold(17.0), textColor: component.theme.list.itemCheckColors.foregroundColor)))
+                                )),
+                                AnyComponentWithIdentity(id: "timer", component: AnyComponent(
+                                    AnimatedTextComponent(
+                                        font: Font.with(size: 17.0, weight: .medium, traits: .monospacedNumbers),
+                                        color: component.theme.list.itemCheckColors.foregroundColor.withAlphaComponent(0.7),
+                                        items: buttonAnimatedTitleItems,
+                                        noDelay: true
+                                    )
+                                ))
+                            ], spacing: 5.0)
+                        )),
+                        action: {
+                            component.action()
+                        }
+                    )
+                ),
+                environment: {},
+                containerSize: CGSize(width: availableSize.width - 32.0, height: 52.0)
+            )
+            let buttonFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((availableSize.width - buttonSize.width) / 2.0), y: size.height), size: buttonSize)
+            if let buttonView = self.button.view {
+                if buttonView.superview == nil {
+                    self.addSubview(buttonView)
+                }
+                buttonView.frame = buttonFrame
+            }
+            size.height += buttonSize.height
+            size.height += 16.0
+           
+            return size
+        }
+    }
+    
+    func makeView() -> View {
+        return View(frame: CGRect())
+    }
+    
+    func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
+        return view.update(component: self, availableSize: availableSize, state: state, environment: environment, transition: transition)
     }
 }

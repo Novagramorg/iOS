@@ -4,6 +4,7 @@ import Display
 import ComponentFlow
 import SwiftSignalKit
 import TelegramCore
+import TelegramPresentationData
 import Photos
 import LocalMediaResources
 import CameraButtonComponent
@@ -37,6 +38,7 @@ private extension SimpleShapeLayer {
 }
 
 private final class ShutterButtonContentComponent: Component {
+    let strings: PresentationStrings
     let isTablet: Bool
     let hasAppeared: Bool
     let tintColor: UIColor
@@ -49,6 +51,7 @@ private final class ShutterButtonContentComponent: Component {
     let updateOffsetY: ActionSlot<(CGFloat, ComponentTransition)>
     
     init(
+        strings: PresentationStrings,
         isTablet: Bool,
         hasAppeared: Bool,
         tintColor: UIColor,
@@ -60,6 +63,7 @@ private final class ShutterButtonContentComponent: Component {
         updateOffsetX: ActionSlot<(CGFloat, ComponentTransition)>,
         updateOffsetY: ActionSlot<(CGFloat, ComponentTransition)>
     ) {
+        self.strings = strings
         self.isTablet = isTablet
         self.hasAppeared = hasAppeared
         self.tintColor = tintColor
@@ -673,6 +677,7 @@ final class CaptureControlsComponent: Component {
     }
     
     let context: AccountContext
+    let strings: PresentationStrings
     let isTablet: Bool
     let isSticker: Bool
     let hasGallery: Bool
@@ -701,6 +706,7 @@ final class CaptureControlsComponent: Component {
     
     init(
         context: AccountContext,
+        strings: PresentationStrings,
         isTablet: Bool,
         isSticker: Bool,
         hasGallery: Bool,
@@ -728,6 +734,7 @@ final class CaptureControlsComponent: Component {
         openResolvedPeer: @escaping (EnginePeer) -> Void
     ) {
         self.context = context
+        self.strings = strings
         self.isTablet = isTablet
         self.isSticker = isSticker
         self.hasGallery = hasGallery
@@ -1425,6 +1432,7 @@ final class CaptureControlsComponent: Component {
                     Button(
                         content: AnyComponent(
                             ShutterButtonContentComponent(
+                                strings: component.strings,
                                 isTablet: component.isTablet,
                                 hasAppeared: component.hasAppeared,
                                 tintColor: component.tintColor,

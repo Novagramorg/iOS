@@ -14,8 +14,7 @@ extension CameraMode {
         case .video:
             return strings.Story_Camera_Video
         case .live:
-            //TODO:localize
-            return "LIVE"
+            return strings.Story_Camera_Live
         }
     }
 }
