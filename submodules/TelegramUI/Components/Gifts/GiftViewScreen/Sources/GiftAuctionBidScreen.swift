@@ -952,7 +952,7 @@ private final class GiftAuctionBidScreenComponent: Component {
         
         private static func makeSliderSteps(minRealValue: Int, maxRealValue: Int, isLogarithmic: Bool) -> [Int] {
             if isLogarithmic {
-                var sliderSteps: [Int] = [1, 10, 50, 100, 500, 1_000, 2_000, 5_000, 7_500, 10_000, 20_000, 30_000]
+                var sliderSteps: [Int] = [1, 10, 50, 100, 500, 1_000, 2_000, 5_000, 7_500, 15_000, 20_000, 30_000, 40_000, 50_000]
                 sliderSteps.removeAll(where: { $0 <= minRealValue })
                 sliderSteps.insert(minRealValue, at: 0)
                 sliderSteps.removeAll(where: { $0 >= maxRealValue })
@@ -1027,6 +1027,10 @@ private final class GiftAuctionBidScreenComponent: Component {
         
         func withMinAllowedRealValue(_ minAllowedRealValue: Int) -> Amount {
             return Amount(realValue: self.realValue, minRealValue: self.minRealValue, minAllowedRealValue: minAllowedRealValue, maxRealValue: self.maxRealValue, maxSliderValue: self.maxSliderValue, isLogarithmic: self.isLogarithmic)
+        }
+        
+        func withMaxRealValue(_ maxRealValue: Int) -> Amount {
+            return Amount(realValue: self.realValue, minRealValue: self.minRealValue, minAllowedRealValue: self.minAllowedRealValue, maxRealValue: maxRealValue, maxSliderValue: self.maxSliderValue, isLogarithmic: self.isLogarithmic)
         }
     }
         
@@ -1369,13 +1373,12 @@ private final class GiftAuctionBidScreenComponent: Component {
         }
         
         private var isLoading = false
-        private func placeBid() {
+        private func commitBid(value: Int64) {
             guard let component = self.component, case let .generic(gift) = component.gift, let controller = self.environment?.controller() else {
                 return
             }
             
             var isUpdate = false
-            let value = Int64(self.amount.realValue)
             if let myBidAmount = self.giftAuctionState?.myState.bidAmount {
                 isUpdate = true
                 if value == myBidAmount {
@@ -1447,10 +1450,19 @@ private final class GiftAuctionBidScreenComponent: Component {
                     return
                 }
                 self.isLoading = false
+                
+                let newMaxValue = Int(Double(value) * 1.5)
+                var updatedAmount = self.amount.withMinAllowedRealValue(Int(value))
+                if newMaxValue > self.amount.maxRealValue {
+                    updatedAmount = updatedAmount.withMaxRealValue(newMaxValue)
+                }
+                self.amount = updatedAmount
                 self.state?.updated()
                 
-                self.amount = self.amount.withMinAllowedRealValue(Int(value))
-                                
+                if !isUpdate {
+                    component.auctionContext.load()
+                }
+                
                 let title = isUpdate ? presentationData.strings.Gift_AuctionBid_Increased_Title : presentationData.strings.Gift_AuctionBid_Placed_Title
                 let text = isUpdate ? presentationData.strings.Gift_AuctionBid_Increased_Text("\(giftsPerRounds)").string : presentationData.strings.Gift_AuctionBid_Placed_Text("\(giftsPerRounds)").string
                 
@@ -1737,8 +1749,12 @@ private final class GiftAuctionBidScreenComponent: Component {
                         peerIds.append(context.account.peerId)
                         
                         var minBidAmount: Int64 = 100
-                        if case let .ongoing(_, _, _, auctionMinBidAmount, _, _, _, _, _, _) = state?.auctionState {
+                        var maxBidAmount: Int64 = 50000
+                        if case let .ongoing(_, _, _, auctionMinBidAmount, bidLevels, _, _, _, _, _) = state?.auctionState {
                             minBidAmount = auctionMinBidAmount
+                            if let firstLevel = bidLevels.first(where: { $0.position == 1 }) {
+                                maxBidAmount = max(maxBidAmount, Int64(Double(firstLevel.amount) * 1.5))
+                            }
                         }
                         var currentValue = max(Int(minBidAmount), 100)
                         if let myBidAmount = state?.myState.bidAmount {
@@ -1750,7 +1766,7 @@ private final class GiftAuctionBidScreenComponent: Component {
                             minAllowedRealValue = myBidAmount
                         }
                         
-                        self.amount = Amount(realValue: currentValue, minRealValue: Int(minBidAmount), minAllowedRealValue: Int(minAllowedRealValue), maxRealValue: 30000, maxSliderValue: 999, isLogarithmic: true)
+                        self.amount = Amount(realValue: currentValue, minRealValue: Int(minBidAmount), minAllowedRealValue: Int(minAllowedRealValue), maxRealValue: Int(maxBidAmount), maxSliderValue: 999, isLogarithmic: true)
                         transition = .immediate
                     }
                     
@@ -2521,8 +2537,7 @@ private final class GiftAuctionBidScreenComponent: Component {
                             
                             return
                         }
-                        
-                        self.placeBid()
+                        self.commitBid(value: Int64(self.amount.realValue))
                     }
                 )),
                 environment: {},
@@ -2666,9 +2681,25 @@ public class GiftAuctionBidScreen: ViewControllerComponentContainer {
         }
     }
         
+    fileprivate func dismissAllTooltips() {
+        self.window?.forEachController({ controller in
+            if let controller = controller as? UndoOverlayController {
+                controller.dismiss()
+            }
+        })
+        self.forEachController({ controller in
+            if let controller = controller as? UndoOverlayController {
+                controller.dismiss()
+            }
+            return true
+        })
+    }
+    
     override public func dismiss(completion: (() -> Void)? = nil) {
         if !self.isDismissed {
             self.isDismissed = true
+            
+            self.dismissAllTooltips()
             
             if let componentView = self.node.hostView.componentView as? GiftAuctionBidScreenComponent.View {
                 componentView.animateOut(completion: { [weak self] in

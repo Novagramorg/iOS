@@ -15221,6 +15221,7 @@ Error: %8$@";
 "Gift.AuctionBid.AddMoreStars.Stars_1" = "%@ Star";
 "Gift.AuctionBid.AddMoreStars.Stars_any" = "%@ Stars";
 "Gift.AuctionBid.Top" = "TOP %@";
+"Gift.AuctionBid.Custom" = "Custom";
 
 "Gift.Auction.Context.About" = "About";
 "Gift.Auction.Context.CopyLink" = "Copy Link";
