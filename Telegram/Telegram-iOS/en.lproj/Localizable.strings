@@ -15180,7 +15180,7 @@ Error: %8$@";
 "Notification.GiftAuction.Acquired" = "You've successfully bought a gift in the auction for %@.";
 
 "Gift.Auction.Auction" = "auction";
-"Gift.Auction.Description" = "Top %@ bidders will get a **%@** this round. [Learn More >]()";
+"Gift.Auction.Description" = "Top %@ bidders will get **%@** gifts this round. [Learn More >]()";
 "Gift.Auction.Ended" = "Auction ended";
 "Gift.Auction.FirstSale" = "First Sale";
 "Gift.Auction.LastSale" = "Last Sale";
@@ -15213,6 +15213,14 @@ Error: %8$@";
 "Gift.AuctionBid.TopWinners" = "Top 3 Winners";
 "Gift.AuctionBid.PlaceBid" = "Place a %@ Bid";
 "Gift.AuctionBid.AddToBid" = "Add %@ to Your Bid";
+"Gift.AuctionBid.Placed.Title" = "Your bid has been placed";
+"Gift.AuctionBid.Placed.Text" = "If you fall below the top %@, your bid will roll over to the next drop.";
+"Gift.AuctionBid.Increased.Title" = "Your bid has been increased";
+"Gift.AuctionBid.Increased.Text" = "If you fall below the top %@, your bid will roll over to the next drop.";
+"Gift.AuctionBid.AddMoreStars" = "Add at least %@ to increase your bid.";
+"Gift.AuctionBid.AddMoreStars.Stars_1" = "%@ Star";
+"Gift.AuctionBid.AddMoreStars.Stars_any" = "%@ Stars";
+"Gift.AuctionBid.Top" = "TOP %@";
 
 "Gift.Auction.Context.About" = "About";
 "Gift.Auction.Context.CopyLink" = "Copy Link";
@@ -15264,3 +15272,24 @@ Error: %8$@";
 "Gift.Auction.Ongoing.Text" = "You’ve already bid in this gift auction for **%@**.";
 "Gift.Auction.Ongoing.TextYourself" = "You’ve already bid in this gift auction for yourself.";
 "Gift.Auction.Ongoing.View" = "View";
+
+"Gift.Auction.Info.Title" = "Auction";
+"Gift.Auction.Info.Description" = "Join the battle for exclusive gifts.";
+
+"Gift.Auction.Info.TopBidders.Title_1" = "Top %@ Bidder";
+"Gift.Auction.Info.TopBidders.Title_any" = "Top %@ Bidders";
+"Gift.Auction.Info.TopBidders.Text" = "%@ are dropped in %@ to the top %@ by bid amount.";
+"Gift.Auction.Info.TopBidders.Gifts_1" = "%@ gift";
+"Gift.Auction.Info.TopBidders.Gifts_any" = "%@ gifts";
+"Gift.Auction.Info.TopBidders.Rounds_1" = "%@ round";
+"Gift.Auction.Info.TopBidders.Rounds_any" = "%@ rounds";
+"Gift.Auction.Info.TopBidders.Bidders_1" = "%@ bidder";
+"Gift.Auction.Info.TopBidders.Bidders_any" = "%@ bidders";
+
+"Gift.Auction.Info.Carryover.Title" = "Bid Carryover";
+"Gift.Auction.Info.Carryover.Text" = "If your bid leaves the top %@, it will automatically join the next drop.";
+
+"Gift.Auction.Info.Missed.Title" = "Missed Bidders";
+"Gift.Auction.Info.Missed.Text" = "If your bid doesn't win after the final drop, your Stars will be fully refunded.";
+
+"Gift.Auction.Info.Understood" = "Understood";

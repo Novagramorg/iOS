@@ -810,11 +810,10 @@ private final class SliderBackgroundComponent: Component {
             topLineFrameTransition.setFrame(layer: self.topBackgroundLine, frame: topLineFrame)
             topLineAlphaTransition.setAlpha(layer: self.topBackgroundLine, alpha: topLineAlpha)
             
-            //TODO:localize
             let topTextSize = self.topForegroundText.update(
                 transition: .immediate,
                 component: AnyComponent(MultilineTextComponent(
-                    text: .plain(NSAttributedString(string: "TOP \(component.giftsPerRound)", font: Font.semibold(15.0), textColor: UIColor(white: 1.0, alpha: 0.4)))
+                    text: .plain(NSAttributedString(string: component.strings.Gift_AuctionBid_Top("\(component.giftsPerRound)").string, font: Font.semibold(15.0), textColor: UIColor(white: 1.0, alpha: 0.4)))
                 )),
                 environment: {},
                 containerSize: CGSize(width: availableSize.width, height: 100.0)
@@ -822,7 +821,7 @@ private final class SliderBackgroundComponent: Component {
             let _ = self.topBackgroundText.update(
                 transition: .immediate,
                 component: AnyComponent(MultilineTextComponent(
-                    text: .plain(NSAttributedString(string: "TOP \(component.giftsPerRound)", font: Font.semibold(15.0), textColor: component.theme.overallDarkAppearance ? UIColor(white: 1.0, alpha: 0.22) : UIColor(white: 0.0, alpha: 0.2)))
+                    text: .plain(NSAttributedString(string: component.strings.Gift_AuctionBid_Top("\(component.giftsPerRound)").string, font: Font.semibold(15.0), textColor: component.theme.overallDarkAppearance ? UIColor(white: 1.0, alpha: 0.22) : UIColor(white: 0.0, alpha: 0.2)))
                 )),
                 environment: {},
                 containerSize: CGSize(width: availableSize.width, height: 100.0)
@@ -1364,21 +1363,30 @@ private final class GiftAuctionBidScreenComponent: Component {
                 return
             }
             
+            var isUpdate = false
             let value = Int64(self.amount.realValue)
             if let myBidAmount = self.giftAuctionState?.myState.bidAmount {
+                isUpdate = true
                 if value == myBidAmount {
                     controller.dismiss()
                     return
                 }
             }
             
+            let giftsPerRounds = gift.auctionGiftsPerRound ?? 50
+            
+            let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
             if let myBidAmount = self.giftAuctionState?.myState.bidAmount, let myMinBidAmount = self.giftAuctionState?.myState.minBidAmount, value < myMinBidAmount {
                 HapticFeedback().error()
-                let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
                 controller.present(
                     UndoOverlayController(
                         presentationData: presentationData,
-                        content: .info(title: nil, text: "Add at least \(myMinBidAmount - myBidAmount) Stars to increase your bid.", timeout: nil, customUndoText: nil),
+                        content: .info(
+                            title: nil,
+                            text: presentationData.strings.Gift_AuctionBid_AddMoreStars(presentationData.strings.Gift_AuctionBid_AddMoreStars_Stars(Int32(clamping: myMinBidAmount - myBidAmount))).string,
+                            timeout: nil,
+                            customUndoText: nil
+                        ),
                         position: .bottom,
                         action: { _ in return true }
                     ),
@@ -1431,13 +1439,20 @@ private final class GiftAuctionBidScreenComponent: Component {
                 self.state?.updated()
                 
                 self.amount = self.amount.withMinAllowedRealValue(Int(value))
+                                
+                let title = isUpdate ? presentationData.strings.Gift_AuctionBid_Increased_Title : presentationData.strings.Gift_AuctionBid_Placed_Title
+                let text = isUpdate ? presentationData.strings.Gift_AuctionBid_Increased_Text("\(giftsPerRounds)").string : presentationData.strings.Gift_AuctionBid_Placed_Text("\(giftsPerRounds)").string
                 
-                //TODO:localize
                 let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
                 controller?.present(
                     UndoOverlayController(
                         presentationData: presentationData,
-                        content: .actionSucceeded(title: "Your bid has been placed", text: "If you fall below the top 50, your bid will roll over to the next drop.", cancel: nil, destructive: false),
+                        content: .actionSucceeded(
+                            title: title,
+                            text: text,
+                            cancel: nil,
+                            destructive: false
+                        ),
                         position: .bottom,
                         action: { _ in return true }
                     ),
@@ -1571,6 +1586,7 @@ private final class GiftAuctionBidScreenComponent: Component {
             
             let context = component.context
             let gift = component.auctionContext.gift
+            let auctionContext = component.auctionContext
             let presentationData = context.sharedContext.currentPresentationData.with { $0 }
             
             var link = ""
@@ -1583,7 +1599,7 @@ private final class GiftAuctionBidScreenComponent: Component {
             items.append(.action(ContextMenuActionItem(text: presentationData.strings.Gift_Auction_Context_About, icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Info"), color: theme.contextMenu.primaryColor) }, action: { [weak controller] c, f in
                 f(.default)
                 
-                let infoController = context.sharedContext.makeGiftAuctionInfoScreen(context: context, gift: gift, completion: nil)
+                let infoController = context.sharedContext.makeGiftAuctionInfoScreen(context: context, auctionContext: auctionContext, completion: nil)
                 controller?.push(infoController)
             })))
                          
@@ -1973,7 +1989,7 @@ private final class GiftAuctionBidScreenComponent: Component {
             var dropsLeftAnimatedItems: [AnimatedTextComponent.Item] = []
             
             if let auctionState = self.giftAuctionState?.auctionState {
-                if case let .ongoing(_, _, _, minBidAmount, _, _, nextDropDate, _, dropsLeft, _) = auctionState {
+                if case let .ongoing(_, _, _, minBidAmount, _, _, nextDropDate, dropsLeft, _, _) = auctionState {
                     var minBidAmount = minBidAmount
                     if let myMinBidAmmount = self.giftAuctionState?.myState.minBidAmount {
                         minBidAmount = myMinBidAmmount
@@ -2040,7 +2056,7 @@ private final class GiftAuctionBidScreenComponent: Component {
                     }
                     
                     let currentTime = Int32(CFAbsoluteTimeGetCurrent() + kCFAbsoluteTimeIntervalSince1970)
-                    let dropTimeout = nextDropDate - currentTime
+                    let dropTimeout = max(0, nextDropDate - currentTime)
                     
                     let minutes = Int(dropTimeout / 60)
                     let seconds = Int(dropTimeout % 60)
