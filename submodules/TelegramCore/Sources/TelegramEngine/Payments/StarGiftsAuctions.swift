@@ -448,17 +448,60 @@ public class GiftAuctionsManager {
 }
 
 public extension GiftAuctionContext.State {
-    var place: Int32? {
-        guard case let .ongoing(_, _, _, _, bidLevels, _, _, _, _, _) = self.auctionState, let myBid = self.myState.bidAmount, let myBidDate = self.myState.bidDate else {
+    func getPlace(myBid: Int64?, myBidDate: Int32?) -> Int32? {
+        guard case let .ongoing(_, _, _, _, bidLevels, _, _, _, _, _) = self.auctionState else {
             return nil
         }
-        var place: Int32 = 1
-        for level in bidLevels {
-            if myBid < level.amount || (myBid == level.amount && myBidDate > level.date) {
-                place = level.position + 1
+        guard let myBid = myBid ?? self.myState.bidAmount else {
+            return nil
+        }
+        let currentTime = Int32(CFAbsoluteTimeGetCurrent() + kCFAbsoluteTimeIntervalSince1970)
+        let myBidDate = self.myState.bidDate ?? currentTime
+        
+        let levels = bidLevels
+        guard !levels.isEmpty else {
+            return 1
+        }
+        
+        func isWorse(than level: GiftAuctionContext.State.BidLevel) -> Bool {
+            if myBid < level.amount {
+                return true
+            }
+            if myBid == level.amount, myBidDate > level.date {
+                return true
+            }
+            return false
+        }
+        
+        var lowerIndex: Int = -1
+        for (i, level) in levels.enumerated() {
+            if isWorse(than: level) {
+                lowerIndex = i
+            } else {
+                break
             }
         }
-        return place
+        if lowerIndex == -1 {
+            return 1
+        }
+        
+        let lowerPosition = levels[lowerIndex].position
+        let nextPosition: Int32
+        let nextIndex = lowerIndex + 1
+        if nextIndex < levels.count {
+            nextPosition = levels[nextIndex].position
+        } else {
+            nextPosition = lowerPosition
+        }
+        if nextPosition == lowerPosition + 1 {
+            return lowerPosition + 1
+        } else {
+            return nextPosition
+        }
+    }
+    
+    var place: Int32? {
+        return self.getPlace(myBid: nil, myBidDate: nil)
     }
     
     var startDate: Int32 {

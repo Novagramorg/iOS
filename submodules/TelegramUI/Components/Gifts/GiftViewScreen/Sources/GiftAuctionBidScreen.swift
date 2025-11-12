@@ -1781,6 +1781,8 @@ private final class GiftAuctionBidScreenComponent: Component {
                 self.backgroundLayer.backgroundColor = environment.theme.actionSheet.opaqueItemBackgroundColor.cgColor
             }
             
+            let currentTime = Int32(CFAbsoluteTimeGetCurrent() + kCFAbsoluteTimeIntervalSince1970)
+            
             transition.setFrame(view: self.dimView, frame: CGRect(origin: CGPoint(), size: availableSize))
             
             var contentHeight: CGFloat = 0.0
@@ -2055,7 +2057,6 @@ private final class GiftAuctionBidScreenComponent: Component {
                         minBidAnimatedItems.append(AnimatedTextComponent.Item(id: "static", content: .text(minBidString)))
                     }
                     
-                    let currentTime = Int32(CFAbsoluteTimeGetCurrent() + kCFAbsoluteTimeIntervalSince1970)
                     let dropTimeout = max(0, nextDropDate - currentTime)
                     
                     let minutes = Int(dropTimeout / 60)
@@ -2235,19 +2236,16 @@ private final class GiftAuctionBidScreenComponent: Component {
             var topBidsComponents: [(EnginePeer.Id, AnyComponent<Empty>)] = []
             
             if let giftAuctionState = self.giftAuctionState, case let .ongoing(_, _, _, _, bidLevels, topBidders, _, _, _, _) = giftAuctionState.auctionState {
-                if var myBidAmount = giftAuctionState.myState.bidAmount, let myBidDate = giftAuctionState.myState.bidDate, let peer = self.peersMap[component.context.account.peerId] {
+                if var myBidAmount = giftAuctionState.myState.bidAmount, var myBidDate = giftAuctionState.myState.bidDate, let peer = self.peersMap[component.context.account.peerId] {
                     var place: Int32 = 1
                     var isBiddingUp = false
                     if self.amount.realValue > myBidAmount {
                         myBidAmount = Int64(self.amount.realValue)
+                        myBidDate = currentTime
                         isBiddingUp = true
                     }
-                    for level in bidLevels {
-                        if myBidAmount < level.amount || (myBidAmount == level.amount && myBidDate > level.date) {
-                            place = level.position + 1
-                        }
-                    }
-                    
+                    place = giftAuctionState.getPlace(myBid: myBidAmount, myBidDate: myBidDate) ?? 1
+                                        
                     var bidTitle: String
                     var bidTitleColor: UIColor
                     var bidStatus: PeerComponent.Status?
