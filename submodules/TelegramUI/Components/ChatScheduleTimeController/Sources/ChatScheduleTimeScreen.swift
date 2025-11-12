@@ -159,6 +159,8 @@ private final class ChatScheduleTimeSheetContentComponent: Component {
             self.component = component
             self.state = state
             
+            let strings = environment.strings
+            
             let sideInset: CGFloat = 39.0
             
             var contentHeight: CGFloat = 0.0
@@ -201,9 +203,9 @@ private final class ChatScheduleTimeSheetContentComponent: Component {
             let title: String
             switch component.mode {
             case .scheduledMessages:
-                title = environment.strings.Conversation_ScheduleMessage_Title
+                title = strings.Conversation_ScheduleMessage_Title
             case .reminders:
-                title = environment.strings.Conversation_SetReminder_Title
+                title = strings.Conversation_SetReminder_Title
             }
             let titleSize = self.title.update(
                 transition: transition,
@@ -232,7 +234,7 @@ private final class ChatScheduleTimeSheetContentComponent: Component {
             } else {
                 datePicker = DatePickerNode(
                     theme: DatePickerTheme(theme: environment.theme),
-                    strings: environment.strings,
+                    strings: strings,
                     dateTimeFormat: environment.dateTimeFormat,
                     hasValueRow: false
                 )
@@ -295,7 +297,7 @@ private final class ChatScheduleTimeSheetContentComponent: Component {
             let timeTitleSize = self.timeTitle.update(
                 transition: transition,
                 component: AnyComponent(
-                    Text(text: "Time", font: Font.regular(17.0), color: environment.theme.actionSheet.primaryTextColor)
+                    Text(text: strings.ScheduleMessage_Time, font: Font.regular(17.0), color: environment.theme.actionSheet.primaryTextColor)
                 ),
                 environment: {},
                 containerSize: availableSize
@@ -364,7 +366,7 @@ private final class ChatScheduleTimeSheetContentComponent: Component {
             let repeatTitleSize = self.repeatTitle.update(
                 transition: transition,
                 component: AnyComponent(
-                    Text(text: "Repeat", font: Font.regular(17.0), color: environment.theme.actionSheet.primaryTextColor)
+                    Text(text: strings.ScheduleMessage_Repeat, font: Font.regular(17.0), color: environment.theme.actionSheet.primaryTextColor)
                 ),
                 environment: {},
                 containerSize: availableSize
@@ -380,29 +382,25 @@ private final class ChatScheduleTimeSheetContentComponent: Component {
             let repeatString: String
             if let repeatPeriod = self.repeatPeriod {
                 switch repeatPeriod {
-                case 60:
-                    repeatString = "Every Minute"
-                case 300:
-                    repeatString = "Every 5 Minutes"
                 case 86400:
-                    repeatString = "Daily"
+                    repeatString = strings.ScheduleMessage_RepeatPeriod_Daily
                 case 7 * 86400:
-                    repeatString = "Weekly"
+                    repeatString = strings.ScheduleMessage_RepeatPeriod_Weekly
                 case 14 * 86400:
-                    repeatString = "Biweekly"
+                    repeatString = strings.ScheduleMessage_RepeatPeriod_Biweekly
                 case 30 * 86400:
-                    repeatString = "Monthly"
+                    repeatString = strings.ScheduleMessage_RepeatPeriod_Monthly
                 case 91 * 86400:
-                    repeatString = "Every 3 Months"
+                    repeatString = strings.ScheduleMessage_RepeatPeriod_3Months
                 case 182 * 86400:
-                    repeatString = "Every 6 Months"
+                    repeatString = strings.ScheduleMessage_RepeatPeriod_6Months
                 case 365 * 86400:
-                    repeatString = "Yearly"
+                    repeatString = strings.ScheduleMessage_RepeatPeriod_Yearly
                 default:
-                    repeatString = "\(repeatPeriod)"
+                    repeatString = "\(repeatPeriod)s"
                 }
             } else {
-                repeatString = "Never"
+                repeatString = strings.ScheduleMessage_RepeatPeriod_Never
             }
             
             let repeatValueSize = self.repeatValue.update(
@@ -448,19 +446,19 @@ private final class ChatScheduleTimeSheetContentComponent: Component {
             switch component.mode {
             case .scheduledMessages:
                 if calendar.isDateInToday(date) {
-                    buttonTitle = environment.strings.Conversation_ScheduleMessage_SendToday(time).string
+                    buttonTitle = strings.Conversation_ScheduleMessage_SendToday(time).string
                 } else if calendar.isDateInTomorrow(date) {
-                    buttonTitle = environment.strings.Conversation_ScheduleMessage_SendTomorrow(time).string
+                    buttonTitle = strings.Conversation_ScheduleMessage_SendTomorrow(time).string
                 } else {
-                    buttonTitle = environment.strings.Conversation_ScheduleMessage_SendOn(self.dateFormatter.string(from: date), time).string
+                    buttonTitle = strings.Conversation_ScheduleMessage_SendOn(self.dateFormatter.string(from: date), time).string
                 }
             case .reminders:
                 if calendar.isDateInToday(date) {
-                    buttonTitle = environment.strings.Conversation_SetReminder_RemindToday(time).string
+                    buttonTitle = strings.Conversation_SetReminder_RemindToday(time).string
                 } else if calendar.isDateInTomorrow(date) {
-                    buttonTitle = environment.strings.Conversation_SetReminder_RemindTomorrow(time).string
+                    buttonTitle = strings.Conversation_SetReminder_RemindTomorrow(time).string
                 } else {
-                    buttonTitle = environment.strings.Conversation_SetReminder_RemindOn(self.dateFormatter.string(from: date), time).string
+                    buttonTitle = strings.Conversation_SetReminder_RemindOn(self.dateFormatter.string(from: date), time).string
                 }
             }
                 
@@ -517,7 +515,7 @@ private final class ChatScheduleTimeSheetContentComponent: Component {
                             pressedColor: environment.theme.list.itemCheckColors.fillColor.withMultipliedAlpha(0.8),
                         ),
                         content: AnyComponentWithIdentity(id: AnyHashable(0 as Int), component: AnyComponent(
-                            Text(text: environment.strings.Conversation_ScheduleMessage_SendWhenOnline, font: Font.semibold(17.0), color: environment.theme.list.itemCheckColors.fillColor)
+                            Text(text: strings.Conversation_ScheduleMessage_SendWhenOnline, font: Font.semibold(17.0), color: environment.theme.list.itemCheckColors.fillColor)
                         )),
                         isEnabled: true,
                         displaysProgress: false,
@@ -608,6 +606,7 @@ private final class ChatScheduleTimeSheetContentComponent: Component {
                             sourceFrame: repeatValueFrame,
                             component: AnyComponent(RepeatMenuComponent(
                                 theme: environment.theme,
+                                strings: strings,
                                 value: self.repeatPeriod,
                                 valueUpdated: { [weak self] value in
                                     guard let self, let component = self.component, let environment = self.environment else {
@@ -620,9 +619,9 @@ private final class ChatScheduleTimeSheetContentComponent: Component {
                                         let toastController = UndoOverlayController(
                                             presentationData: component.context.sharedContext.currentPresentationData.with { $0 },
                                             content: .premiumPaywall(
-                                                title: "Premium Required",
-                                                text: "Subscribe to **Telegram Premium** to schedule repeating messages.",
-                                                customUndoText: "Add",
+                                                title: strings.ScheduleMessage_PremiumRequired_Title,
+                                                text: strings.ScheduleMessage_PremiumRequired_Text,
+                                                customUndoText: strings.ScheduleMessage_PremiumRequired_Add,
                                                 timeout: nil,
                                                 linkAction: nil
                                             ),
@@ -1169,21 +1168,27 @@ private final class MenuComponent: Component {
 
 private final class RepeatMenuComponent: Component {
     let theme: PresentationTheme
+    let strings: PresentationStrings
     let value: Int32?
     let valueUpdated: (Int32?) -> Void
     
     init(
         theme: PresentationTheme,
+        strings: PresentationStrings,
         value: Int32?,
         valueUpdated: @escaping (Int32?) -> Void
     ) {
         self.theme = theme
+        self.strings = strings
         self.value = value
         self.valueUpdated = valueUpdated
     }
 
     public static func ==(lhs: RepeatMenuComponent, rhs: RepeatMenuComponent) -> Bool {
         if lhs.theme !== rhs.theme {
+            return false
+        }
+        if lhs.strings !== rhs.strings {
             return false
         }
         if lhs.value != rhs.value {
@@ -1240,7 +1245,7 @@ private final class RepeatMenuComponent: Component {
                 component: AnyComponent(
                     PlainButtonComponent(
                         content: AnyComponent(
-                            Text(text: "Never", font: Font.regular(17.0), color: textColor)
+                            Text(text: component.strings.ScheduleMessage_RepeatPeriod_Never, font: Font.regular(17.0), color: textColor)
                         ),
                         action: { [weak self] in
                             guard let self else {
@@ -1278,26 +1283,22 @@ private final class RepeatMenuComponent: Component {
                 
                 let repeatString: String
                 switch value {
-                case 60:
-                    repeatString = "Every Minute"
-                case 300:
-                    repeatString = "Every 5 Minutes"
                 case 86400:
-                    repeatString = "Daily"
+                    repeatString = component.strings.ScheduleMessage_RepeatPeriod_Daily
                 case 7 * 86400:
-                    repeatString = "Weekly"
+                    repeatString = component.strings.ScheduleMessage_RepeatPeriod_Weekly
                 case 14 * 86400:
-                    repeatString = "Biweekly"
+                    repeatString = component.strings.ScheduleMessage_RepeatPeriod_Biweekly
                 case 30 * 86400:
-                    repeatString = "Monthly"
+                    repeatString = component.strings.ScheduleMessage_RepeatPeriod_Monthly
                 case 91 * 86400:
-                    repeatString = "Every 3 Months"
+                    repeatString = component.strings.ScheduleMessage_RepeatPeriod_3Months
                 case 182 * 86400:
-                    repeatString = "Every 6 Months"
+                    repeatString = component.strings.ScheduleMessage_RepeatPeriod_6Months
                 case 365 * 86400:
-                    repeatString = "Yearly"
+                    repeatString = component.strings.ScheduleMessage_RepeatPeriod_Yearly
                 default:
-                    repeatString = "\(value)"
+                    repeatString = "\(value)s"
                 }
                 
                 let itemSize = itemView.update(
