@@ -529,6 +529,42 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         }
     }
     
+    public func updateInputTextState(_ state: ChatTextInputState) {
+        if self.ignoreInputStateUpdates {
+            return
+        }
+        if state.inputText.length != 0 && self.textInputNode == nil {
+            self.loadTextInputNode()
+        }
+        
+        if let textInputNode = self.textInputNode, let _ = self.presentationInterfaceState, let context = self.context {
+            self.updatingInputState = true
+            
+            var textColor: UIColor = .black
+            var accentTextColor: UIColor = .blue
+            var baseFontSize: CGFloat = 17.0
+            if let presentationInterfaceState = self.presentationInterfaceState {
+                textColor = presentationInterfaceState.theme.chat.inputPanel.inputTextColor
+                accentTextColor = presentationInterfaceState.theme.chat.inputPanel.panelControlAccentColor
+                baseFontSize = max(minInputFontSize, presentationInterfaceState.fontSize.baseDisplaySize)
+            }
+            textInputNode.attributedText = textAttributedStringForStateText(context: context, stateText: state.inputText, fontSize: baseFontSize, textColor: textColor, accentTextColor: accentTextColor, writingDirection: nil, spoilersRevealed: self.spoilersRevealed, availableEmojis: (self.context?.animatedEmojiStickersValue.keys).flatMap(Set.init) ?? Set(), emojiViewProvider: self.emojiViewProvider, makeCollapsedQuoteAttachment: { text, attributes in
+                return ChatInputTextCollapsedQuoteAttachmentImpl(text: text, attributes: attributes)
+            })
+            textInputNode.selectedRange = NSMakeRange(state.selectionRange.lowerBound, state.selectionRange.count)
+            
+            if let presentationInterfaceState = self.presentationInterfaceState {
+                refreshChatTextInputAttributes(context: context, textView: textInputNode.textView, theme: presentationInterfaceState.theme, baseFontSize: baseFontSize, spoilersRevealed: self.spoilersRevealed, availableEmojis: (self.context?.animatedEmojiStickersValue.keys).flatMap(Set.init) ?? Set(), emojiViewProvider: self.emojiViewProvider, makeCollapsedQuoteAttachment: { text, attributes in
+                    return ChatInputTextCollapsedQuoteAttachmentImpl(text: text, attributes: attributes)
+                })
+            }
+            
+            self.updatingInputState = false
+            self.updateTextNodeText(animated: false)
+            self.updateSpoiler()
+        }
+    }
+    
     public func updateKeepSendButtonEnabled(keepSendButtonEnabled: Bool, extendedSearchLayout: Bool, animated: Bool) {
         if keepSendButtonEnabled != self.keepSendButtonEnabled || extendedSearchLayout != self.extendedSearchLayout {
             self.keepSendButtonEnabled = keepSendButtonEnabled
@@ -902,7 +938,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         
         self.glassBackgroundContainer.contentView.addSubview(self.menuButton.view)
         self.glassBackgroundContainer.contentView.addSubview(self.attachmentButtonBackground)
-        self.glassBackgroundContainer.contentView.addSubview(self.secondaryLeftButtonBackground)
+        //self.glassBackgroundContainer.contentView.addSubview(self.secondaryLeftButtonBackground)
         self.glassBackgroundContainer.contentView.addSubview(self.attachmentButtonDisabledNode.view)
         
         self.glassBackgroundContainer.contentView.addSubview(self.startButton.view)

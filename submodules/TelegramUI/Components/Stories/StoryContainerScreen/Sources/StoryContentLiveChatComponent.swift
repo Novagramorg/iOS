@@ -390,12 +390,18 @@ final class StoryContentLiveChatComponent: Component {
             }
         }
         
-        @discardableResult private func scrollToMessage(id: GroupCallMessagesContext.Message.Id) -> Bool {
+        @discardableResult private func scrollToMessage(id: GroupCallMessagesContext.Message.Id, highlight: Bool) -> Bool {
             guard let messagesState = self.messagesState, let message = messagesState.messages.first(where: { $0.id == id }) else {
                 return false
             }
             self.listState.resetScrolling(id: AnyHashable(message.stableId))
             self.state?.updated(transition: .spring(duration: 0.4), isLocal: true)
+            
+            if highlight {
+                if let listView = self.list.view as? AsyncListComponent.View, let itemView = listView.visibleItemView(id: AnyHashable(message.stableId)) as? StoryLiveChatMessageComponent.View {
+                    itemView.flashHighlight()
+                }
+            }
             
             return true
         }
@@ -677,7 +683,7 @@ final class StoryContentLiveChatComponent: Component {
                             return
                         }
                         self.isChatExpanded = true
-                        if !self.scrollToMessage(id: message.id) {
+                        if !self.scrollToMessage(id: message.id, highlight: true) {
                             if !self.isUpdating {
                                 self.state?.updated(transition: .spring(duration: 0.4))
                             }

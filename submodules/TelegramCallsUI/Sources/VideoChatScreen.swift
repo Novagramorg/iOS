@@ -163,7 +163,7 @@ extension VideoChatCall {
     func setMessagesEnabled(isEnabled: Bool) {
         switch self {
         case let .group(group):
-            group.updateMessagesEnabled(isEnabled: isEnabled)
+            group.updateMessagesEnabled(isEnabled: isEnabled, sendPaidMessageStars: nil)
         case .conferenceSource:
             break
         }

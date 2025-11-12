@@ -1156,11 +1156,6 @@ public final class AvatarNode: ASDisplayNode {
     
     public let contentNode: ContentNode
     private var storyIndicator: ComponentView<Empty>?
-    private var contentMaskView: UIView?
-    private var storyIndicatorMaskView: UIView?
-    private var liveBadgeMaskView: UIImageView?
-    private var liveBadgeStoryIndicatorMaskView: UIImageView?
-    private var liveBadgeView: UIImageView?
     public private(set) var storyPresentationParams: StoryPresentationParams?
     
     private var loadingStatuses = Bag<Disposable>()
@@ -1188,7 +1183,6 @@ public final class AvatarNode: ASDisplayNode {
     }
     
     public private(set) var storyStats: StoryStats?
-    public var displayLiveBadge: Bool = false
     
     public var font: UIFont {
         get {
@@ -1502,124 +1496,6 @@ public final class AvatarNode: ASDisplayNode {
                         storyIndicatorView?.removeFromSuperview()
                     })
                 }
-            }
-        }
-        
-        if self.displayLiveBadge, let storyStats = self.storyStats, storyStats.hasLiveItems {
-            let contentMaskView: UIView
-            let storyIndicatorMaskView: UIView
-            let liveBadgeMaskView: UIImageView
-            let liveBadgeStoryIndicatorMaskView: UIImageView
-            let liveBadgeView: UIImageView
-            
-            var liveBadgeTransition = transition
-            
-            if let current = self.contentMaskView {
-                contentMaskView = current
-            } else {
-                liveBadgeTransition = liveBadgeTransition.withAnimation(.none)
-                contentMaskView = UIView()
-                contentMaskView.backgroundColor = .white
-                if let filter = CALayer.luminanceToAlpha() {
-                    contentMaskView.layer.filters = [filter]
-                }
-                self.contentMaskView = contentMaskView
-                self.contentNode.view.mask = contentMaskView
-            }
-            
-            if let current = self.storyIndicatorMaskView {
-                storyIndicatorMaskView = current
-            } else {
-                storyIndicatorMaskView = UIView()
-                storyIndicatorMaskView.backgroundColor = .white
-                if let filter = CALayer.luminanceToAlpha() {
-                    storyIndicatorMaskView.layer.filters = [filter]
-                }
-                self.storyIndicatorMaskView = storyIndicatorMaskView
-                self.storyIndicator?.view?.mask = storyIndicatorMaskView
-            }
-            
-            if let current = self.liveBadgeView {
-                liveBadgeView = current
-            } else {
-                liveBadgeView = UIImageView()
-                
-                //TODO:localize
-                let liveString = NSAttributedString(string: "LIVE", font: Font.semibold(10.0), textColor: .white)
-                let liveStringBounds = liveString.boundingRect(with: CGSize(width: 100.0, height: 100.0), options: .usesLineFragmentOrigin, context: nil)
-                let liveBadgeSize = CGSize(width: ceil(liveStringBounds.width) + 4.0 * 2.0, height: ceil(liveStringBounds.height) + 2.0 * 2.0)
-                liveBadgeView.image = generateImage(liveBadgeSize, rotatedContext: { size, context in
-                    UIGraphicsPushContext(context)
-                    defer {
-                        UIGraphicsPopContext()
-                    }
-                    
-                    context.clear(CGRect(origin: CGPoint(), size: size))
-                    context.setFillColor(UIColor(rgb: 0xFF2D55).cgColor)
-                    context.addPath(UIBezierPath(roundedRect: CGRect(origin: CGPoint(), size: size), cornerRadius: size.height * 0.5).cgPath)
-                    context.fillPath()
-                    
-                    liveString.draw(at: CGPoint(x: floorToScreenPixels((size.width - liveStringBounds.width) * 0.5), y: floorToScreenPixels((size.height - liveStringBounds.height) * 0.5)))
-                })
-                
-                self.view.addSubview(liveBadgeView)
-                self.liveBadgeView = liveBadgeView
-            }
-            
-            if let current = self.liveBadgeMaskView {
-                liveBadgeMaskView = current
-            } else {
-                liveBadgeMaskView = UIImageView()
-                self.liveBadgeMaskView = liveBadgeMaskView
-                contentMaskView.addSubview(liveBadgeMaskView)
-                
-                if let image = liveBadgeView.image {
-                    liveBadgeMaskView.image = generateStretchableFilledCircleImage(diameter: image.size.height + 2.0 * 2.0, color: .black)
-                }
-            }
-            
-            if let current = self.liveBadgeStoryIndicatorMaskView {
-                liveBadgeStoryIndicatorMaskView = current
-            } else {
-                liveBadgeStoryIndicatorMaskView = UIImageView()
-                self.liveBadgeStoryIndicatorMaskView = liveBadgeStoryIndicatorMaskView
-                storyIndicatorMaskView.addSubview(liveBadgeStoryIndicatorMaskView)
-                
-                if let image = liveBadgeView.image {
-                    liveBadgeStoryIndicatorMaskView.image = generateStretchableFilledCircleImage(diameter: image.size.height + 2.0 * 2.0, color: .black)
-                }
-            }
-            
-            liveBadgeTransition.setFrame(view: contentMaskView, frame: CGRect(origin: CGPoint(), size: size))
-            liveBadgeTransition.setFrame(view: storyIndicatorMaskView, frame: CGRect(origin: CGPoint(), size: size).insetBy(dx: -6.0, dy: -6.0))
-            if let image = liveBadgeView.image {
-                let badgeFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((size.width - image.size.width) * 0.5), y: size.height + 5.0 - image.size.height), size: image.size)
-                liveBadgeTransition.setFrame(view: liveBadgeView, frame: badgeFrame)
-                liveBadgeTransition.setFrame(view: liveBadgeMaskView, frame: self.contentNode.view.convert(badgeFrame.insetBy(dx: -2.0, dy: -2.0), from: self.view))
-                liveBadgeTransition.setFrame(view: liveBadgeStoryIndicatorMaskView, frame: badgeFrame.insetBy(dx: -2.0, dy: -2.0).offsetBy(dx: 1.0, dy: 0.0))
-            }
-        } else {
-            if let contentMaskView = self.contentMaskView {
-                self.contentMaskView = nil
-                contentMaskView.removeFromSuperview()
-                self.contentNode.view.mask = nil
-            }
-            if let storyIndicatorMaskView = self.storyIndicatorMaskView {
-                self.storyIndicatorMaskView = nil
-                storyIndicatorMaskView.removeFromSuperview()
-                self.storyIndicator?.view?.mask = nil
-            }
-            if let liveBadgeMaskView = self.liveBadgeMaskView {
-                self.liveBadgeMaskView = nil
-                liveBadgeMaskView.removeFromSuperview()
-            }
-            if let liveBadgeStoryIndicatorMaskView = self.liveBadgeStoryIndicatorMaskView {
-                self.liveBadgeStoryIndicatorMaskView = nil
-                liveBadgeStoryIndicatorMaskView.removeFromSuperview()
-            }
-            if let liveBadgeView = self.liveBadgeView {
-                self.liveBadgeView = nil
-                liveBadgeView.removeFromSuperview()
             }
         }
     }

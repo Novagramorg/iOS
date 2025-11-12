@@ -19,7 +19,7 @@ public final class ChatFloatingTopicsPanel: Component {
     public let topicId: Int64?
     public let controller: () -> ViewController?
     public let togglePanel: () -> Void
-    public let updateTopicId: (Int64?, Bool) -> Void
+    public let updateTopicId: (Int64?, ChatControllerAnimateInnerChatSwitchDirection) -> Void
     public let openDeletePeer: (Int64) -> Void
     
     public init(
@@ -32,7 +32,7 @@ public final class ChatFloatingTopicsPanel: Component {
         topicId: Int64?,
         controller: @escaping () -> ViewController?,
         togglePanel: @escaping () -> Void,
-        updateTopicId: @escaping (Int64?, Bool) -> Void,
+        updateTopicId: @escaping (Int64?, ChatControllerAnimateInnerChatSwitchDirection) -> Void,
         openDeletePeer: @escaping (Int64) -> Void
     ) {
         self.context = context
@@ -80,6 +80,8 @@ public final class ChatFloatingTopicsPanel: Component {
         private var sidePanel: ComponentView<ChatSidePanelEnvironment>?
         private var topPanel: ComponentView<ChatSidePanelEnvironment>?
         
+        private var component: ChatFloatingTopicsPanel?
+        
         override public init(frame: CGRect) {
             self.containerView = GlassBackgroundContainerView()
             
@@ -103,6 +105,8 @@ public final class ChatFloatingTopicsPanel: Component {
         }
         
         func update(component: ChatFloatingTopicsPanel, availableSize: CGSize, state: EmptyComponentState, environment: Environment<ChatSidePanelEnvironment>, transition: ComponentTransition) -> CGSize {
+            self.component = component
+            
             let environment = environment[ChatSidePanelEnvironment.self].value
             
             var currentPanelBackgroundFrame: CGRect?
@@ -129,7 +133,12 @@ public final class ChatFloatingTopicsPanel: Component {
                         topicId: component.topicId,
                         controller: component.controller,
                         togglePanel: component.togglePanel,
-                        updateTopicId: component.updateTopicId,
+                        updateTopicId: { [weak self] threadId, direction in
+                            guard let self, let component = self.component else {
+                                return
+                            }
+                            component.updateTopicId(threadId, direction ? .down : .up)
+                        },
                         openDeletePeer: component.openDeletePeer
                     )),
                     environment: {
@@ -187,7 +196,12 @@ public final class ChatFloatingTopicsPanel: Component {
                         topicId: component.topicId,
                         controller: component.controller,
                         togglePanel: component.togglePanel,
-                        updateTopicId: component.updateTopicId,
+                        updateTopicId: { [weak self] threadId, direction in
+                            guard let self, let component = self.component else {
+                                return
+                            }
+                            component.updateTopicId(threadId, direction ? .right : .left)
+                        },
                         openDeletePeer: component.openDeletePeer
                     )),
                     environment: {

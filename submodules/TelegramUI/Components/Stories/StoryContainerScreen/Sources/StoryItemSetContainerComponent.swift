@@ -951,6 +951,9 @@ public final class StoryItemSetContainerComponent: Component {
                     view.deactivateInput()
                     if self.sendMessageContext.inputMediaNode != nil {
                         self.state?.updated(transition: .spring(duration: 0.4).withUserData(TextFieldComponent.AnimationHint(view: nil, kind: .textFocusChanged(isFocused: false))))
+                        DispatchQueue.main.async { [weak self] in
+                            self?.state?.updated(transition: .spring(duration: 0.4).withUserData(TextFieldComponent.AnimationHint(view: nil, kind: .textFocusChanged(isFocused: false))))
+                        }
                     }
                 } else {
                     self.state?.updated(transition: .spring(duration: 0.4).withUserData(TextFieldComponent.AnimationHint(view: nil, kind: .textFocusChanged(isFocused: false))))
@@ -1423,7 +1426,10 @@ public final class StoryItemSetContainerComponent: Component {
             if self.verticalPanState != nil {
                 return .pause
             }
-            if self.inputPanelExternalState.isEditing || component.isProgressPaused || self.sendMessageContext.actionSheet != nil || self.sendMessageContext.isViewingAttachedStickers || self.contextController != nil || self.sendMessageContext.audioRecorderValue != nil || self.sendMessageContext.videoRecorderValue != nil || self.viewListDisplayState != .hidden {
+            if self.contextController != nil {
+                return .blurred
+            }
+            if self.inputPanelExternalState.isEditing || component.isProgressPaused || self.sendMessageContext.actionSheet != nil || self.sendMessageContext.isViewingAttachedStickers || self.sendMessageContext.audioRecorderValue != nil || self.sendMessageContext.videoRecorderValue != nil || self.viewListDisplayState != .hidden {
                 return .pause
             }
             if let reactionContextNode = self.reactionContextNode, reactionContextNode.isReactionSearchActive {
@@ -4249,20 +4255,10 @@ public final class StoryItemSetContainerComponent: Component {
             var currentLeftInfoItem: InfoItem?
             if focusedItem != nil {
                 let leftInfoComponent = AnyComponent(StoryAvatarInfoComponent(context: component.context, peer: component.slice.effectivePeer, isLiveStream: isLiveStream))
-                if let leftInfoItem = self.leftInfoItem, leftInfoItem.component == leftInfoComponent {
+                if let leftInfoItem = self.leftInfoItem {
                     currentLeftInfoItem = leftInfoItem
                 } else {
                     currentLeftInfoItem = InfoItem(component: leftInfoComponent)
-                }
-            }
-            
-            if let leftInfoItem = self.leftInfoItem, currentLeftInfoItem?.component != leftInfoItem.component {
-                self.leftInfoItem = nil
-                if let view = leftInfoItem.view.view {
-                    view.layer.animateScale(from: 1.0, to: 0.5, duration: 0.3, timingFunction: kCAMediaTimingFunctionSpring, removeOnCompletion: false)
-                    view.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2, removeOnCompletion: false, completion: { [weak view] _ in
-                        view?.removeFromSuperview()
-                    })
                 }
             }
             
@@ -4295,7 +4291,7 @@ public final class StoryItemSetContainerComponent: Component {
                     isLiveStream: isLiveStream,
                     customSubtitle: customSubtitle
                 ))
-                if let centerInfoItem = self.centerInfoItem, centerInfoItem.component == centerInfoComponent {
+                if let centerInfoItem = self.centerInfoItem {
                     currentCenterInfoItem = centerInfoItem
                 } else {
                     currentCenterInfoItem = InfoItem(component: centerInfoComponent)
@@ -6512,7 +6508,19 @@ public final class StoryItemSetContainerComponent: Component {
                     self.openItemPrivacySettings()
                 })))
                 
-                if !isLiveStream {
+                if isLiveStream {
+                    //TODO:localize
+                    items.append(.action(ContextMenuActionItem(text: "Minimize", icon: { theme in
+                        return generateTintedImage(image: UIImage(bundleImageName: "Call/pip"), color: theme.contextMenu.primaryColor)
+                    }, action: { [weak self] _, a in
+                        a(.default)
+                        
+                        guard let self else {
+                            return
+                        }
+                        self.beginPictureInPicture()
+                    })))
+                } else {
                     items.append(.action(ContextMenuActionItem(text: component.strings.Story_Context_Edit, icon: { theme in
                         return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Edit"), color: theme.contextMenu.primaryColor)
                     }, action: { [weak self] _, a in
@@ -6584,7 +6592,7 @@ public final class StoryItemSetContainerComponent: Component {
                         self.requestSave()
                     })))
                     
-                    if case let .user(accountUser) = component.slice.effectivePeer {
+                    if case let .user(accountUser) = component.slice.effectivePeer, !isLiveStream {
                         items.append(.action(ContextMenuActionItem(text: component.strings.Story_ContextStealthMode, icon: { theme in
                             return generateTintedImage(image: UIImage(bundleImageName: accountUser.isPremium ? "Chat/Context Menu/Eye" : "Chat/Context Menu/EyeLocked"), color: theme.contextMenu.primaryColor)
                         }, action: { [weak self] _, a in
@@ -6644,6 +6652,19 @@ public final class StoryItemSetContainerComponent: Component {
                 }
                 
                 if case .liveStream = component.slice.item.storyItem.media {
+                    //TODO:localize
+                    items.append(.action(ContextMenuActionItem(text: "Live Settings", icon: { theme in
+                        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Settings"), color: theme.contextMenu.primaryColor)
+                    }, action: { [weak self] _, a in
+                        a(.default)
+                        
+                        guard let self else {
+                            return
+                        }
+                        
+                        self.sendMessageContext.displayLiveStreamSettings(view: self)
+                    })))
+                    
                     items.append(.action(ContextMenuActionItem(text: presentationData.strings.Common_Delete, textColor: .destructive, icon: { theme in
                         return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Delete"), color: theme.contextMenu.destructiveColor)
                     }, action: { [weak self] _, a in
@@ -6821,7 +6842,19 @@ public final class StoryItemSetContainerComponent: Component {
                     })))
                 }
                 
-                if !isLiveStream {
+                if isLiveStream {
+                    //TODO:localize
+                    items.append(.action(ContextMenuActionItem(text: "Minimize", icon: { theme in
+                        return generateTintedImage(image: UIImage(bundleImageName: "Call/pip"), color: theme.contextMenu.primaryColor)
+                    }, action: { [weak self] _, a in
+                        a(.default)
+                        
+                        guard let self else {
+                            return
+                        }
+                        self.beginPictureInPicture()
+                    })))
+                } else {
                     let saveText: String = component.strings.Story_Context_SaveToGallery
                     items.append(.action(ContextMenuActionItem(text: saveText, icon: { theme in
                         return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Save"), color: theme.contextMenu.primaryColor)
@@ -6920,6 +6953,21 @@ public final class StoryItemSetContainerComponent: Component {
                     self.updateIsProgressPaused()
                     component.controller()?.present(tooltipScreen, in: .current)
                 })))
+                
+                if channel.hasPermission(.postStories) {
+                    //TODO:localize
+                    items.append(.action(ContextMenuActionItem(text: "Live Settings", icon: { theme in
+                        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Settings"), color: theme.contextMenu.primaryColor)
+                    }, action: { [weak self] _, a in
+                        a(.default)
+                        
+                        guard let self else {
+                            return
+                        }
+                        
+                        self.sendMessageContext.displayLiveStreamSettings(view: self)
+                    })))
+                }
                 
                 if (component.slice.item.storyItem.isMy && channel.hasPermission(.postStories)) || channel.hasPermission(.deleteStories) {
                     items.append(.action(ContextMenuActionItem(text: component.strings.Story_ContextDeleteStory, textColor: .destructive, icon: { theme in
@@ -7022,6 +7070,11 @@ public final class StoryItemSetContainerComponent: Component {
                 
                 guard case let .user(accountUser) = accountPeer else {
                     return
+                }
+                
+                var isLiveStream = false
+                if case .liveStream = component.slice.item.storyItem.media {
+                    isLiveStream = true
                 }
                 
                 self.dismissAllTooltips()
@@ -7274,7 +7327,19 @@ public final class StoryItemSetContainerComponent: Component {
                         })))
                     }
                     
-                    if !component.slice.item.storyItem.isForwardingDisabled {
+                    if isLiveStream {
+                        //TODO:localize
+                        items.append(.action(ContextMenuActionItem(text: "Minimize", icon: { theme in
+                            return generateTintedImage(image: UIImage(bundleImageName: "Call/pip"), color: theme.contextMenu.primaryColor)
+                        }, action: { [weak self] _, a in
+                            a(.default)
+                            
+                            guard let self else {
+                                return
+                            }
+                            self.beginPictureInPicture()
+                        })))
+                    } else if !component.slice.item.storyItem.isForwardingDisabled {
                         let saveText: String = component.strings.Story_Context_SaveToGallery
                         items.append(.action(ContextMenuActionItem(text: saveText, icon: { theme in
                             return generateTintedImage(image: UIImage(bundleImageName: accountUser.isPremium ? "Chat/Context Menu/Download" : "Chat/Context Menu/DownloadLocked"), color: theme.contextMenu.primaryColor)
@@ -7293,7 +7358,7 @@ public final class StoryItemSetContainerComponent: Component {
                         })))
                     }
                     
-                    if case .user = component.slice.effectivePeer {
+                    if case .user = component.slice.effectivePeer, !isLiveStream {
                         items.append(.action(ContextMenuActionItem(text: component.strings.Story_ContextStealthMode, icon: { theme in
                             return generateTintedImage(image: UIImage(bundleImageName: accountUser.isPremium ? "Chat/Context Menu/Eye" : "Chat/Context Menu/EyeLocked"), color: theme.contextMenu.primaryColor)
                         }, action: { [weak self] _, a in
@@ -7396,6 +7461,33 @@ public final class StoryItemSetContainerComponent: Component {
                 self.contextController = contextController
                 self.updateIsProgressPaused()
                 controller.present(contextController, in: .window(.root))
+            })
+        }
+        
+        private func beginPictureInPicture() {
+            guard let component = self.component, let visibleItem = self.visibleItems[component.slice.item.id] else {
+                return
+            }
+            guard let itemView = visibleItem.view.view as? StoryItemContentComponent.View else {
+                return
+            }
+            itemView.beginPictureInPicture(dismissController: { [weak self] in
+                guard let self, let component = self.component, let controller = component.controller() as? StoryContainerScreen, let navigationController = controller.navigationController as? NavigationController else {
+                    return ({ completion in
+                        completion()
+                    }, {})
+                }
+                
+                controller.dismissForPictureInPicture()
+                
+                return ({ [weak navigationController] completion in
+                    guard let navigationController else {
+                        completion()
+                        return
+                    }
+                    controller.restoreForPictureInPicture(navigationController: navigationController, completion: completion)
+                }, {
+                })
             })
         }
         

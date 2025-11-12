@@ -1074,7 +1074,7 @@ public final class MessageInputPanelComponent: Component {
                         strings: component.strings,
                         chatPeerId: component.chatLocation?.peerId ?? component.context.account.peerId,
                         inlineActions: inlineActions,
-                        leftAction: ChatTextInputPanelComponent.LeftAction(kind: .toggleExpanded(isVisible: component.liveChatState?.isEnabled == true, isExpanded: component.liveChatState?.isExpanded ?? true && component.liveChatState?.isEmpty == false, hasUnseen: component.liveChatState?.hasUnseenMessages ?? false), action: { [weak self] in
+                        leftAction: ChatTextInputPanelComponent.LeftAction(kind: .toggleExpanded(isVisible: component.liveChatState == nil || component.liveChatState?.isEnabled == true, isExpanded: component.liveChatState?.isExpanded ?? true && component.liveChatState?.isEmpty == false, hasUnseen: component.liveChatState?.hasUnseenMessages ?? false), action: { [weak self] in
                             guard let self, let component = self.component else {
                                 return
                             }
@@ -1091,8 +1091,8 @@ public final class MessageInputPanelComponent: Component {
                         rightAction: rightAction,
                         sendAsConfiguration: component.liveChatState?.isEnabled == true ? sendAsConfiguration : nil,
                         //TODO:localize
-                        placeholder: component.liveChatState?.isEnabled == true ? placeholder : "Comments are disabled",
-                        isEnabled: component.liveChatState?.isEnabled == true,
+                        placeholder: (component.liveChatState == nil || component.liveChatState?.isEnabled == true) ? placeholder : "Comments are disabled",
+                        isEnabled: (component.liveChatState == nil || component.liveChatState?.isEnabled == true),
                         paidMessagePrice: component.sendPaidMessageStars,
                         sendColor: component.sendPaidMessageStars.flatMap { value in
                             let params = LiveChatMessageParams(appConfig: component.context.currentAppConfiguration.with({ $0 }))
