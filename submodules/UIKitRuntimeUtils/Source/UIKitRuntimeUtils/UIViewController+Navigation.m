@@ -260,7 +260,7 @@ static void registerEffectViewOverrides(void) {
             registerEffectViewOverrides();
         }
         
-        #if DEBUG
+        /*#if DEBUG
         Class cls = NSClassFromString(@"WKBrowsingContextController");
         SEL sel = NSSelectorFromString(@"registerSchemeForCustomProtocol:");
         if ([cls respondsToSelector:sel]) {
@@ -270,7 +270,7 @@ static void registerEffectViewOverrides(void) {
             [cls performSelector:sel withObject:@"https"];
 #pragma clang diagnostic pop
         }
-        #endif
+        #endif*/
     });
 }
 

@@ -36,6 +36,7 @@ import ReactionSelectionNode
 import EntityKeyboard
 import GlassBackgroundComponent
 import PremiumUI
+import VideoChatMicButtonComponent
 
 extension VideoChatCall {
     var myAudioLevelAndSpeaking: Signal<(Float, Bool), NoError> {
