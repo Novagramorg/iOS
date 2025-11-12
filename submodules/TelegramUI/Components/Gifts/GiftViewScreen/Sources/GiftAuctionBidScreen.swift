@@ -29,6 +29,7 @@ import BotPaymentsUI
 import UndoUI
 import GiftItemComponent
 import LottieComponent
+import EdgeEffect
 
 private final class BadgeComponent: Component {
     let theme: PresentationTheme
@@ -1039,6 +1040,9 @@ private final class GiftAuctionBidScreenComponent: Component {
         private let scrollContentView: UIView
         private let hierarchyTrackingNode: HierarchyTrackingNode
         
+        private let topEdgeEffectView: EdgeEffectView
+        private let bottomEdgeEffectView: EdgeEffectView
+        
         private var balanceOverlay = ComponentView<Empty>()
         
         private let backgroundHandleView: UIImageView
@@ -1114,6 +1118,13 @@ private final class GiftAuctionBidScreenComponent: Component {
             self.scrollContentView = UIView()
             
             self.hierarchyTrackingNode = HierarchyTrackingNode()
+            
+            self.topEdgeEffectView = EdgeEffectView()
+            self.topEdgeEffectView.clipsToBounds = true
+            self.topEdgeEffectView.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
+            self.topEdgeEffectView.layer.cornerRadius = 40.0
+            
+            self.bottomEdgeEffectView = EdgeEffectView()
             
             super.init(frame: frame)
             
@@ -2518,9 +2529,24 @@ private final class GiftAuctionBidScreenComponent: Component {
                 containerSize: CGSize(width: availableSize.width - buttonInsets.left - buttonInsets.right, height: 54.0)
             )
             
-           
+            let edgeEffectHeight: CGFloat = 80.0
+            let edgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: availableSize.width, height: edgeEffectHeight))
+            transition.setFrame(view: self.topEdgeEffectView, frame: edgeEffectFrame)
+            self.topEdgeEffectView.update(content: environment.theme.actionSheet.opaqueItemBackgroundColor, blur: true, alpha: 1.0, rect: edgeEffectFrame, edge: .top, edgeSize: edgeEffectFrame.height, transition: transition)
+            if self.topEdgeEffectView.superview == nil {
+                self.navigationBarContainer.insertSubview(self.topEdgeEffectView, at: 0)
+            }
             
             var bottomPanelHeight = 13.0 + buttonInsets.bottom + actionButtonSize.height
+            
+            let bottomEdgeEffectHeight: CGFloat = bottomPanelHeight
+            let bottomEdgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: availableSize.height - bottomEdgeEffectHeight), size: CGSize(width: availableSize.width, height: bottomEdgeEffectHeight))
+            transition.setFrame(view: self.bottomEdgeEffectView, frame: bottomEdgeEffectFrame)
+            self.bottomEdgeEffectView.update(content: environment.theme.actionSheet.opaqueItemBackgroundColor, blur: true, alpha: 1.0, rect: bottomEdgeEffectFrame, edge: .bottom, edgeSize: bottomEdgeEffectFrame.height, transition: transition)
+            if self.bottomEdgeEffectView.superview == nil {
+                self.containerView.addSubview(self.bottomEdgeEffectView)
+            }
+            
             let actionButtonFrame = CGRect(origin: CGPoint(x: buttonInsets.left, y: availableSize.height - buttonInsets.bottom - actionButtonSize.height), size: actionButtonSize)
             bottomPanelHeight -= 1.0
             if let actionButtonView = actionButton.view {
@@ -2539,7 +2565,7 @@ private final class GiftAuctionBidScreenComponent: Component {
             
             let scrollContentHeight = max(topInset + contentHeight + containerInset, availableSize.height - containerInset)
             
-            self.scrollContentClippingView.layer.cornerRadius = 10.0
+            self.scrollContentClippingView.layer.cornerRadius = 38.0
             
             self.itemLayout = ItemLayout(containerSize: availableSize, containerInset: containerInset, containerCornerRadius: environment.deviceMetrics.screenCornerRadius, bottomInset: environment.safeInsets.bottom, topInset: topInset)
             
