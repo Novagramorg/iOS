@@ -64,7 +64,7 @@ public final class GlassBarButtonComponent: Component {
         private let containerView: UIView
         private let genericContainerView: UIView
         private let genericBackgroundView: SimpleGlassView
-        private let glassContainerView: GlassBackgroundContainerView
+        private let glassContainerView: UIView
         private var glassBackgroundView: GlassBackgroundView?
         private var componentView: ComponentView<Empty>?
         
@@ -74,7 +74,7 @@ public final class GlassBarButtonComponent: Component {
             self.containerView = UIView()
             self.genericContainerView = UIView()
             self.genericBackgroundView = SimpleGlassView()
-            self.glassContainerView = GlassBackgroundContainerView()
+            self.glassContainerView = UIView()
             
             super.init(frame: frame)
             
@@ -189,9 +189,9 @@ public final class GlassBarButtonComponent: Component {
             transition.setAlpha(view: self.genericContainerView, alpha: genericAlpha)
             transition.setFrame(view: self.genericContainerView, frame: bounds)
             
-            transition.setAlpha(view: self.glassContainerView, alpha: glassAlpha)
+            //transition.setAlpha(view: self.glassContainerView, alpha: glassAlpha)
             transition.setFrame(view: self.glassContainerView, frame: bounds)
-            self.glassContainerView.update(size: bounds.size, isDark: component.isDark, transition: transition)
+            //self.glassContainerView.update(size: bounds.size, isDark: component.isDark, transition: transition)
             
             transition.setFrame(view: self.genericBackgroundView, frame: bounds)
             
@@ -204,7 +204,7 @@ public final class GlassBarButtonComponent: Component {
                     glassBackgroundTransition = .immediate
                     glassBackgroundView = GlassBackgroundView()
                     glassBackgroundView.isUserInteractionEnabled = false
-                    self.glassContainerView.contentView.addSubview(glassBackgroundView)
+                    self.glassContainerView.addSubview(glassBackgroundView)
                     self.glassBackgroundView = glassBackgroundView
                     
                     transition.animateAlpha(view: glassBackgroundView, from: 0.0, to: 1.0)
