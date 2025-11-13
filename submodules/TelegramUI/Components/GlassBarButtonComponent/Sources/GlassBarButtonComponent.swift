@@ -65,7 +65,7 @@ public final class GlassBarButtonComponent: Component {
         private let genericContainerView: UIView
         private let genericBackgroundView: SimpleGlassView
         private let glassContainerView: GlassBackgroundContainerView
-        private let glassBackgroundView: GlassBackgroundView
+        private var glassBackgroundView: GlassBackgroundView?
         private var componentView: ComponentView<Empty>?
         
         private var component: GlassBarButtonComponent?
@@ -75,11 +75,9 @@ public final class GlassBarButtonComponent: Component {
             self.genericContainerView = UIView()
             self.genericBackgroundView = SimpleGlassView()
             self.glassContainerView = GlassBackgroundContainerView()
-            self.glassBackgroundView = GlassBackgroundView()
             
             super.init(frame: frame)
             
-            self.glassBackgroundView.isUserInteractionEnabled = false
             self.containerView.isUserInteractionEnabled = false
             
             self.addSubview(self.containerView)
@@ -87,7 +85,6 @@ public final class GlassBarButtonComponent: Component {
             self.containerView.addSubview(self.glassContainerView)
             
             self.genericContainerView.addSubview(self.genericBackgroundView)
-            self.glassContainerView.contentView.addSubview(self.glassBackgroundView)
                         
             self.addTarget(self, action: #selector(self.pressed), for: .touchUpInside)
             
@@ -184,8 +181,8 @@ public final class GlassBarButtonComponent: Component {
             
             let cornerRadius = containerSize.height * 0.5
             self.genericBackgroundView.update(size: containerSize, cornerRadius: cornerRadius, isDark: component.isDark, tintColor: .init(kind: .custom, color: component.backgroundColor), transition: transition)
-            self.glassBackgroundView.update(size: containerSize, cornerRadius: cornerRadius, isDark: component.isDark, tintColor: .init(kind: effectiveState == .tintedGlass ? .custom : .panel , color: component.backgroundColor.withMultipliedAlpha(effectiveState == .tintedGlass ? 1.0 : 0.7)), transition: transition)
             
+                        
             let bounds = CGRect(origin: .zero, size: containerSize)
             transition.setFrame(view: self.containerView, frame: bounds)
                         
@@ -197,7 +194,29 @@ public final class GlassBarButtonComponent: Component {
             self.glassContainerView.update(size: bounds.size, isDark: component.isDark, transition: transition)
             
             transition.setFrame(view: self.genericBackgroundView, frame: bounds)
-            transition.setFrame(view: self.glassBackgroundView, frame: bounds)
+            
+            if glassAlpha == 1.0 {
+                let glassBackgroundView: GlassBackgroundView
+                var glassBackgroundTransition = transition
+                if let current = self.glassBackgroundView {
+                    glassBackgroundView = current
+                } else {
+                    glassBackgroundTransition = .immediate
+                    glassBackgroundView = GlassBackgroundView()
+                    glassBackgroundView.isUserInteractionEnabled = false
+                    self.glassContainerView.contentView.addSubview(glassBackgroundView)
+                    self.glassBackgroundView = glassBackgroundView
+                    
+                    transition.animateAlpha(view: glassBackgroundView, from: 0.0, to: 1.0)
+                }
+                glassBackgroundView.update(size: containerSize, cornerRadius: cornerRadius, isDark: component.isDark, tintColor: .init(kind: effectiveState == .tintedGlass ? .custom : .panel , color: component.backgroundColor.withMultipliedAlpha(effectiveState == .tintedGlass ? 1.0 : 0.7)), transition: glassBackgroundTransition)
+                glassBackgroundTransition.setFrame(view: glassBackgroundView, frame: bounds)
+            } else if let glassBackgroundView = self.glassBackgroundView {
+                self.glassBackgroundView = nil
+                transition.setAlpha(view: glassBackgroundView, alpha: 0.0, completion: { _ in
+                    glassBackgroundView.removeFromSuperview()
+                })
+            }
             
             return containerSize
         }
