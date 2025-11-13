@@ -666,7 +666,6 @@ public final class AvatarStoryIndicatorComponent: Component {
             let inactiveColors: [CGColor]
             
             if component.hasLiveItems {
-                //TODO:localize
                 activeColors = [UIColor(rgb: 0xFF3777).cgColor, UIColor(rgb: 0xFF2D55).cgColor]
             } else if component.hasUnseenCloseFriendsItems {
                 activeColors = component.colors.unseenCloseFriendsColors.map(\.cgColor)

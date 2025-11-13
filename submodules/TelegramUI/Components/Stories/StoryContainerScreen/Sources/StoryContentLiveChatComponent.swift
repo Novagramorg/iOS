@@ -421,9 +421,8 @@ final class StoryContentLiveChatComponent: Component {
                 }
                 
                 var items: [ContextMenuItem] = []
-                //TODO:localize
                 if !isPinned {
-                    items.append(.action(ContextMenuActionItem(text: "Copy", textColor: .primary, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Copy"), color: theme.contextMenu.primaryColor) }, action: { [weak self] c, _ in
+                    items.append(.action(ContextMenuActionItem(text: presentationData.strings.Conversation_ContextMenuCopy, textColor: .primary, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Copy"), color: theme.contextMenu.primaryColor) }, action: { [weak self] c, _ in
                         guard let self else {
                             return
                         }
@@ -459,13 +458,12 @@ final class StoryContentLiveChatComponent: Component {
                     isMessageFromAdmin = true
                 }
                 
-                //TODO:localize
                 if !isMyMessage, let author = message.author {
                     let openProfileString: String
                     if case .channel = author {
-                        openProfileString = "Open Channel"
+                        openProfileString = presentationData.strings.Conversation_ContextMenuOpenChannel
                     } else {
-                        openProfileString = "Open Profile"
+                        openProfileString = presentationData.strings.Conversation_ContextMenuOpenProfile
                     }
                     items.append(.action(ContextMenuActionItem(text: openProfileString, textColor: .primary, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/User"), color: theme.contextMenu.primaryColor) }, action: { [weak self] c, _ in
                         guard let self else {
