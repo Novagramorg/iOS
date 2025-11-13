@@ -15167,7 +15167,12 @@ Error: %8$@";
 "ScheduledMessages.Reminder.Delete" = "Delete Reminder";
 "ScheduledMessages.Reminder.DeleteMany" = "Delete Reminders";
 
-"Gift.Setup.NextDropIn" = "next drop in {m}:{s}";
+"Gift.Setup.PlaceBid" = "Place a Bid";
+"Gift.Setup.AuctionInfo" = "%@ are dropped to the top %@ by bid amount. [Learn more >]()";
+"Gift.Setup.AuctionInfo.Gifts_1" = "%@ gift";
+"Gift.Setup.AuctionInfo.Gifts_any" = "%@ gifts";
+"Gift.Setup.AuctionInfo.Bidders_1" = "%@ bidder";
+"Gift.Setup.AuctionInfo.Bidders_any" = "%@ bidders";
 
 "PrivacySettings.LoginEmailSetupInfo" = "Setup your email address for Telegram login codes.";
 
@@ -15223,6 +15228,11 @@ Error: %8$@";
 "Gift.AuctionBid.Top" = "TOP %@";
 "Gift.AuctionBid.Custom" = "Custom";
 
+"Gift.AuctionBid.CustomBid.Title" = "Place a Custom Bid";
+"Gift.AuctionBid.CustomBid.Text" = "If you fall below the top %@, your bid will roll over to the next drop.";
+"Gift.AuctionBid.CustomBid.Placeholder" = "Amount";
+"Gift.AuctionBid.CustomBid.Done" = "Place a Bid";
+
 "Gift.Auction.Context.About" = "About";
 "Gift.Auction.Context.CopyLink" = "Copy Link";
 "Gift.Auction.Context.Share" = "Share";
@@ -15268,11 +15278,6 @@ Error: %8$@";
 "ChatList.Auctions.Status.Many.Outbid_any" = "You've been outbid in %@ of them.";
 "ChatList.Auctions.Status.Many.OutbidAll" = "You've been outbid in all of them.";
 "ChatList.Auctions.View" = "View";
-
-"Gift.Auction.Ongoing.Title" = "One Auction at a Time";
-"Gift.Auction.Ongoing.Text" = "You’ve already bid in this gift auction for **%@**.";
-"Gift.Auction.Ongoing.TextYourself" = "You’ve already bid in this gift auction for yourself.";
-"Gift.Auction.Ongoing.View" = "View";
 
 "Gift.Auction.Info.Title" = "Auction";
 "Gift.Auction.Info.Description" = "Join the battle for exclusive gifts.";
@@ -15368,7 +15373,14 @@ Error: %8$@";
 "Stars.Transaction.LiveStreamPaidMessage_any" = "Fee for %@ Live Stream Messages";
 "Stars.Transaction.LiveStreamPaidMessage.Text" = "You receive **%@%** of the price that you charge for each incoming message.";
 
-"Notification.StarGift.Subtitle.NoConvert" = "We'll notify you once it becomes eligible for unique upgrades.";
-"Notification.StarGift.Subtitle.OtherNoConvert" = "We'll notify %1$@ once it becomes eligible for unique upgrades.";
-"Gift.View.NoConvertDescription" = "We'll notify you once it becomes eligible for unique upgrades.";
-"Gift.View.OtherNoConvertDescription" = "We'll notify %1$@ once it becomes eligible for unique upgrades.";
+"Notification.StarGift.Subtitle.NoConvert" = "Display this gift on your page and turn it into a collectible.";
+"Notification.StarGift.Subtitle.OtherNoConvert" = "Display this gift on your page and turn it into a collectible.";
+"Gift.View.NoConvertDescription" = "We will notify you once it becomes eligible for unique upgrades.";
+"Gift.View.OtherNoConvertDescription" = "We will notify %1$@ once it becomes eligible for unique upgrades.";
+
+"Gift.AuctionTransfer.Title" = "Change Recipient";
+"Gift.AuctionTransfer.Text" = "The current recipient of this gift is **%@**. Change to **%@**?";
+"Gift.AuctionTransfer.TextFromYourself" = "The current recipient of this gift is you. Change to **%@**?";
+"Gift.AuctionTransfer.TextToYourself" = "The current recipient of this gift is **%@**. Change to yourself?";
+"Gift.AuctionTransfer.Change" = "Change";
+

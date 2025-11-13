@@ -464,6 +464,7 @@ swift_library(
         "//submodules/TelegramUI/Components/Stars/StarsIntroScreen",
         "//submodules/TelegramUI/Components/Gifts/GiftOptionsScreen",
         "//submodules/TelegramUI/Components/Gifts/GiftStoreScreen",
+        "//submodules/TelegramUI/Components/Gifts/GiftSetupScreen",
         "//submodules/TelegramUI/Components/ContentReportScreen",
         "//submodules/TelegramUI/Components/PeerInfo/AffiliateProgramSetupScreen",
         "//submodules/TelegramUI/Components/Stars/StarsBalanceOverlayComponent",
