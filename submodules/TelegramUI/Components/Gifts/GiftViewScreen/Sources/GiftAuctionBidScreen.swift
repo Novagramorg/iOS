@@ -1003,7 +1003,7 @@ private final class GiftAuctionBidScreenComponent: Component {
         
         private static func makeSliderSteps(minRealValue: Int, maxRealValue: Int, isLogarithmic: Bool) -> [Int] {
             if isLogarithmic {
-                var sliderSteps: [Int] = [1, 10, 50, 100, 500, 1_000, 2_000, 5_000, 10_000, 20_000, 30_000, 40_000, 50_000]
+                var sliderSteps: [Int] = [100, 500, 1_000, 2_000, 5_000, 10_000, 25_000, 50_000, 100_000, 500_000]
                 sliderSteps.removeAll(where: { $0 <= minRealValue })
                 sliderSteps.insert(minRealValue, at: 0)
                 sliderSteps.removeAll(where: { $0 >= maxRealValue })
@@ -1082,6 +1082,17 @@ private final class GiftAuctionBidScreenComponent: Component {
         
         func withMaxRealValue(_ maxRealValue: Int) -> Amount {
             return Amount(realValue: self.realValue, minRealValue: self.minRealValue, minAllowedRealValue: self.minAllowedRealValue, maxRealValue: maxRealValue, maxSliderValue: self.maxSliderValue, isLogarithmic: self.isLogarithmic)
+        }
+        
+        func cutoffSliderValue(for cutoffRealValue: Int) -> Int {
+            let clampedReal = max(self.minRealValue, min(cutoffRealValue, self.maxRealValue))
+            
+            return Amount.remapValueToSlider(
+                realValue: clampedReal,
+                minAllowedRealValue: self.minAllowedRealValue,
+                maxSliderValue: self.maxSliderValue,
+                steps: self.sliderSteps
+            )
         }
     }
         
@@ -2016,14 +2027,20 @@ private final class GiftAuctionBidScreenComponent: Component {
                 giftsPerRound = giftsPerRoundValue
             }
             
-            var topCutoff: CGFloat?
+            var topCutoffRealValue: Int?
             if let giftAuctionState = self.giftAuctionState, case let .ongoing(_, _, _, _, bidLevels, _, _, _, _, _) = giftAuctionState.auctionState {
                 for bidLevel in bidLevels {
                     if bidLevel.position == giftsPerRound - 1 {
-                        topCutoff = CGFloat(bidLevel.amount) / CGFloat(self.amount.maxRealValue)
+                        topCutoffRealValue = Int(bidLevel.amount)
                         break
                     }
                 }
+            }
+            
+            var topCutoff: CGFloat?
+            if let topCutoffRealValue {
+                let cutoffSliderValue = self.amount.cutoffSliderValue(for: topCutoffRealValue)
+                topCutoff = CGFloat(cutoffSliderValue) / CGFloat(self.amount.maxSliderValue)
             }
             
             let _ = self.sliderBackground.update(

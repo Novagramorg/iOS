@@ -64,7 +64,7 @@ public final class GlassBarButtonComponent: Component {
         private let containerView: UIView
         private let genericContainerView: UIView
         private let genericBackgroundView: SimpleGlassView
-        private let glassContainerView: UIView
+        private let glassContainerView: GlassBackgroundContainerView
         private let glassBackgroundView: GlassBackgroundView
         private var componentView: ComponentView<Empty>?
         
@@ -74,7 +74,7 @@ public final class GlassBarButtonComponent: Component {
             self.containerView = UIView()
             self.genericContainerView = UIView()
             self.genericBackgroundView = SimpleGlassView()
-            self.glassContainerView = UIView()
+            self.glassContainerView = GlassBackgroundContainerView()
             self.glassBackgroundView = GlassBackgroundView()
             
             super.init(frame: frame)
@@ -87,7 +87,7 @@ public final class GlassBarButtonComponent: Component {
             self.containerView.addSubview(self.glassContainerView)
             
             self.genericContainerView.addSubview(self.genericBackgroundView)
-            self.glassContainerView.addSubview(self.glassBackgroundView)
+            self.glassContainerView.contentView.addSubview(self.glassBackgroundView)
                         
             self.addTarget(self, action: #selector(self.pressed), for: .touchUpInside)
             
@@ -176,7 +176,7 @@ public final class GlassBarButtonComponent: Component {
             switch effectiveState {
             case .generic:
                 genericAlpha = 1.0
-                glassAlpha = 0.001
+                glassAlpha = 0.0
             case .glass, .tintedGlass:
                 glassAlpha = 1.0
                 genericAlpha = 0.0
@@ -194,6 +194,7 @@ public final class GlassBarButtonComponent: Component {
             
             transition.setAlpha(view: self.glassContainerView, alpha: glassAlpha)
             transition.setFrame(view: self.glassContainerView, frame: bounds)
+            self.glassContainerView.update(size: bounds.size, isDark: component.isDark, transition: transition)
             
             transition.setFrame(view: self.genericBackgroundView, frame: bounds)
             transition.setFrame(view: self.glassBackgroundView, frame: bounds)
