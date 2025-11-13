@@ -77,6 +77,10 @@ public final class GiftAuctionContext {
     private let account: Account
     public let gift: StarGift
     
+    public var isActive: Bool {
+        return myState?.bidAmount != nil
+    }
+    
     private let disposable = MetaDisposable()
     
     private var auctionState: State.AuctionState?
