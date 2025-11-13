@@ -214,6 +214,7 @@ private final class StarsTransactionSheetContent: CombinedComponent {
             var photo: TelegramMediaWebFile?
             var transactionStatus: (String, UIColor)? = nil
             var isGift = false
+            var isGiftAuctionBid = false
             var isSubscription = false
             var isSubscriber = false
             var isSubscriptionFee = false
@@ -356,6 +357,7 @@ private final class StarsTransactionSheetContent: CombinedComponent {
                     case .generic:
                         if transaction.flags.contains(.isStarGiftAuctionBid) {
                             titleText = strings.Stars_Transaction_GiftAuctionBid
+                            isGiftAuctionBid = true
                         } else {
                             titleText = strings.Stars_Transaction_Gift_Title
                         }
@@ -927,7 +929,7 @@ private final class StarsTransactionSheetContent: CombinedComponent {
                 ))
             }
             
-            if isGift, toPeer == nil {
+            if isGift && !isGiftAuctionBid, toPeer == nil {
                 tableItems.append(.init(
                     id: "from",
                     title: strings.Stars_Transaction_From,
@@ -950,7 +952,7 @@ private final class StarsTransactionSheetContent: CombinedComponent {
                         )
                     )
                 ))
-            } else if let toPeer, !isRefProgram {
+            } else if let toPeer, !isRefProgram && !isGiftAuctionBid {
                 let title: String
                 if isGiftUpgrade {
                     title = strings.Stars_Transaction_GiftFrom
@@ -2438,7 +2440,7 @@ private final class PeerCellComponent: Component {
             let avatarNaturalSize = self.avatar.update(
                 transition: .immediate,
                 component: AnyComponent(
-                    StarsAvatarComponent(context: component.context, theme: component.theme, peer: .transactionPeer(peer), photo: nil, media: [], uniqueGift: nil, backgroundColor: .clear)
+                    StarsAvatarComponent(context: component.context, theme: component.theme, peer: .transactionPeer(peer), photo: nil, media: [], gift: nil, backgroundColor: .clear)
                 ),
                 environment: {},
                 containerSize: CGSize(width: 40.0, height: 40.0)
