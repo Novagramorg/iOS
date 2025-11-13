@@ -3,7 +3,7 @@ import UIKit
 import Display
 import ComponentFlow
 
-public final class EdgeEffectView: UIView {
+public class EdgeEffectView: UIView {
     public enum Edge {
         case top
         case bottom
@@ -118,6 +118,69 @@ public final class EdgeEffectView: UIView {
             self.blurView = nil
             blurView.removeFromSuperview()
         }
+    }
+}
+
+public final class EdgeEffectComponent: Component {
+    private let color: UIColor
+    private let blur: Bool
+    private let alpha: CGFloat
+    private let size: CGSize
+    private let edge: EdgeEffectView.Edge
+    private let edgeSize: CGFloat
+    
+    public init(
+        color: UIColor,
+        blur: Bool,
+        alpha: CGFloat,
+        size: CGSize,
+        edge: EdgeEffectView.Edge,
+        edgeSize: CGFloat
+    ) {
+        self.color = color
+        self.blur = blur
+        self.alpha = alpha
+        self.size = size
+        self.edge = edge
+        self.edgeSize = edgeSize
+    }
+    
+    public static func == (lhs: EdgeEffectComponent, rhs: EdgeEffectComponent) -> Bool {
+        if lhs.color != rhs.color {
+            return false
+        }
+        if lhs.blur != rhs.blur {
+            return false
+        }
+        if lhs.alpha != rhs.alpha {
+            return false
+        }
+        if lhs.size != rhs.size {
+            return false
+        }
+        if lhs.edge != rhs.edge {
+            return false
+        }
+        if lhs.edgeSize != rhs.edgeSize {
+            return false
+        }
+        return true
+    }
+    
+    public final class View: EdgeEffectView {
+        func update(component: EdgeEffectComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
+            self.update(content: component.color, blur: component.blur, alpha: component.alpha, rect: CGRect(origin: .zero, size: component.size), edge: component.edge, edgeSize: component.edgeSize, transition: transition)
+            
+            return component.size
+        }
+    }
+    
+    public func makeView() -> View {
+        return View()
+    }
+    
+    public func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<EnvironmentType>, transition: ComponentTransition) -> CGSize {
+        return view.update(component: self, availableSize: availableSize, state: state, environment: environment, transition: transition)
     }
 }
 
