@@ -562,6 +562,7 @@ private final class SheetContent: CombinedComponent {
                                     accentColor: theme.list.itemAccentColor,
                                     value: state.amount?.value,
                                     minValue: minAmount?.value,
+                                    forceMinValue: false,
                                     allowZero: allowZero,
                                     maxValue: maxAmount?.value,
                                     placeholderText: amountPlaceholder,
@@ -1296,6 +1297,7 @@ private final class AmountFieldStarsFormatter: NSObject, UITextFieldDelegate {
     
     private let textField: UITextField
     private let minValue: Int64
+    private let forceMinValue: Bool
     private let allowZero: Bool
     private let maxValue: Int64
     private let updated: (Int64) -> Void
@@ -1303,11 +1305,12 @@ private final class AmountFieldStarsFormatter: NSObject, UITextFieldDelegate {
     private let animateError: () -> Void
     private let focusUpdated: (Bool) -> Void
 
-    init?(textField: UITextField, currency: CurrencyAmount.Currency, dateTimeFormat: PresentationDateTimeFormat, minValue: Int64, allowZero: Bool, maxValue: Int64, updated: @escaping (Int64) -> Void, isEmptyUpdated: @escaping (Bool) -> Void, animateError: @escaping () -> Void, focusUpdated: @escaping (Bool) -> Void) {
+    init?(textField: UITextField, currency: CurrencyAmount.Currency, dateTimeFormat: PresentationDateTimeFormat, minValue: Int64, forceMinValue: Bool, allowZero: Bool, maxValue: Int64, updated: @escaping (Int64) -> Void, isEmptyUpdated: @escaping (Bool) -> Void, animateError: @escaping () -> Void, focusUpdated: @escaping (Bool) -> Void) {
         self.textField = textField
         self.currency = currency
         self.dateTimeFormat = dateTimeFormat
         self.minValue = minValue
+        self.forceMinValue = forceMinValue
         self.allowZero = allowZero
         self.maxValue = maxValue
         self.updated = updated
@@ -1434,7 +1437,17 @@ private final class AmountFieldStarsFormatter: NSObject, UITextFieldDelegate {
         }
         
         let amount: Int64 = self.amountFrom(text: newText)
-        if amount > self.maxValue {
+        if self.forceMinValue && amount < self.minValue {
+            switch self.currency {
+            case .stars:
+                textField.text = "\(self.minValue)"
+            case .ton:
+                textField.text = "\(formatTonAmountText(self.minValue, dateTimeFormat: PresentationDateTimeFormat(timeFormat: self.dateTimeFormat.timeFormat, dateFormat: self.dateTimeFormat.dateFormat, dateSeparator: "", dateSuffix: "", requiresFullYear: false, decimalSeparator: self.dateTimeFormat.decimalSeparator, groupingSeparator: ""), maxDecimalPositions: nil))"
+            }
+            self.onTextChanged(text: self.textField.text ?? "")
+            self.animateError()
+            return false
+        } else if amount > self.maxValue {
             switch self.currency {
             case .stars:
                 textField.text = "\(self.maxValue)"
@@ -1452,8 +1465,8 @@ private final class AmountFieldStarsFormatter: NSObject, UITextFieldDelegate {
     }
 }
 
-private final class AmountFieldComponent: Component {
-    typealias EnvironmentType = Empty
+public final class AmountFieldComponent: Component {
+    public typealias EnvironmentType = Empty
     
     let textColor: UIColor
     let secondaryColor: UIColor
@@ -1461,25 +1474,29 @@ private final class AmountFieldComponent: Component {
     let accentColor: UIColor
     let value: Int64?
     let minValue: Int64?
+    let forceMinValue: Bool
     let allowZero: Bool
     let maxValue: Int64?
     let placeholderText: String
+    let textFieldOffset: CGPoint
     let labelText: String?
     let currency: CurrencyAmount.Currency
     let dateTimeFormat: PresentationDateTimeFormat
     let amountUpdated: (Int64?) -> Void
     let tag: AnyObject?
     
-    init(
+    public init(
         textColor: UIColor,
         secondaryColor: UIColor,
         placeholderColor: UIColor,
         accentColor: UIColor,
         value: Int64?,
         minValue: Int64?,
+        forceMinValue: Bool,
         allowZero: Bool,
         maxValue: Int64?,
         placeholderText: String,
+        textFieldOffset: CGPoint = .zero,
         labelText: String?,
         currency: CurrencyAmount.Currency,
         dateTimeFormat: PresentationDateTimeFormat,
@@ -1492,9 +1509,11 @@ private final class AmountFieldComponent: Component {
         self.accentColor = accentColor
         self.value = value
         self.minValue = minValue
+        self.forceMinValue = forceMinValue
         self.allowZero = allowZero
         self.maxValue = maxValue
         self.placeholderText = placeholderText
+        self.textFieldOffset = textFieldOffset
         self.labelText = labelText
         self.currency = currency
         self.dateTimeFormat = dateTimeFormat
@@ -1502,7 +1521,7 @@ private final class AmountFieldComponent: Component {
         self.tag = tag
     }
     
-    static func ==(lhs: AmountFieldComponent, rhs: AmountFieldComponent) -> Bool {
+    public static func ==(lhs: AmountFieldComponent, rhs: AmountFieldComponent) -> Bool {
         if lhs.textColor != rhs.textColor {
             return false
         }
@@ -1539,7 +1558,7 @@ private final class AmountFieldComponent: Component {
         return true
     }
     
-    final class View: UIView, UITextFieldDelegate, ComponentTaggedView {
+    public final class View: UIView, UITextFieldDelegate, ComponentTaggedView {
         public func matches(tag: Any) -> Bool {
             if let component = self.component, let componentTag = component.tag {
                 let tag = tag as AnyObject
@@ -1563,7 +1582,7 @@ private final class AmountFieldComponent: Component {
         
         private var didSetValueOnce = false
         
-        override init(frame: CGRect) {
+        public override init(frame: CGRect) {
             self.placeholderView = ComponentView<Empty>()
             self.textField = TextFieldNodeView(frame: .zero)
             self.labelView = ComponentView<Empty>()
@@ -1577,21 +1596,32 @@ private final class AmountFieldComponent: Component {
             fatalError("init(coder:) has not been implemented")
         }
         
-        func activateInput() {
+        public func activateInput() {
             self.textField.becomeFirstResponder()
         }
         
-        func selectAll() {
-            self.textField.selectAll(nil)
+        public func deactivateInput() {
+            self.textField.resignFirstResponder()
         }
         
-        func animateError() {
+        public func selectAll() {
+            self.textField.selectAll(nil)
+        }
+                
+        public func animateError() {
             self.textField.layer.addShakeAnimation()
             let hapticFeedback = HapticFeedback()
             hapticFeedback.error()
             DispatchQueue.main.asyncAfter(deadline: DispatchTime.now() + 1.0, execute: {
                 let _ = hapticFeedback
             })
+        }
+        
+        public func resetValue() {
+            guard let component = self.component, let value = component.value else {
+                return
+            }
+            self.textField.text = "\(value)"
         }
         
         func update(component: AmountFieldComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<EnvironmentType>, transition: ComponentTransition) -> CGSize {
@@ -1633,6 +1663,7 @@ private final class AmountFieldComponent: Component {
                             currency: component.currency,
                             dateTimeFormat: component.dateTimeFormat,
                             minValue: component.minValue ?? 0,
+                            forceMinValue: component.forceMinValue,
                             allowZero: component.allowZero,
                             maxValue: component.maxValue ?? Int64.max,
                             updated: { [weak self] value in
@@ -1669,6 +1700,7 @@ private final class AmountFieldComponent: Component {
                             currency: component.currency,
                             dateTimeFormat: component.dateTimeFormat,
                             minValue: component.minValue ?? 0,
+                            forceMinValue: component.forceMinValue,
                             allowZero: component.allowZero,
                             maxValue: component.maxValue ?? 10000000,
                             updated: { [weak self] value in
@@ -1790,7 +1822,7 @@ private final class AmountFieldComponent: Component {
                 labelView.removeFromSuperview()
             }
             
-            self.textField.frame = CGRect(x: leftInset, y: 4.0, width: size.width - 30.0, height: 44.0)
+            self.textField.frame = CGRect(x: leftInset + component.textFieldOffset.x, y: 4.0 + component.textFieldOffset.y, width: size.width - 30.0, height: 44.0)
                         
             return size
         }
@@ -1803,28 +1835,6 @@ private final class AmountFieldComponent: Component {
     public func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<EnvironmentType>, transition: ComponentTransition) -> CGSize {
         return view.update(component: self, availableSize: availableSize, state: state, environment: environment, transition: transition)
     }
-}
-
-
-func generateCloseButtonImage(backgroundColor: UIColor, foregroundColor: UIColor) -> UIImage? {
-    return generateImage(CGSize(width: 30.0, height: 30.0), contextGenerator: { size, context in
-        context.clear(CGRect(origin: CGPoint(), size: size))
-        
-        context.setFillColor(backgroundColor.cgColor)
-        context.fillEllipse(in: CGRect(origin: CGPoint(), size: size))
-        
-        context.setLineWidth(2.0)
-        context.setLineCap(.round)
-        context.setStrokeColor(foregroundColor.cgColor)
-        
-        context.move(to: CGPoint(x: 10.0, y: 10.0))
-        context.addLine(to: CGPoint(x: 20.0, y: 20.0))
-        context.strokePath()
-        
-        context.move(to: CGPoint(x: 20.0, y: 10.0))
-        context.addLine(to: CGPoint(x: 10.0, y: 20.0))
-        context.strokePath()
-    })
 }
 
 private struct StarsWithdrawConfiguration {

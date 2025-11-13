@@ -37,6 +37,7 @@ import TelegramStringFormatting
 import TextFormat
 import BrowserUI
 import MediaEditorScreen
+import GiftSetupScreen
 
 private func defaultNavigationForPeerId(_ peerId: PeerId?, navigation: ChatControllerInteractionNavigateToPeer) -> ChatControllerInteractionNavigateToPeer {
     if case .default = navigation {
@@ -1498,19 +1499,30 @@ func openResolvedUrlImpl(
                 present(textAlertController(context: context, updatedPresentationData: updatedPresentationData, title: nil, text: presentationData.strings.Login_UnknownError, actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]), nil)
             }
         case let .auction(auctionContext):
-            if let auctionContext {
+            if let auctionContext, case let .generic(gift) = auctionContext.gift {
                 if let currentBidPeerId = auctionContext.currentBidPeerId {
                     let controller = context.sharedContext.makeGiftAuctionBidScreen(
                         context: context,
                         toPeerId: currentBidPeerId,
+                        text: nil,
+                        entities: nil,
+                        hideName: false,
                         auctionContext: auctionContext
                     )
                     navigationController?.pushViewController(controller)
                 } else {
                     let controller = context.sharedContext.makeGiftAuctionViewScreen(
                         context: context,
-                        toPeerId: context.account.peerId,
-                        auctionContext: auctionContext
+                        auctionContext: auctionContext,
+                        completion: { [weak navigationController] in
+                            let controller = GiftSetupScreen(
+                                context: context,
+                                peerId: context.account.peerId,
+                                subject: .starGift(gift, nil),
+                                completion: nil
+                            )
+                            navigationController?.pushViewController(controller)
+                        }
                     )
                     navigationController?.pushViewController(controller)
                 }

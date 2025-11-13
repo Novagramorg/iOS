@@ -390,44 +390,47 @@ final class GiftOptionsScreenComponent: Component {
                                     let giftController = component.context.sharedContext.makeGiftAuctionBidScreen(
                                         context: component.context,
                                         toPeerId: currentBidPeerId,
+                                        text: nil,
+                                        entities: nil,
+                                        hideName: false,
                                         auctionContext: auctionContext
                                     )
                                     mainController.push(giftController)
                                 } else {
-                                    let _ = (component.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: currentBidPeerId))
-                                    |> deliverOnMainQueue).start(next: { [weak self, weak mainController] peer in
-                                        guard let component = self?.component, let environment = self?.environment, let mainController else {
+                                    let _ = (context.engine.data.get(
+                                        TelegramEngine.EngineData.Item.Peer.Peer(id: currentBidPeerId),
+                                        TelegramEngine.EngineData.Item.Peer.Peer(id: component.peerId)
+                                    )
+                                    |> deliverOnMainQueue).start(next: { [weak self, weak mainController] fromPeer, toPeer in
+                                        guard let component = self?.component, let mainController, let fromPeer, let toPeer else {
                                             return
                                         }
-                                        let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
-                                        let alertController = textAlertController(
-                                            context: component.context,
-                                            title: environment.strings.Gift_Auction_Ongoing_Title,
-                                            text: auctionContext.currentBidPeerId == component.context.account.peerId ? environment.strings.Gift_Auction_Ongoing_TextYourself : environment.strings.Gift_Auction_Ongoing_Text(peer?.displayTitle(strings: environment.strings, displayOrder: presentationData.nameDisplayOrder) ?? "").string,
-                                            actions: [
-                                                TextAlertAction(type: .genericAction, title: environment.strings.Common_OK, action: {}),
-                                                TextAlertAction(type: .defaultAction, title: environment.strings.Gift_Auction_Ongoing_View, action: { [weak mainController] in
-                                                    guard let mainController else {
-                                                        return
-                                                    }
-                                                    let giftController = component.context.sharedContext.makeGiftAuctionBidScreen(
-                                                        context: component.context,
-                                                        toPeerId: currentBidPeerId,
-                                                        auctionContext: auctionContext
-                                                    )
-                                                    mainController.push(giftController)
-                                                })
-                                            ],
-                                            parseMarkdown: true
-                                        )
+                                        
+                                        let alertController = giftAuctionTransferController(context: context, fromPeer: fromPeer, toPeer: toPeer, commit: {
+                                            let controller = GiftSetupScreen(
+                                                context: context,
+                                                peerId: component.peerId,
+                                                subject: .starGift(gift, nil),
+                                                completion: nil
+                                            )
+                                            mainController.push(controller)
+                                        })
                                         mainController.present(alertController, in: .window(.root))
                                     })
                                 }
                             } else {
                                 let giftController = component.context.sharedContext.makeGiftAuctionViewScreen(
                                     context: component.context,
-                                    toPeerId: component.peerId,
-                                    auctionContext: auctionContext
+                                    auctionContext: auctionContext,
+                                    completion: { [weak mainController] in
+                                        let controller = GiftSetupScreen(
+                                            context: context,
+                                            peerId: component.peerId,
+                                            subject: .starGift(gift, nil),
+                                            completion: nil
+                                        )
+                                        mainController?.push(controller)
+                                    }
                                 )
                                 mainController.push(giftController)
                             }
