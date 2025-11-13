@@ -464,8 +464,7 @@ final class StoryItemSetContainerSendMessage: @unchecked(Sendable) {
         var items: [ContextMenuItem] = []
         
         if case .liveStream = component.slice.item.storyItem.media {
-            //TODO:localize
-            items.append(.action(ContextMenuActionItem(text: self.currentLiveStreamMessageStars != nil ? "Edit Stars" : "Add Stars", icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Input/Text/AccessoryIconSuggestPost"), color: theme.contextMenu.primaryColor)
+            items.append(.action(ContextMenuActionItem(text: self.currentLiveStreamMessageStars != nil ? presentationData.strings.LiveStream_InputContextMenuEditStars : presentationData.strings.LiveStream_InputContextMenuAddStars, icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Input/Text/AccessoryIconSuggestPost"), color: theme.contextMenu.primaryColor)
             }, action: { [weak self, weak view] _, a in
                 a(.default)
                 
@@ -485,7 +484,7 @@ final class StoryItemSetContainerSendMessage: @unchecked(Sendable) {
             }
             
             if canRemoveStars {
-                items.append(.action(ContextMenuActionItem(text: "Remove Stars", icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/RemovePrice"), color: theme.contextMenu.primaryColor)
+                items.append(.action(ContextMenuActionItem(text: presentationData.strings.LiveStream_InputContextMenuRemoveStars, icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/RemovePrice"), color: theme.contextMenu.primaryColor)
                 }, action: { [weak self, weak view] _, a in
                     a(.default)
                     

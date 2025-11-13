@@ -1809,8 +1809,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                 self.avatarNode.view.addSubview(avatarLiveBadge.outline)
                 self.avatarNode.view.addSubview(avatarLiveBadge.foreground)
                 
-                //TODO:localize
-                let liveString = NSAttributedString(string: "LIVE", font: Font.semibold(10.0), textColor: .white)
+                let liveString = NSAttributedString(string: item.presentationData.strings.Story_LiveBadge, font: Font.semibold(10.0), textColor: .white)
                 let liveStringBounds = liveString.boundingRect(with: CGSize(width: 100.0, height: 100.0), options: .usesLineFragmentOrigin, context: nil)
                 let liveBadgeSize = CGSize(width: ceil(liveStringBounds.width) + 4.0 * 2.0, height: ceil(liveStringBounds.height) + 2.0 * 2.0)
                 avatarLiveBadge.foreground.image = generateImage(liveBadgeSize, rotatedContext: { size, context in

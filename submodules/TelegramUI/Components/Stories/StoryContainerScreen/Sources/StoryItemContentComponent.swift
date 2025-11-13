@@ -831,9 +831,8 @@ final class StoryItemContentComponent: Component {
                 selectedMedia = component.item.media
                 messageMedia = selectedMedia
                 
-                //TODO:localize
                 if self.customSubtitle == nil {
-                    self.customSubtitle = "loading..."
+                    self.customSubtitle = component.strings.LiveStream_LoadingStatus
                 }
             } else if !component.preferHighQuality, !component.item.isMy, let alternativeMediaValue = component.item.alternativeMediaList.first {
                 selectedMedia = alternativeMediaValue
@@ -940,6 +939,25 @@ final class StoryItemContentComponent: Component {
                             self.state?.updated(transition: .immediate, isLocal: true)
                         }
                     })
+                }
+            }
+            
+            if let messageMedia, case .liveStream = messageMedia {
+                self.imageView.update(
+                    context: component.context,
+                    strings: component.strings,
+                    peer: component.peer,
+                    storyId: component.item.id,
+                    media: messageMedia,
+                    size: availableSize,
+                    isCaptureProtected: component.item.isForwardingDisabled,
+                    attemptSynchronous: synchronousLoad,
+                    transition: transition
+                )
+                if !self.contentLoaded || component.isVideoBuffering {
+                    self.imageView.isHidden = false
+                } else {
+                    self.imageView.isHidden = true
                 }
             }
             
@@ -1188,7 +1206,6 @@ final class StoryItemContentComponent: Component {
                         guard let self, let component = self.component, let environment = self.environment else {
                             return
                         }
-                        //TODO:localize
                         let subtitle: String
                         if let members {
                             var totalCount = members.totalCount
@@ -1196,12 +1213,12 @@ final class StoryItemContentComponent: Component {
                                 totalCount -= 1
                             }
                             if totalCount == 0 && component.isEmbeddedInCamera {
-                                subtitle = "no viewers"
+                                subtitle = component.strings.LiveStream_StoryViewerEmpty
                             } else {
-                                subtitle = "\(max(1, totalCount)) watching"
+                                subtitle = component.strings.LiveStream_StoryViewerCount(Int32(max(1, totalCount)))
                             }
                         } else {
-                            subtitle = "loading..."
+                            subtitle = component.strings.LiveStream_LoadingStatus
                         }
                         if self.customSubtitle != subtitle {
                             self.customSubtitle = subtitle
@@ -1226,10 +1243,6 @@ final class StoryItemContentComponent: Component {
                                 } else {
                                     mediaStreamCall.setRequestedVideoList(items: [])
                                 }
-                            }
-                            
-                            if video != nil {
-                                print("updating with video")
                             }
                             
                             if !self.isUpdating {

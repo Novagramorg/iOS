@@ -15372,3 +15372,39 @@ Error: %8$@";
 "Notification.StarGift.Subtitle.OtherNoConvert" = "We'll notify %1$@ once it becomes eligible for unique upgrades.";
 "Gift.View.NoConvertDescription" = "We'll notify you once it becomes eligible for unique upgrades.";
 "Gift.View.OtherNoConvertDescription" = "We'll notify %1$@ once it becomes eligible for unique upgrades.";
+
+"Story.LiveBadge" = "LIVE";
+"SendStarReactions.LiveStreamPerk1Title" = "pin in chat";
+"SendStarReactions.LiveStreamPerk2Title" = "characters";
+"SendStarReactions.LiveStreamPerk3Title" = "emoji";
+"SendStarReactions.LiveStreamMessageTitle" = "Highlight and Pin";
+"SendStarReactions.LiveStreamReactionText" = "Highlight and pin a message\nby adding Stars for **%@**";
+"SendStarReactions.LiveStreamMessageText" = "Highlight and pin a message\nby adding Stars for **%@**";
+"SendStarReactions.OwnLiveStreamCloseButton" = "Close";
+"SendStarReactions.OwnLiveStreamInfoText" = "You can't send star reactions to own story.";
+"SendStarReactions.LiveStreamActionButton" = "Add  # %@";
+
+"LiveStream.CommentsDisabledPlaceholder" = "Comments disabled";
+"LiveStream.LoadingStatus" = "loading...";
+"LiveStream.StoryViewerEmpty" = "no viewers";
+"LiveStream.StoryViewerCount_1" = "1 watching";
+"LiveStream.StoryViewerCount_any" = "%@ watching";
+
+"LiveStream.InputPlaceholder" = "Comment";
+
+"Story.ContextMenuPip" = "Minimize";
+"Story.ContextMenuLiveSettings" = "Live Settings";
+
+"LiveStream.InputContextMenuAddStars" = "Add Stars";
+"LiveStream.InputContextMenuEditStars" = "Edit Stars";
+"LiveStream.InputContextMenuRemoveStars" = "Remove Stars";
+
+"Reminders.DeleteRepeatingTitle" = "Delete Repeating Reminder";
+"Reminders.DeleteRepeatingText" = "Are you sure you want to delete this reminder? This is a repeating reminder.";
+"Reminders.DeleteRepeatingActionSingle" = "Delete This Reminder Only";
+"Reminders.DeleteRepeatingActionMultiple" = "Delete All Future Reminders";
+
+"ScheduledMessages.DeleteRepeatingTitle" = "Delete Repeating Message";
+"ScheduledMessages.DeleteRepeatingText" = "Are you sure you want to delete this scheduled message? This is a repeating message.";
+"ScheduledMessages.DeleteRepeatingActionSingle" = "Delete This Message Only";
+"ScheduledMessages.DeleteRepeatingActionMultiple" = "Delete All Future Messages";
