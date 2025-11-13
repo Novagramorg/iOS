@@ -943,21 +943,25 @@ final class StoryItemContentComponent: Component {
             }
             
             if let messageMedia, case .liveStream = messageMedia {
-                self.imageView.update(
-                    context: component.context,
-                    strings: component.strings,
-                    peer: component.peer,
-                    storyId: component.item.id,
-                    media: messageMedia,
-                    size: availableSize,
-                    isCaptureProtected: component.item.isForwardingDisabled,
-                    attemptSynchronous: synchronousLoad,
-                    transition: transition
-                )
-                if !self.contentLoaded || component.isVideoBuffering {
-                    self.imageView.isHidden = false
-                } else {
+                if component.isEmbeddedInCamera {
                     self.imageView.isHidden = true
+                } else {
+                    self.imageView.update(
+                        context: component.context,
+                        strings: component.strings,
+                        peer: component.peer,
+                        storyId: component.item.id,
+                        media: messageMedia,
+                        size: availableSize,
+                        isCaptureProtected: component.item.isForwardingDisabled,
+                        attemptSynchronous: synchronousLoad,
+                        transition: transition
+                    )
+                    if !self.contentLoaded || component.isVideoBuffering {
+                        self.imageView.isHidden = false
+                    } else {
+                        self.imageView.isHidden = true
+                    }
                 }
             }
             
