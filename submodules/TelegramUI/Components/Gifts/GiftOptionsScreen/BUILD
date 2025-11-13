@@ -21,6 +21,7 @@ swift_library(
         "//submodules/Components/MultilineTextComponent",
         "//submodules/Components/BalancedTextComponent",
         "//submodules/TelegramPresentationData",
+        "//submodules/TelegramNotices",
         "//submodules/AccountContext",
         "//submodules/AppBundle",
         "//submodules/ItemListUI",

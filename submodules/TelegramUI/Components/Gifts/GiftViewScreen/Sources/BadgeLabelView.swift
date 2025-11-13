@@ -109,6 +109,7 @@ final class BadgeLabelView: UIView {
             }
             
             if self.staticLabel.superview == nil {
+                self.staticLabel.alpha = 0.0
                 self.staticLabel.textColor = self.color
                 self.staticLabel.font = font
                 self.addSubview(self.staticLabel)
