@@ -3057,6 +3057,19 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
         }
     }
     
+    func displayContinueLiveStream() {
+        self.present(standardTextAlertController(theme: AlertControllerTheme(presentationData: self.presentationData), title: self.presentationData.strings.ChatList_AlertResumeLiveStreamTitle, text: self.presentationData.strings.ChatList_AlertResumeLiveStreamText, actions: [
+            TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: {
+            }),
+            TextAlertAction(type: .defaultAction, title: presentationData.strings.ChatList_AlertResumeLiveStreamAction, action: { [weak self] in
+                guard let self else {
+                    return
+                }
+                self.openStoryCamera(fromList: false)
+            })
+        ]), in: .window(.root))
+    }
+    
     public func storyCameraTransitionOut() -> (Stories.PendingTarget?, Bool) -> StoryCameraTransitionOut? {
         return { [weak self] target, isArchived in
             guard let self, let target else {
@@ -7052,7 +7065,12 @@ private final class ChatListLocationContext {
                             guard let self, let parentController = self.parentController else {
                                 return
                             }
-                            parentController.openStoryCamera(fromList: false)
+                            
+                            if let componentView = parentController.chatListHeaderView(), let storyPeerListView = componentView.storyPeerListView(), storyPeerListView.isLiveStreaming {
+                                parentController.displayContinueLiveStream()
+                            } else {
+                                parentController.openStoryCamera(fromList: false)
+                            }
                         }
                     )))
                 } else {

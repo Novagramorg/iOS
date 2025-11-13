@@ -942,7 +942,7 @@ final class StoryItemContentComponent: Component {
                 }
             }
             
-            if let messageMedia, case .liveStream = messageMedia {
+            if let messageMedia, case .liveStream = messageMedia, !component.isEmbeddedInCamera {
                 self.imageView.update(
                     context: component.context,
                     strings: component.strings,
