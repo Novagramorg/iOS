@@ -1750,23 +1750,22 @@ private final class ChatSendStarsScreenComponent: Component {
             
             switch component.initialData.subjectInitialData {
             case let .liveStreamMessage(liveStreamMessageData):
-                //TODO:localize
                 let params = GroupCallMessagesContext.getStarAmountParamMapping(params: liveStreamMessageData.liveChatMessageParams, value: Int64(self.amount.realValue))
                 var perks: [(String, String)] = []
                 
                 perks.append((
                     shortTimeIntervalString(strings: environment.strings, value: Int32(params.period), useLargeFormat: false),
-                    "pin in chat"
+                    environment.strings.SendStarReactions_LiveStreamPerk1Title
                 ))
                 
                 perks.append((
                     "\(params.maxLength)",
-                    "characters"
+                    environment.strings.SendStarReactions_LiveStreamPerk2Title
                 ))
                 
                 perks.append((
                     "\(params.emojiCount)",
-                    "emoji"
+                    environment.strings.SendStarReactions_LiveStreamPerk3Title
                 ))
                 
                 contentHeight += 54.0
@@ -1932,8 +1931,7 @@ private final class ChatSendStarsScreenComponent: Component {
             case .react:
                 titleText = environment.strings.SendStarReactions_Title
             case .liveStreamMessage:
-                //TODO:localize
-                titleText = "Highlight and Pin"
+                titleText = environment.strings.SendStarReactions_LiveStreamMessageTitle
             }
             
             let titleSize = title.update(
@@ -1974,8 +1972,7 @@ private final class ChatSendStarsScreenComponent: Component {
             switch component.initialData.subjectInitialData {
             case let .react(reactData):
                 if case .liveStream = reactData.reactSubject {
-                    //TODO:localize
-                    text = "Highlight and pin a message\nby adding Stars for **\(reactData.peer.displayTitle(strings: environment.strings, displayOrder: .firstLast))**."
+                    text = environment.strings.SendStarReactions_LiveStreamReactionText(reactData.peer.displayTitle(strings: environment.strings, displayOrder: .firstLast)).string
                 } else {
                     if let currentSentAmount = reactData.currentSentAmount {
                         text = environment.strings.SendStarReactions_TextSentStars(Int32(clamping: currentSentAmount))
@@ -1984,8 +1981,7 @@ private final class ChatSendStarsScreenComponent: Component {
                     }
                 }
             case let .liveStreamMessage(liveStreamMessageData):
-                //TODO:localize
-                text = "Highlight and pin a message\nby adding Stars for **\(liveStreamMessageData.peer.displayTitle(strings: environment.strings, displayOrder: .firstLast))**."
+                text = environment.strings.SendStarReactions_LiveStreamMessageText(liveStreamMessageData.peer.displayTitle(strings: environment.strings, displayOrder: .firstLast)).string
             }
             
             let addDescriptionText: () -> Void = {
@@ -2508,14 +2504,12 @@ private final class ChatSendStarsScreenComponent: Component {
             switch component.initialData.subjectInitialData {
             case .react:
                 if isOnlyDisplay {
-                    //TODO:localize
-                    buttonString = "Close"
+                    buttonString = environment.strings.SendStarReactions_OwnLiveStreamCloseButton
                 } else {
                     buttonString = environment.strings.SendStarReactions_SendButtonTitle("\(self.amount.realValue)").string
                 }
             case .liveStreamMessage:
-                //TODO:localize
-                buttonString = "Add  # \(self.amount.realValue)"
+                buttonString = environment.strings.SendStarReactions_LiveStreamActionButton("\(self.amount.realValue)").string
             }
             let buttonAttributedString = NSMutableAttributedString(string: buttonString, font: Font.semibold(17.0), textColor: environment.theme.list.itemCheckColors.foregroundColor, paragraphAlignment: .center)
             if let range = buttonAttributedString.string.range(of: "#"), let starImage = self.cachedStarImage?.0 {
@@ -2579,7 +2573,6 @@ private final class ChatSendStarsScreenComponent: Component {
                                 case let .react(reactData):
                                     purchasePurpose = .reactions(peerId: reactData.peer.id, requiredStars: Int64(self.amount.realValue))
                                 case let .liveStreamMessage(liveStreamMessageData):
-                                    //TODO:localize
                                     purchasePurpose = .reactions(peerId: liveStreamMessageData.peer.id, requiredStars: Int64(self.amount.realValue))
                                 }
                                 
@@ -2641,11 +2634,10 @@ private final class ChatSendStarsScreenComponent: Component {
             
             var buttonDescriptionTextSize: CGSize?
             if case .react = component.initialData.subjectInitialData {
-                //TODO:localize
                 buttonDescriptionTextSize = self.buttonDescriptionText.update(
                     transition: .immediate,
                     component: AnyComponent(MultilineTextComponent(
-                        text: .markdown(text: isOnlyDisplay ? "You can't send star reactions to own story." : environment.strings.SendStarReactions_TermsOfServiceFooter, attributes: MarkdownAttributes(
+                        text: .markdown(text: isOnlyDisplay ? environment.strings.SendStarReactions_OwnLiveStreamInfoText : environment.strings.SendStarReactions_TermsOfServiceFooter, attributes: MarkdownAttributes(
                             body: MarkdownAttributeSet(font: Font.regular(13.0), textColor: environment.theme.list.itemSecondaryTextColor),
                             bold: MarkdownAttributeSet(font: Font.semibold(13.0), textColor: environment.theme.list.itemSecondaryTextColor),
                             link: MarkdownAttributeSet(font: Font.regular(13.0), textColor: environment.theme.list.itemAccentColor),

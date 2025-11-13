@@ -822,8 +822,7 @@ public final class StoryPeerListItemComponent: Component {
                     self.indicatorMaskUnseenLayer.addSublayer(avatarLiveBadgeMaskUnseenLayer)
                 }
                 if avatarLiveBadgeView.image == nil || themeUpdated {
-                    //TODO:localize
-                    let liveString = NSAttributedString(string: "LIVE", font: Font.semibold(10.0), textColor: .white)
+                    let liveString = NSAttributedString(string: component.strings.Story_LiveBadge, font: Font.semibold(10.0), textColor: .white)
                     let liveStringBounds = liveString.boundingRect(with: CGSize(width: 100.0, height: 100.0), options: .usesLineFragmentOrigin, context: nil)
                     let liveBadgeSize = CGSize(width: ceil(liveStringBounds.width) + 4.0 * 2.0, height: ceil(liveStringBounds.height) + 2.0 * 2.0)
                     avatarLiveBadgeView.image = generateImage(liveBadgeSize, rotatedContext: { size, context in
@@ -892,7 +891,6 @@ public final class StoryPeerListItemComponent: Component {
             let unseenColors: [CGColor]
             
             if component.hasLiveItems {
-                //TODO:localize
                 unseenColors = [UIColor(rgb: 0xFF3777).cgColor, UIColor(rgb: 0xFF2D55).cgColor]
             } else if component.hasUnseenCloseFriendsItems {
                 unseenColors = [component.theme.chatList.storyUnseenPrivateColors.topColor.cgColor, component.theme.chatList.storyUnseenPrivateColors.bottomColor.cgColor]
