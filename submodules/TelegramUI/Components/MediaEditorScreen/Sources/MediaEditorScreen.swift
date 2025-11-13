@@ -7641,7 +7641,7 @@ public final class MediaEditorScreenImpl: ViewController, MediaEditorScreen, UID
         }
         let imagesReady = ValuePromise<Bool>(false, ignoreRepeated: true)
         Queue.concurrentDefaultQueue().async {
-            if !isVideo, let data = try? WebP.convert(toWebP: image, quality: 97.0) {
+            if !isVideo, let data = try? WebP.convert(toWebP: image, quality: 90.0) {
                 self.context.account.postbox.mediaBox.storeResourceData(isVideo ? thumbnailResource.id : resource.id, data: data, synchronous: true)
             }
             if let thumbnailImage = generateScaledImage(image: image, size: CGSize(width: 320.0, height: 320.0), opaque: false, scale: 1.0), let data = try? WebP.convert(toWebP: thumbnailImage, quality: 90.0) {
