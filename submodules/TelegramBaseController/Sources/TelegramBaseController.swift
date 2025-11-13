@@ -368,8 +368,13 @@ open class TelegramBaseController: ViewController, KeyShortcutResponder {
                 guard let self else {
                     return
                 }
-                self.giftAuctionStates = states
-                
+                self.giftAuctionStates = states.filter { state in
+                    if case .ongoing = state.auctionState {
+                        return true
+                    } else {
+                        return false
+                    }
+                }
             })
         }
         

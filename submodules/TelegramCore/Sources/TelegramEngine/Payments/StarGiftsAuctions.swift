@@ -432,18 +432,20 @@ public class GiftAuctionsManager {
     }
     
     private func updateState() {
-        var signals: [Signal<GiftAuctionContext.State, NoError>] = []
+        var signals: [Signal<GiftAuctionContext.State?, NoError>] = []
         for auction in self.auctionContexts.values.sorted(by: { $0.gift.giftId < $1.gift.giftId }) {
-            signals.append(auction.state
-            |> mapToSignal { state in
-                if let state, state.myState.bidAmount != nil, case .ongoing = state.auctionState {
-                    return .single(state)
-                } else {
-                    return .complete()
-                }
-            })
+            signals.append(auction.state)
         }
-        self.statePromise.set(combineLatest(signals))
+        self.statePromise.set(combineLatest(signals)
+        |> map { states -> [GiftAuctionContext.State] in
+            var filteredStates: [GiftAuctionContext.State] = []
+            for state in states {
+                if let state, case .ongoing = state.auctionState, state.myState.bidAmount != nil {
+                    filteredStates.append(state)
+                }
+            }
+            return filteredStates
+        })
     }
 }
 

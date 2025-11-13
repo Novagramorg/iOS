@@ -1318,6 +1318,7 @@ private final class GiftAuctionBidScreenComponent: Component {
             if let actionButtonView = self.actionButton.view {
                 actionButtonView.layer.animatePosition(from: CGPoint(x: 0.0, y: animateOffset), to: CGPoint(), duration: 0.5, timingFunction: kCAMediaTimingFunctionSpring, additive: true)
             }
+            self.bottomEdgeEffectView.layer.animatePosition(from: CGPoint(x: 0.0, y: animateOffset), to: CGPoint(), duration: 0.5, timingFunction: kCAMediaTimingFunctionSpring, additive: true)
         }
         
         func animateOut(completion: @escaping () -> Void) {
@@ -1332,7 +1333,8 @@ private final class GiftAuctionBidScreenComponent: Component {
             if let actionButtonView = self.actionButton.view {
                 actionButtonView.layer.animatePosition(from: CGPoint(), to: CGPoint(x: 0.0, y: animateOffset), duration: 0.3, timingFunction: CAMediaTimingFunctionName.easeInEaseOut.rawValue, removeOnCompletion: false, additive: true)
             }
-            
+            self.bottomEdgeEffectView.layer.animatePosition(from: CGPoint(), to: CGPoint(x: 0.0, y: animateOffset), duration: 0.3, timingFunction: CAMediaTimingFunctionName.easeInEaseOut.rawValue, removeOnCompletion: false, additive: true)
+          
             if let view = self.balanceOverlay.view {
                 view.layer.animateScale(from: 1.0, to: 0.8, duration: 0.4, removeOnCompletion: false)
                 view.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.3, removeOnCompletion: false)
@@ -1681,9 +1683,6 @@ private final class GiftAuctionBidScreenComponent: Component {
         
         func presentCustomBidController() {
             guard let component = self.component else {
-                return
-            }
-            if "".isEmpty {
                 return
             }
             let controller = giftAuctionCustomBidController(
