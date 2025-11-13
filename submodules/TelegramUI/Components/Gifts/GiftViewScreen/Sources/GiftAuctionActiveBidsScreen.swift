@@ -332,7 +332,7 @@ private final class GiftAuctionActiveBidsScreenComponent: Component {
                                         }
                                         controller.dismiss()
                                         
-                                        let bidController = component.context.sharedContext.makeGiftAuctionBidScreen(context: component.context, toPeerId: auction.currentBidPeerId ?? component.context.account.peerId, auctionContext: auction)
+                                        let bidController = component.context.sharedContext.makeGiftAuctionBidScreen(context: component.context, toPeerId: auction.currentBidPeerId ?? component.context.account.peerId, text: nil, entities: nil, hideName: false, auctionContext: auction)
                                         navigationController.pushViewController(bidController)
                                     })
                                 }

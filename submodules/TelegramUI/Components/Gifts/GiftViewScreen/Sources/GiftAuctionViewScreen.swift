@@ -33,20 +33,17 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
     
     let context: AccountContext
-    let toPeerId: EnginePeer.Id
     let auctionContext: GiftAuctionContext
     let animateOut: ActionSlot<Action<()>>
     let getController: () -> ViewController?
     
     init(
         context: AccountContext,
-        toPeerId: EnginePeer.Id,
         auctionContext: GiftAuctionContext,
         animateOut: ActionSlot<Action<()>>,
         getController: @escaping () -> ViewController?
     ) {
         self.context = context
-        self.toPeerId = toPeerId
         self.auctionContext = auctionContext
         self.animateOut = animateOut
         self.getController = getController
@@ -63,7 +60,6 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
         let averagePriceTag = GenericComponentViewTag()
         
         private let context: AccountContext
-        private let toPeerId: EnginePeer.Id
         private let auctionContext: GiftAuctionContext
         private let animateOut: ActionSlot<Action<()>>
         private let getController: () -> ViewController?
@@ -82,13 +78,11 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
                                         
         init(
             context: AccountContext,
-            toPeerId: EnginePeer.Id,
             auctionContext: GiftAuctionContext,
             animateOut: ActionSlot<Action<()>>,
             getController: @escaping () -> ViewController?
         ) {
             self.context = context
-            self.toPeerId = toPeerId
             self.auctionContext = auctionContext
             self.animateOut = animateOut
             self.getController = getController
@@ -162,15 +156,16 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
             self.context.sharedContext.openExternalUrl(context: self.context, urlContext: .generic, url: url, forceExternal: true, presentationData: presentationData, navigationController: navigationController, dismissInput: {})
         }
         
-        func openAuction() {
-            guard let controller = self.getController() as? GiftAuctionViewScreen, let navigationController = controller.navigationController as? NavigationController else {
+        func proceed() {
+            guard let controller = self.getController() as? GiftAuctionViewScreen else {
                 return
             }
-            
             self.dismiss(animated: true)
             
-            let bidController = self.context.sharedContext.makeGiftAuctionBidScreen(context: self.context, toPeerId: self.auctionContext.currentBidPeerId ?? self.toPeerId, auctionContext: self.auctionContext)
-            navigationController.pushViewController(bidController)
+            controller.completion()
+            
+//            let bidController = self.context.sharedContext.makeGiftAuctionBidScreen(context: self.context, toPeerId: self.auctionContext.currentBidPeerId ?? self.toPeerId, auctionContext: self.auctionContext)
+//            navigationController.pushViewController(bidController)
         }
         
         func openPeer(_ peer: EnginePeer, dismiss: Bool = true) {
@@ -350,7 +345,7 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
     }
     
     func makeState() -> State {
-        return State(context: self.context, toPeerId: self.toPeerId, auctionContext: self.auctionContext, animateOut: self.animateOut, getController: self.getController)
+        return State(context: self.context, auctionContext: self.auctionContext, animateOut: self.animateOut, getController: self.getController)
     }
     
     static var body: Body {
@@ -765,7 +760,7 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
                             guard let state else {
                                 return
                             }
-                            state.openAuction()
+                            state.proceed()
                         }),
                     availableSize: buttonSize,
                     transition: .spring(duration: 0.2)
@@ -964,16 +959,13 @@ final class GiftAuctionViewSheetComponent: CombinedComponent {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
     
     let context: AccountContext
-    let toPeerId: EnginePeer.Id
     let auctionContext: GiftAuctionContext
     
     init(
         context: AccountContext,
-        toPeerId: EnginePeer.Id,
         auctionContext: GiftAuctionContext
     ) {
         self.context = context
-        self.toPeerId = toPeerId
         self.auctionContext = auctionContext
     }
     
@@ -998,7 +990,6 @@ final class GiftAuctionViewSheetComponent: CombinedComponent {
                 component: SheetComponent<EnvironmentType>(
                     content: AnyComponent<EnvironmentType>(GiftAuctionViewSheetContent(
                         context: context.component.context,
-                        toPeerId: context.component.toPeerId,
                         auctionContext: context.component.auctionContext,
                         animateOut: animateOut,
                         getController: controller
@@ -1079,16 +1070,19 @@ final class GiftAuctionViewSheetComponent: CombinedComponent {
 }
 
 public final class GiftAuctionViewScreen: ViewControllerComponentContainer {
+    fileprivate let completion: () -> Void
+    
     public init(
         context: AccountContext,
-        toPeerId: EnginePeer.Id,
-        auctionContext: GiftAuctionContext
+        auctionContext: GiftAuctionContext,
+        completion: @escaping () -> Void
     ) {
+        self.completion = completion
+        
         super.init(
             context: context,
             component: GiftAuctionViewSheetComponent(
                 context: context,
-                toPeerId: toPeerId,
                 auctionContext: auctionContext
             ),
             navigationBarAppearance: .none,

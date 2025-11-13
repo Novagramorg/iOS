@@ -556,7 +556,11 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                             }
                         case let .starGift(gift, convertStars, giftText, giftEntities, _, savedToProfile, converted, upgraded, canUpgrade, upgradeStars, isRefunded, isPrepaidUpgrade, _, channelPeerId, senderPeerId, _, _, _, _, _, toPeerId):
                             var incoming = incoming
+                            var convertStars = convertStars
                             if case let .generic(gift) = gift {
+                                if gift.flags.contains(.isAuction) {
+                                    convertStars = nil
+                                }
                                 if let releasedBy = gift.releasedBy, let peer = item.message.peers[releasedBy], let addressName = peer.addressName {
                                     creatorButtonTitle = item.presentationData.strings.Notification_StarGift_ReleasedBy("**@\(addressName)**").string
                                 }
@@ -656,7 +660,7 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                                                     entities.append(MessageTextEntity(range: starsRange.range.lowerBound ..< starsRange.range.upperBound, type: .Bold))
                                                 }
                                             } else {
-                                                text = item.presentationData.strings.Notification_StarGift_Subtitle_OtherNoConvert(peerName).string
+                                                text = item.presentationData.strings.Notification_StarGift_Subtitle_OtherNoConvert
                                             }
                                         }
                                     }
