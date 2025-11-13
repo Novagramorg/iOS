@@ -15425,3 +15425,6 @@ Error: %8$@";
 "ScheduledMessages.DeleteRepeatingActionSingle" = "Delete This Message Only";
 "ScheduledMessages.DeleteRepeatingActionMultiple" = "Delete All Future Messages";
 
+"ChatList.AlertResumeLiveStreamTitle" = "Resume Live Stream";
+"ChatList.AlertResumeLiveStreamText" = "Do you want to resume an existing Live Stream?";
+"ChatList.AlertResumeLiveStreamAction" = "Resume";
