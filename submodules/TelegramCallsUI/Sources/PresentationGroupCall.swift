@@ -938,7 +938,7 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
                 messageLifetime = Int32(value)
             }
             
-            if isStream {
+            if streamPeerId != nil {
                 messageLifetime = Int32.max
             }
             
@@ -948,7 +948,7 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
                 reference: .id(id: initialCall.description.id, accessHash: initialCall.description.accessHash),
                 e2eContext: self.e2eContext,
                 messageLifetime: messageLifetime,
-                isLiveStream: isStream
+                isLiveStream: streamPeerId != nil
             )
             self.messagesStatePromise.set(self.messagesContext!.state)
         }
