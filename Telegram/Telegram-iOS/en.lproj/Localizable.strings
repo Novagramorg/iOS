@@ -15367,3 +15367,8 @@ Error: %8$@";
 "Stars.Transaction.LiveStreamPaidMessage_1" = "Fee for %@ Live Stream Message";
 "Stars.Transaction.LiveStreamPaidMessage_any" = "Fee for %@ Live Stream Messages";
 "Stars.Transaction.LiveStreamPaidMessage.Text" = "You receive **%@%** of the price that you charge for each incoming message.";
+
+"Notification.StarGift.Subtitle.NoConvert" = "We'll notify you once it becomes eligible for unique upgrades.";
+"Notification.StarGift.Subtitle.OtherNoConvert" = "We'll notify %1$@ once it becomes eligible for unique upgrades.";
+"Gift.View.NoConvertDescription" = "We'll notify you once it becomes eligible for unique upgrades.";
+"Gift.View.OtherNoConvertDescription" = "We'll notify %1$@ once it becomes eligible for unique upgrades.";

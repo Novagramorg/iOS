@@ -2410,6 +2410,11 @@ private final class GiftViewSheetContent: CombinedComponent {
                 soldOut = true
                 titleString = strings.Gift_View_UnavailableTitle
             } else if let arguments = subject.arguments {
+                if let toPeerId = arguments.auctionToPeerId {
+                    isSelfGift =  arguments.messageId?.peerId.isTelegramNotifications == true && toPeerId == component.context.account.peerId
+                } else {
+                    isSelfGift = arguments.messageId?.peerId == component.context.account.peerId
+                }
                 switch arguments.gift {
                 case let .generic(gift):
                     if let releasedBy = gift.releasedBy, let peer = state.peerMap[releasedBy], let addressName = peer.addressName {
@@ -2451,12 +2456,14 @@ private final class GiftViewSheetContent: CombinedComponent {
                     isChannelGift = true
                     incoming = true
                 } else {
-                    incoming = arguments.incoming || arguments.peerId == component.context.account.peerId
+                    if let toPeerId = arguments.auctionToPeerId, toPeerId != component.context.account.peerId {
+                        incoming = false
+                    } else {
+                        incoming = arguments.incoming || arguments.peerId == component.context.account.peerId
+                    }
                 }
                 nameHidden = arguments.nameHidden
                 canGiftUpgrade = arguments.prepaidUpgradeHash != nil
-                
-                isSelfGift = arguments.messageId?.peerId == component.context.account.peerId
                 
                 if case let .peerId(peerId) = uniqueGift?.owner, peerId == component.context.account.peerId {
                     isMyOwnedUniqueGift = true
@@ -3025,33 +3032,52 @@ private final class GiftViewSheetContent: CombinedComponent {
                 } else if incoming {
                     if let _ = upgradeStars {
                         descriptionText = strings.Gift_View_FreeUpgradeDescription
+                    } else if let gift = subject.arguments?.gift, case let .generic(gift) = gift, gift.availability != nil, !upgraded {
+                        if canUpgrade || upgradeStars != nil {
+                            if let upgradeStars, upgradeStars > 0 {
+                                descriptionText = strings.Gift_View_UpgradeFreeDescription
+                            } else {
+                                descriptionText = strings.Gift_View_UpgradeDescription
+                            }
+                        } else {
+                            descriptionText = strings.Gift_View_NoConvertDescription
+                        }
                     } else if let convertStars, !upgraded {
                         if !converted {
-                            if canUpgrade || upgradeStars != nil {
-                                if let upgradeStars, upgradeStars > 0 {
-                                    descriptionText = strings.Gift_View_UpgradeFreeDescription
-                                } else {
-                                    descriptionText = strings.Gift_View_UpgradeDescription
-                                }
-                            } else {
-                                descriptionText = isChannelGift ? strings.Gift_View_KeepOrConvertDescription_Channel(strings.Gift_View_KeepOrConvertDescription_Stars(Int32(clamping: convertStars))).string : strings.Gift_View_KeepOrConvertDescription(strings.Gift_View_KeepOrConvertDescription_Stars(Int32(clamping: convertStars))).string
-                            }
+                            descriptionText = isChannelGift ? strings.Gift_View_KeepOrConvertDescription_Channel(strings.Gift_View_KeepOrConvertDescription_Stars(Int32(clamping: convertStars))).string : strings.Gift_View_KeepOrConvertDescription(strings.Gift_View_KeepOrConvertDescription_Stars(Int32(clamping: convertStars))).string
                         } else {
                             descriptionText = strings.Gift_View_ConvertedDescription(strings.Gift_View_ConvertedDescription_Stars(Int32(clamping: convertStars))).string
                         }
                     } else {
-                        descriptionText = strings.Gift_View_BotDescription
+                        descriptionText = strings.Gift_View_NoConvertDescription
                     }
-                } else if let peerId = subject.arguments?.peerId, let peer = state.peerMap[peerId] {
-                    if let _ = upgradeStars {
-                        descriptionText = strings.Gift_View_FreeUpgradeOtherDescription(peer.compactDisplayTitle).string
-                    } else if case .message = subject, let convertStars {
-                        descriptionText = strings.Gift_View_OtherDescription(peer.compactDisplayTitle, strings.Gift_View_OtherDescription_Stars(Int32(clamping: convertStars))).string
+                } else {
+                    let recipientPeerId: EnginePeer.Id?
+                    if let toPeerId = subject.arguments?.auctionToPeerId {
+                        recipientPeerId = toPeerId
+                    } else if let peerId = subject.arguments?.peerId {
+                        recipientPeerId = peerId
+                    } else {
+                        recipientPeerId = nil
+                    }
+                    
+                    if let recipientPeerId, let peer = state.peerMap[recipientPeerId] {
+                        if let _ = upgradeStars {
+                            descriptionText = strings.Gift_View_FreeUpgradeOtherDescription(peer.compactDisplayTitle).string
+                        } else if case .message = subject {
+                            if let gift = subject.arguments?.gift, case let .generic(gift) = gift, gift.availability != nil {
+                                descriptionText = strings.Gift_View_OtherNoConvertDescription(peer.compactDisplayTitle).string
+                            } else if let convertStars {
+                                descriptionText = strings.Gift_View_OtherDescription(peer.compactDisplayTitle, strings.Gift_View_OtherDescription_Stars(Int32(clamping: convertStars))).string
+                            } else {
+                                descriptionText = ""
+                            }
+                        } else {
+                            descriptionText = ""
+                        }
                     } else {
                         descriptionText = ""
                     }
-                } else {
-                    descriptionText = ""
                 }
                 if let spaceRegex {
                     let nsRange = NSRange(descriptionText.startIndex..., in: descriptionText)
@@ -3497,7 +3523,10 @@ private final class GiftViewSheetContent: CombinedComponent {
                             ))
                         }
                         
-                    } else if let peerId = subject.arguments?.fromPeerId, let peer = state.peerMap[peerId] {
+                    } else if let peerId = subject.arguments?.fromPeerId, var peer = state.peerMap[peerId] {
+                        if let toPeerId = subject.arguments?.auctionToPeerId, toPeerId != component.context.account.peerId, let selfPeer =  state.peerMap[component.context.account.peerId] {
+                            peer = selfPeer
+                        }
                         var isBot = false
                         if case let .user(user) = peer, user.botInfo != nil {
                             isBot = true
@@ -5128,12 +5157,43 @@ public class GiftViewScreen: ViewControllerComponentContainer {
         case upgradePreview([StarGift.UniqueGift.Attribute], String)
         case wearPreview(StarGift.UniqueGift)
         
-        var arguments: (peerId: EnginePeer.Id?, fromPeerId: EnginePeer.Id?, fromPeerName: String?, fromPeerCompactName: String?, messageId: EngineMessage.Id?, reference: StarGiftReference?, incoming: Bool, gift: StarGift, date: Int32, convertStars: Int64?, text: String?, entities: [MessageTextEntity]?, nameHidden: Bool, savedToProfile: Bool, pinnedToTop: Bool?, converted: Bool, upgraded: Bool, refunded: Bool, canUpgrade: Bool, upgradeStars: Int64?, transferStars: Int64?, resellAmounts: [CurrencyAmount]?, canExportDate: Int32?, upgradeMessageId: Int32?, canTransferDate: Int32?, canResaleDate: Int32?, prepaidUpgradeHash: String?, upgradeSeparate: Bool, dropOriginalDetailsStars: Int64?)? {
+        var arguments: (
+            peerId: EnginePeer.Id?,
+            fromPeerId: EnginePeer.Id?,
+            fromPeerName: String?,
+            fromPeerCompactName: String?,
+            messageId: EngineMessage.Id?,
+            reference: StarGiftReference?,
+            incoming: Bool,
+            gift: StarGift,
+            date: Int32,
+            convertStars: Int64?,
+            text: String?,
+            entities: [MessageTextEntity]?,
+            nameHidden: Bool,
+            savedToProfile: Bool,
+            pinnedToTop: Bool?,
+            converted: Bool,
+            upgraded: Bool,
+            refunded: Bool,
+            canUpgrade: Bool,
+            upgradeStars: Int64?,
+            transferStars: Int64?,
+            resellAmounts: [CurrencyAmount]?,
+            canExportDate: Int32?,
+            upgradeMessageId: Int32?,
+            canTransferDate: Int32?,
+            canResaleDate: Int32?,
+            prepaidUpgradeHash: String?,
+            upgradeSeparate: Bool,
+            dropOriginalDetailsStars: Int64?,
+            auctionToPeerId: EnginePeer.Id?
+        )? {
             switch self {
             case let .message(message):
                 if let action = message.media.first(where: { $0 is TelegramMediaAction }) as? TelegramMediaAction {
                     switch action.action {
-                    case let .starGift(gift, convertStars, text, entities, nameHidden, savedToProfile, converted, upgraded, canUpgrade, upgradeStars, isRefunded, _, upgradeMessageId, peerId, senderId, savedId, prepaidUpgradeHash, giftMessageId, upgradeSeparate, _, _):
+                    case let .starGift(gift, convertStars, text, entities, nameHidden, savedToProfile, converted, upgraded, canUpgrade, upgradeStars, isRefunded, _, upgradeMessageId, peerId, senderId, savedId, prepaidUpgradeHash, giftMessageId, upgradeSeparate, _, toPeerId):
                         var reference: StarGiftReference
                         if let peerId, let giftMessageId {
                             reference = .message(messageId: EngineMessage.Id(peerId: peerId, namespace: Namespaces.Message.Cloud, id: giftMessageId))
@@ -5142,7 +5202,9 @@ public class GiftViewScreen: ViewControllerComponentContainer {
                         } else {
                             reference = .message(messageId: message.id)
                         }
-                        return (message.id.peerId, senderId ?? message.author?.id, message.author?.debugDisplayTitle, message.author?.compactDisplayTitle, message.id, reference, message.flags.contains(.Incoming), gift, message.timestamp, convertStars, text, entities, nameHidden, savedToProfile, nil, converted, upgraded, isRefunded, canUpgrade, upgradeStars, nil, nil, nil, upgradeMessageId, nil, nil, prepaidUpgradeHash, upgradeSeparate, nil)
+                        
+                        let fromPeerId = senderId ?? message.author?.id
+                        return (message.id.peerId, fromPeerId, message.author?.debugDisplayTitle, message.author?.compactDisplayTitle, message.id, reference, message.flags.contains(.Incoming), gift, message.timestamp, convertStars, text, entities, nameHidden, savedToProfile, nil, converted, upgraded, isRefunded, canUpgrade, upgradeStars, nil, nil, nil, upgradeMessageId, nil, nil, prepaidUpgradeHash, upgradeSeparate, nil, toPeerId)
                     case let .starGiftUnique(gift, isUpgrade, isTransferred, savedToProfile, canExportDate, transferStars, _, _, peerId, senderId, savedId, _, canTransferDate, canResaleDate, dropOriginalDetailsStars, _):
                         var reference: StarGiftReference
                         if let peerId, let savedId {
@@ -5167,13 +5229,13 @@ public class GiftViewScreen: ViewControllerComponentContainer {
                         if case let .unique(uniqueGift) = gift {
                             resellAmounts = uniqueGift.resellAmounts
                         }
-                        return (message.id.peerId, senderId ?? message.author?.id, message.author?.debugDisplayTitle, message.author?.compactDisplayTitle, message.id, reference, incoming, gift, message.timestamp, nil, nil, nil, false, savedToProfile, nil, false, false, false, false, nil, transferStars, resellAmounts, canExportDate, nil, canTransferDate, canResaleDate, nil, false, dropOriginalDetailsStars)
+                        return (message.id.peerId, senderId ?? message.author?.id, message.author?.debugDisplayTitle, message.author?.compactDisplayTitle, message.id, reference, incoming, gift, message.timestamp, nil, nil, nil, false, savedToProfile, nil, false, false, false, false, nil, transferStars, resellAmounts, canExportDate, nil, canTransferDate, canResaleDate, nil, false, dropOriginalDetailsStars, nil)
                     default:
                         return nil
                     }
                 }
             case let .uniqueGift(gift, _), let .wearPreview(gift):
-                return (nil, nil, nil, nil, nil, nil, false, .unique(gift), 0, nil, nil, nil, false, false, nil, false, false, false, false, nil, nil, gift.resellAmounts, nil, nil, nil, nil, nil, false, nil)
+                return (nil, nil, nil, nil, nil, nil, false, .unique(gift), 0, nil, nil, nil, false, false, nil, false, false, false, false, nil, nil, gift.resellAmounts, nil, nil, nil, nil, nil, false, nil, nil)
             case let .profileGift(peerId, gift):
                 var messageId: EngineMessage.Id?
                 if case let .message(messageIdValue) = gift.reference {
@@ -5183,7 +5245,7 @@ public class GiftViewScreen: ViewControllerComponentContainer {
                 if case let .unique(uniqueGift) = gift.gift {
                     resellAmounts = uniqueGift.resellAmounts
                 }
-                return (peerId, gift.fromPeer?.id, gift.fromPeer?.debugDisplayTitle, gift.fromPeer?.compactDisplayTitle, messageId, gift.reference, false, gift.gift, gift.date, gift.convertStars, gift.text, gift.entities, gift.nameHidden, gift.savedToProfile, gift.pinnedToTop, false, false, false, gift.canUpgrade, gift.upgradeStars, gift.transferStars, resellAmounts, gift.canExportDate, nil, gift.canTransferDate, gift.canResaleDate, gift.prepaidUpgradeHash, gift.upgradeSeparate, gift.dropOriginalDetailsStars)
+                return (peerId, gift.fromPeer?.id, gift.fromPeer?.debugDisplayTitle, gift.fromPeer?.compactDisplayTitle, messageId, gift.reference, false, gift.gift, gift.date, gift.convertStars, gift.text, gift.entities, gift.nameHidden, gift.savedToProfile, gift.pinnedToTop, false, false, false, gift.canUpgrade, gift.upgradeStars, gift.transferStars, resellAmounts, gift.canExportDate, nil, gift.canTransferDate, gift.canResaleDate, gift.prepaidUpgradeHash, gift.upgradeSeparate, gift.dropOriginalDetailsStars, nil)
             case .soldOutGift:
                 return nil
             case .upgradePreview:

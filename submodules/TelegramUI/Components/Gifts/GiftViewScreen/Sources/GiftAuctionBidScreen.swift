@@ -1318,6 +1318,7 @@ private final class GiftAuctionBidScreenComponent: Component {
             if let actionButtonView = self.actionButton.view {
                 actionButtonView.layer.animatePosition(from: CGPoint(x: 0.0, y: animateOffset), to: CGPoint(), duration: 0.5, timingFunction: kCAMediaTimingFunctionSpring, additive: true)
             }
+            self.bottomEdgeEffectView.layer.animatePosition(from: CGPoint(x: 0.0, y: animateOffset), to: CGPoint(), duration: 0.5, timingFunction: kCAMediaTimingFunctionSpring, additive: true)
         }
         
         func animateOut(completion: @escaping () -> Void) {
@@ -1332,7 +1333,8 @@ private final class GiftAuctionBidScreenComponent: Component {
             if let actionButtonView = self.actionButton.view {
                 actionButtonView.layer.animatePosition(from: CGPoint(), to: CGPoint(x: 0.0, y: animateOffset), duration: 0.3, timingFunction: CAMediaTimingFunctionName.easeInEaseOut.rawValue, removeOnCompletion: false, additive: true)
             }
-            
+            self.bottomEdgeEffectView.layer.animatePosition(from: CGPoint(), to: CGPoint(x: 0.0, y: animateOffset), duration: 0.3, timingFunction: CAMediaTimingFunctionName.easeInEaseOut.rawValue, removeOnCompletion: false, additive: true)
+          
             if let view = self.balanceOverlay.view {
                 view.layer.animateScale(from: 1.0, to: 0.8, duration: 0.4, removeOnCompletion: false)
                 view.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.3, removeOnCompletion: false)
@@ -1683,9 +1685,6 @@ private final class GiftAuctionBidScreenComponent: Component {
             guard let component = self.component else {
                 return
             }
-            if "".isEmpty {
-                return
-            }
             let controller = giftAuctionCustomBidController(
                 context: component.context,
                 title: "Place a Custom Bid",
@@ -1794,14 +1793,6 @@ private final class GiftAuctionBidScreenComponent: Component {
                     self.giftAuctionState = state
                     
                     var peerIds: [EnginePeer.Id] = []
-                    if case let .ongoing(_, _, _, _, _, topBidders, _, _, _, _) = state?.auctionState {
-                        for bidder in topBidders {
-                            if self.peersMap[bidder] == nil {
-                                peerIds.append(bidder)
-                            }
-                        }
-                    }
-                    
                     var transition = ComponentTransition.spring(duration: 0.4)
 
                     if isFirstTime {
@@ -2358,17 +2349,15 @@ private final class GiftAuctionBidScreenComponent: Component {
                 }
                 
                 var i: Int32 = 1
-                for bidder in topBidders {
-                    if let peer = self.peersMap[bidder] {
-                        var bid: Int64 = 0
-                        for level in bidLevels {
-                            if level.position == i {
-                                bid = level.amount
-                                break
-                            }
+                for peer in topBidders {    
+                    var bid: Int64 = 0
+                    for level in bidLevels {
+                        if level.position == i {
+                            bid = level.amount
+                            break
                         }
-                        topBidsComponents.append((bidder, AnyComponent(PeerComponent(context: component.context, theme: environment.theme, groupingSeparator: environment.dateTimeFormat.groupingSeparator, peer: peer, place: i, amount: bid, isLast: i == topBidders.count, action: peer.id != component.context.account.peerId ? { [weak self] in self?.openPeer(peer, dismiss: false) } : nil))))
                     }
+                    topBidsComponents.append((peer.id, AnyComponent(PeerComponent(context: component.context, theme: environment.theme, groupingSeparator: environment.dateTimeFormat.groupingSeparator, peer: peer, place: i, amount: bid, isLast: i == topBidders.count, action: peer.id != component.context.account.peerId ? { [weak self] in self?.openPeer(peer, dismiss: false) } : nil))))
                     i += 1
                 }
                 
