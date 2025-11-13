@@ -297,7 +297,7 @@ private final class GiftAuctionCustomBidAlertContentNode: AlertContentNode {
     }
 }
 
-func giftAuctionCustomBidController(context: AccountContext, title: String, text: String, placeholder: String, action: String, minValue: Int64, value: Int64, apply: @escaping (Int64) -> Void) -> AlertController {
+func giftAuctionCustomBidController(context: AccountContext, title: String, text: String, placeholder: String, action: String, minValue: Int64, value: Int64, apply: @escaping (Int64) -> Void, cancel: @escaping () -> Void) -> AlertController {
     let presentationData = context.sharedContext.currentPresentationData.with { $0 }
     
     var dismissImpl: ((Bool) -> Void)?
@@ -305,6 +305,7 @@ func giftAuctionCustomBidController(context: AccountContext, title: String, text
     
     let actions: [TextAlertAction] = [TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: {
         dismissImpl?(true)
+        cancel()
     }), TextAlertAction(type: .defaultAction, title: action, action: {
         applyImpl?()
     })]
@@ -330,8 +331,11 @@ func giftAuctionCustomBidController(context: AccountContext, title: String, text
     let presentationDataDisposable = context.sharedContext.presentationData.start(next: { [weak controller] presentationData in
         controller?.theme = AlertControllerTheme(presentationData: presentationData)
     })
-    controller.dismissed = { _ in
+    controller.dismissed = { byTapOutside in
         presentationDataDisposable.dispose()
+        if byTapOutside {
+            cancel()
+        }
     }
     dismissImpl = { [weak controller, weak contentNode] animated in
         contentNode?.deactivateInput()
