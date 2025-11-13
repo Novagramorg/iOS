@@ -15384,11 +15384,6 @@ Error: %8$@";
 "Gift.AuctionTransfer.TextToYourself" = "The current recipient of this gift is **%@**. Change to yourself?";
 "Gift.AuctionTransfer.Change" = "Change";
 
-"Notification.StarGift.Subtitle.NoConvert" = "We'll notify you once it becomes eligible for unique upgrades.";
-"Notification.StarGift.Subtitle.OtherNoConvert" = "We'll notify %1$@ once it becomes eligible for unique upgrades.";
-"Gift.View.NoConvertDescription" = "We'll notify you once it becomes eligible for unique upgrades.";
-"Gift.View.OtherNoConvertDescription" = "We'll notify %1$@ once it becomes eligible for unique upgrades.";
-
 "Story.LiveBadge" = "LIVE";
 "SendStarReactions.LiveStreamPerk1Title" = "pin in chat";
 "SendStarReactions.LiveStreamPerk2Title" = "characters";
