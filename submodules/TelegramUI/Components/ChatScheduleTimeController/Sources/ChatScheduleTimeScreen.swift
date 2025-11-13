@@ -2,6 +2,7 @@ import Foundation
 import UIKit
 import Display
 import ComponentFlow
+import SwiftSignalKit
 import TelegramCore
 import ViewControllerComponent
 import TelegramPresentationData
@@ -159,6 +160,8 @@ private final class ChatScheduleTimeSheetContentComponent: Component {
             self.component = component
             self.state = state
             
+            let strings = environment.strings
+            
             let sideInset: CGFloat = 39.0
             
             var contentHeight: CGFloat = 0.0
@@ -201,9 +204,9 @@ private final class ChatScheduleTimeSheetContentComponent: Component {
             let title: String
             switch component.mode {
             case .scheduledMessages:
-                title = environment.strings.Conversation_ScheduleMessage_Title
+                title = strings.Conversation_ScheduleMessage_Title
             case .reminders:
-                title = environment.strings.Conversation_SetReminder_Title
+                title = strings.Conversation_SetReminder_Title
             }
             let titleSize = self.title.update(
                 transition: transition,
@@ -232,7 +235,7 @@ private final class ChatScheduleTimeSheetContentComponent: Component {
             } else {
                 datePicker = DatePickerNode(
                     theme: DatePickerTheme(theme: environment.theme),
-                    strings: environment.strings,
+                    strings: strings,
                     dateTimeFormat: environment.dateTimeFormat,
                     hasValueRow: false
                 )
@@ -295,7 +298,7 @@ private final class ChatScheduleTimeSheetContentComponent: Component {
             let timeTitleSize = self.timeTitle.update(
                 transition: transition,
                 component: AnyComponent(
-                    Text(text: "Time", font: Font.regular(17.0), color: environment.theme.actionSheet.primaryTextColor)
+                    Text(text: strings.ScheduleMessage_Time, font: Font.regular(17.0), color: environment.theme.actionSheet.primaryTextColor)
                 ),
                 environment: {},
                 containerSize: availableSize
@@ -364,7 +367,7 @@ private final class ChatScheduleTimeSheetContentComponent: Component {
             let repeatTitleSize = self.repeatTitle.update(
                 transition: transition,
                 component: AnyComponent(
-                    Text(text: "Repeat", font: Font.regular(17.0), color: environment.theme.actionSheet.primaryTextColor)
+                    Text(text: strings.ScheduleMessage_Repeat, font: Font.regular(17.0), color: environment.theme.actionSheet.primaryTextColor)
                 ),
                 environment: {},
                 containerSize: availableSize
@@ -380,29 +383,25 @@ private final class ChatScheduleTimeSheetContentComponent: Component {
             let repeatString: String
             if let repeatPeriod = self.repeatPeriod {
                 switch repeatPeriod {
-                case 60:
-                    repeatString = "Every Minute"
-                case 300:
-                    repeatString = "Every 5 Minutes"
                 case 86400:
-                    repeatString = "Daily"
+                    repeatString = strings.ScheduleMessage_RepeatPeriod_Daily
                 case 7 * 86400:
-                    repeatString = "Weekly"
+                    repeatString = strings.ScheduleMessage_RepeatPeriod_Weekly
                 case 14 * 86400:
-                    repeatString = "Biweekly"
+                    repeatString = strings.ScheduleMessage_RepeatPeriod_Biweekly
                 case 30 * 86400:
-                    repeatString = "Monthly"
+                    repeatString = strings.ScheduleMessage_RepeatPeriod_Monthly
                 case 91 * 86400:
-                    repeatString = "Every 3 Months"
+                    repeatString = strings.ScheduleMessage_RepeatPeriod_3Months
                 case 182 * 86400:
-                    repeatString = "Every 6 Months"
+                    repeatString = strings.ScheduleMessage_RepeatPeriod_6Months
                 case 365 * 86400:
-                    repeatString = "Yearly"
+                    repeatString = strings.ScheduleMessage_RepeatPeriod_Yearly
                 default:
-                    repeatString = "\(repeatPeriod)"
+                    repeatString = "\(repeatPeriod)s"
                 }
             } else {
-                repeatString = "Never"
+                repeatString = strings.ScheduleMessage_RepeatPeriod_Never
             }
             
             let repeatValueSize = self.repeatValue.update(
@@ -448,19 +447,19 @@ private final class ChatScheduleTimeSheetContentComponent: Component {
             switch component.mode {
             case .scheduledMessages:
                 if calendar.isDateInToday(date) {
-                    buttonTitle = environment.strings.Conversation_ScheduleMessage_SendToday(time).string
+                    buttonTitle = strings.Conversation_ScheduleMessage_SendToday(time).string
                 } else if calendar.isDateInTomorrow(date) {
-                    buttonTitle = environment.strings.Conversation_ScheduleMessage_SendTomorrow(time).string
+                    buttonTitle = strings.Conversation_ScheduleMessage_SendTomorrow(time).string
                 } else {
-                    buttonTitle = environment.strings.Conversation_ScheduleMessage_SendOn(self.dateFormatter.string(from: date), time).string
+                    buttonTitle = strings.Conversation_ScheduleMessage_SendOn(self.dateFormatter.string(from: date), time).string
                 }
             case .reminders:
                 if calendar.isDateInToday(date) {
-                    buttonTitle = environment.strings.Conversation_SetReminder_RemindToday(time).string
+                    buttonTitle = strings.Conversation_SetReminder_RemindToday(time).string
                 } else if calendar.isDateInTomorrow(date) {
-                    buttonTitle = environment.strings.Conversation_SetReminder_RemindTomorrow(time).string
+                    buttonTitle = strings.Conversation_SetReminder_RemindTomorrow(time).string
                 } else {
-                    buttonTitle = environment.strings.Conversation_SetReminder_RemindOn(self.dateFormatter.string(from: date), time).string
+                    buttonTitle = strings.Conversation_SetReminder_RemindOn(self.dateFormatter.string(from: date), time).string
                 }
             }
                 
@@ -517,7 +516,7 @@ private final class ChatScheduleTimeSheetContentComponent: Component {
                             pressedColor: environment.theme.list.itemCheckColors.fillColor.withMultipliedAlpha(0.8),
                         ),
                         content: AnyComponentWithIdentity(id: AnyHashable(0 as Int), component: AnyComponent(
-                            Text(text: environment.strings.Conversation_ScheduleMessage_SendWhenOnline, font: Font.semibold(17.0), color: environment.theme.list.itemCheckColors.fillColor)
+                            Text(text: strings.Conversation_ScheduleMessage_SendWhenOnline, font: Font.semibold(17.0), color: environment.theme.list.itemCheckColors.fillColor)
                         )),
                         isEnabled: true,
                         displaysProgress: false,
@@ -608,6 +607,7 @@ private final class ChatScheduleTimeSheetContentComponent: Component {
                             sourceFrame: repeatValueFrame,
                             component: AnyComponent(RepeatMenuComponent(
                                 theme: environment.theme,
+                                strings: strings,
                                 value: self.repeatPeriod,
                                 valueUpdated: { [weak self] value in
                                     guard let self, let component = self.component, let environment = self.environment else {
@@ -620,9 +620,9 @@ private final class ChatScheduleTimeSheetContentComponent: Component {
                                         let toastController = UndoOverlayController(
                                             presentationData: component.context.sharedContext.currentPresentationData.with { $0 },
                                             content: .premiumPaywall(
-                                                title: "Premium Required",
-                                                text: "Subscribe to **Telegram Premium** to schedule repeating messages.",
-                                                customUndoText: "Add",
+                                                title: strings.ScheduleMessage_PremiumRequired_Title,
+                                                text: strings.ScheduleMessage_PremiumRequired_Text,
+                                                customUndoText: strings.ScheduleMessage_PremiumRequired_Add,
                                                 timeout: nil,
                                                 linkAction: nil
                                             ),
@@ -1167,23 +1167,175 @@ private final class MenuComponent: Component {
     }
 }
 
+private final class MenuButtonComponent: Component {
+    let theme: PresentationTheme
+    let text: String
+    let isSelected: Bool
+    let width: CGFloat?
+    let action: () -> Void
+    
+    init(
+        theme: PresentationTheme,
+        text: String,
+        isSelected: Bool,
+        width: CGFloat?,
+        action: @escaping () -> Void
+    ) {
+        self.theme = theme
+        self.text = text
+        self.isSelected = isSelected
+        self.width = width
+        self.action = action
+    }
+
+    static func ==(lhs: MenuButtonComponent, rhs: MenuButtonComponent) -> Bool {
+        if lhs.theme !== rhs.theme {
+            return false
+        }
+        if lhs.text != rhs.text {
+            return false
+        }
+        if lhs.isSelected != rhs.isSelected {
+            return false
+        }
+        if lhs.width != rhs.width {
+            return false
+        }
+        return true
+    }
+
+    final class View: UIView {
+        private var component: MenuButtonComponent?
+        private weak var componentState: EmptyComponentState?
+        
+        private let selectionLayer = SimpleLayer()
+        private let title = ComponentView<Empty>()
+        private let icon = ComponentView<Empty>()
+        private let button = HighlightTrackingButton()
+                
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+                        
+            self.layer.addSublayer(self.selectionLayer)
+            self.selectionLayer.masksToBounds = true
+            self.selectionLayer.opacity = 0.0
+            
+            self.button.addTarget(self, action: #selector(self.buttonPressed), for: .touchUpInside)
+            
+            self.button.highligthedChanged = { [weak self] highlighted in
+                if let self {
+                    if highlighted {
+                        self.selectionLayer.opacity = 1.0
+                        self.selectionLayer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
+                    } else {
+                        self.selectionLayer.opacity = 0.0
+                        self.selectionLayer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2)
+                    }
+                }
+            }
+        }
+        
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
+        
+        @objc private func buttonPressed() {
+            if let component = self.component {
+                component.action()
+            }
+        }
+                
+        func update(component: MenuButtonComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
+            self.component = component
+            self.componentState = state
+            
+            let leftInset: CGFloat = 60.0
+            let rightInset: CGFloat = 40.0
+                        
+            let titleSize = self.title.update(
+                transition: transition,
+                component: AnyComponent(
+                    Text(text: component.text, font: Font.regular(17.0), color: component.theme.contextMenu.primaryColor)
+                ),
+                environment: {},
+                containerSize: availableSize
+            )
+            let titleFrame = CGRect(origin: CGPoint(x: 60.0, y: floorToScreenPixels((availableSize.height - titleSize.height) / 2.0)), size: titleSize)
+            if let titleView = self.title.view {
+                if titleView.superview == nil {
+                    self.addSubview(titleView)
+                }
+                titleView.frame = titleFrame
+            }
+            
+            let size = CGSize(width: component.width ?? (leftInset + rightInset + titleSize.width), height: availableSize.height)
+            
+            if component.isSelected {
+                let iconSize = self.icon.update(
+                    transition: .immediate,
+                    component: AnyComponent(
+                        BundleIconComponent(
+                            name: "Media Gallery/Check",
+                            tintColor: component.theme.contextMenu.primaryColor
+                        )
+                    ),
+                    environment: {},
+                    containerSize: CGSize(width: 44.0, height: 44.0)
+                )
+                let iconFrame = CGRect(origin: CGPoint(x: 25.0, y: floorToScreenPixels((size.height - iconSize.height) / 2.0)), size: iconSize)
+                if let iconView = self.icon.view {
+                    if iconView.superview == nil {
+                        self.addSubview(iconView)
+                    }
+                    iconView.frame = iconFrame
+                }
+            }
+            
+            self.selectionLayer.backgroundColor = component.theme.contextMenu.itemHighlightedBackgroundColor.withMultipliedAlpha(0.5).cgColor
+            transition.setFrame(layer: self.selectionLayer, frame: CGRect(origin: .zero, size: size).insetBy(dx: 10.0, dy: 0.0))
+            self.selectionLayer.cornerRadius = size.height / 2.0
+                       
+            if self.button.superview == nil {
+                self.addSubview(self.button)
+            }
+            self.button.frame = CGRect(origin: .zero, size: size)
+            
+            return size
+        }
+    }
+
+    func makeView() -> View {
+        return View(frame: CGRect())
+    }
+
+    func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
+        return view.update(component: self, availableSize: availableSize, state: state, environment: environment, transition: transition)
+    }
+}
+
 private final class RepeatMenuComponent: Component {
     let theme: PresentationTheme
+    let strings: PresentationStrings
     let value: Int32?
     let valueUpdated: (Int32?) -> Void
     
     init(
         theme: PresentationTheme,
+        strings: PresentationStrings,
         value: Int32?,
         valueUpdated: @escaping (Int32?) -> Void
     ) {
         self.theme = theme
+        self.strings = strings
         self.value = value
         self.valueUpdated = valueUpdated
     }
 
     public static func ==(lhs: RepeatMenuComponent, rhs: RepeatMenuComponent) -> Bool {
         if lhs.theme !== rhs.theme {
+            return false
+        }
+        if lhs.strings !== rhs.strings {
             return false
         }
         if lhs.value != rhs.value {
@@ -1197,7 +1349,6 @@ private final class RepeatMenuComponent: Component {
         private let never = ComponentView<Empty>()
         private let separator = SimpleLayer()
         private var itemViews: [Int32: ComponentView<Empty>] = [:]
-        private let checkIcon = UIImageView()
         
         private var component: RepeatMenuComponent?
         
@@ -1211,9 +1362,10 @@ private final class RepeatMenuComponent: Component {
             365 * 86400
         ]
         
+        private var width: CGFloat?
+        
         public override init(frame: CGRect) {
             self.backgroundView = GlassBackgroundView()
-            self.checkIcon.image = UIImage(bundleImageName: "Media Gallery/Check")?.withRenderingMode(.alwaysTemplate)
             
             super.init(frame: frame)
             
@@ -1229,19 +1381,16 @@ private final class RepeatMenuComponent: Component {
             self.component = component
             
             let sideInset: CGFloat = 18.0
-            let itemInset: CGFloat = 60.0
+            let itemHeight: CGFloat = 40.0
             
-            let textColor = component.theme.contextMenu.primaryColor
-            
-            self.checkIcon.tintColor = textColor
-                        
             let neverSize = self.never.update(
                 transition: transition,
                 component: AnyComponent(
-                    PlainButtonComponent(
-                        content: AnyComponent(
-                            Text(text: "Never", font: Font.regular(17.0), color: textColor)
-                        ),
+                    MenuButtonComponent(
+                        theme: component.theme,
+                        text: component.strings.ScheduleMessage_RepeatPeriod_Never,
+                        isSelected: component.value == nil,
+                        width: self.width,
                         action: { [weak self] in
                             guard let self else {
                                 return
@@ -1251,22 +1400,18 @@ private final class RepeatMenuComponent: Component {
                     )
                 ),
                 environment: {},
-                containerSize: availableSize
+                containerSize: CGSize(width: availableSize.width, height: itemHeight)
             )
-            let neverFrame = CGRect(origin: CGPoint(x: itemInset, y: 21.0), size: neverSize)
+            let neverFrame = CGRect(origin: CGPoint(x: 0.0, y: 12.0), size: neverSize)
             if let neverView = self.never.view {
                 if neverView.superview == nil {
                     self.addSubview(neverView)
                 }
                 transition.setFrame(view: neverView, frame: neverFrame)
-                
-                if component.value == nil {
-                    neverView.addSubview(self.checkIcon)
-                }
             }
             
             var maxWidth: CGFloat = 0.0
-            var originY: CGFloat = 83.0
+            var originY: CGFloat = 72.0
             for value in self.values {
                 let itemView: ComponentView<Empty>
                 if let current = self.itemViews[value] {
@@ -1278,35 +1423,32 @@ private final class RepeatMenuComponent: Component {
                 
                 let repeatString: String
                 switch value {
-                case 60:
-                    repeatString = "Every Minute"
-                case 300:
-                    repeatString = "Every 5 Minutes"
                 case 86400:
-                    repeatString = "Daily"
+                    repeatString = component.strings.ScheduleMessage_RepeatPeriod_Daily
                 case 7 * 86400:
-                    repeatString = "Weekly"
+                    repeatString = component.strings.ScheduleMessage_RepeatPeriod_Weekly
                 case 14 * 86400:
-                    repeatString = "Biweekly"
+                    repeatString = component.strings.ScheduleMessage_RepeatPeriod_Biweekly
                 case 30 * 86400:
-                    repeatString = "Monthly"
+                    repeatString = component.strings.ScheduleMessage_RepeatPeriod_Monthly
                 case 91 * 86400:
-                    repeatString = "Every 3 Months"
+                    repeatString = component.strings.ScheduleMessage_RepeatPeriod_3Months
                 case 182 * 86400:
-                    repeatString = "Every 6 Months"
+                    repeatString = component.strings.ScheduleMessage_RepeatPeriod_6Months
                 case 365 * 86400:
-                    repeatString = "Yearly"
+                    repeatString = component.strings.ScheduleMessage_RepeatPeriod_Yearly
                 default:
-                    repeatString = "\(value)"
+                    repeatString = "\(value)s"
                 }
                 
                 let itemSize = itemView.update(
                     transition: transition,
                     component: AnyComponent(
-                        PlainButtonComponent(
-                            content: AnyComponent(
-                                Text(text: repeatString, font: Font.regular(17.0), color: textColor)
-                            ),
+                        MenuButtonComponent(
+                            theme: component.theme,
+                            text: repeatString,
+                            isSelected: component.value == value,
+                            width: self.width,
                             action: { [weak self] in
                                 guard let self else {
                                     return
@@ -1316,31 +1458,30 @@ private final class RepeatMenuComponent: Component {
                         )
                     ),
                     environment: {},
-                    containerSize: availableSize
+                    containerSize: CGSize(width: availableSize.width, height: itemHeight)
                 )
                 maxWidth = max(maxWidth, itemSize.width)
-                let itemFrame = CGRect(origin: CGPoint(x: itemInset, y: originY), size: itemSize)
+                let itemFrame = CGRect(origin: CGPoint(x: 0.0, y: originY), size: itemSize)
                 if let itemView = itemView.view {
                     if itemView.superview == nil {
                         self.addSubview(itemView)
                     }
                     transition.setFrame(view: itemView, frame: itemFrame)
-                    
-                    if component.value == value {
-                        itemView.addSubview(self.checkIcon)
-                    }
                 }
-                originY += 42.0
+                originY += 40.0
             }
             
-            if let image = self.checkIcon.image {
-                self.checkIcon.frame = CGRect(origin: CGPoint(x: -35.0, y: floorToScreenPixels((12.0 - image.size.height) / 2.0) + 5.0), size: image.size)
-            }
+            let size = CGSize(width: maxWidth, height: originY + 8.0)
             
-            let size = CGSize(width: itemInset + maxWidth + 40.0, height: originY)
-            
-            self.separator.backgroundColor = textColor.withMultipliedAlpha(0.6).cgColor
+            self.separator.backgroundColor = component.theme.contextMenu.primaryColor.withMultipliedAlpha(0.5).cgColor
             self.separator.frame = CGRect(origin: CGPoint(x: sideInset, y: 62.0), size: CGSize(width: size.width - sideInset * 2.0, height: UIScreenPixel))
+            
+            if self.width == nil {
+                self.width = maxWidth
+                Queue.mainQueue().justDispatch {
+                    state.updated()
+                }
+            }
                         
             return size
         }

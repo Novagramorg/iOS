@@ -15299,3 +15299,71 @@ Error: %8$@";
 
 "Camera.LiveStream.Change" = "change";
 "Camera.LiveStream.StartLiveStream" = "Start Live Stream";
+
+"Camera.LiveStream.End" = "End";
+"Camera.LiveStream.End.Title" = "End Live Stream";
+"Camera.LiveStream.End.Text" = "Are you sure you want to end this live stream?";
+"Camera.LiveStream.End.End" = "End";
+"Camera.LiveStream.End.Leave" = "Leave";
+
+"Message.RepeatAt" = "%1$@ at %2$@";
+"Message.RepeatPeriod.Daily" = "daily";
+"Message.RepeatPeriod.Weekly" = "weekly";
+"Message.RepeatPeriod.Biweekly" = "biweekly";
+"Message.RepeatPeriod.Monthly" = "monthly";
+"Message.RepeatPeriod.3Months" = "every 3 months";
+"Message.RepeatPeriod.6Months" = "every 6 months";
+"Message.RepeatPeriod.Yearly" = "yearly";
+"Message.Approximate" = "appx. %@";
+
+"LiveStreamSettings.Title" = "Live Settings";
+"LiveStreamSettings.TitleEdit" = "Live Stream";
+"LiveStreamSettings.StartLiveAs" = "START LIVE AS";
+"LiveStreamSettings.WhoCanView" = "WHO CAN VIEW THIS LIVE";
+"LiveStreamSettings.WhoCanViewInfo" = "[Select people]() who won't see your live.";
+"LiveStreamSettings.ConnectStream" = "Connect Stream";
+"LiveStreamSettings.ConnectStreamInfo" = "Stream with a different app.";
+"LiveStreamSettings.AllowComments" = "Allow Comments";
+"LiveStreamSettings.AllowScreenshots" = "Allow Screenshots";
+"LiveStreamSettings.PricePerComment" = "PRICE PER COMMENT";
+"LiveStreamSettings.PricePerCommentInfo" = "The price a viewer must pay to send a comment.";
+"LiveStreamSettings.PricePerComment.Free" = "Free";
+"LiveStreamSettings.PricePerComment.Stars_1" = "%@ Star";
+"LiveStreamSettings.PricePerComment.Stars_any" = "%@ Stars";
+"LiveStreamSettings.SaveSettings" = "Save Settings";
+
+"AddContact.Title" = "New Contact";
+"AddContact.PhoneNumber.IsContact"= "This phone number is already in your contacts. [View >]()";
+"AddContact.PhoneNumber.Registered"= "This phone number is on Telegram.";
+"AddContact.PhoneNumber.NotRegistered"= "This phone number is not on Telegram. [Invite >]()";
+"AddContact.SyncToPhone" = "Sync Contact to Phone";
+"AddContact.NotePlaceholder" = "Add notes only visible to you";
+"AddContact.AddQR" = "Add via QR Code";
+
+"ScheduleMessage.Time" = "Time";
+"ScheduleMessage.Repeat" = "Repeat";
+"ScheduleMessage.RepeatPeriod.Never" = "Never";
+"ScheduleMessage.RepeatPeriod.Daily" = "Daily";
+"ScheduleMessage.RepeatPeriod.Weekly" = "Weekly";
+"ScheduleMessage.RepeatPeriod.Biweekly" = "Biweekly";
+"ScheduleMessage.RepeatPeriod.Monthly" = "Monthly";
+"ScheduleMessage.RepeatPeriod.3Months" = "Every 3 Months";
+"ScheduleMessage.RepeatPeriod.6Months" = "Every 6 Months";
+"ScheduleMessage.RepeatPeriod.Yearly" = "Yearly";
+
+"ScheduleMessage.PremiumRequired.Title" = "Premium Required";
+"ScheduleMessage.PremiumRequired.Text" = "Subscribe to **Telegram Premium** to schedule repeating messages.";
+"ScheduleMessage.PremiumRequired.Add" = "Add";
+
+"Stars.Transaction.GiftAuctionBid" = "Gift Auction Bid";
+"Stars.Intro.Transaction.GiftAuctionBid" = "Gift Auction Bid";
+
+"Stars.Intro.Transaction.LiveStreamReaction" = "Live Stream Reaction";
+"Stars.Transaction.LiveStreamReaction" = "Live Stream Reaction";
+"Stars.Transaction.LiveStreamReaction.Text" = "You receive **%@%** of the amount of each reaction.";
+
+"Stars.Intro.Transaction.LiveStreamPaidMessage_1" = "Fee for %@ Live Stream Message";
+"Stars.Intro.Transaction.LiveStreamPaidMessage_any" = "Fee for %@ Live Stream Messages";
+"Stars.Transaction.LiveStreamPaidMessage_1" = "Fee for %@ Live Stream Message";
+"Stars.Transaction.LiveStreamPaidMessage_any" = "Fee for %@ Live Stream Messages";
+"Stars.Transaction.LiveStreamPaidMessage.Text" = "You receive **%@%** of the price that you charge for each incoming message.";
