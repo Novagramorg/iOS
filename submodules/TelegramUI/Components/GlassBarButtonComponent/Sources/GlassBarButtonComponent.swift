@@ -95,7 +95,6 @@ public final class GlassBarButtonComponent: Component {
                 guard let self else {
                     return
                 }
-                //let transition = ComponentTransition(animation: .curve(duration: highlighted ? 0.25 : 0.35, curve: .spring))
                 if highlighted {
                     self.containerView.layer.animateSpring(from: CGFloat((self.containerView.layer.presentation()?.value(forKeyPath: "transform.scale.y") as? NSNumber)?.floatValue ?? 1.0) as NSNumber, to: 1.3636 as NSNumber, keyPath: "transform.scale", duration: 0.5, removeOnCompletion: false)
                 } else {
@@ -177,7 +176,7 @@ public final class GlassBarButtonComponent: Component {
             switch effectiveState {
             case .generic:
                 genericAlpha = 1.0
-                glassAlpha = 0.0
+                glassAlpha = 0.001
             case .glass, .tintedGlass:
                 glassAlpha = 1.0
                 genericAlpha = 0.0
@@ -193,7 +192,7 @@ public final class GlassBarButtonComponent: Component {
             transition.setAlpha(view: self.genericContainerView, alpha: genericAlpha)
             transition.setFrame(view: self.genericContainerView, frame: bounds)
             
-            transition.setAlpha(view: self.glassBackgroundView, alpha: glassAlpha)
+            transition.setAlpha(view: self.glassContainerView, alpha: glassAlpha)
             transition.setFrame(view: self.glassContainerView, frame: bounds)
             
             transition.setFrame(view: self.genericBackgroundView, frame: bounds)
