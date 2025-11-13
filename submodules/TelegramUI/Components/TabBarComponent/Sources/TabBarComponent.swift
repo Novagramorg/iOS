@@ -369,9 +369,10 @@ public final class TabBarComponent: Component {
             
             if let nativeTabBar = self.nativeTabBar {
                 if previousComponent?.items.map(\.item.title) != component.items.map(\.item.title) {
-                    nativeTabBar.items = (0 ..< component.items.count).map { i in
+                    let items: [UITabBarItem] = (0 ..< component.items.count).map { i in
                         return UITabBarItem(title: component.items[i].item.title, image: nil, tag: i)
                     }
+                    nativeTabBar.items = items
                     for (_, itemView) in self.itemViews {
                         itemView.view?.removeFromSuperview()
                     }
@@ -543,11 +544,12 @@ public final class TabBarComponent: Component {
             transition.setFrame(view: self.backgroundView, frame: CGRect(origin: CGPoint(), size: size))
             self.backgroundView.update(size: size, cornerRadius: size.height * 0.5, isDark: component.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: component.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7)), transition: transition)
             
-            transition.setFrame(view: self.contextGestureContainerView, frame: CGRect(origin: CGPoint(), size: size))
-            
             if self.nativeTabBar != nil {
-                return CGSize(width: availableSize.width, height: 62.0)
+                let finalSize = CGSize(width: availableSize.width, height: 62.0)
+                transition.setFrame(view: self.contextGestureContainerView, frame: CGRect(origin: CGPoint(), size: finalSize))
+                return finalSize
             } else {
+                transition.setFrame(view: self.contextGestureContainerView, frame: CGRect(origin: CGPoint(), size: size))
                 return size
             }
         }

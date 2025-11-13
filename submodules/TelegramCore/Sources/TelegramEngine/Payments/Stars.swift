@@ -729,9 +729,14 @@ private extension StarsContext.State.Transaction {
             if (apiFlags & (1 << 26)) != 0 {
                 flags.insert(.isStarGiftDropOriginalDetails)
             }
+            if (apiFlags & (1 << 27)) != 0 {
+                flags.insert(.isLiveStreamPaidMessage)
+            }
+            if (apiFlags & (1 << 28)) != 0 {
+                flags.insert(.isStarGiftAuctionBid)
+            }
             
             let media = extendedMedia.flatMap({ $0.compactMap { textMediaAndExpirationTimerFromApiMedia($0, PeerId(0)).media } }) ?? []
-            let _ = subscriptionPeriod
                         
             self.init(flags: flags, id: id, count: CurrencyAmount(apiAmount: stars), date: date, peer: parsedPeer, title: title, description: description, photo: photo.flatMap(TelegramMediaWebFile.init), transactionDate: transactionDate, transactionUrl: transactionUrl, paidMessageId: paidMessageId, giveawayMessageId: giveawayMessageId, media: media, subscriptionPeriod: subscriptionPeriod, starGift: starGift.flatMap { StarGift(apiStarGift: $0) }, floodskipNumber: floodskipNumber, starrefCommissionPermille: starrefCommissionPermille, starrefPeerId: starrefPeer?.peerId, starrefAmount: starrefAmount.flatMap(StarsAmount.init(apiAmount:)), paidMessageCount: paidMessageCount, premiumGiftMonths: premiumGiftMonths, adsProceedsFromDate: adsProceedsFromDate, adsProceedsToDate: adsProceedsToDate)
         }
@@ -786,6 +791,8 @@ public final class StarsContext {
                 public static let isPostsSearch = Flags(rawValue: 1 << 10)
                 public static let isStarGiftPrepaidUpgrade = Flags(rawValue: 1 << 11)
                 public static let isStarGiftDropOriginalDetails = Flags(rawValue: 1 << 12)
+                public static let isStarGiftAuctionBid = Flags(rawValue: 1 << 13)
+                public static let isLiveStreamPaidMessage = Flags(rawValue: 1 << 14)
             }
             
             public enum Peer: Equatable {
@@ -1630,7 +1637,7 @@ func _internal_sendStarsPaymentForm(account: Account, formId: Int64, source: Bot
                                                     receiptMessageId = id
                                                 }
                                             }
-                                        case .giftCode, .stars, .starsGift, .starsChatSubscription, .starGift, .starGiftUpgrade, .starGiftTransfer, .premiumGift, .starGiftResale, .starGiftPrepaidUpgrade, .starGiftDropOriginalDetails:
+                                        case .giftCode, .stars, .starsGift, .starsChatSubscription, .starGift, .starGiftUpgrade, .starGiftTransfer, .premiumGift, .starGiftResale, .starGiftPrepaidUpgrade, .starGiftDropOriginalDetails, .starGiftAuctionBid:
                                             receiptMessageId = nil
                                         }
                                     } else if case let .starGiftUnique(gift, _, _, savedToProfile, canExportDate, transferStars, _, _, peerId, _, savedId, _, canTransferDate, canResaleDate, dropOriginalDetailsStars, _) = action.action, case let .Id(messageId) = message.id {

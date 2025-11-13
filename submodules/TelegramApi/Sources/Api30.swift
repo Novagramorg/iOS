@@ -1,4 +1,54 @@
 public extension Api.account {
+    enum SavedRingtone: TypeConstructorDescription {
+        case savedRingtone
+        case savedRingtoneConverted(document: Api.Document)
+    
+    public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+    switch self {
+                case .savedRingtone:
+                    if boxed {
+                        buffer.appendInt32(-1222230163)
+                    }
+                    
+                    break
+                case .savedRingtoneConverted(let document):
+                    if boxed {
+                        buffer.appendInt32(523271863)
+                    }
+                    document.serialize(buffer, true)
+                    break
+    }
+    }
+    
+    public func descriptionFields() -> (String, [(String, Any)]) {
+        switch self {
+                case .savedRingtone:
+                return ("savedRingtone", [])
+                case .savedRingtoneConverted(let document):
+                return ("savedRingtoneConverted", [("document", document as Any)])
+    }
+    }
+    
+        public static func parse_savedRingtone(_ reader: BufferReader) -> SavedRingtone? {
+            return Api.account.SavedRingtone.savedRingtone
+        }
+        public static func parse_savedRingtoneConverted(_ reader: BufferReader) -> SavedRingtone? {
+            var _1: Api.Document?
+            if let signature = reader.readInt32() {
+                _1 = Api.parse(reader, signature: signature) as? Api.Document
+            }
+            let _c1 = _1 != nil
+            if _c1 {
+                return Api.account.SavedRingtone.savedRingtoneConverted(document: _1!)
+            }
+            else {
+                return nil
+            }
+        }
+    
+    }
+}
+public extension Api.account {
     enum SavedRingtones: TypeConstructorDescription {
         case savedRingtones(hash: Int64, ringtones: [Api.Document])
         case savedRingtonesNotModified

@@ -198,6 +198,9 @@ public final class AsyncListComponent: Component {
         if lhs.externalState !== rhs.externalState {
             return false
         }
+        if lhs.externalStateValue != rhs.externalStateValue {
+            return false
+        }
         if lhs.items != rhs.items {
             return false
         }
@@ -326,7 +329,7 @@ public final class AsyncListComponent: Component {
     
     private final class ListItemNodeImpl: ListViewItemNode {
         private let contentContainer: UIView
-        private let contentsView = ComponentView<Empty>()
+        let contentsView = ComponentView<Empty>()
         private(set) var item: ListItemImpl?
         
         init() {
@@ -427,7 +430,7 @@ public final class AsyncListComponent: Component {
         
         private var externalStateValue: ExternalState.Value?
         private var isUpdating: Bool = false
-        private(set) var component: AsyncListComponent?
+        public private(set) var component: AsyncListComponent?
         
         private var currentEntries: [ItemEntry] = []
         
@@ -473,6 +476,33 @@ public final class AsyncListComponent: Component {
             if let onVisibleItemsUpdated = component.onVisibleItemsUpdated {
                 onVisibleItemsUpdated(VisibleItems(view: self, direction: component.direction), transition)
             }
+        }
+        
+        public func visibleItems() -> VisibleItems? {
+            guard let component = self.component else {
+                return nil
+            }
+            return VisibleItems(view: self, direction: component.direction)
+        }
+        
+        public func visibleItemView(id: AnyHashable) -> UIView? {
+            guard let component = self.component else {
+                return nil
+            }
+            guard let index = component.items.firstIndex(where: { $0.id == id }) else {
+                return nil
+            }
+            var foundItemNode: ListItemNodeImpl?
+            self.listNode.forEachItemNode { itemNode in
+                if let itemNode = itemNode as? ListItemNodeImpl, itemNode.index == index {
+                    foundItemNode = itemNode
+                }
+            }
+            if let foundItemNode {
+                return foundItemNode.contentsView.view
+            }
+            
+            return nil
         }
         
         func update(component: AsyncListComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
