@@ -348,7 +348,10 @@ private final class StarsPurchaseScreenContentComponent: CombinedComponent {
                     let backgroundComponent: AnyComponent<Empty>?
                     if product.storeProduct.id == context.component.selectedProductId {
                         backgroundComponent = AnyComponent(
-                            ItemShimmeringLoadingComponent(color: environment.theme.list.itemAccentColor)
+                            ItemShimmeringLoadingComponent(
+                                color: environment.theme.list.itemAccentColor,
+                                cornerRadius: 26.0
+                            )
                         )
                     } else {
                         backgroundComponent = nil
@@ -359,10 +362,12 @@ private final class StarsPurchaseScreenContentComponent: CombinedComponent {
                         id: product.id,
                         component: AnyComponent(ListSectionComponent(
                             theme: environment.theme,
+                            style: .glass,
                             header: nil,
                             footer: nil,
                             items: [AnyComponentWithIdentity(id: 0, component: AnyComponent(ListActionItemComponent(
                                 theme: environment.theme,
+                                style: .glass,
                                 background: backgroundComponent,
                                 title: titleComponent,
                                 contentInsets: UIEdgeInsets(top: 12.0, left: -6.0, bottom: 12.0, right: 0.0),
@@ -414,10 +419,12 @@ private final class StarsPurchaseScreenContentComponent: CombinedComponent {
                     id: items.count,
                     component: AnyComponent(ListSectionComponent(
                         theme: environment.theme,
+                        style: .glass,
                         header: nil,
                         footer: nil,
                         items: [AnyComponentWithIdentity(id: 0, component: AnyComponent(ListActionItemComponent(
                             theme: environment.theme,
+                            style: .glass,
                             title: titleCombinedComponent,
                             titleAlignment: .center,
                             contentInsets: UIEdgeInsets(top: 7.0, left: 0.0, bottom: 7.0, right: 0.0),
@@ -1013,6 +1020,7 @@ public final class StarsPurchaseScreen: ViewControllerComponentContainer {
         options: [Any] = [],
         purpose: StarsPurchasePurpose,
         targetPeerId: EnginePeer.Id?,
+        customTheme: PresentationTheme? = nil,
         completion: @escaping (Int64) -> Void = { _ in }
     ) {
         self.context = context
@@ -1040,7 +1048,7 @@ public final class StarsPurchaseScreen: ViewControllerComponentContainer {
             completion: { stars in
                 completionImpl?(stars)
             }
-        ), navigationBarAppearance: .transparent, presentationMode: .modal, theme: .default)
+        ), navigationBarAppearance: .transparent, presentationMode: .modal, theme: customTheme.flatMap { .custom($0) } ?? .default)
         
         let presentationData = context.sharedContext.currentPresentationData.with { $0 }
         

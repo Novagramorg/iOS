@@ -593,6 +593,7 @@ final class UserAppearanceScreenComponent: Component {
                             options: options ?? [],
                             purpose: .buyStarGift(requiredStars: resellAmount.amount.value),
                             targetPeerId: nil,
+                            customTheme: nil,
                             completion: { [weak self, weak starsContext] stars in
                                 guard let self, let starsContext else {
                                     return
@@ -1277,6 +1278,7 @@ final class UserAppearanceScreenComponent: Component {
                             AnyComponentWithIdentity(id: 0, component: AnyComponent(ListItemComponentAdaptor(
                                 itemGenerator: PeerNameColorItem(
                                     theme: environment.theme,
+                                    systemStyle: .glass,
                                     colors: component.context.peerNameColors,
                                     mode: .profile,
                                     currentColor: resolvedState.profileColor,
@@ -1609,6 +1611,7 @@ final class UserAppearanceScreenComponent: Component {
                             AnyComponentWithIdentity(id: 0, component: AnyComponent(ListItemComponentAdaptor(
                                 itemGenerator: PeerNameColorItem(
                                     theme: environment.theme,
+                                    systemStyle: .glass,
                                     colors: component.context.peerNameColors,
                                     mode: .name,
                                     currentColor: resolvedState.nameColor.nameColor,
