@@ -139,6 +139,53 @@ public func generateWebAppThemeParams(_ theme: PresentationTheme) -> [String: An
     ]
 }
 
+#if DEBUG
+private let registeredProtocols: Void = {
+    class AppURLProtocol: URLProtocol {
+        var urlTask: URLSessionDataTask?
+        
+        override class func canInit(with request: URLRequest) -> Bool {
+            if request.url?.scheme == "https" {
+                return false
+            }
+            return false
+        }
+        
+        override class func canonicalRequest(for request: URLRequest) -> URLRequest {
+            return request
+        }
+        
+        override func startLoading() {
+            super.startLoading()
+            
+            /*if self.urlTask != nil {
+                return
+            }
+            self.urlTask = URLSession.shared.dataTask(with: self.request, completionHandler: { [weak self] _, response, error in
+                guard let self else {
+                    return
+                }
+                if let error {
+                    self.client?.urlProtocol(self, didFailWithError: error)
+                } else {
+                    if let response = response as? HTTPURLResponse {
+                        self.client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+                    } else {
+                    }
+                    self.client?.urlProtocolDidFinishLoading(self)
+                }
+            })
+            self.urlTask?.resume()*/
+        }
+        
+        override func stopLoading() {
+            self.urlTask?.cancel()
+        }
+    }
+    URLProtocol.registerClass(AppURLProtocol.self)
+}()
+#endif
+
 public final class WebAppController: ViewController, AttachmentContainable {
     public var requestAttachmentMenuExpansion: () -> Void = { }
     public var updateNavigationStack: (@escaping ([AttachmentContainable]) -> ([AttachmentContainable], AttachmentMediaPickerContext?)) -> Void = { _ in }
@@ -203,6 +250,10 @@ public final class WebAppController: ViewController, AttachmentContainable {
         private var validLayout: (ContainerViewLayout, CGFloat)?
         
         init(context: AccountContext, controller: WebAppController) {
+            #if DEBUG
+            let _ = registeredProtocols
+            #endif
+            
             self.context = context
             self.controller = controller
             self.presentationData = controller.presentationData
@@ -428,7 +479,7 @@ public final class WebAppController: ViewController, AttachmentContainable {
         }
         
         private func load(url: URL) {
-            #if DEBUG
+            /*#if DEBUG
             if "".isEmpty {
                 if #available(iOS 16.0, *) {
                     let documentsPath = URL.documentsDirectory.path(percentEncoded: false)
@@ -464,7 +515,7 @@ public final class WebAppController: ViewController, AttachmentContainable {
                 
                 return
             }
-            #endif
+            #endif*/
             self.webView?.load(URLRequest(url: url))
         }
         

@@ -382,7 +382,7 @@ public class ItemListFolderInviteLinkItemNode: ListViewItemNode, ItemListItemNod
                         strongSelf.topStripeNode.backgroundColor = itemSeparatorColor
                         strongSelf.bottomStripeNode.backgroundColor = itemSeparatorColor
                         strongSelf.backgroundNode.backgroundColor = itemBackgroundColor
-                        strongSelf.fieldNode.image = generateStretchableFilledCircleImage(diameter: 26.0, color: item.presentationData.theme.list.itemInputField.backgroundColor)
+                        strongSelf.fieldNode.image = generateStretchableFilledCircleImage(diameter: 52.0, color: item.presentationData.theme.list.itemInputField.backgroundColor)
                         strongSelf.addressButtonIconNode.image = actionButtonImage(color: item.presentationData.theme.list.itemInputField.controlColor)
                     }
                                         

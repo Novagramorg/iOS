@@ -15176,3 +15176,194 @@ Error: %8$@";
 
 "LoginEmail.Success.Title" = "Email added";
 "LoginEmail.Success.Text" = "Your account is now protected!";
+
+"Notification.GiftAuction.Acquired" = "You've successfully bought a gift in the auction for %@.";
+
+"Gift.Auction.Auction" = "auction";
+"Gift.Auction.Description" = "Top %@ bidders will get **%@** gifts this round. [Learn More >]()";
+"Gift.Auction.Ended" = "Auction ended";
+"Gift.Auction.FirstSale" = "First Sale";
+"Gift.Auction.LastSale" = "Last Sale";
+"Gift.Auction.Started" = "Started";
+"Gift.Auction.Ends" = "Ends";
+"Gift.Auction.AveragePrice" = "Average Price";
+"Gift.Auction.CurrentRound" = "Current Round";
+"Gift.Auction.Round" = "%@ of %@";
+"Gift.Auction.Availability" = "Availability";
+"Gift.Auction.AvailabilityOf" = "%@ of %@ left";
+"Gift.Auction.Join" = "Join Auction";
+"Gift.Auction.TimeLeftHours" = "{h}h {m}m left";
+"Gift.Auction.TimeLeftMinutes" = "{m}:{s} left";
+"Gift.Auction.ItemsBought_1" = "item bought";
+"Gift.Auction.ItemsBought_any" = "items bought";
+"Gift.Auction.ForSaleOnTelegram" = "for sale on Telegram";
+"Gift.Auction.ForSaleOnFragment" = "for sale on Fragment";
+"Gift.Auction.AveragePriceInfo" = "**%1$@** is the average sale price for %2$@ gifts.";
+"Gift.Auction.Stars_1" = "%@ Star";
+"Gift.Auction.Stars_any" = "%@ Stars";
+
+"Gift.AuctionBid.Title" = "Place a Bid";
+"Gift.AuctionBid.MinimumBid" = "minimum bid";
+"Gift.AuctionBid.UntilNext" = "until next round";
+"Gift.AuctionBid.Left" = "left";
+"Gift.AuctionBid.YourBid" = "your bid";
+"Gift.AuctionBid.Winning" = "You're winning";
+"Gift.AuctionBid.Outbid" = "You've been outbid";
+"Gift.AuctionBid.BidPreview" = "Your bid will be";
+"Gift.AuctionBid.TopWinners" = "Top 3 Winners";
+"Gift.AuctionBid.PlaceBid" = "Place a %@ Bid";
+"Gift.AuctionBid.AddToBid" = "Add %@ to Your Bid";
+"Gift.AuctionBid.Placed.Title" = "Your bid has been placed";
+"Gift.AuctionBid.Placed.Text" = "If you fall below the top %@, your bid will roll over to the next drop.";
+"Gift.AuctionBid.Increased.Title" = "Your bid has been increased";
+"Gift.AuctionBid.Increased.Text" = "If you fall below the top %@, your bid will roll over to the next drop.";
+"Gift.AuctionBid.AddMoreStars" = "Add at least %@ to increase your bid.";
+"Gift.AuctionBid.AddMoreStars.Stars_1" = "%@ Star";
+"Gift.AuctionBid.AddMoreStars.Stars_any" = "%@ Stars";
+"Gift.AuctionBid.Top" = "TOP %@";
+"Gift.AuctionBid.Custom" = "Custom";
+
+"Gift.Auction.Context.About" = "About";
+"Gift.Auction.Context.CopyLink" = "Copy Link";
+"Gift.Auction.Context.Share" = "Share";
+
+"Gift.ActiveAuctions.Title_1" = "%@ Active Auction";
+"Gift.ActiveAuctions.Title_any" = "%@ Active Auctions";
+"Gift.ActiveAuctions.Round" = "Round %@ of %@";
+"Gift.ActiveAuctions.Winning" = "Your bid **%@** is ranked **#%@**";
+"Gift.ActiveAuctions.Outbid" = "Your bid **%@** is outbid";
+"Gift.ActiveAuctions.RaiseBid" = "Raise Bid";
+
+"Gift.Acquired.Title_1" = "%@ Item Bought";
+"Gift.Acquired.Title_any" = "%@ Items Bought";
+"Gift.Acquired.Round" = "Round #%@";
+"Gift.Acquired.Recipient" = "Recipient";
+"Gift.Acquired.Date" = "Date";
+"Gift.Acquired.AcceptedBid" = "Accepted Bid";
+"Gift.Acquired.Top" = "TOP %@";
+
+"Gift.Options.Gift.Auction" = "auction";
+
+"Story.Camera.Live" = "Live";
+
+"Chat.Auction" = "Gift Auction";
+"Chat.Auction.ViewResults" = "VIEW RESULTS";
+"Chat.Auction.Join" = "JOIN";
+"Chat.Auction.Finished" = "finished";
+"Chat.Auction.Gifts_1" = "%@ gift";
+"Chat.Auction.Gifts_any" = "%@ gifts";
+
+"Story.Privacy.StartLiveAs" = "Start Live As";
+
+"ChatList.Auctions.ActiveAuction_1" = "Active Auction";
+"ChatList.Auctions.ActiveAuction_any" = "%@ Active Auctions";
+"ChatList.Auctions.Status.Single.Winning" = "You're winning (%@ place).";
+"ChatList.Auctions.Status.Single.PlaceFirst" = "%@st";
+"ChatList.Auctions.Status.Single.PlaceSecond" = "%@nd";
+"ChatList.Auctions.Status.Single.PlaceThird" = "%@rd";
+"ChatList.Auctions.Status.Single.PlaceNTh" = "%@th";
+"ChatList.Auctions.Status.Single.Outbid" = "You've been outbid.";
+"ChatList.Auctions.Status.Many.WinningAll" = "You're winning all of them.";
+"ChatList.Auctions.Status.Many.Outbid_1" = "You've been outbid in %@ of them.";
+"ChatList.Auctions.Status.Many.Outbid_any" = "You've been outbid in %@ of them.";
+"ChatList.Auctions.Status.Many.OutbidAll" = "You've been outbid in all of them.";
+"ChatList.Auctions.View" = "View";
+
+"Gift.Auction.Ongoing.Title" = "One Auction at a Time";
+"Gift.Auction.Ongoing.Text" = "You’ve already bid in this gift auction for **%@**.";
+"Gift.Auction.Ongoing.TextYourself" = "You’ve already bid in this gift auction for yourself.";
+"Gift.Auction.Ongoing.View" = "View";
+
+"Gift.Auction.Info.Title" = "Auction";
+"Gift.Auction.Info.Description" = "Join the battle for exclusive gifts.";
+
+"Gift.Auction.Info.TopBidders.Title_1" = "Top %@ Bidder";
+"Gift.Auction.Info.TopBidders.Title_any" = "Top %@ Bidders";
+"Gift.Auction.Info.TopBidders.Text" = "%@ are dropped in %@ to the top %@ by bid amount.";
+"Gift.Auction.Info.TopBidders.Gifts_1" = "%@ gift";
+"Gift.Auction.Info.TopBidders.Gifts_any" = "%@ gifts";
+"Gift.Auction.Info.TopBidders.Rounds_1" = "%@ round";
+"Gift.Auction.Info.TopBidders.Rounds_any" = "%@ rounds";
+"Gift.Auction.Info.TopBidders.Bidders_1" = "%@ bidder";
+"Gift.Auction.Info.TopBidders.Bidders_any" = "%@ bidders";
+
+"Gift.Auction.Info.Carryover.Title" = "Bid Carryover";
+"Gift.Auction.Info.Carryover.Text" = "If your bid leaves the top %@, it will automatically join the next drop.";
+
+"Gift.Auction.Info.Missed.Title" = "Missed Bidders";
+"Gift.Auction.Info.Missed.Text" = "If your bid doesn't win after the final drop, your Stars will be fully refunded.";
+
+"Gift.Auction.Info.Understood" = "Understood";
+
+"Location.SendLocation" = "Send Location";
+
+"Camera.LiveStream.Change" = "change";
+"Camera.LiveStream.StartLiveStream" = "Start Live Stream";
+
+"Camera.LiveStream.End" = "End";
+"Camera.LiveStream.End.Title" = "End Live Stream";
+"Camera.LiveStream.End.Text" = "Are you sure you want to end this live stream?";
+"Camera.LiveStream.End.End" = "End";
+"Camera.LiveStream.End.Leave" = "Leave";
+
+"Message.RepeatAt" = "%1$@ at %2$@";
+"Message.RepeatPeriod.Daily" = "daily";
+"Message.RepeatPeriod.Weekly" = "weekly";
+"Message.RepeatPeriod.Biweekly" = "biweekly";
+"Message.RepeatPeriod.Monthly" = "monthly";
+"Message.RepeatPeriod.3Months" = "every 3 months";
+"Message.RepeatPeriod.6Months" = "every 6 months";
+"Message.RepeatPeriod.Yearly" = "yearly";
+"Message.Approximate" = "appx. %@";
+
+"LiveStreamSettings.Title" = "Live Settings";
+"LiveStreamSettings.TitleEdit" = "Live Stream";
+"LiveStreamSettings.StartLiveAs" = "START LIVE AS";
+"LiveStreamSettings.WhoCanView" = "WHO CAN VIEW THIS LIVE";
+"LiveStreamSettings.WhoCanViewInfo" = "[Select people]() who won't see your live.";
+"LiveStreamSettings.ConnectStream" = "Connect Stream";
+"LiveStreamSettings.ConnectStreamInfo" = "Stream with a different app.";
+"LiveStreamSettings.AllowComments" = "Allow Comments";
+"LiveStreamSettings.AllowScreenshots" = "Allow Screenshots";
+"LiveStreamSettings.PricePerComment" = "PRICE PER COMMENT";
+"LiveStreamSettings.PricePerCommentInfo" = "The price a viewer must pay to send a comment.";
+"LiveStreamSettings.PricePerComment.Free" = "Free";
+"LiveStreamSettings.PricePerComment.Stars_1" = "%@ Star";
+"LiveStreamSettings.PricePerComment.Stars_any" = "%@ Stars";
+"LiveStreamSettings.SaveSettings" = "Save Settings";
+
+"AddContact.Title" = "New Contact";
+"AddContact.PhoneNumber.IsContact"= "This phone number is already in your contacts. [View >]()";
+"AddContact.PhoneNumber.Registered"= "This phone number is on Telegram.";
+"AddContact.PhoneNumber.NotRegistered"= "This phone number is not on Telegram. [Invite >]()";
+"AddContact.SyncToPhone" = "Sync Contact to Phone";
+"AddContact.NotePlaceholder" = "Add notes only visible to you";
+"AddContact.AddQR" = "Add via QR Code";
+
+"ScheduleMessage.Time" = "Time";
+"ScheduleMessage.Repeat" = "Repeat";
+"ScheduleMessage.RepeatPeriod.Never" = "Never";
+"ScheduleMessage.RepeatPeriod.Daily" = "Daily";
+"ScheduleMessage.RepeatPeriod.Weekly" = "Weekly";
+"ScheduleMessage.RepeatPeriod.Biweekly" = "Biweekly";
+"ScheduleMessage.RepeatPeriod.Monthly" = "Monthly";
+"ScheduleMessage.RepeatPeriod.3Months" = "Every 3 Months";
+"ScheduleMessage.RepeatPeriod.6Months" = "Every 6 Months";
+"ScheduleMessage.RepeatPeriod.Yearly" = "Yearly";
+
+"ScheduleMessage.PremiumRequired.Title" = "Premium Required";
+"ScheduleMessage.PremiumRequired.Text" = "Subscribe to **Telegram Premium** to schedule repeating messages.";
+"ScheduleMessage.PremiumRequired.Add" = "Add";
+
+"Stars.Transaction.GiftAuctionBid" = "Gift Auction Bid";
+"Stars.Intro.Transaction.GiftAuctionBid" = "Gift Auction Bid";
+
+"Stars.Intro.Transaction.LiveStreamReaction" = "Live Stream Reaction";
+"Stars.Transaction.LiveStreamReaction" = "Live Stream Reaction";
+"Stars.Transaction.LiveStreamReaction.Text" = "You receive **%@%** of the amount of each reaction.";
+
+"Stars.Intro.Transaction.LiveStreamPaidMessage_1" = "Fee for %@ Live Stream Message";
+"Stars.Intro.Transaction.LiveStreamPaidMessage_any" = "Fee for %@ Live Stream Messages";
+"Stars.Transaction.LiveStreamPaidMessage_1" = "Fee for %@ Live Stream Message";
+"Stars.Transaction.LiveStreamPaidMessage_any" = "Fee for %@ Live Stream Messages";
+"Stars.Transaction.LiveStreamPaidMessage.Text" = "You receive **%@%** of the price that you charge for each incoming message.";

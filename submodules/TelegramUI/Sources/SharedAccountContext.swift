@@ -3842,16 +3842,20 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         return controller
     }
     
-    public func makeGiftAuctionInfoScreen(context: AccountContext, gift: StarGift, completion: (() -> Void)?) -> ViewController {
-        return GiftAuctionInfoScreen(context: context, gift: gift, completion: completion)
+    public func makeGiftAuctionInfoScreen(context: AccountContext, auctionContext: GiftAuctionContext, completion: (() -> Void)?) -> ViewController {
+        return GiftAuctionInfoScreen(context: context, auctionContext: auctionContext, completion: completion)
     }
     
-    public func makeGiftAuctionBidScreen(context: AccountContext, auctionContext: GiftAuctionContext) -> ViewController {
-        return GiftAuctionBidScreen(context: context, auctionContext: auctionContext)
+    public func makeGiftAuctionBidScreen(context: AccountContext, toPeerId: EnginePeer.Id, auctionContext: GiftAuctionContext) -> ViewController {
+        return GiftAuctionBidScreen(context: context, toPeerId: toPeerId, auctionContext: auctionContext)
     }
     
-    public func makeGiftAuctionViewScreen(context: AccountContext, auctionContext: GiftAuctionContext) -> ViewController {
-        return GiftAuctionViewScreen(context: context, auctionContext: auctionContext)
+    public func makeGiftAuctionViewScreen(context: AccountContext, toPeerId: EnginePeer.Id, auctionContext: GiftAuctionContext) -> ViewController {
+        return GiftAuctionViewScreen(context: context, toPeerId: toPeerId, auctionContext: auctionContext)
+    }
+    
+    public func makeGiftAuctionActiveBidsScreen(context: AccountContext) -> ViewController {
+        return GiftAuctionActiveBidsScreen(context: context)
     }
     
     public func makeStorySharingScreen(context: AccountContext, subject: StorySharingSubject, parentController: ViewController) -> ViewController {

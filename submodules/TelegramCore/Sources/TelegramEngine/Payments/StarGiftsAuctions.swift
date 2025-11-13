@@ -55,7 +55,7 @@ public final class GiftAuctionContext {
         }
         
         public enum AuctionState: Equatable {
-            case ongoing(version: Int32, minBidAmount: Int64, bidLevels: [BidLevel], topBidders: [EnginePeer.Id], nextRoundDate: Int32, giftsLeft: Int32, currentRound: Int32, totalRounds: Int32, startDate: Int32, endDate: Int32)
+            case ongoing(version: Int32, startDate: Int32, endDate: Int32, minBidAmount: Int64, bidLevels: [BidLevel], topBidders: [EnginePeer.Id], nextRoundDate: Int32, giftsLeft: Int32, currentRound: Int32, totalRounds: Int32)
             case finished(startDate: Int32, endDate: Int32, averagePrice: Int64)
         }
         
@@ -92,6 +92,14 @@ public final class GiftAuctionContext {
     private let stateValue = Promise<State?>()
     public var state: Signal<State?, NoError> {
         return self.stateValue.get()
+    }
+    
+    public var currentBidPeerId: EnginePeer.Id? {
+        if self.myState?.bidAmount != nil, case .ongoing = self.auctionState {
+            return self.myState?.bidPeerId
+        } else {
+            return nil
+        }
     }
     
     public convenience init(account: Account, gift: StarGift) {
@@ -141,10 +149,19 @@ public final class GiftAuctionContext {
             self.myState = myState
             self.timeout = timeout
             
+            let currentTime = Int32(CFAbsoluteTimeGetCurrent() + kCFAbsoluteTimeIntervalSince1970)
+            var effectiveTimeout = timeout
+            if case let .ongoing(_, _, _, _, _, _, nextRoundDate, _, _, _) = auctionState {
+                let delta = nextRoundDate - currentTime
+                if delta > 0 && delta < timeout {
+                    effectiveTimeout = delta
+                }
+            }
+            
             self.pushState()
             
             self.updateTimer?.invalidate()
-            self.updateTimer = SwiftSignalKit.Timer(timeout: Double(timeout), repeat: false, completion: { [weak self] _ in
+            self.updateTimer = SwiftSignalKit.Timer(timeout: Double(effectiveTimeout), repeat: false, completion: { [weak self] _ in
                 guard let self else {
                     return
                 }
@@ -194,7 +211,7 @@ extension GiftAuctionContext.State.AuctionState {
     init?(apiAuctionState: Api.StarGiftAuctionState) {
         switch apiAuctionState {
         case let .starGiftAuctionState(version, startDate, endDate, minBidAmount, bidLevels, topBidders, nextRoundAt, giftsLeft, currentRound, totalRounds):
-            self = .ongoing(version: version, minBidAmount: minBidAmount, bidLevels: bidLevels.map(GiftAuctionContext.State.BidLevel.init(apiBidLevel:)), topBidders: topBidders.map { EnginePeer.Id(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value($0)) }, nextRoundDate: nextRoundAt, giftsLeft: giftsLeft, currentRound: currentRound, totalRounds: totalRounds, startDate: startDate, endDate: endDate)
+            self = .ongoing(version: version, startDate: startDate, endDate: endDate, minBidAmount: minBidAmount, bidLevels: bidLevels.map(GiftAuctionContext.State.BidLevel.init(apiBidLevel:)), topBidders: topBidders.map { EnginePeer.Id(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value($0)) }, nextRoundDate: nextRoundAt, giftsLeft: giftsLeft, currentRound: currentRound, totalRounds: totalRounds)
         case let .starGiftAuctionStateFinished(startDate, endDate, averagePrice):
             self = .finished(startDate: startDate, endDate: endDate, averagePrice: averagePrice)
         case .starGiftAuctionStateNotModified:
@@ -337,7 +354,7 @@ public class GiftAuctionsManager {
             for (giftId, update) in updates {
                 if let auctionContext = self.auctionContexts[giftId] {
                     auctionContext.updateAuctionState(update)
-                } else {
+                } else if case .ongoing = update {
                     reload = true
                     break
                 }
@@ -381,11 +398,11 @@ public class GiftAuctionsManager {
             guard let self, let activeAuctions else {
                 return
             }
-            var auctionContexts: [Int64 : GiftAuctionContext] = [:]
             for auction in activeAuctions {
-                auctionContexts[auction.gift.giftId] = auction
+                if self.auctionContexts[auction.gift.giftId] == nil {
+                    self.auctionContexts[auction.gift.giftId] = auction
+                }
             }
-            self.auctionContexts = auctionContexts
             self.updateState()
         }))
     }
@@ -413,17 +430,17 @@ public class GiftAuctionsManager {
         }
     }
 
-    func storeAuctionContext(auctionContext: GiftAuctionContext) {
+    public func storeAuctionContext(auctionContext: GiftAuctionContext) {
         self.auctionContexts[auctionContext.gift.giftId] = auctionContext
         self.updateState()
     }
     
     private func updateState() {
         var signals: [Signal<GiftAuctionContext.State, NoError>] = []
-        for (_, auction) in self.auctionContexts {
+        for auction in self.auctionContexts.values.sorted(by: { $0.gift.giftId < $1.gift.giftId }) {
             signals.append(auction.state
             |> mapToSignal { state in
-                if let state {
+                if let state, state.myState.bidAmount != nil, case .ongoing = state.auctionState {
                     return .single(state)
                 } else {
                     return .complete()
@@ -435,16 +452,77 @@ public class GiftAuctionsManager {
 }
 
 public extension GiftAuctionContext.State {
-    var place: Int32? {
-        guard case let .ongoing(_, _, bidLevels, _, _, _, _, _, _, _) = self.auctionState, let myBid = self.myState.bidAmount, let myBidDate = self.myState.bidDate else {
+    func getPlace(myBid: Int64?, myBidDate: Int32?) -> Int32? {
+        guard case let .ongoing(_, _, _, _, bidLevels, _, _, _, _, _) = self.auctionState else {
             return nil
         }
-        var place: Int32 = 1
-        for level in bidLevels {
-            if myBid < level.amount || (myBid == level.amount && myBidDate > level.date) {
-                place = level.position + 1
+        guard let myBid = myBid ?? self.myState.bidAmount else {
+            return nil
+        }
+        let currentTime = Int32(CFAbsoluteTimeGetCurrent() + kCFAbsoluteTimeIntervalSince1970)
+        let myBidDate = self.myState.bidDate ?? currentTime
+        
+        let levels = bidLevels
+        guard !levels.isEmpty else {
+            return 1
+        }
+        
+        func isWorse(than level: GiftAuctionContext.State.BidLevel) -> Bool {
+            if myBid < level.amount {
+                return true
+            }
+            if myBid == level.amount, myBidDate > level.date {
+                return true
+            }
+            return false
+        }
+        
+        var lowerIndex: Int = -1
+        for (i, level) in levels.enumerated() {
+            if isWorse(than: level) {
+                lowerIndex = i
+            } else {
+                break
             }
         }
-        return place
+        if lowerIndex == -1 {
+            return 1
+        }
+        
+        let lowerPosition = levels[lowerIndex].position
+        let nextPosition: Int32
+        let nextIndex = lowerIndex + 1
+        if nextIndex < levels.count {
+            nextPosition = levels[nextIndex].position
+        } else {
+            nextPosition = lowerPosition
+        }
+        if nextPosition == lowerPosition + 1 {
+            return lowerPosition + 1
+        } else {
+            return nextPosition
+        }
+    }
+    
+    var place: Int32? {
+        return self.getPlace(myBid: nil, myBidDate: nil)
+    }
+    
+    var startDate: Int32 {
+        switch self.auctionState {
+        case let .ongoing(_, startDate, _, _, _, _, _, _, _, _):
+            return startDate
+        case let .finished(startDate, _, _):
+            return startDate
+        }
+    }
+    
+    var endDate: Int32 {
+        switch self.auctionState {
+        case let .ongoing(_, _, endDate, _, _, _, _, _, _, _):
+            return endDate
+        case let .finished(_, endDate, _):
+            return endDate
+        }
     }
 }

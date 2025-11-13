@@ -1497,6 +1497,26 @@ func openResolvedUrlImpl(
             } else {
                 present(textAlertController(context: context, updatedPresentationData: updatedPresentationData, title: nil, text: presentationData.strings.Login_UnknownError, actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]), nil)
             }
+        case let .auction(auctionContext):
+            if let auctionContext {
+                if let currentBidPeerId = auctionContext.currentBidPeerId {
+                    let controller = context.sharedContext.makeGiftAuctionBidScreen(
+                        context: context,
+                        toPeerId: currentBidPeerId,
+                        auctionContext: auctionContext
+                    )
+                    navigationController?.pushViewController(controller)
+                } else {
+                    let controller = context.sharedContext.makeGiftAuctionViewScreen(
+                        context: context,
+                        toPeerId: context.account.peerId,
+                        auctionContext: auctionContext
+                    )
+                    navigationController?.pushViewController(controller)
+                }
+            } else {
+                present(textAlertController(context: context, updatedPresentationData: updatedPresentationData, title: nil, text: presentationData.strings.Login_UnknownError, actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]), nil)
+            }
         case let .messageLink(link):
             if let link {
                 if let navigationController = navigationController {

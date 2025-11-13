@@ -371,6 +371,7 @@ public final class MediaStreamComponent: CombinedComponent {
                     isFullscreen: isFullscreen,
                     videoLoading: context.state.videoStalled,
                     callPeer: context.state.chatPeer,
+                    enablePictureInPicture: true,
                     activatePictureInPicture: activatePictureInPicture,
                     deactivatePictureInPicture: deactivatePictureInPicture,
                     bringBackControllerForPictureInPictureDeactivation: { [weak call] completed in

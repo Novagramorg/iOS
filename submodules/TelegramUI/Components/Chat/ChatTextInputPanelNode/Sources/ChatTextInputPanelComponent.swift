@@ -83,6 +83,30 @@ public final class ChatTextInputPanelComponent: Component {
         public enum Kind: Equatable {
             case empty
             case stars(count: Int, isFilled: Bool)
+            case liveMicrophone(call: AnyObject?)
+            
+            public static func ==(lhs: Kind, rhs: Kind) -> Bool {
+                switch lhs {
+                case .empty:
+                    if case .empty = rhs {
+                        return true
+                    } else {
+                        return false
+                    }
+                case let .stars(count, isFilled):
+                    if case .stars(count, isFilled) = rhs {
+                        return true
+                    } else {
+                        return false
+                    }
+                case let .liveMicrophone(lhsCall):
+                    if case let .liveMicrophone(rhsCall) = rhs, lhsCall === rhsCall {
+                        return true
+                    } else {
+                        return false
+                    }
+                }
+            }
         }
         
         public let kind: Kind
@@ -147,6 +171,7 @@ public final class ChatTextInputPanelComponent: Component {
     let leftAction: LeftAction?
     let secondaryLeftAction: LeftAction?
     let rightAction: RightAction?
+    let secondaryRightAction: RightAction?
     let sendAsConfiguration: SendAsConfiguration?
     let placeholder: String
     let isEnabled: Bool
@@ -170,6 +195,7 @@ public final class ChatTextInputPanelComponent: Component {
         leftAction: LeftAction?,
         secondaryLeftAction: LeftAction?,
         rightAction: RightAction?,
+        secondaryRightAction: RightAction?,
         sendAsConfiguration: SendAsConfiguration?,
         placeholder: String,
         isEnabled: Bool,
@@ -192,6 +218,7 @@ public final class ChatTextInputPanelComponent: Component {
         self.leftAction = leftAction
         self.secondaryLeftAction = secondaryLeftAction
         self.rightAction = rightAction
+        self.secondaryRightAction = secondaryRightAction
         self.sendAsConfiguration = sendAsConfiguration
         self.placeholder = placeholder
         self.isEnabled = isEnabled
@@ -232,6 +259,9 @@ public final class ChatTextInputPanelComponent: Component {
             return false
         }
         if lhs.rightAction != rhs.rightAction {
+            return false
+        }
+        if lhs.secondaryRightAction != rhs.secondaryRightAction {
             return false
         }
         if lhs.sendAsConfiguration != rhs.sendAsConfiguration {
@@ -277,6 +307,7 @@ public final class ChatTextInputPanelComponent: Component {
         private var panelNode: ChatTextInputPanelNode?
         
         private var interfaceInteraction: ChatPanelInterfaceInteraction?
+        private var hasPendingInputTextRefresh: Bool = false
         
         private var component: ChatTextInputPanelComponent?
         private weak var state: EmptyComponentState?
@@ -406,7 +437,10 @@ public final class ChatTextInputPanelComponent: Component {
                         if let component = self.component {
                             let currentMode = inputModeFromComponent(component)
                             let (updatedTextInputState, updatedMode) = f(component.externalState.textInputState, currentMode)
-                            component.externalState.textInputState = updatedTextInputState
+                            if component.externalState.textInputState != updatedTextInputState {
+                                component.externalState.textInputState = updatedTextInputState
+                                self.hasPendingInputTextRefresh = true
+                            }
                             if !self.isUpdating {
                                 self.state?.updated(transition: .spring(duration: 0.4))
                             }
@@ -877,7 +911,14 @@ public final class ChatTextInputPanelComponent: Component {
                     if component.insets.bottom > 40.0 {
                         isVisible = false
                     }
-                    panelNode.customLeftAction = .settings(isVisible: isVisible)
+                    panelNode.customLeftAction = .settings(isVisible: isVisible, action: { [weak self] _ in
+                        guard let self, let component = self.component else {
+                            return
+                        }
+                        if let leftAction = component.leftAction {
+                            leftAction.action()
+                        }
+                    })
                 }
             } else {
                 panelNode.customLeftAction = nil
@@ -899,7 +940,14 @@ public final class ChatTextInputPanelComponent: Component {
                     if component.insets.bottom > 40.0 {
                         isVisible = false
                     }
-                    panelNode.customSecondaryLeftAction = .settings(isVisible: isVisible)
+                    panelNode.customSecondaryLeftAction = .settings(isVisible: isVisible, action: { [weak self] _ in
+                        guard let self, let component = self.component else {
+                            return
+                        }
+                        if let secondaryLeftAction = component.secondaryLeftAction {
+                            secondaryLeftAction.action()
+                        }
+                    })
                 }
             } else {
                 panelNode.customSecondaryLeftAction = nil
@@ -909,6 +957,10 @@ public final class ChatTextInputPanelComponent: Component {
                 switch rightAction.kind {
                 case .empty:
                     panelNode.customRightAction = .empty
+                case let .liveMicrophone(call):
+                    panelNode.customSecondaryRightAction = .liveMicrophone(call: call, action: { sourceView in
+                        rightAction.action(sourceView)
+                    })
                 case let .stars(count, isFilled):
                     panelNode.customRightAction = .stars(count: count, isFilled: isFilled, action: { sourceView in
                         rightAction.action(sourceView)
@@ -920,6 +972,27 @@ public final class ChatTextInputPanelComponent: Component {
                 }
             } else {
                 panelNode.customRightAction = nil
+            }
+            
+            if let secondaryRightAction = component.secondaryRightAction {
+                switch secondaryRightAction.kind {
+                case .empty:
+                    panelNode.customSecondaryRightAction = .empty
+                case let .liveMicrophone(call):
+                    panelNode.customSecondaryRightAction = .liveMicrophone(call: call, action: { sourceView in
+                        secondaryRightAction.action(sourceView)
+                    })
+                case let .stars(count, isFilled):
+                    panelNode.customSecondaryRightAction = .stars(count: count, isFilled: isFilled, action: { sourceView in
+                        secondaryRightAction.action(sourceView)
+                    }, longPressAction: secondaryRightAction.longPressAction.flatMap { longPressAction in
+                        return { sourceView in
+                            longPressAction(sourceView)
+                        }
+                    })
+                }
+            } else {
+                panelNode.customSecondaryRightAction = nil
             }
             
             panelNode.customSendColor = component.sendColor
@@ -944,7 +1017,10 @@ public final class ChatTextInputPanelComponent: Component {
                 component.externalState.resetInputState = nil
                 let _ = resetInputState
                 panelNode.text = ""
+            } else if self.hasPendingInputTextRefresh {
+                panelNode.updateInputTextState(component.externalState.textInputState)
             }
+            self.hasPendingInputTextRefresh = false
             
             let panelHeight = panelNode.updateLayout(
                 width: availableSize.width,

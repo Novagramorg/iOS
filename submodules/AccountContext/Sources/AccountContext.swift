@@ -328,6 +328,7 @@ public enum ResolvedUrl {
     case premiumGiftCode(slug: String)
     case premiumMultiGift(reference: String?)
     case collectible(gift: StarGift.UniqueGift?)
+    case auction(auction: GiftAuctionContext?)
     case messageLink(link: TelegramResolvedMessageLink?)
     case stars
     case ton
@@ -1421,10 +1422,11 @@ public protocol SharedAccountContext: AnyObject {
     func makeGiftViewScreen(context: AccountContext, message: EngineMessage, shareStory: ((StarGift.UniqueGift) -> Void)?) -> ViewController
     func makeGiftViewScreen(context: AccountContext, gift: StarGift.UniqueGift, shareStory: ((StarGift.UniqueGift) -> Void)?, openChatTheme: (() -> Void)?, dismissed: (() -> Void)?) -> ViewController
     func makeGiftWearPreviewScreen(context: AccountContext, gift: StarGift.UniqueGift) -> ViewController
-    func makeGiftAuctionInfoScreen(context: AccountContext, gift: StarGift, completion: (() -> Void)?) -> ViewController
-    func makeGiftAuctionBidScreen(context: AccountContext, auctionContext: GiftAuctionContext) -> ViewController
-    func makeGiftAuctionViewScreen(context: AccountContext, auctionContext: GiftAuctionContext) -> ViewController
-        
+    func makeGiftAuctionInfoScreen(context: AccountContext, auctionContext: GiftAuctionContext, completion: (() -> Void)?) -> ViewController
+    func makeGiftAuctionBidScreen(context: AccountContext, toPeerId: EnginePeer.Id, auctionContext: GiftAuctionContext) -> ViewController
+    func makeGiftAuctionViewScreen(context: AccountContext, toPeerId: EnginePeer.Id, auctionContext: GiftAuctionContext) -> ViewController
+    func makeGiftAuctionActiveBidsScreen(context: AccountContext) -> ViewController
+    
     func makeStorySharingScreen(context: AccountContext, subject: StorySharingSubject, parentController: ViewController) -> ViewController
     
     func makeContentReportScreen(context: AccountContext, subject: ReportContentSubject, forceDark: Bool, present: @escaping (ViewController) -> Void, completion: @escaping () -> Void, requestSelectMessages: ((String, Data, String?) -> Void)?)

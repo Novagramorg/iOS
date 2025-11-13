@@ -75,6 +75,12 @@ struct CameraState: Equatable {
         }
     }
     
+    enum StreamingMode {
+        case none
+        case camera
+        case rtmp
+    }
+    
     let mode: CameraMode
     let position: Camera.Position
     let flashMode: Camera.FlashMode
@@ -87,7 +93,7 @@ struct CameraState: Equatable {
     let isCollageEnabled: Bool
     let collageGrid: Camera.CollageGrid
     let collageProgress: Float
-    let isStreaming: Bool
+    let isStreaming: StreamingMode
     let isWaitingForStream: Bool
     
     func updatedMode(_ mode: CameraMode) -> CameraState {
@@ -134,7 +140,7 @@ struct CameraState: Equatable {
         return CameraState(mode: self.mode, position: self.position, flashMode: self.flashMode, flashModeDidChange: self.flashModeDidChange, flashTint: self.flashTint, flashTintSize: self.flashTintSize, recording: self.recording, duration: self.duration, isDualCameraEnabled: self.isDualCameraEnabled, isCollageEnabled: self.isCollageEnabled, collageGrid: self.collageGrid, collageProgress: collageProgress, isStreaming: self.isStreaming, isWaitingForStream: self.isWaitingForStream)
     }
     
-    func updatedIsStreaming(_ isStreaming: Bool) -> CameraState {
+    func updatedIsStreaming(_ isStreaming: StreamingMode) -> CameraState {
         return CameraState(mode: self.mode, position: self.position, flashMode: self.flashMode, flashModeDidChange: self.flashModeDidChange, flashTint: self.flashTint, flashTintSize: self.flashTintSize, recording: self.recording, duration: self.duration, isDualCameraEnabled: self.isDualCameraEnabled, isCollageEnabled: self.isCollageEnabled, collageGrid: self.collageGrid, collageProgress: self.collageProgress, isStreaming: isStreaming, isWaitingForStream: self.isWaitingForStream)
     }
     
@@ -1133,7 +1139,7 @@ private final class CameraScreenComponent: CombinedComponent {
                     }
                     self.liveStreamStory = story
                     
-                    controller?.updateCameraState({ $0.updatedIsStreaming(true).updatedIsWaitingForStream(false) }, transition: .spring(duration: 0.4))
+                    controller?.updateCameraState({ $0.updatedIsStreaming(rtmp ? .rtmp : .camera).updatedIsWaitingForStream(false) }, transition: .spring(duration: 0.4))
                     self.updated(transition: .immediate)
                 })
             }
@@ -1155,9 +1161,9 @@ private final class CameraScreenComponent: CombinedComponent {
                             return
                         }
                         for item in state.items.reversed() {
-                            if case let .item(item) = item, case .liveStream = item.media {
+                            if case let .item(item) = item, case let .liveStream(liveStream) = item.media {
                                 self.liveStreamStory = item
-                                controller?.updateCameraState({ $0.updatedIsStreaming(true) }, transition: .spring(duration: 0.4))
+                                controller?.updateCameraState({ $0.updatedIsStreaming(liveStream.kind == .rtmp ? .rtmp : .camera) }, transition: .spring(duration: 0.4))
                                 self.updated(transition: .immediate)
                                 return
                             }
@@ -1180,17 +1186,17 @@ private final class CameraScreenComponent: CombinedComponent {
                 let alertController = textAlertController(
                     context: self.context,
                     forceTheme: defaultDarkColorPresentationTheme,
-                    title: "End Live Stream",
-                    text: "Are you sure you want to end this live stream?",
+                    title: presentationData.strings.Camera_LiveStream_End_Title,
+                    text: presentationData.strings.Camera_LiveStream_End_Text,
                     actions: [
-                        TextAlertAction(type: .destructiveAction, title: "End", action: { [weak self, weak controller] in
+                        TextAlertAction(type: .destructiveAction, title: presentationData.strings.Camera_LiveStream_End_End, action: { [weak self, weak controller] in
                             guard let self, let controller else {
                                 return
                             }
                             let _ = self.liveStreamCall?.leave(terminateIfPossible: true).startStandalone()
                             controller.requestDismiss(animated: true)
                         }),
-                        TextAlertAction(type: .genericAction, title: "Leave", action: { [weak controller] in
+                        TextAlertAction(type: .genericAction, title: presentationData.strings.Camera_LiveStream_End_Leave, action: { [weak controller] in
                             guard let controller else {
                                 return
                             }
@@ -1206,11 +1212,11 @@ private final class CameraScreenComponent: CombinedComponent {
                 let alertController = textAlertController(
                     context: self.context,
                     forceTheme: defaultDarkColorPresentationTheme,
-                    title: "End Live Stream",
-                    text: "Are you sure you want to end this live stream?",
+                    title: presentationData.strings.Camera_LiveStream_End_Title,
+                    text: presentationData.strings.Camera_LiveStream_End_Text,
                     actions: [
                         TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_Cancel, action: {}),
-                        TextAlertAction(type: .destructiveAction, title: "End", action: { [weak self, weak controller] in
+                        TextAlertAction(type: .destructiveAction, title: presentationData.strings.Camera_LiveStream_End_End, action: { [weak self, weak controller] in
                             guard let self, let controller else {
                                 return
                             }
@@ -1435,7 +1441,7 @@ private final class CameraScreenComponent: CombinedComponent {
                     case .video:
                         shutterState = .video
                     case .live:
-                        shutterState = .live(active: component.cameraState.isStreaming, progress: component.cameraState.isWaitingForStream)
+                        shutterState = .live(active: component.cameraState.isStreaming != .none, progress: component.cameraState.isWaitingForStream)
                     }
                 }
             }
@@ -1451,6 +1457,7 @@ private final class CameraScreenComponent: CombinedComponent {
             let captureControls = captureControls.update(
                 component: CaptureControlsComponent(
                     context: component.context,
+                    strings: environment.strings,
                     isTablet: isTablet,
                     isSticker: isSticker,
                     hasGallery: !isSticker && !isAvatar,
@@ -1559,7 +1566,7 @@ private final class CameraScreenComponent: CombinedComponent {
                 )
             }
             
-            if component.cameraState.mode == .live, component.cameraState.isStreaming {
+            if component.cameraState.mode == .live, component.cameraState.isStreaming != .none {
                 let liveStream = liveStream.update(
                     component: CameraLiveStreamComponent(
                         context: component.context,
@@ -1606,7 +1613,7 @@ private final class CameraScreenComponent: CombinedComponent {
             let topControlVerticalInset: CGFloat = 12.0
             let topButtonSpacing: CGFloat = 15.0
             
-            if component.cameraState.mode == .live && !component.cameraState.isStreaming {
+            if component.cameraState.mode == .live && component.cameraState.isStreaming == .none {
                 let streamAsButton = streamAsButton.update(
                     component: PlainButtonComponent(
                         content: AnyComponent(
@@ -1646,7 +1653,7 @@ private final class CameraScreenComponent: CombinedComponent {
             }
                         
             if case .none = component.cameraState.recording, !state.isTransitioning {
-                if !state.displayingCollageSelection && !component.cameraState.isStreaming {
+                if !state.displayingCollageSelection && component.cameraState.isStreaming == .none {
                     let cancelButton = cancelButton.update(
                         component: CameraButton(
                             content: AnyComponentWithIdentity(
@@ -1727,22 +1734,23 @@ private final class CameraScreenComponent: CombinedComponent {
                 }
                 
                 if hasAllRequiredAccess {
-                    let isStreaming = component.cameraState.mode == .live && component.cameraState.isStreaming
+                    let isStreaming = component.cameraState.mode == .live && component.cameraState.isStreaming != .none
+                    var endStreamButtonWidth: CGFloat = 56.0
                     if isStreaming {
                         let endStreamButton = endStreamButton.update(
                             component: GlassBarButtonComponent(
-                                size: CGSize(width: 56.0, height: 40.0),
+                                size: nil,
                                 backgroundColor: UIColor.black.withAlphaComponent(0.5),
                                 isDark: true,
                                 state: .glass,
-                                component: AnyComponentWithIdentity(id: "label", component: AnyComponent(Text(text: "End", font: Font.semibold(17.0), color: .white))),
+                                component: AnyComponentWithIdentity(id: "label", component: AnyComponent(Text(text: environment.strings.Camera_LiveStream_End, font: Font.semibold(17.0), color: .white))),
                                 action: { [weak state] _ in
                                     if let state {
                                         state.endLiveStream()
                                     }
                                 }
                             ),
-                            availableSize: CGSize(width: 40.0, height: 40.0),
+                            availableSize: CGSize(width: 120.0, height: 40.0),
                             transition: .immediate
                         )
                         context.add(endStreamButton
@@ -1750,12 +1758,13 @@ private final class CameraScreenComponent: CombinedComponent {
                             .appear(.default(scale: true))
                             .disappear(.default(scale: true))
                         )
+                        endStreamButtonWidth = endStreamButton.size.width
                     }
                     
                     let rightMostButtonWidth: CGFloat
                     if component.cameraState.mode == .live {
-                        if component.cameraState.isStreaming {
-                            rightMostButtonWidth = -25.0
+                        if component.cameraState.isStreaming != .none {
+                            rightMostButtonWidth = -25.0 + (endStreamButtonWidth - 56.0) * 2.0
                         } else {
                             rightMostButtonWidth = -55.0
                         }
@@ -1823,7 +1832,7 @@ private final class CameraScreenComponent: CombinedComponent {
                     
                     if !isSticker && !isAvatar && !isTablet {
                         var nextButtonX = availableSize.width - topControlSideInset - rightMostButtonWidth / 2.0 - 100.0
-                        if Camera.isDualCameraSupported(forRoundVideo: false) && !component.cameraState.isCollageEnabled {
+                        if Camera.isDualCameraSupported(forRoundVideo: false) && !component.cameraState.isCollageEnabled && component.cameraState.isStreaming == .none {
                             let dualButton = dualButton.update(
                                 component: CameraButton(
                                     content: AnyComponentWithIdentity(
@@ -1855,7 +1864,35 @@ private final class CameraScreenComponent: CombinedComponent {
                         }
                         
                         if component.cameraState.mode == .live {
-                            
+                            if component.cameraState.isStreaming == .camera {
+                                let flipButton = flipButton.update(
+                                    component: CameraButton(
+                                        content: AnyComponentWithIdentity(
+                                            id: "flip",
+                                            component: AnyComponent(
+                                                FlipButtonContentComponent(
+                                                    action: animateFlipAction,
+                                                    maskFrame: .zero,
+                                                    tintColor: controlsTintColor
+                                                )
+                                            )
+                                        ),
+                                        minSize: CGSize(width: 44.0, height: 44.0),
+                                        action: { [weak state] in
+                                            if let state {
+                                                state.togglePosition(animateFlipAction)
+                                            }
+                                        }
+                                    ),
+                                    availableSize: availableSize,
+                                    transition: context.transition
+                                )
+                                context.add(flipButton
+                                    .position(CGPoint(x: nextButtonX, y: max(environment.statusBarHeight + 5.0, environment.safeInsets.top + topControlVerticalInset) + flipButton.size.height / 2.0 - 4.0))
+                                    .appear(.default(scale: true))
+                                    .disappear(.default(scale: true))
+                                )
+                            }
                         } else {
                             let collageButton = collageButton.update(
                                 component: CameraButton(
@@ -2025,7 +2062,7 @@ private final class CameraScreenComponent: CombinedComponent {
                 }
             }
             
-            if !isSticker, case .none = component.cameraState.recording, !component.cameraState.isStreaming && !state.isTransitioning && hasAllRequiredAccess && component.cameraState.collageProgress < 1.0 - .ulpOfOne {
+            if !isSticker, case .none = component.cameraState.recording, component.cameraState.isStreaming == .none && !state.isTransitioning && hasAllRequiredAccess && component.cameraState.collageProgress < 1.0 - .ulpOfOne {
                 let availableModeControlSize: CGSize
                 if isTablet {
                     availableModeControlSize = CGSize(width: panelWidth, height: 120.0)
@@ -2033,12 +2070,10 @@ private final class CameraScreenComponent: CombinedComponent {
                     availableModeControlSize = availableSize
                 }
                 
-                let availableModes: [CameraMode]
-                //#if DEBUG
-                availableModes = [.photo, .video, .live]
-                //#else
-                //availableModes = [.photo, .video]
-                //#endif
+                var availableModes: [CameraMode] = [.photo, .video]
+                if !isTablet {
+                    availableModes.append(.live)
+                }
                 
                 let modeControl = modeControl.update(
                     component: ModeComponent(
@@ -2475,7 +2510,7 @@ public class CameraScreenImpl: ViewController, CameraScreen {
                 isCollageEnabled: false,
                 collageGrid: collageGrids[6],
                 collageProgress: 0.0,
-                isStreaming: false,
+                isStreaming: .none,
                 isWaitingForStream: false
             )
                         
@@ -2901,7 +2936,7 @@ public class CameraScreenImpl: ViewController, CameraScreen {
             case .began:
                 break
             case .changed:
-                if case .none = self.cameraState.recording, !self.cameraState.isStreaming && !self.cameraState.isWaitingForStream {
+                if case .none = self.cameraState.recording, self.cameraState.isStreaming == .none && !self.cameraState.isWaitingForStream {
                     if case .compact = layout.metrics.widthClass {
                         switch controller.mode {
                         case .story:

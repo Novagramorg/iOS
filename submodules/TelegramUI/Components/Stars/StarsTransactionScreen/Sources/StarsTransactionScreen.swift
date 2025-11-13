@@ -354,7 +354,11 @@ private final class StarsTransactionSheetContent: CombinedComponent {
                 if let starGift = transaction.starGift {
                     switch starGift {
                     case .generic:
-                        titleText = strings.Stars_Transaction_Gift_Title
+                        if transaction.flags.contains(.isStarGiftAuctionBid) {
+                            titleText = strings.Stars_Transaction_GiftAuctionBid
+                        } else {
+                            titleText = strings.Stars_Transaction_Gift_Title
+                        }
                         descriptionText = ""
                     case let .unique(gift):
                         titleText = gift.title
@@ -418,7 +422,24 @@ private final class StarsTransactionSheetContent: CombinedComponent {
                     isGift = true
                 } else if let starrefCommissionPermille = transaction.starrefCommissionPermille {
                     isRefProgram = true
-                    if transaction.flags.contains(.isPaidMessage) {
+                    if transaction.flags.contains(.isLiveStreamPaidMessage) {
+                        isPaidMessage = true
+                        if transaction.flags.contains(.isReaction) {
+                            titleText = strings.Stars_Transaction_LiveStreamReaction
+                        } else {
+                            titleText = strings.Stars_Transaction_LiveStreamPaidMessage(transaction.paidMessageCount ?? 1)
+                        }
+                        if !transaction.flags.contains(.isRefund) {
+                            countOnTop = true
+                            if transaction.flags.contains(.isReaction) {
+                                descriptionText = strings.Stars_Transaction_LiveStreamReaction_Text(formatPermille(1000 - starrefCommissionPermille)).string
+                            } else {
+                                descriptionText = strings.Stars_Transaction_LiveStreamPaidMessage_Text(formatPermille(1000 - starrefCommissionPermille)).string
+                            }
+                        } else {
+                            descriptionText = ""
+                        }
+                    } else if transaction.flags.contains(.isPaidMessage) {
                         isPaidMessage = true
                         titleText = strings.Stars_Transaction_PaidMessage(transaction.paidMessageCount ?? 1)
                         if !transaction.flags.contains(.isRefund) {
@@ -468,6 +489,13 @@ private final class StarsTransactionSheetContent: CombinedComponent {
                         if let months = transaction.premiumGiftMonths {
                             premiumGiftMonths = months
                             titleText = strings.Stars_Transaction_TelegramPremium(months)
+                        } else if transaction.flags.contains(.isLiveStreamPaidMessage) {
+                            isPaidMessage = true
+                            if transaction.flags.contains(.isReaction) {
+                                titleText = strings.Stars_Transaction_LiveStreamReaction
+                            } else {
+                                titleText = strings.Stars_Transaction_LiveStreamPaidMessage(transaction.paidMessageCount ?? 1)
+                            }
                         } else if transaction.flags.contains(.isPaidMessage) {
                             isPaidMessage = true
                             titleText = strings.Stars_Transaction_PaidMessage(transaction.paidMessageCount ?? 1)
@@ -1603,36 +1631,16 @@ private final class StarsTransactionSheetContent: CombinedComponent {
             
             if let cancelButtonText {
                 let cancelButton = cancelButton.update(
-//                    component: SolidRoundedButtonComponent(
-//                        title: cancelButtonText,
-//                        theme: SolidRoundedButtonComponent.Theme(backgroundColor: .clear, foregroundColor: linkColor),
-//                        font: .regular,
-//                        fontSize: 17.0,
-//                        height: 50.0,
-//                        cornerRadius: 10.0,
-//                        gloss: false,
-//                        iconName: nil,
-//                        animationName: nil,
-//                        iconPosition: .left,
-//                        isLoading: state.inProgress,
-//                        action: {
-//                            component.cancel(true)
-//                            if isSubscription {
-//                                component.updateSubscription()
-//                            }
-//                        }
-//                    ),
                     component: ButtonComponent(
                         background: ButtonComponent.Background(
                             style: .glass,
-                            color: theme.list.itemCheckColors.fillColor,
-                            foreground: theme.list.itemCheckColors.foregroundColor,
-                            pressedColor: theme.list.itemCheckColors.fillColor.withMultipliedAlpha(0.9),
-                            cornerRadius: 10.0,
+                            color: theme.list.itemCheckColors.fillColor.withMultipliedAlpha(0.1),
+                            foreground: theme.list.itemCheckColors.fillColor,
+                            pressedColor: theme.list.itemCheckColors.fillColor.withMultipliedAlpha(0.8),
                         ),
                         content: AnyComponentWithIdentity(
                             id: AnyHashable(0),
-                            component: AnyComponent(MultilineTextComponent(text: .plain(NSMutableAttributedString(string: cancelButtonText, font: Font.semibold(17.0), textColor: theme.list.itemCheckColors.foregroundColor, paragraphAlignment: .center))))
+                            component: AnyComponent(MultilineTextComponent(text: .plain(NSMutableAttributedString(string: cancelButtonText, font: Font.semibold(17.0), textColor: theme.list.itemCheckColors.fillColor, paragraphAlignment: .center))))
                         ),
                         isEnabled: true,
                         displaysProgress: state.inProgress,
@@ -1662,7 +1670,6 @@ private final class StarsTransactionSheetContent: CombinedComponent {
                             color: theme.list.itemCheckColors.fillColor,
                             foreground: theme.list.itemCheckColors.foregroundColor,
                             pressedColor: theme.list.itemCheckColors.fillColor.withMultipliedAlpha(0.9),
-                            cornerRadius: 10.0,
                         ),
                         content: AnyComponentWithIdentity(
                             id: AnyHashable(0),
@@ -2187,6 +2194,7 @@ private final class TableComponent: CombinedComponent {
     }
     
     final class State: ComponentState {
+        var cachedLeftColumnImage: (UIImage, PresentationTheme)?
         var cachedBorderImage: (UIImage, PresentationTheme)?
     }
     
@@ -2195,7 +2203,7 @@ private final class TableComponent: CombinedComponent {
     }
 
     public static var body: Body {
-        let leftColumnBackground = Child(Rectangle.self)
+        let leftColumnBackground = Child(Image.self)
         let verticalBorder = Child(Rectangle.self)
         let titleChildren = ChildMap(environment: Empty.self, keyedBy: AnyHashable.self)
         let valueChildren = ChildMap(environment: Empty.self, keyedBy: AnyHashable.self)
@@ -2206,9 +2214,11 @@ private final class TableComponent: CombinedComponent {
             let verticalPadding: CGFloat = 11.0
             let horizontalPadding: CGFloat = 12.0
             let borderWidth: CGFloat = 1.0
+            let borderRadius: CGFloat = 14.0
             
             let backgroundColor = context.component.theme.actionSheet.opaqueItemBackgroundColor
             let borderColor = backgroundColor.mixedWith(context.component.theme.list.itemBlocksSeparatorColor, alpha: 0.6)
+            let secondaryBackgroundColor = context.component.theme.overallDarkAppearance ? context.component.theme.list.itemModalBlocksBackgroundColor : context.component.theme.list.itemInputField.backgroundColor
             
             var leftColumnWidth: CGFloat = 0.0
             
@@ -2270,8 +2280,24 @@ private final class TableComponent: CombinedComponent {
                 i += 1
             }
             
+            let leftColumnImage: UIImage
+            if let (currentImage, theme) = context.state.cachedLeftColumnImage, theme === context.component.theme {
+                leftColumnImage = currentImage
+            } else {
+                leftColumnImage = generateImage(CGSize(width: borderRadius * 2.0 + 4.0, height: borderRadius * 2.0 + 4.0), rotatedContext: { size, context in
+                    let bounds = CGRect(origin: .zero, size: CGSize(width: size.width + borderRadius, height: size.height))
+                    context.clear(bounds)
+                    
+                    let path = CGPath(roundedRect: bounds.insetBy(dx: borderWidth / 2.0, dy: borderWidth / 2.0), cornerWidth: borderRadius, cornerHeight: borderRadius, transform: nil)
+                    context.setFillColor(secondaryBackgroundColor.cgColor)
+                    context.addPath(path)
+                    context.fillPath()
+                })!.stretchableImage(withLeftCapWidth: Int(borderRadius), topCapHeight: Int(borderRadius))
+                context.state.cachedLeftColumnImage = (leftColumnImage, context.component.theme)
+            }
+            
             let leftColumnBackground = leftColumnBackground.update(
-                component: Rectangle(color: context.component.theme.list.itemInputField.backgroundColor),
+                component: Image(image: leftColumnImage),
                 availableSize: CGSize(width: leftColumnWidth, height: totalHeight),
                 transition: context.transition
             )
@@ -2284,11 +2310,9 @@ private final class TableComponent: CombinedComponent {
             if let (currentImage, theme) = context.state.cachedBorderImage, theme === context.component.theme {
                 borderImage = currentImage
             } else {
-                let borderRadius: CGFloat = 5.0
-                borderImage = generateImage(CGSize(width: 16.0, height: 16.0), rotatedContext: { size, context in
+                borderImage = generateImage(CGSize(width: borderRadius * 2.0 + 4.0, height: borderRadius * 2.0 + 4.0), rotatedContext: { size, context in
                     let bounds = CGRect(origin: .zero, size: size)
-                    context.setFillColor(backgroundColor.cgColor)
-                    context.fill(bounds)
+                    context.clear(bounds)
                     
                     let path = CGPath(roundedRect: bounds.insetBy(dx: borderWidth / 2.0, dy: borderWidth / 2.0), cornerWidth: borderRadius, cornerHeight: borderRadius, transform: nil)
                     context.setBlendMode(.clear)
@@ -2300,7 +2324,7 @@ private final class TableComponent: CombinedComponent {
                     context.setLineWidth(borderWidth)
                     context.addPath(path)
                     context.strokePath()
-                })!.stretchableImage(withLeftCapWidth: 5, topCapHeight: 5)
+                })!.stretchableImage(withLeftCapWidth: Int(borderRadius), topCapHeight: Int(borderRadius))
                 context.state.cachedBorderImage = (borderImage, context.component.theme)
             }
             

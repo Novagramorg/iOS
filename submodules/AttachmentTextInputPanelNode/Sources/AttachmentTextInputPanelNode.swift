@@ -329,6 +329,10 @@ public class AttachmentTextInputPanelNode: ASDisplayNode, TGCaptionPanelView, AS
     
     public var interfaceInteraction: ChatPanelInterfaceInteraction?
     
+    public func animateIn(transition: ContainedViewLayoutTransition) {
+        self.actionButtons.animateIn(transition: transition)
+    }
+    
     public func updateSendButtonEnabled(_ enabled: Bool, animated: Bool) {
         self.actionButtons.isUserInteractionEnabled = enabled
         
@@ -652,7 +656,7 @@ public class AttachmentTextInputPanelNode: ASDisplayNode, TGCaptionPanelView, AS
     private func calculateTextFieldMetrics(width: CGFloat, maxHeight: CGFloat, metrics: LayoutMetrics) -> (accessoryButtonsWidth: CGFloat, textFieldHeight: CGFloat) {
         var textFieldInsets = self.textFieldInsets(metrics: metrics)
         if self.actionButtons.frame.width > 44.0 {
-            textFieldInsets.right = self.actionButtons.frame.width
+            textFieldInsets.right = self.actionButtons.frame.width - 6.0
         }
         let fieldMaxHeight = textFieldMaxHeight(maxHeight, metrics: metrics)
         
@@ -846,9 +850,9 @@ public class AttachmentTextInputPanelNode: ASDisplayNode, TGCaptionPanelView, AS
                     }
                     self.actionButtons.sendButtonHasApplyIcon = sendButtonHasApplyIcon
                     if self.actionButtons.sendButtonHasApplyIcon {
-                        self.actionButtons.sendButton.setImage(PresentationResourcesChat.chatInputPanelApplyIconImage(interfaceState.theme), for: [])
+                        self.actionButtons.setImage(PresentationResourcesChat.chatInputPanelApplyIconImage(interfaceState.theme))
                     } else {
-                        self.actionButtons.sendButton.setImage(PresentationResourcesChat.chatInputPanelSendIconImage(interfaceState.theme), for: [])
+                        self.actionButtons.setImage(PresentationResourcesChat.chatInputPanelSendIconImage(interfaceState.theme))
                     }
                 }
             }
@@ -1013,17 +1017,17 @@ public class AttachmentTextInputPanelNode: ASDisplayNode, TGCaptionPanelView, AS
                 text = "⭐️\(sendPaidMessageStars.value * Int64(count))"
                 isPaidMessage = true
             } else {
-                isMinimized = !self.isAttachment || inputHasText
+                isMinimized = !self.isAttachment || inputHasText || self.glass
                 text = presentationInterfaceState.strings.MediaPicker_Send
             }
-            actionButtonsSize = self.actionButtons.updateLayout(size: CGSize(width: 44.0, height: minimalHeight), transition: transition, minimized: isMinimized && !self.glass, text: text, interfaceState: presentationInterfaceState)
+            actionButtonsSize = self.actionButtons.updateLayout(size: CGSize(width: 44.0, height: minimalHeight), transition: transition, minimized: isMinimized, text: text, interfaceState: presentationInterfaceState)
             textBackgroundInset = actionButtonsSize.width - 44.0
         } else {
             actionButtonsSize = CGSize(width: 44.0, height: minimalHeight)
         }
         
-        let actionButtonsOriginOffset: CGFloat = self.glass ? -3.0 : 0.0
-        let actionButtonsFrame = CGRect(origin: CGPoint(x: width - rightInset - actionButtonsSize.width + 1.0 - UIScreenPixel + composeButtonsOffset + actionButtonsOriginOffset, y: panelHeight - minimalHeight), size: actionButtonsSize)
+        let actionButtonsOriginOffset: CGFloat = self.glass ? -6.0 : 0.0
+        let actionButtonsFrame = CGRect(origin: CGPoint(x: width - rightInset - actionButtonsSize.width + 1.0 - UIScreenPixel + composeButtonsOffset + actionButtonsOriginOffset, y: panelHeight - minimalHeight - 1.0), size: actionButtonsSize)
         transition.updateFrame(node: self.actionButtons, frame: actionButtonsFrame)
         
         let textInputHeight = panelHeight - textFieldInsets.top - textFieldInsets.bottom
@@ -1065,7 +1069,7 @@ public class AttachmentTextInputPanelNode: ASDisplayNode, TGCaptionPanelView, AS
             )
             var inputNodeOffset: CGPoint = CGPoint(x: -1.0, y: -1.0)
             if self.glass {
-                inputNodeOffset = CGPoint(x: -4.0, y: -4.0)
+                inputNodeOffset = CGPoint(x: -6.0, y: -4.0)
             }
             transition.updateFrame(view: self.inputModeView, frame: CGRect(origin: CGPoint(x: textInputBackgroundFrame.maxX - inputNodeSize.width + inputNodeOffset.x, y: textInputBackgroundFrame.maxY - inputNodeSize.height + inputNodeOffset.y), size: inputNodeSize))
         }
@@ -1503,12 +1507,12 @@ public class AttachmentTextInputPanelNode: ASDisplayNode, TGCaptionPanelView, AS
             if sendButtonHasApplyIcon != self.actionButtons.sendButtonHasApplyIcon {
                 self.actionButtons.sendButtonHasApplyIcon = sendButtonHasApplyIcon
                 if self.actionButtons.sendButtonHasApplyIcon {
-                    self.actionButtons.sendButton.setImage(PresentationResourcesChat.chatInputPanelApplyIconImage(interfaceState.theme), for: [])
+                    self.actionButtons.setImage(PresentationResourcesChat.chatInputPanelApplyIconImage(interfaceState.theme))
                 } else {
                     if case .scheduledMessages = interfaceState.subject {
-                        self.actionButtons.sendButton.setImage(PresentationResourcesChat.chatInputPanelScheduleButtonImage(interfaceState.theme), for: [])
+                        self.actionButtons.setImage(PresentationResourcesChat.chatInputPanelScheduleButtonImage(interfaceState.theme))
                     } else {
-                        self.actionButtons.sendButton.setImage(PresentationResourcesChat.chatInputPanelSendIconImage(interfaceState.theme), for: [])
+                        self.actionButtons.setImage(PresentationResourcesChat.chatInputPanelSendIconImage(interfaceState.theme))
                     }
                 }
             }
@@ -1956,7 +1960,7 @@ public class AttachmentTextInputPanelNode: ASDisplayNode, TGCaptionPanelView, AS
 
     public func frameForInputActionButton() -> CGRect? {
         if !self.actionButtons.alpha.isZero {
-            return self.actionButtons.frame.insetBy(dx: 0.0, dy: 6.0).offsetBy(dx: 4.0, dy: 0.0)
+            return self.actionButtons.frame.insetBy(dx: 0.0, dy: self.glass ? 0.0 : 6.0).offsetBy(dx: 4.0, dy: 0.0)
         }
         return nil
     }

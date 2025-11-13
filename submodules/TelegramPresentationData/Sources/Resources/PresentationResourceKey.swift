@@ -268,6 +268,9 @@ public enum PresentationResourceKey: Int32 {
     case chatMessageAttachedContentHighlightedButtonIconLinkOutgoingWithWallpaper
     case chatMessageAttachedContentHighlightedButtonIconLinkOutgoingWithoutWallpaper
     
+    case chatMessageAttachedContentButtonIconBidIncoming
+    case chatMessageAttachedContentButtonIconBidOutgoing
+    
     case chatCommandPanelArrowImage
     
     case sharedMediaFileDownloadStartIcon

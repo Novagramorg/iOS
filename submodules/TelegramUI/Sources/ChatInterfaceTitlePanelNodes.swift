@@ -244,7 +244,7 @@ func floatingTopicsPanelForChatPresentationInterfaceState(_ chatPresentationInte
         case .loading:
             return nil
         case let .loaded(isEmpty, _):
-            if isEmpty {
+            if isEmpty && chatPresentationInterfaceState.chatLocation.threadId == nil {
                 return nil
             }
         }
@@ -267,7 +267,7 @@ func floatingTopicsPanelForChatPresentationInterfaceState(_ chatPresentationInte
                 interfaceInteraction?.toggleChatSidebarMode()
             },
             updateTopicId: { [weak interfaceInteraction] topicId, direction in
-                interfaceInteraction?.updateChatLocationThread(topicId, direction ? .down : .up)
+                interfaceInteraction?.updateChatLocationThread(topicId, direction)
             },
             openDeletePeer: { [weak interfaceInteraction] threadId in
                 guard let controller = interfaceInteraction?.chatController() as? ChatControllerImpl else {
@@ -293,7 +293,7 @@ func floatingTopicsPanelForChatPresentationInterfaceState(_ chatPresentationInte
                 interfaceInteraction?.toggleChatSidebarMode()
             },
             updateTopicId: { [weak interfaceInteraction] topicId, direction in
-                interfaceInteraction?.updateChatLocationThread(topicId, direction ? .down : .up)
+                interfaceInteraction?.updateChatLocationThread(topicId, direction)
             },
             openDeletePeer: { [weak interfaceInteraction] threadId in
                 guard let controller = interfaceInteraction?.chatController() as? ChatControllerImpl else {
@@ -319,7 +319,7 @@ func floatingTopicsPanelForChatPresentationInterfaceState(_ chatPresentationInte
                 interfaceInteraction?.toggleChatSidebarMode()
             },
             updateTopicId: { [weak interfaceInteraction] topicId, direction in
-                interfaceInteraction?.updateChatLocationThread(topicId, direction ? .down : .up)
+                interfaceInteraction?.updateChatLocationThread(topicId, direction)
             },
             openDeletePeer: { [weak interfaceInteraction] threadId in
                 guard let controller = interfaceInteraction?.chatController() as? ChatControllerImpl else {

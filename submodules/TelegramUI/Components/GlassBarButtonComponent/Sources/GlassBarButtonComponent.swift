@@ -12,7 +12,7 @@ public final class GlassBarButtonComponent: Component {
         case tintedGlass
     }
     
-    public let size: CGSize
+    public let size: CGSize?
     public let backgroundColor: UIColor
     public let isDark: Bool
     public let state: DisplayState?
@@ -21,7 +21,7 @@ public final class GlassBarButtonComponent: Component {
     public let action: ((UIView) -> Void)?
 
     public init(
-        size: CGSize,
+        size: CGSize?,
         backgroundColor: UIColor,
         isDark: Bool,
         state: DisplayState? = nil,
@@ -149,9 +149,17 @@ public final class GlassBarButtonComponent: Component {
                 transition: componentTransition,
                 component: component.component.component,
                 environment: {},
-                containerSize: component.size
+                containerSize: component.size ?? availableSize
             )
-            let componentFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((component.size.width - componentSize.width) / 2.0), y: floorToScreenPixels((component.size.height - componentSize.height) / 2.0)), size: componentSize)
+            
+            let containerSize: CGSize
+            if let size = component.size {
+                containerSize = size
+            } else {
+                containerSize = CGSize(width: componentSize.width + 25.0, height: max(availableSize.height, componentSize.height + 19.0))
+            }
+            
+            let componentFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((containerSize.width - componentSize.width) / 2.0), y: floorToScreenPixels((containerSize.height - componentSize.height) / 2.0)), size: componentSize)
             if let view = componentView.view {
                 if view.superview == nil {
                     self.containerView.addSubview(view)
@@ -175,11 +183,11 @@ public final class GlassBarButtonComponent: Component {
                 genericAlpha = 0.0
             }
             
-            let cornerRadius = component.size.height * 0.5
-            self.genericBackgroundView.update(size: component.size, cornerRadius: cornerRadius, isDark: component.isDark, tintColor: .init(kind: .custom, color: component.backgroundColor), transition: transition)
-            self.glassBackgroundView.update(size: component.size, cornerRadius: cornerRadius, isDark: component.isDark, tintColor: .init(kind: effectiveState == .tintedGlass ? .custom : .panel , color: component.backgroundColor.withMultipliedAlpha(effectiveState == .tintedGlass ? 1.0 : 0.7)), transition: transition)
+            let cornerRadius = containerSize.height * 0.5
+            self.genericBackgroundView.update(size: containerSize, cornerRadius: cornerRadius, isDark: component.isDark, tintColor: .init(kind: .custom, color: component.backgroundColor), transition: transition)
+            self.glassBackgroundView.update(size: containerSize, cornerRadius: cornerRadius, isDark: component.isDark, tintColor: .init(kind: effectiveState == .tintedGlass ? .custom : .panel , color: component.backgroundColor.withMultipliedAlpha(effectiveState == .tintedGlass ? 1.0 : 0.7)), transition: transition)
             
-            let bounds = CGRect(origin: .zero, size: component.size)
+            let bounds = CGRect(origin: .zero, size: containerSize)
             transition.setFrame(view: self.containerView, frame: bounds)
                         
             transition.setAlpha(view: self.genericContainerView, alpha: genericAlpha)
@@ -191,7 +199,7 @@ public final class GlassBarButtonComponent: Component {
             transition.setFrame(view: self.genericBackgroundView, frame: bounds)
             transition.setFrame(view: self.glassBackgroundView, frame: bounds)
             
-            return component.size
+            return containerSize
         }
     }
 

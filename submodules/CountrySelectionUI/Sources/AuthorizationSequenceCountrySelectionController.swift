@@ -341,8 +341,7 @@ public final class AuthorizationSequenceCountrySelectionController: ViewControll
         self.statusBar.statusBarStyle = theme.rootController.statusBarStyle.style
         
         if glass {
-            //TODO:localize
-            self.title = "Select Country"
+            self.title = strings.Login_SelectCountry
         } else {
             let navigationContentNode = AuthorizationSequenceCountrySelectionNavigationContentNode(theme: theme, strings: strings, cancel: { [weak self] in
                 self?.dismissed?()

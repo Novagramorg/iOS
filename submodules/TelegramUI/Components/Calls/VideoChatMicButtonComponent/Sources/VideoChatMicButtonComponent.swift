@@ -12,6 +12,32 @@ import SwiftSignalKit
 import AccountContext
 import RadialStatusNode
 import GlassBackgroundComponent
+import TelegramCore
+
+private extension VideoChatCall {
+    var myAudioLevelAndSpeaking: Signal<(Float, Bool), NoError> {
+        switch self {
+        case let .group(group):
+            return group.myAudioLevelAndSpeaking
+        case let .conferenceSource(conferenceSource):
+            return conferenceSource.audioLevel |> map { value in
+                return (value, false)
+            }
+        }
+    }
+    
+    var audioLevels: Signal<[(EnginePeer.Id, UInt32, Float, Bool)], NoError> {
+        switch self {
+        case let .group(group):
+            return group.audioLevels
+        case let .conferenceSource(conferenceSource):
+            let peerId = conferenceSource.peerId
+            return conferenceSource.audioLevel |> map { value in
+                return [(peerId, 0, value, false)]
+            }
+        }
+    }
+}
 
 private let blueColor = UIColor(rgb: 0x55b3f8)
 
@@ -177,13 +203,13 @@ private final class GlowView: UIView {
     }
 }
 
-final class VideoChatMicButtonComponent: Component {
-    enum ScheduledState: Equatable {
+public final class VideoChatMicButtonComponent: Component {
+    public enum ScheduledState: Equatable {
         case start
         case toggleSubscription(isSubscribed: Bool)
     }
     
-    enum Content: Equatable {
+    public enum Content: Equatable {
         case connecting
         case muted(forced: Bool)
         case unmuted(pushToTalk: Bool)
@@ -191,21 +217,23 @@ final class VideoChatMicButtonComponent: Component {
         case scheduled(state: ScheduledState)
     }
     
-    let call: VideoChatCall
+    let call: VideoChatCall?
     let strings: PresentationStrings
     let content: Content
     let isCollapsed: Bool
     let isCompact: Bool
+    let customIconScale: CGFloat?
     let updateUnmutedStateIsPushToTalk: (Bool?) -> Void
     let raiseHand: () -> Void
     let scheduleAction: () -> Void
 
-    init(
-        call: VideoChatCall,
+    public init(
+        call: VideoChatCall?,
         strings: PresentationStrings,
         content: Content,
         isCollapsed: Bool,
         isCompact: Bool,
+        customIconScale: CGFloat? = nil,
         updateUnmutedStateIsPushToTalk: @escaping (Bool?) -> Void,
         raiseHand: @escaping () -> Void,
         scheduleAction: @escaping () -> Void
@@ -215,12 +243,13 @@ final class VideoChatMicButtonComponent: Component {
         self.content = content
         self.isCollapsed = isCollapsed
         self.isCompact = isCompact
+        self.customIconScale = customIconScale
         self.updateUnmutedStateIsPushToTalk = updateUnmutedStateIsPushToTalk
         self.raiseHand = raiseHand
         self.scheduleAction = scheduleAction
     }
 
-    static func ==(lhs: VideoChatMicButtonComponent, rhs: VideoChatMicButtonComponent) -> Bool {
+    public static func ==(lhs: VideoChatMicButtonComponent, rhs: VideoChatMicButtonComponent) -> Bool {
         if lhs.call != rhs.call {
             return false
         }
@@ -233,10 +262,13 @@ final class VideoChatMicButtonComponent: Component {
         if lhs.isCompact != rhs.isCompact {
             return false
         }
+        if lhs.customIconScale != rhs.customIconScale {
+            return false
+        }
         return true
     }
 
-    final class View: HighlightTrackingButton {
+    public final class View: HighlightTrackingButton {
         private let background: UIImageView
         private var disappearingBackgrounds: [UIImageView] = []
         private var progressIndicator: RadialStatusNode?
@@ -268,7 +300,7 @@ final class VideoChatMicButtonComponent: Component {
             self.audioLevelDisposable?.dispose()
         }
         
-        override func beginTracking(_ touch: UITouch, with event: UIEvent?) -> Bool {
+        override public func beginTracking(_ touch: UITouch, with event: UIEvent?) -> Bool {
             self.beginTrackingTimestamp = CFAbsoluteTimeGetCurrent()
             if let component = self.component {
                 switch component.content {
@@ -287,13 +319,13 @@ final class VideoChatMicButtonComponent: Component {
             return super.beginTracking(touch, with: event)
         }
         
-        override func endTracking(_ touch: UITouch?, with event: UIEvent?) {
+        override public func endTracking(_ touch: UITouch?, with event: UIEvent?) {
             performEndOrCancelTracking()
             
             return super.endTracking(touch, with: event)
         }
         
-        override func cancelTracking(with event: UIEvent?) {
+        override public func cancelTracking(with event: UIEvent?) {
             performEndOrCancelTracking()
             
             return super.cancelTracking(with: event)
@@ -585,7 +617,13 @@ final class VideoChatMicButtonComponent: Component {
             
             transition.setPosition(view: self.icon.view, position: iconFrame.center)
             transition.setBounds(view: self.icon.view, bounds: CGRect(origin: CGPoint(), size: iconFrame.size))
-            transition.setScale(view: self.icon.view, scale: component.isCollapsed || component.isCompact ? ((iconSize.width - 34.0) / iconSize.width) : 1.0)
+            let iconScale: CGFloat
+            if let customIconScale = component.customIconScale {
+                iconScale = customIconScale
+            } else {
+                iconScale = component.isCollapsed || component.isCompact ? ((iconSize.width - 34.0) / iconSize.width) : 1.0
+            }
+            transition.setScale(view: self.icon.view, scale: iconScale)
             
             switch component.content {
             case .connecting:
@@ -653,14 +691,17 @@ final class VideoChatMicButtonComponent: Component {
                 
                 switch component.content {
                 case .unmuted:
-                    if self.audioLevelDisposable == nil {
-                        self.audioLevelDisposable = (component.call.myAudioLevelAndSpeaking
+                    if self.audioLevelDisposable == nil, let call = component.call {
+                        self.audioLevelDisposable = (call.myAudioLevelAndSpeaking
                         |> deliverOnMainQueue).startStrict(next: { [weak self] value, _ in
                             guard let self, let blobView = self.blobView else {
                                 return
                             }
                             blobView.updateLevel(CGFloat(value), immediately: false)
                         })
+                    } else if let audioLevelDisposable = self.audioLevelDisposable {
+                        self.audioLevelDisposable = nil
+                        audioLevelDisposable.dispose()
                     }
                 case .connecting, .muted, .raiseHand, .scheduled:
                     if let audioLevelDisposable = self.audioLevelDisposable {
@@ -752,11 +793,11 @@ final class VideoChatMicButtonComponent: Component {
         }
     }
 
-    func makeView() -> View {
+    public func makeView() -> View {
         return View()
     }
 
-    func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<EnvironmentType>, transition: ComponentTransition) -> CGSize {
+    public func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<EnvironmentType>, transition: ComponentTransition) -> CGSize {
         return view.update(component: self, availableSize: availableSize, state: state, environment: environment, transition: transition)
     }
 }
