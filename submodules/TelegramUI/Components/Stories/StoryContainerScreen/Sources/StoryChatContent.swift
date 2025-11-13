@@ -589,6 +589,7 @@ public final class StoryContentContextImpl: StoryContentContext {
     private var focusedItem: (peerId: EnginePeer.Id, storyId: Int32?)?
     
     private var currentState: StateContext?
+    private var stateIsEmpty: Bool = false
     private var currentStateUpdatedDisposable: Disposable?
     
     private var pendingState: StateContext?
@@ -645,7 +646,7 @@ public final class StoryContentContextImpl: StoryContentContext {
                 
                 let storySubscriptions = EngineStorySubscriptions(
                     accountItem: nil,
-                    items: [EngineStorySubscriptions.Item(
+                    items: state.items.isEmpty ? [] : [EngineStorySubscriptions.Item(
                         peer: peer,
                         hasUnseen: state.hasUnseen,
                         hasUnseenCloseFriends: state.hasUnseenCloseFriends,
@@ -938,6 +939,9 @@ public final class StoryContentContextImpl: StoryContentContext {
                             self.updateState()
                         })
                     })
+                } else {
+                    self.stateIsEmpty = true
+                    self.updateState()
                 }
             }
         } else {
@@ -947,6 +951,12 @@ public final class StoryContentContextImpl: StoryContentContext {
     
     private func updateState() {
         guard let currentState = self.currentState else {
+            if self.stateIsEmpty {
+                self.stateValue = nil
+                self.statePromise.set(.single(StoryContentContextState(slice: nil, previousSlice: nil, nextSlice: nil)))
+                
+                self.updatedPromise.set(.single(Void()))
+            }
             return
         }
         let stateValue = StoryContentContextState(

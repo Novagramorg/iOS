@@ -4125,6 +4125,17 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                         let liveBadgeFrame = CGRect(origin: CGPoint(x: floor((avatarFrame.width - iconImage.size.width) * 0.5), y: avatarFrame.height + 5.0 - iconImage.size.height), size: iconImage.size)
                         transition.updateFrame(view: avatarLiveBadge.foreground, frame: liveBadgeFrame)
                         transition.updateFrame(view: avatarLiveBadge.outline, frame: liveBadgeFrame.insetBy(dx: -outlineInset, dy: -outlineInset))
+                        
+                        let effectiveBackgroundColor: UIColor
+                        if item.isPinned {
+                            effectiveBackgroundColor = item.presentationData.theme.chatList.pinnedItemBackgroundColor
+                        } else {
+                            effectiveBackgroundColor = item.presentationData.theme.chatList.itemBackgroundColor
+                        }
+                        
+                        let highlightAlpha = strongSelf.highlightedBackgroundNode.supernode == nil ? 0.0 : strongSelf.highlightedBackgroundNode.alpha
+                        let outlineColor = item.presentationData.theme.chatList.itemHighlightedBackgroundColor.mixedWith(effectiveBackgroundColor, alpha: 1.0 - highlightAlpha)
+                        transition.updateTintColor(view: avatarLiveBadge.outline, color: outlineColor)
                     }
                     
                     let onlineInlineNavigationFraction: CGFloat = item.interaction.inlineNavigationLocation?.progress ?? 0.0
