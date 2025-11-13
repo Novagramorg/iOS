@@ -438,17 +438,16 @@ extension ChatControllerImpl {
                     let text: String
                     let deleteOneAction: String
                     let deleteAllAction: String
-                    //TODO:localize
                     if message.id.peerId == self.context.account.peerId {
-                        title = "Delete Repeating Reminder"
-                        text = "Are you sure you want to delete this reminder? This is a repeating reminder."
-                        deleteOneAction = "Delete This Reminder Only"
-                        deleteAllAction = "Delete All Future Reminders"
+                        title = self.presentationData.strings.Reminders_DeleteRepeatingTitle
+                        text = self.presentationData.strings.Reminders_DeleteRepeatingText
+                        deleteOneAction = self.presentationData.strings.Reminders_DeleteRepeatingActionSingle
+                        deleteAllAction = self.presentationData.strings.Reminders_DeleteRepeatingActionMultiple
                     } else {
-                        title = "Delete Repeating Message"
-                        text = "Are you sure you want to delete this scheduled message? This is a repeating message."
-                        deleteOneAction = "Delete This Message Only"
-                        deleteAllAction = "Delete All Future Messages"
+                        title = self.presentationData.strings.ScheduledMessages_DeleteRepeatingTitle
+                        text = self.presentationData.strings.ScheduledMessages_DeleteRepeatingText
+                        deleteOneAction = self.presentationData.strings.ScheduledMessages_DeleteRepeatingActionSingle
+                        deleteAllAction = self.presentationData.strings.ScheduledMessages_DeleteRepeatingActionMultiple
                     }
                     self.present(standardTextAlertController(
                         theme: AlertControllerTheme(presentationData: self.presentationData),
