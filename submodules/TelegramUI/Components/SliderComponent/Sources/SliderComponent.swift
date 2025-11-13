@@ -140,6 +140,15 @@ public final class SliderComponent: Component {
             fatalError("init(coder:) has not been implemented")
         }
                 
+        public func cancelGestures() {
+            if let sliderView = self.sliderView, let gestureRecognizers = sliderView.gestureRecognizers {
+                for gestureRecognizer in gestureRecognizers {
+                    gestureRecognizer.isEnabled = false
+                    gestureRecognizer.isEnabled = true
+                }
+            }
+        }
+        
         func update(component: SliderComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
             self.component = component
             self.state = state
