@@ -441,7 +441,7 @@ public final class GiftItemComponent: Component {
                 let _ = loadingBackground.update(
                     transition: transition,
                     component: AnyComponent(
-                        ItemShimmeringLoadingComponent(color: component.theme.list.itemAccentColor, cornerRadius: 10.0)
+                        ItemShimmeringLoadingComponent(color: component.theme.list.itemAccentColor, cornerRadius: cornerRadius)
                     ),
                     environment: {},
                     containerSize: size

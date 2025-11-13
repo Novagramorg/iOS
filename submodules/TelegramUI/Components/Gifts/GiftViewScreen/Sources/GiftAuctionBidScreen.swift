@@ -940,17 +940,26 @@ private final class GiftAuctionBidScreenComponent: Component {
     
     let context: AccountContext
     let toPeerId: EnginePeer.Id
+    let text: String?
+    let entities: [MessageTextEntity]?
+    let hideName: Bool
     let gift: StarGift
     let auctionContext: GiftAuctionContext
     
     init(
         context: AccountContext,
         toPeerId: EnginePeer.Id,
+        text: String?,
+        entities: [MessageTextEntity]?,
+        hideName: Bool,
         gift: StarGift,
         auctionContext: GiftAuctionContext
     ) {
         self.context = context
         self.toPeerId = toPeerId
+        self.text = text
+        self.entities = entities
+        self.hideName = hideName
         self.gift = gift
         self.auctionContext = auctionContext
     }
@@ -994,7 +1003,7 @@ private final class GiftAuctionBidScreenComponent: Component {
         
         private static func makeSliderSteps(minRealValue: Int, maxRealValue: Int, isLogarithmic: Bool) -> [Int] {
             if isLogarithmic {
-                var sliderSteps: [Int] = [1, 10, 50, 100, 500, 1_000, 2_000, 5_000, 7_500, 15_000, 20_000, 30_000, 40_000, 50_000]
+                var sliderSteps: [Int] = [1, 10, 50, 100, 500, 1_000, 2_000, 5_000, 10_000, 20_000, 30_000, 40_000, 50_000]
                 sliderSteps.removeAll(where: { $0 <= minRealValue })
                 sliderSteps.insert(minRealValue, at: 0)
                 sliderSteps.removeAll(where: { $0 >= maxRealValue })
@@ -1423,6 +1432,10 @@ private final class GiftAuctionBidScreenComponent: Component {
             }
             
             var isUpdate = false
+            var myBidPeerId: EnginePeer.Id?
+            if let peerId = self.giftAuctionState?.myState.bidPeerId {
+                myBidPeerId = peerId
+            }
             if let myBidAmount = self.giftAuctionState?.myState.bidAmount {
                 isUpdate = true
                 if value == myBidAmount {
@@ -1456,14 +1469,19 @@ private final class GiftAuctionBidScreenComponent: Component {
             self.isLoading = true
             self.state?.updated()
             
+            var peerId: EnginePeer.Id?
+            if !isUpdate || (myBidPeerId != nil && myBidPeerId != component.toPeerId) {
+                peerId = component.toPeerId
+            }
+            
             let source: BotPaymentInvoiceSource = .starGiftAuctionBid(
                update: isUpdate,
-               hideName: false,
-               peerId: component.toPeerId,
+               hideName: peerId != nil ? component.hideName : false,
+               peerId: peerId,
                giftId: gift.id,
                bidAmount: value,
-               text: nil,
-               entities: nil
+               text: peerId != nil ? component.text : nil,
+               entities: peerId != nil ? component.entities : nil
            )
             
             let signal = BotCheckoutController.InputData.fetch(context: component.context, source: source)
@@ -1489,7 +1507,7 @@ private final class GiftAuctionBidScreenComponent: Component {
                 self.isLoading = false
                 
                 let newMaxValue = Int(Double(value) * 1.5)
-                var updatedAmount = self.amount.withMinAllowedRealValue(Int(value))
+                var updatedAmount = self.amount.withMinAllowedRealValue(Int(value)).withRealValue(Int(value))
                 if newMaxValue > self.amount.maxRealValue {
                     updatedAmount = updatedAmount.withMaxRealValue(newMaxValue)
                 }
@@ -1682,15 +1700,33 @@ private final class GiftAuctionBidScreenComponent: Component {
         }
         
         func presentCustomBidController() {
-            guard let component = self.component else {
+            guard let component = self.component, let environment = self.environment, case let .generic(gift) = component.gift else {
                 return
             }
+            
+            guard let auctionState = self.giftAuctionState else {
+                return
+            }
+            
+            var minBidAmount: Int64 = 100
+            if case let .ongoing(_, _, _, auctionMinBidAmount, _, _, _, _, _, _) = auctionState.auctionState {
+                minBidAmount = auctionMinBidAmount
+                if let myMinBidAmount = auctionState.myState.minBidAmount {
+                    minBidAmount = myMinBidAmount
+                }
+            }
+            
+            
+            let giftsPerRounds = gift.auctionGiftsPerRound ?? 50
+            
             let controller = giftAuctionCustomBidController(
                 context: component.context,
-                title: "Place a Custom Bid",
-                text: "Description",
-                placeholder: "Bid",
-                value: 100,
+                title: environment.strings.Gift_AuctionBid_CustomBid_Title,
+                text: environment.strings.Gift_AuctionBid_CustomBid_Text("\(giftsPerRounds)").string,
+                placeholder: environment.strings.Gift_AuctionBid_CustomBid_Placeholder,
+                action: environment.strings.Gift_AuctionBid_CustomBid_Done,
+                minValue: minBidAmount,
+                value: minBidAmount,
                 apply: { [weak self] value in
                     guard let self else {
                         return
@@ -2698,12 +2734,15 @@ public class GiftAuctionBidScreen: ViewControllerComponentContainer {
     private var didPlayAppearAnimation: Bool = false
     private var isDismissed: Bool = false
     
-    public init(context: AccountContext, toPeerId: EnginePeer.Id, auctionContext: GiftAuctionContext) {
+    public init(context: AccountContext, toPeerId: EnginePeer.Id, text: String?, entities: [MessageTextEntity]?, hideName: Bool, auctionContext: GiftAuctionContext) {
         self.context = context
         
         super.init(context: context, component: GiftAuctionBidScreenComponent(
             context: context,
             toPeerId: toPeerId,
+            text: text,
+            entities: entities,
+            hideName: hideName,
             gift: auctionContext.gift,
             auctionContext: auctionContext
         ), navigationBarAppearance: .none, theme: .default)

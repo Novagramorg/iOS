@@ -7,168 +7,23 @@ import TelegramCore
 import TelegramPresentationData
 import AccountContext
 import UrlEscaping
+import ComponentFlow
+import StarsWithdrawalScreen
 
-private final class GiftAuctionCustomBidInputFieldNode: ASDisplayNode, ASEditableTextNodeDelegate {
-    private var theme: PresentationTheme
-    private let backgroundNode: ASImageNode
-    private let textInputNode: EditableTextNode
-    private let placeholderNode: ASTextNode
-    
-    var updateHeight: (() -> Void)?
-    var complete: (() -> Void)?
-    var textChanged: ((String) -> Void)?
-    
-    private let backgroundInsets = UIEdgeInsets(top: 8.0, left: 16.0, bottom: 15.0, right: 16.0)
-    private let inputInsets = UIEdgeInsets(top: 5.0, left: 12.0, bottom: 5.0, right: 12.0)
-    
-    var text: String {
-        get {
-            return self.textInputNode.attributedText?.string ?? ""
-        }
-        set {
-            self.textInputNode.attributedText = NSAttributedString(string: newValue, font: Font.regular(17.0), textColor: self.theme.actionSheet.inputTextColor)
-            self.placeholderNode.isHidden = !newValue.isEmpty
-        }
-    }
-    
-    var placeholder: String = "" {
-        didSet {
-            self.placeholderNode.attributedText = NSAttributedString(string: self.placeholder, font: Font.regular(17.0), textColor: self.theme.actionSheet.inputPlaceholderColor)
-        }
-    }
-        
-    init(theme: PresentationTheme, placeholder: String, returnKeyType: UIReturnKeyType = .done) {
-        self.theme = theme
-        
-        self.backgroundNode = ASImageNode()
-        self.backgroundNode.isLayerBacked = true
-        self.backgroundNode.displaysAsynchronously = false
-        self.backgroundNode.displayWithoutProcessing = true
-        self.backgroundNode.image = generateStretchableFilledCircleImage(diameter: 12.0, color: theme.actionSheet.inputHollowBackgroundColor, strokeColor: theme.actionSheet.inputBorderColor, strokeWidth: 1.0)
-        
-        self.textInputNode = EditableTextNode()
-        self.textInputNode.typingAttributes = [NSAttributedString.Key.font.rawValue: Font.regular(17.0), NSAttributedString.Key.foregroundColor.rawValue: theme.actionSheet.inputTextColor]
-        self.textInputNode.clipsToBounds = true
-        self.textInputNode.hitTestSlop = UIEdgeInsets(top: -5.0, left: -5.0, bottom: -5.0, right: -5.0)
-        self.textInputNode.textContainerInset = UIEdgeInsets(top: self.inputInsets.top, left: 0.0, bottom: self.inputInsets.bottom, right: 0.0)
-        self.textInputNode.keyboardAppearance = theme.rootController.keyboardColor.keyboardAppearance
-        self.textInputNode.keyboardType = .default
-        self.textInputNode.autocapitalizationType = .sentences
-        self.textInputNode.returnKeyType = returnKeyType
-        self.textInputNode.autocorrectionType = .default
-        self.textInputNode.tintColor = theme.actionSheet.controlAccentColor
-        self.textInputNode.keyboardType = .numberPad
-        
-        self.placeholderNode = ASTextNode()
-        self.placeholderNode.isUserInteractionEnabled = false
-        self.placeholderNode.displaysAsynchronously = false
-        self.placeholderNode.attributedText = NSAttributedString(string: placeholder, font: Font.regular(17.0), textColor: self.theme.actionSheet.inputPlaceholderColor)
-        
-        super.init()
-        
-        self.textInputNode.delegate = self
-        
-        self.addSubnode(self.backgroundNode)
-        self.addSubnode(self.textInputNode)
-        self.addSubnode(self.placeholderNode)
-    }
-    
-    func updateTheme(_ theme: PresentationTheme) {
-        self.theme = theme
-        
-        self.backgroundNode.image = generateStretchableFilledCircleImage(diameter: 12.0, color: self.theme.actionSheet.inputHollowBackgroundColor, strokeColor: self.theme.actionSheet.inputBorderColor, strokeWidth: 1.0)
-        self.textInputNode.keyboardAppearance = self.theme.rootController.keyboardColor.keyboardAppearance
-        self.placeholderNode.attributedText = NSAttributedString(string: self.placeholderNode.attributedText?.string ?? "", font: Font.regular(17.0), textColor: self.theme.actionSheet.inputPlaceholderColor)
-        self.textInputNode.tintColor = self.theme.actionSheet.controlAccentColor
-    }
-    
-    func updateLayout(width: CGFloat, transition: ContainedViewLayoutTransition) -> CGFloat {
-        let backgroundInsets = self.backgroundInsets
-        let inputInsets = self.inputInsets
-        
-        let textFieldHeight = self.calculateTextFieldMetrics(width: width)
-        let panelHeight = textFieldHeight + backgroundInsets.top + backgroundInsets.bottom
-        
-        let backgroundFrame = CGRect(origin: CGPoint(x: backgroundInsets.left, y: backgroundInsets.top), size: CGSize(width: width - backgroundInsets.left - backgroundInsets.right, height: panelHeight - backgroundInsets.top - backgroundInsets.bottom))
-        transition.updateFrame(node: self.backgroundNode, frame: backgroundFrame)
-        
-        let placeholderSize = self.placeholderNode.measure(backgroundFrame.size)
-        transition.updateFrame(node: self.placeholderNode, frame: CGRect(origin: CGPoint(x: backgroundFrame.minX + inputInsets.left, y: backgroundFrame.minY + floor((backgroundFrame.size.height - placeholderSize.height) / 2.0)), size: placeholderSize))
-        
-        transition.updateFrame(node: self.textInputNode, frame: CGRect(origin: CGPoint(x: backgroundFrame.minX + inputInsets.left, y: backgroundFrame.minY), size: CGSize(width: backgroundFrame.size.width - inputInsets.left - inputInsets.right - 20.0, height: backgroundFrame.size.height)))
-        
-        return panelHeight
-    }
-    
-    func activateInput() {
-        self.textInputNode.becomeFirstResponder()
-    }
-    
-    func deactivateInput() {
-        self.textInputNode.resignFirstResponder()
-    }
-    
-    @objc func editableTextNodeDidUpdateText(_ editableTextNode: ASEditableTextNode) {
-        self.updateTextNodeText(animated: true)
-        self.textChanged?(editableTextNode.textView.text)
-        self.placeholderNode.isHidden = !(editableTextNode.textView.text ?? "").isEmpty
-    }
-    
-    func editableTextNodeDidBeginEditing(_ editableTextNode: ASEditableTextNode) {
-    }
-    
-    func editableTextNodeDidFinishEditing(_ editableTextNode: ASEditableTextNode) {
-    }
-    
-    func editableTextNode(_ editableTextNode: ASEditableTextNode, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
-        let updatedText = (editableTextNode.textView.text as NSString).replacingCharacters(in: range, with: text)
-        if updatedText.count > 1 {
-            self.textInputNode.layer.addShakeAnimation()
-            return false
-        }
-        if text == "\n" {
-            self.complete?()
-            return false
-        }
-        return true
-    }
-    
-    private func calculateTextFieldMetrics(width: CGFloat) -> CGFloat {
-        let backgroundInsets = self.backgroundInsets
-        let inputInsets = self.inputInsets
-        
-        let unboundTextFieldHeight = max(33.0, ceil(self.textInputNode.measure(CGSize(width: width - backgroundInsets.left - backgroundInsets.right - inputInsets.left - inputInsets.right - 20.0, height: CGFloat.greatestFiniteMagnitude)).height))
-        
-        return min(61.0, max(33.0, unboundTextFieldHeight))
-    }
-    
-    private func updateTextNodeText(animated: Bool) {
-        let backgroundInsets = self.backgroundInsets
-        
-        let textFieldHeight = self.calculateTextFieldMetrics(width: self.bounds.size.width)
-        
-        let panelHeight = textFieldHeight + backgroundInsets.top + backgroundInsets.bottom
-        if !self.bounds.size.height.isEqual(to: panelHeight) {
-            self.updateHeight?()
-        }
-    }
-    
-    @objc func clearPressed() {
-        self.placeholderNode.isHidden = false
-        
-        self.textInputNode.attributedText = nil
-        self.updateHeight?()
-    }
-}
-
-private final class giftAuctionCustomBidAlertContentNode: AlertContentNode {
+private final class GiftAuctionCustomBidAlertContentNode: AlertContentNode {
+    private let theme: PresentationTheme
     private let strings: PresentationStrings
+    private let dateTimeFormat: PresentationDateTimeFormat
     private let title: String
     private let text: String
+    private let placeholder: String
+    private let minValue: Int64
+    fileprivate var value: Int64
     
     private let titleNode: ASTextNode
     private let textNode: ASTextNode
-    let inputFieldNode: GiftAuctionCustomBidInputFieldNode
+    private let backgroundView = UIImageView()
+    let amountField = ComponentView<Empty>()
     
     private let actionNodesSeparator: ASDisplayNode
     private let actionNodes: [TextAlertContentActionNode]
@@ -182,7 +37,7 @@ private final class giftAuctionCustomBidAlertContentNode: AlertContentNode {
     
     var complete: (() -> Void)? {
         didSet {
-            self.inputFieldNode.complete = self.complete
+            //self.inputFieldNode.complete = self.complete
         }
     }
     
@@ -190,18 +45,23 @@ private final class giftAuctionCustomBidAlertContentNode: AlertContentNode {
         return self.isUserInteractionEnabled
     }
     
-    init(theme: AlertControllerTheme, ptheme: PresentationTheme, strings: PresentationStrings, actions: [TextAlertAction], title: String, text: String, placeholder: String, value: Int64) {
+    init(theme: AlertControllerTheme, ptheme: PresentationTheme, strings: PresentationStrings, dateTimeFormat: PresentationDateTimeFormat, actions: [TextAlertAction], title: String, text: String, placeholder: String, minValue: Int64, value: Int64) {
+        self.theme = ptheme
         self.strings = strings
+        self.dateTimeFormat = dateTimeFormat
         self.title = title
         self.text = text
+        self.placeholder = placeholder
+        self.minValue = minValue
+        self.value = value
         
         self.titleNode = ASTextNode()
         self.titleNode.maximumNumberOfLines = 2
         self.textNode = ASTextNode()
         self.textNode.maximumNumberOfLines = 8
-        
-        self.inputFieldNode = GiftAuctionCustomBidInputFieldNode(theme: ptheme, placeholder: placeholder)
-        self.inputFieldNode.text = "\(value)"
+                
+//        self.inputFieldNode = GiftAuctionCustomBidInputFieldNode(theme: ptheme, placeholder: placeholder)
+//        self.inputFieldNode.text = "\(value)"
         
         self.actionNodesSeparator = ASDisplayNode()
         self.actionNodesSeparator.isLayerBacked = true
@@ -225,7 +85,7 @@ private final class giftAuctionCustomBidAlertContentNode: AlertContentNode {
         self.addSubnode(self.titleNode)
         self.addSubnode(self.textNode)
         
-        self.addSubnode(self.inputFieldNode)
+//        self.addSubnode(self.inputFieldNode)
 
         self.addSubnode(self.actionNodesSeparator)
         
@@ -237,14 +97,6 @@ private final class giftAuctionCustomBidAlertContentNode: AlertContentNode {
             self.addSubnode(separatorNode)
         }
         
-        self.inputFieldNode.updateHeight = { [weak self] in
-            if let strongSelf = self {
-                if let _ = strongSelf.validLayout {
-                    strongSelf.requestLayout?(.animated(duration: 0.15, curve: .spring))
-                }
-            }
-        }
-        
         self.updateTheme(theme)
     }
     
@@ -252,10 +104,6 @@ private final class giftAuctionCustomBidAlertContentNode: AlertContentNode {
         self.disposable.dispose()
     }
     
-    var value: String {
-        return self.inputFieldNode.text
-    }
-
     override func updateTheme(_ theme: AlertControllerTheme) {
         self.titleNode.attributedText = NSAttributedString(string: self.title, font: Font.bold(17.0), textColor: theme.primaryColor, paragraphAlignment: .center)
         self.textNode.attributedText = NSAttributedString(string: self.text, font: Font.regular(13.0), textColor: theme.primaryColor, paragraphAlignment: .center)
@@ -327,13 +175,52 @@ private final class giftAuctionCustomBidAlertContentNode: AlertContentNode {
         
         let resultWidth = contentWidth + insets.left + insets.right
         
-        let inputFieldWidth = resultWidth
-        let inputFieldHeight = self.inputFieldNode.updateLayout(width: inputFieldWidth, transition: transition)
-        let inputHeight = inputFieldHeight
-        transition.updateFrame(node: self.inputFieldNode, frame: CGRect(x: 0.0, y: origin.y, width: resultWidth, height: inputFieldHeight))
-        transition.updateAlpha(node: self.inputFieldNode, alpha: inputHeight > 0.0 ? 1.0 : 0.0)
+        let fieldWidth = resultWidth - 18.0
+        let amountFieldSize = self.amountField.update(
+            transition: .immediate,
+            component: AnyComponent(
+                AmountFieldComponent(
+                    textColor: self.theme.list.itemPrimaryTextColor,
+                    secondaryColor: self.theme.list.itemSecondaryTextColor,
+                    placeholderColor: self.theme.list.itemPlaceholderTextColor,
+                    accentColor: self.theme.list.itemAccentColor,
+                    value: self.value,
+                    minValue: self.minValue,
+                    forceMinValue: false,
+                    allowZero: false,
+                    maxValue: nil,
+                    placeholderText: self.placeholder,
+                    textFieldOffset: CGPoint(x: -4.0, y: -1.0),
+                    labelText: nil,
+                    currency: .stars,
+                    dateTimeFormat: self.dateTimeFormat,
+                    amountUpdated: { [weak self] value in
+                        guard let self else {
+                            return
+                        }
+                        if let value {
+                            self.value = value
+                        }
+                    },
+                    tag: nil
+                )
+            ),
+            environment: {},
+            containerSize: CGSize(width: fieldWidth, height: 44.0)
+        )
+        let amountFieldFrame = CGRect(origin: CGPoint(x: floor((resultWidth - fieldWidth) / 2.0), y: origin.y - 2.0), size: amountFieldSize)
+        if let amountFieldView = self.amountField.view {
+            if amountFieldView.superview == nil {
+                self.backgroundView.image = generateStretchableFilledCircleImage(diameter: 12.0, color: self.theme.actionSheet.inputHollowBackgroundColor, strokeColor: self.theme.actionSheet.inputBorderColor, strokeWidth: 1.0)
+                
+                self.view.addSubview(self.backgroundView)
+                self.view.addSubview(amountFieldView)
+            }
+            self.backgroundView.frame = amountFieldFrame.insetBy(dx: 7.0, dy: 9.0)
+            amountFieldView.frame = amountFieldFrame
+        }
         
-        let resultSize = CGSize(width: resultWidth, height: titleSize.height + textSize.height + spacing + inputHeight + actionsHeight  + insets.top + insets.bottom)
+        let resultSize = CGSize(width: resultWidth, height: titleSize.height + textSize.height + spacing + amountFieldSize.height + actionsHeight + insets.top + insets.bottom + 3.0)
         
         transition.updateFrame(node: self.actionNodesSeparator, frame: CGRect(origin: CGPoint(x: 0.0, y: resultSize.height - actionsHeight - UIScreenPixel), size: CGSize(width: resultSize.width, height: UIScreenPixel)))
         
@@ -381,19 +268,36 @@ private final class giftAuctionCustomBidAlertContentNode: AlertContentNode {
         }
         
         if !hadValidLayout {
-            self.inputFieldNode.activateInput()
+            if let amountFieldView = self.amountField.view as? AmountFieldComponent.View {
+                amountFieldView.activateInput()
+                amountFieldView.selectAll()
+            }
         }
         
         return resultSize
     }
     
     func animateError() {
-        self.inputFieldNode.layer.addShakeAnimation()
-        self.hapticFeedback.error()
+        if let amountFieldView = self.amountField.view as? AmountFieldComponent.View {
+            self.value = self.minValue
+            if let size = self.validLayout {
+                _ = self.updateLayout(size: size, transition: .immediate)
+            }
+            amountFieldView.resetValue()
+            
+            amountFieldView.animateError()
+            amountFieldView.selectAll()
+        }
+    }
+    
+    func deactivateInput() {
+        if let amountFieldView = self.amountField.view as? AmountFieldComponent.View {
+            amountFieldView.deactivateInput()
+        }
     }
 }
 
-func giftAuctionCustomBidController(context: AccountContext, title: String, text: String, placeholder: String, value: Int64, apply: @escaping (Int64) -> Void) -> AlertController {
+func giftAuctionCustomBidController(context: AccountContext, title: String, text: String, placeholder: String, action: String, minValue: Int64, value: Int64, apply: @escaping (Int64) -> Void) -> AlertController {
     let presentationData = context.sharedContext.currentPresentationData.with { $0 }
     
     var dismissImpl: ((Bool) -> Void)?
@@ -401,11 +305,11 @@ func giftAuctionCustomBidController(context: AccountContext, title: String, text
     
     let actions: [TextAlertAction] = [TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: {
         dismissImpl?(true)
-    }), TextAlertAction(type: .defaultAction, title: "Place a Bid", action: {
+    }), TextAlertAction(type: .defaultAction, title: action, action: {
         applyImpl?()
     })]
     
-    let contentNode = giftAuctionCustomBidAlertContentNode(theme: AlertControllerTheme(presentationData: presentationData), ptheme: presentationData.theme, strings: presentationData.strings, actions: actions, title: title, text: text, placeholder: placeholder, value: value)
+    let contentNode = GiftAuctionCustomBidAlertContentNode(theme: AlertControllerTheme(presentationData: presentationData), ptheme: presentationData.theme, strings: presentationData.strings, dateTimeFormat: presentationData.dateTimeFormat, actions: actions, title: title, text: text, placeholder: placeholder, minValue: minValue, value: value)
     contentNode.complete = {
         applyImpl?()
     }
@@ -413,23 +317,25 @@ func giftAuctionCustomBidController(context: AccountContext, title: String, text
         guard let contentNode = contentNode else {
             return
         }
-        dismissImpl?(true)
-        
-        if let value = Int64(contentNode.value.trimmingCharacters(in: .whitespacesAndNewlines)) {
-            apply(value)
+        let value = contentNode.value
+        if value < minValue {
+            contentNode.animateError()
+        } else {
+            dismissImpl?(true)
+            apply(contentNode.value)
         }
     }
     
     let controller = AlertController(theme: AlertControllerTheme(presentationData: presentationData), contentNode: contentNode)
-    let presentationDataDisposable = context.sharedContext.presentationData.start(next: { [weak controller, weak contentNode] presentationData in
+    let presentationDataDisposable = context.sharedContext.presentationData.start(next: { [weak controller] presentationData in
         controller?.theme = AlertControllerTheme(presentationData: presentationData)
-        contentNode?.inputFieldNode.updateTheme(presentationData.theme)
     })
     controller.dismissed = { _ in
         presentationDataDisposable.dispose()
     }
     dismissImpl = { [weak controller, weak contentNode] animated in
-        contentNode?.inputFieldNode.deactivateInput()
+        contentNode?.deactivateInput()
+        let _ = contentNode
         if animated {
             controller?.dismissAnimated()
         } else {

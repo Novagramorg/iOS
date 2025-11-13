@@ -1946,13 +1946,13 @@ private final class CameraScreenComponent: CombinedComponent {
                                             view.animateIn()
                                         }
                                     }))
-                                        .disappear(ComponentTransition.Disappear({ view, transition, completion in
-                                            if let view = view as? CollageIconCarouselComponent.View, !transition.animation.isImmediate {
-                                                view.animateOut(completion: completion)
-                                            } else {
-                                                completion()
-                                            }
-                                        }))
+                                    .disappear(ComponentTransition.Disappear({ view, transition, completion in
+                                        if let view = view as? CollageIconCarouselComponent.View, !transition.animation.isImmediate {
+                                            view.animateOut(completion: completion)
+                                        } else {
+                                            completion()
+                                        }
+                                    }))
                                 )
                             }
                         }
