@@ -1793,14 +1793,6 @@ private final class GiftAuctionBidScreenComponent: Component {
                     self.giftAuctionState = state
                     
                     var peerIds: [EnginePeer.Id] = []
-                    if case let .ongoing(_, _, _, _, _, topBidders, _, _, _, _) = state?.auctionState {
-                        for bidder in topBidders {
-                            if self.peersMap[bidder] == nil {
-                                peerIds.append(bidder)
-                            }
-                        }
-                    }
-                    
                     var transition = ComponentTransition.spring(duration: 0.4)
 
                     if isFirstTime {
@@ -2357,17 +2349,15 @@ private final class GiftAuctionBidScreenComponent: Component {
                 }
                 
                 var i: Int32 = 1
-                for bidder in topBidders {
-                    if let peer = self.peersMap[bidder] {
-                        var bid: Int64 = 0
-                        for level in bidLevels {
-                            if level.position == i {
-                                bid = level.amount
-                                break
-                            }
+                for peer in topBidders {    
+                    var bid: Int64 = 0
+                    for level in bidLevels {
+                        if level.position == i {
+                            bid = level.amount
+                            break
                         }
-                        topBidsComponents.append((bidder, AnyComponent(PeerComponent(context: component.context, theme: environment.theme, groupingSeparator: environment.dateTimeFormat.groupingSeparator, peer: peer, place: i, amount: bid, isLast: i == topBidders.count, action: peer.id != component.context.account.peerId ? { [weak self] in self?.openPeer(peer, dismiss: false) } : nil))))
                     }
+                    topBidsComponents.append((peer.id, AnyComponent(PeerComponent(context: component.context, theme: environment.theme, groupingSeparator: environment.dateTimeFormat.groupingSeparator, peer: peer, place: i, amount: bid, isLast: i == topBidders.count, action: peer.id != component.context.account.peerId ? { [weak self] in self?.openPeer(peer, dismiss: false) } : nil))))
                     i += 1
                 }
                 
