@@ -17,7 +17,6 @@ import ListSectionComponent
 import BundleIconComponent
 import LottieComponent
 import ListSwitchItemComponent
-import ListSwitchItemComponent
 import ListActionItemComponent
 import Markdown
 import TelegramStringFormatting

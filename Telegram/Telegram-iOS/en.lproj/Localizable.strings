@@ -15354,3 +15354,16 @@ Error: %8$@";
 "ScheduleMessage.PremiumRequired.Title" = "Premium Required";
 "ScheduleMessage.PremiumRequired.Text" = "Subscribe to **Telegram Premium** to schedule repeating messages.";
 "ScheduleMessage.PremiumRequired.Add" = "Add";
+
+"Stars.Transaction.GiftAuctionBid" = "Gift Auction Bid";
+"Stars.Intro.Transaction.GiftAuctionBid" = "Gift Auction Bid";
+
+"Stars.Intro.Transaction.LiveStreamReaction" = "Live Stream Reaction";
+"Stars.Transaction.LiveStreamReaction" = "Live Stream Reaction";
+"Stars.Transaction.LiveStreamReaction.Text" = "You receive **%@%** of the amount of each reaction.";
+
+"Stars.Intro.Transaction.LiveStreamPaidMessage_1" = "Fee for %@ Live Stream Message";
+"Stars.Intro.Transaction.LiveStreamPaidMessage_any" = "Fee for %@ Live Stream Messages";
+"Stars.Transaction.LiveStreamPaidMessage_1" = "Fee for %@ Live Stream Message";
+"Stars.Transaction.LiveStreamPaidMessage_any" = "Fee for %@ Live Stream Messages";
+"Stars.Transaction.LiveStreamPaidMessage.Text" = "You receive **%@%** of the price that you charge for each incoming message.";
