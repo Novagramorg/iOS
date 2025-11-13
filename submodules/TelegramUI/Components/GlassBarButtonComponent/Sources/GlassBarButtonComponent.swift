@@ -193,7 +193,7 @@ public final class GlassBarButtonComponent: Component {
             transition.setAlpha(view: self.genericContainerView, alpha: genericAlpha)
             transition.setFrame(view: self.genericContainerView, frame: bounds)
             
-            transition.setAlpha(view: self.glassContainerView, alpha: glassAlpha)
+            transition.setAlpha(view: self.glassBackgroundView, alpha: glassAlpha)
             transition.setFrame(view: self.glassContainerView, frame: bounds)
             
             transition.setFrame(view: self.genericBackgroundView, frame: bounds)
