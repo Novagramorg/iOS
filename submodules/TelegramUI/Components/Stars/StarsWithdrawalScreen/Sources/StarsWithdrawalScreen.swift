@@ -26,6 +26,7 @@ import ChatScheduleTimeController
 import TabSelectorComponent
 import PresentationDataUtils
 import BalanceNeededScreen
+import GlassBarButtonComponent
 
 private let amountTag = GenericComponentViewTag()
 
@@ -54,7 +55,8 @@ private final class SheetContent: CombinedComponent {
     }
     
     static var body: (CombinedComponentContext<SheetContent>) -> CGSize {
-        let closeButton = Child(Button.self)
+        let closeButton = Child(GlassBarButtonComponent.self)
+        let cancelButton = Child(Button.self)
         let balance = Child(BalanceComponent.self)
         let title = Child(Text.self)
         let currencyToggle = Child(TabSelectorComponent.self)
@@ -114,7 +116,7 @@ private final class SheetContent: CombinedComponent {
                     )
                 }
                 
-                let closeButton = closeButton.update(
+                let cancelButton = cancelButton.update(
                     component: Button(
                         content: AnyComponent(Text(text: environment.strings.Common_Cancel, font: Font.regular(17.0), color: environment.theme.list.itemAccentColor)),
                         action: {
@@ -124,30 +126,32 @@ private final class SheetContent: CombinedComponent {
                     availableSize: CGSize(width: 200.0, height: 100.0),
                     transition: .immediate
                 )
-                let closeFrame = CGRect(origin: CGPoint(x: 16.0, y: floor((56.0 - closeButton.size.height) * 0.5)), size: closeButton.size)
-                context.add(closeButton
+                let closeFrame = CGRect(origin: CGPoint(x: 16.0, y: floor((56.0 - cancelButton.size.height) * 0.5)), size: cancelButton.size)
+                context.add(cancelButton
                     .position(closeFrame.center)
                 )
             } else {
-                let closeImage: UIImage
-                if let (image, theme) = state.cachedCloseImage, theme === environment.theme {
-                    closeImage = image
-                } else {
-                    closeImage = generateCloseButtonImage(backgroundColor: UIColor(rgb: 0x808084, alpha: 0.1), foregroundColor: theme.actionSheet.inputClearButtonColor)!
-                    state.cachedCloseImage = (closeImage, theme)
-                }
                 let closeButton = closeButton.update(
-                    component: Button(
-                        content: AnyComponent(Image(image: closeImage)),
-                        action: {
+                    component: GlassBarButtonComponent(
+                        size: CGSize(width: 40.0, height: 40.0),
+                        backgroundColor: theme.rootController.navigationBar.glassBarButtonBackgroundColor,
+                        isDark: theme.overallDarkAppearance,
+                        state: .generic,
+                        component: AnyComponentWithIdentity(id: "close", component: AnyComponent(
+                            BundleIconComponent(
+                                name: "Navigation/Close",
+                                tintColor: theme.rootController.navigationBar.glassBarButtonForegroundColor
+                            )
+                        )),
+                        action: { _ in
                             component.dismiss()
                         }
                     ),
-                    availableSize: CGSize(width: 30.0, height: 30.0),
+                    availableSize: CGSize(width: 40.0, height: 40.0),
                     transition: .immediate
                 )
                 context.add(closeButton
-                    .position(CGPoint(x: context.availableSize.width - closeButton.size.width, y: 28.0))
+                    .position(CGPoint(x: 16.0 + closeButton.size.width / 2.0, y: 16.0 + closeButton.size.height / 2.0))
                 )
             }
             
@@ -257,7 +261,7 @@ private final class SheetContent: CombinedComponent {
                 transition: .immediate
             )
             context.add(title
-                .position(CGPoint(x: context.availableSize.width / 2.0, y: contentSize.height + title.size.height / 2.0))
+                .position(CGPoint(x: context.availableSize.width / 2.0, y: 36.0))
             )
             contentSize.height += title.size.height
             contentSize.height += 40.0
@@ -537,6 +541,7 @@ private final class SheetContent: CombinedComponent {
             let amountSection = amountSection.update(
                 component: ListSectionComponent(
                     theme: theme,
+                    style: .glass,
                     header: AnyComponent(MultilineTextComponent(
                         text: .plain(NSAttributedString(
                             string: amountTitle.uppercased(),
@@ -838,13 +843,14 @@ private final class SheetContent: CombinedComponent {
                 isButtonEnabled = true
             }
             
+            let buttonInsets = ContainerViewLayout.concentricInsets(bottomInset: environment.safeInsets.bottom, innerDiameter: 52.0, sideInset: 30.0)
             let button = button.update(
                 component: ButtonComponent(
                     background: ButtonComponent.Background(
+                        style: .glass,
                         color: theme.list.itemCheckColors.fillColor,
                         foreground: theme.list.itemCheckColors.foregroundColor,
-                        pressedColor: theme.list.itemCheckColors.fillColor.withMultipliedAlpha(0.9),
-                        cornerRadius: 10.0
+                        pressedColor: theme.list.itemCheckColors.fillColor.withMultipliedAlpha(0.9)
                     ),
                     content: AnyComponentWithIdentity(
                         id: AnyHashable(0),
@@ -931,19 +937,21 @@ private final class SheetContent: CombinedComponent {
                         }
                     }
                 ),
-                availableSize: CGSize(width: context.availableSize.width - sideInset * 2.0, height: 50),
+                availableSize: CGSize(width: context.availableSize.width - buttonInsets.left - buttonInsets.right, height: 52.0),
                 transition: .immediate
             )
             context.add(button
-                .clipsToBounds(true)
-                .cornerRadius(10.0)
                 .position(CGPoint(x: context.availableSize.width / 2.0, y: contentSize.height + button.size.height / 2.0))
             )
             contentSize.height += button.size.height
-            contentSize.height += 15.0
             
-            contentSize.height += max(environment.inputHeight, environment.safeInsets.bottom)
-
+            if environment.inputHeight > 0.0 {
+                contentSize.height += 15.0
+                contentSize.height += max(environment.inputHeight, environment.safeInsets.bottom)
+            } else {
+                contentSize.height += buttonInsets.bottom
+            }
+            
             return contentSize
         }
         
@@ -965,7 +973,6 @@ private final class SheetContent: CombinedComponent {
         fileprivate var tonBalance: StarsAmount?
         private var tonStateDisposable: Disposable?
         
-        var cachedCloseImage: (UIImage, PresentationTheme)?
         var cachedStarImage: (UIImage, PresentationTheme)?
         var cachedTonImage: (UIImage, PresentationTheme)?
         var cachedChevronImage: (UIImage, PresentationTheme)?
@@ -1130,6 +1137,7 @@ private final class StarsWithdrawSheetComponent: CombinedComponent {
                             })
                         }
                     )),
+                    style: .glass,
                     backgroundColor: .color(environment.theme.list.blocksBackgroundColor),
                     followContentSizeChanges: false,
                     clipsContent: true,
@@ -1696,7 +1704,7 @@ private final class AmountFieldComponent: Component {
             self.component = component
             self.state = state
                        
-            let size = CGSize(width: availableSize.width, height: 44.0)
+            let size = CGSize(width: availableSize.width, height: 52.0)
             
             let sideInset: CGFloat = 16.0
             var leftInset: CGFloat = 16.0
@@ -1782,7 +1790,7 @@ private final class AmountFieldComponent: Component {
                 labelView.removeFromSuperview()
             }
             
-            self.textField.frame = CGRect(x: leftInset, y: 0.0, width: size.width - 30.0, height: 44.0)
+            self.textField.frame = CGRect(x: leftInset, y: 4.0, width: size.width - 30.0, height: 44.0)
                         
             return size
         }

@@ -1901,7 +1901,7 @@ private func finalStateWithUpdatesAndServerTime(accountPeerId: PeerId, postbox: 
             case let .updateMonoForumNoPaidException(flags, channelId, savedPeerId):
                 updatedState.updateMonoForumNoPaidException(peerId: PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(channelId)), threadId: savedPeerId.peerId.toInt64(), isFree: (flags & (1 << 0)) != 0)
             case let .updateStarGiftAuctionState(giftId, state):
-                if let state = GiftAuctionContext.State.AuctionState(apiAuctionState: state) {
+                if let state = GiftAuctionContext.State.AuctionState(apiAuctionState: state, peers: updatedState.peers) {
                     updatedState.updateStarGiftAuctionState(giftId: giftId, state: state)
                 }
             case let .updateStarGiftAuctionUserState(giftId, userState):
