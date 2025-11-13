@@ -126,7 +126,7 @@ private final class BadgeComponent: Component {
         }
         
         override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
-            if self.badgeView.frame.contains(point) {
+            if self.isUserInteractionEnabled && self.badgeView.frame.contains(point) {
                 return self
             } else {
                 return nil
@@ -1401,60 +1401,72 @@ private final class ChatSendStarsScreenComponent: Component {
             }
             let sideInset: CGFloat = floor((availableSize.width - fillingSize) * 0.5) + 16.0
             
-            let context = component.context
-            let balanceSize = self.balanceOverlay.update(
-                transition: .immediate,
-                component: AnyComponent(
-                    StarsBalanceOverlayComponent(
-                        context: component.context,
-                        peerId: component.context.account.peerId,
-                        theme: environment.theme,
-                        currency: .stars,
-                        action: { [weak self] in
-                            guard let self, let component = self.component, let starsContext = context.starsContext, let navigationController = self.environment?.controller()?.navigationController as? NavigationController else {
-                                return
-                            }
-                            self.environment?.controller()?.dismiss()
-                            
-                            let targetPeerId: EnginePeer.Id
-                            switch component.initialData.subjectInitialData {
-                            case let .react(reactData):
-                                targetPeerId = reactData.peer.id
-                            case let .liveStreamMessage(liveStreamMessageData):
-                                targetPeerId = liveStreamMessageData.peer.id
-                            }
-                            
-                            let customTheme = environment.theme
-                            
-                            let _ = (context.engine.payments.starsTopUpOptions()
-                            |> take(1)
-                            |> deliverOnMainQueue).startStandalone(next: { options in
-                                let controller = context.sharedContext.makeStarsPurchaseScreen(
-                                    context: context,
-                                    starsContext: starsContext,
-                                    options: options,
-                                    purpose: .generic,
-                                    targetPeerId: targetPeerId,
-                                    customTheme: customTheme,
-                                    completion: { _ in }
-                                )
-                                navigationController.pushViewController(controller)
-                            })
-                        }
-                    )
-                ),
-                environment: {},
-                containerSize: availableSize
-            )
-            if let view = self.balanceOverlay.view {
-                if view.superview == nil {
-                    self.addSubview(view)
-                    
-                    view.layer.animatePosition(from: CGPoint(x: 0.0, y: -64.0), to: .zero, duration: 0.4, timingFunction: kCAMediaTimingFunctionSpring, additive: true)
-                    view.layer.animateSpring(from: 0.8 as NSNumber, to: 1.0 as NSNumber, keyPath: "transform.scale", duration: 0.5, initialVelocity: 0.0, removeOnCompletion: true, additive: false, completion: nil)
-                    view.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.25)
+            var isOnlyDisplay = false
+            switch component.initialData.subjectInitialData {
+            case let .react(reactData):
+                if case let .liveStream(_, _, _, _, _, isOnlyDisplayValue) = reactData.reactSubject {
+                    isOnlyDisplay = isOnlyDisplayValue
                 }
-                view.frame = CGRect(origin: CGPoint(x: floorToScreenPixels((availableSize.width - balanceSize.width) / 2.0), y: environment.statusBarHeight + 5.0), size: balanceSize)
+            case .liveStreamMessage:
+                break
+            }
+            
+            let context = component.context
+            if !isOnlyDisplay {
+                let balanceSize = self.balanceOverlay.update(
+                    transition: .immediate,
+                    component: AnyComponent(
+                        StarsBalanceOverlayComponent(
+                            context: component.context,
+                            peerId: component.context.account.peerId,
+                            theme: environment.theme,
+                            currency: .stars,
+                            action: { [weak self] in
+                                guard let self, let component = self.component, let starsContext = context.starsContext, let navigationController = self.environment?.controller()?.navigationController as? NavigationController else {
+                                    return
+                                }
+                                self.environment?.controller()?.dismiss()
+                                
+                                let targetPeerId: EnginePeer.Id
+                                switch component.initialData.subjectInitialData {
+                                case let .react(reactData):
+                                    targetPeerId = reactData.peer.id
+                                case let .liveStreamMessage(liveStreamMessageData):
+                                    targetPeerId = liveStreamMessageData.peer.id
+                                }
+                                
+                                let customTheme = environment.theme
+                                
+                                let _ = (context.engine.payments.starsTopUpOptions()
+                                         |> take(1)
+                                         |> deliverOnMainQueue).startStandalone(next: { options in
+                                    let controller = context.sharedContext.makeStarsPurchaseScreen(
+                                        context: context,
+                                        starsContext: starsContext,
+                                        options: options,
+                                        purpose: .generic,
+                                        targetPeerId: targetPeerId,
+                                        customTheme: customTheme,
+                                        completion: { _ in }
+                                    )
+                                    navigationController.pushViewController(controller)
+                                })
+                            }
+                        )
+                    ),
+                    environment: {},
+                    containerSize: availableSize
+                )
+                if let view = self.balanceOverlay.view {
+                    if view.superview == nil {
+                        self.addSubview(view)
+                        
+                        view.layer.animatePosition(from: CGPoint(x: 0.0, y: -64.0), to: .zero, duration: 0.4, timingFunction: kCAMediaTimingFunctionSpring, additive: true)
+                        view.layer.animateSpring(from: 0.8 as NSNumber, to: 1.0 as NSNumber, keyPath: "transform.scale", duration: 0.5, initialVelocity: 0.0, removeOnCompletion: true, additive: false, completion: nil)
+                        view.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.25)
+                    }
+                    view.frame = CGRect(origin: CGPoint(x: floorToScreenPixels((availableSize.width - balanceSize.width) / 2.0), y: environment.statusBarHeight + 5.0), size: balanceSize)
+                }
             }
             
             if self.component == nil {
@@ -1500,7 +1512,7 @@ private final class ChatSendStarsScreenComponent: Component {
                                 }
                             }
                         })
-                    case let .liveStream(_, _, _, _, availableSendAsPeers):
+                    case let .liveStream(_, _, _, _, availableSendAsPeers, _):
                         self.channelsForPublicReaction = availableSendAsPeers.filter({ $0.id != reactData.myPeer.id })
                     }
                 case let .liveStreamMessage(liveStreamMessageData):
@@ -1653,7 +1665,7 @@ private final class ChatSendStarsScreenComponent: Component {
                     self.isPastTopCutoff = nil
                 }
                 
-                if case let .liveStream(_, _, _, liveChatMessageParams, _) = reactData.reactSubject {
+                if case let .liveStream(_, _, _, liveChatMessageParams, _, _) = reactData.reactSubject {
                     let color = GroupCallMessagesContext.getStarAmountParamMapping(params: liveChatMessageParams, value: Int64(self.amount.realValue)).color ?? GroupCallMessagesContext.Message.Color(rawValue: 0x985FDC)
                     sliderColor = StoryLiveChatMessageComponent.getMessageColor(color: color)
                 }
@@ -1680,6 +1692,10 @@ private final class ChatSendStarsScreenComponent: Component {
                     self.scrollContentView.addSubview(self.badgeStars)
                     self.scrollContentView.addSubview(sliderBackgroundView)
                     self.scrollContentView.addSubview(sliderView)
+                    
+                    if isOnlyDisplay {
+                        sliderView.isUserInteractionEnabled = false
+                    }
                 }
                 transition.setFrame(view: sliderView, frame: sliderFrame)
                 
@@ -1703,6 +1719,9 @@ private final class ChatSendStarsScreenComponent: Component {
                 var badgeFrame = CGRect(origin: CGPoint(x: sliderForegroundFrame.minX + sliderForegroundFrame.width - floorToScreenPixels(sliderMinWidth * 0.5), y: sliderForegroundFrame.minY - 8.0), size: badgeSize)
                 if let badgeView = self.badge.view as? BadgeComponent.View {
                     if badgeView.superview == nil {
+                        if isOnlyDisplay {
+                            badgeView.isUserInteractionEnabled = false
+                        }
                         self.scrollContentView.insertSubview(badgeView, belowSubview: self.badgeStars)
                     }
                     
@@ -2238,7 +2257,7 @@ private final class ChatSendStarsScreenComponent: Component {
                         
                         var peerColor: UIColor = UIColor(rgb: 0xFFB10D)
                         var topPlace: Int?
-                        if case let .liveStream(_, _, _, liveChatMessageParams, _) = reactData.reactSubject {
+                        if case let .liveStream(_, _, _, liveChatMessageParams, _, _) = reactData.reactSubject {
                             let color = GroupCallMessagesContext.getStarAmountParamMapping(params: liveChatMessageParams, value: Int64(topPeer.count)).color ?? GroupCallMessagesContext.Message.Color(rawValue: 0x985FDC)
                             peerColor = StoryLiveChatMessageComponent.getMessageColor(color: color)
                             topPlace = validIds.count - 1
@@ -2488,7 +2507,12 @@ private final class ChatSendStarsScreenComponent: Component {
             let buttonString: String
             switch component.initialData.subjectInitialData {
             case .react:
-                buttonString = environment.strings.SendStarReactions_SendButtonTitle("\(self.amount.realValue)").string
+                if isOnlyDisplay {
+                    //TODO:localize
+                    buttonString = "Close"
+                } else {
+                    buttonString = environment.strings.SendStarReactions_SendButtonTitle("\(self.amount.realValue)").string
+                }
             case .liveStreamMessage:
                 //TODO:localize
                 buttonString = "Add  # \(self.amount.realValue)"
@@ -2522,6 +2546,19 @@ private final class ChatSendStarsScreenComponent: Component {
                         guard let self, let component = self.component else {
                             return
                         }
+                        
+                        switch component.initialData.subjectInitialData {
+                        case let .react(reactData):
+                            if case let .liveStream(_, _, _, _, _, isOnlyDisplay) = reactData.reactSubject {
+                                if isOnlyDisplay {
+                                    self.environment?.controller()?.dismiss()
+                                    return
+                                }
+                            }
+                        case .liveStreamMessage:
+                            break
+                        }
+                        
                         guard let balance = self.balance else {
                             return
                         }
@@ -2604,10 +2641,11 @@ private final class ChatSendStarsScreenComponent: Component {
             
             var buttonDescriptionTextSize: CGSize?
             if case .react = component.initialData.subjectInitialData {
+                //TODO:localize
                 buttonDescriptionTextSize = self.buttonDescriptionText.update(
                     transition: .immediate,
                     component: AnyComponent(MultilineTextComponent(
-                        text: .markdown(text: environment.strings.SendStarReactions_TermsOfServiceFooter, attributes: MarkdownAttributes(
+                        text: .markdown(text: isOnlyDisplay ? "You can't send star reactions to own story." : environment.strings.SendStarReactions_TermsOfServiceFooter, attributes: MarkdownAttributes(
                             body: MarkdownAttributeSet(font: Font.regular(13.0), textColor: environment.theme.list.itemSecondaryTextColor),
                             bold: MarkdownAttributeSet(font: Font.semibold(13.0), textColor: environment.theme.list.itemSecondaryTextColor),
                             link: MarkdownAttributeSet(font: Font.regular(13.0), textColor: environment.theme.list.itemAccentColor),
@@ -2716,7 +2754,7 @@ private final class ChatSendStarsScreenComponent: Component {
 public class ChatSendStarsScreen: ViewControllerComponentContainer {
     public enum ReactSubject {
         case message(EngineMessage.Id)
-        case liveStream(peerId: EnginePeer.Id, storyId: Int32, minAmount: Int, liveChatMessageParams: LiveChatMessageParams, availableSendAsPeers: [EnginePeer])
+        case liveStream(peerId: EnginePeer.Id, storyId: Int32, minAmount: Int, liveChatMessageParams: LiveChatMessageParams, availableSendAsPeers: [EnginePeer], isDisplayOnly: Bool)
     }
     
     fileprivate enum SubjectInitialData {
@@ -2925,7 +2963,7 @@ public class ChatSendStarsScreen: ViewControllerComponentContainer {
         switch reactSubject {
         case .message:
             channelsForPublicReaction = context.engine.peers.channelsForPublicReaction(useLocalCache: true)
-        case let .liveStream(_, _, _, _, availableSendAsPeers):
+        case let .liveStream(_, _, _, _, availableSendAsPeers, _):
             channelsForPublicReaction = .single(availableSendAsPeers)
         }
         
@@ -2958,7 +2996,7 @@ public class ChatSendStarsScreen: ViewControllerComponentContainer {
         }
         
         var minAmount = 1
-        if case let .liveStream(_, _, minAmountValue, _, _) = reactSubject {
+        if case let .liveStream(_, _, minAmountValue, _, _, _) = reactSubject {
             minAmount = minAmountValue
         }
         
