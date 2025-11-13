@@ -1882,16 +1882,18 @@ private final class StoryContainerScreenComponent: Component {
                             if let previousRotationFraction = itemSetView.rotationFraction, !itemSetTransition.animation.isImmediate {
                                 let fromT = previousRotationFraction
                                 let toT = panFraction + cubeAdditionalRotationFraction
-                                itemSetTransition.setTransformAsKeyframes(view: itemSetView, transform: { sourceT, isFinal in
-                                    let t = fromT * (1.0 - sourceT) + toT * sourceT
-                                    if isFinal {
-                                        if abs(t - 0.0) <= 0.0001 {
-                                            return CATransform3DIdentity
+                                if abs(fromT - toT) > CGFloat.leastNonzeroMagnitude {
+                                    itemSetTransition.setTransformAsKeyframes(view: itemSetView, transform: { sourceT, isFinal in
+                                        let t = fromT * (1.0 - sourceT) + toT * sourceT
+                                        if isFinal {
+                                            if abs(t - 0.0) <= 0.0001 {
+                                                return CATransform3DIdentity
+                                            }
                                         }
-                                    }
-                                    
-                                    return calculateCubeTransform(rotationFraction: t, sideAngle: sideAngle, cubeSize: itemFrame.size)
-                                })
+                                        
+                                        return calculateCubeTransform(rotationFraction: t, sideAngle: sideAngle, cubeSize: itemFrame.size)
+                                    })
+                                }
                             } else {
                                 let updatedTransform: CATransform3D
                                 if abs(panFraction + cubeAdditionalRotationFraction) <= 0.0001 {
