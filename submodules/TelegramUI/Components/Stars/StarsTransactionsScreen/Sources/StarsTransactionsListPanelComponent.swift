@@ -311,11 +311,21 @@ final class StarsTransactionsListPanelComponent: Component {
                             itemTitle = environment.strings.Stars_Intro_Transaction_SearchFee
                             itemSubtitle = ""
                             itemPeer = .search
+                        } else if item.flags.contains(.isLiveStreamPaidMessage) {
+                            itemTitle = peer.displayTitle(strings: environment.strings, displayOrder: .firstLast)
+                            if item.flags.contains(.isReaction) {
+                                itemSubtitle = environment.strings.Stars_Intro_Transaction_LiveStreamReaction
+                            } else {
+                                itemSubtitle = environment.strings.Stars_Intro_Transaction_LiveStreamPaidMessage(item.paidMessageCount ?? 1)
+                            }
                         } else if item.flags.contains(.isPaidMessage) {
                             itemTitle = peer.displayTitle(strings: environment.strings, displayOrder: .firstLast)
                             itemSubtitle = environment.strings.Stars_Intro_Transaction_PaidMessage(item.paidMessageCount ?? 1)
                         } else if let starGift = item.starGift {
-                            if item.flags.contains(.isStarGiftPrepaidUpgrade) {
+                            if item.flags.contains(.isStarGiftAuctionBid), case let .generic(gift) = starGift {
+                                itemTitle = gift.title ?? "Gift"
+                                itemSubtitle = environment.strings.Stars_Intro_Transaction_GiftAuctionBid
+                            } else if item.flags.contains(.isStarGiftPrepaidUpgrade) {
                                 itemTitle = peer.displayTitle(strings: environment.strings, displayOrder: .firstLast)
                                 itemSubtitle = environment.strings.Stars_Intro_Transaction_PrepaidGiftUpgrade
                             } else if item.flags.contains(.isStarGiftDropOriginalDetails), case let .unique(gift) = starGift {

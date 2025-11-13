@@ -1499,15 +1499,17 @@ func openResolvedUrlImpl(
             }
         case let .auction(auctionContext):
             if let auctionContext {
-                if let _ = auctionContext.currentBidPeerId {
+                if let currentBidPeerId = auctionContext.currentBidPeerId {
                     let controller = context.sharedContext.makeGiftAuctionBidScreen(
                         context: context,
+                        toPeerId: currentBidPeerId,
                         auctionContext: auctionContext
                     )
                     navigationController?.pushViewController(controller)
                 } else {
                     let controller = context.sharedContext.makeGiftAuctionViewScreen(
                         context: context,
+                        toPeerId: context.account.peerId,
                         auctionContext: auctionContext
                     )
                     navigationController?.pushViewController(controller)

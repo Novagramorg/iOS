@@ -36,6 +36,7 @@ import EmojiActionIconComponent
 import ScrollComponent
 import PremiumStarComponent
 import PremiumCoinComponent
+import EdgeEffect
 
 public enum PremiumSource: Equatable {
     public static func == (lhs: PremiumSource, rhs: PremiumSource) -> Bool {
@@ -2280,8 +2281,6 @@ private final class PremiumIntroScreenContentComponent: CombinedComponent {
                 )
                 context.add(perksSection
                     .position(CGPoint(x: availableWidth / 2.0, y: size.height + perksSection.size.height / 2.0))
-                    .clipsToBounds(true)
-                    .cornerRadius(10.0)
                     .disappear(.default(alpha: true))
                 )
                 size.height += perksSection.size.height
@@ -2517,8 +2516,6 @@ private final class PremiumIntroScreenContentComponent: CombinedComponent {
                 )
                 context.add(businessSection
                     .position(CGPoint(x: availableWidth / 2.0, y: size.height + businessSection.size.height / 2.0))
-                    .clipsToBounds(true)
-                    .cornerRadius(10.0)
                 )
                 size.height += businessSection.size.height
                 size.height += 23.0
@@ -2673,8 +2670,6 @@ private final class PremiumIntroScreenContentComponent: CombinedComponent {
                 )
                 context.add(moreBusinessSection
                     .position(CGPoint(x: availableWidth / 2.0, y: size.height + moreBusinessSection.size.height / 2.0))
-                    .clipsToBounds(true)
-                    .cornerRadius(10.0)
                 )
                 size.height += moreBusinessSection.size.height
                 size.height += 23.0
@@ -2767,8 +2762,6 @@ private final class PremiumIntroScreenContentComponent: CombinedComponent {
                 )
                 context.add(adsSettingsSection
                     .position(CGPoint(x: availableWidth / 2.0, y: size.height + adsSettingsSection.size.height / 2.0))
-                    .clipsToBounds(true)
-                    .cornerRadius(10.0)
                 )
                 size.height += adsSettingsSection.size.height
                 size.height += 23.0
@@ -3424,8 +3417,7 @@ private final class PremiumIntroScreenComponent: CombinedComponent {
         let topSeparator = Child(Rectangle.self)
         let title = Child(MultilineTextComponent.self)
         let secondaryTitle = Child(MultilineTextWithEntitiesComponent.self)
-        let bottomPanel = Child(BlurredBackgroundComponent.self)
-        let bottomSeparator = Child(Rectangle.self)
+        let bottomEdgeEffect = Child(EdgeEffectComponent.self)
         let button = Child(SolidRoundedButtonComponent.self)
         
         var updatedInstalled: Bool?
@@ -3685,9 +3677,10 @@ private final class PremiumIntroScreenComponent: CombinedComponent {
                 transition: context.transition
             )
             
+            let buttonInsets = ContainerViewLayout.concentricInsets(bottomInset: environment.safeInsets.bottom, innerDiameter: 52.0, sideInset: 30.0)
             let bottomPanelPadding: CGFloat = 12.0
             let bottomInset: CGFloat = environment.safeInsets.bottom > 0.0 ? environment.safeInsets.bottom + 5.0 : bottomPanelPadding
-            let bottomPanelHeight: CGFloat = state.isPremium == true && !state.canUpgrade ? bottomInset : bottomPanelPadding + 50.0 + bottomInset
+            let bottomPanelHeight: CGFloat = state.isPremium == true && !state.canUpgrade ? bottomInset : bottomPanelPadding + 52.0 + bottomInset
                        
             let scrollContent = scrollContent.update(
                 component: ScrollComponent<EnvironmentType>(
@@ -3837,7 +3830,8 @@ private final class PremiumIntroScreenComponent: CombinedComponent {
                     }
                 }
                 
-                let buttonSideInset: CGFloat = 36.0
+                
+
                 
                 let controller = environment.controller
                 let button = button.update(
@@ -3857,6 +3851,7 @@ private final class PremiumIntroScreenComponent: CombinedComponent {
                         height: 52.0,
                         cornerRadius: 26.0,
                         gloss: true,
+                        glass: true,
                         isLoading: state.inProgress,
                         action: {
                             if let controller = controller() as? PremiumIntroScreen, let customProceed = controller.customProceed {
@@ -3867,66 +3862,42 @@ private final class PremiumIntroScreenComponent: CombinedComponent {
                             }
                         }
                     ),
-                    availableSize: CGSize(width: context.availableSize.width - buttonSideInset * 2.0 - environment.safeInsets.left - environment.safeInsets.right, height: 52.0),
+                    availableSize: CGSize(width: context.availableSize.width - buttonInsets.left - buttonInsets.right - environment.safeInsets.left - environment.safeInsets.right, height: 52.0),
                     transition: context.transition)
                                
-                let bottomPanel = bottomPanel.update(
-                    component: BlurredBackgroundComponent(
-                        color: environment.theme.rootController.tabBar.backgroundColor
+                let bottomEdgeEffectHeight = 13.0 + buttonInsets.bottom + button.size.height
+                let bottomEdgeEffect = bottomEdgeEffect.update(
+                    component: EdgeEffectComponent(
+                        color: environment.theme.list.blocksBackgroundColor,
+                        blur: true,
+                        alpha: 1.0,
+                        size: CGSize(width: context.availableSize.width, height: bottomEdgeEffectHeight),
+                        edge: .bottom,
+                        edgeSize: bottomEdgeEffectHeight
                     ),
-                    availableSize: CGSize(width: context.availableSize.width, height: bottomPanelPadding + button.size.height + bottomInset),
+                    availableSize: CGSize(width: context.availableSize.width, height: bottomEdgeEffectHeight),
                     transition: context.transition
                 )
-                
-                let bottomSeparator = bottomSeparator.update(
-                    component: Rectangle(
-                        color: environment.theme.rootController.tabBar.separatorColor
-                    ),
-                    availableSize: CGSize(width: context.availableSize.width, height: UIScreenPixel),
-                    transition: context.transition
-                )
-                
-                let bottomPanelAlpha: CGFloat
-                if let bottomContentOffset = state.bottomContentOffset {
-                    bottomPanelAlpha = min(16.0, bottomContentOffset) / 16.0
-                } else {
-                    bottomPanelAlpha = 1.0
-                }
-                
-                context.add(bottomPanel
-                    .position(CGPoint(x: context.availableSize.width / 2.0, y: context.availableSize.height - bottomPanel.size.height / 2.0))
-                    .opacity(bottomPanelAlpha)
+                context.add(bottomEdgeEffect
+                    .position(CGPoint(x: context.availableSize.width / 2.0, y: context.availableSize.height - bottomEdgeEffect.size.height / 2.0))
                     .disappear(ComponentTransition.Disappear { view, transition, completion in
                         if case .none = transition.animation {
                             completion()
                             return
                         }
-                        view.layer.animatePosition(from: CGPoint(), to: CGPoint(x: 0.0, y: bottomPanel.size.height), duration: 0.2, removeOnCompletion: false, additive: true, completion: { _ in
-                            completion()
-                        })
-                    })
-                )
-                context.add(bottomSeparator
-                    .position(CGPoint(x: context.availableSize.width / 2.0, y: context.availableSize.height - bottomPanel.size.height))
-                    .opacity(bottomPanelAlpha)
-                    .disappear(ComponentTransition.Disappear { view, transition, completion in
-                        if case .none = transition.animation {
-                            completion()
-                            return
-                        }
-                        view.layer.animatePosition(from: CGPoint(), to: CGPoint(x: 0.0, y: bottomPanel.size.height), duration: 0.2, removeOnCompletion: false, additive: true, completion: { _ in
+                        view.layer.animatePosition(from: CGPoint(), to: CGPoint(x: 0.0, y: bottomEdgeEffect.size.height), duration: 0.2, removeOnCompletion: false, additive: true, completion: { _ in
                             completion()
                         })
                     })
                 )
                 context.add(button
-                    .position(CGPoint(x: context.availableSize.width / 2.0, y: context.availableSize.height - bottomPanel.size.height + bottomPanelPadding + button.size.height / 2.0))
+                    .position(CGPoint(x: context.availableSize.width / 2.0, y: context.availableSize.height - buttonInsets.bottom - button.size.height / 2.0))
                     .disappear(ComponentTransition.Disappear { view, transition, completion in
                         if case .none = transition.animation {
                             completion()
                             return
                         }
-                        view.layer.animatePosition(from: CGPoint(), to: CGPoint(x: 0.0, y: bottomPanel.size.height), duration: 0.2, removeOnCompletion: false, additive: true, completion: { _ in
+                        view.layer.animatePosition(from: CGPoint(), to: CGPoint(x: 0.0, y: button.size.height + buttonInsets.bottom), duration: 0.2, removeOnCompletion: false, additive: true, completion: { _ in
                             completion()
                         })
                     })

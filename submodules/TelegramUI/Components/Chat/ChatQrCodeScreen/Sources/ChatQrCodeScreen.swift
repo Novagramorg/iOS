@@ -890,7 +890,7 @@ private class ChatQrCodeScreenNode: ViewControllerTracingNode, ASScrollViewDeleg
         self.animationNode = AnimationNode(animation: self.isDarkAppearance ? "anim_sun_reverse" : "anim_sun", colors: iconColors(theme: self.presentationData.theme), scale: 1.0)
         self.animationNode.isUserInteractionEnabled = false
         
-        self.doneButton = SolidRoundedButtonNode(theme: SolidRoundedButtonTheme(theme: self.presentationData.theme), height: 52.0, cornerRadius: 11.0)
+        self.doneButton = SolidRoundedButtonNode(theme: SolidRoundedButtonTheme(theme: self.presentationData.theme), glass: true, height: 52.0, cornerRadius: 26.0)
         switch controller.subject {
         case .peer:
             self.doneButton.title = self.presentationData.strings.InviteLink_QRCode_Share

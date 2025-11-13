@@ -293,6 +293,7 @@ private final class GiftAuctionAcquiredScreenComponent: Component {
             } else {
                 fillingSize = min(availableSize.width, 428.0) - environment.safeInsets.left * 2.0
             }
+            let rawSideInset = floor((availableSize.width - fillingSize) * 0.5)
             let sideInset: CGFloat = floor((availableSize.width - fillingSize) * 0.5) + 24.0
             
             self.component = component
@@ -474,7 +475,7 @@ private final class GiftAuctionAcquiredScreenComponent: Component {
                 environment: {},
                 containerSize: CGSize(width: 40.0, height: 40.0)
             )
-            let closeButtonFrame = CGRect(origin: CGPoint(x: 16.0, y: 16.0), size: closeButtonSize)
+            let closeButtonFrame = CGRect(origin: CGPoint(x: rawSideInset + 16.0, y: 16.0), size: closeButtonSize)
             if let closeButtonView = self.closeButton.view {
                 if closeButtonView.superview == nil {
                     self.navigationBarContainer.addSubview(closeButtonView)
@@ -538,12 +539,11 @@ private final class GiftAuctionAcquiredScreenComponent: Component {
                     }
                 )),
                 environment: {},
-                containerSize: CGSize(width: availableSize.width - buttonInsets.left - buttonInsets.right, height: 54.0)
+                containerSize: CGSize(width: fillingSize - buttonInsets.left - buttonInsets.right, height: 54.0)
             )
-            
            
             let edgeEffectHeight: CGFloat = 80.0
-            let edgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: availableSize.width, height: edgeEffectHeight))
+            let edgeEffectFrame = CGRect(origin: CGPoint(x: rawSideInset, y: 0.0), size: CGSize(width: fillingSize, height: edgeEffectHeight))
             transition.setFrame(view: self.topEdgeEffectView, frame: edgeEffectFrame)
             self.topEdgeEffectView.update(content: environment.theme.actionSheet.opaqueItemBackgroundColor, blur: true, alpha: 1.0, rect: edgeEffectFrame, edge: .top, edgeSize: edgeEffectFrame.height, transition: transition)
             if self.topEdgeEffectView.superview == nil {
@@ -553,14 +553,14 @@ private final class GiftAuctionAcquiredScreenComponent: Component {
             var bottomPanelHeight = 13.0 + buttonInsets.bottom + actionButtonSize.height
             
             let bottomEdgeEffectHeight: CGFloat = bottomPanelHeight
-            let bottomEdgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: availableSize.height - bottomEdgeEffectHeight), size: CGSize(width: availableSize.width, height: bottomEdgeEffectHeight))
+            let bottomEdgeEffectFrame = CGRect(origin: CGPoint(x: rawSideInset, y: availableSize.height - bottomEdgeEffectHeight), size: CGSize(width: fillingSize, height: bottomEdgeEffectHeight))
             transition.setFrame(view: self.bottomEdgeEffectView, frame: bottomEdgeEffectFrame)
             self.bottomEdgeEffectView.update(content: environment.theme.actionSheet.opaqueItemBackgroundColor, blur: true, alpha: 1.0, rect: bottomEdgeEffectFrame, edge: .bottom, edgeSize: bottomEdgeEffectFrame.height, transition: transition)
             if self.bottomEdgeEffectView.superview == nil {
                 self.containerView.addSubview(self.bottomEdgeEffectView)
             }
             
-            let actionButtonFrame = CGRect(origin: CGPoint(x: buttonInsets.left, y: availableSize.height - buttonInsets.bottom - actionButtonSize.height), size: actionButtonSize)
+            let actionButtonFrame = CGRect(origin: CGPoint(x: rawSideInset + buttonInsets.left, y: availableSize.height - buttonInsets.bottom - actionButtonSize.height), size: actionButtonSize)
             bottomPanelHeight -= 1.0
             if let actionButtonView = actionButton.view {
                 if actionButtonView.superview == nil {

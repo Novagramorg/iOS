@@ -389,6 +389,7 @@ final class GiftOptionsScreenComponent: Component {
                                 if currentBidPeerId == component.peerId {
                                     let giftController = component.context.sharedContext.makeGiftAuctionBidScreen(
                                         context: component.context,
+                                        toPeerId: currentBidPeerId,
                                         auctionContext: auctionContext
                                     )
                                     mainController.push(giftController)
@@ -411,6 +412,7 @@ final class GiftOptionsScreenComponent: Component {
                                                     }
                                                     let giftController = component.context.sharedContext.makeGiftAuctionBidScreen(
                                                         context: component.context,
+                                                        toPeerId: currentBidPeerId,
                                                         auctionContext: auctionContext
                                                     )
                                                     mainController.push(giftController)
@@ -424,6 +426,7 @@ final class GiftOptionsScreenComponent: Component {
                             } else {
                                 let giftController = component.context.sharedContext.makeGiftAuctionViewScreen(
                                     context: component.context,
+                                    toPeerId: component.peerId,
                                     auctionContext: auctionContext
                                 )
                                 mainController.push(giftController)
