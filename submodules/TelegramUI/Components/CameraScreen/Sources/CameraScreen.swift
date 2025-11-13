@@ -1916,9 +1916,12 @@ private final class CameraScreenComponent: CombinedComponent {
                                 availableSize: CGSize(width: 40.0, height: 40.0),
                                 transition: .immediate
                             )
+                            if component.cameraState.isCollageEnabled {
+                                nextButtonX += 48.0
+                            }
                             var collageButtonX = nextButtonX
                             if rightMostButtonWidth.isZero {
-                                collageButtonX = availableSize.width - topControlSideInset - collageButton.size.width / 2.0 - 5.0
+                                collageButtonX = availableSize.width - topControlSideInset - collageButton.size.width / 2.0 - 54.0
                             }
                             context.add(collageButton
                                 .position(CGPoint(x: collageButtonX, y: max(environment.statusBarHeight + 5.0, environment.safeInsets.top + topControlVerticalInset) + collageButton.size.height / 2.0 + 2.0))

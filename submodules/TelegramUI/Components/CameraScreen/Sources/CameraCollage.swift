@@ -1014,7 +1014,9 @@ final class CameraCollageView: UIView, UIGestureRecognizerDelegate {
             guard let self, let videoSource = self.cameraVideoSource, self.isEnabled else {
                 return
             }
-            self.cameraVideoLayer.video = videoSource.currentOutput
+            Queue.mainQueue().async {
+                self.cameraVideoLayer.video = videoSource.currentOutput
+            }
         }
         
         let videoSize = CGSize(width: 160.0 * 2.0, height: 284.0 * 2.0)
