@@ -1002,6 +1002,10 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         self.recordMoreButton.addTarget(self, action: #selector(self.recordMorePressed), forControlEvents: [.touchUpInside])
         
         self.view.addSubview(self.recordMoreButton.view)
+        
+        if let viewForOverlayContent = self.viewForOverlayContent {
+            viewForOverlayContent.addSubnode(self.viewOnceButton)
+        }
     }
 
     required init?(coder aDecoder: NSCoder) {
@@ -1016,10 +1020,6 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     
     override public func didLoad() {
         super.didLoad()
-        
-        if let viewForOverlayContent = self.viewForOverlayContent {
-            viewForOverlayContent.addSubnode(self.viewOnceButton)
-        }
     }
     
     public func loadTextInputNodeIfNeeded() {
@@ -3379,7 +3379,8 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             if case let .audio(_, isLocked) = recordingState {
                 viewOnceIsVisible = isLocked
             } else if case let .video(_, isLocked) = recordingState {
-                viewOnceIsVisible = isLocked
+                let _ = isLocked
+                //viewOnceIsVisible = isLocked
             }
         }
         if let mediaDraftState = interfaceState.interfaceState.mediaDraftState, case .audio = mediaDraftState.contentType {
@@ -3407,9 +3408,6 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         self.recordMoreButton.bounds = CGRect(origin: .zero, size: recordMoreButtonFrame.size)
         transition.updatePosition(node: self.recordMoreButton, position: recordMoreButtonFrame.center)
         
-        if self.viewOnceButton.alpha.isZero && viewOnceIsVisible {
-            self.viewOnceButton.update(isSelected: self.viewOnce, animated: false)
-        }
         if self.recordMoreButton.alpha.isZero && recordMoreIsVisible {
             self.recordMoreButton.update(isSelected: false, animated: false)
         }
