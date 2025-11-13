@@ -118,6 +118,7 @@ public enum ParsedInternalUrl {
     case premiumGiftCode(slug: String)
     case messageLink(slug: String)
     case collectible(slug: String)
+    case auction(slug: String)
     case externalUrl(url: String)
 }
 
@@ -568,6 +569,8 @@ public func parseInternalUrl(sharedContext: SharedAccountContext, context: Accou
                     return .theme(pathComponents[1])
                 } else if pathComponents[0] == "nft" {
                     return .collectible(slug: pathComponents[1])
+                } else if pathComponents[0] == "auction" {
+                    return .auction(slug: pathComponents[1])
                 } else if pathComponents[0] == "addlist" || pathComponents[0] == "folder" || pathComponents[0] == "list" {
                     return .chatFolder(slug: pathComponents[1])
                 } else if pathComponents[0] == "boost", pathComponents.count == 2 {
@@ -1185,6 +1188,15 @@ private func resolveInternalUrl(context: AccountContext, url: ParsedInternalUrl)
             |> map { gift -> ResolveInternalUrlResult in
                 return .result(.collectible(gift: gift))
             })
+        case let .auction(slug):
+            if let giftAuctionsManager = context.giftAuctionsManager {
+                return .single(.progress) |> then(giftAuctionsManager.auctionContext(for: .slug(slug))
+                |> map { auction -> ResolveInternalUrlResult in
+                    return .result(.auction(auction: auction))
+                })
+            } else {
+                return .single(.result(nil))
+            }
         case let .messageLink(slug):
             return .single(.progress)
             |> then(context.engine.peers.resolveMessageLink(slug: slug)

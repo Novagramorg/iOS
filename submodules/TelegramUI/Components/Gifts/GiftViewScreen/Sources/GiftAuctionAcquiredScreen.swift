@@ -241,6 +241,40 @@ private final class GiftAuctionAcquiredScreenComponent: Component {
             }
             self.bottomEdgeEffectView.layer.animatePosition(from: CGPoint(), to: CGPoint(x: 0.0, y: animateOffset), duration: 0.3, timingFunction: CAMediaTimingFunctionName.easeInEaseOut.rawValue, removeOnCompletion: false, additive: true)
         }
+        
+        private func openPeer(_ peer: EnginePeer, dismiss: Bool = true) {
+            guard let component = self.component, let controller = self.environment?.controller() as? GiftAuctionAcquiredScreen, let navigationController = controller.navigationController as? NavigationController else {
+                return
+            }
+                                    
+            let context = component.context
+            let action = {
+                context.sharedContext.navigateToChatController(NavigateToChatControllerParams(
+                    navigationController: navigationController,
+                    chatController: nil,
+                    context: context,
+                    chatLocation: .peer(peer),
+                    subject: nil,
+                    botStart: nil,
+                    updateTextInputState: nil,
+                    keepStack: .always,
+                    useExisting: true,
+                    purposefulAction: nil,
+                    scrollToEndIfExists: false,
+                    activateMessageSearch: nil,
+                    animated: true
+                ))
+            }
+            
+            if dismiss {
+                controller.dismiss()
+                Queue.mainQueue().after(0.4, {
+                    action()
+                })
+            } else {
+                action()
+            }
+        }
       
         func update(component: GiftAuctionAcquiredScreenComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<ViewControllerComponentContainer.Environment>, transition: ComponentTransition) -> CGSize {
             self.isUpdating = true
@@ -259,6 +293,7 @@ private final class GiftAuctionAcquiredScreenComponent: Component {
             } else {
                 fillingSize = min(availableSize.width, 428.0) - environment.safeInsets.left * 2.0
             }
+            let rawSideInset = floor((availableSize.width - fillingSize) * 0.5)
             let sideInset: CGFloat = floor((availableSize.width - fillingSize) * 0.5) + 24.0
             
             self.component = component
@@ -268,15 +303,6 @@ private final class GiftAuctionAcquiredScreenComponent: Component {
             if themeUpdated {
                 self.dimView.backgroundColor = UIColor(white: 0.0, alpha: 0.5)
                 self.backgroundLayer.backgroundColor = environment.theme.actionSheet.opaqueItemBackgroundColor.cgColor
-                
-                var locations: [NSNumber] = []
-                var colors: [CGColor] = []
-                let numStops = 6
-                for i in 0 ..< numStops {
-                    let step = CGFloat(i) / CGFloat(numStops - 1)
-                    locations.append(step as NSNumber)
-                    colors.append(environment.theme.list.blocksBackgroundColor.withAlphaComponent(1.0 - step * step).cgColor)
-                }
             }
             
             transition.setFrame(view: self.dimView, frame: CGRect(origin: CGPoint(), size: availableSize))
@@ -325,7 +351,7 @@ private final class GiftAuctionAcquiredScreenComponent: Component {
                             AnyComponentWithIdentity(
                                 id: "title",
                                 component: AnyComponent(
-                                    MultilineTextComponent(text: .plain(NSAttributedString(string: "Round #\(gift.round)", font: tableBoldFont, textColor: tableTextColor)))
+                                    MultilineTextComponent(text: .plain(NSAttributedString(string: environment.strings.Gift_Acquired_Round("\(gift.round)").string, font: tableBoldFont, textColor: tableTextColor)))
                                 )
                             )
                         ], spacing: 1.0))
@@ -334,7 +360,7 @@ private final class GiftAuctionAcquiredScreenComponent: Component {
                 
                 items.append(.init(
                     id: "recipient",
-                    title: "Recipient",
+                    title: environment.strings.Gift_Acquired_Recipient,
                     component: AnyComponent(Button(
                         content: AnyComponent(
                             PeerCellComponent(
@@ -344,15 +370,18 @@ private final class GiftAuctionAcquiredScreenComponent: Component {
                                 peer: gift.peer
                             )
                         ),
-                        action: {
-                            
+                        action: { [weak self] in
+                            guard let self else {
+                                return
+                            }
+                            self.openPeer(gift.peer, dismiss: false)
                         }
                     ))
                 ))
                 
                 items.append(.init(
                     id: "date",
-                    title: "Date",
+                    title: environment.strings.Gift_Acquired_Date,
                     component: AnyComponent(MultilineTextComponent(text: .plain(NSAttributedString(string: stringForMediumDate(timestamp: gift.date, strings: environment.strings, dateTimeFormat: environment.dateTimeFormat), font: tableFont, textColor: tableTextColor))))
                 ))
                 
@@ -366,7 +395,7 @@ private final class GiftAuctionAcquiredScreenComponent: Component {
                 
                 items.append(.init(
                     id: "bid",
-                    title: "Accepted Bid",
+                    title: environment.strings.Gift_Acquired_AcceptedBid,
                     component: AnyComponent(HStack([
                         AnyComponentWithIdentity(id: "stars", component: AnyComponent(MultilineTextWithEntitiesComponent(
                             context: component.context,
@@ -381,11 +410,10 @@ private final class GiftAuctionAcquiredScreenComponent: Component {
                             component: AnyComponent(Button(
                                 content: AnyComponent(ButtonContentComponent(
                                     context: component.context,
-                                    text: "TOP \(gift.position)",
+                                    text: environment.strings.Gift_Acquired_Top("\(gift.position)").string,
                                     color: environment.theme.list.itemAccentColor
                                 )),
                                 action: {
-                                    
                                 }
                             ))
                         )
@@ -447,7 +475,7 @@ private final class GiftAuctionAcquiredScreenComponent: Component {
                 environment: {},
                 containerSize: CGSize(width: 40.0, height: 40.0)
             )
-            let closeButtonFrame = CGRect(origin: CGPoint(x: 16.0, y: 16.0), size: closeButtonSize)
+            let closeButtonFrame = CGRect(origin: CGPoint(x: rawSideInset + 16.0, y: 16.0), size: closeButtonSize)
             if let closeButtonView = self.closeButton.view {
                 if closeButtonView.superview == nil {
                     self.navigationBarContainer.addSubview(closeButtonView)
@@ -463,13 +491,7 @@ private final class GiftAuctionAcquiredScreenComponent: Component {
             let title = self.title
             let actionButton = self.actionButton
             
-            let titleText: String
-            if component.acquiredGifts.count == 1 {
-                titleText = "1 Item Bought"
-            } else {
-                titleText = "\(component.acquiredGifts.count) Items Bought"
-            }
-            
+            let titleText = environment.strings.Gift_Acquired_Title(Int32(component.acquiredGifts.count))
             let titleSize = title.update(
                 transition: .immediate,
                 component: AnyComponent(MultilineTextComponent(
@@ -517,12 +539,11 @@ private final class GiftAuctionAcquiredScreenComponent: Component {
                     }
                 )),
                 environment: {},
-                containerSize: CGSize(width: availableSize.width - buttonInsets.left - buttonInsets.right, height: 54.0)
+                containerSize: CGSize(width: fillingSize - buttonInsets.left - buttonInsets.right, height: 54.0)
             )
-            
            
             let edgeEffectHeight: CGFloat = 80.0
-            let edgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: availableSize.width, height: edgeEffectHeight))
+            let edgeEffectFrame = CGRect(origin: CGPoint(x: rawSideInset, y: 0.0), size: CGSize(width: fillingSize, height: edgeEffectHeight))
             transition.setFrame(view: self.topEdgeEffectView, frame: edgeEffectFrame)
             self.topEdgeEffectView.update(content: environment.theme.actionSheet.opaqueItemBackgroundColor, blur: true, alpha: 1.0, rect: edgeEffectFrame, edge: .top, edgeSize: edgeEffectFrame.height, transition: transition)
             if self.topEdgeEffectView.superview == nil {
@@ -532,14 +553,14 @@ private final class GiftAuctionAcquiredScreenComponent: Component {
             var bottomPanelHeight = 13.0 + buttonInsets.bottom + actionButtonSize.height
             
             let bottomEdgeEffectHeight: CGFloat = bottomPanelHeight
-            let bottomEdgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: availableSize.height - bottomEdgeEffectHeight), size: CGSize(width: availableSize.width, height: bottomEdgeEffectHeight))
+            let bottomEdgeEffectFrame = CGRect(origin: CGPoint(x: rawSideInset, y: availableSize.height - bottomEdgeEffectHeight), size: CGSize(width: fillingSize, height: bottomEdgeEffectHeight))
             transition.setFrame(view: self.bottomEdgeEffectView, frame: bottomEdgeEffectFrame)
             self.bottomEdgeEffectView.update(content: environment.theme.actionSheet.opaqueItemBackgroundColor, blur: true, alpha: 1.0, rect: bottomEdgeEffectFrame, edge: .bottom, edgeSize: bottomEdgeEffectFrame.height, transition: transition)
             if self.bottomEdgeEffectView.superview == nil {
                 self.containerView.addSubview(self.bottomEdgeEffectView)
             }
             
-            let actionButtonFrame = CGRect(origin: CGPoint(x: buttonInsets.left, y: availableSize.height - buttonInsets.bottom - actionButtonSize.height), size: actionButtonSize)
+            let actionButtonFrame = CGRect(origin: CGPoint(x: rawSideInset + buttonInsets.left, y: availableSize.height - buttonInsets.bottom - actionButtonSize.height), size: actionButtonSize)
             bottomPanelHeight -= 1.0
             if let actionButtonView = actionButton.view {
                 if actionButtonView.superview == nil {
@@ -617,14 +638,6 @@ private final class GiftAuctionAcquiredScreenComponent: Component {
 }
 
 public class GiftAuctionAcquiredScreen: ViewControllerComponentContainer {
-    public final class TransitionOut {
-        public let sourceView: UIView
-        
-        init(sourceView: UIView) {
-            self.sourceView = sourceView
-        }
-    }
-    
     private let context: AccountContext
     
     private var didPlayAppearAnimation: Bool = false

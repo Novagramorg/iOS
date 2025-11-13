@@ -239,6 +239,7 @@ final class LiveStreamSettingsScreenComponent: Component {
             
             let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
             let theme = environment.theme.withModalBlocksBackground()
+            let strings = environment.strings
             
             guard let screenState = component.stateContext.stateValue else {
                 return CGSize()
@@ -318,7 +319,7 @@ final class LiveStreamSettingsScreenComponent: Component {
                 
                 let streamAsSectionHeader = AnyComponent(MultilineTextComponent(
                     text: .plain(NSAttributedString(
-                        string: "START LIVE AS",
+                        string: strings.LiveStreamSettings_StartLiveAs,
                         font: Font.regular(presentationData.listsFontSize.itemListBaseHeaderFontSize),
                         textColor: theme.list.freeTextColor
                     )),
@@ -349,7 +350,14 @@ final class LiveStreamSettingsScreenComponent: Component {
                 contentHeight += sectionSpacing
             }
             
-            if screenState.sendAsPeerId?.namespace != Namespaces.Peer.CloudChannel {
+            var displayPrivacy = true
+            if screenState.sendAsPeerId?.namespace == Namespaces.Peer.CloudChannel {
+                displayPrivacy = false
+            } else if screenState.call != nil && screenState.isEdit {
+                displayPrivacy = false
+            }
+            
+            if displayPrivacy {
                 var privacySectionItems: [AnyComponentWithIdentity<Empty>] = []
                 
                 var categoryItems: [ShareWithPeersScreenComponent.CategoryItem] = []
@@ -580,7 +588,7 @@ final class LiveStreamSettingsScreenComponent: Component {
                 
                 let privacySectionHeader = AnyComponent(MultilineTextComponent(
                     text: .plain(NSAttributedString(
-                        string: "WHO CAN VIEW THIS LIVE",
+                        string: strings.LiveStreamSettings_WhoCanView,
                         font: Font.regular(presentationData.listsFontSize.itemListBaseHeaderFontSize),
                         textColor: theme.list.freeTextColor
                     )),
@@ -589,7 +597,7 @@ final class LiveStreamSettingsScreenComponent: Component {
                 
                 let privacySectionFooter = AnyComponent(MultilineTextComponent(
                     text: .markdown(
-                        text: "[Select people]() who won't see your live.",
+                        text: strings.LiveStreamSettings_WhoCanViewInfo,
                         attributes: MarkdownAttributes(
                             body: MarkdownAttributeSet(font: footerTextFont, textColor: footerTextColor),
                             bold: MarkdownAttributeSet(font: footerBoldTextFont, textColor: footerTextColor),
@@ -659,12 +667,12 @@ final class LiveStreamSettingsScreenComponent: Component {
                 })
             }
             
-            if !screenState.isEdit {
+            if !screenState.isEdit || (screenState.call != nil && screenState.isEdit && screenState.callIsStream) {
                 let externalStreamSectionItems = [AnyComponentWithIdentity(id: 0, component: AnyComponent(
                     ListActionItemComponent(
                         theme: theme,
                         style: .glass,
-                        title: AnyComponent(MultilineTextComponent(text: .plain(NSAttributedString(string: "Connect Stream", font: Font.regular(presentationData.listsFontSize.baseDisplaySize), textColor: theme.list.itemPrimaryTextColor)))),
+                        title: AnyComponent(MultilineTextComponent(text: .plain(NSAttributedString(string: strings.LiveStreamSettings_ConnectStream, font: Font.regular(presentationData.listsFontSize.baseDisplaySize), textColor: theme.list.itemPrimaryTextColor)))),
                         action: { [weak self] _ in
                             guard let self else {
                                 return
@@ -674,7 +682,7 @@ final class LiveStreamSettingsScreenComponent: Component {
                     )
                 ))]
                 let externalStreamFooterComponent = AnyComponent(MultilineTextComponent(
-                    text: .plain(NSAttributedString(string: "Stream with a different app.", font: footerTextFont, textColor: footerTextColor)),
+                    text: .plain(NSAttributedString(string: strings.LiveStreamSettings_ConnectStreamInfo, font: footerTextFont, textColor: footerTextColor)),
                     maximumNumberOfLines: 0
                 ))
                 
@@ -702,14 +710,13 @@ final class LiveStreamSettingsScreenComponent: Component {
                 contentHeight += sectionSpacing
             }
             
-
             var settingsSectionItems: [AnyComponentWithIdentity<Empty>] = []
             settingsSectionItems.append(AnyComponentWithIdentity(id: "comments", component: AnyComponent(ListActionItemComponent(
                 theme: theme,
                 style: .glass,
                 title: AnyComponent(MultilineTextComponent(
                     text: .plain(NSAttributedString(
-                        string: "Allow Comments",
+                        string: strings.LiveStreamSettings_AllowComments,
                         font: Font.regular(presentationData.listsFontSize.baseDisplaySize),
                         textColor: theme.list.itemPrimaryTextColor
                     )),
@@ -725,26 +732,28 @@ final class LiveStreamSettingsScreenComponent: Component {
                 action: nil
             ))))
             
-            settingsSectionItems.append(AnyComponentWithIdentity(id: "screenshots", component: AnyComponent(ListActionItemComponent(
-                theme: theme,
-                style: .glass,
-                title: AnyComponent(MultilineTextComponent(
-                    text: .plain(NSAttributedString(
-                        string: "Allow Screenshots",
-                        font: Font.regular(presentationData.listsFontSize.baseDisplaySize),
-                        textColor: theme.list.itemPrimaryTextColor
+            if !(screenState.call != nil && screenState.isEdit) {
+                settingsSectionItems.append(AnyComponentWithIdentity(id: "screenshots", component: AnyComponent(ListActionItemComponent(
+                    theme: theme,
+                    style: .glass,
+                    title: AnyComponent(MultilineTextComponent(
+                        text: .plain(NSAttributedString(
+                            string: strings.LiveStreamSettings_AllowScreenshots,
+                            font: Font.regular(presentationData.listsFontSize.baseDisplaySize),
+                            textColor: theme.list.itemPrimaryTextColor
+                        )),
+                        maximumNumberOfLines: 1
                     )),
-                    maximumNumberOfLines: 1
-                )),
-                accessory: .toggle(ListActionItemComponent.Toggle(style: .regular, isOn: !screenState.isForwardingDisabled, action: { [weak self] _ in
-                    guard let self, let component = self.component else {
-                        return
-                    }
-                    component.stateContext.isForwardingDisabled = !component.stateContext.isForwardingDisabled
-                    self.state?.updated(transition: .spring(duration: 0.4))
-                })),
-                action: nil
-            ))))
+                    accessory: .toggle(ListActionItemComponent.Toggle(style: .regular, isOn: !screenState.isForwardingDisabled, action: { [weak self] _ in
+                        guard let self, let component = self.component else {
+                            return
+                        }
+                        component.stateContext.isForwardingDisabled = !component.stateContext.isForwardingDisabled
+                        self.state?.updated(transition: .spring(duration: 0.4))
+                    })),
+                    action: nil
+                ))))
+            }
             
             let settingsSectionSize = self.settingsSection.update(
                 transition: transition,
@@ -777,7 +786,7 @@ final class LiveStreamSettingsScreenComponent: Component {
                         minValue: 0,
                         lowerBoundTitle: "0",
                         upperBoundTitle: "\(presentationStringsFormattedNumber(Int32(clamping: screenState.maxPaidMessageStars), environment.dateTimeFormat.groupingSeparator))",
-                        title: screenState.paidMessageStars == 0 ? "Free" : "\(screenState.paidMessageStars) Stars",
+                        title: screenState.paidMessageStars == 0 ? strings.LiveStreamSettings_PricePerComment_Free : strings.LiveStreamSettings_PricePerComment_Stars(Int32(clamping: screenState.paidMessageStars)),
                         valueUpdated: { [weak self] value in
                             guard let self, let component = self.component else {
                                 return
@@ -793,7 +802,7 @@ final class LiveStreamSettingsScreenComponent: Component {
             if screenState.allowComments {
                 let paidMessageSectionHeader = AnyComponent(MultilineTextComponent(
                     text: .plain(NSAttributedString(
-                        string: "PRICE PER COMMENT",
+                        string: strings.LiveStreamSettings_PricePerComment,
                         font: Font.regular(presentationData.listsFontSize.itemListBaseHeaderFontSize),
                         textColor: theme.list.freeTextColor
                     )),
@@ -801,7 +810,7 @@ final class LiveStreamSettingsScreenComponent: Component {
                 ))
                 
                 let paidMessageSectionFooterComponent = AnyComponent(MultilineTextComponent(
-                    text: .plain(NSAttributedString(string: "The price a viewer must pay to send a comment.", font: footerTextFont, textColor: footerTextColor)),
+                    text: .plain(NSAttributedString(string: strings.LiveStreamSettings_PricePerCommentInfo, font: footerTextFont, textColor: footerTextColor)),
                     maximumNumberOfLines: 0
                 ))
                 
@@ -844,7 +853,7 @@ final class LiveStreamSettingsScreenComponent: Component {
             transition.setFrame(view: self.bottomEdgeEffectView, frame: bottomEdgeEffectFrame)
             self.bottomEdgeEffectView.update(content: theme.list.blocksBackgroundColor, blur: true, alpha: 1.0, rect: bottomEdgeEffectFrame, edge: .bottom, edgeSize: edgeEffectFrame.height, transition: transition)
             
-            let title: String = screenState.isEdit ? "Live Stream" : "Live Settings"
+            let title: String = screenState.isEdit ? strings.LiveStreamSettings_TitleEdit : strings.LiveStreamSettings_Title
             let titleSize = self.title.update(
                 transition: transition,
                 component: AnyComponent(
@@ -949,7 +958,7 @@ final class LiveStreamSettingsScreenComponent: Component {
                             content: AnyComponentWithIdentity(
                                 id: "label",
                                 component: AnyComponent(ButtonTextContentComponent(
-                                    text: "Save Settings",
+                                    text: strings.LiveStreamSettings_SaveSettings,
                                     badge: 0,
                                     textColor: theme.list.itemCheckColors.foregroundColor,
                                     badgeBackground: theme.list.itemCheckColors.foregroundColor,
@@ -1025,7 +1034,7 @@ final class LiveStreamSettingsScreenComponent: Component {
 public class LiveStreamSettingsScreen: ViewControllerComponentContainer {
     public enum Mode {
         case create(sendAsPeerId: EnginePeer.Id?, isCustomTarget: Bool, privacy: EngineStoryPrivacy, allowComments: Bool, isForwardingDisabled: Bool, pin: Bool, paidMessageStars: Int64)
-        case edit(PresentationGroupCall)
+        case edit(call: PresentationGroupCall, displayExternalStream: Bool)
     }
     
     public struct Result {
@@ -1088,7 +1097,9 @@ public class LiveStreamSettingsScreen: ViewControllerComponentContainer {
     }
     
     final class State {
+        var call: PresentationGroupCall?
         var isEdit: Bool
+        var callIsStream: Bool
         var maxPaidMessageStars: Int64
         var sendAsPeerId: EnginePeer.Id?
         var isCustomTarget: Bool
@@ -1105,7 +1116,9 @@ public class LiveStreamSettingsScreen: ViewControllerComponentContainer {
         var grayListPeers: [EnginePeer]
         
         init(
+            call: PresentationGroupCall?,
             isEdit: Bool,
+            callIsStream: Bool,
             maxPaidMessageStars: Int64,
             sendAsPeerId: EnginePeer.Id?,
             isCustomTarget: Bool,
@@ -1121,7 +1134,9 @@ public class LiveStreamSettingsScreen: ViewControllerComponentContainer {
             closeFriendsPeers: [EnginePeer],
             grayListPeers: [EnginePeer]
         ) {
+            self.call = call
             self.isEdit = isEdit
+            self.callIsStream = callIsStream
             self.maxPaidMessageStars = maxPaidMessageStars
             self.sendAsPeerId = sendAsPeerId
             self.isCustomTarget = isCustomTarget
@@ -1140,6 +1155,7 @@ public class LiveStreamSettingsScreen: ViewControllerComponentContainer {
     }
     
     public final class StateContext {
+        let mode: LiveStreamSettingsScreen.Mode
         let blockedPeersContext: BlockedPeersContext?
         
         var stateValue: State?
@@ -1211,6 +1227,7 @@ public class LiveStreamSettingsScreen: ViewControllerComponentContainer {
             adminedChannels: Signal<[EnginePeer], NoError>,
             blockedPeersContext: BlockedPeersContext?
         ) {
+            self.mode = mode
             self.blockedPeersContext = blockedPeersContext
             
             let grayListPeers: Signal<[EnginePeer], NoError>
@@ -1337,6 +1354,7 @@ public class LiveStreamSettingsScreen: ViewControllerComponentContainer {
                 savedSelectedPeers[.contacts] = contactsPeers
                 savedSelectedPeers[.nobody] = selectedPeers
                 
+                let call: PresentationGroupCall?
                 let isEdit: Bool
                 let maxPaidMessageStars: Int64 = 10000
                 let sendAsPeerId: EnginePeer.Id?
@@ -1346,8 +1364,10 @@ public class LiveStreamSettingsScreen: ViewControllerComponentContainer {
                 let isForwardingDisabled: Bool
                 let pin: Bool
                 let paidMessageStars: Int64
+                var callIsStream = false
                 
                 if let current = self.stateValue {
+                    call = current.call
                     isEdit = current.isEdit
                     sendAsPeerId = current.sendAsPeerId
                     isCustomTarget = current.isCustomTarget
@@ -1359,6 +1379,7 @@ public class LiveStreamSettingsScreen: ViewControllerComponentContainer {
                 } else {
                     switch mode {
                     case let .create(sendAsPeerIdValue, isCustomTargetValue, privacyValue, allowCommentsValue, isForwardingDisabledValue, pinValue, paidMessageStarsValue):
+                        call = nil
                         isEdit = false
                         sendAsPeerId = sendAsPeerIdValue
                         isCustomTarget = isCustomTargetValue
@@ -1367,8 +1388,8 @@ public class LiveStreamSettingsScreen: ViewControllerComponentContainer {
                         isForwardingDisabled = isForwardingDisabledValue
                         pin = pinValue
                         paidMessageStars = paidMessageStarsValue
-                    case let .edit(call):
-                        let _ = call
+                    case let .edit(callValue, callIsStreamValue):
+                        call = callValue
                         isEdit = true
                         sendAsPeerId = nil
                         isCustomTarget = false
@@ -1377,11 +1398,14 @@ public class LiveStreamSettingsScreen: ViewControllerComponentContainer {
                         isForwardingDisabled = false
                         pin = true
                         paidMessageStars = 0
+                        callIsStream = callIsStreamValue
                     }
                 }
                 
                 let state = State(
+                    call: call,
                     isEdit: isEdit,
+                    callIsStream: callIsStream,
                     maxPaidMessageStars: maxPaidMessageStars,
                     sendAsPeerId: sendAsPeerId,
                     isCustomTarget: isCustomTarget,

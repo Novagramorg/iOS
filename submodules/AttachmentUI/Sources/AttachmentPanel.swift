@@ -1890,7 +1890,7 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate {
             self.textInputPanelNode?.ensureUnfocused()
         }
         
-        let textPanelSideInset: CGFloat = 8.0
+        let textPanelSideInset: CGFloat = 16.0
         let defaultPanelSideInset: CGFloat = glassPanelSideInset
         let panelSideInset: CGFloat = (isSelecting ? textPanelSideInset : defaultPanelSideInset) + layout.safeInsets.left
         var textPanelHeight: CGFloat = 0.0
@@ -1913,7 +1913,7 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate {
             } else {
                 textPanelHeight = self.panelStyle == .glass ? 40.0 : 45.0
             }
-            textPanelWidth = layout.size.width - panelSideInset - 88.0 - 6.0
+            textPanelWidth = layout.size.width - panelSideInset * 2.0
         }
         
         let glassPanelHeight: CGFloat = 62.0
@@ -1937,7 +1937,7 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate {
                 backgroundViewColor = self.presentationData.theme.list.plainBackgroundColor.withAlphaComponent(0.75)
             }
             
-            let backgroundOriginX: CGFloat = isSelecting ? panelSideInset + 8.0 : floorToScreenPixels((layout.size.width - panelSize.width) / 2.0)
+            let backgroundOriginX: CGFloat = isSelecting ? panelSideInset : floorToScreenPixels((layout.size.width - panelSize.width) / 2.0)
             backgroundView.update(size: panelSize, cornerRadius: isSelecting ? 20.0 : glassPanelHeight * 0.5, isDark: self.presentationData.theme.overallDarkAppearance, tintColor: .init(kind: .custom, color: backgroundViewColor), transition: ComponentTransition(transition))
             transition.updatePosition(layer: backgroundView.layer, position: CGPoint(x: backgroundOriginX + panelSize.width * 0.5, y: panelSize.height * 0.5))
             transition.updateBounds(layer: backgroundView.layer, bounds: CGRect(origin: .zero, size: panelSize))
@@ -2021,14 +2021,19 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate {
                         let alphaTransition = ContainedViewLayoutTransition.animated(duration: 0.25, curve: .easeInOut)
                         alphaTransition.updateAlpha(node: textInputPanelNode, alpha: 1.0)
                         
-                        ComponentTransition.easeInOut(duration: 0.25).animateBlur(layer: self.scrollNode.layer, fromRadius: 0.0, toRadius: 10.0)
+                        let componentTransition = ComponentTransition.easeInOut(duration: 0.25)
+                        componentTransition.animateBlur(layer: self.scrollNode.layer, fromRadius: 0.0, toRadius: 10.0)
                         
-                        transition.animatePosition(node: textInputPanelNode.opaqueActionButtons, from: CGPoint(x: textInputPanelNode.opaqueActionButtons.position.x + 62.0, y: textInputPanelNode.opaqueActionButtons.position.y + heightDelta))
+                        let blurTransition = ComponentTransition.easeInOut(duration: 0.18)
                         transition.animateTransformScale(node: textInputPanelNode.opaqueActionButtons, from: 0.01)
-                                             
+                        blurTransition.animateBlur(layer: textInputPanelNode.opaqueActionButtons.layer, fromRadius: 4.0, toRadius: 0.0)
+                        textInputPanelNode.opaqueActionButtons.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
+                        transition.animatePosition(node: textInputPanelNode.opaqueActionButtons, from: CGPoint(x: textInputPanelNode.opaqueActionButtons.position.x, y: textInputPanelNode.opaqueActionButtons.position.y + heightDelta))
+
                         transition.animatePositionAdditive(layer: textInputPanelNode.textPlaceholderNode.layer, offset: CGPoint(x: 6.0, y: heightDelta))
                         transition.animatePositionAdditive(layer: textInputPanelNode.inputModeView.layer, offset: CGPoint(x: 64.0, y: heightDelta))
                         
+                        textInputPanelNode.animateIn(transition: transition)
                     } else {
                         textInputPanelNode.alpha = 1.0
                         textInputPanelNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.25)
@@ -2048,10 +2053,15 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate {
                         let alphaTransition = ContainedViewLayoutTransition.animated(duration: 0.25, curve: .easeInOut)
                         alphaTransition.updateAlpha(node: textInputPanelNode, alpha: 0.0)
                         
-                        ComponentTransition.easeInOut(duration: 0.25).animateBlur(layer: self.scrollNode.layer, fromRadius: 10.0, toRadius: 0.0)
+                        let componentTransition = ComponentTransition.easeInOut(duration: 0.25)
+                        componentTransition.animateBlur(layer: self.scrollNode.layer, fromRadius: 10.0, toRadius: 0.0)
                         
-                        transition.animatePosition(node: textInputPanelNode.opaqueActionButtons, to: CGPoint(x: textInputPanelNode.opaqueActionButtons.position.x + 62.0, y: textInputPanelNode.opaqueActionButtons.position.y + heightDelta))
+                        let blurTransition = ComponentTransition.easeInOut(duration: 0.18)
                         transition.animateTransformScale(layer: textInputPanelNode.opaqueActionButtons.layer, from: CGPoint(x: 1.0, y: 1.0), to: CGPoint(x: 0.01, y: 0.01))
+                        blurTransition.animateBlur(layer: textInputPanelNode.opaqueActionButtons.layer, fromRadius: 0.0, toRadius: 4.0)
+                        textInputPanelNode.opaqueActionButtons.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2)
+                        transition.animatePosition(node: textInputPanelNode.opaqueActionButtons, to: CGPoint(x: textInputPanelNode.opaqueActionButtons.position.x, y: textInputPanelNode.opaqueActionButtons.position.y + heightDelta))
+
                         transition.animatePositionAdditive(layer: textInputPanelNode.textPlaceholderNode.layer, offset: .zero, to: CGPoint(x: 6.0, y: heightDelta))
                         transition.animatePositionAdditive(layer: textInputPanelNode.inputModeView.layer, offset: .zero, to: CGPoint(x: 64.0, y: heightDelta))
                     } else {

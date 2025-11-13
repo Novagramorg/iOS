@@ -14,13 +14,13 @@ extension CameraMode {
         case .video:
             return strings.Story_Camera_Video
         case .live:
-            //TODO:localize
-            return "LIVE"
+            return strings.Story_Camera_Live
         }
     }
 }
 
 private let buttonSize = CGSize(width: 55.0, height: 48.0)
+private let tabletButtonSize = CGSize(width: 55.0, height: 44.0)
 
 final class ModeComponent: Component {
     let isTablet: Bool
@@ -92,7 +92,7 @@ final class ModeComponent: Component {
                 self.pressed()
             }
             
-            func update(value: String, selected: Bool, tintColor: UIColor) -> CGSize {
+            func update(isTablet: Bool, value: String, selected: Bool, tintColor: UIColor) -> CGSize {
                 let accentColor: UIColor
                 let normalColor: UIColor
                 if tintColor.rgb == 0xffffff {
@@ -108,7 +108,7 @@ final class ModeComponent: Component {
                 self.setAttributedTitle(title, for: .normal)
                 self.sizeToFit()
                 
-                return CGSize(width: self.titleLabel?.bounds.size.width ?? 0.0, height: buttonSize.height)
+                return CGSize(width: self.titleLabel?.bounds.size.width ?? 0.0, height: isTablet ? tabletButtonSize.height : buttonSize.height)
             }
         }
         
@@ -168,6 +168,9 @@ final class ModeComponent: Component {
         
             let isTablet = component.isTablet
             let updatedMode = component.updatedMode
+            
+            self.glassContainerView.isHidden = component.isTablet
+            self.backgroundView.backgroundColor = component.isTablet ? .clear : UIColor(rgb: 0xffffff, alpha: 0.11)
         
             let inset: CGFloat = 23.0
             let spacing: CGFloat = isTablet ? 9.0 : 40.0
@@ -189,7 +192,7 @@ final class ModeComponent: Component {
                     updatedMode(mode)
                 }
                
-                let itemSize = itemView.update(value: mode.title(strings: component.strings), selected: mode == component.currentMode, tintColor: component.tintColor)
+                let itemSize = itemView.update(isTablet: component.isTablet, value: mode.title(strings: component.strings), selected: mode == component.currentMode, tintColor: component.tintColor)
                 itemView.bounds = CGRect(origin: .zero, size: itemSize)
                 itemFrame = CGRect(origin: itemFrame.origin, size: itemSize)
                 
@@ -202,7 +205,7 @@ final class ModeComponent: Component {
                     if mode == component.currentMode {
                         selectedCenter = itemFrame.midY
                     }
-                    itemFrame = itemFrame.offsetBy(dx: 0.0, dy: buttonSize.height + spacing)
+                    itemFrame = itemFrame.offsetBy(dx: 0.0, dy: tabletButtonSize.height + spacing)
                 } else {
                     itemView.center = CGPoint(x: itemFrame.midX, y: itemFrame.midY)
                     if mode == component.currentMode {
@@ -216,7 +219,7 @@ final class ModeComponent: Component {
             let totalSize: CGSize
             let size: CGSize
             if isTablet {
-                totalSize = CGSize(width: availableSize.width, height: buttonSize.height * CGFloat(component.availableModes.count) + spacing * CGFloat(component.availableModes.count - 1))
+                totalSize = CGSize(width: availableSize.width, height: tabletButtonSize.height * CGFloat(component.availableModes.count) + spacing * CGFloat(component.availableModes.count - 1))
                 size = CGSize(width: availableSize.width, height: availableSize.height)
                 transition.setFrame(view: self.backgroundView, frame: CGRect(origin: CGPoint(x: 0.0, y: availableSize.height / 2.0 - selectedCenter), size: totalSize))
             } else {

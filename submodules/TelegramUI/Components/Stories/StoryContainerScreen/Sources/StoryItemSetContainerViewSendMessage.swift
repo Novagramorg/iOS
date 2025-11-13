@@ -53,6 +53,7 @@ import ChatMessagePaymentAlertController
 import ChatSendStarsScreen
 import AnimatedTextComponent
 import ChatSendAsContextMenu
+import ShareWithPeersScreen
 
 private var ObjCKey_DeinitWatcher: Int?
 
@@ -4390,6 +4391,41 @@ final class StoryItemSetContainerSendMessage: @unchecked(Sendable) {
         
         self.isSelectingSendAsPeer = true
         view.state?.updated(transition: .spring(duration: 0.4))
+    }
+    
+    func displayLiveStreamSettings(view: StoryItemSetContainerComponent.View) {
+        Task { @MainActor [weak self, weak view] in
+            guard let self, let view, let component = view.component, let controller = component.controller(), let mediaStreamCall = view.mediaStreamCall else {
+                return
+            }
+            
+            let callState = await (mediaStreamCall.state |> take(1)).get()
+            
+            let stateContext = LiveStreamSettingsScreen.StateContext(
+                context: component.context,
+                mode: .edit(call: mediaStreamCall, displayExternalStream: callState.isUnifiedStream),
+                closeFriends: .single([]),
+                adminedChannels: .single([]),
+                blockedPeersContext: nil
+            )
+            let _ = await (stateContext.ready |> filter { $0 } |> take(1)).get()
+            let settingsScreen = LiveStreamSettingsScreen(
+                context: component.context,
+                stateContext: stateContext,
+                editCategory: { _, _, _, _, _ in
+                },
+                editBlockedPeers: { _, _, _, _, _ in
+                },
+                completion: { [weak self, weak view] result in
+                    guard let self, let view, let call = view.mediaStreamCall else {
+                        return
+                    }
+                    let _ = self
+                    call.updateMessagesEnabled(isEnabled: result.allowComments, sendPaidMessageStars: result.paidMessageStars)
+                }
+            )
+            controller.push(settingsScreen)
+        }
     }
 }
 

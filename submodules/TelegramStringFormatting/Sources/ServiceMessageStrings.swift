@@ -1171,7 +1171,7 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                 attributedString = mutableString
             case .prizeStars:
                 attributedString = NSAttributedString(string: strings.Notification_StarsPrize, font: titleFont, textColor: primaryTextColor)
-            case let .starGift(gift, _, text, entities, _, _, _, _, _, upgradeStars, _, isPrepaidUpgrade, _, peerId, senderId, _, _, _, upgradeSeparate):
+            case let .starGift(gift, _, text, entities, _, _, _, _, _, upgradeStars, _, isPrepaidUpgrade, _, peerId, senderId, _, _, _, upgradeSeparate, isAuctionAcquired, _):
                 if !forAdditionalServiceMessage {
                     if let text {
                         let mutableAttributedString = NSMutableAttributedString(attributedString: stringWithAppliedEntities(text, entities: entities ?? [], baseColor: primaryTextColor, linkColor: primaryTextColor, baseFont: titleFont, linkFont: titleBoldFont, boldFont: titleBoldFont, italicFont: titleFont, boldItalicFont: titleBoldFont, fixedFont: titleFont, blockQuoteFont: titleFont, underlineLinks: false, message: message._asMessage()))
@@ -1196,7 +1196,9 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                         authorName = strings.Notification_StarsGift_UnknownUser
                         peerIds = []
                     }
-                    if message.id.peerId.isTelegramNotifications && senderId == nil {
+                    if isAuctionAcquired {
+                        attributedString = addAttributesToStringWithRanges(strings.Notification_GiftAuction_Acquired(starsPrice)._tuple, body: bodyAttributes, argumentAttributes: [0: boldAttributes])
+                    } else if message.id.peerId.isTelegramNotifications && senderId == nil {
                         attributedString = NSAttributedString(string: strings.Notification_StarsGift_SentSomeone, font: titleFont, textColor: primaryTextColor)
                     } else if message.id.peerId == accountPeerId {
                         attributedString = addAttributesToStringWithRanges(strings.Notification_StarsGift_Self_Bought(starsPrice)._tuple, body: bodyAttributes, argumentAttributes: [0: boldAttributes])

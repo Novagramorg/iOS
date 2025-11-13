@@ -1533,11 +1533,10 @@ final class LocationPickerControllerNode: ViewControllerTracingNode, CLLocationM
                     foreground: self.presentationData.theme.list.itemCheckColors.foregroundColor,
                     pressedColor: self.presentationData.theme.list.itemCheckColors.fillColor.withMultipliedAlpha(0.9),
                 )
-                //TODO:localize
                 var buttonContents: [AnyComponentWithIdentity<Empty>] = [
                     AnyComponentWithIdentity(
                         id: AnyHashable("label"),
-                        component: AnyComponent(MultilineTextComponent(text: .plain(NSAttributedString(string: "Send Location", font: Font.semibold(17.0), textColor: self.presentationData.theme.list.itemCheckColors.foregroundColor, paragraphAlignment: .center))))
+                        component: AnyComponent(MultilineTextComponent(text: .plain(NSAttributedString(string: self.presentationData.strings.Location_SendLocation, font: Font.semibold(17.0), textColor: self.presentationData.theme.list.itemCheckColors.foregroundColor, paragraphAlignment: .center))))
                     )
                 ]
                 

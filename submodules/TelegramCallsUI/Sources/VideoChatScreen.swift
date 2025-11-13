@@ -36,6 +36,7 @@ import ReactionSelectionNode
 import EntityKeyboard
 import GlassBackgroundComponent
 import PremiumUI
+import VideoChatMicButtonComponent
 
 extension VideoChatCall {
     var myAudioLevelAndSpeaking: Signal<(Float, Bool), NoError> {
@@ -163,7 +164,7 @@ extension VideoChatCall {
     func setMessagesEnabled(isEnabled: Bool) {
         switch self {
         case let .group(group):
-            group.updateMessagesEnabled(isEnabled: isEnabled)
+            group.updateMessagesEnabled(isEnabled: isEnabled, sendPaidMessageStars: nil)
         case .conferenceSource:
             break
         }

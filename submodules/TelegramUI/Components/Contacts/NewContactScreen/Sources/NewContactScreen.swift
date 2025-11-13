@@ -253,6 +253,7 @@ final class NewContactScreenComponent: Component {
             self.environment = environment
             
             let theme = environment.theme
+            let strings = environment.strings
             
             var initialCountryCode: Int32?
             var updateFocusTag: Any?
@@ -326,7 +327,7 @@ final class NewContactScreenComponent: Component {
                     theme: theme,
                     initialText: component.initialData.firstName ?? "",
                     resetText: nil,
-                    placeholder: "First Name",
+                    placeholder: strings.UserInfo_FirstNamePlaceholder,
                     autocapitalizationType: .sentences,
                     autocorrectionType: .default,
                     returnKeyType: .next,
@@ -347,7 +348,7 @@ final class NewContactScreenComponent: Component {
                     theme: theme,
                     initialText: component.initialData.lastName ?? "",
                     resetText: nil,
-                    placeholder: "Last Name",
+                    placeholder: strings.UserInfo_LastNamePlaceholder,
                     autocapitalizationType: .sentences,
                     autocorrectionType: .default,
                     returnKeyType: .next,
@@ -437,7 +438,7 @@ final class NewContactScreenComponent: Component {
                             style: .glass,
                             title: AnyComponent(VStack([
                                 AnyComponentWithIdentity(id: "title", component: AnyComponent(MultilineTextComponent(text: .plain(NSAttributedString(string: "mobile", font: Font.regular(14.0), textColor: theme.list.itemPrimaryTextColor))))),
-                                AnyComponentWithIdentity(id: "value", component: AnyComponent(MultilineTextComponent(text: .plain(NSAttributedString(string: environment.strings.ContactInfo_PhoneNumberHidden, font: Font.regular(17.0), textColor: theme.list.itemAccentColor)))))
+                                AnyComponentWithIdentity(id: "value", component: AnyComponent(MultilineTextComponent(text: .plain(NSAttributedString(string: strings.ContactInfo_PhoneNumberHidden, font: Font.regular(17.0), textColor: theme.list.itemAccentColor)))))
                             ], alignment: .left, spacing: 4.0)),
                             contentInsets: UIEdgeInsets(top: 15.0, left: 0.0, bottom: 15.0, right: 0.0),
                             accessory: nil,
@@ -445,7 +446,7 @@ final class NewContactScreenComponent: Component {
                         )))
                     )
                     phoneFooterComponent = AnyComponent(MultilineTextComponent(
-                        text: .plain(NSAttributedString(string: environment.strings.AddContact_ContactWillBeSharedAfterMutual(peer.compactDisplayTitle).string, font: Font.regular(13.0), textColor: environment.theme.list.freeTextColor)),
+                        text: .plain(NSAttributedString(string: strings.AddContact_ContactWillBeSharedAfterMutual(peer.compactDisplayTitle).string, font: Font.regular(13.0), textColor: environment.theme.list.freeTextColor)),
                         maximumNumberOfLines: 0
                     ))
                 }
@@ -454,14 +455,14 @@ final class NewContactScreenComponent: Component {
                     ListItemComponentAdaptor(
                         itemGenerator: PhoneInputItem(
                             theme: theme,
-                            strings: environment.strings,
+                            strings: strings,
                             value: (initialCountryCode, nil, ""),
                             accessory: phoneAccesory,
                             selectCountryCode: { [weak self] in
                                 guard let self, let environment = self.environment, let controller = environment.controller() else {
                                     return
                                 }
-                                let countryController = AuthorizationSequenceCountrySelectionController(strings: environment.strings, theme: environment.theme, glass: true)
+                                let countryController = AuthorizationSequenceCountrySelectionController(strings: strings, theme: environment.theme, glass: true)
                                 countryController.completeWithCountryCode = { [weak self] code, name in
                                     guard let self else {
                                         return
@@ -550,12 +551,12 @@ final class NewContactScreenComponent: Component {
                         phoneFooterRawText = ""
                     case let .peer(_, isContact):
                         if isContact {
-                            phoneFooterRawText = "This phone number is already in your contacts. [View >]()"
+                            phoneFooterRawText = strings.AddContact_PhoneNumber_IsContact
                         } else {
-                            phoneFooterRawText = "This phone number is on Telegram."
+                            phoneFooterRawText = strings.AddContact_PhoneNumber_Registered
                         }
                     case .notFound:
-                        phoneFooterRawText = "This phone number is not on Telegram. [Invite >]()"
+                        phoneFooterRawText = strings.AddContact_PhoneNumber_NotRegistered
                     }
                     let phoneFooterText = NSMutableAttributedString(attributedString: parseMarkdownIntoAttributedString(phoneFooterRawText, attributes: footerAttributes))
                     if let range = phoneFooterText.string.range(of: ">"), let chevronImage = self.cachedChevronImage?.0 {
@@ -625,7 +626,7 @@ final class NewContactScreenComponent: Component {
                     style: .glass,
                     title: AnyComponent(MultilineTextComponent(
                         text: .plain(NSAttributedString(
-                            string: "Sync Contact to Phone",
+                            string: strings.AddContact_SyncToPhone,
                             font: Font.regular(presentationData.listsFontSize.baseDisplaySize),
                             textColor: theme.list.itemPrimaryTextColor
                         )),
@@ -649,7 +650,7 @@ final class NewContactScreenComponent: Component {
                         style: .glass,
                         title: AnyComponent(MultilineTextComponent(
                             text: .plain(NSAttributedString(
-                                string: environment.strings.AddContact_SharedContactException,
+                                string: strings.AddContact_SharedContactException,
                                 font: Font.regular(presentationData.listsFontSize.baseDisplaySize),
                                 textColor: theme.list.itemPrimaryTextColor
                             )),
@@ -666,7 +667,7 @@ final class NewContactScreenComponent: Component {
                     )))
                 )
                 optionsFooterComponent = AnyComponent(MultilineTextComponent(
-                    text: .plain(NSAttributedString(string: environment.strings.AddContact_SharedContactExceptionInfo(peer.compactDisplayTitle).string, font: Font.regular(13.0), textColor: environment.theme.list.freeTextColor)),
+                    text: .plain(NSAttributedString(string: strings.AddContact_SharedContactExceptionInfo(peer.compactDisplayTitle).string, font: Font.regular(13.0), textColor: environment.theme.list.freeTextColor)),
                     maximumNumberOfLines: 0
                 ))
             }
@@ -714,8 +715,8 @@ final class NewContactScreenComponent: Component {
                                 context: component.context,
                                 style: .glass,
                                 theme: theme,
-                                strings: environment.strings,
-                                placeholder: NSAttributedString(string: "Add notes only visible to you", font: Font.regular(17.0), textColor: theme.list.itemPlaceholderTextColor),
+                                strings: strings,
+                                placeholder: NSAttributedString(string: strings.AddContact_NotePlaceholder, font: Font.regular(17.0), textColor: theme.list.itemPlaceholderTextColor),
                                 characterLimit: characterLimit,
                                 emptyLineHandling: .allowed,
                                 returnKeyAction: nil,
@@ -771,7 +772,7 @@ final class NewContactScreenComponent: Component {
                         title: AnyComponent(VStack([
                             AnyComponentWithIdentity(id: AnyHashable(0), component: AnyComponent(MultilineTextComponent(
                                 text: .plain(NSAttributedString(
-                                    string: "Add via QR Code",
+                                    string: strings.AddContact_AddQR,
                                     font: Font.regular(presentationData.listsFontSize.baseDisplaySize),
                                     textColor: theme.list.itemAccentColor
                                 )),
@@ -867,7 +868,7 @@ final class NewContactScreenComponent: Component {
                     MultilineTextComponent(
                         text: .plain(
                             NSAttributedString(
-                                string: "New Contact",
+                                string: strings.AddContact_Title,
                                 font: Font.semibold(17.0),
                                 textColor: environment.theme.rootController.navigationBar.primaryTextColor
                             )

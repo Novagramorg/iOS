@@ -292,9 +292,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                             }
                         }))
                         
-                        if arguments.upgradeStars == nil {
-                            self.fetchUpgradeForm()
-                        }
+                        self.fetchUpgradeForm()
                     }
                 }
                 
@@ -2139,6 +2137,31 @@ private final class GiftViewSheetContent: CombinedComponent {
                 }
             } else {
                 self.scheduledUpgradeCommit = true
+                
+                self.inProgress = true
+                self.updated()
+                
+                Queue.mainQueue().after(5.0, {
+                    if self.scheduledUpgradeCommit {
+                        self.scheduledUpgradeCommit = false
+                        self.inProgress = false
+                        self.updated()
+                        
+                        let presentationData = self.context.sharedContext.currentPresentationData.with { $0 }
+                        let alertController = textAlertController(
+                            context: self.context,
+                            title: nil,
+                            text: presentationData.strings.Login_UnknownError,
+                            actions: [
+                                TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})
+                            ],
+                            parseMarkdown: true
+                        )
+                        if let controller = self.getController() {
+                            controller.present(alertController, in: .window(.root))
+                        }
+                    }
+                })
             }
         }
         
@@ -4236,7 +4259,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                             transition: context.transition
                         )
                         context.add(priceButton
-                            .position(CGPoint(x: environment.safeInsets.left + 16.0 + priceButton.size.width / 2.0, y: 28.0))
+                            .position(CGPoint(x: environment.safeInsets.left + 16.0 + priceButton.size.width / 2.0, y: 31.0))
                             .appear(.default(scale: true, alpha: true))
                             .disappear(.default(scale: true, alpha: true))
                         )
@@ -4354,8 +4377,10 @@ private final class GiftViewSheetContent: CombinedComponent {
                 originY += 16.0
             }
             
-            let buttonSize = CGSize(width: context.availableSize.width - sideInset * 2.0, height: 50.0)
+            let buttonInsets = ContainerViewLayout.concentricInsets(bottomInset: environment.safeInsets.bottom, innerDiameter: 52.0, sideInset: 30.0)
+            let buttonSize = CGSize(width: context.availableSize.width - buttonInsets.left - buttonInsets.right, height: 52.0)
             let buttonBackground = ButtonComponent.Background(
+                style: .glass,
                 color: theme.list.itemCheckColors.fillColor,
                 foreground: theme.list.itemCheckColors.foregroundColor,
                 pressedColor: theme.list.itemCheckColors.fillColor.withMultipliedAlpha(0.9)
@@ -4837,7 +4862,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                     transition: context.transition
                 )
             }
-            let buttonFrame = CGRect(origin: CGPoint(x: sideInset, y: originY), size: buttonChild.size)
+            let buttonFrame = CGRect(origin: CGPoint(x: buttonInsets.left, y: originY), size: buttonChild.size)
             
             var buttonAlpha: CGFloat = 1.0
             if let nextGiftToUpgrade = state.nextGiftToUpgrade, case let .generic(gift) = nextGiftToUpgrade.gift, !state.canSkip {
@@ -4880,7 +4905,6 @@ private final class GiftViewSheetContent: CombinedComponent {
             
             context.add(buttonChild
                 .position(CGPoint(x: buttonFrame.midX, y: buttonFrame.midY))
-                .cornerRadius(10.0)
                 .opacity(buttonAlpha)
             )
             originY += buttonChild.size.height
@@ -4920,7 +4944,7 @@ private final class GiftViewSheetContent: CombinedComponent {
             }
             
             context.add(buttons
-                .position(CGPoint(x: context.availableSize.width - environment.safeInsets.left - 16.0 - buttons.size.width / 2.0, y: 28.0))
+                .position(CGPoint(x: context.availableSize.width - environment.safeInsets.left - 16.0 - buttons.size.width / 2.0, y: 31.0))
             )
             
             let effectiveBottomInset: CGFloat = environment.metrics.isTablet ? 0.0 : environment.safeInsets.bottom
@@ -5012,6 +5036,7 @@ final class GiftViewSheetComponent: CombinedComponent {
                         getController: controller
                     )),
                     headerContent: headerContent,
+                    style: .glass,
                     backgroundColor: .color(environment.theme.actionSheet.opaqueItemBackgroundColor),
                     followContentSizeChanges: true,
                     clipsContent: true,
@@ -5108,7 +5133,7 @@ public class GiftViewScreen: ViewControllerComponentContainer {
             case let .message(message):
                 if let action = message.media.first(where: { $0 is TelegramMediaAction }) as? TelegramMediaAction {
                     switch action.action {
-                    case let .starGift(gift, convertStars, text, entities, nameHidden, savedToProfile, converted, upgraded, canUpgrade, upgradeStars, isRefunded, _, upgradeMessageId, peerId, senderId, savedId, prepaidUpgradeHash, giftMessageId, upgradeSeparate):
+                    case let .starGift(gift, convertStars, text, entities, nameHidden, savedToProfile, converted, upgraded, canUpgrade, upgradeStars, isRefunded, _, upgradeMessageId, peerId, senderId, savedId, prepaidUpgradeHash, giftMessageId, upgradeSeparate, _, _):
                         var reference: StarGiftReference
                         if let peerId, let giftMessageId {
                             reference = .message(messageId: EngineMessage.Id(peerId: peerId, namespace: Namespaces.Message.Cloud, id: giftMessageId))
@@ -6033,7 +6058,7 @@ private final class HeaderButtonComponent: CombinedComponent {
             let background = background.update(
                 component: RoundedRectangle(
                     color: UIColor.white.withAlphaComponent(0.16),
-                    cornerRadius: 10.0
+                    cornerRadius: 16.0
                 ),
                 availableSize: context.availableSize,
                 transition: .immediate

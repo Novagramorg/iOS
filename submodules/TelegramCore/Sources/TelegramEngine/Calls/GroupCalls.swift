@@ -2643,13 +2643,18 @@ public final class GroupCallParticipantsContext {
         }))
     }
     
-    public func updateMessagesEnabled(isEnabled: Bool) {
-        if isEnabled == self.stateValue.state.messagesAreEnabled.isEnabled {
+    public func updateMessagesEnabled(isEnabled: Bool, sendPaidMessageStars: Int64?) {
+        if isEnabled == self.stateValue.state.messagesAreEnabled.isEnabled && self.stateValue.state.messagesAreEnabled.sendPaidMessagesStars == sendPaidMessageStars {
             return
         }
         self.stateValue.state.messagesAreEnabled.isEnabled = isEnabled
+        self.stateValue.state.messagesAreEnabled.sendPaidMessagesStars = sendPaidMessageStars
         
-        self.updateMessagesEnabledDisposable.set((self.account.network.request(Api.functions.phone.toggleGroupCallSettings(flags: 1 << 2, call: self.reference.apiInputGroupCall, joinMuted: nil, messagesEnabled: isEnabled ? .boolTrue : .boolFalse, sendPaidMessagesStars: nil))
+        var flags: Int32 = 1 << 2
+        if sendPaidMessageStars != nil {
+            flags |= 1 << 3
+        }
+        self.updateMessagesEnabledDisposable.set((self.account.network.request(Api.functions.phone.toggleGroupCallSettings(flags: 1 << 2, call: self.reference.apiInputGroupCall, joinMuted: nil, messagesEnabled: isEnabled ? .boolTrue : .boolFalse, sendPaidMessagesStars: sendPaidMessageStars))
         |> deliverOnMainQueue).start(next: { [weak self] updates in
             guard let strongSelf = self else {
                 return

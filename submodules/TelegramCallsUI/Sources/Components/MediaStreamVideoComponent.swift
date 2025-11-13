@@ -19,6 +19,7 @@ public final class MediaStreamVideoComponent: Component {
     let isVisible: Bool
     let isAdmin: Bool
     let peerTitle: String
+    let enablePictureInPicture: Bool
     let activatePictureInPicture: ActionSlot<Action<Void>>
     let deactivatePictureInPicture: ActionSlot<Void>
     let bringBackControllerForPictureInPictureDeactivation: (@escaping () -> Void) -> Void
@@ -40,6 +41,7 @@ public final class MediaStreamVideoComponent: Component {
         isFullscreen: Bool,
         videoLoading: Bool,
         callPeer: Peer?,
+        enablePictureInPicture: Bool,
         activatePictureInPicture: ActionSlot<Action<Void>>,
         deactivatePictureInPicture: ActionSlot<Void>,
         bringBackControllerForPictureInPictureDeactivation: @escaping (@escaping () -> Void) -> Void,
@@ -53,6 +55,7 @@ public final class MediaStreamVideoComponent: Component {
         self.isAdmin = isAdmin
         self.peerTitle = peerTitle
         self.videoLoading = videoLoading
+        self.enablePictureInPicture = enablePictureInPicture
         self.activatePictureInPicture = activatePictureInPicture
         self.deactivatePictureInPicture = deactivatePictureInPicture
         self.bringBackControllerForPictureInPictureDeactivation = bringBackControllerForPictureInPictureDeactivation
@@ -88,6 +91,9 @@ public final class MediaStreamVideoComponent: Component {
             return false
         }
         if lhs.videoLoading != rhs.videoLoading {
+            return false
+        }
+        if lhs.enablePictureInPicture != rhs.enablePictureInPicture {
             return false
         }
         return true
@@ -349,7 +355,7 @@ public final class MediaStreamVideoComponent: Component {
                         UIView.animate(withDuration: 0.3) {
                             videoView.alpha = 1
                         }
-                        if let sampleBufferVideoView = videoView as? SampleBufferVideoRenderingView {
+                        if component.enablePictureInPicture, let sampleBufferVideoView = videoView as? SampleBufferVideoRenderingView {
                             sampleBufferVideoView.sampleBufferLayer.masksToBounds = true
                             
                             if #available(iOS 13.0, *) {

@@ -96,7 +96,6 @@ public func stringForMessageTimestampStatus(accountPeerId: PeerId, message: Mess
     }
     
     if let repeatPeriod = message.scheduleRepeatPeriod {
-        //TODO:localize
         let repeatString: String
         switch repeatPeriod {
         case 60:
@@ -104,27 +103,27 @@ public func stringForMessageTimestampStatus(accountPeerId: PeerId, message: Mess
         case 300:
             repeatString = "5 min"
         case 86400:
-            repeatString = "daily"
+            repeatString = strings.Message_RepeatPeriod_Daily
         case 7 * 86400:
-            repeatString = "weekly"
+            repeatString = strings.Message_RepeatPeriod_Weekly
         case 14 * 86400:
-            repeatString = "biweekly"
+            repeatString = strings.Message_RepeatPeriod_Biweekly
         case 30 * 86400:
-            repeatString = "monthly"
+            repeatString = strings.Message_RepeatPeriod_Monthly
         case 91 * 86400:
-            repeatString = "every 3 months"
+            repeatString = strings.Message_RepeatPeriod_3Months
         case 182 * 86400:
-            repeatString = "every 6 months"
+            repeatString = strings.Message_RepeatPeriod_6Months
         case 365 * 86400:
-            repeatString = "yearly"
+            repeatString = strings.Message_RepeatPeriod_Yearly
         default:
-            repeatString = ""
+            repeatString = "\(repeatPeriod)s"
         }
-        dateText = "\(repeatString) at \(dateText)"
+        dateText = strings.Message_RepeatAt(repeatString, dateText).string
     }
     
     if message.id.namespace == Namespaces.Message.ScheduledCloud, let _ = message.pendingProcessingAttribute {
-        return "appx. \(dateText)"
+        return strings.Message_Approximate(dateText).string
     }
     
     if displayFullDate {

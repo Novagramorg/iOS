@@ -17,7 +17,6 @@ import BundleIconComponent
 import Markdown
 import TextFormat
 import TelegramStringFormatting
-import GiftAnimationComponent
 import GlassBarButtonComponent
 import ButtonComponent
 import LottieComponent
@@ -27,17 +26,20 @@ private final class GiftAuctionInfoSheetContent: CombinedComponent {
     
     let context: AccountContext
     let gift: StarGift
+    let auctionContext: GiftAuctionContext
     let animateOut: ActionSlot<Action<()>>
     let getController: () -> ViewController?
     
     init(
         context: AccountContext,
         gift: StarGift,
+        auctionContext: GiftAuctionContext,
         animateOut: ActionSlot<Action<()>>,
         getController: @escaping () -> ViewController?
     ) {
         self.context = context
         self.gift = gift
+        self.auctionContext = auctionContext
         self.animateOut = animateOut
         self.getController = getController
     }
@@ -54,19 +56,42 @@ private final class GiftAuctionInfoSheetContent: CombinedComponent {
     
     final class State: ComponentState {
         private let context: AccountContext
+        private let auctionContext: GiftAuctionContext
         private let animateOut: ActionSlot<Action<()>>
         private let getController: () -> ViewController?
+        
+        private(set) var rounds: Int32 = 50
+        
+        fileprivate let playButtonAnimation = ActionSlot<Void>()
+        private var didPlayAnimation = false
                 
         init(
             context: AccountContext,
+            auctionContext: GiftAuctionContext,
             animateOut: ActionSlot<Action<()>>,
             getController: @escaping () -> ViewController?
         ) {
             self.context = context
+            self.auctionContext = auctionContext
             self.animateOut = animateOut
             self.getController = getController
             
             super.init()
+            
+            let _ = (self.auctionContext.state
+            |> deliverOnMainQueue).startStandalone(next: { [weak self] state in
+                if let self, case let .ongoing(_, _, _, _, _, _, _, _, _, totalRounds) = state?.auctionState {
+                    self.rounds = totalRounds
+                    self.updated()
+                }
+            })
+        }
+        
+        func playAnimationIfNeeded() {
+            if !self.didPlayAnimation {
+                self.didPlayAnimation = true
+                self.playButtonAnimation.invoke(Void())
+            }
         }
         
         func dismiss(animated: Bool) {
@@ -84,33 +109,29 @@ private final class GiftAuctionInfoSheetContent: CombinedComponent {
     }
     
     func makeState() -> State {
-        return State(context: self.context, animateOut: self.animateOut, getController: self.getController)
+        return State(context: self.context, auctionContext: self.auctionContext, animateOut: self.animateOut, getController: self.getController)
     }
     
     static var body: Body {
         let closeButton = Child(GlassBarButtonComponent.self)
-        let animation = Child(GiftCompositionComponent.self)
+        let icon = Child(BundleIconComponent.self)
         let title = Child(BalancedTextComponent.self)
         let text = Child(BalancedTextComponent.self)
         let list = Child(List<Empty>.self)
         let button = Child(ButtonComponent.self)
-                        
-        let giftCompositionExternalState = GiftCompositionComponent.ExternalState()
-        
+                                
         return { context in
             let environment = context.environment[ViewControllerComponentContainer.Environment.self].value
-            let component = context.component
             let state = context.state
             let controller = environment.controller
            
             let theme = environment.theme
             let strings = environment.strings
-            let _ = strings
             
             let sideInset: CGFloat = 30.0 + environment.safeInsets.left
             let textSideInset: CGFloat = 30.0 + environment.safeInsets.left
             
-            let titleFont = Font.semibold(20.0)
+            let titleFont = Font.bold(24.0)
             let textFont = Font.regular(15.0)
             
             let textColor = theme.actionSheet.primaryTextColor
@@ -118,50 +139,30 @@ private final class GiftAuctionInfoSheetContent: CombinedComponent {
             let linkColor = theme.actionSheet.controlAccentColor
             
             let spacing: CGFloat = 16.0
-            var contentSize = CGSize(width: context.availableSize.width, height: 30.0)
+            var contentSize = CGSize(width: context.availableSize.width, height: 33.0)
             
-            var animationFile: TelegramMediaFile?
-            switch component.gift {
-            case let .generic(gift):
-                animationFile = gift.file
-            default:
-                animationFile = nil
+            var auctionGiftsPerRound: Int32 = 50
+            if case let .generic(gift) = context.component.gift, let auctionGiftsPerRoundValue = gift.auctionGiftsPerRound {
+                auctionGiftsPerRound = auctionGiftsPerRoundValue
             }
-                                         
-            let headerHeight: CGFloat = 210.0
-            let headerSubject: GiftCompositionComponent.Subject?
-            if let animationFile {
-                headerSubject = .generic(animationFile)
-            } else {
-                headerSubject = nil
-            }
-            
-            if let headerSubject {
-                let animation = animation.update(
-                    component: GiftCompositionComponent(
-                        context: component.context,
-                        theme: theme,
-                        subject: headerSubject,
-                        animationOffset: nil,
-                        animationScale: nil,
-                        displayAnimationStars: false,
-                        externalState: giftCompositionExternalState,
-                        requestUpdate: { [weak state] _ in
-                            state?.updated()
-                        }
-                    ),
-                    availableSize: CGSize(width: context.availableSize.width, height: headerHeight),
-                    transition: context.transition
-                )
-                context.add(animation
-                    .position(CGPoint(x: context.availableSize.width / 2.0, y: headerHeight / 2.0))
-                )
-            }
-            contentSize.height += headerHeight - 78.0
+                                              
+            let icon = icon.update(
+                component: BundleIconComponent(
+                    name: "Premium/Auction/BidLarge",
+                    tintColor: linkColor
+                ),
+                availableSize: context.availableSize,
+                transition: context.transition
+            )
+            context.add(icon
+                .position(CGPoint(x: context.availableSize.width / 2.0, y: contentSize.height + icon.size.height / 2.0))
+            )
+            contentSize.height += icon.size.height
+            contentSize.height += 8.0
         
             let title = title.update(
                 component: BalancedTextComponent(
-                    text: .plain(NSAttributedString(string: "Auction", font: titleFont, textColor: textColor)),
+                    text: .plain(NSAttributedString(string: strings.Gift_Auction_Info_Title, font: titleFont, textColor: textColor)),
                     horizontalAlignment: .center,
                     maximumNumberOfLines: 0,
                     lineSpacing: 0.1
@@ -173,11 +174,11 @@ private final class GiftAuctionInfoSheetContent: CombinedComponent {
                 .position(CGPoint(x: context.availableSize.width / 2.0, y: contentSize.height + title.size.height / 2.0))
             )
             contentSize.height += title.size.height
-            contentSize.height += spacing - 14.0
+            contentSize.height += spacing - 8.0
             
             let text = text.update(
                 component: BalancedTextComponent(
-                    text: .plain(NSAttributedString(string: "Join the battle for exclusive gifts.", font: textFont, textColor: secondaryTextColor)),
+                    text: .plain(NSAttributedString(string: strings.Gift_Auction_Info_Description, font: textFont, textColor: secondaryTextColor)),
                     horizontalAlignment: .center,
                     maximumNumberOfLines: 0,
                     lineSpacing: 0.2
@@ -189,19 +190,16 @@ private final class GiftAuctionInfoSheetContent: CombinedComponent {
                 .position(CGPoint(x: context.availableSize.width / 2.0, y: contentSize.height + text.size.height / 2.0))
             )
             contentSize.height += text.size.height
-            contentSize.height += spacing + 7.0
-            
-            
-            //TODO:localize
+            contentSize.height += spacing + 9.0
             
             var items: [AnyComponentWithIdentity<Empty>] = []
             items.append(
                 AnyComponentWithIdentity(
                     id: "top",
                     component: AnyComponent(ParagraphComponent(
-                        title: "Top 50 Bidders",
+                        title: strings.Gift_Auction_Info_TopBidders_Title(auctionGiftsPerRound),
                         titleColor: textColor,
-                        text: "50 gifts are dropped in 10 rounds to the top 50 bidders by bid amount.",
+                        text: strings.Gift_Auction_Info_TopBidders_Text(strings.Gift_Auction_Info_TopBidders_Gifts(auctionGiftsPerRound), strings.Gift_Auction_Info_TopBidders_Rounds(state.rounds), strings.Gift_Auction_Info_TopBidders_Bidders(auctionGiftsPerRound)).string,
                         textColor: secondaryTextColor,
                         accentColor: linkColor,
                         iconName: "Premium/Auction/Drop",
@@ -213,9 +211,9 @@ private final class GiftAuctionInfoSheetContent: CombinedComponent {
                 AnyComponentWithIdentity(
                     id: "carryover",
                     component: AnyComponent(ParagraphComponent(
-                        title: "Bid Carryover",
+                        title: strings.Gift_Auction_Info_Carryover_Title,
                         titleColor: textColor,
-                        text: "If your bid leaves the top 50, it will automatically join the next drop.",
+                        text: strings.Gift_Auction_Info_Carryover_Text("\(auctionGiftsPerRound)").string,
                         textColor: secondaryTextColor,
                         accentColor: linkColor,
                         iconName: "Premium/Auction/NextDrop",
@@ -227,9 +225,9 @@ private final class GiftAuctionInfoSheetContent: CombinedComponent {
                 AnyComponentWithIdentity(
                     id: "missed",
                     component: AnyComponent(ParagraphComponent(
-                        title: "Missed Bidders",
+                        title: strings.Gift_Auction_Info_Missed_Title,
                         titleColor: textColor,
-                        text: "If your bid doesn't win after the final drop, your Stars will be fully refunded.",
+                        text: strings.Gift_Auction_Info_Missed_Text,
                         textColor: secondaryTextColor,
                         accentColor: linkColor,
                         iconName: "Premium/Auction/Refund",
@@ -277,16 +275,15 @@ private final class GiftAuctionInfoSheetContent: CombinedComponent {
             
             
             var buttonTitle: [AnyComponentWithIdentity<Empty>] = []
-            let playButtonAnimation = ActionSlot<Void>()
             buttonTitle.append(AnyComponentWithIdentity(id: 0, component: AnyComponent(LottieComponent(
                 content: LottieComponent.AppBundleContent(name: "anim_ok"),
                 color: theme.list.itemCheckColors.foregroundColor,
                 startingPosition: .begin,
                 size: CGSize(width: 28.0, height: 28.0),
-                playOnce: playButtonAnimation
+                playOnce: state.playButtonAnimation
             ))))
             buttonTitle.append(AnyComponentWithIdentity(id: 1, component: AnyComponent(ButtonTextContentComponent(
-                text: "Understood",
+                text: strings.Gift_Auction_Info_Understood,
                 badge: 0,
                 textColor: theme.list.itemCheckColors.foregroundColor,
                 badgeBackground: theme.list.itemCheckColors.foregroundColor,
@@ -329,6 +326,8 @@ private final class GiftAuctionInfoSheetContent: CombinedComponent {
  
             contentSize.height += 30.0
             
+            state.playAnimationIfNeeded()
+            
             return contentSize
         }
     }
@@ -339,13 +338,16 @@ final class GiftAuctionInfoSheetComponent: CombinedComponent {
     
     let context: AccountContext
     let gift: StarGift
+    let auctionContext: GiftAuctionContext
     
     init(
         context: AccountContext,
-        gift: StarGift
+        gift: StarGift,
+        auctionContext: GiftAuctionContext
     ) {
         self.context = context
         self.gift = gift
+        self.auctionContext = auctionContext
     }
     
     static func ==(lhs: GiftAuctionInfoSheetComponent, rhs: GiftAuctionInfoSheetComponent) -> Bool {
@@ -373,6 +375,7 @@ final class GiftAuctionInfoSheetComponent: CombinedComponent {
                     content: AnyComponent<EnvironmentType>(GiftAuctionInfoSheetContent(
                         context: context.component.context,
                         gift: context.component.gift,
+                        auctionContext: context.component.auctionContext,
                         animateOut: animateOut,
                         getController: controller
                     )),
@@ -448,23 +451,22 @@ final class GiftAuctionInfoSheetComponent: CombinedComponent {
 
 public final class GiftAuctionInfoScreen: ViewControllerComponentContainer {
     private let context: AccountContext
-    private let gift: StarGift
     fileprivate let completion: (() -> Void)?
     
     public init(
         context: AccountContext,
-        gift: StarGift,
+        auctionContext: GiftAuctionContext,
         completion: (() -> Void)?
     ) {
         self.context = context
-        self.gift = gift
         self.completion = completion
         
         super.init(
             context: context,
             component: GiftAuctionInfoSheetComponent(
                 context: context,
-                gift: gift
+                gift: auctionContext.gift,
+                auctionContext: auctionContext
             ),
             navigationBarAppearance: .none,
             statusBarStyle: .ignore,

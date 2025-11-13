@@ -98,6 +98,7 @@ final class BadgeLabelView: UIView {
         }
     }
     
+    
     func update(value: String, transition: ComponentTransition) -> CGSize {
         if value.contains(" ") {
             for (_, view) in self.itemViews {
