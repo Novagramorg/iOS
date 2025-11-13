@@ -182,6 +182,7 @@ private final class SheetContent: CombinedComponent {
                         
             let controller = environment.controller() as? AgeVerificationScreen
                         
+            let buttonInsets = ContainerViewLayout.concentricInsets(bottomInset: environment.safeInsets.bottom, innerDiameter: 52.0, sideInset: 30.0)
             let button = button.update(
                 component: ButtonComponent(
                     background: ButtonComponent.Background(
@@ -201,15 +202,14 @@ private final class SheetContent: CombinedComponent {
                         controller?.complete(result: true)
                     }
                 ),
-                availableSize: CGSize(width: context.availableSize.width - 30.0 * 2.0, height: 52.0),
+                availableSize: CGSize(width: context.availableSize.width - buttonInsets.left - buttonInsets.right, height: 52.0),
                 transition: .immediate
             )
             context.add(button
                 .position(CGPoint(x: context.availableSize.width / 2.0, y: contentSize.height + button.size.height / 2.0))
             )
             contentSize.height += button.size.height
- 
-            contentSize.height += 30.0
+            contentSize.height += buttonInsets.bottom
             
             return contentSize
         }
@@ -364,27 +364,6 @@ public final class AgeVerificationScreen: ViewControllerComponentContainer {
             view.dismissAnimated()
         }
     }
-}
-
-func generateCloseButtonImage(backgroundColor: UIColor, foregroundColor: UIColor) -> UIImage? {
-    return generateImage(CGSize(width: 30.0, height: 30.0), contextGenerator: { size, context in
-        context.clear(CGRect(origin: CGPoint(), size: size))
-        
-        context.setFillColor(backgroundColor.cgColor)
-        context.fillEllipse(in: CGRect(origin: CGPoint(), size: size))
-        
-        context.setLineWidth(2.0)
-        context.setLineCap(.round)
-        context.setStrokeColor(foregroundColor.cgColor)
-        
-        context.move(to: CGPoint(x: 10.0, y: 10.0))
-        context.addLine(to: CGPoint(x: 20.0, y: 20.0))
-        context.strokePath()
-        
-        context.move(to: CGPoint(x: 20.0, y: 10.0))
-        context.addLine(to: CGPoint(x: 10.0, y: 20.0))
-        context.strokePath()
-    })
 }
 
 public func presentAgeVerification(context: AccountContext, parentController: ViewController, completion: @escaping () -> Void) {

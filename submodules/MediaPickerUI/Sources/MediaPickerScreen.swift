@@ -205,6 +205,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
     private let titleView: MediaPickerTitleView
     private let cancelButtonNode: WebAppCancelButtonNode
     
+    private var glassContainerView = GlassBackgroundContainerView()
     private var cancelButton: ComponentView<Empty>?
     private var rightButton: ComponentView<Empty>?
     private let moreButtonPlayOnce = ActionSlot<Void>()
@@ -2572,6 +2573,14 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
         transition.updateAlpha(layer: self.controllerNode.topEdgeEffectView.layer, alpha: self.controllerNode.scrolledExactlyToTop && self.controllerNode.currentDisplayMode == .all ? 0.0 : 1.0)
         self.controllerNode.topEdgeEffectView.update(content: topEdgeColor, blur: true, alpha: 0.8, rect: topEdgeEffectFrame, edge: .top, edgeSize: topEdgeEffectFrame.height, transition: ComponentTransition(transition))
         
+        if self.cancelButton != nil {
+            if self.glassContainerView.superview == nil {
+                self.view.addSubview(self.glassContainerView)
+            }
+            self.glassContainerView.frame = CGRect(origin: .zero, size: CGSize(width: layout.size.width, height: 72.0))
+            self.glassContainerView.update(size: self.glassContainerView.frame.size, isDark: self.presentationData.theme.overallDarkAppearance, transition: .immediate)
+        }
+        
         if let cancelButton = self.cancelButton {
             if cancelButton.view == nil {
                 buttonTransition = .immediate
@@ -2599,7 +2608,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
             let cancelButtonFrame = CGRect(origin: CGPoint(x: barButtonSideInset + layout.safeInsets.left, y: barButtonSideInset), size: cancelButtonSize)
             if let view = cancelButton.view {
                 if view.superview == nil {
-                    self.view.addSubview(view)
+                    self.glassContainerView.contentView.addSubview(view)
                 }
                 view.bounds = CGRect(origin: .zero, size: cancelButtonFrame.size)
                 view.center = cancelButtonFrame.center
@@ -2634,7 +2643,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
             let moreButtonFrame = CGRect(origin: CGPoint(x: layout.size.width - moreButtonSize.width - barButtonSideInset - layout.safeInsets.right, y: barButtonSideInset), size: moreButtonSize)
             if let view = moreButton.view {
                 if view.superview == nil {
-                    self.view.addSubview(view)
+                    self.glassContainerView.contentView.addSubview(view)
                 }
                 view.bounds = CGRect(origin: .zero, size: moreButtonFrame.size)
                 view.center = moreButtonFrame.center

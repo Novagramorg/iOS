@@ -260,8 +260,18 @@ private final class GiftAuctionActiveBidsScreenComponent: Component {
                     guard let self else {
                         return
                     }
-                    self.auctionStates = auctionStates
+                    self.auctionStates = auctionStates.filter { state in
+                        if case .ongoing = state.auctionState {
+                            return true
+                        } else {
+                            return false
+                        }
+                    }
                     self.state?.updated(transition: .immediate)
+                    
+                    if self.auctionStates.isEmpty {
+                        self.environment?.controller()?.dismiss()
+                    }
                 })
                 
                 self.giftAuctionTimer = SwiftSignalKit.Timer(timeout: 0.5, repeat: true, completion: { [weak self] in
@@ -286,8 +296,12 @@ private final class GiftAuctionActiveBidsScreenComponent: Component {
             let currentTime = Int32(CFAbsoluteTimeGetCurrent() + kCFAbsoluteTimeIntervalSince1970)
             
             var contentHeight: CGFloat = 75.0
+            
+            var validKeys: Set<Int64> = Set()
             for auctionState in self.auctionStates {
                 let id = auctionState.gift.giftId
+                validKeys.insert(id)
+                
                 let itemView: ComponentView<Empty>
                 if let current = self.itemsViews[id] {
                     itemView = current
@@ -339,6 +353,22 @@ private final class GiftAuctionActiveBidsScreenComponent: Component {
                 contentHeight += 20.0
             }
             contentHeight -= 10.0
+            
+            var removeKeys: [Int64] = []
+            for (id, item) in self.itemsViews {
+                if !validKeys.contains(id) {
+                    removeKeys.append(id)
+                    
+                    if let itemView = item.view {
+                        transition.setAlpha(view: itemView, alpha: 0.0, completion: { _ in
+                            itemView.removeFromSuperview()
+                        })
+                    }
+                }
+            }
+            for id in removeKeys {
+                self.itemsViews.removeValue(forKey: id)
+            }
             
             if self.backgroundHandleView.image == nil {
                 self.backgroundHandleView.image = generateStretchableFilledCircleImage(diameter: 5.0, color: .white)?.withRenderingMode(.alwaysTemplate)
