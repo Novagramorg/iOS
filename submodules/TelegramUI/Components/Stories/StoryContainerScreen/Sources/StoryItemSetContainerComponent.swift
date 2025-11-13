@@ -3306,10 +3306,10 @@ public final class StoryItemSetContainerComponent: Component {
                             }
                         },
                         sendStarsAction: (isLiveStream && canSendStars) ? { [weak self] sourceView, isLongPress in
-                            guard let self else {
+                            guard let self, let component = self.component else {
                                 return
                             }
-                            if isLongPress {
+                            if isLongPress || component.isEmbeddedInCamera {
                                 self.sendMessageContext.openSendStars(view: self)
                             } else {
                                 self.sendMessageContext.performSendStars(view: self, buttonView: sourceView, count: 1, isFromExpandedView: false)
