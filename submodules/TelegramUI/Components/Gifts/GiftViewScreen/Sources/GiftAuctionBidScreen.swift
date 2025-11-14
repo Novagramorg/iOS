@@ -2209,7 +2209,7 @@ private final class GiftAuctionBidScreenComponent: Component {
                 var myBidDate = currentTime
                 var isBiddingUp = true
                 
-                if let currentAmount = giftAuctionState.myState.bidAmount, let currentDate = giftAuctionState.myState.bidDate, currentAmount <= myBidAmount {
+                if let currentAmount = giftAuctionState.myState.bidAmount, let currentDate = giftAuctionState.myState.bidDate, currentAmount >= myBidAmount {
                     myBidAmount = currentAmount
                     myBidDate = currentDate
                     isBiddingUp = false
