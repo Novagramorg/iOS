@@ -1809,8 +1809,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                 self.avatarNode.view.addSubview(avatarLiveBadge.outline)
                 self.avatarNode.view.addSubview(avatarLiveBadge.foreground)
                 
-                //TODO:localize
-                let liveString = NSAttributedString(string: "LIVE", font: Font.semibold(10.0), textColor: .white)
+                let liveString = NSAttributedString(string: item.presentationData.strings.Story_LiveBadge, font: Font.semibold(10.0), textColor: .white)
                 let liveStringBounds = liveString.boundingRect(with: CGSize(width: 100.0, height: 100.0), options: .usesLineFragmentOrigin, context: nil)
                 let liveBadgeSize = CGSize(width: ceil(liveStringBounds.width) + 4.0 * 2.0, height: ceil(liveStringBounds.height) + 2.0 * 2.0)
                 avatarLiveBadge.foreground.image = generateImage(liveBadgeSize, rotatedContext: { size, context in
@@ -4125,6 +4124,17 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                         let liveBadgeFrame = CGRect(origin: CGPoint(x: floor((avatarFrame.width - iconImage.size.width) * 0.5), y: avatarFrame.height + 5.0 - iconImage.size.height), size: iconImage.size)
                         transition.updateFrame(view: avatarLiveBadge.foreground, frame: liveBadgeFrame)
                         transition.updateFrame(view: avatarLiveBadge.outline, frame: liveBadgeFrame.insetBy(dx: -outlineInset, dy: -outlineInset))
+                        
+                        let effectiveBackgroundColor: UIColor
+                        if item.isPinned {
+                            effectiveBackgroundColor = item.presentationData.theme.chatList.pinnedItemBackgroundColor
+                        } else {
+                            effectiveBackgroundColor = item.presentationData.theme.chatList.itemBackgroundColor
+                        }
+                        
+                        let highlightAlpha = strongSelf.highlightedBackgroundNode.supernode == nil ? 0.0 : strongSelf.highlightedBackgroundNode.alpha
+                        let outlineColor = item.presentationData.theme.chatList.itemHighlightedBackgroundColor.mixedWith(effectiveBackgroundColor, alpha: 1.0 - highlightAlpha)
+                        transition.updateTintColor(view: avatarLiveBadge.outline, color: outlineColor)
                     }
                     
                     let onlineInlineNavigationFraction: CGFloat = item.interaction.inlineNavigationLocation?.progress ?? 0.0

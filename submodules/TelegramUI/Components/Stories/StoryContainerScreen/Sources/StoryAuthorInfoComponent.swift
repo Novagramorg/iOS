@@ -278,8 +278,7 @@ final class StoryAuthorInfoComponent: Component {
                     liveBadgeView = UIImageView()
                     self.liveBadgeView = liveBadgeView
                     self.addSubview(liveBadgeView)
-                    //TODO:localize
-                    let liveString = NSAttributedString(string: "LIVE", font: Font.semibold(10.0), textColor: .white)
+                    let liveString = NSAttributedString(string: component.strings.Story_LiveBadge, font: Font.semibold(10.0), textColor: .white)
                     let liveStringBounds = liveString.boundingRect(with: CGSize(width: 100.0, height: 100.0), options: .usesLineFragmentOrigin, context: nil)
                     let liveBadgeSize = CGSize(width: ceil(liveStringBounds.width) + 3.0 * 2.0, height: ceil(liveStringBounds.height) + 1.0 * 2.0)
                     liveBadgeView.image = generateImage(liveBadgeSize, rotatedContext: { size, context in

@@ -535,7 +535,7 @@ public final class StoryLiveChatMessageComponent: Component {
                 
                 if let paidStars = component.message.paidStars, let baseColor = GroupCallMessagesContext.getStarAmountParamMapping(params: LiveChatMessageParams(appConfig: component.context.currentAppConfiguration.with({ $0 })), value: paidStars).color {
                     backgroundView.tintColor = StoryLiveChatMessageComponent.getMessageColor(color: baseColor)
-                    backgroundView.alpha = component.layout.transparentBackground ? 0.7 : 1.0
+                    backgroundView.alpha = component.layout.transparentBackground ? 0.5 : 1.0
                 } else {
                     backgroundView.tintColor = UIColor(white: 0.0, alpha: 0.3)
                     backgroundView.alpha = 1.0

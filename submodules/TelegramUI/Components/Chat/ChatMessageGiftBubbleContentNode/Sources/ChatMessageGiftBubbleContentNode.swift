@@ -554,16 +554,27 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                                 buttonTitle = item.presentationData.strings.Notification_PremiumPrize_View
                                 hasServiceMessage = false
                             }
-                        case let .starGift(gift, convertStars, giftText, giftEntities, _, savedToProfile, converted, upgraded, canUpgrade, upgradeStars, isRefunded, isPrepaidUpgrade, _, channelPeerId, senderPeerId, _, _, _, _, _, _):
+                        case let .starGift(gift, convertStars, giftText, giftEntities, _, savedToProfile, converted, upgraded, canUpgrade, upgradeStars, isRefunded, isPrepaidUpgrade, _, channelPeerId, senderPeerId, _, _, _, _, _, toPeerId):
+                            var incoming = incoming
+                            var convertStars = convertStars
                             if case let .generic(gift) = gift {
+                                if gift.flags.contains(.isAuction) {
+                                    convertStars = nil
+                                }
                                 if let releasedBy = gift.releasedBy, let peer = item.message.peers[releasedBy], let addressName = peer.addressName {
                                     creatorButtonTitle = item.presentationData.strings.Notification_StarGift_ReleasedBy("**@\(addressName)**").string
                                 }
-                                
                                 isStarGift = true
-                                var authorName = item.message.author.flatMap { EnginePeer($0) }?.compactDisplayTitle ?? ""
-                                                                
-                                let isSelfGift = item.message.id.peerId == item.context.account.peerId
+                                
+                                var isSelfGift = item.message.id.peerId == item.context.account.peerId
+                                if item.message.id.peerId.isTelegramNotifications, let toPeerId {
+                                    if toPeerId == item.context.account.peerId {
+                                        isSelfGift = true
+                                    } else {
+                                        incoming = false
+                                    }
+                                }
+                                
                                 let isChannelGift = item.message.id.peerId.namespace == Namespaces.Peer.CloudChannel || channelPeerId != nil
                                 if isSelfGift {
                                     title = item.presentationData.strings.Notification_StarGift_Self_Title
@@ -572,10 +583,17 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                                         title = item.presentationData.strings.Gift_View_Unknown_Title
                                     } else {
                                         if let senderPeerId, let name = item.message.peers[senderPeerId].flatMap(EnginePeer.init)?.compactDisplayTitle {
-                                            authorName = name
-                                            title = item.presentationData.strings.Notification_StarGift_Title(authorName).string
-                                        } else if !incoming, let name = item.message.peers[item.message.id.peerId].flatMap(EnginePeer.init)?.compactDisplayTitle {
-                                            title = item.presentationData.strings.Notification_StarGift_TitleTo(name).string
+                                            title = item.presentationData.strings.Notification_StarGift_Title(name).string
+                                        } else if !incoming {
+                                            var recipientPeerId = item.message.id.peerId
+                                            if let toPeerId {
+                                                recipientPeerId = toPeerId
+                                            }
+                                            if let name = item.message.peers[recipientPeerId].flatMap(EnginePeer.init)?.compactDisplayTitle {
+                                                title = item.presentationData.strings.Notification_StarGift_TitleTo(name).string
+                                            } else {
+                                                title = item.presentationData.strings.Gift_View_Unknown_Title
+                                            }
                                         } else {
                                             title = item.presentationData.strings.Gift_View_Unknown_Title
                                         }
@@ -614,8 +632,12 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                                             }
                                         }
                                     } else {
+                                        var recipientPeerId = item.message.id.peerId
+                                        if let toPeerId {
+                                            recipientPeerId = toPeerId
+                                        }
                                         var peerName = ""
-                                        if let peer = item.message.peers[item.message.id.peerId] {
+                                        if let peer = item.message.peers[recipientPeerId] {
                                             peerName = EnginePeer(peer).compactDisplayTitle
                                         }
                                         if peerName.isEmpty {
@@ -637,6 +659,8 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                                                 if let starsRange = formattedString.ranges.last {
                                                     entities.append(MessageTextEntity(range: starsRange.range.lowerBound ..< starsRange.range.upperBound, type: .Bold))
                                                 }
+                                            } else {
+                                                text = item.presentationData.strings.Notification_StarGift_Subtitle_OtherNoConvert
                                             }
                                         }
                                     }

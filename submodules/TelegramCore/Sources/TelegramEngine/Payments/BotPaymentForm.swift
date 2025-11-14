@@ -20,7 +20,7 @@ public enum BotPaymentInvoiceSource {
     case starGiftResale(slug: String, toPeerId: EnginePeer.Id, ton: Bool)
     case starGiftPrepaidUpgrade(peerId: EnginePeer.Id, hash: String)
     case starGiftDropOriginalDetails(reference: StarGiftReference)
-    case starGiftAuctionBid(update: Bool, hideName: Bool, peerId: EnginePeer.Id, giftId: Int64, bidAmount: Int64, text: String?, entities: [MessageTextEntity]?)
+    case starGiftAuctionBid(update: Bool, hideName: Bool, peerId: EnginePeer.Id?, giftId: Int64, bidAmount: Int64, text: String?, entities: [MessageTextEntity]?)
 }
 
 public struct BotPaymentInvoiceFields: OptionSet {
@@ -426,22 +426,27 @@ func _internal_parseInputInvoice(transaction: Transaction, source: BotPaymentInv
         return reference.apiStarGiftReference(transaction: transaction).flatMap { .inputInvoiceStarGiftDropOriginalDetails(stargift: $0) }
         
     case let .starGiftAuctionBid(update, hideName, peerId, giftId, bidAmount, text, entities):
-        guard let peer = transaction.getPeer(peerId), let inputPeer = apiInputPeer(peer) else {
-            return nil
-        }
         var flags: Int32 = 0
-        if hideName {
-            flags |= (1 << 0)
-        }
+        var inputPeer: Api.InputPeer?
+        var message: Api.TextWithEntities?
         if update {
             flags |= (1 << 2)
         }
-        flags |= (1 << 3)
-        
-        var message: Api.TextWithEntities?
-        if let text, !text.isEmpty {
-            flags |= (1 << 1)
-            message = .textWithEntities(text: text, entities: entities.flatMap { apiEntitiesFromMessageTextEntities($0, associatedPeers: SimpleDictionary()) } ?? [])
+        if let peerId {
+            guard let peer = transaction.getPeer(peerId).flatMap(apiInputPeer) else {
+                return nil
+            }
+            flags |= (1 << 3)
+            inputPeer = peer
+            
+            if hideName {
+                flags |= (1 << 0)
+            }
+            
+            if let text, !text.isEmpty {
+                flags |= (1 << 1)
+                message = .textWithEntities(text: text, entities: entities.flatMap { apiEntitiesFromMessageTextEntities($0, associatedPeers: SimpleDictionary()) } ?? [])
+            }
         }
         return .inputInvoiceStarGiftAuctionBid(flags: flags, peer: inputPeer, giftId: giftId, bidAmount: bidAmount, message: message)
     }
