@@ -1599,11 +1599,13 @@ private final class GiftAuctionBidScreenComponent: Component {
                 controller?.present(
                     UndoOverlayController(
                         presentationData: presentationData,
-                        content: .actionSucceeded(
+                        content: .universalImage(
+                            image: generateTintedImage(image:  UIImage(bundleImageName: "Premium/Auction/BidMedium"), color: .white)!,
+                            size: nil,
                             title: title,
                             text: text,
-                            cancel: nil,
-                            destructive: false
+                            customUndoText: nil,
+                            timeout: nil
                         ),
                         position: .bottom,
                         action: { _ in return true }
