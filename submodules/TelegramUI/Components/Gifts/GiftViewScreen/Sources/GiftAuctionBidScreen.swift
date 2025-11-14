@@ -1962,7 +1962,9 @@ private final class GiftAuctionBidScreenComponent: Component {
                 }, queue: Queue.mainQueue())
                 self.giftAuctionTimer?.start()
                 
-                self.reloadAcquiredGifts()
+                Queue.mainQueue().justDispatch {
+                    self.reloadAcquiredGifts()
+                }
             }
             
             self.component = component
