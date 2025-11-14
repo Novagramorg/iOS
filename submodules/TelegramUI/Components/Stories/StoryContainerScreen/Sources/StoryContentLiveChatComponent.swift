@@ -752,7 +752,7 @@ final class StoryContentLiveChatComponent: Component {
                 containerSize: availableSize
             )
             let listFrame = CGRect(origin: CGPoint(), size: availableSize)
-            if let listView = self.list.view {
+            if let listView = self.list.view as? AsyncListComponent.View {
                 if listView.superview == nil {
                     listView.transform = CGAffineTransformMakeRotation(CGFloat.pi)
                     self.listContainer.addSubview(listView)
@@ -766,7 +766,20 @@ final class StoryContentLiveChatComponent: Component {
                 } else {
                     listAlpha = listItems.isEmpty ? 0.0 : 1.0
                 }
-                alphaTransition.setAlpha(view: listView, alpha: listAlpha)
+                if previousListIsEmpty && !listItems.isEmpty && !alphaTransition.animation.isImmediate {
+                    listView.alpha = 1.0
+                    var delay: Double = 0.0
+                    let delayIncrement: Double = 0.014
+                    for itemView in listView.visibleItemViews() {
+                        if let itemView = itemView as? StoryLiveChatMessageComponent.View {
+                            itemView.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2, delay: delay)
+                            itemView.layer.animateScale(from: 0.95, to: 1.0, duration: 0.2, delay: delay)
+                            delay += delayIncrement
+                        }
+                    }
+                } else {
+                    alphaTransition.setAlpha(view: listView, alpha: listAlpha)
+                }
             }
             
             transition.setFrame(view: self.listContainer, frame: CGRect(origin: CGPoint(), size: availableSize))
