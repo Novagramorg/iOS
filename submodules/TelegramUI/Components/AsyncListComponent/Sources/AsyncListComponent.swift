@@ -165,6 +165,34 @@ public final class AsyncListComponent: Component {
             return nil
         }
     }
+    
+    public final class VisibleItemViews: Sequence, IteratorProtocol {
+        private var index: Int = 0
+        private let itemViews: [UIView]
+        
+        init(view: AsyncListComponent.View) {
+            var itemViews: [(Int, UIView)] = []
+            view.listNode.forEachItemNode { itemNode in
+                if let itemNode = itemNode as? ListItemNodeImpl, let index = itemNode.index {
+                    if let itemContentView = itemNode.contentsView.view {
+                        itemViews.append((index, itemContentView))
+                    }
+                }
+            }
+            itemViews.sort(by: { $0.0 < $1.0 })
+            self.itemViews = itemViews.map(\.1)
+        }
+        
+        public func next() -> UIView? {
+            if self.index >= self.itemViews.count {
+                return nil
+            }
+            let index = self.index
+            self.index += 1
+            
+            return self.itemViews[index]
+        }
+    }
 
     public let externalState: ExternalState
     public let externalStateValue: ExternalState.Value
@@ -503,6 +531,10 @@ public final class AsyncListComponent: Component {
             }
             
             return nil
+        }
+        
+        public func visibleItemViews() -> VisibleItemViews {
+            return VisibleItemViews(view: self)
         }
         
         func update(component: AsyncListComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
