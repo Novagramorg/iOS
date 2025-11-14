@@ -2725,6 +2725,8 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
                     if didUpdateInvitedPeers {
                         self.invitedPeersValue = updatedInvitedPeers
                     }
+                    
+                    self.messagesContext?.updateSettings(minMessagePrice: stateValue.sendPaidMessageStars ?? 0)
                 }))
                 
                 self.isFailedEventDisposable?.dispose()

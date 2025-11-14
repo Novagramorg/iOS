@@ -1644,6 +1644,7 @@ public final class StoryItemSetContainerComponent: Component {
                             baseRate: component.storyItemSharedState.baseRate,
                             isVideoBuffering: visibleItem.isBuffering,
                             isCurrent: index == centralIndex,
+                            isUIHidden: component.hideUI,
                             preferHighQuality: component.slice.additionalPeerData.preferHighQualityStories,
                             isEmbeddedInCamera: component.isEmbeddedInCamera,
                             activateReaction: { [weak self] reactionView, reaction in
