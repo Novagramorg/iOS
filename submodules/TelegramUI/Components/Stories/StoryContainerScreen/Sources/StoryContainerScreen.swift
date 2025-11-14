@@ -952,9 +952,15 @@ private final class StoryContainerScreenComponent: Component {
                 } else {
                     let itemViewFrame = currentItemView.convert(currentItemView.bounds, to: self)
                     if location.x < itemViewFrame.minX {
-                        self.navigate(direction: .previous)
+                        if slice.previousItemId == nil && currentItemView.preventTapNavigation() {
+                        } else {
+                            self.navigate(direction: .previous)
+                        }
                     } else if location.x > itemViewFrame.maxX {
-                        self.navigate(direction: .next)
+                        if slice.nextItemId == nil && currentItemView.preventTapNavigation() {
+                        } else {
+                            self.navigate(direction: .next)
+                        }
                     }
                 }
             }
