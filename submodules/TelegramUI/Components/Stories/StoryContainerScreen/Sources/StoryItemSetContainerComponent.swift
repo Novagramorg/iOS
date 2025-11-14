@@ -3009,7 +3009,8 @@ public final class StoryItemSetContainerComponent: Component {
                             isEnabled: liveChatStateValue.areMessagesEnabled,
                             isExpanded: liveChatStateValue.isExpanded,
                             isEmpty: liveChatStateValue.isEmpty,
-                            hasUnseenMessages: liveChatStateValue.hasUnseenMessages
+                            hasUnseenMessages: liveChatStateValue.hasUnseenMessages,
+                            isUnifiedStream: liveChatStateValue.isUnifiedStream
                         )
                         starStats = liveChatStateValue.starStats.flatMap { starStats in
                             return MessageInputPanelComponent.StarStats(
