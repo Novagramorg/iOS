@@ -30,6 +30,7 @@ import UndoUI
 import GiftItemComponent
 import LottieComponent
 import EdgeEffect
+import ConfettiEffect
 
 private final class BadgeComponent: Component {
     let theme: PresentationTheme
@@ -1142,7 +1143,7 @@ private final class GiftAuctionBidScreenComponent: Component {
         private var giftAuctionTimer: SwiftSignalKit.Timer?
         private var peersMap: [EnginePeer.Id: EnginePeer] = [:]
         
-        private var giftAuctionAcquiredGifts: [GiftAuctionAcquiredGift] = []
+        private var giftAuctionAcquiredGifts: [GiftAuctionAcquiredGift]?
         private let giftAuctionAcquiredGiftsDisposable = MetaDisposable()
         
         private let actionButton = ComponentView<Empty>()
@@ -1324,7 +1325,13 @@ private final class GiftAuctionBidScreenComponent: Component {
                 guard let self else {
                     return
                 }
+                let previous = self.giftAuctionAcquiredGifts
                 self.giftAuctionAcquiredGifts = acquiredGifts
+                
+                if let previous, previous.count < acquiredGifts.count {
+                    self.resetSliderValue()
+                    self.addSubview(ConfettiView(frame: self.bounds))
+                }
                 self.state?.updated(transition: .easeInOut(duration: 0.25))
             }))
         }
@@ -1568,7 +1575,10 @@ private final class GiftAuctionBidScreenComponent: Component {
                 guard let self, let component = self.component else {
                     return
                 }
-                self.isLoading = false
+                Queue.mainQueue().after(0.1) {
+                    self.isLoading = false
+                    self.state?.updated()
+                }
                 
                 let newMaxValue = Int(Double(value) * 1.5)
                 var updatedAmount = self.amount.withMinAllowedRealValue(Int(value)).withRealValue(Int(value))
@@ -2260,6 +2270,7 @@ private final class GiftAuctionBidScreenComponent: Component {
             
             var perks: [([AnimatedTextComponent.Item], String)] = []
             
+            var minBidIsSmall = false
             var minBidAnimatedItems: [AnimatedTextComponent.Item] = []
             var untilNextDropAnimatedItems: [AnimatedTextComponent.Item] = []
             var dropsLeftAnimatedItems: [AnimatedTextComponent.Item] = []
@@ -2270,7 +2281,11 @@ private final class GiftAuctionBidScreenComponent: Component {
                     if let myMinBidAmmount = self.giftAuctionState?.myState.minBidAmount {
                         minBidAmount = myMinBidAmmount
                     }
-                    let minBidString = "# \(presentationStringsFormattedNumber(Int32(clamping: minBidAmount), environment.dateTimeFormat.groupingSeparator))"
+                    var minBidString = "# \(presentationStringsFormattedNumber(Int32(clamping: minBidAmount), environment.dateTimeFormat.groupingSeparator))"
+                    if minBidAmount > 999999 {
+                        minBidString = "# \(minBidAmount)"
+                        minBidIsSmall = true
+                    }
                     if let hashIndex = minBidString.firstIndex(of: "#") {
                         var prefix = String(minBidString[..<hashIndex])
                         if !prefix.isEmpty {
@@ -2337,7 +2352,7 @@ private final class GiftAuctionBidScreenComponent: Component {
                     let seconds = Int(dropTimeout % 60)
                     
                     if dropTimeout == 0, place <= giftsPerRound  {
-                        Queue.mainQueue().after(1.0, {
+                        Queue.mainQueue().after(1.5, {
                             self.reloadAcquiredGifts()
                         })
                     }
@@ -2391,6 +2406,7 @@ private final class GiftAuctionBidScreenComponent: Component {
                         gift: i == perks.count - 1 ? component.auctionContext.gift : nil,
                         title: perk.0,
                         subtitle: perk.1,
+                        small: i == 0 && minBidIsSmall,
                         theme: environment.theme
                     )),
                     environment: {},
@@ -2407,7 +2423,7 @@ private final class GiftAuctionBidScreenComponent: Component {
             contentHeight += perkHeight
             contentHeight += 24.0
             
-            if self.giftAuctionAcquiredGifts.count > 0, case let .generic(gift) = component.gift {
+            if let giftAuctionAcquiredGifts = self.giftAuctionAcquiredGifts, giftAuctionAcquiredGifts.count > 0, case let .generic(gift) = component.gift {
                 var myGiftsTransition = transition
                 let myGiftsSize = self.myGifts.update(
                     transition: .immediate,
@@ -2415,7 +2431,7 @@ private final class GiftAuctionBidScreenComponent: Component {
                         PlainButtonComponent(content: AnyComponent(
                             HStack([
                                 AnyComponentWithIdentity(id: "count", component: AnyComponent(
-                                    MultilineTextComponent(text: .plain(NSAttributedString(string: presentationStringsFormattedNumber(Int32(self.giftAuctionAcquiredGifts.count), environment.dateTimeFormat.groupingSeparator), font: Font.regular(17.0), textColor: environment.theme.actionSheet.controlAccentColor)))
+                                    MultilineTextComponent(text: .plain(NSAttributedString(string: presentationStringsFormattedNumber(Int32(giftAuctionAcquiredGifts.count), environment.dateTimeFormat.groupingSeparator), font: Font.regular(17.0), textColor: environment.theme.actionSheet.controlAccentColor)))
                                 )),
                                 AnyComponentWithIdentity(id: "spacing", component: AnyComponent(
                                     Rectangle(color: .clear, width: 8.0, height: 1.0)
@@ -2431,7 +2447,7 @@ private final class GiftAuctionBidScreenComponent: Component {
                                     )
                                 )),
                                 AnyComponentWithIdentity(id: "text", component: AnyComponent(
-                                    MultilineTextComponent(text: .plain(NSAttributedString(string: "  \(environment.strings.Gift_Auction_ItemsBought(Int32(self.giftAuctionAcquiredGifts.count)))", font: Font.regular(17.0), textColor: environment.theme.actionSheet.controlAccentColor)))
+                                    MultilineTextComponent(text: .plain(NSAttributedString(string: "  \(environment.strings.Gift_Auction_ItemsBought(Int32(giftAuctionAcquiredGifts.count)))", font: Font.regular(17.0), textColor: environment.theme.actionSheet.controlAccentColor)))
                                 )),
                                 AnyComponentWithIdentity(id: "arrow", component: AnyComponent(
                                     BundleIconComponent(name: "Chat/Context Menu/Arrow", tintColor: environment.theme.actionSheet.controlAccentColor)
@@ -2441,7 +2457,7 @@ private final class GiftAuctionBidScreenComponent: Component {
                             guard let self, let component = self.component else {
                                 return
                             }
-                            let giftController = GiftAuctionAcquiredScreen(context: component.context, gift: component.auctionContext.gift, acquiredGifts: self.giftAuctionAcquiredGifts)
+                            let giftController = GiftAuctionAcquiredScreen(context: component.context, gift: component.auctionContext.gift, acquiredGifts: self.giftAuctionAcquiredGifts ?? [])
                             self.environment?.controller()?.push(giftController)
                         }, animateScale: false)
                     ),
@@ -3194,6 +3210,7 @@ private final class AuctionStatComponent: Component {
     let gift: StarGift?
     let title: [AnimatedTextComponent.Item]
     let subtitle: String
+    let small: Bool
     let theme: PresentationTheme
     
     init(
@@ -3201,12 +3218,14 @@ private final class AuctionStatComponent: Component {
         gift: StarGift?,
         title: [AnimatedTextComponent.Item],
         subtitle: String,
+        small: Bool,
         theme: PresentationTheme
     ) {
         self.context = context
         self.gift = gift
         self.title = title
         self.subtitle = subtitle
+        self.small = small
         self.theme = theme
     }
     
@@ -3218,6 +3237,9 @@ private final class AuctionStatComponent: Component {
             return false
         }
         if lhs.subtitle != rhs.subtitle {
+            return false
+        }
+        if lhs.small != rhs.small {
             return false
         }
         if lhs.theme != rhs.theme {
@@ -3263,7 +3285,7 @@ private final class AuctionStatComponent: Component {
             let titleSize = self.title.update(
                 transition: .spring(duration: 0.2),
                 component: AnyComponent(AnimatedTextComponent(
-                    font: Font.with(size: 20.0, weight: .semibold, traits: .monospacedNumbers),
+                    font: Font.with(size: component.small ? 17.0 : 20.0, weight: .semibold, traits: .monospacedNumbers),
                     color: component.theme.list.itemPrimaryTextColor,
                     items: component.title,
                     noDelay: true,
