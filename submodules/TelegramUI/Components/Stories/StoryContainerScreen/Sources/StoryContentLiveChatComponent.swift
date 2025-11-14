@@ -34,6 +34,7 @@ final class StoryContentLiveChatComponent: Component {
     let theme: PresentationTheme
     let call: PresentationGroupCall
     let storyPeerId: EnginePeer.Id
+    let canManageMessagesFromPeers: Set<EnginePeer.Id>
     let insets: UIEdgeInsets
     let isEmbeddedInCamera: Bool
     let minPaidStars: Int?
@@ -46,6 +47,7 @@ final class StoryContentLiveChatComponent: Component {
         theme: PresentationTheme,
         call: PresentationGroupCall,
         storyPeerId: EnginePeer.Id,
+        canManageMessagesFromPeers: Set<EnginePeer.Id>,
         insets: UIEdgeInsets,
         isEmbeddedInCamera: Bool,
         minPaidStars: Int?,
@@ -57,6 +59,7 @@ final class StoryContentLiveChatComponent: Component {
         self.theme = theme
         self.call = call
         self.storyPeerId = storyPeerId
+        self.canManageMessagesFromPeers = canManageMessagesFromPeers
         self.insets = insets
         self.isEmbeddedInCamera = isEmbeddedInCamera
         self.minPaidStars = minPaidStars
@@ -80,6 +83,9 @@ final class StoryContentLiveChatComponent: Component {
             return false
         }
         if lhs.storyPeerId != rhs.storyPeerId {
+            return false
+        }
+        if lhs.canManageMessagesFromPeers != rhs.canManageMessagesFromPeers {
             return false
         }
         if lhs.insets != rhs.insets {
@@ -449,6 +455,10 @@ final class StoryContentLiveChatComponent: Component {
                     return
                 }
                 if message.author?.id == component.context.account.peerId {
+                    isMyMessage = true
+                    canDelete = true
+                }
+                if let author = message.author, component.canManageMessagesFromPeers.contains(author.id) {
                     isMyMessage = true
                     canDelete = true
                 }

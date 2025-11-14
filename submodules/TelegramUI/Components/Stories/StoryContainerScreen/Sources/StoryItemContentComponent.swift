@@ -40,10 +40,11 @@ final class StoryItemContentComponent: Component {
     let isUIHidden: Bool
     let preferHighQuality: Bool
     let isEmbeddedInCamera: Bool
+    let canManageLiveChatMessagesFromPeers: Set<EnginePeer.Id>
     let activateReaction: (UIView, MessageReaction.Reaction) -> Void
     let controller: () -> ViewController?
     
-    init(context: AccountContext, strings: PresentationStrings, peer: EnginePeer, item: EngineStoryItem, availableReactions: StoryAvailableReactions?, entityFiles: [MediaId: TelegramMediaFile], audioMode: StoryContentItem.AudioMode, baseRate: Double, isVideoBuffering: Bool, isCurrent: Bool, isUIHidden: Bool, preferHighQuality: Bool, isEmbeddedInCamera: Bool, activateReaction: @escaping (UIView, MessageReaction.Reaction) -> Void, controller: @escaping () -> ViewController?) {
+    init(context: AccountContext, strings: PresentationStrings, peer: EnginePeer, item: EngineStoryItem, availableReactions: StoryAvailableReactions?, entityFiles: [MediaId: TelegramMediaFile], audioMode: StoryContentItem.AudioMode, baseRate: Double, isVideoBuffering: Bool, isCurrent: Bool, isUIHidden: Bool, preferHighQuality: Bool, isEmbeddedInCamera: Bool, canManageLiveChatMessagesFromPeers: Set<EnginePeer.Id>, activateReaction: @escaping (UIView, MessageReaction.Reaction) -> Void, controller: @escaping () -> ViewController?) {
 		self.context = context
         self.strings = strings
         self.peer = peer
@@ -57,6 +58,7 @@ final class StoryItemContentComponent: Component {
         self.isUIHidden = isUIHidden
         self.preferHighQuality = preferHighQuality
         self.isEmbeddedInCamera = isEmbeddedInCamera
+        self.canManageLiveChatMessagesFromPeers = canManageLiveChatMessagesFromPeers
         self.activateReaction = activateReaction
         self.controller = controller
 	}
@@ -93,6 +95,9 @@ final class StoryItemContentComponent: Component {
             return false
         }
         if lhs.isEmbeddedInCamera != rhs.isEmbeddedInCamera {
+            return false
+        }
+        if lhs.canManageLiveChatMessagesFromPeers != rhs.canManageLiveChatMessagesFromPeers {
             return false
         }
         if lhs.preferHighQuality != rhs.preferHighQuality {
@@ -1013,6 +1018,7 @@ final class StoryItemContentComponent: Component {
                         theme: environment.theme,
                         call: mediaStreamCall,
                         storyPeerId: component.peer.id,
+                        canManageMessagesFromPeers: component.canManageLiveChatMessagesFromPeers,
                         insets: environment.containerInsets,
                         isEmbeddedInCamera: component.isEmbeddedInCamera,
                         minPaidStars: minPaidStars,

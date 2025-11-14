@@ -489,7 +489,7 @@ private final class PeerComponent: Component {
                     self.addSubview(crownIcon)
                 }
                 
-                if topPlace != previousComponent?.topPlace {
+                if topPlace != previousComponent?.topPlace || previousComponent?.color != component.color {
                     crownIcon.image = StoryLiveChatMessageComponent.generateCrownImage(place: topPlace, backgroundColor: component.color, foregroundColor: .white, borderColor: component.theme.actionSheet.opaqueItemBackgroundColor)
                 }
                 if let image = crownIcon.image {

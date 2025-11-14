@@ -1629,6 +1629,12 @@ public final class StoryItemSetContainerComponent: Component {
                             component.markAsSeen(id)
                         }
                     )
+                    
+                    var canManageLiveChatMessagesFromPeers = Set<EnginePeer.Id>()
+                    if let sendAsData = self.sendMessageContext.sendAsData {
+                        canManageLiveChatMessagesFromPeers.formUnion(sendAsData.availablePeers.map(\.peer.id))
+                    }
+                    
                     let _ = visibleItem.view.update(
                         transition: itemTransition.withUserData(StoryItemContentComponent.Hint(
                             synchronousLoad: index == centralIndex && itemLayout.contentScaleFraction <= 0.0001 && hintAllowSynchronousLoads
@@ -1647,6 +1653,7 @@ public final class StoryItemSetContainerComponent: Component {
                             isUIHidden: component.hideUI,
                             preferHighQuality: component.slice.additionalPeerData.preferHighQualityStories,
                             isEmbeddedInCamera: component.isEmbeddedInCamera,
+                            canManageLiveChatMessagesFromPeers: canManageLiveChatMessagesFromPeers,
                             activateReaction: { [weak self] reactionView, reaction in
                                 guard let self else {
                                     return
