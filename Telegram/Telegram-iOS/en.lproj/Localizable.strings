@@ -15208,6 +15208,7 @@ Error: %8$@";
 "Gift.Auction.Stars_any" = "%@ Stars";
 
 "Gift.AuctionBid.Title" = "Place a Bid";
+"Gift.AuctionBid.Subtitle" = "Top %@ bidders will win";
 "Gift.AuctionBid.MinimumBid" = "minimum bid";
 "Gift.AuctionBid.UntilNext" = "until next round";
 "Gift.AuctionBid.Left" = "left";
