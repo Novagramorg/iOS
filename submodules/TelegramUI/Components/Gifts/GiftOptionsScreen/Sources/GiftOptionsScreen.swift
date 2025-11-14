@@ -658,7 +658,11 @@ final class GiftOptionsScreenComponent: Component {
                         switch gift {
                         case let .generic(gift):
                             if gift.flags.contains(.isAuction) {
-                                subject = .starGift(gift: gift, price: "Join")
+                                var action = environment.strings.Gift_Options_Gift_JoinAuction
+                                if gift.availability?.remains == 0 {
+                                    action = environment.strings.Gift_Options_Gift_ViewAuction
+                                }
+                                subject = .starGift(gift: gift, price: action)
                             } else if let availability = gift.availability, availability.remains == 0, let minResaleStars = availability.minResaleStars {
                                 let priceString = presentationStringsFormattedNumber(Int32(minResaleStars), environment.dateTimeFormat.groupingSeparator)
                                 if let resaleConfiguration = self.resaleConfiguration, minResaleStars == resaleConfiguration.starGiftResaleMaxStarsAmount || availability.resale == 1 {
@@ -1823,6 +1827,14 @@ final class GiftOptionsScreenComponent: Component {
                 }
                 
                 var filteredStarGifts = starGifts
+                if peerId.namespace == Namespaces.Peer.CloudChannel {
+                    filteredStarGifts = filteredStarGifts?.filter { gift in
+                        if case let .generic(gift) = gift, gift.availability != nil {
+                            return false
+                        }
+                        return true
+                    }
+                }
                 if let disallowedGifts = self.disallowedGifts, !disallowedGifts.isEmpty {
                     filteredStarGifts = filteredStarGifts?.filter { gift in
                         if case let .generic(gift) = gift {

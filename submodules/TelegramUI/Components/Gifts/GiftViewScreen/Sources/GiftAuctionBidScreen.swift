@@ -912,7 +912,7 @@ private final class SliderBackgroundComponent: Component {
                     topBackgroundTextView.layer.animateSpring(from: NSValue(cgPoint: CGPoint(x: animateTopTextAdditionalX, y: 0.0)), to: NSValue(cgPoint: CGPoint()), keyPath: "position", duration: 0.3, damping: 100.0, additive: true)
                 }
                 
-                topForegroundTextView.isHidden = component.topCutoff == nil || topLineFrame.maxX + topTextSize.width + 20.0 > availableSize.width
+                topForegroundTextView.isHidden = component.topCutoff == nil || topTextFrame.maxX > availableSize.width - 28.0
                 topBackgroundTextView.isHidden = topForegroundTextView.isHidden
                 self.topBackgroundLine.isHidden = topX < 10.0
                 self.topForegroundLine.isHidden = self.topBackgroundLine.isHidden
@@ -1438,7 +1438,7 @@ private final class GiftAuctionBidScreenComponent: Component {
         
         private var isLoading = false
         private func commitBid(value: Int64) {
-            guard let component = self.component, case let .generic(gift) = component.gift, let controller = self.environment?.controller() else {
+            guard let component = self.component, let environment = self.environment, let controller = self.environment?.controller(), let balance = self.balance, case let .generic(gift) = component.gift else {
                 return
             }
             
@@ -1447,12 +1447,37 @@ private final class GiftAuctionBidScreenComponent: Component {
             if let peerId = self.giftAuctionState?.myState.bidPeerId {
                 myBidPeerId = peerId
             }
+            var requiredStars = value
             if let myBidAmount = self.giftAuctionState?.myState.bidAmount {
+                requiredStars = requiredStars - myBidAmount
                 isUpdate = true
                 if value == myBidAmount {
                     controller.dismiss()
                     return
                 }
+            }
+            
+            if balance < StarsAmount(value: requiredStars, nanos: 0) {
+                let _ = (component.context.engine.payments.starsTopUpOptions()
+                |> take(1)
+                |> deliverOnMainQueue).startStandalone(next: { [weak self] options in
+                    guard let self, let component = self.component else {
+                        return
+                    }
+                    guard let starsContext = component.context.starsContext else {
+                        return
+                    }
+                    
+                    let purchasePurpose: StarsPurchasePurpose = .generic
+                    let purchaseScreen = component.context.sharedContext.makeStarsPurchaseScreen(context: component.context, starsContext: starsContext, options: options, purpose: purchasePurpose, targetPeerId: nil, customTheme: environment.theme, completion: { result in
+                        let _ = result
+                        //TODO:release
+                    })
+                    self.environment?.controller()?.push(purchaseScreen)
+                    self.environment?.controller()?.dismiss()
+                })
+                
+                return
             }
             
             let giftsPerRounds = gift.auctionGiftsPerRound ?? 50
@@ -1795,7 +1820,7 @@ private final class GiftAuctionBidScreenComponent: Component {
             if case .regular = environment.metrics.widthClass {
                 fillingSize = min(availableSize.width, 414.0) - environment.safeInsets.left * 2.0
             } else {
-                fillingSize = min(availableSize.width, 428.0) - environment.safeInsets.left * 2.0
+                fillingSize = min(availableSize.width, environment.deviceMetrics.screenSize.width) - environment.safeInsets.left * 2.0
             }
             let rawSideInset = floor((availableSize.width - fillingSize) * 0.5)
             let sideInset: CGFloat = floor((availableSize.width - fillingSize) * 0.5) + 24.0
@@ -2019,7 +2044,7 @@ private final class GiftAuctionBidScreenComponent: Component {
             var sliderColor: UIColor = UIColor(rgb: 0xFFB10D)
             
             let liveStreamParams = LiveChatMessageParams(appConfig: component.context.currentAppConfiguration.with({ $0 }))
-            let color = GroupCallMessagesContext.getStarAmountParamMapping(params: liveStreamParams, value: Int64(self.amount.realValue)).color ?? GroupCallMessagesContext.Message.Color(rawValue: 0x985FDC)
+            let color = GroupCallMessagesContext.getStarAmountParamMapping(params: liveStreamParams, value: Int64(self.amount.realValue / 5)).color ?? GroupCallMessagesContext.Message.Color(rawValue: 0x985FDC)
             sliderColor = StoryLiveChatMessageComponent.getMessageColor(color: color)
             
             var giftsPerRound: Int32 = 50
@@ -2546,6 +2571,7 @@ private final class GiftAuctionBidScreenComponent: Component {
                     if let topPeerItemView = topPeerItem.view {
                         if topPeerItemView.superview == nil {
                             self.scrollContentView.addSubview(topPeerItemView)
+                            transition.animateAlpha(view: topPeerItemView, from: 0.0, to: 1.0)
                         }
                         topPeerItemView.frame = topPeerItemFrame
                     }
@@ -2635,33 +2661,7 @@ private final class GiftAuctionBidScreenComponent: Component {
                     isEnabled: true,
                     displaysProgress: self.isLoading,
                     action: { [weak self] in
-                        guard let self, let component = self.component else {
-                            return
-                        }
-                        guard let balance = self.balance else {
-                            return
-                        }
-                        
-                        if balance < StarsAmount(value: Int64(self.amount.realValue), nanos: 0) {
-                            let _ = (component.context.engine.payments.starsTopUpOptions()
-                            |> take(1)
-                            |> deliverOnMainQueue).startStandalone(next: { [weak self] options in
-                                guard let self, let component = self.component else {
-                                    return
-                                }
-                                guard let starsContext = component.context.starsContext else {
-                                    return
-                                }
-                                
-                                let purchasePurpose: StarsPurchasePurpose = .generic
-                                let purchaseScreen = component.context.sharedContext.makeStarsPurchaseScreen(context: component.context, starsContext: starsContext, options: options, purpose: purchasePurpose, targetPeerId: nil, customTheme: environment.theme, completion: { result in
-                                    let _ = result
-                                    //TODO:release
-                                })
-                                self.environment?.controller()?.push(purchaseScreen)
-                                self.environment?.controller()?.dismiss()
-                            })
-                            
+                        guard let self else {
                             return
                         }
                         self.commitBid(value: Int64(self.amount.realValue))

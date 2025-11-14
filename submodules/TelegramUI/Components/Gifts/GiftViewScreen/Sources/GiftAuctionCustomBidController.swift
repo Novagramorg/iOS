@@ -208,15 +208,17 @@ private final class GiftAuctionCustomBidAlertContentNode: AlertContentNode {
             environment: {},
             containerSize: CGSize(width: fieldWidth, height: 44.0)
         )
-        let amountFieldFrame = CGRect(origin: CGPoint(x: floor((resultWidth - fieldWidth) / 2.0), y: origin.y - 2.0), size: amountFieldSize)
+        var amountFieldFrame = CGRect(origin: CGPoint(x: floor((resultWidth - fieldWidth) / 2.0), y: origin.y - 2.0), size: amountFieldSize)
         if let amountFieldView = self.amountField.view {
             if amountFieldView.superview == nil {
+                amountFieldView.clipsToBounds = true
                 self.backgroundView.image = generateStretchableFilledCircleImage(diameter: 12.0, color: self.theme.actionSheet.inputHollowBackgroundColor, strokeColor: self.theme.actionSheet.inputBorderColor, strokeWidth: 1.0)
                 
                 self.view.addSubview(self.backgroundView)
                 self.view.addSubview(amountFieldView)
             }
             self.backgroundView.frame = amountFieldFrame.insetBy(dx: 7.0, dy: 9.0)
+            amountFieldFrame.size.width -= 14.0
             amountFieldView.frame = amountFieldFrame
         }
         

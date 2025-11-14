@@ -5640,10 +5640,13 @@ final class PeerCellComponent: Component {
             let avatarSize = CGSize(width: 22.0, height: 22.0)
             let spacing: CGFloat = 6.0
             
-            let peerName: String
+            var peerName: String
             let avatarOverride: AvatarNodeImageOverride?
             if let peerValue = component.peer {
                 peerName = peerValue.compactDisplayTitle
+                if peerName.count > 40 {
+                    peerName = "\(peerName.prefix(40))…"
+                }
                 avatarOverride = nil
             } else {
                 peerName = component.strings.Gift_View_HiddenName
