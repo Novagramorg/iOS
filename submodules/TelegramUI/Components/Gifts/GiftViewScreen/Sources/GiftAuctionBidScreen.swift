@@ -362,13 +362,13 @@ private final class BadgeComponent: Component {
 private final class PeerPlaceComponent: Component {
     let theme: PresentationTheme
     let color: UIColor
-    let place: Int32
+    let place: Int32?
     let groupingSeparator: String
     
     init(
         theme: PresentationTheme,
         color: UIColor,
-        place: Int32,
+        place: Int32?,
         groupingSeparator: String
     ) {
         self.theme = theme
@@ -414,9 +414,9 @@ private final class PeerPlaceComponent: Component {
             
             let textColor: UIColor
             let backgroundColors: [UIColor]?
-            if component.place < 4 {
+            if let place = component.place, place < 4 {
                 textColor = .white
-                switch component.place {
+                switch place {
                 case 1:
                     backgroundColors = [UIColor(rgb: 0xffa901), UIColor(rgb: 0xffcd3b)]
                 case 2:
@@ -446,11 +446,21 @@ private final class PeerPlaceComponent: Component {
             let backgroundFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((availableSize.width - backgroundSize.width) * 0.5), y: floorToScreenPixels((availableSize.height - backgroundSize.height) * 0.5)), size: backgroundSize)
             self.background.frame = backgroundFrame
             
+            var placeString: String
+            if let place = component.place {
+                placeString = presentationStringsFormattedNumber(place, component.groupingSeparator)
+                if place >= 100 {
+                    placeString = "\(placeString)+"
+                }
+            } else {
+                placeString = "–"
+            }
+            
             let labelSize = self.label.update(
                 transition: .immediate,
-                component: AnyComponent(MultilineTextComponent(text: .plain(NSAttributedString(string: presentationStringsFormattedNumber(component.place, component.groupingSeparator), font: Font.regular(17.0), textColor: textColor)))),
+                component: AnyComponent(MultilineTextComponent(text: .plain(NSAttributedString(string: placeString, font: Font.with(size: 17.0, traits: .monospacedNumbers), textColor: textColor)))),
                 environment: {},
-                containerSize: CGSize(width: 40.0, height: 40.0)
+                containerSize: CGSize(width: 60.0, height: 40.0)
             )
             let labelFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((availableSize.width - labelSize.width) * 0.5), y: floorToScreenPixels((availableSize.height - labelSize.height) * 0.5)), size: labelSize)
             if let labelView = self.label.view {
@@ -477,6 +487,7 @@ private final class PeerComponent: Component {
     enum Status {
         case winning
         case outbid
+        case returned
     }
     
     let context: AccountContext
@@ -596,7 +607,7 @@ private final class PeerComponent: Component {
             switch component.status {
             case .winning:
                 color = component.theme.list.itemDisclosureActions.constructive.fillColor
-            case .outbid:
+            case .outbid, .returned:
                 color = component.theme.list.itemDestructiveColor
             default:
                 break
@@ -606,7 +617,7 @@ private final class PeerComponent: Component {
             let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
             let placeSize = self.place.update(
                 transition: .immediate,
-                component: AnyComponent(PeerPlaceComponent(theme: component.theme, color: color, place: component.place, groupingSeparator: presentationData.dateTimeFormat.groupingSeparator)),
+                component: AnyComponent(PeerPlaceComponent(theme: component.theme, color: color, place: component.status == .returned ? nil : component.place, groupingSeparator: presentationData.dateTimeFormat.groupingSeparator)),
                 environment: {},
                 containerSize: CGSize(width: 40.0, height: 40.0)
             )
@@ -1309,17 +1320,10 @@ private final class GiftAuctionBidScreenComponent: Component {
             }
         }
         
-        private var lastAcquiredGiftsReloadTime: Double?
-        private func reloadAcquiredGifts() {
+        private func loadAcquiredGifts() {
             guard let component = self.component, case let .generic(gift) = component.gift else {
                 return
             }
-            
-            let currentTime = CFAbsoluteTimeGetCurrent()
-            if let lastAcquiredGiftsReloadTime = self.lastAcquiredGiftsReloadTime, currentTime < lastAcquiredGiftsReloadTime + 5 {
-                return
-            }
-            self.lastAcquiredGiftsReloadTime = currentTime
             self.giftAuctionAcquiredGiftsDisposable.set((component.context.engine.payments.getGiftAuctionAcquiredGifts(giftId: gift.id)
             |> deliverOnMainQueue).startStrict(next: { [weak self] acquiredGifts in
                 guard let self else {
@@ -1557,14 +1561,7 @@ private final class GiftAuctionBidScreenComponent: Component {
             
             let signal = BotCheckoutController.InputData.fetch(context: component.context, source: source)
             |> `catch` { error -> Signal<BotCheckoutController.InputData, SendBotPaymentFormError> in
-                switch error {
-                case .disallowedStarGifts:
-                    return .fail(.disallowedStarGift)
-                case .starGiftsUserLimit:
-                    return .fail(.starGiftUserLimit)
-                default:
-                    return .fail(.generic)
-                }
+                return .fail(.generic)
             }
             |> mapToSignal { inputData -> Signal<SendBotPaymentResult, SendBotPaymentFormError> in
                 return component.context.engine.payments.sendStarsPaymentForm(formId: inputData.form.id, source: source)
@@ -1612,6 +1609,18 @@ private final class GiftAuctionBidScreenComponent: Component {
                 )
                                 
                 component.context.starsContext?.load(force: true)
+            }, error: { [weak self] _ in
+                guard let self else {
+                    return
+                }
+                
+                self.component?.context.starsContext?.load(force: true)
+                self.resetSliderValue()
+                
+                Queue.mainQueue().after(0.1) {
+                    self.isLoading = false
+                    self.state?.updated()
+                }
             })
         }
         
@@ -1926,13 +1935,15 @@ private final class GiftAuctionBidScreenComponent: Component {
                 }
                 
                 let context = component.context
+                let auctionContext = component.auctionContext
                 self.giftAuctionDisposable = (component.auctionContext.state
-                |> deliverOnMainQueue).start(next: { [weak self] state in
+                |> deliverOnMainQueue).start(next: { [weak self] auctionState in
                     guard let self else {
                         return
                     }
                     let isFirstTime = self.giftAuctionState == nil
-                    self.giftAuctionState = state
+                    let previousState = self.giftAuctionState
+                    self.giftAuctionState = auctionState
                     
                     var peerIds: [EnginePeer.Id] = []
                     var transition = ComponentTransition.spring(duration: 0.4)
@@ -1964,6 +1975,18 @@ private final class GiftAuctionBidScreenComponent: Component {
                         })
                     }
                     self.state?.updated(transition: transition)
+                    
+                    if let acquiredCount = auctionState?.myState.acquiredCount, acquiredCount > (previousState?.myState.acquiredCount ?? 0) {
+                        self.loadAcquiredGifts()
+                    }
+                    
+                    if case .finished = auctionState?.auctionState, let controller = self.environment?.controller() {
+                        if let navigationController = controller.navigationController as? NavigationController {
+                            controller.dismiss()
+                            let auctionController = context.sharedContext.makeGiftAuctionViewScreen(context: context, auctionContext: auctionContext, completion: {})
+                            navigationController.pushViewController(auctionController)
+                        }
+                    }
                 })
                 
                 self.giftAuctionTimer = SwiftSignalKit.Timer(timeout: 0.5, repeat: true, completion: { [weak self] in
@@ -1971,10 +1994,6 @@ private final class GiftAuctionBidScreenComponent: Component {
                     self?.state?.updated()
                 }, queue: Queue.mainQueue())
                 self.giftAuctionTimer?.start()
-                
-                Queue.mainQueue().justDispatch {
-                    self.reloadAcquiredGifts()
-                }
             }
             
             self.component = component
@@ -2224,7 +2243,7 @@ private final class GiftAuctionBidScreenComponent: Component {
                     myBidDate = currentDate
                     isBiddingUp = false
                 }
-                
+                                
                 place = giftAuctionState.getPlace(myBid: myBidAmount, myBidDate: myBidDate) ?? 1
                                     
                 var bidTitle: String
@@ -2233,6 +2252,10 @@ private final class GiftAuctionBidScreenComponent: Component {
                 if isBiddingUp {
                     bidTitleColor = environment.theme.list.itemSecondaryTextColor
                     bidTitle = environment.strings.Gift_AuctionBid_BidPreview
+                } else if giftAuctionState.myState.isReturned {
+                    bidTitle = environment.strings.Gift_AuctionBid_Outbid
+                    bidTitleColor = environment.theme.list.itemDestructiveColor
+                    bidStatus = .returned
                 } else if place > giftsPerRound {
                     bidTitle = environment.strings.Gift_AuctionBid_Outbid
                     bidTitleColor = environment.theme.list.itemDestructiveColor
@@ -2351,12 +2374,6 @@ private final class GiftAuctionBidScreenComponent: Component {
                     let minutes = Int(dropTimeout / 60)
                     let seconds = Int(dropTimeout % 60)
                     
-                    if dropTimeout == 0, place <= giftsPerRound  {
-                        Queue.mainQueue().after(1.5, {
-                            self.reloadAcquiredGifts()
-                        })
-                    }
-                    
                     untilNextDropAnimatedItems.append(AnimatedTextComponent.Item(id: "m", content: .number(minutes, minDigits: 2)))
                     untilNextDropAnimatedItems.append(AnimatedTextComponent.Item(id: "colon", content: .text(":")))
                     untilNextDropAnimatedItems.append(AnimatedTextComponent.Item(id: "s", content: .number(seconds, minDigits: 2)))
@@ -2423,7 +2440,8 @@ private final class GiftAuctionBidScreenComponent: Component {
             contentHeight += perkHeight
             contentHeight += 24.0
             
-            if let giftAuctionAcquiredGifts = self.giftAuctionAcquiredGifts, giftAuctionAcquiredGifts.count > 0, case let .generic(gift) = component.gift {
+            let acquiredGiftsCount = self.giftAuctionState?.myState.acquiredCount ?? 0
+            if acquiredGiftsCount > 0, case let .generic(gift) = component.gift {
                 var myGiftsTransition = transition
                 let myGiftsSize = self.myGifts.update(
                     transition: .immediate,
@@ -2431,7 +2449,7 @@ private final class GiftAuctionBidScreenComponent: Component {
                         PlainButtonComponent(content: AnyComponent(
                             HStack([
                                 AnyComponentWithIdentity(id: "count", component: AnyComponent(
-                                    MultilineTextComponent(text: .plain(NSAttributedString(string: presentationStringsFormattedNumber(Int32(giftAuctionAcquiredGifts.count), environment.dateTimeFormat.groupingSeparator), font: Font.regular(17.0), textColor: environment.theme.actionSheet.controlAccentColor)))
+                                    MultilineTextComponent(text: .plain(NSAttributedString(string: presentationStringsFormattedNumber(Int32(acquiredGiftsCount), environment.dateTimeFormat.groupingSeparator), font: Font.regular(17.0), textColor: environment.theme.actionSheet.controlAccentColor)))
                                 )),
                                 AnyComponentWithIdentity(id: "spacing", component: AnyComponent(
                                     Rectangle(color: .clear, width: 8.0, height: 1.0)
@@ -2447,7 +2465,7 @@ private final class GiftAuctionBidScreenComponent: Component {
                                     )
                                 )),
                                 AnyComponentWithIdentity(id: "text", component: AnyComponent(
-                                    MultilineTextComponent(text: .plain(NSAttributedString(string: "  \(environment.strings.Gift_Auction_ItemsBought(Int32(giftAuctionAcquiredGifts.count)))", font: Font.regular(17.0), textColor: environment.theme.actionSheet.controlAccentColor)))
+                                    MultilineTextComponent(text: .plain(NSAttributedString(string: "  \(environment.strings.Gift_Auction_ItemsBought(Int32(acquiredGiftsCount)))", font: Font.regular(17.0), textColor: environment.theme.actionSheet.controlAccentColor)))
                                 )),
                                 AnyComponentWithIdentity(id: "arrow", component: AnyComponent(
                                     BundleIconComponent(name: "Chat/Context Menu/Arrow", tintColor: environment.theme.actionSheet.controlAccentColor)
