@@ -499,7 +499,7 @@ public final class ChatMessageWebpageBubbleContentNode: ChatMessageBubbleContent
                                     break
                                 }
                             }
-                            title = item.presentationData.strings.Chat_Auction
+                            subtitle = NSAttributedString(string: item.presentationData.strings.Chat_Auction, font: titleFont)
                             text = nil
                             actionTitle = hasEnded ? item.presentationData.strings.Chat_Auction_ViewResults : item.presentationData.strings.Chat_Auction_Join
                             actionIcon = !hasEnded ? .bid : nil
