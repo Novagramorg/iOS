@@ -2932,8 +2932,7 @@ public final class StoryItemSetContainerComponent: Component {
                     let dateTimeFormat = component.context.sharedContext.currentPresentationData.with { $0 }.dateTimeFormat
                     inputPlaceholder = .plain(component.strings.Chat_InputTextPaidMessagePlaceholder(" # \(presentationStringsFormattedNumber(Int32(sendPaidMessageStars.value), dateTimeFormat.groupingSeparator))").string)
                 } else if case .liveStream = component.slice.item.storyItem.media {
-                    //TODO:localize
-                    inputPlaceholder = .plain("Comment")
+                    inputPlaceholder = .plain(component.strings.LiveStream_InputPlaceholder)
                 } else {
                     inputPlaceholder = .plain(isGroup ? component.strings.Story_InputPlaceholderReplyInGroup : component.strings.Story_InputPlaceholderReplyPrivately)
                 }
@@ -3306,10 +3305,10 @@ public final class StoryItemSetContainerComponent: Component {
                             }
                         },
                         sendStarsAction: (isLiveStream && canSendStars) ? { [weak self] sourceView, isLongPress in
-                            guard let self else {
+                            guard let self, let component = self.component else {
                                 return
                             }
-                            if isLongPress {
+                            if isLongPress || component.isEmbeddedInCamera {
                                 self.sendMessageContext.openSendStars(view: self)
                             } else {
                                 self.sendMessageContext.performSendStars(view: self, buttonView: sourceView, count: 1, isFromExpandedView: false)
@@ -6518,8 +6517,7 @@ public final class StoryItemSetContainerComponent: Component {
                 })))
                 
                 if isLiveStream {
-                    //TODO:localize
-                    items.append(.action(ContextMenuActionItem(text: "Minimize", icon: { theme in
+                    items.append(.action(ContextMenuActionItem(text: component.strings.Story_ContextMenuPip, icon: { theme in
                         return generateTintedImage(image: UIImage(bundleImageName: "Call/pip"), color: theme.contextMenu.primaryColor)
                     }, action: { [weak self] _, a in
                         a(.default)
@@ -6661,8 +6659,7 @@ public final class StoryItemSetContainerComponent: Component {
                 }
                 
                 if case .liveStream = component.slice.item.storyItem.media {
-                    //TODO:localize
-                    items.append(.action(ContextMenuActionItem(text: "Live Settings", icon: { theme in
+                    items.append(.action(ContextMenuActionItem(text: component.strings.Story_ContextMenuLiveSettings, icon: { theme in
                         return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Settings"), color: theme.contextMenu.primaryColor)
                     }, action: { [weak self] _, a in
                         a(.default)
@@ -6852,8 +6849,7 @@ public final class StoryItemSetContainerComponent: Component {
                 }
                 
                 if isLiveStream {
-                    //TODO:localize
-                    items.append(.action(ContextMenuActionItem(text: "Minimize", icon: { theme in
+                    items.append(.action(ContextMenuActionItem(text: component.strings.Story_ContextMenuPip, icon: { theme in
                         return generateTintedImage(image: UIImage(bundleImageName: "Call/pip"), color: theme.contextMenu.primaryColor)
                     }, action: { [weak self] _, a in
                         a(.default)
@@ -6964,8 +6960,7 @@ public final class StoryItemSetContainerComponent: Component {
                 })))
                 
                 if channel.hasPermission(.postStories) {
-                    //TODO:localize
-                    items.append(.action(ContextMenuActionItem(text: "Live Settings", icon: { theme in
+                    items.append(.action(ContextMenuActionItem(text: component.strings.Story_ContextMenuLiveSettings, icon: { theme in
                         return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Settings"), color: theme.contextMenu.primaryColor)
                     }, action: { [weak self] _, a in
                         a(.default)
@@ -7337,8 +7332,7 @@ public final class StoryItemSetContainerComponent: Component {
                     }
                     
                     if isLiveStream {
-                        //TODO:localize
-                        items.append(.action(ContextMenuActionItem(text: "Minimize", icon: { theme in
+                        items.append(.action(ContextMenuActionItem(text: component.strings.Story_ContextMenuPip, icon: { theme in
                             return generateTintedImage(image: UIImage(bundleImageName: "Call/pip"), color: theme.contextMenu.primaryColor)
                         }, action: { [weak self] _, a in
                             a(.default)

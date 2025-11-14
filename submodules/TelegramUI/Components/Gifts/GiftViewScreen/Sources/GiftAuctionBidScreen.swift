@@ -229,7 +229,7 @@ private final class BadgeComponent: Component {
             self.badgeForeground.bounds = CGRect(origin: CGPoint(), size: CGSize(width: 600.0, height: badgeFullSize.height + 10.0))
     
             self.badgeIcon.frame = CGRect(x: 10.0, y: 9.0, width: 30.0, height: 30.0)
-            self.badgeLabelMaskView.frame = CGRect(x: 0.0, y: 0.0, width: 100.0, height: 36.0)
+            self.badgeLabelMaskView.frame = CGRect(x: 0.0, y: 0.0, width: 140.0, height: 36.0)
             
             self.badgeView.alpha = 1.0
             
@@ -940,17 +940,26 @@ private final class GiftAuctionBidScreenComponent: Component {
     
     let context: AccountContext
     let toPeerId: EnginePeer.Id
+    let text: String?
+    let entities: [MessageTextEntity]?
+    let hideName: Bool
     let gift: StarGift
     let auctionContext: GiftAuctionContext
     
     init(
         context: AccountContext,
         toPeerId: EnginePeer.Id,
+        text: String?,
+        entities: [MessageTextEntity]?,
+        hideName: Bool,
         gift: StarGift,
         auctionContext: GiftAuctionContext
     ) {
         self.context = context
         self.toPeerId = toPeerId
+        self.text = text
+        self.entities = entities
+        self.hideName = hideName
         self.gift = gift
         self.auctionContext = auctionContext
     }
@@ -994,7 +1003,7 @@ private final class GiftAuctionBidScreenComponent: Component {
         
         private static func makeSliderSteps(minRealValue: Int, maxRealValue: Int, isLogarithmic: Bool) -> [Int] {
             if isLogarithmic {
-                var sliderSteps: [Int] = [1, 10, 50, 100, 500, 1_000, 2_000, 5_000, 7_500, 15_000, 20_000, 30_000, 40_000, 50_000]
+                var sliderSteps: [Int] = [100, 500, 1_000, 2_000, 5_000, 10_000, 25_000, 50_000, 100_000, 500_000]
                 sliderSteps.removeAll(where: { $0 <= minRealValue })
                 sliderSteps.insert(minRealValue, at: 0)
                 sliderSteps.removeAll(where: { $0 >= maxRealValue })
@@ -1073,6 +1082,17 @@ private final class GiftAuctionBidScreenComponent: Component {
         
         func withMaxRealValue(_ maxRealValue: Int) -> Amount {
             return Amount(realValue: self.realValue, minRealValue: self.minRealValue, minAllowedRealValue: self.minAllowedRealValue, maxRealValue: maxRealValue, maxSliderValue: self.maxSliderValue, isLogarithmic: self.isLogarithmic)
+        }
+        
+        func cutoffSliderValue(for cutoffRealValue: Int) -> Int {
+            let clampedReal = max(self.minRealValue, min(cutoffRealValue, self.maxRealValue))
+            
+            return Amount.remapValueToSlider(
+                realValue: clampedReal,
+                minAllowedRealValue: self.minAllowedRealValue,
+                maxSliderValue: self.maxSliderValue,
+                steps: self.sliderSteps
+            )
         }
     }
         
@@ -1318,6 +1338,7 @@ private final class GiftAuctionBidScreenComponent: Component {
             if let actionButtonView = self.actionButton.view {
                 actionButtonView.layer.animatePosition(from: CGPoint(x: 0.0, y: animateOffset), to: CGPoint(), duration: 0.5, timingFunction: kCAMediaTimingFunctionSpring, additive: true)
             }
+            self.bottomEdgeEffectView.layer.animatePosition(from: CGPoint(x: 0.0, y: animateOffset), to: CGPoint(), duration: 0.5, timingFunction: kCAMediaTimingFunctionSpring, additive: true)
         }
         
         func animateOut(completion: @escaping () -> Void) {
@@ -1332,7 +1353,8 @@ private final class GiftAuctionBidScreenComponent: Component {
             if let actionButtonView = self.actionButton.view {
                 actionButtonView.layer.animatePosition(from: CGPoint(), to: CGPoint(x: 0.0, y: animateOffset), duration: 0.3, timingFunction: CAMediaTimingFunctionName.easeInEaseOut.rawValue, removeOnCompletion: false, additive: true)
             }
-            
+            self.bottomEdgeEffectView.layer.animatePosition(from: CGPoint(), to: CGPoint(x: 0.0, y: animateOffset), duration: 0.3, timingFunction: CAMediaTimingFunctionName.easeInEaseOut.rawValue, removeOnCompletion: false, additive: true)
+          
             if let view = self.balanceOverlay.view {
                 view.layer.animateScale(from: 1.0, to: 0.8, duration: 0.4, removeOnCompletion: false)
                 view.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.3, removeOnCompletion: false)
@@ -1421,6 +1443,10 @@ private final class GiftAuctionBidScreenComponent: Component {
             }
             
             var isUpdate = false
+            var myBidPeerId: EnginePeer.Id?
+            if let peerId = self.giftAuctionState?.myState.bidPeerId {
+                myBidPeerId = peerId
+            }
             if let myBidAmount = self.giftAuctionState?.myState.bidAmount {
                 isUpdate = true
                 if value == myBidAmount {
@@ -1454,14 +1480,19 @@ private final class GiftAuctionBidScreenComponent: Component {
             self.isLoading = true
             self.state?.updated()
             
+            var peerId: EnginePeer.Id?
+            if !isUpdate || (myBidPeerId != nil && myBidPeerId != component.toPeerId) {
+                peerId = component.toPeerId
+            }
+            
             let source: BotPaymentInvoiceSource = .starGiftAuctionBid(
                update: isUpdate,
-               hideName: false,
-               peerId: component.toPeerId,
+               hideName: peerId != nil ? component.hideName : false,
+               peerId: peerId,
                giftId: gift.id,
                bidAmount: value,
-               text: nil,
-               entities: nil
+               text: peerId != nil ? component.text : nil,
+               entities: peerId != nil ? component.entities : nil
            )
             
             let signal = BotCheckoutController.InputData.fetch(context: component.context, source: source)
@@ -1487,7 +1518,7 @@ private final class GiftAuctionBidScreenComponent: Component {
                 self.isLoading = false
                 
                 let newMaxValue = Int(Double(value) * 1.5)
-                var updatedAmount = self.amount.withMinAllowedRealValue(Int(value))
+                var updatedAmount = self.amount.withMinAllowedRealValue(Int(value)).withRealValue(Int(value))
                 if newMaxValue > self.amount.maxRealValue {
                     updatedAmount = updatedAmount.withMaxRealValue(newMaxValue)
                 }
@@ -1680,26 +1711,73 @@ private final class GiftAuctionBidScreenComponent: Component {
         }
         
         func presentCustomBidController() {
-            guard let component = self.component else {
+            guard let component = self.component, let environment = self.environment, case let .generic(gift) = component.gift else {
                 return
             }
-            if "".isEmpty {
+            
+            guard let auctionState = self.giftAuctionState else {
                 return
             }
+            
+            var minBidAmount: Int64 = 100
+            if case let .ongoing(_, _, _, auctionMinBidAmount, _, _, _, _, _, _) = auctionState.auctionState {
+                minBidAmount = auctionMinBidAmount
+                if let myMinBidAmount = auctionState.myState.minBidAmount {
+                    minBidAmount = myMinBidAmount
+                }
+            }
+            
+            
+            let giftsPerRounds = gift.auctionGiftsPerRound ?? 50
+            
             let controller = giftAuctionCustomBidController(
                 context: component.context,
-                title: "Place a Custom Bid",
-                text: "Description",
-                placeholder: "Bid",
-                value: 100,
+                title: environment.strings.Gift_AuctionBid_CustomBid_Title,
+                text: environment.strings.Gift_AuctionBid_CustomBid_Text("\(giftsPerRounds)").string,
+                placeholder: environment.strings.Gift_AuctionBid_CustomBid_Placeholder,
+                action: environment.strings.Gift_AuctionBid_CustomBid_Done,
+                minValue: minBidAmount,
+                value: minBidAmount,
                 apply: { [weak self] value in
                     guard let self else {
                         return
                     }
                     self.commitBid(value: value)
+                },
+                cancel: { [weak self] in
+                    guard let self else {
+                        return
+                    }
+                    self.resetSliderValue()
+                    self.state?.updated()
                 }
             )
             self.environment?.controller()?.present(controller, in: .window(.root))
+        }
+        
+        func resetSliderValue() {
+            guard let state = self.giftAuctionState else {
+                return
+            }
+            var minBidAmount: Int64 = 100
+            var maxBidAmount: Int64 = 50000
+            if case let .ongoing(_, _, _, auctionMinBidAmount, bidLevels, _, _, _, _, _) = state.auctionState {
+                minBidAmount = auctionMinBidAmount
+                if let firstLevel = bidLevels.first(where: { $0.position == 1 }) {
+                    maxBidAmount = max(maxBidAmount, Int64(Double(firstLevel.amount) * 1.5))
+                }
+            }
+            var currentValue = max(Int(minBidAmount), 100)
+            if let myBidAmount = state.myState.bidAmount {
+                currentValue = Int(myBidAmount)
+            }
+            
+            var minAllowedRealValue: Int64 = minBidAmount
+            if let myBidAmount = state.myState.bidAmount {
+                minAllowedRealValue = myBidAmount
+            }
+            
+            self.amount = Amount(realValue: currentValue, minRealValue: Int(minBidAmount), minAllowedRealValue: Int(minAllowedRealValue), maxRealValue: Int(maxBidAmount), maxSliderValue: 999, isLogarithmic: true)
         }
         
         func update(component: GiftAuctionBidScreenComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<ViewControllerComponentContainer.Environment>, transition: ComponentTransition) -> CGSize {
@@ -1794,38 +1872,11 @@ private final class GiftAuctionBidScreenComponent: Component {
                     self.giftAuctionState = state
                     
                     var peerIds: [EnginePeer.Id] = []
-                    if case let .ongoing(_, _, _, _, _, topBidders, _, _, _, _) = state?.auctionState {
-                        for bidder in topBidders {
-                            if self.peersMap[bidder] == nil {
-                                peerIds.append(bidder)
-                            }
-                        }
-                    }
-                    
                     var transition = ComponentTransition.spring(duration: 0.4)
 
                     if isFirstTime {
                         peerIds.append(context.account.peerId)
-                        
-                        var minBidAmount: Int64 = 100
-                        var maxBidAmount: Int64 = 50000
-                        if case let .ongoing(_, _, _, auctionMinBidAmount, bidLevels, _, _, _, _, _) = state?.auctionState {
-                            minBidAmount = auctionMinBidAmount
-                            if let firstLevel = bidLevels.first(where: { $0.position == 1 }) {
-                                maxBidAmount = max(maxBidAmount, Int64(Double(firstLevel.amount) * 1.5))
-                            }
-                        }
-                        var currentValue = max(Int(minBidAmount), 100)
-                        if let myBidAmount = state?.myState.bidAmount {
-                            currentValue = Int(myBidAmount)
-                        }
-                        
-                        var minAllowedRealValue: Int64 = minBidAmount
-                        if let myBidAmount = state?.myState.bidAmount {
-                            minAllowedRealValue = myBidAmount
-                        }
-                        
-                        self.amount = Amount(realValue: currentValue, minRealValue: Int(minBidAmount), minAllowedRealValue: Int(minAllowedRealValue), maxRealValue: Int(maxBidAmount), maxSliderValue: 999, isLogarithmic: true)
+                        self.resetSliderValue()
                         transition = .immediate
                     }
                     
@@ -1913,6 +1964,10 @@ private final class GiftAuctionBidScreenComponent: Component {
                             
                             if sliderValue == 1.0 && self.previousSliderValue != 1.0 {
                                 self.presentCustomBidController()
+                                HapticFeedback().tap()
+                                if let sliderView = self.slider.view as? SliderComponent.View {
+                                    sliderView.cancelGestures()
+                                }
                             }
                             
                             self.previousSliderValue = sliderValue
@@ -1940,7 +1995,14 @@ private final class GiftAuctionBidScreenComponent: Component {
             let sliderPlusSize = self.sliderPlus.update(
                 transition: .immediate,
                 component: AnyComponent(
-                    MultilineTextComponent(text: .plain(NSAttributedString(string: "+", font: Font.with(size: 26.0, design: .round, weight: .regular), textColor: environment.theme.list.itemSecondaryTextColor.withAlphaComponent(0.5))))
+                    Button(
+                        content: AnyComponent(
+                            MultilineTextComponent(text: .plain(NSAttributedString(string: "+", font: Font.with(size: 26.0, design: .round, weight: .regular), textColor: environment.theme.list.itemSecondaryTextColor.withAlphaComponent(0.5))))
+                        ),
+                        action: { [weak self] in
+                            self?.presentCustomBidController()
+                        }
+                    ).minSize(CGSize(width: 30.0, height: 30.0))
                 ),
                 environment: {},
                 containerSize: availableSize
@@ -1950,7 +2012,7 @@ private final class GiftAuctionBidScreenComponent: Component {
             
             let sliderFrame = CGRect(origin: CGPoint(x: sliderInset, y: contentHeight), size: sliderSize)
             let sliderBackgroundFrame = CGRect(origin: CGPoint(x: sliderFrame.minX - 8.0, y: sliderFrame.minY + 7.0), size: CGSize(width: sliderFrame.width + 16.0, height: sliderFrame.height - 14.0))
-            let sliderPlusFrame = CGRect(origin: CGPoint(x: sliderBackgroundFrame.maxX - sliderPlusSize.width - 6.0, y: sliderBackgroundFrame.minY - 3.0 + UIScreenPixel), size: sliderPlusSize)
+            let sliderPlusFrame = CGRect(origin: CGPoint(x: sliderBackgroundFrame.maxX - sliderPlusSize.width + 1.0, y: sliderBackgroundFrame.minY - 3.0 + UIScreenPixel), size: sliderPlusSize)
             
             let progressFraction: CGFloat = CGFloat(self.amount.sliderValue) / CGFloat(self.amount.maxSliderValue)
                         
@@ -1965,14 +2027,20 @@ private final class GiftAuctionBidScreenComponent: Component {
                 giftsPerRound = giftsPerRoundValue
             }
             
-            var topCutoff: CGFloat?
+            var topCutoffRealValue: Int?
             if let giftAuctionState = self.giftAuctionState, case let .ongoing(_, _, _, _, bidLevels, _, _, _, _, _) = giftAuctionState.auctionState {
                 for bidLevel in bidLevels {
                     if bidLevel.position == giftsPerRound - 1 {
-                        topCutoff = CGFloat(bidLevel.amount) / CGFloat(self.amount.maxRealValue)
+                        topCutoffRealValue = Int(bidLevel.amount)
                         break
                     }
                 }
+            }
+            
+            var topCutoff: CGFloat?
+            if let topCutoffRealValue {
+                let cutoffSliderValue = self.amount.cutoffSliderValue(for: topCutoffRealValue)
+                topCutoff = CGFloat(cutoffSliderValue) / CGFloat(self.amount.maxSliderValue)
             }
             
             let _ = self.sliderBackground.update(
@@ -1995,8 +2063,6 @@ private final class GiftAuctionBidScreenComponent: Component {
                     self.scrollContentView.addSubview(sliderBackgroundView)
                     self.scrollContentView.addSubview(sliderView)
                     self.scrollContentView.addSubview(sliderPlusView)
-                    
-                    sliderPlusView.isUserInteractionEnabled = false
                 }
                 transition.setFrame(view: sliderView, frame: sliderFrame)
                 
@@ -2005,13 +2071,12 @@ private final class GiftAuctionBidScreenComponent: Component {
                 transition.setFrame(view: sliderPlusView, frame: sliderPlusFrame)
                 
                 var subtitle: String?
-                let badgeValue: String = "\(self.amount.realValue)"
+                var badgeValue: String = "\(self.amount.realValue)"
                 var subtitleOnTop = false
                 
-//                if self.amount.sliderValue == self.amount.maxSliderValue {
-//                    badgeValue = "Custom"
-//                } else
-                if let myBidAmount = self.giftAuctionState?.myState.bidAmount {
+                if self.amount.sliderValue == self.amount.maxSliderValue {
+                    badgeValue = environment.strings.Gift_AuctionBid_Custom
+                } else if let myBidAmount = self.giftAuctionState?.myState.bidAmount {
                     if self.amount.realValue > myBidAmount {
                         subtitle = "+\(self.amount.realValue - Int(myBidAmount))"
                         subtitleOnTop = true
@@ -2358,17 +2423,15 @@ private final class GiftAuctionBidScreenComponent: Component {
                 }
                 
                 var i: Int32 = 1
-                for bidder in topBidders {
-                    if let peer = self.peersMap[bidder] {
-                        var bid: Int64 = 0
-                        for level in bidLevels {
-                            if level.position == i {
-                                bid = level.amount
-                                break
-                            }
+                for peer in topBidders {    
+                    var bid: Int64 = 0
+                    for level in bidLevels {
+                        if level.position == i {
+                            bid = level.amount
+                            break
                         }
-                        topBidsComponents.append((bidder, AnyComponent(PeerComponent(context: component.context, theme: environment.theme, groupingSeparator: environment.dateTimeFormat.groupingSeparator, peer: peer, place: i, amount: bid, isLast: i == topBidders.count, action: peer.id != component.context.account.peerId ? { [weak self] in self?.openPeer(peer, dismiss: false) } : nil))))
                     }
+                    topBidsComponents.append((peer.id, AnyComponent(PeerComponent(context: component.context, theme: environment.theme, groupingSeparator: environment.dateTimeFormat.groupingSeparator, peer: peer, place: i, amount: bid, isLast: i == topBidders.count, action: peer.id != component.context.account.peerId ? { [weak self] in self?.openPeer(peer, dismiss: false) } : nil))))
                     i += 1
                 }
                 
@@ -2709,12 +2772,15 @@ public class GiftAuctionBidScreen: ViewControllerComponentContainer {
     private var didPlayAppearAnimation: Bool = false
     private var isDismissed: Bool = false
     
-    public init(context: AccountContext, toPeerId: EnginePeer.Id, auctionContext: GiftAuctionContext) {
+    public init(context: AccountContext, toPeerId: EnginePeer.Id, text: String?, entities: [MessageTextEntity]?, hideName: Bool, auctionContext: GiftAuctionContext) {
         self.context = context
         
         super.init(context: context, component: GiftAuctionBidScreenComponent(
             context: context,
             toPeerId: toPeerId,
+            text: text,
+            entities: entities,
+            hideName: hideName,
             gift: auctionContext.gift,
             auctionContext: auctionContext
         ), navigationBarAppearance: .none, theme: .default)

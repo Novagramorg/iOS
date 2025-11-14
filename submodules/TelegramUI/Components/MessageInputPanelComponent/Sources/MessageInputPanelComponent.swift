@@ -1110,8 +1110,7 @@ public final class MessageInputPanelComponent: Component {
                         rightAction: rightAction,
                         secondaryRightAction: secondaryRightAction,
                         sendAsConfiguration: component.liveChatState?.isEnabled == true ? sendAsConfiguration : nil,
-                        //TODO:localize
-                        placeholder: (component.liveChatState == nil || component.liveChatState?.isEnabled == true) ? placeholder : "Comments are disabled",
+                        placeholder: (component.liveChatState == nil || component.liveChatState?.isEnabled == true) ? placeholder : component.strings.LiveStream_CommentsDisabledPlaceholder,
                         isEnabled: (component.liveChatState == nil || component.liveChatState?.isEnabled == true),
                         paidMessagePrice: component.sendPaidMessageStars,
                         sendColor: component.sendPaidMessageStars.flatMap { value in

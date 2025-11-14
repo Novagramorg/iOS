@@ -3,6 +3,8 @@ import UIKit
 import Display
 import ComponentFlow
 
+private let nondigitsCharacterSet = CharacterSet(charactersIn: "0123456789").inverted
+
 private let labelWidth: CGFloat = 16.0
 private let labelHeight: CGFloat = 36.0
 private let labelSize = CGSize(width: labelWidth, height: labelHeight)
@@ -100,23 +102,31 @@ final class BadgeLabelView: UIView {
     
     
     func update(value: String, transition: ComponentTransition) -> CGSize {
-        if value.contains(" ") {
+        let alphaTransition = ComponentTransition.easeInOut(duration: 0.15)
+        if value.rangeOfCharacter(from: nondigitsCharacterSet) != nil {
             for (_, view) in self.itemViews {
-                view.isHidden = true
+                alphaTransition.setAlpha(view: view, alpha: 0.0)
             }
             
             if self.staticLabel.superview == nil {
+                self.staticLabel.alpha = 0.0
                 self.staticLabel.textColor = self.color
                 self.staticLabel.font = font
-                
                 self.addSubview(self.staticLabel)
             }
+            alphaTransition.setAlpha(view: self.staticLabel, alpha: 1.0)
+            
             
             self.staticLabel.text = value
             let size = self.staticLabel.sizeThatFits(CGSize(width: 100.0, height: 100.0))
             self.staticLabel.frame = CGRect(origin: .zero, size: CGSize(width: size.width, height: labelHeight))
             
             return CGSize(width: ceil(self.staticLabel.bounds.width), height: ceil(self.staticLabel.bounds.height))
+        } else {
+            for (_, view) in self.itemViews {
+                alphaTransition.setAlpha(view: view, alpha: 1.0)
+            }
+            alphaTransition.setAlpha(view: self.staticLabel, alpha: 0.0)
         }
         
         let string = value

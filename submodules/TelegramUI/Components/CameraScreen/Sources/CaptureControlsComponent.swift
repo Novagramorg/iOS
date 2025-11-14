@@ -1411,6 +1411,7 @@ final class CaptureControlsComponent: Component {
                 transition.setAlpha(view: bottomSettingsButtonView, alpha: !isLiveStream || isLiveActive || isRecording || isTransitioning || hideControls ? 0.0 : 1.0)
             }
             
+            var hitTestEdgeInsets: UIEdgeInsets?
             var blobState: ShutterBlobView.BlobState
             switch component.shutterState {
             case .generic, .disabled:
@@ -1423,6 +1424,7 @@ final class CaptureControlsComponent: Component {
                 blobState = self.panBlobState ?? .video
             case .live:
                 blobState = .live
+                hitTestEdgeInsets = UIEdgeInsets(top: 0.0, left: -130.0, bottom: 0.0, right: -130.0)
             }
             
             let shutterButtonSize = self.shutterButtonView.update(
@@ -1451,7 +1453,7 @@ final class CaptureControlsComponent: Component {
                             component.shutterTapped()
                         },
                         highlightedAction: self.shutterHightlightedAction
-                    ).minSize(maximumShutterSize)
+                    ).minSize(maximumShutterSize).withHitTestEdgeInsets(hitTestEdgeInsets)
                 ),
                 environment: {},
                 containerSize: availableSize

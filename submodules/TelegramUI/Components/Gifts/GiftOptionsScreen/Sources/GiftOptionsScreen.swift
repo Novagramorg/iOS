@@ -7,6 +7,7 @@ import Postbox
 import TelegramCore
 import TelegramPresentationData
 import TelegramUIPreferences
+import TelegramNotices
 import PresentationDataUtils
 import AccountContext
 import ComponentFlow
@@ -369,67 +370,78 @@ final class GiftOptionsScreenComponent: Component {
                         guard let giftAuctionsManager = component.context.giftAuctionsManager else {
                             return
                         }
-                        
-                        self.loadingGiftId = gift.id
-                        Queue.mainQueue().after(0.25) {
-                            if self.loadingGiftId != nil {
-                                self.state?.updated()
-                            }
-                        }
-                        
                         self.auctionDisposable.set((giftAuctionsManager.auctionContext(for: .giftId(gift.id))
                         |> deliverOnMainQueue).start(next: { [weak self, weak mainController] auctionContext in
                             guard let self, let auctionContext, let component = self.component, let mainController else {
                                 return
                             }
-                            self.loadingGiftId = nil
-                            self.state?.updated()
-                            
                             if let currentBidPeerId = auctionContext.currentBidPeerId {
                                 if currentBidPeerId == component.peerId {
                                     let giftController = component.context.sharedContext.makeGiftAuctionBidScreen(
                                         context: component.context,
                                         toPeerId: currentBidPeerId,
+                                        text: nil,
+                                        entities: nil,
+                                        hideName: false,
                                         auctionContext: auctionContext
                                     )
                                     mainController.push(giftController)
                                 } else {
-                                    let _ = (component.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: currentBidPeerId))
-                                    |> deliverOnMainQueue).start(next: { [weak self, weak mainController] peer in
-                                        guard let component = self?.component, let environment = self?.environment, let mainController else {
+                                    let _ = (context.engine.data.get(
+                                        TelegramEngine.EngineData.Item.Peer.Peer(id: currentBidPeerId),
+                                        TelegramEngine.EngineData.Item.Peer.Peer(id: component.peerId)
+                                    )
+                                    |> deliverOnMainQueue).start(next: { [weak self, weak mainController] fromPeer, toPeer in
+                                        guard let component = self?.component, let mainController, let fromPeer, let toPeer else {
                                             return
                                         }
-                                        let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
-                                        let alertController = textAlertController(
-                                            context: component.context,
-                                            title: environment.strings.Gift_Auction_Ongoing_Title,
-                                            text: auctionContext.currentBidPeerId == component.context.account.peerId ? environment.strings.Gift_Auction_Ongoing_TextYourself : environment.strings.Gift_Auction_Ongoing_Text(peer?.displayTitle(strings: environment.strings, displayOrder: presentationData.nameDisplayOrder) ?? "").string,
-                                            actions: [
-                                                TextAlertAction(type: .genericAction, title: environment.strings.Common_OK, action: {}),
-                                                TextAlertAction(type: .defaultAction, title: environment.strings.Gift_Auction_Ongoing_View, action: { [weak mainController] in
-                                                    guard let mainController else {
-                                                        return
-                                                    }
-                                                    let giftController = component.context.sharedContext.makeGiftAuctionBidScreen(
-                                                        context: component.context,
-                                                        toPeerId: currentBidPeerId,
-                                                        auctionContext: auctionContext
-                                                    )
-                                                    mainController.push(giftController)
-                                                })
-                                            ],
-                                            parseMarkdown: true
-                                        )
+                                        
+                                        let alertController = giftAuctionTransferController(context: context, fromPeer: fromPeer, toPeer: toPeer, commit: {
+                                            let controller = GiftSetupScreen(
+                                                context: context,
+                                                peerId: component.peerId,
+                                                subject: .starGift(gift, nil),
+                                                completion: nil
+                                            )
+                                            mainController.push(controller)
+                                        })
                                         mainController.present(alertController, in: .window(.root))
                                     })
                                 }
                             } else {
-                                let giftController = component.context.sharedContext.makeGiftAuctionViewScreen(
-                                    context: component.context,
-                                    toPeerId: component.peerId,
-                                    auctionContext: auctionContext
-                                )
-                                mainController.push(giftController)
+                                let _ = (ApplicationSpecificNotice.getGiftAuctionTips(accountManager: context.sharedContext.accountManager)
+                                |> deliverOnMainQueue).start(next: { [weak mainController] count in
+                                    let presentAuction = {
+                                        let giftController = component.context.sharedContext.makeGiftAuctionViewScreen(
+                                            context: component.context,
+                                            auctionContext: auctionContext,
+                                            completion: { [weak mainController] in
+                                                let controller = GiftSetupScreen(
+                                                    context: context,
+                                                    peerId: component.peerId,
+                                                    subject: .starGift(gift, nil),
+                                                    completion: nil
+                                                )
+                                                mainController?.push(controller)
+                                            }
+                                        )
+                                        mainController?.push(giftController)
+                                    }
+                                    
+                                    if count > 0 {
+                                        presentAuction()
+                                    } else {
+                                        let infoController = component.context.sharedContext.makeGiftAuctionInfoScreen(
+                                            context: component.context,
+                                            auctionContext: auctionContext,
+                                            completion: {
+                                                presentAuction()
+                                                let _ = ApplicationSpecificNotice.incrementGiftAuctionTips(accountManager: component.context.sharedContext.accountManager).startStandalone()
+                                            }
+                                        )
+                                        mainController?.push(infoController)
+                                    }
+                                })
                             }
                         }))
                     } else {

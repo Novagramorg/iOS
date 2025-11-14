@@ -152,8 +152,10 @@ final class AttachmentTextInputActionButtonsNode: ASDisplayNode, ChatSendMessage
             }
             titleOffset -= 2.0
             buttonInset = 14.0
+            self.iconNode.isHidden = true
         } else {
             segments.append(.text(0, NSAttributedString(string: text, font: Font.semibold(17.0), textColor: interfaceState.theme.chat.inputPanel.actionControlForegroundColor)))
+            self.iconNode.isHidden = false
         }
         self.textNode.segments = segments
         
