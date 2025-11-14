@@ -9,6 +9,7 @@ import AccountContext
 import HierarchyTrackingLayer
 import LokiRng
 import SwiftSignalKit
+import TelegramPresentationData
 
 private let gradientColors: [NSArray] = [
     [UIColor(rgb: 0xff516a).cgColor, UIColor(rgb: 0xff885e).cgColor],
@@ -93,15 +94,17 @@ private func avatarViewLettersImage(size: CGSize, peerId: EnginePeer.Id, letters
 }
 
 private func makePeerBadgeImage(engine: TelegramEngine, peer: EnginePeer, count: Int) async -> UIImage {
+    let count = 123
+    
     let avatarSize: CGFloat = 16.0
     let avatarInset: CGFloat = 2.0
     let avatarIconSpacing: CGFloat = 2.0
     let iconTextSpacing: CGFloat = 1.0
     let iconSize: CGFloat = 10.0
-    let rightInset: CGFloat = 2.0
+    let rightInset: CGFloat = 5.0
     
-    let text = NSAttributedString(string: "\(count)", font: Font.semibold(10.0), textColor: .white)
-    var textSize = text.boundingRect(with: CGSize(width: 100.0, height: 100.0), options: .usesLineFragmentOrigin, context: nil).size
+    let text = NSAttributedString(string: countString(Int64(count)), font: Font.semibold(10.0), textColor: .white)
+    var textSize = text.boundingRect(with: CGSize(width: 200.0, height: 100.0), options: .usesLineFragmentOrigin, context: nil).size
     textSize.width = ceil(textSize.width)
     textSize.height = ceil(textSize.height)
     
@@ -127,7 +130,7 @@ private func makePeerBadgeImage(engine: TelegramEngine, peer: EnginePeer, count:
         disposable.dispose()
     }
     
-    let size = CGSize(width: avatarInset + avatarSize + avatarIconSpacing + iconSize + iconTextSpacing + textSize.height + rightInset, height: avatarSize + avatarInset * 2.0)
+    let size = CGSize(width: avatarInset + avatarSize + avatarIconSpacing + iconSize + iconTextSpacing + textSize.width + rightInset, height: avatarSize + avatarInset * 2.0)
     return generateImage(size, rotatedContext: { size, context in
         UIGraphicsPushContext(context)
         defer {

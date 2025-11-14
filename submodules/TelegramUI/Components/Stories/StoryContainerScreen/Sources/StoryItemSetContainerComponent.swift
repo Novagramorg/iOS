@@ -3028,11 +3028,13 @@ public final class StoryItemSetContainerComponent: Component {
                         }
                         
                         var sendAsPeer: SendAsPeer?
-                        if let currentSendAsPeer = self.sendMessageContext.currentSendAsPeer {
-                            sendAsPeer = currentSendAsPeer
-                        } else {
-                            sendAsPeer = liveChatStateValue.defaultSendAs.flatMap { defaultSendAs in
-                                return self.sendMessageContext.sendAsData?.availablePeers.first(where: { $0.peer.id == defaultSendAs })
+                        if let sendAsData = self.sendMessageContext.sendAsData, sendAsData.availablePeers.count > 1 {
+                            if let currentSendAsPeer = self.sendMessageContext.currentSendAsPeer {
+                                sendAsPeer = currentSendAsPeer
+                            } else {
+                                sendAsPeer = liveChatStateValue.defaultSendAs.flatMap { defaultSendAs in
+                                    return self.sendMessageContext.sendAsData?.availablePeers.first(where: { $0.peer.id == defaultSendAs })
+                                }
                             }
                         }
                         
