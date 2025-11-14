@@ -1500,7 +1500,7 @@ func openResolvedUrlImpl(
             }
         case let .auction(auctionContext):
             if let auctionContext, case let .generic(gift) = auctionContext.gift {
-                if let currentBidPeerId = auctionContext.currentBidPeerId {
+                if !auctionContext.isFinished, let currentBidPeerId = auctionContext.currentBidPeerId {
                     let controller = context.sharedContext.makeGiftAuctionBidScreen(
                         context: context,
                         toPeerId: currentBidPeerId,

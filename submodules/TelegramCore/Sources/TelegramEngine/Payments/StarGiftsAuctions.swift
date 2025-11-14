@@ -102,6 +102,14 @@ public final class GiftAuctionContext {
         }
     }
     
+    public var isFinished: Bool {
+        if case .finished = self.auctionState {
+            return true
+        } else {
+            return false
+        }
+    }
+    
     public convenience init(account: Account, gift: StarGift) {
         self.init(account: account, gift: gift, initialAuctionState: nil, initialMyState: nil, initialTimeout: nil)
     }
