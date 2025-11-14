@@ -60,7 +60,7 @@ public final class GiftAuctionContext {
         }
         
         public struct MyState: Equatable {
-            public var isOutbid: Bool
+            public var isReturned: Bool
             public var bidAmount: Int64?
             public var bidDate: Int32?
             public var minBidAmount: Int64?
@@ -132,7 +132,7 @@ public final class GiftAuctionContext {
     
     private var currentVersion: Int32 {
         var currentVersion: Int32 = 0
-        if case let  .ongoing(version, _, _, _, _, _, _, _, _, _) = self.auctionState {
+        if case let .ongoing(version, _, _, _, _, _, _, _, _, _) = self.auctionState {
             currentVersion = version
         }
         return currentVersion
@@ -180,7 +180,10 @@ public final class GiftAuctionContext {
     }
         
     func updateAuctionState(_ auctionState: GiftAuctionContext.State.AuctionState) {
-        self.auctionState = auctionState
+        if case let .ongoing(version, _, _, _, _, _, _, _, _, _) = auctionState, version < self.currentVersion {
+        } else {
+            self.auctionState = auctionState
+        }
         self.pushState()
     }
     
@@ -255,7 +258,7 @@ extension GiftAuctionContext.State.MyState {
     init(apiAuctionUserState: Api.StarGiftAuctionUserState) {
         switch apiAuctionUserState {
         case let .starGiftAuctionUserState(flags, bidAmount, bidDate, minBidAmount, bidPeerId, acquiredCount):
-            self.isOutbid = (flags & (1 << 1)) != 0
+            self.isReturned = (flags & (1 << 1)) != 0
             self.bidAmount = bidAmount
             self.bidDate = bidDate
             self.minBidAmount = minBidAmount
