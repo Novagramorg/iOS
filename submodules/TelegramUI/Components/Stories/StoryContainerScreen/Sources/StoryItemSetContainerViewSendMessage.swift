@@ -696,13 +696,20 @@ final class StoryItemSetContainerSendMessage: @unchecked(Sendable) {
                                 sendPaidMessageStars = StarsAmount(value: minMessagePrice, nanos: 0)
                             }
                         }
-                        isAdmin = liveChatStateValue.isAdmin
                         
                         if let currentSendAsPeer = self.currentSendAsPeer {
                             sendAsPeer = currentSendAsPeer
                         } else {
                             sendAsPeer = liveChatStateValue.defaultSendAs.flatMap { defaultSendAs in
                                 return self.sendAsData?.availablePeers.first(where: { $0.peer.id == defaultSendAs })
+                            }
+                        }
+                        
+                        if liveChatStateValue.isAdmin {
+                            if let sendAsPeer {
+                                isAdmin = sendAsPeer.peer.id == component.context.account.peerId
+                            } else {
+                                isAdmin = true
                             }
                         }
                     }
@@ -4291,13 +4298,19 @@ final class StoryItemSetContainerSendMessage: @unchecked(Sendable) {
         }
         var sendAsPeer: SendAsPeer?
         if let liveChatStateValue = itemView.liveChatState {
-            isAdmin = liveChatStateValue.isAdmin
-            
             if let currentSendAsPeer = self.currentSendAsPeer {
                 sendAsPeer = currentSendAsPeer
             } else {
                 sendAsPeer = liveChatStateValue.defaultSendAs.flatMap { defaultSendAs in
                     return self.sendAsData?.availablePeers.first(where: { $0.peer.id == defaultSendAs })
+                }
+            }
+            
+            if liveChatStateValue.isAdmin {
+                if let sendAsPeer {
+                    isAdmin = sendAsPeer.peer.id == component.context.account.peerId
+                } else {
+                    isAdmin = true
                 }
             }
         }
