@@ -3006,7 +3006,7 @@ public final class StoryItemSetContainerComponent: Component {
                 if let visibleItemView = self.visibleItems[component.slice.item.id]?.view.view as? StoryItemContentComponent.View {
                     if let liveChatStateValue = visibleItemView.liveChatState {
                         liveChatState = MessageInputPanelComponent.LiveChatState(
-                            isEnabled: liveChatStateValue.areMessagesEnabled,
+                            isEnabled: liveChatStateValue.areMessagesEnabled || liveChatStateValue.isAdmin,
                             isExpanded: liveChatStateValue.isExpanded,
                             isEmpty: liveChatStateValue.isEmpty,
                             hasUnseenMessages: liveChatStateValue.hasUnseenMessages,
