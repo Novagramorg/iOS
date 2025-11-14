@@ -751,6 +751,14 @@ final class StoryItemSetContainerSendMessage: @unchecked(Sendable) {
                                     }
                                 }
                                 if emojiCount > maxEmojiCount {
+                                    let absMaxEmojiCount = paramSets.paramSets.max(by: { $0.minStars < $1.minStars })?.maxEmojiCount ?? 10
+                                    if emojiCount > absMaxEmojiCount {
+                                        let presentationData = component.context.sharedContext.currentPresentationData.with({ $0 }).withUpdated(theme: component.theme)
+                                        view.component?.controller()?.present(standardTextAlertController(theme: AlertControllerTheme(presentationData: presentationData), title: nil, text: presentationData.strings.LiveStream_ErrorMaxAllowedEmoji_Text(Int32(absMaxEmojiCount)), actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+                                        
+                                        return
+                                    }
+                                    
                                     sendDisabledMinStars = paramSets.paramSets.sorted(by: { $0.minStars < $1.minStars }).first(where: { $0.maxEmojiCount >= emojiCount })?.minStars ?? 1000000000
                                 }
                             }

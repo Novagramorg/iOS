@@ -15427,3 +15427,6 @@ Error: %8$@";
 
 "Gift.Options.Gift.JoinAuction" = "Join";
 "Gift.Options.Gift.ViewAuction" = "View";
+
+"LiveStream.ErrorMaxAllowedEmoji.Text_1" = "You can send up to %d emoji.";
+"LiveStream.ErrorMaxAllowedEmoji.Text_any" = "You can send up to %d emoji.";
