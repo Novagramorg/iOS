@@ -3286,7 +3286,7 @@ private final class AuctionStatComponent: Component {
                             strings: presentationData.strings,
                             peer: nil,
                             subject: .starGift(gift: gift, price: ""),
-                            mode: .tableIcon
+                            mode: .buttonIcon
                         )
                     ),
                     environment: {},
