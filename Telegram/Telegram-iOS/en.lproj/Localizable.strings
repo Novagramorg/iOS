@@ -15423,3 +15423,6 @@ Error: %8$@";
 "ChatList.AlertResumeLiveStreamTitle" = "Resume Live Stream";
 "ChatList.AlertResumeLiveStreamText" = "Do you want to resume an existing Live Stream?";
 "ChatList.AlertResumeLiveStreamAction" = "Resume";
+
+"Gift.Options.Gift.JoinAuction" = "Join";
+"Gift.Options.Gift.ViewAuction" = "View";
