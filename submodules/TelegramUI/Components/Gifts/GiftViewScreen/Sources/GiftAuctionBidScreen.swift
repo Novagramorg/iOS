@@ -957,6 +957,7 @@ private final class GiftAuctionBidScreenComponent: Component {
     let hideName: Bool
     let gift: StarGift
     let auctionContext: GiftAuctionContext
+    let acquiredGifts: [GiftAuctionAcquiredGift]?
     
     init(
         context: AccountContext,
@@ -965,7 +966,8 @@ private final class GiftAuctionBidScreenComponent: Component {
         entities: [MessageTextEntity]?,
         hideName: Bool,
         gift: StarGift,
-        auctionContext: GiftAuctionContext
+        auctionContext: GiftAuctionContext,
+        acquiredGifts: [GiftAuctionAcquiredGift]?
     ) {
         self.context = context
         self.toPeerId = toPeerId
@@ -974,6 +976,7 @@ private final class GiftAuctionBidScreenComponent: Component {
         self.hideName = hideName
         self.gift = gift
         self.auctionContext = auctionContext
+        self.acquiredGifts = acquiredGifts
     }
     
     static func ==(lhs: GiftAuctionBidScreenComponent, rhs: GiftAuctionBidScreenComponent) -> Bool {
@@ -1827,7 +1830,7 @@ private final class GiftAuctionBidScreenComponent: Component {
             self.environment?.controller()?.present(controller, in: .window(.root))
         }
         
-        func resetSliderValue() {
+        func resetSliderValue(component: GiftAuctionBidScreenComponent? = nil) {
             guard let state = self.giftAuctionState else {
                 return
             }
@@ -1841,7 +1844,11 @@ private final class GiftAuctionBidScreenComponent: Component {
             }
             var currentValue = max(Int(minBidAmount), 100)
             if let myBidAmount = state.myState.bidAmount {
-                currentValue = Int(myBidAmount)
+                if let component, let bidPeerId = state.myState.bidPeerId, bidPeerId != component.toPeerId, let myMinBidAmount = state.myState.minBidAmount {
+                    currentValue = Int(myMinBidAmount)
+                } else {
+                    currentValue = Int(myBidAmount)
+                }
             }
             
             var minAllowedRealValue: Int64 = minBidAmount
@@ -1919,6 +1926,8 @@ private final class GiftAuctionBidScreenComponent: Component {
             }
             
             if self.component == nil {
+                self.giftAuctionAcquiredGifts = component.acquiredGifts
+                
                 if let starsContext = component.context.starsContext {
                     self.balanceDisposable = (starsContext.state
                     |> deliverOnMainQueue).startStrict(next: { [weak self] state in
@@ -1950,7 +1959,7 @@ private final class GiftAuctionBidScreenComponent: Component {
 
                     if isFirstTime {
                         peerIds.append(context.account.peerId)
-                        self.resetSliderValue()
+                        self.resetSliderValue(component: component)
                         transition = .immediate
                     }
                     
@@ -1976,14 +1985,22 @@ private final class GiftAuctionBidScreenComponent: Component {
                     }
                     self.state?.updated(transition: transition)
                     
-                    if let acquiredCount = auctionState?.myState.acquiredCount, acquiredCount > (previousState?.myState.acquiredCount ?? 0) {
-                        self.loadAcquiredGifts()
+                    let previousAcquiredCount: Int32
+                    if let previousState {
+                        previousAcquiredCount = previousState.myState.acquiredCount
+                    } else {
+                        previousAcquiredCount = Int32(component.acquiredGifts?.count ?? 0)
+                    }
+                    if let acquiredCount = auctionState?.myState.acquiredCount, acquiredCount > previousAcquiredCount {
+                        Queue.mainQueue().justDispatch {
+                            self.loadAcquiredGifts()
+                        }
                     }
                     
                     if case .finished = auctionState?.auctionState, let controller = self.environment?.controller() {
                         if let navigationController = controller.navigationController as? NavigationController {
                             controller.dismiss()
-                            let auctionController = context.sharedContext.makeGiftAuctionViewScreen(context: context, auctionContext: auctionContext, completion: {})
+                            let auctionController = context.sharedContext.makeGiftAuctionViewScreen(context: context, auctionContext: auctionContext, completion: { _ in })
                             navigationController.pushViewController(auctionController)
                         }
                     }
@@ -2922,7 +2939,7 @@ public class GiftAuctionBidScreen: ViewControllerComponentContainer {
     private var didPlayAppearAnimation: Bool = false
     private var isDismissed: Bool = false
     
-    public init(context: AccountContext, toPeerId: EnginePeer.Id, text: String?, entities: [MessageTextEntity]?, hideName: Bool, auctionContext: GiftAuctionContext) {
+    public init(context: AccountContext, toPeerId: EnginePeer.Id, text: String?, entities: [MessageTextEntity]?, hideName: Bool, auctionContext: GiftAuctionContext, acquiredGifts: [GiftAuctionAcquiredGift]?) {
         self.context = context
         
         super.init(context: context, component: GiftAuctionBidScreenComponent(
@@ -2932,7 +2949,8 @@ public class GiftAuctionBidScreen: ViewControllerComponentContainer {
             entities: entities,
             hideName: hideName,
             gift: auctionContext.gift,
-            auctionContext: auctionContext
+            auctionContext: auctionContext,
+            acquiredGifts: acquiredGifts
         ), navigationBarAppearance: .none, theme: .default)
         
         self.statusBar.statusBarStyle = .Ignore

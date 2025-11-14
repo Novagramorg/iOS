@@ -46,17 +46,20 @@ private final class GiftSetupScreenComponent: Component {
     let context: AccountContext
     let peerId: EnginePeer.Id
     let subject: GiftSetupScreen.Subject
+    let auctionAcquiredGifts: [GiftAuctionAcquiredGift]?
     let completion: (() -> Void)?
     
     init(
         context: AccountContext,
         peerId: EnginePeer.Id,
         subject: GiftSetupScreen.Subject,
+        auctionAcquiredGifts: [GiftAuctionAcquiredGift]?,
         completion: (() -> Void)? = nil
     ) {
         self.context = context
         self.peerId = peerId
         self.subject = subject
+        self.auctionAcquiredGifts = auctionAcquiredGifts
         self.completion = completion
     }
     
@@ -479,7 +482,8 @@ private final class GiftSetupScreenComponent: Component {
                     text: textInputText.string,
                     entities: entities,
                     hideName: self.hideName,
-                    auctionContext: auctionContext
+                    auctionContext: auctionContext,
+                    acquiredGifts: component.auctionAcquiredGifts
                 )
                 environment.controller()?.dismiss()
                 navigationController.pushViewController(controller)
@@ -2020,6 +2024,7 @@ public class GiftSetupScreen: ViewControllerComponentContainer {
         context: AccountContext,
         peerId: EnginePeer.Id,
         subject: Subject,
+        auctionAcquiredGifts: [GiftAuctionAcquiredGift]? = nil,
         completion: (() -> Void)? = nil
     ) {
         self.context = context
@@ -2028,6 +2033,7 @@ public class GiftSetupScreen: ViewControllerComponentContainer {
             context: context,
             peerId: peerId,
             subject: subject,
+            auctionAcquiredGifts: auctionAcquiredGifts,
             completion: completion
         ), navigationBarAppearance: .none, theme: .default)
         
