@@ -37,12 +37,13 @@ final class StoryItemContentComponent: Component {
     let baseRate: Double
     let isVideoBuffering: Bool
     let isCurrent: Bool
+    let isUIHidden: Bool
     let preferHighQuality: Bool
     let isEmbeddedInCamera: Bool
     let activateReaction: (UIView, MessageReaction.Reaction) -> Void
     let controller: () -> ViewController?
     
-    init(context: AccountContext, strings: PresentationStrings, peer: EnginePeer, item: EngineStoryItem, availableReactions: StoryAvailableReactions?, entityFiles: [MediaId: TelegramMediaFile], audioMode: StoryContentItem.AudioMode, baseRate: Double, isVideoBuffering: Bool, isCurrent: Bool, preferHighQuality: Bool, isEmbeddedInCamera: Bool, activateReaction: @escaping (UIView, MessageReaction.Reaction) -> Void, controller: @escaping () -> ViewController?) {
+    init(context: AccountContext, strings: PresentationStrings, peer: EnginePeer, item: EngineStoryItem, availableReactions: StoryAvailableReactions?, entityFiles: [MediaId: TelegramMediaFile], audioMode: StoryContentItem.AudioMode, baseRate: Double, isVideoBuffering: Bool, isCurrent: Bool, isUIHidden: Bool, preferHighQuality: Bool, isEmbeddedInCamera: Bool, activateReaction: @escaping (UIView, MessageReaction.Reaction) -> Void, controller: @escaping () -> ViewController?) {
 		self.context = context
         self.strings = strings
         self.peer = peer
@@ -53,6 +54,7 @@ final class StoryItemContentComponent: Component {
         self.baseRate = baseRate
         self.isVideoBuffering = isVideoBuffering
         self.isCurrent = isCurrent
+        self.isUIHidden = isUIHidden
         self.preferHighQuality = preferHighQuality
         self.isEmbeddedInCamera = isEmbeddedInCamera
         self.activateReaction = activateReaction
@@ -85,6 +87,9 @@ final class StoryItemContentComponent: Component {
             return false
         }
         if lhs.isCurrent != rhs.isCurrent {
+            return false
+        }
+        if lhs.isUIHidden != rhs.isUIHidden {
             return false
         }
         if lhs.isEmbeddedInCamera != rhs.isEmbeddedInCamera {
@@ -805,6 +810,13 @@ final class StoryItemContentComponent: Component {
                 restorePictureInPictureImpl = dismissController()
             })
         }
+        
+        func scheduleScrollLiveChatToBottom() {
+            guard let liveChatView = self.liveChat?.view as? StoryContentLiveChatComponent.View else {
+                return
+            }
+            liveChatView.scheduleScrollLiveChatToBottom()
+        }
 
         func update(component: StoryItemContentComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<StoryContentItem.Environment>, transition: ComponentTransition) -> CGSize {
             self.isUpdating = true
@@ -1018,9 +1030,11 @@ final class StoryItemContentComponent: Component {
                 if let liveChatView = liveChat.view {
                     if liveChatView.superview == nil {
                         liveChat.parentState = state
+                        liveChatView.layer.allowsGroupOpacity = true
                         self.insertSubview(liveChatView, aboveSubview: self.imageView)
                     }
                     mediaStreamTransition.setFrame(view: liveChatView, frame: liveChatFrame)
+                    mediaStreamTransition.setAlpha(view: liveChatView, alpha: component.isUIHidden ? 0.0 : 1.0)
                 }
                 
                 if case .rtc = liveStream.kind, component.isEmbeddedInCamera {

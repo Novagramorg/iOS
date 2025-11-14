@@ -128,6 +128,7 @@ final class StoryContentLiveChatComponent: Component {
         private let pinnedBar = ComponentView<Empty>()
         
         private let listState = AsyncListComponent.ExternalState()
+        private var isScrollToBottomScheduled: Bool = false
         private let list = ComponentView<Empty>()
         private let listShadowView: UIView
         
@@ -536,6 +537,10 @@ final class StoryContentLiveChatComponent: Component {
             }
         }
         
+        func scheduleScrollLiveChatToBottom() {
+            self.isScrollToBottomScheduled = true
+        }
+        
         func update(component: StoryContentLiveChatComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
             self.isUpdating = true
             defer {
@@ -725,6 +730,13 @@ final class StoryContentLiveChatComponent: Component {
             var listTransition = transition
             if previousListIsEmpty != self.currentListIsEmpty {
                 listTransition = listTransition.withAnimation(.none)
+            }
+            
+            if self.isScrollToBottomScheduled {
+                self.isScrollToBottomScheduled = false
+                if let firstItem = listItems.first {
+                    self.listState.resetScrolling(id: firstItem.id)
+                }
             }
             
             let _ = self.list.update(

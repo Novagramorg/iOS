@@ -764,6 +764,7 @@ final class StoryItemSetContainerSendMessage: @unchecked(Sendable) {
                                 if !(visibleItemView.liveChatState?.isExpanded ?? true) {
                                     visibleItemView.toggleLiveChatExpanded()
                                 }
+                                visibleItemView.scheduleScrollLiveChatToBottom()
                             }
                             
                             let entities = generateChatInputTextEntities(text)
