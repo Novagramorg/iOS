@@ -926,8 +926,11 @@ final class LiveStreamSettingsScreenComponent: Component {
                             )
                         )),
                         action: { [weak self] _ in
-                            guard let self, let controller = self.environment?.controller() as? LiveStreamSettingsScreen else {
+                            guard let self, let component = self.component, let controller = self.environment?.controller() as? LiveStreamSettingsScreen else {
                                 return
+                            }
+                            if case let .edit(_, displayExternalStream, _, _) = component.stateContext.mode {
+                                self.complete(rtmp: displayExternalStream)
                             }
                             controller.dismiss()
                         }
@@ -1034,7 +1037,7 @@ final class LiveStreamSettingsScreenComponent: Component {
 public class LiveStreamSettingsScreen: ViewControllerComponentContainer {
     public enum Mode {
         case create(sendAsPeerId: EnginePeer.Id?, isCustomTarget: Bool, privacy: EngineStoryPrivacy, allowComments: Bool, isForwardingDisabled: Bool, pin: Bool, paidMessageStars: Int64)
-        case edit(call: PresentationGroupCall, displayExternalStream: Bool)
+        case edit(call: PresentationGroupCall, displayExternalStream: Bool, allowComments: Bool, paidMessageStars: Int64)
     }
     
     public struct Result {
@@ -1388,16 +1391,16 @@ public class LiveStreamSettingsScreen: ViewControllerComponentContainer {
                         isForwardingDisabled = isForwardingDisabledValue
                         pin = pinValue
                         paidMessageStars = paidMessageStarsValue
-                    case let .edit(callValue, callIsStreamValue):
+                    case let .edit(callValue, callIsStreamValue, allowCommentsValue, paidMessageStarsValue):
                         call = callValue
                         isEdit = true
                         sendAsPeerId = nil
                         isCustomTarget = false
                         privacy = EngineStoryPrivacy(base: .everyone, additionallyIncludePeers: [])
-                        allowComments = true
+                        allowComments = allowCommentsValue
                         isForwardingDisabled = false
                         pin = true
-                        paidMessageStars = 0
+                        paidMessageStars = paidMessageStarsValue
                         callIsStream = callIsStreamValue
                     }
                 }

@@ -421,7 +421,7 @@ final class StoryContentLiveChatComponent: Component {
                 }
                 
                 var items: [ContextMenuItem] = []
-                if !isPinned {
+                if !isPinned, let messagesState = self.messagesState, let message = messagesState.messages.first(where: { $0.id == id }), !message.text.isEmpty {
                     items.append(.action(ContextMenuActionItem(text: presentationData.strings.Conversation_ContextMenuCopy, textColor: .primary, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Copy"), color: theme.contextMenu.primaryColor) }, action: { [weak self] c, _ in
                         guard let self else {
                             return
