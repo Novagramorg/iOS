@@ -4402,7 +4402,12 @@ final class StoryItemSetContainerSendMessage: @unchecked(Sendable) {
             
             let stateContext = LiveStreamSettingsScreen.StateContext(
                 context: component.context,
-                mode: .edit(call: mediaStreamCall, displayExternalStream: callState.isUnifiedStream),
+                mode: .edit(
+                    call: mediaStreamCall,
+                    displayExternalStream: callState.isUnifiedStream,
+                    allowComments: callState.messagesAreEnabled,
+                    paidMessageStars: callState.sendPaidMessageStars ?? 0
+                ),
                 closeFriends: .single([]),
                 adminedChannels: .single([]),
                 blockedPeersContext: nil
