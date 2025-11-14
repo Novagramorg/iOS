@@ -383,7 +383,8 @@ final class GiftOptionsScreenComponent: Component {
                                         text: nil,
                                         entities: nil,
                                         hideName: false,
-                                        auctionContext: auctionContext
+                                        auctionContext: auctionContext,
+                                        acquiredGifts: nil
                                     )
                                     mainController.push(giftController)
                                 } else {
@@ -415,11 +416,12 @@ final class GiftOptionsScreenComponent: Component {
                                         let giftController = component.context.sharedContext.makeGiftAuctionViewScreen(
                                             context: component.context,
                                             auctionContext: auctionContext,
-                                            completion: { [weak mainController] in
+                                            completion: { [weak mainController] acquiredGifts in
                                                 let controller = GiftSetupScreen(
                                                     context: context,
                                                     peerId: component.peerId,
                                                     subject: .starGift(gift, nil),
+                                                    auctionAcquiredGifts: acquiredGifts,
                                                     completion: nil
                                                 )
                                                 mainController?.push(controller)

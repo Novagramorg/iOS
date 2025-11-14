@@ -169,7 +169,7 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
             }
             self.dismiss(animated: true)
             
-            controller.completion()
+            controller.completion(self.giftAuctionAcquiredGifts)
         }
         
         func openPeer(_ peer: EnginePeer, dismiss: Bool = true) {
@@ -975,12 +975,12 @@ final class GiftAuctionViewSheetComponent: CombinedComponent {
 }
 
 public final class GiftAuctionViewScreen: ViewControllerComponentContainer {
-    fileprivate let completion: () -> Void
+    fileprivate let completion: ([GiftAuctionAcquiredGift]?) -> Void
     
     public init(
         context: AccountContext,
         auctionContext: GiftAuctionContext,
-        completion: @escaping () -> Void
+        completion: @escaping ([GiftAuctionAcquiredGift]?) -> Void
     ) {
         self.completion = completion
         
