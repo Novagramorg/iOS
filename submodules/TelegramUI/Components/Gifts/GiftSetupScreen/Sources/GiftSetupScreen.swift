@@ -889,9 +889,10 @@ private final class GiftSetupScreenComponent: Component {
             if case .regular = environment.metrics.widthClass {
                 fillingSize = min(availableSize.width, 414.0) - environment.safeInsets.left * 2.0
             } else {
-                fillingSize = min(availableSize.width, 428.0) - environment.safeInsets.left * 2.0
+                fillingSize = min(availableSize.width, environment.deviceMetrics.screenSize.width) - environment.safeInsets.left * 2.0
             }
-            let sideInset: CGFloat = floor((availableSize.width - fillingSize) * 0.5) + 24.0
+            let rawSideInset: CGFloat = floor((availableSize.width - fillingSize) * 0.5)
+            let sideInset: CGFloat = rawSideInset + 24.0
             
             let peerName = self.peerMap[component.peerId]?.compactDisplayTitle ?? ""
             let isSelfGift = component.peerId == component.context.account.peerId
@@ -1130,7 +1131,7 @@ private final class GiftSetupScreenComponent: Component {
                 environment: {},
                 containerSize: CGSize(width: 40.0, height: 40.0)
             )
-            let closeButtonFrame = CGRect(origin: CGPoint(x: 16.0, y: 16.0), size: closeButtonSize)
+            let closeButtonFrame = CGRect(origin: CGPoint(x: rawSideInset + 16.0, y: 16.0), size: closeButtonSize)
             if let closeButtonView = self.closeButton.view {
                 if closeButtonView.superview == nil {
                     self.navigationBarContainer.addSubview(closeButtonView)
@@ -1143,64 +1144,6 @@ private final class GiftSetupScreenComponent: Component {
             var initialContentHeight = contentHeight
             let clippingY: CGFloat
                         
-            if case let .starGift(starGift, forceUnique) = component.subject, let availability = starGift.availability, availability.resale > 0 {
-                if let forceUnique, !forceUnique {
-                } else {
-                    let resaleSectionSize = self.resaleSection.update(
-                        transition: transition,
-                        component: AnyComponent(ListSectionComponent(
-                            theme: environment.theme,
-                            style: .glass,
-                            header: nil,
-                            footer: nil,
-                            items: [
-                                AnyComponentWithIdentity(id: 0, component: AnyComponent(ListActionItemComponent(
-                                    theme: environment.theme,
-                                    style: .glass,
-                                    title: AnyComponent(VStack([
-                                        AnyComponentWithIdentity(id: AnyHashable(0), component: AnyComponent(
-                                            MultilineTextComponent(
-                                                text: .plain(NSAttributedString(string: environment.strings.Gift_Send_AvailableForResale, font: Font.regular(presentationData.listsFontSize.baseDisplaySize), textColor: environment.theme.list.itemPrimaryTextColor))
-                                            )
-                                        )),
-                                    ], alignment: .left, spacing: 2.0)),
-                                    accessory: .custom(ListActionItemComponent.CustomAccessory(component: AnyComponentWithIdentity(id: 0, component: AnyComponent(MultilineTextComponent(
-                                        text: .plain(NSAttributedString(
-                                            string: presentationStringsFormattedNumber(Int32(availability.resale), environment.dateTimeFormat.groupingSeparator),
-                                            font: Font.regular(presentationData.listsFontSize.baseDisplaySize),
-                                            textColor: environment.theme.list.itemSecondaryTextColor
-                                        )),
-                                        maximumNumberOfLines: 0
-                                    ))), insets: UIEdgeInsets(top: 0.0, left: 0.0, bottom: 0.0, right: 16.0))),
-                                    action: { [weak self] _ in
-                                        guard let self, let component = self.component, let controller = environment.controller() else {
-                                            return
-                                        }
-                                        let storeController = component.context.sharedContext.makeGiftStoreController(
-                                            context: component.context,
-                                            peerId: component.peerId,
-                                            gift: starGift
-                                        )
-                                        controller.push(storeController)
-                                    }
-                                )))
-                            ]
-                        )),
-                        environment: {},
-                        containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 10000.0)
-                    )
-                    let resaleSectionFrame = CGRect(origin: CGPoint(x: sideInset, y: contentHeight), size: resaleSectionSize)
-                    if let resaleSectionView = self.resaleSection.view {
-                        if resaleSectionView.superview == nil {
-                            self.scrollContentView.addSubview(resaleSectionView)
-                        }
-                        transition.setFrame(view: resaleSectionView, frame: resaleSectionFrame)
-                    }
-                    contentHeight += resaleSectionSize.height
-                    contentHeight += sectionSpacing
-                }
-            }
-            
             let giftConfiguration = GiftConfiguration.with(appConfiguration: component.context.currentAppConfiguration.with { $0 })
                     
             let footerAttributes = MarkdownAttributes(
@@ -1211,45 +1154,7 @@ private final class GiftSetupScreenComponent: Component {
                     return (TelegramTextAttributes.URL, contents)
                 }
             )
-            
-//            let introFooter: AnyComponent<Empty>?
-//            switch component.subject {
-//            case .premium:
-//                introFooter = AnyComponent(MultilineTextComponent(
-//                    text: .plain(NSAttributedString(
-//                        string: environment.strings.Gift_Send_Customize_Info(peerName).string,
-//                        font: Font.regular(presentationData.listsFontSize.itemListBaseHeaderFontSize),
-//                        textColor: environment.theme.list.freeTextColor
-//                    )),
-//                    maximumNumberOfLines: 0
-//                ))
-//            case .starGift:
-//                introFooter = nil
-//            }
-//
-//            let introSectionSize = self.introSection.update(
-//                transition: transition,
-//                component: AnyComponent(ListSectionComponent(
-//                    theme: environment.theme,
-//                    style: .glass,
-//                    header: nil,
-//                    footer: introFooter,
-//                    items: introSectionItems
-//                )),
-//                environment: {},
-//                containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 10000.0)
-//            )
-//            let introSectionFrame = CGRect(origin: CGPoint(x: sideInset, y: contentHeight), size: introSectionSize)
-//            if let introSectionView = self.introSection.view {
-//                if introSectionView.superview == nil {
-//                    self.scrollContentView.addSubview(introSectionView)
-//                    self.introSection.parentState = state
-//                }
-//                transition.setFrame(view: introSectionView, frame: introSectionFrame)
-//            }
-//            contentHeight += introSectionSize.height
-//            contentHeight += sectionSpacing
-            
+                        
             var inputHeight: CGFloat = 0.0
             inputHeight += self.updateInputMediaNode(
                 component: component,
@@ -1270,7 +1175,7 @@ private final class GiftSetupScreenComponent: Component {
             }
             self.previousInputHeight = inputHeight
                          
-            let listItemParams = ListViewItemLayoutParams(width: availableSize.width, leftInset: 0.0, rightInset: 0.0, availableHeight: 10000.0, isStandalone: true)
+            let listItemParams = ListViewItemLayoutParams(width: fillingSize, leftInset: 0.0, rightInset: 0.0, availableHeight: 10000.0, isStandalone: true)
             var introContentSize = CGSize()
             if let accountPeer = self.peerMap[component.context.account.peerId] {
                 var inputPanelSize = CGSize()
@@ -1377,7 +1282,7 @@ private final class GiftSetupScreenComponent: Component {
                             chatLocation: nil
                         )),
                         environment: {},
-                        containerSize: CGSize(width: availableSize.width - inputPanelInset * 2.0, height: 160.0)
+                        containerSize: CGSize(width: fillingSize - inputPanelInset * 2.0, height: 160.0)
                     )
                 }
                 
@@ -1410,6 +1315,10 @@ private final class GiftSetupScreenComponent: Component {
                 if let inputPanelView = self.inputPanel.view as? MessageInputPanelComponent.View, case let .text(text) = inputPanelView.getSendMessageInput(applyAutocorrection: false) {
                     textInputText = text
                 }
+                var inputBottomInset: CGFloat = inputPanelSize.height - 26.0
+                if component.peerId == component.context.account.peerId {
+                    inputBottomInset += 8.0
+                }
                 introContentSize = self.introContent.update(
                     transition: transition,
                     component: AnyComponent(
@@ -1432,13 +1341,13 @@ private final class GiftSetupScreenComponent: Component {
                                 entities: generateChatInputTextEntities(textInputText),
                                 upgradeStars: self.includeUpgrade ? upgradeStars : nil,
                                 chargeStars: nil,
-                                bottomInset: max(0.0, inputPanelSize.height - 26.0)
+                                bottomInset: max(0.0, inputBottomInset)
                             ),
                             params: listItemParams
                         )
                     ),
                     environment: {},
-                    containerSize: CGSize(width: availableSize.width, height: 10000.0)
+                    containerSize: CGSize(width: fillingSize, height: 10000.0)
                 )
                 if let introContentView = self.introContent.view {
                     if introContentView.superview == nil {
@@ -1449,10 +1358,10 @@ private final class GiftSetupScreenComponent: Component {
                         self.scrollContentView.addSubview(introContentView)
                         introContentView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(self.previewTap)))
                     }
-                    transition.setFrame(view: introContentView, frame: CGRect(origin: CGPoint(), size: introContentSize))
+                    transition.setFrame(view: introContentView, frame: CGRect(origin: CGPoint(x: rawSideInset, y: 0.0), size: introContentSize))
                 }
                 
-                let inputPanelFrame = CGRect(origin: CGPoint(x: inputPanelInset, y: contentHeight + introContentSize.height - inputPanelInset - inputPanelSize.height + 6.0), size: inputPanelSize)
+                let inputPanelFrame = CGRect(origin: CGPoint(x: rawSideInset + inputPanelInset, y: contentHeight + introContentSize.height - inputPanelInset - inputPanelSize.height + 6.0), size: inputPanelSize)
                 if let inputPanelView = self.inputPanel.view {
                     if inputPanelView.superview == nil {
                         self.scrollContentView.addSubview(inputPanelView)
@@ -1462,6 +1371,64 @@ private final class GiftSetupScreenComponent: Component {
             }
             contentHeight += introContentSize.height
             contentHeight += sectionSpacing
+            
+            if case let .starGift(starGift, forceUnique) = component.subject, let availability = starGift.availability, availability.resale > 0 {
+                if let forceUnique, !forceUnique {
+                } else {
+                    let resaleSectionSize = self.resaleSection.update(
+                        transition: transition,
+                        component: AnyComponent(ListSectionComponent(
+                            theme: environment.theme,
+                            style: .glass,
+                            header: nil,
+                            footer: nil,
+                            items: [
+                                AnyComponentWithIdentity(id: 0, component: AnyComponent(ListActionItemComponent(
+                                    theme: environment.theme,
+                                    style: .glass,
+                                    title: AnyComponent(VStack([
+                                        AnyComponentWithIdentity(id: AnyHashable(0), component: AnyComponent(
+                                            MultilineTextComponent(
+                                                text: .plain(NSAttributedString(string: environment.strings.Gift_Send_AvailableForResale, font: Font.regular(presentationData.listsFontSize.baseDisplaySize), textColor: environment.theme.list.itemPrimaryTextColor))
+                                            )
+                                        )),
+                                    ], alignment: .left, spacing: 2.0)),
+                                    accessory: .custom(ListActionItemComponent.CustomAccessory(component: AnyComponentWithIdentity(id: 0, component: AnyComponent(MultilineTextComponent(
+                                        text: .plain(NSAttributedString(
+                                            string: presentationStringsFormattedNumber(Int32(availability.resale), environment.dateTimeFormat.groupingSeparator),
+                                            font: Font.regular(presentationData.listsFontSize.baseDisplaySize),
+                                            textColor: environment.theme.list.itemSecondaryTextColor
+                                        )),
+                                        maximumNumberOfLines: 0
+                                    ))), insets: UIEdgeInsets(top: 0.0, left: 0.0, bottom: 0.0, right: 16.0))),
+                                    action: { [weak self] _ in
+                                        guard let self, let component = self.component, let controller = environment.controller() else {
+                                            return
+                                        }
+                                        let storeController = component.context.sharedContext.makeGiftStoreController(
+                                            context: component.context,
+                                            peerId: component.peerId,
+                                            gift: starGift
+                                        )
+                                        controller.push(storeController)
+                                    }
+                                )))
+                            ]
+                        )),
+                        environment: {},
+                        containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 10000.0)
+                    )
+                    let resaleSectionFrame = CGRect(origin: CGPoint(x: sideInset, y: contentHeight), size: resaleSectionSize)
+                    if let resaleSectionView = self.resaleSection.view {
+                        if resaleSectionView.superview == nil {
+                            self.scrollContentView.addSubview(resaleSectionView)
+                        }
+                        transition.setFrame(view: resaleSectionView, frame: resaleSectionFrame)
+                    }
+                    contentHeight += resaleSectionSize.height
+                    contentHeight += sectionSpacing
+                }
+            }
             
             switch component.subject {
             case let .premium(product):
@@ -1945,19 +1912,19 @@ private final class GiftSetupScreenComponent: Component {
                     }
                 )),
                 environment: {},
-                containerSize: CGSize(width: availableSize.width - buttonInsets.left - buttonInsets.right, height: buttonHeight)
+                containerSize: CGSize(width: fillingSize - buttonInsets.left - buttonInsets.right, height: buttonHeight)
             )
             var bottomPanelHeight = 13.0 + buttonInsets.bottom + actionButtonSize.height
             
             let bottomEdgeEffectHeight: CGFloat = bottomPanelHeight
-            let bottomEdgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: availableSize.height - bottomEdgeEffectHeight), size: CGSize(width: availableSize.width, height: bottomEdgeEffectHeight))
+            let bottomEdgeEffectFrame = CGRect(origin: CGPoint(x: rawSideInset, y: availableSize.height - bottomEdgeEffectHeight), size: CGSize(width: fillingSize, height: bottomEdgeEffectHeight))
             transition.setFrame(view: self.bottomEdgeEffectView, frame: bottomEdgeEffectFrame)
             self.bottomEdgeEffectView.update(content: environment.theme.actionSheet.opaqueItemBackgroundColor, blur: true, alpha: 1.0, rect: bottomEdgeEffectFrame, edge: .bottom, edgeSize: bottomEdgeEffectFrame.height, transition: transition)
             if self.bottomEdgeEffectView.superview == nil {
                 self.containerView.addSubview(self.bottomEdgeEffectView)
             }
             
-            let actionButtonFrame = CGRect(origin: CGPoint(x: buttonInsets.left, y: availableSize.height - buttonInsets.bottom - actionButtonSize.height), size: actionButtonSize)
+            let actionButtonFrame = CGRect(origin: CGPoint(x: rawSideInset + buttonInsets.left, y: availableSize.height - buttonInsets.bottom - actionButtonSize.height), size: actionButtonSize)
             if let buttonView = self.actionButton.view {
                 if buttonView.superview == nil {
                     self.containerView.addSubview(buttonView)
@@ -2086,7 +2053,11 @@ public class GiftSetupScreen: ViewControllerComponentContainer {
             self.didPlayAppearAnimation = true
             
             if let componentView = self.node.hostView.componentView as? GiftSetupScreenComponent.View {
-                componentView.animateIn()
+                componentView.alpha = 0.0
+                Queue.mainQueue().after(0.01, {
+                    componentView.alpha = 1.0
+                    componentView.animateIn()
+                })
             }
         }
     }

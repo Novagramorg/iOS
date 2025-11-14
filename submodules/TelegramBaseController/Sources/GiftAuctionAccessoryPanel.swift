@@ -106,22 +106,6 @@ final class GiftAuctionAccessoryPanel: ASDisplayNode {
         let titleText: String = self.strings.ChatList_Auctions_ActiveAuction(Int32(self.states.count))
         titleItems.append(AnyComponentWithIdentity(id: "label", component: AnyComponent(MultilineTextComponent(text: .plain(NSAttributedString(string: titleText, font: titleFont, textColor: self.theme.rootController.navigationBar.primaryTextColor))))))
         
-        let titleSize = self.title.update(
-            transition: .immediate,
-            component: AnyComponent(
-                HStack(titleItems, spacing: 3.0, alignment: .left)
-            ),
-            environment: {},
-            containerSize: size
-        )
-        let titleFrame = CGRect(origin: CGPoint(x: 16.0, y: 9.0), size: titleSize)
-        if let titleView = self.title.view {
-            if titleView.superview == nil {
-                self.contentNode.view.addSubview(titleView)
-            }
-            titleView.frame = titleFrame
-        }
-        
         let subtitleText: String
         var subtitleTextColor = self.theme.rootController.navigationBar.secondaryTextColor
         var isOutbid = false
@@ -195,20 +179,6 @@ final class GiftAuctionAccessoryPanel: ASDisplayNode {
             buttonAnimatedTitleItems.append(AnimatedTextComponent.Item(id: "view", content: .text(self.strings.ChatList_Auctions_View)))
         }
         
-        let subtitleSize = self.subtitle.update(
-            transition: .immediate,
-            component: AnyComponent(MultilineTextComponent(text: .plain(NSAttributedString(string: subtitleText, font: subtitleFont, textColor: subtitleTextColor)))),
-            environment: {},
-            containerSize: size
-        )
-        let subtitleFrame = CGRect(origin: CGPoint(x: 16.0, y: 29.0), size: subtitleSize)
-        if let subtitleView = self.subtitle.view {
-            if subtitleView.superview == nil {
-                self.contentNode.view.addSubview(subtitleView)
-            }
-            subtitleView.frame = subtitleFrame
-        }
-                
         let buttonSize = self.button.update(
             transition: .spring(duration: 0.2),
             component: AnyComponent(
@@ -252,6 +222,36 @@ final class GiftAuctionAccessoryPanel: ASDisplayNode {
                 self.contentNode.view.addSubview(buttonView)
             }
             buttonView.frame = buttonFrame
+        }
+        
+        let titleSize = self.title.update(
+            transition: .immediate,
+            component: AnyComponent(
+                HStack(titleItems, spacing: 3.0, alignment: .left)
+            ),
+            environment: {},
+            containerSize: CGSize(width: size.width - buttonSize.width - 48.0, height: size.height)
+        )
+        let titleFrame = CGRect(origin: CGPoint(x: 16.0, y: 9.0), size: titleSize)
+        if let titleView = self.title.view {
+            if titleView.superview == nil {
+                self.contentNode.view.addSubview(titleView)
+            }
+            titleView.frame = titleFrame
+        }
+        
+        let subtitleSize = self.subtitle.update(
+            transition: .immediate,
+            component: AnyComponent(MultilineTextComponent(text: .plain(NSAttributedString(string: subtitleText, font: subtitleFont, textColor: subtitleTextColor)))),
+            environment: {},
+            containerSize: CGSize(width: size.width - buttonSize.width - 40.0, height: size.height)
+        )
+        let subtitleFrame = CGRect(origin: CGPoint(x: 16.0, y: 29.0), size: subtitleSize)
+        if let subtitleView = self.subtitle.view {
+            if subtitleView.superview == nil {
+                self.contentNode.view.addSubview(subtitleView)
+            }
+            subtitleView.frame = subtitleFrame
         }
         
         transition.updateFrame(node: self.separatorNode, frame: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: size.width, height: UIScreenPixel)))
