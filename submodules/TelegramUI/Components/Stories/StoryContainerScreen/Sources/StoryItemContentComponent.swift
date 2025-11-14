@@ -119,8 +119,9 @@ final class StoryItemContentComponent: Component {
         var starStats: StarStats?
         var isAdmin: Bool
         var defaultSendAs: EnginePeer.Id?
+        var isUnifiedStream: Bool
         
-        init(isExpanded: Bool, isEmpty: Bool, hasUnseenMessages: Bool, areMessagesEnabled: Bool, minMessagePrice: Int64?, starStats: StarStats?, isAdmin: Bool, defaultSendAs: EnginePeer.Id?) {
+        init(isExpanded: Bool, isEmpty: Bool, hasUnseenMessages: Bool, areMessagesEnabled: Bool, minMessagePrice: Int64?, starStats: StarStats?, isAdmin: Bool, defaultSendAs: EnginePeer.Id?, isUnifiedStream: Bool) {
             self.isExpanded = isExpanded
             self.isEmpty = isEmpty
             self.hasUnseenMessages = hasUnseenMessages
@@ -129,6 +130,7 @@ final class StoryItemContentComponent: Component {
             self.starStats = starStats
             self.isAdmin = isAdmin
             self.defaultSendAs = defaultSendAs
+            self.isUnifiedStream = isUnifiedStream
         }
     }
     
@@ -238,7 +240,8 @@ final class StoryItemContentComponent: Component {
                 minMessagePrice: mediaStreamCallState?.minMessagePrice,
                 starStats: starStats,
                 isAdmin: mediaStreamCallState?.isAdmin ?? false,
-                defaultSendAs: mediaStreamCallState?.defaultSendAs
+                defaultSendAs: mediaStreamCallState?.defaultSendAs,
+                isUnifiedStream: mediaStreamCallState?.isUnifiedStream ?? false
             )
         }
         

@@ -178,12 +178,14 @@ public final class MessageInputPanelComponent: Component {
         public var isExpanded: Bool
         public var isEmpty: Bool
         public var hasUnseenMessages: Bool
+        public var isUnifiedStream: Bool
         
-        public init(isEnabled: Bool, isExpanded: Bool, isEmpty: Bool, hasUnseenMessages: Bool) {
+        public init(isEnabled: Bool, isExpanded: Bool, isEmpty: Bool, hasUnseenMessages: Bool, isUnifiedStream: Bool) {
             self.isEnabled = isEnabled
             self.isExpanded = isExpanded
             self.isEmpty = isEmpty
             self.hasUnseenMessages = hasUnseenMessages
+            self.isUnifiedStream = isUnifiedStream
         }
     }
     
@@ -1065,7 +1067,7 @@ public final class MessageInputPanelComponent: Component {
                     rightAction = ChatTextInputPanelComponent.RightAction(kind: .empty, action: { _ in })
                 }
                 var secondaryRightAction: ChatTextInputPanelComponent.RightAction?
-                if component.isEmbeddedInCamera, let call = component.call {
+                if component.isEmbeddedInCamera, let call = component.call, let liveChatState = component.liveChatState, !liveChatState.isUnifiedStream {
                     secondaryRightAction = ChatTextInputPanelComponent.RightAction(kind: .liveMicrophone(call: call), action: { [weak self] sourceView in
                         guard let self, let component = self.component else {
                             return
