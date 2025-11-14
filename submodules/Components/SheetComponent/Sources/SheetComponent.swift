@@ -400,6 +400,10 @@ public final class SheetComponent<ChildEnvironmentType: Sendable & Equatable>: C
             self.component = component
             self.currentHasInputHeight = sheetEnvironment.hasInputHeight
             
+            if self.isAnimatingOut {
+                return availableSize
+            }
+            
             var glassInset: CGFloat = 0.0
             var topCornerRadius: CGFloat
             var bottomCornerRadius: CGFloat
