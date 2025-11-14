@@ -945,6 +945,16 @@ public final class StoryItemSetContainerComponent: Component {
             return false
         }
         
+        func preventTapNavigation() -> Bool {
+            guard let component = self.component else {
+                return false
+            }
+            if case .liveStream = component.slice.item.storyItem.media {
+                return true
+            }
+            return false
+        }
+        
         func deactivateInput() {
             if let view = self.inputPanel.view as? MessageInputPanelComponent.View, view.canDeactivateInput() {
                 self.sendMessageContext.currentInputMode = .text
@@ -3234,7 +3244,7 @@ public final class StoryItemSetContainerComponent: Component {
                             }
                             self.sendMessageContext.performShareAction(view: self)
                         } : nil,
-                        paidMessageAction: isLiveStream && !component.isEmbeddedInCamera ? { [weak self] in
+                        paidMessageAction: isLiveStream && component.slice.item.peerId != component.context.account.peerId && !component.isEmbeddedInCamera ? { [weak self] in
                             guard let self else {
                                 return
                             }
@@ -4269,7 +4279,7 @@ public final class StoryItemSetContainerComponent: Component {
                 closeFriendIcon.view?.removeFromSuperview()
             }
             
-            if case .liveStream = component.slice.item.storyItem.media {
+            if case .liveStream = component.slice.item.storyItem.media, !component.isEmbeddedInCamera {
                 let pictureInPictureIcon: ComponentView<Empty>
                 var pictureInPictureIconTransition: ComponentTransition = itemChanged ? .immediate : .easeInOut(duration: 0.2)
                 if let current = self.pictureInPictureIcon {
