@@ -407,6 +407,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     public var customSendIsDisabled: Bool = false
     public var customInputTextMaxLength: Int?
     public var customSwitchToKeyboard: (() -> Void)?
+    public var allowConsecutiveNewlines = true
     
     private var starReactionButton: ComponentView<Empty>?
     private var liveMicrophoneButton: ComponentView<Empty>?
@@ -4952,24 +4953,41 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 }
             }
         }
-                
+        
+        let string = NSMutableAttributedString(attributedString: editableTextNode.attributedText ?? NSAttributedString())
+        var textColor: UIColor = .black
+        var accentTextColor: UIColor = .blue
+        var baseFontSize: CGFloat = 17.0
+        if let presentationInterfaceState = self.presentationInterfaceState {
+            textColor = presentationInterfaceState.theme.chat.inputPanel.inputTextColor
+            accentTextColor = presentationInterfaceState.theme.chat.inputPanel.panelControlAccentColor
+            baseFontSize = max(minInputFontSize, presentationInterfaceState.fontSize.baseDisplaySize)
+            if "".isEmpty {
+                baseFontSize = 17.0
+            }
+        }
+        let cleanReplacementString = textAttributedStringForStateText(context: context, stateText: NSAttributedString(string: cleanText), fontSize: baseFontSize, textColor: textColor, accentTextColor: accentTextColor, writingDirection: nil, spoilersRevealed: self.spoilersRevealed, availableEmojis: (self.context?.animatedEmojiStickersValue.keys).flatMap(Set.init) ?? Set(), emojiViewProvider: self.emojiViewProvider, makeCollapsedQuoteAttachment: { text, attributes in
+            return ChatInputTextCollapsedQuoteAttachmentImpl(text: text, attributes: attributes)
+        })
+        string.replaceCharacters(in: range, with: cleanReplacementString)
+        
+        var resetText = false
         if cleanText != text {
-            let string = NSMutableAttributedString(attributedString: editableTextNode.attributedText ?? NSAttributedString())
-            var textColor: UIColor = .black
-            var accentTextColor: UIColor = .blue
-            var baseFontSize: CGFloat = 17.0
-            if let presentationInterfaceState = self.presentationInterfaceState {
-                textColor = presentationInterfaceState.theme.chat.inputPanel.inputTextColor
-                accentTextColor = presentationInterfaceState.theme.chat.inputPanel.panelControlAccentColor
-                baseFontSize = max(minInputFontSize, presentationInterfaceState.fontSize.baseDisplaySize)
-                if "".isEmpty {
-                    baseFontSize = 17.0
+            resetText = true
+        }
+        
+        if !self.allowConsecutiveNewlines {
+            while string.string.range(of: "\n\n") != nil {
+                if let range = string.string.range(of: "\n\n") {
+                    let rawRange = NSRange(range, in: string.string)
+                    let firstNewline = string.attributedSubstring(from: NSRange(location: rawRange.location, length: 1))
+                    string.replaceCharacters(in: rawRange, with: firstNewline)
+                    resetText = true
                 }
             }
-            let cleanReplacementString = textAttributedStringForStateText(context: context, stateText: NSAttributedString(string: cleanText), fontSize: baseFontSize, textColor: textColor, accentTextColor: accentTextColor, writingDirection: nil, spoilersRevealed: self.spoilersRevealed, availableEmojis: (self.context?.animatedEmojiStickersValue.keys).flatMap(Set.init) ?? Set(), emojiViewProvider: self.emojiViewProvider, makeCollapsedQuoteAttachment: { text, attributes in
-                return ChatInputTextCollapsedQuoteAttachmentImpl(text: text, attributes: attributes)
-            })
-            string.replaceCharacters(in: range, with: cleanReplacementString)
+        }
+                
+        if resetText {
             self.textInputNode?.attributedText = string
             self.textInputNode?.selectedRange = NSMakeRange(range.lowerBound + cleanReplacementString.length, 0)
             self.updateTextNodeText(animated: true)

@@ -1125,6 +1125,7 @@ public final class MessageInputPanelComponent: Component {
                         insets: UIEdgeInsets(top: 0.0, left: 0.0, bottom: component.bottomInset, right: 0.0),
                         maxHeight: availableSize.height,
                         maxLength: component.maxLength,
+                        allowConsecutiveNewlines: false,
                         sendAction: { [weak self] in
                             guard let self, let component = self.component else {
                                 return
