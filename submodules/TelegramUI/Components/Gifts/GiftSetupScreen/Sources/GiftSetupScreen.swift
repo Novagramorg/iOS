@@ -46,14 +46,14 @@ private final class GiftSetupScreenComponent: Component {
     let context: AccountContext
     let peerId: EnginePeer.Id
     let subject: GiftSetupScreen.Subject
-    let auctionAcquiredGifts: [GiftAuctionAcquiredGift]?
+    let auctionAcquiredGifts: Signal<[GiftAuctionAcquiredGift], NoError>?
     let completion: (() -> Void)?
     
     init(
         context: AccountContext,
         peerId: EnginePeer.Id,
         subject: GiftSetupScreen.Subject,
-        auctionAcquiredGifts: [GiftAuctionAcquiredGift]?,
+        auctionAcquiredGifts: Signal<[GiftAuctionAcquiredGift], NoError>?,
         completion: (() -> Void)? = nil
     ) {
         self.context = context
@@ -2034,7 +2034,7 @@ public class GiftSetupScreen: ViewControllerComponentContainer {
         context: AccountContext,
         peerId: EnginePeer.Id,
         subject: Subject,
-        auctionAcquiredGifts: [GiftAuctionAcquiredGift]? = nil,
+        auctionAcquiredGifts: Signal<[GiftAuctionAcquiredGift], NoError>? = nil,
         completion: (() -> Void)? = nil
     ) {
         self.context = context
