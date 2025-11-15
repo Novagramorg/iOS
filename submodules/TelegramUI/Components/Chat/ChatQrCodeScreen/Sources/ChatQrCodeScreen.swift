@@ -1940,7 +1940,9 @@ private class QrContentNode: ASDisplayNode, ContentNode {
             imageSide = 220.0
             
             if size.width > 375.0 {
-                if textLength > 12 {
+                if textLength > 18 {
+                    fontSize = 16.0
+                } else if textLength > 12 {
                     fontSize = 22.0
                 } else {
                     fontSize = 24.0
