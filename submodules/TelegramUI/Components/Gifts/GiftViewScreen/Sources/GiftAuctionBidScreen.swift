@@ -1332,9 +1332,7 @@ private final class GiftAuctionBidScreenComponent: Component {
                 guard let self else {
                     return
                 }
-                let previous = self.giftAuctionAcquiredGifts
                 self.giftAuctionAcquiredGifts = acquiredGifts
-                
                 self.state?.updated(transition: .easeInOut(duration: 0.25))
             }))
         }
