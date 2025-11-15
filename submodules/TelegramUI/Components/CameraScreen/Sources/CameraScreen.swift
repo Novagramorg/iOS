@@ -1125,10 +1125,12 @@ private final class CameraScreenComponent: CombinedComponent {
                 
                 controller.updateCameraState({ $0.updatedIsWaitingForStream(true) }, transition: .spring(duration: 0.4))
                 
+                let privacy = self.privacy
+                let isForwardingDisabled = self.isForwardingDisabled
                 let _ = (self.context.engine.messages.beginStoryLivestream(
                     peerId: peerId,
                     rtmp: rtmp,
-                    privacy: self.privacy,
+                    privacy: privacy,
                     isForwardingDisabled: self.isForwardingDisabled,
                     messagesEnabled: self.allowComments,
                     sendPaidMessageStars: self.paidMessageStars
@@ -1142,6 +1144,21 @@ private final class CameraScreenComponent: CombinedComponent {
                     controller?.updateCameraState({ $0.updatedIsStreaming(rtmp ? .rtmp : .camera).updatedIsWaitingForStream(false) }, transition: .spring(duration: 0.4))
                     self.updated(transition: .immediate)
                 })
+                
+                let _ = updateMediaEditorStoredStateInteractively(engine: self.context.engine, { current in
+                    if let current {
+                        let updatedPrivacy: MediaEditorResultPrivacy
+                        if let current = current.privacy {
+                            updatedPrivacy = MediaEditorResultPrivacy(sendAsPeerId: peerId, privacy: privacy, timeout: current.timeout, isForwardingDisabled: isForwardingDisabled, pin: current.pin, folderIds: current.folderIds)
+                        } else {
+                            updatedPrivacy = MediaEditorResultPrivacy(sendAsPeerId: peerId, privacy: privacy, timeout: 86400, isForwardingDisabled: isForwardingDisabled, pin: false, folderIds: [])
+                        }
+                        return current.withUpdatedPrivacy(updatedPrivacy)
+                    } else {
+                        let privacy = MediaEditorResultPrivacy(sendAsPeerId: peerId, privacy: privacy, timeout: 86400, isForwardingDisabled: isForwardingDisabled, pin: false, folderIds: [])
+                        return MediaEditorStoredState(privacy: privacy, textSettings: nil)
+                    }
+                }).start()
             }
             
             let _ = (self.context.engine.messages.storySubscriptions(isHidden: false)

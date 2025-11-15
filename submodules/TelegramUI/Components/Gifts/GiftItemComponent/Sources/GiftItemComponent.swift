@@ -698,7 +698,7 @@ public final class GiftItemComponent: Component {
                         containerSize: availableSize
                     )
                     
-                    let badgeBackgroundSize = CGSize(width: badgeTextSize.width + 8.0, height: 18.0)
+                    let badgeBackgroundSize = CGSize(width: badgeTextSize.width + 12.0, height: 18.0)
                     let _ = self.badgeBackground.update(
                         transition: .spring(duration: 0.2),
                         component: AnyComponent(

@@ -1500,25 +1500,27 @@ func openResolvedUrlImpl(
             }
         case let .auction(auctionContext):
             if let auctionContext, case let .generic(gift) = auctionContext.gift {
-                if let currentBidPeerId = auctionContext.currentBidPeerId {
+                if !auctionContext.isFinished, let currentBidPeerId = auctionContext.currentBidPeerId {
                     let controller = context.sharedContext.makeGiftAuctionBidScreen(
                         context: context,
                         toPeerId: currentBidPeerId,
                         text: nil,
                         entities: nil,
                         hideName: false,
-                        auctionContext: auctionContext
+                        auctionContext: auctionContext,
+                        acquiredGifts: nil
                     )
                     navigationController?.pushViewController(controller)
                 } else {
                     let controller = context.sharedContext.makeGiftAuctionViewScreen(
                         context: context,
                         auctionContext: auctionContext,
-                        completion: { [weak navigationController] in
+                        completion: { [weak navigationController] acquiredGifts in
                             let controller = GiftSetupScreen(
                                 context: context,
                                 peerId: context.account.peerId,
                                 subject: .starGift(gift, nil),
+                                auctionAcquiredGifts: acquiredGifts,
                                 completion: nil
                             )
                             navigationController?.pushViewController(controller)

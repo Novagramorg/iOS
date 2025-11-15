@@ -250,9 +250,10 @@ private final class GiftAuctionActiveBidsScreenComponent: Component {
             if case .regular = environment.metrics.widthClass {
                 fillingSize = min(availableSize.width, 414.0) - environment.safeInsets.left * 2.0
             } else {
-                fillingSize = min(availableSize.width, 428.0) - environment.safeInsets.left * 2.0
+                fillingSize = min(availableSize.width, environment.deviceMetrics.screenSize.width) - environment.safeInsets.left * 2.0
             }
-            let sideInset: CGFloat = floor((availableSize.width - fillingSize) * 0.5) + 16.0
+            let rawSideInset: CGFloat = floor((availableSize.width - fillingSize) * 0.5)
+            let sideInset: CGFloat = rawSideInset + 16.0
             
             if self.component == nil, let giftAuctionsManager = component.context.giftAuctionsManager {
                 self.auctionStatesDisposable = (giftAuctionsManager.state
@@ -330,9 +331,7 @@ private final class GiftAuctionActiveBidsScreenComponent: Component {
                                         guard let self, let component = self.component, let auction, let controller = environment.controller(), let navigationController = controller.navigationController as? NavigationController else {
                                             return
                                         }
-                                        controller.dismiss()
-                                        
-                                        let bidController = component.context.sharedContext.makeGiftAuctionBidScreen(context: component.context, toPeerId: auction.currentBidPeerId ?? component.context.account.peerId, text: nil, entities: nil, hideName: false, auctionContext: auction)
+                                        let bidController = component.context.sharedContext.makeGiftAuctionBidScreen(context: component.context, toPeerId: auction.currentBidPeerId ?? component.context.account.peerId, text: nil, entities: nil, hideName: false, auctionContext: auction, acquiredGifts: nil)
                                         navigationController.pushViewController(bidController)
                                     })
                                 }
@@ -403,7 +402,7 @@ private final class GiftAuctionActiveBidsScreenComponent: Component {
                 environment: {},
                 containerSize: CGSize(width: 40.0, height: 40.0)
             )
-            let closeButtonFrame = CGRect(origin: CGPoint(x: 16.0, y: 16.0), size: closeButtonSize)
+            let closeButtonFrame = CGRect(origin: CGPoint(x: rawSideInset + 16.0, y: 16.0), size: closeButtonSize)
             if let closeButtonView = self.closeButton.view {
                 if closeButtonView.superview == nil {
                     self.navigationBarContainer.addSubview(closeButtonView)
@@ -438,7 +437,7 @@ private final class GiftAuctionActiveBidsScreenComponent: Component {
             initialContentHeight = contentHeight
             
             let edgeEffectHeight: CGFloat = 80.0
-            let edgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: availableSize.width, height: edgeEffectHeight))
+            let edgeEffectFrame = CGRect(origin: CGPoint(x: rawSideInset, y: 0.0), size: CGSize(width: fillingSize, height: edgeEffectHeight))
             transition.setFrame(view: self.topEdgeEffectView, frame: edgeEffectFrame)
             self.topEdgeEffectView.update(content: environment.theme.actionSheet.opaqueItemBackgroundColor, blur: true, alpha: 1.0, rect: edgeEffectFrame, edge: .top, edgeSize: edgeEffectFrame.height, transition: transition)
             if self.topEdgeEffectView.superview == nil {

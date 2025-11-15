@@ -148,7 +148,7 @@ public class RemainingCountComponent: Component {
             self.container.layer.addSublayer(self.inactiveBackground)
             self.container.addSubview(self.activeContainer)
             self.activeContainer.layer.addSublayer(self.activeBackground)
-            self.activeContainer.addSubview(self.activeChromeView)
+            //self.activeContainer.addSubview(self.activeChromeView)
             
             self.activeChromeView.layer.compositingFilter = "overlayBlendMode"
             self.activeChromeView.alpha = 0.8

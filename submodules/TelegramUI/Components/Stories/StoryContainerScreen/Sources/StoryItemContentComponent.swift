@@ -37,12 +37,14 @@ final class StoryItemContentComponent: Component {
     let baseRate: Double
     let isVideoBuffering: Bool
     let isCurrent: Bool
+    let isUIHidden: Bool
     let preferHighQuality: Bool
     let isEmbeddedInCamera: Bool
+    let canManageLiveChatMessagesFromPeers: Set<EnginePeer.Id>
     let activateReaction: (UIView, MessageReaction.Reaction) -> Void
     let controller: () -> ViewController?
     
-    init(context: AccountContext, strings: PresentationStrings, peer: EnginePeer, item: EngineStoryItem, availableReactions: StoryAvailableReactions?, entityFiles: [MediaId: TelegramMediaFile], audioMode: StoryContentItem.AudioMode, baseRate: Double, isVideoBuffering: Bool, isCurrent: Bool, preferHighQuality: Bool, isEmbeddedInCamera: Bool, activateReaction: @escaping (UIView, MessageReaction.Reaction) -> Void, controller: @escaping () -> ViewController?) {
+    init(context: AccountContext, strings: PresentationStrings, peer: EnginePeer, item: EngineStoryItem, availableReactions: StoryAvailableReactions?, entityFiles: [MediaId: TelegramMediaFile], audioMode: StoryContentItem.AudioMode, baseRate: Double, isVideoBuffering: Bool, isCurrent: Bool, isUIHidden: Bool, preferHighQuality: Bool, isEmbeddedInCamera: Bool, canManageLiveChatMessagesFromPeers: Set<EnginePeer.Id>, activateReaction: @escaping (UIView, MessageReaction.Reaction) -> Void, controller: @escaping () -> ViewController?) {
 		self.context = context
         self.strings = strings
         self.peer = peer
@@ -53,8 +55,10 @@ final class StoryItemContentComponent: Component {
         self.baseRate = baseRate
         self.isVideoBuffering = isVideoBuffering
         self.isCurrent = isCurrent
+        self.isUIHidden = isUIHidden
         self.preferHighQuality = preferHighQuality
         self.isEmbeddedInCamera = isEmbeddedInCamera
+        self.canManageLiveChatMessagesFromPeers = canManageLiveChatMessagesFromPeers
         self.activateReaction = activateReaction
         self.controller = controller
 	}
@@ -87,7 +91,13 @@ final class StoryItemContentComponent: Component {
         if lhs.isCurrent != rhs.isCurrent {
             return false
         }
+        if lhs.isUIHidden != rhs.isUIHidden {
+            return false
+        }
         if lhs.isEmbeddedInCamera != rhs.isEmbeddedInCamera {
+            return false
+        }
+        if lhs.canManageLiveChatMessagesFromPeers != rhs.canManageLiveChatMessagesFromPeers {
             return false
         }
         if lhs.preferHighQuality != rhs.preferHighQuality {
@@ -119,8 +129,9 @@ final class StoryItemContentComponent: Component {
         var starStats: StarStats?
         var isAdmin: Bool
         var defaultSendAs: EnginePeer.Id?
+        var isUnifiedStream: Bool
         
-        init(isExpanded: Bool, isEmpty: Bool, hasUnseenMessages: Bool, areMessagesEnabled: Bool, minMessagePrice: Int64?, starStats: StarStats?, isAdmin: Bool, defaultSendAs: EnginePeer.Id?) {
+        init(isExpanded: Bool, isEmpty: Bool, hasUnseenMessages: Bool, areMessagesEnabled: Bool, minMessagePrice: Int64?, starStats: StarStats?, isAdmin: Bool, defaultSendAs: EnginePeer.Id?, isUnifiedStream: Bool) {
             self.isExpanded = isExpanded
             self.isEmpty = isEmpty
             self.hasUnseenMessages = hasUnseenMessages
@@ -129,6 +140,7 @@ final class StoryItemContentComponent: Component {
             self.starStats = starStats
             self.isAdmin = isAdmin
             self.defaultSendAs = defaultSendAs
+            self.isUnifiedStream = isUnifiedStream
         }
     }
     
@@ -238,7 +250,8 @@ final class StoryItemContentComponent: Component {
                 minMessagePrice: mediaStreamCallState?.minMessagePrice,
                 starStats: starStats,
                 isAdmin: mediaStreamCallState?.isAdmin ?? false,
-                defaultSendAs: mediaStreamCallState?.defaultSendAs
+                defaultSendAs: mediaStreamCallState?.defaultSendAs,
+                isUnifiedStream: mediaStreamCallState?.isUnifiedStream ?? false
             )
         }
         
@@ -802,6 +815,13 @@ final class StoryItemContentComponent: Component {
                 restorePictureInPictureImpl = dismissController()
             })
         }
+        
+        func scheduleScrollLiveChatToBottom() {
+            guard let liveChatView = self.liveChat?.view as? StoryContentLiveChatComponent.View else {
+                return
+            }
+            liveChatView.scheduleScrollLiveChatToBottom()
+        }
 
         func update(component: StoryItemContentComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<StoryContentItem.Environment>, transition: ComponentTransition) -> CGSize {
             self.isUpdating = true
@@ -998,6 +1018,7 @@ final class StoryItemContentComponent: Component {
                         theme: environment.theme,
                         call: mediaStreamCall,
                         storyPeerId: component.peer.id,
+                        canManageMessagesFromPeers: component.canManageLiveChatMessagesFromPeers,
                         insets: environment.containerInsets,
                         isEmbeddedInCamera: component.isEmbeddedInCamera,
                         minPaidStars: minPaidStars,
@@ -1015,9 +1036,11 @@ final class StoryItemContentComponent: Component {
                 if let liveChatView = liveChat.view {
                     if liveChatView.superview == nil {
                         liveChat.parentState = state
+                        liveChatView.layer.allowsGroupOpacity = true
                         self.insertSubview(liveChatView, aboveSubview: self.imageView)
                     }
                     mediaStreamTransition.setFrame(view: liveChatView, frame: liveChatFrame)
+                    mediaStreamTransition.setAlpha(view: liveChatView, alpha: component.isUIHidden ? 0.0 : 1.0)
                 }
                 
                 if case .rtc = liveStream.kind, component.isEmbeddedInCamera {

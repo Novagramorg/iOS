@@ -34,6 +34,7 @@ final class StoryContentLiveChatComponent: Component {
     let theme: PresentationTheme
     let call: PresentationGroupCall
     let storyPeerId: EnginePeer.Id
+    let canManageMessagesFromPeers: Set<EnginePeer.Id>
     let insets: UIEdgeInsets
     let isEmbeddedInCamera: Bool
     let minPaidStars: Int?
@@ -46,6 +47,7 @@ final class StoryContentLiveChatComponent: Component {
         theme: PresentationTheme,
         call: PresentationGroupCall,
         storyPeerId: EnginePeer.Id,
+        canManageMessagesFromPeers: Set<EnginePeer.Id>,
         insets: UIEdgeInsets,
         isEmbeddedInCamera: Bool,
         minPaidStars: Int?,
@@ -57,6 +59,7 @@ final class StoryContentLiveChatComponent: Component {
         self.theme = theme
         self.call = call
         self.storyPeerId = storyPeerId
+        self.canManageMessagesFromPeers = canManageMessagesFromPeers
         self.insets = insets
         self.isEmbeddedInCamera = isEmbeddedInCamera
         self.minPaidStars = minPaidStars
@@ -80,6 +83,9 @@ final class StoryContentLiveChatComponent: Component {
             return false
         }
         if lhs.storyPeerId != rhs.storyPeerId {
+            return false
+        }
+        if lhs.canManageMessagesFromPeers != rhs.canManageMessagesFromPeers {
             return false
         }
         if lhs.insets != rhs.insets {
@@ -128,6 +134,7 @@ final class StoryContentLiveChatComponent: Component {
         private let pinnedBar = ComponentView<Empty>()
         
         private let listState = AsyncListComponent.ExternalState()
+        private var isScrollToBottomScheduled: Bool = false
         private let list = ComponentView<Empty>()
         private let listShadowView: UIView
         
@@ -421,7 +428,7 @@ final class StoryContentLiveChatComponent: Component {
                 }
                 
                 var items: [ContextMenuItem] = []
-                if !isPinned {
+                if !isPinned, let messagesState = self.messagesState, let message = messagesState.messages.first(where: { $0.id == id }), !message.text.isEmpty {
                     items.append(.action(ContextMenuActionItem(text: presentationData.strings.Conversation_ContextMenuCopy, textColor: .primary, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Copy"), color: theme.contextMenu.primaryColor) }, action: { [weak self] c, _ in
                         guard let self else {
                             return
@@ -448,6 +455,10 @@ final class StoryContentLiveChatComponent: Component {
                     return
                 }
                 if message.author?.id == component.context.account.peerId {
+                    isMyMessage = true
+                    canDelete = true
+                }
+                if let author = message.author, component.canManageMessagesFromPeers.contains(author.id) {
                     isMyMessage = true
                     canDelete = true
                 }
@@ -534,6 +545,10 @@ final class StoryContentLiveChatComponent: Component {
                 
                 component.controller()?.presentInGlobalOverlay(contextController)
             }
+        }
+        
+        func scheduleScrollLiveChatToBottom() {
+            self.isScrollToBottomScheduled = true
         }
         
         func update(component: StoryContentLiveChatComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
@@ -727,6 +742,13 @@ final class StoryContentLiveChatComponent: Component {
                 listTransition = listTransition.withAnimation(.none)
             }
             
+            if self.isScrollToBottomScheduled {
+                self.isScrollToBottomScheduled = false
+                if let firstItem = listItems.first {
+                    self.listState.resetScrolling(id: firstItem.id)
+                }
+            }
+            
             let _ = self.list.update(
                 transition: listTransition,
                 component: AnyComponent(AsyncListComponent(
@@ -740,7 +762,7 @@ final class StoryContentLiveChatComponent: Component {
                 containerSize: availableSize
             )
             let listFrame = CGRect(origin: CGPoint(), size: availableSize)
-            if let listView = self.list.view {
+            if let listView = self.list.view as? AsyncListComponent.View {
                 if listView.superview == nil {
                     listView.transform = CGAffineTransformMakeRotation(CGFloat.pi)
                     self.listContainer.addSubview(listView)
@@ -754,7 +776,20 @@ final class StoryContentLiveChatComponent: Component {
                 } else {
                     listAlpha = listItems.isEmpty ? 0.0 : 1.0
                 }
-                alphaTransition.setAlpha(view: listView, alpha: listAlpha)
+                if previousListIsEmpty && !listItems.isEmpty && !alphaTransition.animation.isImmediate {
+                    listView.alpha = 1.0
+                    var delay: Double = 0.0
+                    let delayIncrement: Double = 0.014
+                    for itemView in listView.visibleItemViews() {
+                        if let itemView = itemView as? StoryLiveChatMessageComponent.View {
+                            itemView.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2, delay: delay)
+                            itemView.layer.animateScale(from: 0.95, to: 1.0, duration: 0.2, delay: delay)
+                            delay += delayIncrement
+                        }
+                    }
+                } else {
+                    alphaTransition.setAlpha(view: listView, alpha: listAlpha)
+                }
             }
             
             transition.setFrame(view: self.listContainer, frame: CGRect(origin: CGPoint(), size: availableSize))

@@ -3345,12 +3345,22 @@ private final class GiftViewSheetContent: CombinedComponent {
                     let hiddenDescription: String
                     if incoming {
                         hiddenDescription = text != nil ? strings.Gift_View_NameAndMessageHidden : strings.Gift_View_NameHidden
-                    } else if let peerId = subject.arguments?.peerId, let peer = state.peerMap[peerId], subject.arguments?.fromPeerId != nil {
-                        var peerName = peer.compactDisplayTitle
-                        if peerName.count > 30 {
-                            peerName = "\(peerName.prefix(30))…"
+                    } else if subject.arguments?.fromPeerId != nil {
+                        var recipientPeerId: EnginePeer.Id?
+                        if let toPeerId = subject.arguments?.auctionToPeerId {
+                            recipientPeerId = toPeerId
+                        } else if let peerId = subject.arguments?.peerId {
+                            recipientPeerId = peerId
                         }
-                        hiddenDescription = text != nil ? strings.Gift_View_Outgoing_NameAndMessageHidden(peerName).string : strings.Gift_View_Outgoing_NameHidden(peerName).string
+                        if let recipientPeerId, let peer = state.peerMap[recipientPeerId] {
+                            var peerName = peer.compactDisplayTitle
+                            if peerName.count > 30 {
+                                peerName = "\(peerName.prefix(30))…"
+                            }
+                            hiddenDescription = text != nil ? strings.Gift_View_Outgoing_NameAndMessageHidden(peerName).string : strings.Gift_View_Outgoing_NameHidden(peerName).string
+                        } else {
+                            hiddenDescription = ""
+                        }
                     } else {
                         hiddenDescription = ""
                     }
@@ -5640,10 +5650,13 @@ final class PeerCellComponent: Component {
             let avatarSize = CGSize(width: 22.0, height: 22.0)
             let spacing: CGFloat = 6.0
             
-            let peerName: String
+            var peerName: String
             let avatarOverride: AvatarNodeImageOverride?
             if let peerValue = component.peer {
                 peerName = peerValue.compactDisplayTitle
+                if peerName.count > 40 {
+                    peerName = "\(peerName.prefix(40))…"
+                }
                 avatarOverride = nil
             } else {
                 peerName = component.strings.Gift_View_HiddenName

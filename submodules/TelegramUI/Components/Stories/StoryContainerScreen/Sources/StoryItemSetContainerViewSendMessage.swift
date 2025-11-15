@@ -696,13 +696,20 @@ final class StoryItemSetContainerSendMessage: @unchecked(Sendable) {
                                 sendPaidMessageStars = StarsAmount(value: minMessagePrice, nanos: 0)
                             }
                         }
-                        isAdmin = liveChatStateValue.isAdmin
                         
                         if let currentSendAsPeer = self.currentSendAsPeer {
                             sendAsPeer = currentSendAsPeer
                         } else {
                             sendAsPeer = liveChatStateValue.defaultSendAs.flatMap { defaultSendAs in
                                 return self.sendAsData?.availablePeers.first(where: { $0.peer.id == defaultSendAs })
+                            }
+                        }
+                        
+                        if liveChatStateValue.isAdmin {
+                            if let sendAsPeer {
+                                isAdmin = sendAsPeer.peer.id == component.context.account.peerId
+                            } else {
+                                isAdmin = true
                             }
                         }
                     }
@@ -751,6 +758,14 @@ final class StoryItemSetContainerSendMessage: @unchecked(Sendable) {
                                     }
                                 }
                                 if emojiCount > maxEmojiCount {
+                                    let absMaxEmojiCount = paramSets.paramSets.max(by: { $0.minStars < $1.minStars })?.maxEmojiCount ?? 10
+                                    if emojiCount > absMaxEmojiCount {
+                                        let presentationData = component.context.sharedContext.currentPresentationData.with({ $0 }).withUpdated(theme: component.theme)
+                                        view.component?.controller()?.present(standardTextAlertController(theme: AlertControllerTheme(presentationData: presentationData), title: nil, text: presentationData.strings.LiveStream_ErrorMaxAllowedEmoji_Text(Int32(absMaxEmojiCount)), actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+                                        
+                                        return
+                                    }
+                                    
                                     sendDisabledMinStars = paramSets.paramSets.sorted(by: { $0.minStars < $1.minStars }).first(where: { $0.maxEmojiCount >= emojiCount })?.minStars ?? 1000000000
                                 }
                             }
@@ -764,6 +779,7 @@ final class StoryItemSetContainerSendMessage: @unchecked(Sendable) {
                                 if !(visibleItemView.liveChatState?.isExpanded ?? true) {
                                     visibleItemView.toggleLiveChatExpanded()
                                 }
+                                visibleItemView.scheduleScrollLiveChatToBottom()
                             }
                             
                             let entities = generateChatInputTextEntities(text)
@@ -4282,13 +4298,19 @@ final class StoryItemSetContainerSendMessage: @unchecked(Sendable) {
         }
         var sendAsPeer: SendAsPeer?
         if let liveChatStateValue = itemView.liveChatState {
-            isAdmin = liveChatStateValue.isAdmin
-            
             if let currentSendAsPeer = self.currentSendAsPeer {
                 sendAsPeer = currentSendAsPeer
             } else {
                 sendAsPeer = liveChatStateValue.defaultSendAs.flatMap { defaultSendAs in
                     return self.sendAsData?.availablePeers.first(where: { $0.peer.id == defaultSendAs })
+                }
+            }
+            
+            if liveChatStateValue.isAdmin {
+                if let sendAsPeer {
+                    isAdmin = sendAsPeer.peer.id == component.context.account.peerId
+                } else {
+                    isAdmin = true
                 }
             }
         }
@@ -4402,7 +4424,12 @@ final class StoryItemSetContainerSendMessage: @unchecked(Sendable) {
             
             let stateContext = LiveStreamSettingsScreen.StateContext(
                 context: component.context,
-                mode: .edit(call: mediaStreamCall, displayExternalStream: callState.isUnifiedStream),
+                mode: .edit(
+                    call: mediaStreamCall,
+                    displayExternalStream: callState.isUnifiedStream,
+                    allowComments: callState.messagesAreEnabled,
+                    paidMessageStars: callState.sendPaidMessageStars ?? 0
+                ),
                 closeFriends: .single([]),
                 adminedChannels: .single([]),
                 blockedPeersContext: nil

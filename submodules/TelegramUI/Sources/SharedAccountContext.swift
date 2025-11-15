@@ -3846,11 +3846,11 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         return GiftAuctionInfoScreen(context: context, auctionContext: auctionContext, completion: completion)
     }
     
-    public func makeGiftAuctionBidScreen(context: AccountContext, toPeerId: EnginePeer.Id, text: String?, entities: [MessageTextEntity]?, hideName: Bool, auctionContext: GiftAuctionContext) -> ViewController {
-        return GiftAuctionBidScreen(context: context, toPeerId: toPeerId, text: text, entities: entities, hideName: hideName, auctionContext: auctionContext)
+    public func makeGiftAuctionBidScreen(context: AccountContext, toPeerId: EnginePeer.Id, text: String?, entities: [MessageTextEntity]?, hideName: Bool, auctionContext: GiftAuctionContext, acquiredGifts: [GiftAuctionAcquiredGift]?) -> ViewController {
+        return GiftAuctionBidScreen(context: context, toPeerId: toPeerId, text: text, entities: entities, hideName: hideName, auctionContext: auctionContext, acquiredGifts: acquiredGifts)
     }
     
-    public func makeGiftAuctionViewScreen(context: AccountContext, auctionContext: GiftAuctionContext, completion: @escaping () -> Void) -> ViewController {
+    public func makeGiftAuctionViewScreen(context: AccountContext, auctionContext: GiftAuctionContext, completion: @escaping ([GiftAuctionAcquiredGift]?) -> Void) -> ViewController {
         return GiftAuctionViewScreen(context: context, auctionContext: auctionContext, completion: completion)
     }
     

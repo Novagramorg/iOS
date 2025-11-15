@@ -15208,6 +15208,7 @@ Error: %8$@";
 "Gift.Auction.Stars_any" = "%@ Stars";
 
 "Gift.AuctionBid.Title" = "Place a Bid";
+"Gift.AuctionBid.Subtitle" = "Top %@ bidders will win";
 "Gift.AuctionBid.MinimumBid" = "minimum bid";
 "Gift.AuctionBid.UntilNext" = "until next round";
 "Gift.AuctionBid.Left" = "left";
@@ -15423,3 +15424,9 @@ Error: %8$@";
 "ChatList.AlertResumeLiveStreamTitle" = "Resume Live Stream";
 "ChatList.AlertResumeLiveStreamText" = "Do you want to resume an existing Live Stream?";
 "ChatList.AlertResumeLiveStreamAction" = "Resume";
+
+"Gift.Options.Gift.JoinAuction" = "Join";
+"Gift.Options.Gift.ViewAuction" = "View";
+
+"LiveStream.ErrorMaxAllowedEmoji.Text_1" = "You can send up to %d emoji.";
+"LiveStream.ErrorMaxAllowedEmoji.Text_any" = "You can send up to %d emoji.";

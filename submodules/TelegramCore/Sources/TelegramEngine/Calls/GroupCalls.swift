@@ -2654,7 +2654,7 @@ public final class GroupCallParticipantsContext {
         if sendPaidMessageStars != nil {
             flags |= 1 << 3
         }
-        self.updateMessagesEnabledDisposable.set((self.account.network.request(Api.functions.phone.toggleGroupCallSettings(flags: 1 << 2, call: self.reference.apiInputGroupCall, joinMuted: nil, messagesEnabled: isEnabled ? .boolTrue : .boolFalse, sendPaidMessagesStars: sendPaidMessageStars))
+        self.updateMessagesEnabledDisposable.set((self.account.network.request(Api.functions.phone.toggleGroupCallSettings(flags: flags, call: self.reference.apiInputGroupCall, joinMuted: nil, messagesEnabled: isEnabled ? .boolTrue : .boolFalse, sendPaidMessagesStars: sendPaidMessageStars))
         |> deliverOnMainQueue).start(next: { [weak self] updates in
             guard let strongSelf = self else {
                 return
@@ -3899,6 +3899,8 @@ public final class GroupCallMessagesContext {
         private var pendingSendStars: (fromPeer: Peer, messageId: Int64, amount: Int64)?
         private var pendingSendStarsTimer: SwiftSignalKit.Timer?
         
+        private var minMessagePrice: Int64 = 0
+        
         init(queue: Queue, appConfig: AppConfiguration, account: Account, callId: Int64, reference: InternalGroupCallReference, e2eContext: ConferenceCallE2EContext?, messageLifetime: Int32, isLiveStream: Bool) {
             self.queue = queue
             self.params = LiveChatMessageParams(appConfig: appConfig)
@@ -4039,7 +4041,7 @@ public final class GroupCallMessagesContext {
                             existingIds.insert(message.id)
                             state.messages.append(message)
                             if self.isLiveStream, let paidStars = message.paidStars {
-                                if message.date + message.lifetime >= currentTime {
+                                if message.date + message.lifetime >= currentTime && paidStars >= self.minMessagePrice {
                                     state.pinnedMessages.append(message)
                                 }
                                 if let author = message.author {
@@ -4301,7 +4303,7 @@ public final class GroupCallMessagesContext {
                 )
                 state.messages.append(message)
                 if self.isLiveStream {
-                    if let paidStars {
+                    if let paidStars, paidStars >= self.minMessagePrice {
                         state.pinnedMessages.append(message)
                         if let fromPeer {
                             Impl.addStateStars(state: &state, peerId: fromPeer.id, isMy: true, amount: paidStars)
@@ -4535,36 +4537,42 @@ public final class GroupCallMessagesContext {
                             paidStars: totalAmount
                         ))
                     }
-                    if let index = state.pinnedMessages.firstIndex(where: { $0.id == Message.Id(space: .local, id: pendingSendStarsValue.messageId) }) {
-                        let message = state.pinnedMessages[index]
-                        state.pinnedMessages.remove(at: index)
-                        state.pinnedMessages.append(Message(
-                            id: message.id,
-                            stableId: message.stableId,
-                            isIncoming: message.isIncoming,
-                            author: message.author,
-                            isFromAdmin: isAdmin,
-                            text: message.text,
-                            entities: message.entities,
-                            date: currentTime,
-                            lifetime: lifetime,
-                            paidStars: totalAmount
-                        ))
+                    if totalAmount >= self.minMessagePrice {
+                        if let index = state.pinnedMessages.firstIndex(where: { $0.id == Message.Id(space: .local, id: pendingSendStarsValue.messageId) }) {
+                            let message = state.pinnedMessages[index]
+                            state.pinnedMessages.remove(at: index)
+                            state.pinnedMessages.append(Message(
+                                id: message.id,
+                                stableId: message.stableId,
+                                isIncoming: message.isIncoming,
+                                author: message.author,
+                                isFromAdmin: isAdmin,
+                                text: message.text,
+                                entities: message.entities,
+                                date: currentTime,
+                                lifetime: lifetime,
+                                paidStars: totalAmount
+                            ))
+                        } else {
+                            let stableId = self.nextStableId
+                            self.nextStableId += 1
+                            state.pinnedMessages.append(Message(
+                                id: Message.Id(space: .local, id: pendingSendStarsValue.messageId),
+                                stableId: stableId,
+                                isIncoming: false,
+                                author: EnginePeer(fromPeer),
+                                isFromAdmin: isAdmin,
+                                text: "",
+                                entities: [],
+                                date: currentTime,
+                                lifetime: lifetime,
+                                paidStars: totalAmount
+                            ))
+                        }
                     } else {
-                        let stableId = self.nextStableId
-                        self.nextStableId += 1
-                        state.pinnedMessages.append(Message(
-                            id: Message.Id(space: .local, id: pendingSendStarsValue.messageId),
-                            stableId: stableId,
-                            isIncoming: false,
-                            author: EnginePeer(fromPeer),
-                            isFromAdmin: isAdmin,
-                            text: "",
-                            entities: [],
-                            date: currentTime,
-                            lifetime: lifetime,
-                            paidStars: totalAmount
-                        ))
+                        if let index = state.pinnedMessages.firstIndex(where: { $0.id == Message.Id(space: .local, id: pendingSendStarsValue.messageId) }) {
+                            state.pinnedMessages.remove(at: index)
+                        }
                     }
                 }
                 
@@ -4647,6 +4655,26 @@ public final class GroupCallMessagesContext {
                 }
             })
         }
+        
+        func updateSettings(minMessagePrice: Int64) {
+            if self.minMessagePrice != minMessagePrice {
+                self.minMessagePrice = minMessagePrice
+                
+                var updatedState: State?
+                for i in (0 ..< self.state.pinnedMessages.count).reversed() {
+                    let message = self.state.pinnedMessages[i]
+                    if let paidStars = message.paidStars, paidStars < minMessagePrice {
+                        if updatedState == nil {
+                            updatedState = self.state
+                        }
+                        updatedState?.pinnedMessages.remove(at: i)
+                    }
+                }
+                if let updatedState {
+                    self.state = updatedState
+                }
+            }
+        }
     }
     
     private let queue: Queue
@@ -4699,6 +4727,12 @@ public final class GroupCallMessagesContext {
     public func deleteAllMessages(authorId: EnginePeer.Id, reportSpam: Bool) {
         self.impl.with { impl in
             impl.deleteAllMessages(authorId: authorId, reportSpam: reportSpam)
+        }
+    }
+    
+    public func updateSettings(minMessagePrice: Int64) {
+        self.impl.with { impl in
+            impl.updateSettings(minMessagePrice: minMessagePrice)
         }
     }
     
