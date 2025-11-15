@@ -272,7 +272,7 @@ extension GiftAuctionContext.State.MyState {
     }
 }
 
-public struct GiftAuctionAcquiredGift {
+public struct GiftAuctionAcquiredGift: Equatable {
     public var nameHidden: Bool
     public let peer: EnginePeer
     public let date: Int32
