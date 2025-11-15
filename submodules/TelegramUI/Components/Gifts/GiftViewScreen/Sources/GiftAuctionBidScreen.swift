@@ -681,7 +681,7 @@ private final class PeerComponent: Component {
             }
             
             if let icon = self.amountStar.image {
-                self.amountStar.frame = CGRect(origin: CGPoint(x: amountFrame.minX - icon.size.width, y: floorToScreenPixels((size.height - icon.size.height) / 2.0) - UIScreenPixel), size: icon.size)
+                self.amountStar.frame = CGRect(origin: CGPoint(x: amountFrame.minX - icon.size.width - 2.0, y: floorToScreenPixels((size.height - icon.size.height) / 2.0) - UIScreenPixel), size: icon.size)
             }
             
             self.separator.backgroundColor = component.theme.list.itemPlainSeparatorColor.cgColor
@@ -1335,10 +1335,6 @@ private final class GiftAuctionBidScreenComponent: Component {
                 let previous = self.giftAuctionAcquiredGifts
                 self.giftAuctionAcquiredGifts = acquiredGifts
                 
-                if let previous, previous.count < acquiredGifts.count {
-                    self.resetSliderValue()
-                    self.addSubview(ConfettiView(frame: self.bounds))
-                }
                 self.state?.updated(transition: .easeInOut(duration: 0.25))
             }))
         }
@@ -1997,6 +1993,10 @@ private final class GiftAuctionBidScreenComponent: Component {
                         Queue.mainQueue().justDispatch {
                             self.loadAcquiredGifts()
                         }
+                        if !isFirstTime {
+                            self.resetSliderValue()
+                            self.addSubview(ConfettiView(frame: self.bounds))
+                        }
                     }
                     
                     if case .finished = auctionState?.auctionState, let controller = self.environment?.controller() {
@@ -2299,7 +2299,7 @@ private final class GiftAuctionBidScreenComponent: Component {
                             break
                         }
                     }
-                    topBidsComponents.append((peer.id, AnyComponent(PeerComponent(context: component.context, theme: environment.theme, groupingSeparator: environment.dateTimeFormat.groupingSeparator, peer: peer, place: i, amount: bid, isLast: i == topBidders.count, action: peer.id != component.context.account.peerId ? { [weak self] in self?.openPeer(peer, dismiss: false) } : nil))))
+                    topBidsComponents.append((peer.id, AnyComponent(PeerComponent(context: component.context, theme: environment.theme, groupingSeparator: environment.dateTimeFormat.groupingSeparator, peer: peer, place: i, amount: bid, isLast: i == topBidders.count, action: nil))))
                     i += 1
                 }
                 
