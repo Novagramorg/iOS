@@ -450,6 +450,7 @@ public final class StoryItemSetContainerComponent: Component {
         var currentSoundButtonState: Bool?
         let soundButton = ComponentView<Empty>()
         var privacyIcon: ComponentView<Empty>?
+        var pictureInPictureIcon: ComponentView<Empty>?
         
         var captionItem: CaptionItem?
         
@@ -940,6 +941,16 @@ public final class StoryItemSetContainerComponent: Component {
                 if view.canDeactivateInput() && (hasFirstResponder(self) || self.sendMessageContext.currentInputMode == .media) {
                     return true
                 }
+            }
+            return false
+        }
+        
+        func preventTapNavigation() -> Bool {
+            guard let component = self.component else {
+                return false
+            }
+            if case .liveStream = component.slice.item.storyItem.media {
+                return true
             }
             return false
         }
@@ -1629,6 +1640,12 @@ public final class StoryItemSetContainerComponent: Component {
                             component.markAsSeen(id)
                         }
                     )
+                    
+                    var canManageLiveChatMessagesFromPeers = Set<EnginePeer.Id>()
+                    if let sendAsData = self.sendMessageContext.sendAsData {
+                        canManageLiveChatMessagesFromPeers.formUnion(sendAsData.availablePeers.map(\.peer.id))
+                    }
+                    
                     let _ = visibleItem.view.update(
                         transition: itemTransition.withUserData(StoryItemContentComponent.Hint(
                             synchronousLoad: index == centralIndex && itemLayout.contentScaleFraction <= 0.0001 && hintAllowSynchronousLoads
@@ -1644,8 +1661,10 @@ public final class StoryItemSetContainerComponent: Component {
                             baseRate: component.storyItemSharedState.baseRate,
                             isVideoBuffering: visibleItem.isBuffering,
                             isCurrent: index == centralIndex,
+                            isUIHidden: component.hideUI,
                             preferHighQuality: component.slice.additionalPeerData.preferHighQualityStories,
                             isEmbeddedInCamera: component.isEmbeddedInCamera,
+                            canManageLiveChatMessagesFromPeers: canManageLiveChatMessagesFromPeers,
                             activateReaction: { [weak self] reactionView, reaction in
                                 guard let self else {
                                     return
@@ -2152,6 +2171,9 @@ public final class StoryItemSetContainerComponent: Component {
                 if let closeFriendIcon = self.privacyIcon?.view {
                     closeFriendIcon.layer.animateAlpha(from: 0.0, to: closeFriendIcon.alpha, duration: 0.25)
                 }
+                if let pictureInPictureIconView = self.pictureInPictureIcon?.view {
+                    pictureInPictureIconView.layer.animateAlpha(from: 0.0, to: pictureInPictureIconView.alpha, duration: 0.25)
+                }
                 self.closeButton.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.25, completion: { _ in
                     completion()
                 })
@@ -2341,6 +2363,9 @@ public final class StoryItemSetContainerComponent: Component {
                 }
                 if let closeFriendIconView = self.privacyIcon?.view {
                     closeFriendIconView.layer.animateAlpha(from: closeFriendIconView.alpha, to: 0.0, duration: 0.25, removeOnCompletion: false)
+                }
+                if let pictureInPictureIconView = self.pictureInPictureIcon?.view {
+                    pictureInPictureIconView.layer.animateAlpha(from: pictureInPictureIconView.alpha, to: 0.0, duration: 0.25, removeOnCompletion: false)
                 }
                 if let captionView = self.captionItem?.view.view {
                     captionView.layer.animateAlpha(from: captionView.alpha, to: 0.0, duration: 0.25, removeOnCompletion: false)
@@ -3006,10 +3031,11 @@ public final class StoryItemSetContainerComponent: Component {
                 if let visibleItemView = self.visibleItems[component.slice.item.id]?.view.view as? StoryItemContentComponent.View {
                     if let liveChatStateValue = visibleItemView.liveChatState {
                         liveChatState = MessageInputPanelComponent.LiveChatState(
-                            isEnabled: liveChatStateValue.areMessagesEnabled,
+                            isEnabled: liveChatStateValue.areMessagesEnabled || liveChatStateValue.isAdmin,
                             isExpanded: liveChatStateValue.isExpanded,
                             isEmpty: liveChatStateValue.isEmpty,
-                            hasUnseenMessages: liveChatStateValue.hasUnseenMessages
+                            hasUnseenMessages: liveChatStateValue.hasUnseenMessages,
+                            isUnifiedStream: liveChatStateValue.isUnifiedStream
                         )
                         starStats = liveChatStateValue.starStats.flatMap { starStats in
                             return MessageInputPanelComponent.StarStats(
@@ -3028,11 +3054,13 @@ public final class StoryItemSetContainerComponent: Component {
                         }
                         
                         var sendAsPeer: SendAsPeer?
-                        if let currentSendAsPeer = self.sendMessageContext.currentSendAsPeer {
-                            sendAsPeer = currentSendAsPeer
-                        } else {
-                            sendAsPeer = liveChatStateValue.defaultSendAs.flatMap { defaultSendAs in
-                                return self.sendMessageContext.sendAsData?.availablePeers.first(where: { $0.peer.id == defaultSendAs })
+                        if let sendAsData = self.sendMessageContext.sendAsData, sendAsData.availablePeers.count > 1 {
+                            if let currentSendAsPeer = self.sendMessageContext.currentSendAsPeer {
+                                sendAsPeer = currentSendAsPeer
+                            } else {
+                                sendAsPeer = liveChatStateValue.defaultSendAs.flatMap { defaultSendAs in
+                                    return self.sendMessageContext.sendAsData?.availablePeers.first(where: { $0.peer.id == defaultSendAs })
+                                }
                             }
                         }
                         
@@ -3216,7 +3244,7 @@ public final class StoryItemSetContainerComponent: Component {
                             }
                             self.sendMessageContext.performShareAction(view: self)
                         } : nil,
-                        paidMessageAction: isLiveStream && !component.isEmbeddedInCamera ? { [weak self] in
+                        paidMessageAction: isLiveStream && component.slice.item.peerId != component.context.account.peerId && !component.isEmbeddedInCamera ? { [weak self] in
                             guard let self else {
                                 return
                             }
@@ -4249,6 +4277,51 @@ public final class StoryItemSetContainerComponent: Component {
             } else if let closeFriendIcon = self.privacyIcon {
                 self.privacyIcon = nil
                 closeFriendIcon.view?.removeFromSuperview()
+            }
+            
+            if case .liveStream = component.slice.item.storyItem.media, !component.isEmbeddedInCamera {
+                let pictureInPictureIcon: ComponentView<Empty>
+                var pictureInPictureIconTransition: ComponentTransition = itemChanged ? .immediate : .easeInOut(duration: 0.2)
+                if let current = self.pictureInPictureIcon {
+                    pictureInPictureIcon = current
+                } else {
+                    pictureInPictureIconTransition = .immediate
+                    pictureInPictureIcon = ComponentView()
+                    self.pictureInPictureIcon = pictureInPictureIcon
+                }
+                let pictureInPictureIconSize = pictureInPictureIcon.update(
+                    transition: pictureInPictureIconTransition,
+                    component: AnyComponent(PlainButtonComponent(
+                        content: AnyComponent(
+                            BundleIconComponent(
+                                name: "Stories/HeaderPictureInPicture",
+                                tintColor: .white
+                            )
+                        ),
+                        effectAlignment: .center,
+                        action: { [weak self] in
+                            guard let self else {
+                                return
+                            }
+                            
+                            self.beginPictureInPicture()
+                        }
+                    )),
+                    environment: {},
+                    containerSize: CGSize(width: 44.0, height: 44.0)
+                )
+                let pictureInPictureIconFrame = CGRect(origin: CGPoint(x: headerRightOffset - pictureInPictureIconSize.width, y: 20.0), size: pictureInPictureIconSize)
+                if let pictureInPictureIconView = pictureInPictureIcon.view {
+                    if pictureInPictureIconView.superview == nil {
+                        self.controlsClippingView.addSubview(pictureInPictureIconView)
+                    }
+                    
+                    pictureInPictureIconTransition.setFrame(view: pictureInPictureIconView, frame: pictureInPictureIconFrame)
+                    headerRightOffset -= 44.0
+                }
+            } else if let pictureInPictureIcon = self.pictureInPictureIcon {
+                self.pictureInPictureIcon = nil
+                pictureInPictureIcon.view?.removeFromSuperview()
             }
             
             let controlsContainerAlpha = (component.hideUI || self.isEditingStory || self.viewListDisplayState != .hidden) ? 0.0 : 1.0

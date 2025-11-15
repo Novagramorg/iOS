@@ -182,6 +182,7 @@ public final class ChatTextInputPanelComponent: Component {
     let insets: UIEdgeInsets
     let maxHeight: CGFloat
     let maxLength: Int?
+    let allowConsecutiveNewlines: Bool
     let sendAction: (() -> Void)?
     let sendContextAction: ((UIView, ContextGesture) -> Void)?
     
@@ -206,6 +207,7 @@ public final class ChatTextInputPanelComponent: Component {
         insets: UIEdgeInsets,
         maxHeight: CGFloat,
         maxLength: Int?,
+        allowConsecutiveNewlines: Bool,
         sendAction: (() -> Void)?,
         sendContextAction: ((UIView, ContextGesture) -> Void)?
     ) {
@@ -229,6 +231,7 @@ public final class ChatTextInputPanelComponent: Component {
         self.insets = insets
         self.maxHeight = maxHeight
         self.maxLength = maxLength
+        self.allowConsecutiveNewlines = allowConsecutiveNewlines
         self.sendAction = sendAction
         self.sendContextAction = sendContextAction
     }
@@ -292,6 +295,9 @@ public final class ChatTextInputPanelComponent: Component {
             return false
         }
         if lhs.maxLength != rhs.maxLength {
+            return false
+        }
+        if lhs.allowConsecutiveNewlines != rhs.allowConsecutiveNewlines {
             return false
         }
         if (lhs.sendAction == nil) != (rhs.sendAction == nil) {
@@ -1012,6 +1018,8 @@ public final class ChatTextInputPanelComponent: Component {
                     }
                 }
             }
+            
+            panelNode.allowConsecutiveNewlines = component.allowConsecutiveNewlines
             
             if let resetInputState = component.externalState.resetInputState {
                 component.externalState.resetInputState = nil

@@ -1833,7 +1833,6 @@ final class ShareWithPeersScreenComponent: Component {
                     sectionOffset += footerSize.height
                 } else if section.id == 4 && section.itemCount > 0 {
                     var sectionItemOffset: CGFloat = 0.0
-                    //TODO:release
                     if self.selectedOptions.contains(.pin) && !"".isEmpty {
                         let itemFrame = CGRect(origin: CGPoint(x: itemLayout.sideInset, y: sectionOffset + section.insets.top + sectionItemOffset), size: CGSize(width: itemLayout.containerSize.width, height: section.itemHeight))
                         if !visibleBounds.intersects(itemFrame) {
@@ -2732,10 +2731,6 @@ final class ShareWithPeersScreenComponent: Component {
                         if hasCover {
                             itemCount += 1
                         }
-                        //TODO:release
-                        /*if self.selectedOptions.contains(.pin) {
-                            itemCount += 1
-                        }*/
                         if itemCount != 0 {
                             sections.append(ItemLayout.Section(
                                 id: 4,
