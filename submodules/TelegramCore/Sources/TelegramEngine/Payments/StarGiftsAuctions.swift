@@ -78,7 +78,11 @@ public final class GiftAuctionContext {
     public let gift: StarGift
     
     public var isActive: Bool {
-        return myState?.bidAmount != nil
+        if case .finished = auctionState {
+            return false
+        } else {
+            return myState?.bidAmount != nil
+        }
     }
     
     private let disposable = MetaDisposable()
@@ -268,7 +272,7 @@ extension GiftAuctionContext.State.MyState {
     }
 }
 
-public struct GiftAuctionAcquiredGift {
+public struct GiftAuctionAcquiredGift: Equatable {
     public var nameHidden: Bool
     public let peer: EnginePeer
     public let date: Int32
