@@ -1423,8 +1423,8 @@ public protocol SharedAccountContext: AnyObject {
     func makeGiftViewScreen(context: AccountContext, gift: StarGift.UniqueGift, shareStory: ((StarGift.UniqueGift) -> Void)?, openChatTheme: (() -> Void)?, dismissed: (() -> Void)?) -> ViewController
     func makeGiftWearPreviewScreen(context: AccountContext, gift: StarGift.UniqueGift) -> ViewController
     func makeGiftAuctionInfoScreen(context: AccountContext, auctionContext: GiftAuctionContext, completion: (() -> Void)?) -> ViewController
-    func makeGiftAuctionBidScreen(context: AccountContext, toPeerId: EnginePeer.Id, text: String?, entities: [MessageTextEntity]?, hideName: Bool, auctionContext: GiftAuctionContext, acquiredGifts: [GiftAuctionAcquiredGift]?) -> ViewController
-    func makeGiftAuctionViewScreen(context: AccountContext, auctionContext: GiftAuctionContext, completion: @escaping ([GiftAuctionAcquiredGift]?) -> Void) -> ViewController
+    func makeGiftAuctionBidScreen(context: AccountContext, toPeerId: EnginePeer.Id, text: String?, entities: [MessageTextEntity]?, hideName: Bool, auctionContext: GiftAuctionContext, acquiredGifts: Signal<[GiftAuctionAcquiredGift], NoError>?) -> ViewController
+    func makeGiftAuctionViewScreen(context: AccountContext, auctionContext: GiftAuctionContext, completion: @escaping (Signal<[GiftAuctionAcquiredGift], NoError>) -> Void) -> ViewController
     func makeGiftAuctionActiveBidsScreen(context: AccountContext) -> ViewController
     
     func makeStorySharingScreen(context: AccountContext, subject: StorySharingSubject, parentController: ViewController) -> ViewController

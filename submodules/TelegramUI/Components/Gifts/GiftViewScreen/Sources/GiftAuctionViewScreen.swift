@@ -69,6 +69,7 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
         
         private var giftAuctionTimer: SwiftSignalKit.Timer?
         fileprivate var giftAuctionAcquiredGifts: [GiftAuctionAcquiredGift] = []
+        private var giftAuctionAcquiredGiftsPromise = ValuePromise<[GiftAuctionAcquiredGift]>()
         private var giftAuctionAcquiredGiftsDisposable = MetaDisposable()
                 
         var cachedStarImage: (UIImage, PresentationTheme)?
@@ -122,6 +123,7 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
                     return
                 }
                 self.giftAuctionAcquiredGifts = acquiredGifts
+                self.giftAuctionAcquiredGiftsPromise.set(acquiredGifts)
                 self.updated(transition: .easeInOut(duration: 0.25))
             }))
         }
@@ -169,7 +171,7 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
             }
             self.dismiss(animated: true)
             
-            controller.completion(self.giftAuctionAcquiredGifts)
+            controller.completion(self.giftAuctionAcquiredGiftsPromise.get())
         }
         
         func openPeer(_ peer: EnginePeer, dismiss: Bool = true) {
@@ -975,12 +977,12 @@ final class GiftAuctionViewSheetComponent: CombinedComponent {
 }
 
 public final class GiftAuctionViewScreen: ViewControllerComponentContainer {
-    fileprivate let completion: ([GiftAuctionAcquiredGift]?) -> Void
+    fileprivate let completion: (Signal<[GiftAuctionAcquiredGift], NoError>) -> Void
     
     public init(
         context: AccountContext,
         auctionContext: GiftAuctionContext,
-        completion: @escaping ([GiftAuctionAcquiredGift]?) -> Void
+        completion: @escaping (Signal<[GiftAuctionAcquiredGift], NoError>) -> Void
     ) {
         self.completion = completion
         
