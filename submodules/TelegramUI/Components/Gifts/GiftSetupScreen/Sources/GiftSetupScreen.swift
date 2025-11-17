@@ -584,7 +584,6 @@ private final class GiftSetupScreenComponent: Component {
                         }
                         navigationController.setViewControllers(controllers, animated: true)
                         
-                        
                         if case let .starGift(starGift, _) = component.subject, let perUserLimit = starGift.perUserLimit {
                             Queue.mainQueue().after(0.5) {
                                 let remains = max(0, perUserLimit.remains - 1)
@@ -2019,7 +2018,7 @@ private final class GiftSetupScreenComponent: Component {
     }
 }
 
-public class GiftSetupScreen: ViewControllerComponentContainer {
+public class GiftSetupScreen: ViewControllerComponentContainer, GiftSetupScreenProtocol {
     public enum Subject: Equatable {
         case premium(PremiumGiftProduct)
         case starGift(StarGift.Gift, Bool?)
