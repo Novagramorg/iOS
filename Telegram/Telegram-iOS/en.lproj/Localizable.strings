@@ -15226,8 +15226,10 @@ Error: %8$@";
 "Gift.AuctionBid.AddMoreStars" = "Add at least %@ to increase your bid.";
 "Gift.AuctionBid.AddMoreStars.Stars_1" = "%@ Star";
 "Gift.AuctionBid.AddMoreStars.Stars_any" = "%@ Stars";
+"Gift.AuctionBid.AddMoreStars.Set" = "Set";
 "Gift.AuctionBid.Top" = "TOP %@";
 "Gift.AuctionBid.Custom" = "Custom";
+"Gift.AuctionBid.MinimumBidIncreased" = "The minimum bid increased to **%@**.";
 
 "Gift.AuctionBid.CustomBid.Title" = "Place a Custom Bid";
 "Gift.AuctionBid.CustomBid.Text" = "If you fall below the top %@, your bid will roll over to the next drop.";

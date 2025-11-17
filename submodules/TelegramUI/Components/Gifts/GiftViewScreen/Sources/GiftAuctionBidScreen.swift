@@ -681,7 +681,7 @@ private final class PeerComponent: Component {
             }
             
             if let icon = self.amountStar.image {
-                self.amountStar.frame = CGRect(origin: CGPoint(x: amountFrame.minX - icon.size.width, y: floorToScreenPixels((size.height - icon.size.height) / 2.0) - UIScreenPixel), size: icon.size)
+                self.amountStar.frame = CGRect(origin: CGPoint(x: amountFrame.minX - icon.size.width - 2.0, y: floorToScreenPixels((size.height - icon.size.height) / 2.0) - UIScreenPixel), size: icon.size)
             }
             
             self.separator.backgroundColor = component.theme.list.itemPlainSeparatorColor.cgColor
@@ -957,7 +957,7 @@ private final class GiftAuctionBidScreenComponent: Component {
     let hideName: Bool
     let gift: StarGift
     let auctionContext: GiftAuctionContext
-    let acquiredGifts: [GiftAuctionAcquiredGift]?
+    let acquiredGifts: Signal<[GiftAuctionAcquiredGift], NoError>?
     
     init(
         context: AccountContext,
@@ -967,7 +967,7 @@ private final class GiftAuctionBidScreenComponent: Component {
         hideName: Bool,
         gift: StarGift,
         auctionContext: GiftAuctionContext,
-        acquiredGifts: [GiftAuctionAcquiredGift]?
+        acquiredGifts: Signal<[GiftAuctionAcquiredGift], NoError>?
     ) {
         self.context = context
         self.toPeerId = toPeerId
@@ -1332,13 +1332,7 @@ private final class GiftAuctionBidScreenComponent: Component {
                 guard let self else {
                     return
                 }
-                let previous = self.giftAuctionAcquiredGifts
                 self.giftAuctionAcquiredGifts = acquiredGifts
-                
-                if let previous, previous.count < acquiredGifts.count {
-                    self.resetSliderValue()
-                    self.addSubview(ConfettiView(frame: self.bounds))
-                }
                 self.state?.updated(transition: .easeInOut(duration: 0.25))
             }))
         }
@@ -1534,10 +1528,15 @@ private final class GiftAuctionBidScreenComponent: Component {
                             title: nil,
                             text: presentationData.strings.Gift_AuctionBid_AddMoreStars(presentationData.strings.Gift_AuctionBid_AddMoreStars_Stars(Int32(clamping: myMinBidAmount - myBidAmount))).string,
                             timeout: nil,
-                            customUndoText: nil
+                            customUndoText: presentationData.strings.Gift_AuctionBid_AddMoreStars_Set
                         ),
                         position: .bottom,
-                        action: { _ in return true }
+                        action: { [weak self] action in
+                            if let self, case .undo = action {
+                                self.resetSliderValue(component: self.component, forceMinimum: true)
+                            }
+                            return true
+                        }
                     ),
                     in: .current
                 )
@@ -1619,8 +1618,30 @@ private final class GiftAuctionBidScreenComponent: Component {
                     return
                 }
                 
+                HapticFeedback().error()
+                
+                let currentValue = self.amount.realValue
                 self.component?.context.starsContext?.load(force: true)
-                self.resetSliderValue()
+                self.resetSliderValue(component: self.component, forceMinimum: true)
+                
+                if self.amount.realValue > currentValue {
+                    controller.present(
+                        UndoOverlayController(
+                            presentationData: presentationData,
+                            content: .info(
+                                title: nil,
+                                text: presentationData.strings.Gift_AuctionBid_MinimumBidIncreased(presentationData.strings.Gift_AuctionBid_AddMoreStars_Stars(Int32(clamping: self.amount.realValue))).string,
+                                timeout: nil,
+                                customUndoText: nil
+                            ),
+                            position: .bottom,
+                            action: { _ in
+                                return true
+                            }
+                        ),
+                        in: .current
+                    )
+                }
                 
                 Queue.mainQueue().after(0.1) {
                     self.isLoading = false
@@ -1832,7 +1853,7 @@ private final class GiftAuctionBidScreenComponent: Component {
             self.environment?.controller()?.present(controller, in: .window(.root))
         }
         
-        func resetSliderValue(component: GiftAuctionBidScreenComponent? = nil) {
+        func resetSliderValue(component: GiftAuctionBidScreenComponent? = nil, forceMinimum: Bool = false) {
             guard let state = self.giftAuctionState else {
                 return
             }
@@ -1845,16 +1866,13 @@ private final class GiftAuctionBidScreenComponent: Component {
                 }
             }
             var currentValue = max(Int(minBidAmount), 100)
+            var minAllowedRealValue: Int64 = minBidAmount
             if let myBidAmount = state.myState.bidAmount {
-                if let component, let bidPeerId = state.myState.bidPeerId, bidPeerId != component.toPeerId, let myMinBidAmount = state.myState.minBidAmount {
+                if let component, let bidPeerId = state.myState.bidPeerId, bidPeerId != component.toPeerId || forceMinimum, let myMinBidAmount = state.myState.minBidAmount {
                     currentValue = Int(myMinBidAmount)
                 } else {
                     currentValue = Int(myBidAmount)
                 }
-            }
-            
-            var minAllowedRealValue: Int64 = minBidAmount
-            if let myBidAmount = state.myState.bidAmount {
                 minAllowedRealValue = myBidAmount
             }
             
@@ -1928,8 +1946,6 @@ private final class GiftAuctionBidScreenComponent: Component {
             }
             
             if self.component == nil {
-                self.giftAuctionAcquiredGifts = component.acquiredGifts
-                
                 if let starsContext = component.context.starsContext {
                     self.balanceDisposable = (starsContext.state
                     |> deliverOnMainQueue).startStrict(next: { [weak self] state in
@@ -1963,6 +1979,18 @@ private final class GiftAuctionBidScreenComponent: Component {
                         peerIds.append(context.account.peerId)
                         self.resetSliderValue(component: component)
                         transition = .immediate
+                        
+                        if let acquiredGifts = component.acquiredGifts {
+                            self.giftAuctionAcquiredGiftsDisposable.set((acquiredGifts
+                            |> take(1)
+                            |> deliverOnMainQueue).start(next: { [weak self] acquiredGifts in
+                                self?.giftAuctionAcquiredGifts = acquiredGifts
+                            }))
+                        } else if let acquiredCount = auctionState?.myState.acquiredCount, acquiredCount > 0 {
+                            Queue.mainQueue().justDispatch {
+                                self.loadAcquiredGifts()
+                            }
+                        }
                     }
                     
                     if !peerIds.isEmpty {
@@ -1987,15 +2015,35 @@ private final class GiftAuctionBidScreenComponent: Component {
                     }
                     self.state?.updated(transition: transition)
                     
-                    let previousAcquiredCount: Int32
-                    if let previousState {
-                        previousAcquiredCount = previousState.myState.acquiredCount
-                    } else {
-                        previousAcquiredCount = Int32(component.acquiredGifts?.count ?? 0)
-                    }
-                    if let acquiredCount = auctionState?.myState.acquiredCount, acquiredCount > previousAcquiredCount {
+                    if let acquiredCount = auctionState?.myState.acquiredCount, let previousAcquiredCount = previousState?.myState.acquiredCount, acquiredCount > previousAcquiredCount {
                         Queue.mainQueue().justDispatch {
                             self.loadAcquiredGifts()
+                        }
+                        if !isFirstTime {
+                            if let bidPeerId = previousState?.myState.bidPeerId, let controller = self.environment?.controller() {
+                                if let navigationController = controller.navigationController as? NavigationController {
+                                    var controllers = navigationController.viewControllers
+                                    controllers = controllers.filter { !($0 is GiftAuctionBidScreen) && !($0 is GiftSetupScreenProtocol) && !($0 is GiftOptionsScreenProtocol) && !($0 is PeerInfoScreen) && !($0 is ContactSelectionController) }
+                                    
+                                    var foundController = false
+                                    for controller in controllers.reversed() {
+                                        if let chatController = controller as? ChatController, case .peer(id: bidPeerId) = chatController.chatLocation {
+                                            chatController.hintPlayNextOutgoingGift()
+                                            foundController = true
+                                            break
+                                        }
+                                    }
+                                    if !foundController {
+                                        let chatController = component.context.sharedContext.makeChatController(context: component.context, chatLocation: .peer(id: bidPeerId), subject: nil, botStart: nil, mode: .standard(.default), params: nil)
+                                        chatController.hintPlayNextOutgoingGift()
+                                        controllers.append(chatController)
+                                    }
+                                    navigationController.setViewControllers(controllers, animated: true)
+                                }
+                            } else {
+                                self.resetSliderValue()
+                                self.addSubview(ConfettiView(frame: self.bounds))
+                            }
                         }
                     }
                     
@@ -2299,7 +2347,7 @@ private final class GiftAuctionBidScreenComponent: Component {
                             break
                         }
                     }
-                    topBidsComponents.append((peer.id, AnyComponent(PeerComponent(context: component.context, theme: environment.theme, groupingSeparator: environment.dateTimeFormat.groupingSeparator, peer: peer, place: i, amount: bid, isLast: i == topBidders.count, action: peer.id != component.context.account.peerId ? { [weak self] in self?.openPeer(peer, dismiss: false) } : nil))))
+                    topBidsComponents.append((peer.id, AnyComponent(PeerComponent(context: component.context, theme: environment.theme, groupingSeparator: environment.dateTimeFormat.groupingSeparator, peer: peer, place: i, amount: bid, isLast: i == topBidders.count, action: nil))))
                     i += 1
                 }
                 
@@ -2312,7 +2360,6 @@ private final class GiftAuctionBidScreenComponent: Component {
             
             var perks: [([AnimatedTextComponent.Item], String)] = []
             
-            var minBidIsSmall = false
             var minBidAnimatedItems: [AnimatedTextComponent.Item] = []
             var untilNextDropAnimatedItems: [AnimatedTextComponent.Item] = []
             var dropsLeftAnimatedItems: [AnimatedTextComponent.Item] = []
@@ -2323,11 +2370,13 @@ private final class GiftAuctionBidScreenComponent: Component {
                     if let myMinBidAmmount = self.giftAuctionState?.myState.minBidAmount {
                         minBidAmount = myMinBidAmmount
                     }
-                    var minBidString = "# \(presentationStringsFormattedNumber(Int32(clamping: minBidAmount), environment.dateTimeFormat.groupingSeparator))"
-                    if minBidAmount > 999999 {
-                        minBidString = "# \(minBidAmount)"
-                        minBidIsSmall = true
+                    var minBidString: String
+                    if minBidAmount > 99999 {
+                        minBidString = compactNumericCountString(Int(minBidAmount), decimalSeparator: environment.dateTimeFormat.decimalSeparator, showDecimalPart: false)
+                    } else {
+                        minBidString = presentationStringsFormattedNumber(Int32(clamping: minBidAmount), environment.dateTimeFormat.groupingSeparator)
                     }
+                    minBidString = "# \(minBidString)"
                     if let hashIndex = minBidString.firstIndex(of: "#") {
                         var prefix = String(minBidString[..<hashIndex])
                         if !prefix.isEmpty {
@@ -2442,7 +2491,7 @@ private final class GiftAuctionBidScreenComponent: Component {
                         gift: i == perks.count - 1 ? component.auctionContext.gift : nil,
                         title: perk.0,
                         subtitle: perk.1,
-                        small: i == 0 && minBidIsSmall,
+                        small: false,
                         theme: environment.theme
                     )),
                     environment: {},
@@ -2941,7 +2990,7 @@ public class GiftAuctionBidScreen: ViewControllerComponentContainer {
     private var didPlayAppearAnimation: Bool = false
     private var isDismissed: Bool = false
     
-    public init(context: AccountContext, toPeerId: EnginePeer.Id, text: String?, entities: [MessageTextEntity]?, hideName: Bool, auctionContext: GiftAuctionContext, acquiredGifts: [GiftAuctionAcquiredGift]?) {
+    public init(context: AccountContext, toPeerId: EnginePeer.Id, text: String?, entities: [MessageTextEntity]?, hideName: Bool, auctionContext: GiftAuctionContext, acquiredGifts: Signal<[GiftAuctionAcquiredGift], NoError>?) {
         self.context = context
         
         super.init(context: context, component: GiftAuctionBidScreenComponent(
