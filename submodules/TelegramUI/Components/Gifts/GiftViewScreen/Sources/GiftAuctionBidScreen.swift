@@ -1528,10 +1528,15 @@ private final class GiftAuctionBidScreenComponent: Component {
                             title: nil,
                             text: presentationData.strings.Gift_AuctionBid_AddMoreStars(presentationData.strings.Gift_AuctionBid_AddMoreStars_Stars(Int32(clamping: myMinBidAmount - myBidAmount))).string,
                             timeout: nil,
-                            customUndoText: nil
+                            customUndoText: presentationData.strings.Gift_AuctionBid_AddMoreStars_Set
                         ),
                         position: .bottom,
-                        action: { _ in return true }
+                        action: { [weak self] action in
+                            if let self, case .undo = action {
+                                self.resetSliderValue(component: self.component, forceMinimum: true)
+                            }
+                            return true
+                        }
                     ),
                     in: .current
                 )
@@ -1613,8 +1618,28 @@ private final class GiftAuctionBidScreenComponent: Component {
                     return
                 }
                 
+                HapticFeedback().error()
+                
+                let currentValue = self.amount.realValue
                 self.component?.context.starsContext?.load(force: true)
-                self.resetSliderValue()
+                self.resetSliderValue(component: self.component, forceMinimum: true)
+                
+                if self.amount.realValue > currentValue {
+                    controller.present(
+                        UndoOverlayController(
+                            presentationData: presentationData,
+                            content: .info(
+                                title: nil,
+                                text: presentationData.strings.Gift_AuctionBid_MinimumBidIncreased(presentationData.strings.Gift_AuctionBid_AddMoreStars_Stars(Int32(clamping: self.amount.realValue))).string,
+                                timeout: nil,
+                                customUndoText: nil
+                            ),
+                            position: .bottom,
+                            action: { _ in return true }
+                        ),
+                        in: .current
+                    )
+                }
                 
                 Queue.mainQueue().after(0.1) {
                     self.isLoading = false
@@ -1826,7 +1851,7 @@ private final class GiftAuctionBidScreenComponent: Component {
             self.environment?.controller()?.present(controller, in: .window(.root))
         }
         
-        func resetSliderValue(component: GiftAuctionBidScreenComponent? = nil) {
+        func resetSliderValue(component: GiftAuctionBidScreenComponent? = nil, forceMinimum: Bool = false) {
             guard let state = self.giftAuctionState else {
                 return
             }
@@ -1839,16 +1864,13 @@ private final class GiftAuctionBidScreenComponent: Component {
                 }
             }
             var currentValue = max(Int(minBidAmount), 100)
+            var minAllowedRealValue: Int64 = minBidAmount
             if let myBidAmount = state.myState.bidAmount {
-                if let component, let bidPeerId = state.myState.bidPeerId, bidPeerId != component.toPeerId, let myMinBidAmount = state.myState.minBidAmount {
+                if let component, let bidPeerId = state.myState.bidPeerId, bidPeerId != component.toPeerId || forceMinimum, let myMinBidAmount = state.myState.minBidAmount {
                     currentValue = Int(myMinBidAmount)
                 } else {
                     currentValue = Int(myBidAmount)
                 }
-            }
-            
-            var minAllowedRealValue: Int64 = minBidAmount
-            if let myBidAmount = state.myState.bidAmount {
                 minAllowedRealValue = myBidAmount
             }
             

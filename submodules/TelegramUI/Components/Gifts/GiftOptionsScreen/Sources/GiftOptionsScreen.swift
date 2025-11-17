@@ -353,7 +353,7 @@ final class GiftOptionsScreenComponent: Component {
                         return
                     }
                     
-                    if let perUserLimit = gift.perUserLimit, perUserLimit.remains == 0 {
+                    if let perUserLimit = gift.perUserLimit, perUserLimit.remains == 0 && (gift.availability?.resale ?? 0) == 0 {
                         let text = environment.strings.Gift_Options_Gift_BuyLimitReached(perUserLimit.total)
                         let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
                         let controller = UndoOverlayController(presentationData: presentationData, content: .sticker(context: component.context, file: gift.file, loop: true, title: nil, text: text, undoText: nil, customAction: nil), action: { _ in return false })
@@ -447,7 +447,7 @@ final class GiftOptionsScreenComponent: Component {
                             }
                         }))
                     } else {
-                        if let availability = gift.availability, availability.remains == 0 {
+                        if let availability = gift.availability, availability.remains == 0 || gift.perUserLimit?.remains == 0 || component.peerId.namespace == Namespaces.Peer.CloudChannel {
                             if availability.resale > 0 {
                                 let storeController = component.context.sharedContext.makeGiftStoreController(
                                     context: component.context,
@@ -611,7 +611,7 @@ final class GiftOptionsScreenComponent: Component {
                                     text = environment.strings.Gift_Options_Gift_Auction
                                     ribbonColor = .orange
                                     outline = .orange
-                                } else if let perUserLimit = gift.perUserLimit {
+                                } else if let perUserLimit = gift.perUserLimit, component.peerId.namespace != Namespaces.Peer.CloudChannel {
                                     text = environment.strings.Gift_Options_Gift_Limited_Left(perUserLimit.remains)
                                 } else {
                                     text = environment.strings.Gift_Options_Gift_Limited
@@ -1831,7 +1831,7 @@ final class GiftOptionsScreenComponent: Component {
                 var filteredStarGifts = starGifts
                 if peerId.namespace == Namespaces.Peer.CloudChannel {
                     filteredStarGifts = filteredStarGifts?.filter { gift in
-                        if case let .generic(gift) = gift, gift.availability != nil {
+                        if case let .generic(gift) = gift, let availability = gift.availability, availability.resale == 0 {
                             return false
                         }
                         return true
