@@ -937,6 +937,86 @@ public extension Api.account {
     }
 }
 public extension Api.account {
+    enum PasskeyRegistrationOptions: TypeConstructorDescription {
+        case passkeyRegistrationOptions(options: Api.DataJSON)
+    
+    public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+    switch self {
+                case .passkeyRegistrationOptions(let options):
+                    if boxed {
+                        buffer.appendInt32(-513057567)
+                    }
+                    options.serialize(buffer, true)
+                    break
+    }
+    }
+    
+    public func descriptionFields() -> (String, [(String, Any)]) {
+        switch self {
+                case .passkeyRegistrationOptions(let options):
+                return ("passkeyRegistrationOptions", [("options", options as Any)])
+    }
+    }
+    
+        public static func parse_passkeyRegistrationOptions(_ reader: BufferReader) -> PasskeyRegistrationOptions? {
+            var _1: Api.DataJSON?
+            if let signature = reader.readInt32() {
+                _1 = Api.parse(reader, signature: signature) as? Api.DataJSON
+            }
+            let _c1 = _1 != nil
+            if _c1 {
+                return Api.account.PasskeyRegistrationOptions.passkeyRegistrationOptions(options: _1!)
+            }
+            else {
+                return nil
+            }
+        }
+    
+    }
+}
+public extension Api.account {
+    enum Passkeys: TypeConstructorDescription {
+        case passkeys(passkeys: [Api.Passkey])
+    
+    public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+    switch self {
+                case .passkeys(let passkeys):
+                    if boxed {
+                        buffer.appendInt32(-119494116)
+                    }
+                    buffer.appendInt32(481674261)
+                    buffer.appendInt32(Int32(passkeys.count))
+                    for item in passkeys {
+                        item.serialize(buffer, true)
+                    }
+                    break
+    }
+    }
+    
+    public func descriptionFields() -> (String, [(String, Any)]) {
+        switch self {
+                case .passkeys(let passkeys):
+                return ("passkeys", [("passkeys", passkeys as Any)])
+    }
+    }
+    
+        public static func parse_passkeys(_ reader: BufferReader) -> Passkeys? {
+            var _1: [Api.Passkey]?
+            if let _ = reader.readInt32() {
+                _1 = Api.parseVector(reader, elementSignature: 0, elementType: Api.Passkey.self)
+            }
+            let _c1 = _1 != nil
+            if _c1 {
+                return Api.account.Passkeys.passkeys(passkeys: _1!)
+            }
+            else {
+                return nil
+            }
+        }
+    
+    }
+}
+public extension Api.account {
     enum Password: TypeConstructorDescription {
         case password(flags: Int32, currentAlgo: Api.PasswordKdfAlgo?, srpB: Buffer?, srpId: Int64?, hint: String?, emailUnconfirmedPattern: String?, newAlgo: Api.PasswordKdfAlgo, newSecureAlgo: Api.SecurePasswordKdfAlgo, secureRandom: Buffer, pendingResetDate: Int32?, loginEmailPattern: String?)
     
@@ -1326,60 +1406,6 @@ public extension Api.account {
             else {
                 return nil
             }
-        }
-    
-    }
-}
-public extension Api.account {
-    enum SavedMusicIds: TypeConstructorDescription {
-        case savedMusicIds(ids: [Int64])
-        case savedMusicIdsNotModified
-    
-    public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-    switch self {
-                case .savedMusicIds(let ids):
-                    if boxed {
-                        buffer.appendInt32(-1718786506)
-                    }
-                    buffer.appendInt32(481674261)
-                    buffer.appendInt32(Int32(ids.count))
-                    for item in ids {
-                        serializeInt64(item, buffer: buffer, boxed: false)
-                    }
-                    break
-                case .savedMusicIdsNotModified:
-                    if boxed {
-                        buffer.appendInt32(1338514798)
-                    }
-                    
-                    break
-    }
-    }
-    
-    public func descriptionFields() -> (String, [(String, Any)]) {
-        switch self {
-                case .savedMusicIds(let ids):
-                return ("savedMusicIds", [("ids", ids as Any)])
-                case .savedMusicIdsNotModified:
-                return ("savedMusicIdsNotModified", [])
-    }
-    }
-    
-        public static func parse_savedMusicIds(_ reader: BufferReader) -> SavedMusicIds? {
-            var _1: [Int64]?
-            if let _ = reader.readInt32() {
-                _1 = Api.parseVector(reader, elementSignature: 570911930, elementType: Int64.self)
-            }
-            let _c1 = _1 != nil
-            if _c1 {
-                return Api.account.SavedMusicIds.savedMusicIds(ids: _1!)
-            }
-            else {
-                return nil
-            }
-        }
-        public static func parse_savedMusicIdsNotModified(_ reader: BufferReader) -> SavedMusicIds? {
-            return Api.account.SavedMusicIds.savedMusicIdsNotModified
         }
     
     }

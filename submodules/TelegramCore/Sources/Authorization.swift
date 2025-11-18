@@ -1167,6 +1167,109 @@ public func authorizeWithPassword(accountManager: AccountManager<TelegramAccount
     }
 }
 
+public final class AuthorizationPasskeyData {
+    public let id: String
+    public let clientData: String
+    public let authenticatorData: Data
+    public let signature: Data
+    public let userHandle: String
+    
+    public init(id: String, clientData: String, authenticatorData: Data, signature: Data, userHandle: String) {
+        self.id = id
+        self.clientData = clientData
+        self.authenticatorData = authenticatorData
+        self.signature = signature
+        self.userHandle = userHandle
+    }
+}
+
+public func authorizeWithPasskey(accountManager: AccountManager<TelegramAccountManagerTypes>, account: UnauthorizedAccount, passkey: AuthorizationPasskeyData, forcedPasswordSetupNotice: @escaping (Int32) -> (NoticeEntryKey, CodableEntry)?, syncContacts: Bool) -> Signal<AuthorizeWithCodeResult, AuthorizationCodeVerificationError> {
+    return account.postbox.transaction { transaction -> Signal<AuthorizeWithCodeResult, AuthorizationCodeVerificationError> in
+        return account.network.request(Api.functions.auth.finishPasskeyLogin(flags: 0, credential: .inputPasskeyCredentialPublicKey(id: passkey.id, rawId: passkey.id, response: .inputPasskeyResponseLogin(clientData: .dataJSON(data: passkey.clientData), authenticatorData: Buffer(data: passkey.authenticatorData), signature: Buffer(data: passkey.signature), userHandle: passkey.userHandle)), fromDcId: nil, fromAuthKeyId: nil), automaticFloodWait: false)
+        |> map { authorization in
+            return .authorization(authorization)
+        }
+        |> `catch` { error -> Signal<AuthorizationCodeResult, AuthorizationCodeVerificationError> in
+            switch (error.errorCode, error.errorDescription ?? "") {
+                case (401, "SESSION_PASSWORD_NEEDED"):
+                    return account.network.request(Api.functions.account.getPassword(), automaticFloodWait: false)
+                    |> mapError { error -> AuthorizationCodeVerificationError in
+                        if error.errorDescription.hasPrefix("FLOOD_WAIT") {
+                            return .limitExceeded
+                        } else {
+                            return .generic
+                        }
+                    }
+                    |> mapToSignal { result -> Signal<AuthorizationCodeResult, AuthorizationCodeVerificationError> in
+                        switch result {
+                            case let .password(_, _, _, _, hint, _, _, _, _, _, _):
+                                return .single(.password(hint: hint ?? ""))
+                        }
+                    }
+                case let (_, errorDescription):
+                    if errorDescription.hasPrefix("FLOOD_WAIT") {
+                        return .fail(.limitExceeded)
+                    } else if errorDescription == "PHONE_CODE_INVALID" || errorDescription == "EMAIL_CODE_INVALID" {
+                        return .fail(.invalidCode)
+                    } else if errorDescription == "CODE_HASH_EXPIRED" || errorDescription == "PHONE_CODE_EXPIRED" {
+                        return .fail(.codeExpired)
+                    } else if errorDescription == "PHONE_NUMBER_UNOCCUPIED" {
+                        return .single(.signUp)
+                    } else if errorDescription == "EMAIL_TOKEN_INVALID" {
+                        return .fail(.invalidEmailToken)
+                    } else if errorDescription == "EMAIL_ADDRESS_INVALID" {
+                        return .fail(.invalidEmailAddress)
+                    } else {
+                        return .fail(.generic)
+                    }
+            }
+        }
+        |> mapToSignal { result -> Signal<AuthorizeWithCodeResult, AuthorizationCodeVerificationError> in
+            return account.postbox.transaction { transaction -> Signal<AuthorizeWithCodeResult, AuthorizationCodeVerificationError> in
+                switch result {
+                case .signUp:
+                    return .fail(.generic)
+                case let .password(hint):
+                    transaction.setState(UnauthorizedAccountState(isTestingEnvironment: account.testingEnvironment, masterDatacenterId: account.masterDatacenterId, contents: .passwordEntry(hint: hint, number: nil, code: nil, suggestReset: false, syncContacts: syncContacts)))
+                    return .single(.loggedIn)
+                case let .authorization(authorization):
+                    switch authorization {
+                    case let .authorization(_, otherwiseReloginDays, _, futureAuthToken, user):
+                        if let futureAuthToken = futureAuthToken {
+                            storeFutureLoginToken(accountManager: accountManager, token: futureAuthToken.makeData())
+                        }
+                        
+                        let user = TelegramUser(user: user)
+                        var isSupportUser = false
+                        if let phone = user.phone, phone.hasPrefix("42") {
+                            isSupportUser = true
+                        }
+                        let state = AuthorizedAccountState(isTestingEnvironment: account.testingEnvironment, masterDatacenterId: account.masterDatacenterId, peerId: user.id, state: nil, invalidatedChannels: [])
+                        initializedAppSettingsAfterLogin(transaction: transaction, appVersion: account.networkArguments.appVersion, syncContacts: syncContacts)
+                        transaction.setState(state)
+                        if let otherwiseReloginDays = otherwiseReloginDays, let value = forcedPasswordSetupNotice(otherwiseReloginDays) {
+                            transaction.setNoticeEntry(key: value.0, value: value.1)
+                        }
+                        return accountManager.transaction { transaction -> AuthorizeWithCodeResult in
+                            switchToAuthorizedAccount(transaction: transaction, account: account, isSupportUser: isSupportUser)
+                            return .loggedIn
+                        }
+                        |> castError(AuthorizationCodeVerificationError.self)
+                    case .authorizationSignUpRequired:
+                        return .fail(.generic)
+                    }
+                }
+            }
+            |> mapError { _ -> AuthorizationCodeVerificationError in
+            }
+            |> switchToLatest
+        }
+    }
+    |> mapError { _ -> AuthorizationCodeVerificationError in
+    }
+    |> switchToLatest
+}
+
 public enum PasswordRecoveryRequestError {
     case limitExceeded
     case generic
@@ -1466,3 +1569,4 @@ func _internal_reportMissingCode(network: Network, phoneNumber: String, phoneCod
         return .complete()
     }
 }
+
