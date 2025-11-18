@@ -233,6 +233,21 @@ public extension Api.functions.account {
                 }
 }
 public extension Api.functions.account {
+                static func deletePasskey(id: String) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Bool>) {
+                    let buffer = Buffer()
+                    buffer.appendInt32(-172665281)
+                    serializeString(id, buffer: buffer, boxed: false)
+                    return (FunctionDescription(name: "account.deletePasskey", parameters: [("id", String(describing: id))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.Bool? in
+                        let reader = BufferReader(buffer)
+                        var result: Api.Bool?
+                        if let signature = reader.readInt32() {
+                            result = Api.parse(reader, signature: signature) as? Api.Bool
+                        }
+                        return result
+                    })
+                }
+}
+public extension Api.functions.account {
                 static func deleteSecureValue(types: [Api.SecureValueType]) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Bool>) {
                     let buffer = Buffer()
                     buffer.appendInt32(-1199522741)
@@ -667,6 +682,21 @@ public extension Api.functions.account {
                 }
 }
 public extension Api.functions.account {
+                static func getPasskeys() -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.account.Passkeys>) {
+                    let buffer = Buffer()
+                    buffer.appendInt32(-367063982)
+                    
+                    return (FunctionDescription(name: "account.getPasskeys", parameters: []), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.account.Passkeys? in
+                        let reader = BufferReader(buffer)
+                        var result: Api.account.Passkeys?
+                        if let signature = reader.readInt32() {
+                            result = Api.parse(reader, signature: signature) as? Api.account.Passkeys
+                        }
+                        return result
+                    })
+                }
+}
+public extension Api.functions.account {
                 static func getPassword() -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.account.Password>) {
                     let buffer = Buffer()
                     buffer.appendInt32(1418342645)
@@ -901,6 +931,21 @@ public extension Api.functions.account {
                 }
 }
 public extension Api.functions.account {
+                static func initPasskeyRegistration() -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.account.PasskeyRegistrationOptions>) {
+                    let buffer = Buffer()
+                    buffer.appendInt32(1117079528)
+                    
+                    return (FunctionDescription(name: "account.initPasskeyRegistration", parameters: []), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.account.PasskeyRegistrationOptions? in
+                        let reader = BufferReader(buffer)
+                        var result: Api.account.PasskeyRegistrationOptions?
+                        if let signature = reader.readInt32() {
+                            result = Api.parse(reader, signature: signature) as? Api.account.PasskeyRegistrationOptions
+                        }
+                        return result
+                    })
+                }
+}
+public extension Api.functions.account {
                 static func initTakeoutSession(flags: Int32, fileMaxSize: Int64?) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.account.Takeout>) {
                     let buffer = Buffer()
                     buffer.appendInt32(-1896617296)
@@ -988,6 +1033,22 @@ public extension Api.functions.account {
                         var result: Api.Bool?
                         if let signature = reader.readInt32() {
                             result = Api.parse(reader, signature: signature) as? Api.Bool
+                        }
+                        return result
+                    })
+                }
+}
+public extension Api.functions.account {
+                static func registerPasskey(credential: Api.InputPasskeyCredential, name: String) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Passkey>) {
+                    let buffer = Buffer()
+                    buffer.appendInt32(-810803168)
+                    credential.serialize(buffer, true)
+                    serializeString(name, buffer: buffer, boxed: false)
+                    return (FunctionDescription(name: "account.registerPasskey", parameters: [("credential", String(describing: credential)), ("name", String(describing: name))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.Passkey? in
+                        let reader = BufferReader(buffer)
+                        var result: Api.Passkey?
+                        if let signature = reader.readInt32() {
+                            result = Api.parse(reader, signature: signature) as? Api.Passkey
                         }
                         return result
                     })
@@ -2076,6 +2137,24 @@ public extension Api.functions.auth {
                 }
 }
 public extension Api.functions.auth {
+                static func finishPasskeyLogin(flags: Int32, credential: Api.InputPasskeyCredential, fromDcId: Int32?, fromAuthKeyId: Int64?) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.auth.Authorization>) {
+                    let buffer = Buffer()
+                    buffer.appendInt32(-1739084537)
+                    serializeInt32(flags, buffer: buffer, boxed: false)
+                    credential.serialize(buffer, true)
+                    if Int(flags) & Int(1 << 0) != 0 {serializeInt32(fromDcId!, buffer: buffer, boxed: false)}
+                    if Int(flags) & Int(1 << 0) != 0 {serializeInt64(fromAuthKeyId!, buffer: buffer, boxed: false)}
+                    return (FunctionDescription(name: "auth.finishPasskeyLogin", parameters: [("flags", String(describing: flags)), ("credential", String(describing: credential)), ("fromDcId", String(describing: fromDcId)), ("fromAuthKeyId", String(describing: fromAuthKeyId))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.auth.Authorization? in
+                        let reader = BufferReader(buffer)
+                        var result: Api.auth.Authorization?
+                        if let signature = reader.readInt32() {
+                            result = Api.parse(reader, signature: signature) as? Api.auth.Authorization
+                        }
+                        return result
+                    })
+                }
+}
+public extension Api.functions.auth {
                 static func importAuthorization(id: Int64, bytes: Buffer) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.auth.Authorization>) {
                     let buffer = Buffer()
                     buffer.appendInt32(-1518699091)
@@ -2136,6 +2215,22 @@ public extension Api.functions.auth {
                         var result: Api.auth.Authorization?
                         if let signature = reader.readInt32() {
                             result = Api.parse(reader, signature: signature) as? Api.auth.Authorization
+                        }
+                        return result
+                    })
+                }
+}
+public extension Api.functions.auth {
+                static func initPasskeyLogin(apiId: Int32, apiHash: String) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.auth.PasskeyLoginOptions>) {
+                    let buffer = Buffer()
+                    buffer.appendInt32(1368051895)
+                    serializeInt32(apiId, buffer: buffer, boxed: false)
+                    serializeString(apiHash, buffer: buffer, boxed: false)
+                    return (FunctionDescription(name: "auth.initPasskeyLogin", parameters: [("apiId", String(describing: apiId)), ("apiHash", String(describing: apiHash))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.auth.PasskeyLoginOptions? in
+                        let reader = BufferReader(buffer)
+                        var result: Api.auth.PasskeyLoginOptions?
+                        if let signature = reader.readInt32() {
+                            result = Api.parse(reader, signature: signature) as? Api.auth.PasskeyLoginOptions
                         }
                         return result
                     })
