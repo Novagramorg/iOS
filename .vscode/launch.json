@@ -12,26 +12,6 @@
             "internalConsoleOptions": "openOnSessionStart",
             "timeout": 1000
         },
-        {
-            "type": "swift",
-            "request": "launch",
-            "args": [],
-            "cwd": "${workspaceFolder:Telegram}",
-            "name": "Debug sourcekit-bazel-bsp",
-            "preLaunchTask": "swift: Build Debug sourcekit-bazel-bsp",
-            "target": "sourcekit-bazel-bsp",
-            "configuration": "debug"
-        },
-        {
-            "type": "swift",
-            "request": "launch",
-            "args": [],
-            "cwd": "${workspaceFolder:Telegram}",
-            "name": "Release sourcekit-bazel-bsp",
-            "preLaunchTask": "swift: Build Release sourcekit-bazel-bsp",
-            "target": "sourcekit-bazel-bsp",
-            "configuration": "release"
-        }
     ],
     "options": {
         "console": "integratedTerminal",
