@@ -388,8 +388,8 @@ private final class StarsPurchaseScreenContentComponent: CombinedComponent {
                                 highlighting: .disabled,
                                 updateIsHighlighted: { view, isHighlighted in
                                     let transition: ComponentTransition = .easeInOut(duration: 0.25)
-                                    if let superview = view.superview {
-                                        transition.setScale(view: superview, scale: isHighlighted ? 0.9 : 1.0)
+                                    if let superview = view.superview?.superview?.superview?.superview {
+                                        transition.setScale(view: superview, scale: isHighlighted ? 1.05 : 1.0)
                                     }
                                 }
                             )))]
@@ -427,7 +427,7 @@ private final class StarsPurchaseScreenContentComponent: CombinedComponent {
                             style: .glass,
                             title: titleCombinedComponent,
                             titleAlignment: .center,
-                            contentInsets: UIEdgeInsets(top: 7.0, left: 0.0, bottom: 7.0, right: 0.0),
+                            contentInsets: UIEdgeInsets(top: 11.0, left: 0.0, bottom: 11.0, right: 0.0),
                             leftIcon: nil,
                             accessory: .none,
                             action: { _ in
