@@ -397,6 +397,50 @@ public extension Api {
     }
 }
 public extension Api {
+    enum Passkey: TypeConstructorDescription {
+        case passkey(id: String, name: String, date: Int32)
+    
+    public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+    switch self {
+                case .passkey(let id, let name, let date):
+                    if boxed {
+                        buffer.appendInt32(1047842022)
+                    }
+                    serializeString(id, buffer: buffer, boxed: false)
+                    serializeString(name, buffer: buffer, boxed: false)
+                    serializeInt32(date, buffer: buffer, boxed: false)
+                    break
+    }
+    }
+    
+    public func descriptionFields() -> (String, [(String, Any)]) {
+        switch self {
+                case .passkey(let id, let name, let date):
+                return ("passkey", [("id", id as Any), ("name", name as Any), ("date", date as Any)])
+    }
+    }
+    
+        public static func parse_passkey(_ reader: BufferReader) -> Passkey? {
+            var _1: String?
+            _1 = parseString(reader)
+            var _2: String?
+            _2 = parseString(reader)
+            var _3: Int32?
+            _3 = reader.readInt32()
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            let _c3 = _3 != nil
+            if _c1 && _c2 && _c3 {
+                return Api.Passkey.passkey(id: _1!, name: _2!, date: _3!)
+            }
+            else {
+                return nil
+            }
+        }
+    
+    }
+}
+public extension Api {
     enum PasswordKdfAlgo: TypeConstructorDescription {
         case passwordKdfAlgoSHA256SHA256PBKDF2HMACSHA512iter100000SHA256ModPow(salt1: Buffer, salt2: Buffer, g: Int32, p: Buffer)
         case passwordKdfAlgoUnknown

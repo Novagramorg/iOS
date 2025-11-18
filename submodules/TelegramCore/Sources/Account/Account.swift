@@ -453,6 +453,121 @@ func _internal_twoStepAuthData(_ network: Network) -> Signal<TwoStepAuthData, MT
     }
 }
 
+public final class TelegramPasskey: Equatable {
+    public let id: String
+    public let name: String
+    public let date: Int32
+
+    public init(id: String, name: String, date: Int32) {
+        self.id = id
+        self.name = name
+        self.date = date
+    }
+    
+    public static func ==(lhs: TelegramPasskey, rhs: TelegramPasskey) -> Bool {
+        if lhs.id != rhs.id {
+            return false
+        }
+        if lhs.name != rhs.name {
+            return false
+        }
+        if lhs.date != rhs.date {
+            return false
+        }
+        return true
+    }
+}
+
+extension TelegramPasskey {
+    convenience init(apiPasskey: Api.Passkey) {
+        switch apiPasskey {
+        case let .passkey(id, name, date):
+            self.init(id: id, name: name, date: date)
+        }
+    }
+}
+
+func _internal_passkeysData(network: Network) -> Signal<[TelegramPasskey], NoError> {
+    return network.request(Api.functions.account.getPasskeys())
+    |> map(Optional.init)
+    |> `catch` { _ -> Signal<Api.account.Passkeys?, NoError> in
+        return .single(nil)
+    }
+    |> map { passkeys -> [TelegramPasskey] in
+        guard let passkeys else {
+            return []
+        }
+        switch passkeys {
+        case let .passkeys(passkeys):
+            return passkeys.map { passkey in
+                return TelegramPasskey(apiPasskey: passkey)
+            }
+        }
+    }
+}
+
+func _internal_requestPasskeyRegistration(network: Network) -> Signal<String?, NoError> {
+    return network.request(Api.functions.account.initPasskeyRegistration())
+    |> map(Optional.init)
+    |> `catch` { _ -> Signal<Api.account.PasskeyRegistrationOptions?, NoError> in
+        return .single(nil)
+    }
+    |> map { options -> String? in
+        guard let options else {
+            return nil
+        }
+        switch options {
+        case let .passkeyRegistrationOptions(options):
+            switch options {
+            case let .dataJSON(data):
+                return data
+            }
+        }
+    }
+}
+
+func _internal_requestCreatePasskey(network: Network, id: String, clientData: String, attestationObject: Data) -> Signal<TelegramPasskey?, NoError> {
+    return network.request(Api.functions.account.registerPasskey(credential: .inputPasskeyCredentialPublicKey(id: id, rawId: id, response: .inputPasskeyResponseRegister(clientData: .dataJSON(data: clientData), attestationData: Buffer(data: attestationObject))), name: "iCloud"))
+    |> map(Optional.init)
+    |> `catch` { _ -> Signal<Api.Passkey?, NoError> in
+        return .single(nil)
+    }
+    |> map { result -> TelegramPasskey? in
+        guard let result else {
+            return nil
+        }
+        return TelegramPasskey(apiPasskey: result)
+    }
+}
+
+func _internal_deletePasskey(network: Network, id: String) -> Signal<Never, NoError> {
+    return network.request(Api.functions.account.deletePasskey(id: id))
+    |> `catch` { _ -> Signal<Api.Bool, NoError> in
+        return .single(.boolFalse)
+    }
+    |> ignoreValues
+}
+
+func _internal_requestPasskeyLoginData(network: Network, apiId: Int32, apiHash: String) -> Signal<String?, NoError> {
+    return network.request(Api.functions.auth.initPasskeyLogin(apiId: apiId, apiHash: apiHash))
+    |> map(Optional.init)
+    |> `catch` { _ -> Signal<Api.auth.PasskeyLoginOptions?, NoError> in
+        return .single(nil)
+    }
+    |> map { result -> String? in
+        guard let result else {
+            return nil
+        }
+        switch result {
+        case let .passkeyLoginOptions(options):
+            switch options {
+            case let .dataJSON(data):
+                return data
+            }
+        }
+    }
+}
+
 public func hexString(_ data: Data) -> String {
     let hexString = NSMutableString()
     data.withUnsafeBytes { rawBytes -> Void in

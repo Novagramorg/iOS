@@ -432,6 +432,9 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[1548122514] = { return Api.InputNotifyPeer.parse_inputNotifyForumTopic($0) }
     dict[-1195615476] = { return Api.InputNotifyPeer.parse_inputNotifyPeer($0) }
     dict[423314455] = { return Api.InputNotifyPeer.parse_inputNotifyUsers($0) }
+    dict[1009235855] = { return Api.InputPasskeyCredential.parse_inputPasskeyCredentialPublicKey($0) }
+    dict[-1021329078] = { return Api.InputPasskeyResponse.parse_inputPasskeyResponseLogin($0) }
+    dict[1046713180] = { return Api.InputPasskeyResponse.parse_inputPasskeyResponseRegister($0) }
     dict[873977640] = { return Api.InputPaymentCredentials.parse_inputPaymentCredentials($0) }
     dict[178373535] = { return Api.InputPaymentCredentials.parse_inputPaymentCredentialsApplePay($0) }
     dict[-1966921727] = { return Api.InputPaymentCredentials.parse_inputPaymentCredentialsGooglePay($0) }
@@ -756,6 +759,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[520887001] = { return Api.PaidReactionPrivacy.parse_paidReactionPrivacyAnonymous($0) }
     dict[543872158] = { return Api.PaidReactionPrivacy.parse_paidReactionPrivacyDefault($0) }
     dict[-596837136] = { return Api.PaidReactionPrivacy.parse_paidReactionPrivacyPeer($0) }
+    dict[1047842022] = { return Api.Passkey.parse_passkey($0) }
     dict[982592842] = { return Api.PasswordKdfAlgo.parse_passwordKdfAlgoSHA256SHA256PBKDF2HMACSHA512iter100000SHA256ModPow($0) }
     dict[-732254058] = { return Api.PasswordKdfAlgo.parse_passwordKdfAlgoUnknown($0) }
     dict[-368917890] = { return Api.PaymentCharge.parse_paymentCharge($0) }
@@ -1268,6 +1272,8 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[-1866176559] = { return Api.account.EmojiStatuses.parse_emojiStatuses($0) }
     dict[-796072379] = { return Api.account.EmojiStatuses.parse_emojiStatusesNotModified($0) }
     dict[504403720] = { return Api.account.PaidMessagesRevenue.parse_paidMessagesRevenue($0) }
+    dict[-513057567] = { return Api.account.PasskeyRegistrationOptions.parse_passkeyRegistrationOptions($0) }
+    dict[-119494116] = { return Api.account.Passkeys.parse_passkeys($0) }
     dict[-1787080453] = { return Api.account.Password.parse_password($0) }
     dict[-1036572727] = { return Api.account.PasswordInputSettings.parse_passwordInputSettings($0) }
     dict[-1705233435] = { return Api.account.PasswordSettings.parse_passwordSettings($0) }
@@ -1302,6 +1308,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[1654593920] = { return Api.auth.LoginToken.parse_loginToken($0) }
     dict[110008598] = { return Api.auth.LoginToken.parse_loginTokenMigrateTo($0) }
     dict[957176926] = { return Api.auth.LoginToken.parse_loginTokenSuccess($0) }
+    dict[-503089271] = { return Api.auth.PasskeyLoginOptions.parse_passkeyLoginOptions($0) }
     dict[326715557] = { return Api.auth.PasswordRecovery.parse_passwordRecovery($0) }
     dict[1577067778] = { return Api.auth.SentCode.parse_sentCode($0) }
     dict[-527082948] = { return Api.auth.SentCode.parse_sentCodePaymentRequired($0) }
@@ -1930,6 +1937,10 @@ public extension Api {
                 _1.serialize(buffer, boxed)
             case let _1 as Api.InputNotifyPeer:
                 _1.serialize(buffer, boxed)
+            case let _1 as Api.InputPasskeyCredential:
+                _1.serialize(buffer, boxed)
+            case let _1 as Api.InputPasskeyResponse:
+                _1.serialize(buffer, boxed)
             case let _1 as Api.InputPaymentCredentials:
                 _1.serialize(buffer, boxed)
             case let _1 as Api.InputPeer:
@@ -2065,6 +2076,8 @@ public extension Api {
             case let _1 as Api.PageTableRow:
                 _1.serialize(buffer, boxed)
             case let _1 as Api.PaidReactionPrivacy:
+                _1.serialize(buffer, boxed)
+            case let _1 as Api.Passkey:
                 _1.serialize(buffer, boxed)
             case let _1 as Api.PasswordKdfAlgo:
                 _1.serialize(buffer, boxed)
@@ -2376,6 +2389,10 @@ public extension Api {
                 _1.serialize(buffer, boxed)
             case let _1 as Api.account.PaidMessagesRevenue:
                 _1.serialize(buffer, boxed)
+            case let _1 as Api.account.PasskeyRegistrationOptions:
+                _1.serialize(buffer, boxed)
+            case let _1 as Api.account.Passkeys:
+                _1.serialize(buffer, boxed)
             case let _1 as Api.account.Password:
                 _1.serialize(buffer, boxed)
             case let _1 as Api.account.PasswordInputSettings:
@@ -2415,6 +2432,8 @@ public extension Api {
             case let _1 as Api.auth.LoggedOut:
                 _1.serialize(buffer, boxed)
             case let _1 as Api.auth.LoginToken:
+                _1.serialize(buffer, boxed)
+            case let _1 as Api.auth.PasskeyLoginOptions:
                 _1.serialize(buffer, boxed)
             case let _1 as Api.auth.PasswordRecovery:
                 _1.serialize(buffer, boxed)
