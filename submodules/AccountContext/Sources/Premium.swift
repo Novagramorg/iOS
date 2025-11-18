@@ -347,3 +347,7 @@ public struct AccountFreezeConfiguration {
 public protocol GiftOptionsScreenProtocol {
     
 }
+
+public protocol GiftSetupScreenProtocol {
+    
+}

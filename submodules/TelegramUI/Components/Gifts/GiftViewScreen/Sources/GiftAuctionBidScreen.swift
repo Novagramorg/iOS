@@ -1635,7 +1635,9 @@ private final class GiftAuctionBidScreenComponent: Component {
                                 customUndoText: nil
                             ),
                             position: .bottom,
-                            action: { _ in return true }
+                            action: { _ in
+                                return true
+                            }
                         ),
                         in: .current
                     )
@@ -2018,8 +2020,30 @@ private final class GiftAuctionBidScreenComponent: Component {
                             self.loadAcquiredGifts()
                         }
                         if !isFirstTime {
-                            self.resetSliderValue()
-                            self.addSubview(ConfettiView(frame: self.bounds))
+                            if let bidPeerId = previousState?.myState.bidPeerId, let controller = self.environment?.controller() {
+                                if let navigationController = controller.navigationController as? NavigationController {
+                                    var controllers = navigationController.viewControllers
+                                    controllers = controllers.filter { !($0 is GiftAuctionBidScreen) && !($0 is GiftSetupScreenProtocol) && !($0 is GiftOptionsScreenProtocol) && !($0 is PeerInfoScreen) && !($0 is ContactSelectionController) }
+                                    
+                                    var foundController = false
+                                    for controller in controllers.reversed() {
+                                        if let chatController = controller as? ChatController, case .peer(id: bidPeerId) = chatController.chatLocation {
+                                            chatController.hintPlayNextOutgoingGift()
+                                            foundController = true
+                                            break
+                                        }
+                                    }
+                                    if !foundController {
+                                        let chatController = component.context.sharedContext.makeChatController(context: component.context, chatLocation: .peer(id: bidPeerId), subject: nil, botStart: nil, mode: .standard(.default), params: nil)
+                                        chatController.hintPlayNextOutgoingGift()
+                                        controllers.append(chatController)
+                                    }
+                                    navigationController.setViewControllers(controllers, animated: true)
+                                }
+                            } else {
+                                self.resetSliderValue()
+                                self.addSubview(ConfettiView(frame: self.bounds))
+                            }
                         }
                     }
                     

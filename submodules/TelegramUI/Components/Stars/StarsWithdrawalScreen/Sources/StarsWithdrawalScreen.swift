@@ -56,7 +56,6 @@ private final class SheetContent: CombinedComponent {
     
     static var body: (CombinedComponentContext<SheetContent>) -> CGSize {
         let closeButton = Child(GlassBarButtonComponent.self)
-        let cancelButton = Child(Button.self)
         let balance = Child(BalanceComponent.self)
         let title = Child(Text.self)
         let currencyToggle = Child(TabSelectorComponent.self)
@@ -115,45 +114,30 @@ private final class SheetContent: CombinedComponent {
                         .position(CGPoint(x: balanceFrame.maxX, y: balanceFrame.minY))
                     )
                 }
-                
-                let cancelButton = cancelButton.update(
-                    component: Button(
-                        content: AnyComponent(Text(text: environment.strings.Common_Cancel, font: Font.regular(17.0), color: environment.theme.list.itemAccentColor)),
-                        action: {
-                            component.dismiss()
-                        }
-                    ).minSize(CGSize(width: 8.0, height: 44.0)),
-                    availableSize: CGSize(width: 200.0, height: 100.0),
-                    transition: .immediate
-                )
-                let closeFrame = CGRect(origin: CGPoint(x: 16.0, y: floor((56.0 - cancelButton.size.height) * 0.5)), size: cancelButton.size)
-                context.add(cancelButton
-                    .position(closeFrame.center)
-                )
-            } else {
-                let closeButton = closeButton.update(
-                    component: GlassBarButtonComponent(
-                        size: CGSize(width: 40.0, height: 40.0),
-                        backgroundColor: theme.rootController.navigationBar.glassBarButtonBackgroundColor,
-                        isDark: theme.overallDarkAppearance,
-                        state: .generic,
-                        component: AnyComponentWithIdentity(id: "close", component: AnyComponent(
-                            BundleIconComponent(
-                                name: "Navigation/Close",
-                                tintColor: theme.rootController.navigationBar.glassBarButtonForegroundColor
-                            )
-                        )),
-                        action: { _ in
-                            component.dismiss()
-                        }
-                    ),
-                    availableSize: CGSize(width: 40.0, height: 40.0),
-                    transition: .immediate
-                )
-                context.add(closeButton
-                    .position(CGPoint(x: 16.0 + closeButton.size.width / 2.0, y: 16.0 + closeButton.size.height / 2.0))
-                )
             }
+            
+            let closeButton = closeButton.update(
+                component: GlassBarButtonComponent(
+                    size: CGSize(width: 40.0, height: 40.0),
+                    backgroundColor: theme.rootController.navigationBar.glassBarButtonBackgroundColor,
+                    isDark: theme.overallDarkAppearance,
+                    state: .generic,
+                    component: AnyComponentWithIdentity(id: "close", component: AnyComponent(
+                        BundleIconComponent(
+                            name: "Navigation/Close",
+                            tintColor: theme.rootController.navigationBar.glassBarButtonForegroundColor
+                        )
+                    )),
+                    action: { _ in
+                        component.dismiss()
+                    }
+                ),
+                availableSize: CGSize(width: 40.0, height: 40.0),
+                transition: .immediate
+            )
+            context.add(closeButton
+                .position(CGPoint(x: 16.0 + closeButton.size.width / 2.0, y: 16.0 + closeButton.size.height / 2.0))
+            )
             
             let titleString: String
             let amountTitle: String
@@ -264,7 +248,7 @@ private final class SheetContent: CombinedComponent {
                 .position(CGPoint(x: context.availableSize.width / 2.0, y: 36.0))
             )
             contentSize.height += title.size.height
-            contentSize.height += 40.0
+            contentSize.height += 56.0
             
             let balance: StarsAmount?
             if case .accountWithdraw = component.mode {
