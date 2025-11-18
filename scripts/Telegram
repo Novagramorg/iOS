@@ -309,8 +309,6 @@ def persistent_simulator(
     sim_device: str,
     sim_os_version: str,
 ) -> str:
-  return "C4EDF56A-4B14-442F-B4D6-4B665E0495D2"
-
   """Finds or creates a persistent compatible Apple simulator.
 
   Boots the simulator if needed. Does not shut down or delete the simulator when
