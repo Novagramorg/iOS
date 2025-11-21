@@ -350,7 +350,6 @@ final class ContactsControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
             chatListTitle: NetworkStatusTitle(text: title, activity: false, hasProxy: false, connectsViaProxy: false, isPasscodeSet: false, isManuallyLocked: false, peerStatus: nil),
             leftButton: leftButton,
             rightButtons: rightButtons,
-            backTitle: nil,
             backPressed: nil
         )
         
@@ -362,8 +361,8 @@ final class ContactsControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
                 strings: self.presentationData.strings,
                 statusBarHeight: layout.statusBarHeight ?? 0.0,
                 sideInset: layout.safeInsets.left,
+                search: ChatListNavigationBar.Search(isEnabled: true),
                 isSearchActive: self.isSearchDisplayControllerActive,
-                isSearchEnabled: true,
                 primaryContent: primaryContent,
                 secondaryContent: nil,
                 secondaryTransition: 0.0,
