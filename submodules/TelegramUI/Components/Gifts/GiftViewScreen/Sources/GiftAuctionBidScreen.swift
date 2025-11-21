@@ -2024,7 +2024,7 @@ private final class GiftAuctionBidScreenComponent: Component {
                                 if let navigationController = controller.navigationController as? NavigationController {
                                     var controllers = navigationController.viewControllers
                                     controllers = controllers.filter { !($0 is GiftAuctionBidScreen) && !($0 is GiftSetupScreenProtocol) && !($0 is GiftOptionsScreenProtocol) && !($0 is PeerInfoScreen) && !($0 is ContactSelectionController) }
-                                    
+                                                                        
                                     var foundController = false
                                     for controller in controllers.reversed() {
                                         if let chatController = controller as? ChatController, case .peer(id: bidPeerId) = chatController.chatLocation {
@@ -2039,6 +2039,12 @@ private final class GiftAuctionBidScreenComponent: Component {
                                         controllers.append(chatController)
                                     }
                                     navigationController.setViewControllers(controllers, animated: true)
+                                    
+                                    for controller in controllers {
+                                        if controller is MinimizableController {
+                                            controller.dismiss(animated: true)
+                                        }
+                                    }
                                 }
                             } else {
                                 self.resetSliderValue()
