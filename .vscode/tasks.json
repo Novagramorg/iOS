@@ -4,7 +4,7 @@
     {
       "label": "Build Telegram",
       "type": "shell",
-      "command": "${workspaceFolder}/build-input/bazel-8.3.1-darwin-arm64",
+      "command": "${workspaceFolder}/build-input/bazel-8.4.2-darwin-arm64",
       "args": [
         "build",
         "Telegram/Telegram",
@@ -73,6 +73,28 @@
       "presentation": {
         "reveal": "always",
         "panel": "dedicated"
+      }
+    },
+    {
+      "label": "Stop Telegram Debug Session",
+      "type": "shell",
+      "command": "pkill -f 'launch_and_debug.sh' || true; lsof -ti:6667 | xargs kill -9 2>/dev/null || true",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "silent",
+        "close": true
+      }
+    },
+    {
+      "label": "Restart Telegram Debug",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "Stop Telegram Debug Session",
+        "_launch_telegram"
+      ],
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always"
       }
     }
   ]

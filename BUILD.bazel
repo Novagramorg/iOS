@@ -2,7 +2,7 @@ load("@sourcekit_bazel_bsp//rules:setup_sourcekit_bsp.bzl", "setup_sourcekit_bsp
 
 setup_sourcekit_bsp(
     name = "setup_sourcekit_bsp_telegram_project",
-    bazel_wrapper = "./build-input/bazel-8.3.1-darwin-arm64",
+    bazel_wrapper = "./build-input/bazel-8.4.2-darwin-arm64",
     files_to_watch = [
         "**/*.swift",
     ],

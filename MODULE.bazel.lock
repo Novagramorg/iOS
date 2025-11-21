@@ -256,7 +256,7 @@
     },
     "@@rules_xcodeproj+//xcodeproj:extensions.bzl%internal": {
       "general": {
-        "bzlTransitiveDigest": "/r7IWMTdpceHqqiSh7G9bQLHvIkfqE/cesswbkTSJZw=",
+        "bzlTransitiveDigest": "hsJI1bzu5CX3ZE+NX8jnNWEOh1pNDT650SbTSBnF5jA=",
         "usagesDigest": "fvsnMonVwKDYnBfww4bXuYie3WU0d9VSqT2gePSdQco=",
         "recordedFileInputs": {},
         "recordedDirentsInputs": {},
@@ -278,7 +278,7 @@
     },
     "@@rules_xcodeproj+//xcodeproj:extensions.bzl%non_module_deps": {
       "general": {
-        "bzlTransitiveDigest": "/r7IWMTdpceHqqiSh7G9bQLHvIkfqE/cesswbkTSJZw=",
+        "bzlTransitiveDigest": "hsJI1bzu5CX3ZE+NX8jnNWEOh1pNDT650SbTSBnF5jA=",
         "usagesDigest": "jzxYhnOC9BE0dJ0biFLfxWXi/+R19uAAZkJ0p9CY0JI=",
         "recordedFileInputs": {},
         "recordedDirentsInputs": {},
