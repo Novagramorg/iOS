@@ -2186,12 +2186,79 @@ private final class GiftAuctionBidScreenComponent: Component {
                 giftsPerRound = giftsPerRoundValue
             }
             
+            var myBidTitleComponent: AnyComponent<Empty>?
+            var myBidComponent: AnyComponent<Empty>?
+            
+            var topBidsTitleComponent: AnyComponent<Empty>?
+            var topBidsComponents: [(EnginePeer.Id, AnyComponent<Empty>)] = []
+            
+            let place: Int32
+            if let giftAuctionState = self.giftAuctionState, case let .ongoing(_, _, _, _, bidLevels, topBidders, _, _, _, _) = giftAuctionState.auctionState {
+                var myBidAmount = Int64(self.amount.realValue)
+                var myBidDate = currentTime
+                var isBiddingUp = true
+                
+                if let currentAmount = giftAuctionState.myState.bidAmount, let currentDate = giftAuctionState.myState.bidDate, currentAmount >= myBidAmount {
+                    myBidAmount = currentAmount
+                    myBidDate = currentDate
+                    isBiddingUp = false
+                }
+                                
+                place = giftAuctionState.getPlace(myBid: myBidAmount, myBidDate: myBidDate) ?? 1
+                                    
+                var bidTitle: String
+                var bidTitleColor: UIColor
+                var bidStatus: PeerComponent.Status?
+                if isBiddingUp {
+                    bidTitleColor = environment.theme.list.itemSecondaryTextColor
+                    bidTitle = environment.strings.Gift_AuctionBid_BidPreview
+                } else if giftAuctionState.myState.isReturned {
+                    bidTitle = environment.strings.Gift_AuctionBid_Outbid
+                    bidTitleColor = environment.theme.list.itemDestructiveColor
+                    bidStatus = .returned
+                } else if place > giftsPerRound {
+                    bidTitle = environment.strings.Gift_AuctionBid_Outbid
+                    bidTitleColor = environment.theme.list.itemDestructiveColor
+                    bidStatus = .outbid
+                } else {
+                    bidTitle = environment.strings.Gift_AuctionBid_Winning
+                    bidTitleColor = environment.theme.list.itemDisclosureActions.constructive.fillColor
+                    bidStatus = .winning
+                }
+                
+                if let peer = self.peersMap[component.context.account.peerId] {
+                    myBidTitleComponent = AnyComponent(MultilineTextComponent(text: .plain(NSAttributedString(string: bidTitle.uppercased(), font: Font.medium(13.0), textColor: bidTitleColor))))
+                    myBidComponent = AnyComponent(PeerComponent(context: component.context, theme: environment.theme, groupingSeparator: environment.dateTimeFormat.groupingSeparator, peer: peer, place: place, amount: myBidAmount, status: bidStatus, isLast: true, action: nil))
+                }
+                
+                var i: Int32 = 1
+                for peer in topBidders {
+                    var bid: Int64 = 0
+                    for level in bidLevels {
+                        if level.position == i {
+                            bid = level.amount
+                            break
+                        }
+                    }
+                    topBidsComponents.append((peer.id, AnyComponent(PeerComponent(context: component.context, theme: environment.theme, groupingSeparator: environment.dateTimeFormat.groupingSeparator, peer: peer, place: i, amount: bid, isLast: i == topBidders.count, action: nil))))
+                    i += 1
+                }
+                
+                if !topBidsComponents.isEmpty {
+                    topBidsTitleComponent = AnyComponent(MultilineTextComponent(text: .plain(NSAttributedString(string: environment.strings.Gift_AuctionBid_TopWinners.uppercased(), font: Font.medium(13.0), textColor: environment.theme.list.itemSecondaryTextColor))))
+                }
+            } else {
+                place = 1
+            }
+            
             var topCutoffRealValue: Int?
-            if let giftAuctionState = self.giftAuctionState, case let .ongoing(_, _, _, _, bidLevels, _, _, _, _, _) = giftAuctionState.auctionState {
-                for bidLevel in bidLevels {
-                    if bidLevel.position == giftsPerRound - 1 {
-                        topCutoffRealValue = Int(bidLevel.amount)
-                        break
+            if place > giftsPerRound {
+                if let giftAuctionState = self.giftAuctionState, case let .ongoing(_, _, _, _, bidLevels, _, _, _, _, _) = giftAuctionState.auctionState {
+                    for bidLevel in bidLevels {
+                        if bidLevel.position == giftsPerRound - 1 {
+                            topCutoffRealValue = Int(bidLevel.amount)
+                            break
+                        }
                     }
                 }
             }
@@ -2298,72 +2365,7 @@ private final class GiftAuctionBidScreenComponent: Component {
                 self.badgeStars.frame = starsRect
                 self.badgeStars.update(size: starsRect.size, color: sliderColor, emitterPosition: CGPoint(x: badgeFrame.midX, y: badgeFrame.maxY - 32.0))
             }
-            
-            var myBidTitleComponent: AnyComponent<Empty>?
-            var myBidComponent: AnyComponent<Empty>?
-            
-            var topBidsTitleComponent: AnyComponent<Empty>?
-            var topBidsComponents: [(EnginePeer.Id, AnyComponent<Empty>)] = []
-            
-            let place: Int32
-            if let giftAuctionState = self.giftAuctionState, case let .ongoing(_, _, _, _, bidLevels, topBidders, _, _, _, _) = giftAuctionState.auctionState {
-                var myBidAmount = Int64(self.amount.realValue)
-                var myBidDate = currentTime
-                var isBiddingUp = true
-                
-                if let currentAmount = giftAuctionState.myState.bidAmount, let currentDate = giftAuctionState.myState.bidDate, currentAmount >= myBidAmount {
-                    myBidAmount = currentAmount
-                    myBidDate = currentDate
-                    isBiddingUp = false
-                }
-                                
-                place = giftAuctionState.getPlace(myBid: myBidAmount, myBidDate: myBidDate) ?? 1
-                                    
-                var bidTitle: String
-                var bidTitleColor: UIColor
-                var bidStatus: PeerComponent.Status?
-                if isBiddingUp {
-                    bidTitleColor = environment.theme.list.itemSecondaryTextColor
-                    bidTitle = environment.strings.Gift_AuctionBid_BidPreview
-                } else if giftAuctionState.myState.isReturned {
-                    bidTitle = environment.strings.Gift_AuctionBid_Outbid
-                    bidTitleColor = environment.theme.list.itemDestructiveColor
-                    bidStatus = .returned
-                } else if place > giftsPerRound {
-                    bidTitle = environment.strings.Gift_AuctionBid_Outbid
-                    bidTitleColor = environment.theme.list.itemDestructiveColor
-                    bidStatus = .outbid
-                } else {
-                    bidTitle = environment.strings.Gift_AuctionBid_Winning
-                    bidTitleColor = environment.theme.list.itemDisclosureActions.constructive.fillColor
-                    bidStatus = .winning
-                }
-                
-                if let peer = self.peersMap[component.context.account.peerId] {
-                    myBidTitleComponent = AnyComponent(MultilineTextComponent(text: .plain(NSAttributedString(string: bidTitle.uppercased(), font: Font.medium(13.0), textColor: bidTitleColor))))
-                    myBidComponent = AnyComponent(PeerComponent(context: component.context, theme: environment.theme, groupingSeparator: environment.dateTimeFormat.groupingSeparator, peer: peer, place: place, amount: myBidAmount, status: bidStatus, isLast: true, action: nil))
-                }
-                
-                var i: Int32 = 1
-                for peer in topBidders {
-                    var bid: Int64 = 0
-                    for level in bidLevels {
-                        if level.position == i {
-                            bid = level.amount
-                            break
-                        }
-                    }
-                    topBidsComponents.append((peer.id, AnyComponent(PeerComponent(context: component.context, theme: environment.theme, groupingSeparator: environment.dateTimeFormat.groupingSeparator, peer: peer, place: i, amount: bid, isLast: i == topBidders.count, action: nil))))
-                    i += 1
-                }
-                
-                if !topBidsComponents.isEmpty {
-                    topBidsTitleComponent = AnyComponent(MultilineTextComponent(text: .plain(NSAttributedString(string: environment.strings.Gift_AuctionBid_TopWinners.uppercased(), font: Font.medium(13.0), textColor: environment.theme.list.itemSecondaryTextColor))))
-                }
-            } else {
-                place = 1
-            }
-            
+                        
             var perks: [([AnimatedTextComponent.Item], String)] = []
             
             var minBidAnimatedItems: [AnimatedTextComponent.Item] = []
