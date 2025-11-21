@@ -226,6 +226,8 @@ public class ContactsController: ViewController {
         }
         
         self.sortButton.addTarget(self, action: #selector(self.sortPressed), forControlEvents: .touchUpInside)
+
+        self.updateTabBarSearchState(ViewController.TabBarSearchState(isActive: false), transition: .immediate)
     }
     
     required public init(coder aDecoder: NSCoder) {

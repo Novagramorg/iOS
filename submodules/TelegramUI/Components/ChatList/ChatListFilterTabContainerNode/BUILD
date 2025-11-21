@@ -1,8 +1,8 @@
 load("@build_bazel_rules_swift//swift:swift.bzl", "swift_library")
 
 swift_library(
-    name = "TabBarComponent",
-    module_name = "TabBarComponent",
+    name = "ChatListFilterTabContainerNode",
+    module_name = "ChatListFilterTabContainerNode",
     srcs = glob([
         "Sources/**/*.swift",
     ]),
@@ -10,19 +10,15 @@ swift_library(
         "-warnings-as-errors",
     ],
     deps = [
+        "//submodules/AsyncDisplayKit",
         "//submodules/Display",
+        "//submodules/TelegramCore",
         "//submodules/TelegramPresentationData",
+        "//submodules/TelegramUI/Components/TextNodeWithEntities",
+        "//submodules/AccountContext",
         "//submodules/ComponentFlow",
-        "//submodules/Components/ComponentDisplayAdapters",
-        "//submodules/Components/MultilineTextComponent",
         "//submodules/TelegramUI/Components/GlassBackgroundComponent",
-        "//submodules/TelegramUI/Components/LottieComponent",
-        "//submodules/Components/BundleIconComponent",
-        "//submodules/TelegramUI/Components/TextBadgeComponent",
-        "//submodules/UIKitRuntimeUtils",
         "//submodules/TelegramUI/Components/LiquidLens",
-        "//submodules/AppBundle",
-        "//submodules/SearchBarNode",
     ],
     visibility = [
         "//visibility:public",

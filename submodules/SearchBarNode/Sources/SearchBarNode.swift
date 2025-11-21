@@ -369,6 +369,7 @@ private class SearchBarTextField: UITextField, UIScrollViewDelegate {
     }
     
     var theme: SearchBarNodeTheme
+    let style: SearchBarStyle
     
     fileprivate func layoutTokens(transition: ContainedViewLayoutTransition = .immediate) {
         var hasSelected = false
@@ -519,8 +520,9 @@ private class SearchBarTextField: UITextField, UIScrollViewDelegate {
         }
     }
     
-    init(theme: SearchBarNodeTheme) {
+    init(theme: SearchBarNodeTheme, style: SearchBarStyle) {
         self.theme = theme
+        self.style = style
                 
         self.placeholderLabel = ImmediateTextNode()
         self.placeholderLabel.isUserInteractionEnabled = false
@@ -679,6 +681,10 @@ private class SearchBarTextField: UITextField, UIScrollViewDelegate {
             placeholderYOffset = 1.0
         } else {
         }
+
+        if case .inlineNavigation = self.style {
+            placeholderYOffset += 6.0
+        }
         
         let textRect = self.textRect(forBounds: bounds)
         let labelSize = self.placeholderLabel.updateLayout(textRect.size)
@@ -813,40 +819,45 @@ public final class SearchBarNodeTheme: Equatable {
 public enum SearchBarStyle {
     case modern
     case legacy
+    case inlineNavigation
     
     var font: UIFont {
         switch self {
-            case .modern:
-                return Font.regular(17.0)
-            case .legacy:
-                return Font.regular(14.0)
+        case .modern, .inlineNavigation:
+            return Font.regular(17.0)
+        case .legacy:
+            return Font.regular(14.0)
         }
     }
     
     var cornerDiameter: CGFloat {
         switch self {
-            case .modern:
-                return 21.0
-            case .legacy:
-                return 14.0
+        case .modern, .inlineNavigation:
+            return 21.0
+        case .legacy:
+            return 14.0
         }
     }
     
     var height: CGFloat {
         switch self {
-            case .modern:
-                return 36.0
-            case .legacy:
-                return 28.0
+        case .inlineNavigation:
+            return 48.0
+        case .modern:
+            return 36.0
+        case .legacy:
+            return 28.0
         }
     }
     
     var padding: CGFloat {
         switch self {
-            case .modern:
-                return 10.0
-            case .legacy:
-                return 8.0
+        case .inlineNavigation:
+            return 0.0
+        case .modern:
+            return 10.0
+        case .legacy:
+            return 8.0
         }
     }
 }
@@ -994,7 +1005,7 @@ public class SearchBarNode: ASDisplayNode, UITextFieldDelegate {
         self.iconNode.displaysAsynchronously = false
         self.iconNode.displayWithoutProcessing = true
         
-        self.textField = SearchBarTextField(theme: theme)
+        self.textField = SearchBarTextField(theme: theme, style: fieldStyle)
         self.textField.accessibilityTraits = .searchField
         self.textField.autocorrectionType = .no
         self.textField.returnKeyType = .search
@@ -1011,14 +1022,21 @@ public class SearchBarNode: ASDisplayNode, UITextFieldDelegate {
         
         super.init()
         
-        self.addSubnode(self.backgroundNode)
-        self.addSubnode(self.separatorNode)
-        
-        self.addSubnode(self.textBackgroundNode)
+        if case .inlineNavigation = self.fieldStyle {
+        } else {
+            self.addSubnode(self.backgroundNode)
+            self.addSubnode(self.separatorNode)
+            self.addSubnode(self.textBackgroundNode)
+        }
         self.view.addSubview(self.textField)
-        self.addSubnode(self.iconNode)
+
+        if case .inlineNavigation = self.fieldStyle {
+        } else {
+            self.addSubnode(self.iconNode)
+            self.addSubnode(self.cancelButton)
+        }
+
         self.addSubnode(self.clearButton)
-        self.addSubnode(self.cancelButton)
         
         self.textField.delegate = self
         self.textField.addTarget(self, action: #selector(self.textFieldDidChange(_:)), for: .editingChanged)
@@ -1093,19 +1111,34 @@ public class SearchBarNode: ASDisplayNode, UITextFieldDelegate {
         self.backgroundNode.update(size: self.backgroundNode.bounds.size, transition: .immediate)
         transition.updateFrame(node: self.separatorNode, frame: CGRect(origin: CGPoint(x: 0.0, y: self.bounds.size.height), size: CGSize(width: self.bounds.size.width, height: UIScreenPixel)))
         
-        let verticalOffset: CGFloat = boundingSize.height - 82.0
-        
         let contentFrame = CGRect(origin: CGPoint(x: leftInset, y: 0.0), size: CGSize(width: boundingSize.width - leftInset - rightInset, height: boundingSize.height))
         
-        let textBackgroundHeight = self.fieldStyle.height
+        let textBackgroundHeight: CGFloat
+        if case .inlineNavigation = self.fieldStyle {
+            textBackgroundHeight = boundingSize.height
+        } else {
+            textBackgroundHeight = self.fieldStyle.height
+        }
+        let verticalOffset: CGFloat
+        if case .inlineNavigation = self.fieldStyle {
+            verticalOffset = -textBackgroundHeight
+        } else {
+            verticalOffset = boundingSize.height - 82.0
+        }
         let cancelButtonSize = self.cancelButton.measure(CGSize(width: 100.0, height: CGFloat.infinity))
         transition.updateFrame(node: self.cancelButton, frame: CGRect(origin: CGPoint(x: contentFrame.maxX - 10.0 - cancelButtonSize.width, y: verticalOffset + textBackgroundHeight + floorToScreenPixels((textBackgroundHeight - cancelButtonSize.height) / 2.0)), size: cancelButtonSize))
         
         let padding = self.fieldStyle.padding
-        let textBackgroundFrame = CGRect(origin: CGPoint(x: contentFrame.minX + padding, y: verticalOffset + textBackgroundHeight), size: CGSize(width: contentFrame.width - padding * 2.0 - (self.hasCancelButton ? cancelButtonSize.width + 11.0 : 0.0), height: textBackgroundHeight))
+        var textBackgroundFrame = CGRect(origin: CGPoint(x: contentFrame.minX + padding, y: verticalOffset + textBackgroundHeight), size: CGSize(width: contentFrame.width - padding * 2.0 - (self.hasCancelButton ? cancelButtonSize.width + 11.0 : 0.0), height: textBackgroundHeight))
         transition.updateFrame(node: self.textBackgroundNode, frame: textBackgroundFrame)
         
-        let textFrame = CGRect(origin: CGPoint(x: textBackgroundFrame.minX + 24.0, y: textBackgroundFrame.minY), size: CGSize(width: max(1.0, textBackgroundFrame.size.width - 24.0 - 27.0), height: textBackgroundFrame.size.height))
+        var textFrame = CGRect(origin: CGPoint(x: 0.0, y: textBackgroundFrame.minY), size: CGSize(width: max(1.0, textBackgroundFrame.size.width - 24.0 - 27.0), height: textBackgroundFrame.size.height))
+        if case .inlineNavigation = self.fieldStyle {
+            textFrame.size.width = boundingSize.width - 27.0
+            textBackgroundFrame.size.width = boundingSize.width
+        } else {
+            textFrame.origin.x = textBackgroundFrame.minX + 24.0
+        }
         
         if let iconImage = self.iconNode.image {
             let iconSize = iconImage.size
