@@ -151,17 +151,17 @@ final class GiftOptionsScreenComponent: Component {
         
         private var loadingGiftId: Int64?
         
-        private var _effectiveStarGifts: ([StarGift], StarsFilter)?
+        private var _effectiveStarGifts: ([StarGift], StarsFilter, Int)?
         private var effectiveStarGifts: [StarGift]? {
             get {
-                if let (currentGifts, currentFilter) = self._effectiveStarGifts, currentFilter == self.starsFilter && currentFilter != .transfer {
+                if let (currentGifts, currentFilter, currentVersion) = self._effectiveStarGifts, currentFilter == self.starsFilter && currentFilter != .transfer && currentVersion == self.state?.starGiftsVersion {
                     return currentGifts
-                } else if let allGifts = self.state?.starGifts {
+                } else if let state = self.state, let allGifts = state.starGifts {
                     if case .transfer = self.starsFilter {
                         let filteredGifts: [StarGift] = self.state?.transferStarGifts?.map { gift in
                             return gift.gift
                         } ?? []
-                        self._effectiveStarGifts = (filteredGifts, self.starsFilter)
+                        self._effectiveStarGifts = (filteredGifts, self.starsFilter, state.starGiftsVersion)
                         return filteredGifts
                     } else {
                         var sortedGifts = allGifts
@@ -216,7 +216,7 @@ final class GiftOptionsScreenComponent: Component {
                             }
                             return false
                         }
-                        self._effectiveStarGifts = (filteredGifts, self.starsFilter)
+                        self._effectiveStarGifts = (filteredGifts, self.starsFilter, state.starGiftsVersion)
                         return filteredGifts
                     }
                 } else {
@@ -1718,6 +1718,7 @@ final class GiftOptionsScreenComponent: Component {
         fileprivate var disallowedGifts: TelegramDisallowedGifts?
         fileprivate var premiumProducts: [PremiumGiftProduct]?
         fileprivate var starGifts: [StarGift]?
+        fileprivate var starGiftsVersion: Int = 0
         
         fileprivate let starGiftsContext: ProfileGiftsContext
         fileprivate var transferStarGifts: [ProfileGiftsContext.State.StarGift]?
@@ -1739,7 +1740,7 @@ final class GiftOptionsScreenComponent: Component {
             } else {
                 availableProducts = .single([])
             }
-            
+                        
             self.disposable = combineLatest(
                 queue: Queue.mainQueue(),
                 context.engine.data.get(
@@ -1860,6 +1861,10 @@ final class GiftOptionsScreenComponent: Component {
                         }
                         return true
                     }
+                }
+                
+                if self.starGifts != filteredStarGifts {
+                    self.starGiftsVersion += 1
                 }
                 self.starGifts = filteredStarGifts
                 
