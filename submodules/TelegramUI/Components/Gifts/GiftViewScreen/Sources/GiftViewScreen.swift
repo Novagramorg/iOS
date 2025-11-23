@@ -3262,6 +3262,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                             )
                         })
                     } else {
+                        let descriptionConstrainedWidth = hasDescriptionButton ? context.availableSize.width - sideInset : context.availableSize.width - sideInset * 2.0 - 50.0
                         let description = description.update(
                             component: MultilineTextComponent(
                                 text: .plain(attributedString),
@@ -3284,7 +3285,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                                     }
                                 }
                             ),
-                            availableSize: CGSize(width: context.availableSize.width - sideInset * 2.0 - 50.0, height: CGFloat.greatestFiniteMagnitude),
+                            availableSize: CGSize(width: descriptionConstrainedWidth, height: CGFloat.greatestFiniteMagnitude),
                             transition: context.transition
                         )
                         descriptionSize = description.size
@@ -3311,7 +3312,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                                     animateScale: false
                                 ),
                                 environment: {},
-                                availableSize: CGSize(width: description.size.width + 18.0, height: 19.0),
+                                availableSize: CGSize(width: description.size.width + 18.0, height: description.size.height + 1.0),
                                 transition: .immediate
                             )
                             headerComponents.append({
