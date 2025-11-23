@@ -897,10 +897,10 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                     }
                 ), textAlignment: .center)
                 
-                let (creatorButtonTitleLayout, creatorButtonTitleApply) = makeCreatorButtonTitleLayout(TextNodeLayoutArguments(attributedString: creatorButtonAttributedString, backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .middle, constrainedSize: CGSize(width: giftSize.width - 32.0, height: CGFloat.greatestFiniteMagnitude), alignment: .center, cutout: nil, insets: UIEdgeInsets()))
+                let (creatorButtonTitleLayout, creatorButtonTitleApply) = makeCreatorButtonTitleLayout(TextNodeLayoutArguments(attributedString: creatorButtonAttributedString, backgroundColor: nil, maximumNumberOfLines: 2, truncationType: .middle, constrainedSize: CGSize(width: giftSize.width - 32.0, height: CGFloat.greatestFiniteMagnitude), alignment: .center, cutout: nil, insets: UIEdgeInsets()))
 
                 if modelTitle == nil && !creatorButtonTitle.isEmpty {
-                    textSpacing += 28.0
+                    textSpacing += creatorButtonTitleLayout.size.height + 13.0
                 }
                 
                 giftSize.height = titleLayout.size.height + textSpacing + clippedTextHeight + 164.0
@@ -909,7 +909,8 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                     giftSize.height += 70.0
                     
                     if !creatorButtonTitle.isEmpty {
-                        giftSize.height += 28.0
+                        giftSize.height += creatorButtonTitleLayout.size.height + 13.0
+                        //28.0
                     }
                 }
                 
@@ -1073,7 +1074,7 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                             
                             var attributesOffsetY: CGFloat = 0.0
                             
-                            let creatorButtonSize = CGSize(width: creatorButtonTitleLayout.size.width + 18.0, height: 18.0)
+                            let creatorButtonSize = CGSize(width: creatorButtonTitleLayout.size.width + 18.0, height: creatorButtonTitleLayout.size.height + 3.0)
                             let creatorButtonOriginY = modelTitle == nil ? titleFrame.maxY + 4.0 : clippingTextFrame.maxY + 5.0
                             let creatorButtonFrame = CGRect(origin: CGPoint(x: mediaBackgroundFrame.minX + floorToScreenPixels((mediaBackgroundFrame.width - creatorButtonSize.width) / 2.0), y: creatorButtonOriginY), size: creatorButtonSize)
                             if !creatorButtonTitle.isEmpty {
