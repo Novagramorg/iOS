@@ -155,6 +155,8 @@ public final class CallListController: TelegramBaseController {
         if case .navigation = self.mode {
             self.navigationItem.backBarButtonItem = UIBarButtonItem(title: self.presentationData.strings.Common_Back, style: .plain, target: nil, action: nil)
         }
+
+        self.updateTabBarSearchState(ViewController.TabBarSearchState(isActive: false), transition: .immediate)
     }
     
     required public init(coder aDecoder: NSCoder) {

@@ -298,8 +298,7 @@ final class PeerSelectionScreenComponent: Component {
                     }
                 ))) : nil,
                 rightButtons: rightButtons,
-                backTitle: isModal ? nil : strings.Common_Back,
-                backPressed: { [weak self] in
+                backPressed: isModal ? nil : { [weak self] in
                     guard let self else {
                         return
                     }
@@ -318,8 +317,8 @@ final class PeerSelectionScreenComponent: Component {
                     strings: strings,
                     statusBarHeight: statusBarHeight,
                     sideInset: insets.left,
+                    search: ChatListNavigationBar.Search(isEnabled: true),
                     isSearchActive: self.isSearchDisplayControllerActive,
-                    isSearchEnabled: true,
                     primaryContent: headerContent,
                     secondaryContent: nil,
                     secondaryTransition: 0.0,
