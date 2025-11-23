@@ -7,7 +7,7 @@ set -e
 # Ideally we should upstream these changes back to rules_apple since they should be useful for everyone.
 
 echo "Building..."
-./build-input/bazel-8.3.1-darwin-arm64 build Telegram/Telegram --announce_rc --features=swift.use_global_module_cache --verbose_failures --remote_cache_async --features=swift.skip_function_bodies_for_derived_files --jobs=16 --define=buildNumber=10000 --define=telegramVersion=12.2.1 --disk_cache=/Users/ali/telegram-bazel-cache -c dbg --ios_multi_cpus=sim_arm64 --watchos_cpus=arm64_32 --features=swift.enable_batch_mode
+./build-input/bazel-8.4.2-darwin-arm64 build Telegram/Telegram --announce_rc --features=swift.use_global_module_cache --verbose_failures --remote_cache_async --jobs=16 --define=buildNumber=10000 --define=telegramVersion=12.2.1 --disk_cache=/Users/ali/telegram-bazel-cache -c dbg --ios_multi_cpus=sim_arm64 --watchos_cpus=arm64_32 --features=swift.enable_batch_mode
 chmod -R 777 ./bazel-bin/Telegram
 
 tmp_file=$(pwd)/bazel-bin/Telegram/pid.txt

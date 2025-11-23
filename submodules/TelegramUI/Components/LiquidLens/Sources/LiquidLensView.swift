@@ -64,13 +64,15 @@ public final class LiquidLensView: UIView {
         var selectionWidth: CGFloat
         var isDark: Bool
         var isLifted: Bool
+        var isCollapsed: Bool
 
-        init(size: CGSize, selectionX: CGFloat, selectionWidth: CGFloat, isDark: Bool, isLifted: Bool) {
+        init(size: CGSize, selectionX: CGFloat, selectionWidth: CGFloat, isDark: Bool, isLifted: Bool, isCollapsed: Bool) {
             self.size = size
             self.selectionX = selectionX
             self.selectionWidth = selectionWidth
             self.isLifted = isLifted
             self.isDark = isDark
+            self.isCollapsed = isCollapsed
         }
     }
 
@@ -85,8 +87,8 @@ public final class LiquidLensView: UIView {
     }
 
     private let containerView: UIView
-    private let backgroundContainerContainer: UIView
-    private let backgroundContainer: GlassBackgroundContainerView
+    private let backgroundContainer: GlassBackgroundContainerView?
+    private let genericBackgroundContainer: UIView?
     private let backgroundView: GlassBackgroundView
     private var lensView: UIView?
     private let liftedContainerView: UIView
@@ -117,11 +119,16 @@ public final class LiquidLensView: UIView {
         return self.params?.selectionWidth
     }
 
-    override public init(frame: CGRect) {
+    public init(useBackgroundContainer: Bool = true) {
         self.containerView = UIView()
         
-        self.backgroundContainerContainer = UIView()
-        self.backgroundContainer = GlassBackgroundContainerView()
+        if useBackgroundContainer {
+            self.backgroundContainer = GlassBackgroundContainerView()
+            self.genericBackgroundContainer = nil
+        } else {
+            self.backgroundContainer = nil
+            self.genericBackgroundContainer = UIView()
+        }
         
         self.backgroundView = GlassBackgroundView()
         
@@ -130,12 +137,16 @@ public final class LiquidLensView: UIView {
 
         self.restingBackgroundView = RestingBackgroundView()
 
-        super.init(frame: frame)
+        super.init(frame: CGRect())
         
-        self.backgroundContainerContainer.addSubview(self.backgroundContainer)
-        self.addSubview(self.backgroundContainerContainer)
+        if let backgroundContainer = self.backgroundContainer {
+            self.addSubview(backgroundContainer)
+            backgroundContainer.contentView.addSubview(self.backgroundView)
+        } else if let genericBackgroundContainer = self.genericBackgroundContainer {
+            self.addSubview(genericBackgroundContainer)
+            genericBackgroundContainer.addSubview(self.backgroundView)
+        }
         
-        self.backgroundContainer.contentView.addSubview(self.backgroundView)
         self.backgroundView.contentView.addSubview(self.containerView)
         self.containerView.isUserInteractionEnabled = false
         
@@ -150,7 +161,11 @@ public final class LiquidLensView: UIView {
         }
         
         if let lensView = self.lensView {
-            self.backgroundContainer.layer.zPosition = 1
+            if let backgroundContainer = self.backgroundContainer {
+                backgroundContainer.layer.zPosition = 1
+            } else if let genericBackgroundContainer = self.genericBackgroundContainer{
+                genericBackgroundContainer.layer.zPosition = 1
+            }
             lensView.layer.zPosition = 10.0
             
             self.liftedContainerView.addSubview(self.restingBackgroundView)
@@ -159,7 +174,11 @@ public final class LiquidLensView: UIView {
             self.containerView.addSubview(lensView)
             self.containerView.addSubview(self.contentView)
             
-            lensView.perform(NSSelectorFromString("setLiftedContainerView:"), with: self.backgroundContainer.contentView)
+            if let backgroundContainer = self.backgroundContainer {
+                lensView.perform(NSSelectorFromString("setLiftedContainerView:"), with: backgroundContainer.contentView)
+            } else if let genericBackgroundContainer = self.genericBackgroundContainer {
+                lensView.perform(NSSelectorFromString("setLiftedContainerView:"), with: genericBackgroundContainer)
+            }
             lensView.perform(NSSelectorFromString("setLiftedContentView:"), with: self.liftedContainerView)
             lensView.perform(NSSelectorFromString("setOverridePunchoutView:"), with: self.contentView)
             
@@ -223,8 +242,8 @@ public final class LiquidLensView: UIView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    public func update(size: CGSize, selectionX: CGFloat, selectionWidth: CGFloat, isDark: Bool, isLifted: Bool, transition: ComponentTransition) {
-        let params = Params(size: size, selectionX: selectionX, selectionWidth: selectionWidth, isDark: isDark, isLifted: isLifted)
+    public func update(size: CGSize, selectionX: CGFloat, selectionWidth: CGFloat, isDark: Bool, isLifted: Bool, isCollapsed: Bool = false, transition: ComponentTransition) {
+        let params = Params(size: size, selectionX: selectionX, selectionWidth: selectionWidth, isDark: isDark, isLifted: isLifted, isCollapsed: isCollapsed)
         if self.params == params {
             return
         }
@@ -319,16 +338,36 @@ public final class LiquidLensView: UIView {
         self.params = params
 
         transition.setFrame(view: self.containerView, frame: CGRect(origin: CGPoint(), size: params.size))
-        transition.setFrame(view: self.backgroundContainerContainer, frame: CGRect(origin: CGPoint(), size: params.size))
 
-        transition.setFrame(view: self.backgroundContainer, frame: CGRect(origin: CGPoint(), size: params.size))
-        self.backgroundContainer.update(size: params.size, isDark: params.isDark, transition: transition)
+        if let backgroundContainer = self.backgroundContainer {
+            transition.setFrame(view: backgroundContainer, frame: CGRect(origin: CGPoint(), size: params.size))
+            backgroundContainer.update(size: params.size, isDark: params.isDark, transition: transition)
+        } else if let genericBackgroundContainer = self.genericBackgroundContainer {
+            transition.setFrame(view: genericBackgroundContainer, frame: CGRect(origin: CGPoint(), size: params.size))
+        }
         
         transition.setFrame(view: self.backgroundView, frame: CGRect(origin: CGPoint(), size: params.size))
         self.backgroundView.update(size: params.size, cornerRadius: params.size.height * 0.5, isDark: params.isDark, tintColor: GlassBackgroundView.TintColor.init(kind: .panel, color: UIColor(white: params.isDark ? 0.0 : 1.0, alpha: 0.6)), isInteractive: true, transition: transition)
         
-        transition.setFrame(view: self.contentView, frame: CGRect(origin: CGPoint(), size: params.size))
-        transition.setFrame(view: self.liftedContainerView, frame: CGRect(origin: CGPoint(), size: params.size))
+        if self.contentView.bounds.size != params.size {
+            self.contentView.clipsToBounds = true
+            transition.setFrame(view: self.contentView, frame: CGRect(origin: CGPoint(), size: params.size), completion: { [weak self] completed in
+                guard let self, completed else {
+                    return
+                }
+                self.contentView.clipsToBounds = false
+            })
+            transition.setCornerRadius(layer: self.contentView.layer, cornerRadius: params.size.height * 0.5)
+
+            self.liftedContainerView.clipsToBounds = true
+            transition.setFrame(view: self.liftedContainerView, frame: CGRect(origin: CGPoint(), size: params.size), completion: { [weak self] completed in
+                guard let self, completed else {
+                    return
+                }
+                self.liftedContainerView.clipsToBounds = false
+            })
+            transition.setCornerRadius(layer: self.liftedContainerView.layer, cornerRadius: params.size.height * 0.5)
+        }
 
         let baseLensFrame = CGRect(origin: CGPoint(x: max(0.0, min(params.selectionX, params.size.width - params.selectionWidth)), y: 0.0), size: CGSize(width: params.selectionWidth, height: params.size.height))
         self.updateLens(params: LensParams(baseFrame: baseLensFrame, isLifted: params.isLifted), animated: !transition.animation.isImmediate)
@@ -354,7 +393,7 @@ public final class LiquidLensView: UIView {
 
         transition.setFrame(view: self.restingBackgroundView, frame: CGRect(origin: CGPoint(), size: params.size))
         self.restingBackgroundView.update(isDark: params.isDark)
-        transition.setAlpha(view: self.restingBackgroundView, alpha: params.isLifted ? 0.0 : 1.0)
+        transition.setAlpha(view: self.restingBackgroundView, alpha: (params.isLifted || params.isCollapsed) ? 0.0 : 1.0)
 
         if params.isLifted {
             if self.liftedDisplayLink == nil {
