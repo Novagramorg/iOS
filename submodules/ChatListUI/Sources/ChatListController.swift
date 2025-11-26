@@ -438,23 +438,6 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
         }).strict()
         
         if !previewing {
-            /*
-            self.searchContentNode = NavigationBarSearchContentNode(theme: self.presentationData.theme, placeholder: placeholder, compactPlaceholder: compactPlaceholder, activate: { [weak self] in
-                self?.chatListDisplayNode.mainContainerNode.currentItemNode.cancelTracking()
-                self?.activateSearch(filter: isForum ? .topics : .chats)
-            })
-            self.searchContentNode?.updateExpansionProgress(0.0)
-            self.navigationBar?.setContentNode(self.searchContentNode, animated: false)*/
-            
-            let tabsIsEmpty: Bool
-            if let (resolvedItems, displayTabsAtBottom, _) = self.tabContainerData {
-                tabsIsEmpty = resolvedItems.count <= 1 || displayTabsAtBottom
-            } else {
-                tabsIsEmpty = true
-            }
-            
-            self.navigationBar?.secondaryContentHeight = !tabsIsEmpty ? NavigationBar.defaultSecondaryContentHeight : 0.0
-            
             enum State: Equatable {
                 case empty(hasDownloads: Bool)
                 case downloading(progress: Double)
@@ -937,7 +920,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
         }
         
         self.statusBar.statusBarStyle = self.presentationData.theme.rootController.statusBarStyle.style
-        self.navigationBar?.updatePresentationData(NavigationBarPresentationData(presentationData: self.presentationData))
+        self.navigationBar?.updatePresentationData(NavigationBarPresentationData(presentationData: self.presentationData), transition: .immediate)
         
         if let layout = self.validLayout {
             self.tabContainerNode.update(size: CGSize(width: layout.size.width, height: 46.0), sideInset: layout.safeInsets.left, filters: self.tabContainerData?.0 ?? [], selectedFilter: self.chatListDisplayNode.effectiveContainerNode.currentItemFilter, isReordering: self.chatListDisplayNode.isReorderingFilters || (self.chatListDisplayNode.effectiveContainerNode.currentItemNode.currentState.editing && !self.chatListDisplayNode.didBeginSelectingChatsWhileEditing), isEditing: self.chatListDisplayNode.effectiveContainerNode.currentItemNode.currentState.editing, canReorderAllChats: self.isPremium, filtersLimit: self.tabContainerData?.2, transitionFraction: self.chatListDisplayNode.effectiveContainerNode.transitionFraction, presentationData: self.presentationData, transition: .immediate)
@@ -3522,8 +3505,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
             tabContainerOffset += 44.0 + 20.0
         }
 
-        let navigationBarHeight: CGFloat = 0.0//self.navigationBar?.frame.maxY ?? 0.0
-        //let secondaryContentHeight = self.navigationBar?.secondaryContentHeight ?? 0.0
+        let navigationBarHeight: CGFloat = 0.0
         
         transition.updateFrame(node: self.tabContainerNode, frame: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: layout.size.width, height: 46.0)))
         

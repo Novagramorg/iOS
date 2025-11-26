@@ -205,7 +205,7 @@ public final class CallListController: TelegramBaseController {
         }
         
         self.statusBar.statusBarStyle = self.presentationData.theme.rootController.statusBarStyle.style
-        self.navigationBar?.updatePresentationData(NavigationBarPresentationData(presentationData: self.presentationData))
+        self.navigationBar?.updatePresentationData(NavigationBarPresentationData(presentationData: self.presentationData), transition: .immediate)
         
         if self.isNodeLoaded {
             self.controllerNode.updateThemeAndStrings(presentationData: self.presentationData)
@@ -779,6 +779,10 @@ public final class CallListController: TelegramBaseController {
         
         let controller = ContextController(presentationData: self.presentationData, source: .reference(CallListTabBarContextReferenceContentSource(controller: self, sourceView: sourceView)), items: .single(ContextController.Items(content: .list(items))), recognizer: nil, gesture: gesture)
         self.context.sharedContext.mainWindow?.presentInGlobalOverlay(controller)
+    }
+    
+    override public func tabBarActivateSearch() {
+        self.beginCallImpl()
     }
 }
 

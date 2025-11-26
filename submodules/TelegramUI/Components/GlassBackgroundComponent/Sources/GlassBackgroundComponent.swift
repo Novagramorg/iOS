@@ -292,12 +292,14 @@ public class GlassBackgroundView: UIView {
         public let isDark: Bool
         public let tintColor: TintColor
         public let isInteractive: Bool
+        public let isVisible: Bool
         
-        init(shape: Shape, isDark: Bool, tintColor: TintColor, isInteractive: Bool) {
+        init(shape: Shape, isDark: Bool, tintColor: TintColor, isInteractive: Bool, isVisible: Bool) {
             self.shape = shape
             self.isDark = isDark
             self.tintColor = tintColor
             self.isInteractive = isInteractive
+            self.isVisible = isVisible
         }
     }
     
@@ -402,11 +404,11 @@ public class GlassBackgroundView: UIView {
         return nil
     }
         
-    public func update(size: CGSize, cornerRadius: CGFloat, isDark: Bool, tintColor: TintColor, isInteractive: Bool = false, transition: ComponentTransition) {
-        self.update(size: size, shape: .roundedRect(cornerRadius: cornerRadius), isDark: isDark, tintColor: tintColor, isInteractive: isInteractive, transition: transition)
+    public func update(size: CGSize, cornerRadius: CGFloat, isDark: Bool, tintColor: TintColor, isInteractive: Bool = false, isVisible: Bool = true, transition: ComponentTransition) {
+        self.update(size: size, shape: .roundedRect(cornerRadius: cornerRadius), isDark: isDark, tintColor: tintColor, isInteractive: isInteractive, isVisible: isVisible, transition: transition)
     }
     
-    public func update(size: CGSize, shape: Shape, isDark: Bool, tintColor: TintColor, isInteractive: Bool = false, transition: ComponentTransition) {
+    public func update(size: CGSize, shape: Shape, isDark: Bool, tintColor: TintColor, isInteractive: Bool = false, isVisible: Bool = true, transition: ComponentTransition) {
         if let nativeView = self.nativeView, let nativeViewClippingContext = self.nativeViewClippingContext, (nativeView.bounds.size != size || nativeViewClippingContext.shape != shape) {
             
             nativeViewClippingContext.update(shape: shape, size: size, transition: transition)
@@ -468,7 +470,7 @@ public class GlassBackgroundView: UIView {
             innerBackgroundView.removeFromSuperview()
         }
         
-        let params = Params(shape: shape, isDark: isDark, tintColor: tintColor, isInteractive: isInteractive)
+        let params = Params(shape: shape, isDark: isDark, tintColor: tintColor, isInteractive: isInteractive, isVisible: isVisible)
         if self.params != params {
             self.params = params
             
@@ -498,21 +500,44 @@ public class GlassBackgroundView: UIView {
             } else {
                 if let nativeParamsView = self.nativeParamsView, let nativeView = self.nativeView {
                     if #available(iOS 26.0, *) {
-                        let glassEffect = UIGlassEffect(style: .regular)
-                        switch tintColor.kind {
-                        case .panel:
-                            glassEffect.tintColor = UIColor(white: isDark ? 0.0 : 1.0, alpha: 0.1)
-                        case .custom:
-                            glassEffect.tintColor = tintColor.color
-                        }
-                        glassEffect.isInteractive = params.isInteractive
+                        var glassEffect: UIGlassEffect?
                         
-                        if transition.animation.isImmediate {
-                            nativeView.effect = glassEffect
-                        } else {
-                            UIView.animate(withDuration: 0.2, animations: {
+                        if isVisible {
+                            let glassEffectValue = UIGlassEffect(style: .regular)
+                            switch tintColor.kind {
+                            case .panel:
+                                glassEffectValue.tintColor = UIColor(white: isDark ? 0.0 : 1.0, alpha: 0.1)
+                            case .custom:
+                                glassEffectValue.tintColor = tintColor.color
+                            }
+                            glassEffectValue.isInteractive = params.isInteractive
+                            glassEffect = glassEffectValue
+                        }
+                        
+                        if glassEffect == nil && nativeView.effect != nil {
+                            if transition.animation.isImmediate {
+                                if #available(iOS 26.2, *) {
+                                } else {
+                                    nativeView.effect = UIBlurEffect(style: .regular)
+                                }
                                 nativeView.effect = glassEffect
-                            })
+                            } else {
+                                UIView.animate(withDuration: 0.2, animations: {
+                                    if #available(iOS 26.2, *) {
+                                    } else {
+                                        nativeView.effect = UIBlurEffect(style: .regular)
+                                    }
+                                    nativeView.effect = glassEffect
+                                })
+                            }
+                        } else {
+                            if transition.animation.isImmediate {
+                                nativeView.effect = glassEffect
+                            } else {
+                                UIView.animate(withDuration: 0.2, animations: {
+                                    nativeView.effect = glassEffect
+                                })
+                            }
                         }
                         
                         if isDark {

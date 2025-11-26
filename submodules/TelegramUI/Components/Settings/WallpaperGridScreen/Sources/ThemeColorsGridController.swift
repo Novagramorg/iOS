@@ -216,7 +216,7 @@ public final class ThemeColorsGridController: ViewController, AttachmentContaina
     private func updateThemeAndStrings() {
         self.title = self.presentationData.strings.WallpaperColors_Title
         self.statusBar.statusBarStyle = self.presentationData.theme.rootController.statusBarStyle.style
-        self.navigationBar?.updatePresentationData(NavigationBarPresentationData(presentationData: self.presentationData))
+        self.navigationBar?.updatePresentationData(NavigationBarPresentationData(presentationData: self.presentationData), transition: .immediate)
         
         if self.isNodeLoaded {
             self.controllerNode.updatePresentationData(self.presentationData)

@@ -307,7 +307,7 @@ class ContactSelectionControllerImpl: ViewController, ContactSelectionController
         if case .glass = self.style {
             glass = true
         }
-        self.navigationBar?.updatePresentationData(NavigationBarPresentationData(theme: NavigationBarTheme(rootControllerTheme: self.presentationData.theme, hideBackground: glass, hideSeparator: glass), strings: NavigationBarStrings(presentationStrings: self.presentationData.strings)))
+        self.navigationBar?.updatePresentationData(NavigationBarPresentationData(theme: NavigationBarTheme(rootControllerTheme: self.presentationData.theme, hideBackground: glass, hideSeparator: glass), strings: NavigationBarStrings(presentationStrings: self.presentationData.strings)), transition: .immediate)
         (self.searchContentNode as? NavigationBarSearchContentNode)?.updateThemeAndPlaceholder(theme: self.presentationData.theme, placeholder: self.presentationData.strings.Common_Search)
         self.title = self.titleProducer(self.presentationData.strings)
         self.tabBarItem.title = self.presentationData.strings.Contacts_Title

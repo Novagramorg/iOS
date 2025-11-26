@@ -8,6 +8,10 @@ import ComponentFlow
 import ChatSideTopicsPanel
 
 func titlePanelForChatPresentationInterfaceState(_ chatPresentationInterfaceState: ChatPresentationInterfaceState, context: AccountContext, currentPanel: ChatTitleAccessoryPanelNode?, controllerInteraction: ChatControllerInteraction?, interfaceInteraction: ChatPanelInterfaceInteraction?, force: Bool) -> ChatTitleAccessoryPanelNode? {
+    if "".isEmpty {
+        return nil
+    }
+    
     if !force, case .standard(.embedded) = chatPresentationInterfaceState.mode {
         return nil
     }

@@ -2673,7 +2673,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
         } else {
             navigationBarPresentationData = NavigationBarPresentationData(presentationData: self.presentationData)
         }
-        self.navigationBar?.updatePresentationData(navigationBarPresentationData)
+        self.navigationBar?.updatePresentationData(navigationBarPresentationData, transition: .immediate)
         self.titleView.theme = self.presentationData.theme
         self.cancelButtonNode.theme = self.presentationData.theme
         self.moreButtonNode.theme = self.presentationData.theme

@@ -5,7 +5,11 @@
       "Bash(.build/debug/makeproject:*)",
       "Bash(mkdir:*)",
       "Bash(find:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Skill(superpowers:brainstorming)",
+      "Bash(cat:*)",
+      "Bash(python3:*)",
+      "Skill(superpowers:writing-plans)"
     ],
     "deny": []
   }
