@@ -3621,6 +3621,7 @@ public final class WebAppController: ViewController, AttachmentContainable {
         if let backgroundColor = self.controllerNode.headerColor, let textColor = self.controllerNode.headerPrimaryTextColor {
             navigationBarPresentationData = NavigationBarPresentationData(
                 theme: NavigationBarTheme(
+                    overallDarkAppearance: false,
                     buttonColor: textColor,
                     disabledButtonColor: textColor,
                     primaryTextColor: textColor,
@@ -3639,7 +3640,7 @@ public final class WebAppController: ViewController, AttachmentContainable {
                 strings: NavigationBarStrings(back: "", close: "")
             )
         }
-        self.navigationBar?.updatePresentationData(navigationBarPresentationData)
+        self.navigationBar?.updatePresentationData(navigationBarPresentationData, transition: .immediate)
     }
     
     @objc fileprivate func cancelPressed() {

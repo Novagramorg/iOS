@@ -387,7 +387,7 @@ public protocol CustomViewControllerNavigationDataSummary: AnyObject {
     public init(navigationBarPresentationData: NavigationBarPresentationData?) {
         self.statusBar = StatusBar()
         if let navigationBarPresentationData = navigationBarPresentationData {
-            self.navigationBar = NavigationBar(presentationData: navigationBarPresentationData)
+            self.navigationBar = defaultNavigationBarImpl!(navigationBarPresentationData)
         } else {
             self.navigationBar = nil
         }
@@ -554,14 +554,14 @@ public protocol CustomViewControllerNavigationDataSummary: AnyObject {
             UIView.transition(with: navigationBar.view, duration: 0.3, options: [.transitionCrossDissolve], animations: {
             }, completion: nil)
         }
-        self.navigationBar?.updatePresentationData(presentationData)
+        self.navigationBar?.updatePresentationData(presentationData, transition: .immediate)
         if let parent = self.parent as? TabBarController {
             if parent.currentController === self {
                 if animated, let navigationBar = parent.navigationBar {
                     UIView.transition(with: navigationBar.view, duration: 0.3, options: [.transitionCrossDissolve], animations: {
                     }, completion: nil)
                 }
-                parent.navigationBar?.updatePresentationData(presentationData)
+                parent.navigationBar?.updatePresentationData(presentationData, transition: .immediate)
             }
         }
     }

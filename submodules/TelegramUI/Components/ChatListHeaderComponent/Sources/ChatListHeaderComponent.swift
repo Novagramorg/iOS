@@ -715,7 +715,7 @@ public final class ChatListHeaderComponent: Component {
         }
     }
     
-    public final class View: UIView, NavigationBarHeaderView {
+    public final class View: UIView {
         private var component: ChatListHeaderComponent?
         private weak var state: EmptyComponentState?
         
@@ -768,17 +768,6 @@ public final class ChatListHeaderComponent: Component {
         
         public var titleContentView: UIView? {
             return self.effectiveContentView?.titleContentView?.view 
-        }
-        
-        public func makeTransitionBackArrowView(accentColor: UIColor) -> UIView? {
-            if let backArrowView = self.backArrowView {
-                let view = UIImageView()
-                view.image = NavigationBar.backArrowImage(color: accentColor)
-                view.frame = backArrowView.convert(backArrowView.bounds, to: self)
-                return view
-            } else {
-                return nil
-            }
         }
         
         public func storyPeerListView() -> StoryPeerListComponent.View? {

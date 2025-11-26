@@ -218,8 +218,6 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
     private let inputPanelClippingNode: SparseNode
     let inputPanelBackgroundNode: NavigationBackgroundNode
     
-    private var navigationBarBackgroundContent: WallpaperBubbleBackgroundNode?
-    
     private var intrinsicInputPanelBackgroundNodeSize: CGSize?
     private var inputPanelBottomBackgroundSeparatorBaseOffset: CGFloat = 0.0
     private var plainInputSeparatorAlpha: CGFloat?
@@ -238,6 +236,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
     private var floatingTopicsPanelContainer: ChatControllerTitlePanelNodeContainer
     private var floatingTopicsPanel: (view: ComponentView<ChatSidePanelEnvironment>, component: ChatFloatingTopicsPanel)?
     
+    private var topBackgroundEdgeEffectNode: WallpaperEdgeEffectNode?
     private var bottomBackgroundEdgeEffectNode: WallpaperEdgeEffectNode?
     
     private(set) var inputPanelNode: ChatInputPanelNode?
@@ -1392,6 +1391,11 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             }
         }
         
+        //TODO:localize
+        if "".isEmpty {
+            hasTranslationPanel = false
+        }
+        
         /*#if DEBUG
         if "".isEmpty {
             hasTranslationPanel = true
@@ -2187,6 +2191,28 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             }
         }
         
+        var topBackgroundEdgeEffectNode: WallpaperEdgeEffectNode?
+        if let current = self.topBackgroundEdgeEffectNode {
+            topBackgroundEdgeEffectNode = current
+        } else {
+            if let value = self.backgroundNode.makeEdgeEffectNode() {
+                topBackgroundEdgeEffectNode = value
+                self.topBackgroundEdgeEffectNode = value
+                self.historyNodeContainer.view.superview?.insertSubview(value.view, aboveSubview: self.historyNodeContainer.view)
+            }
+        }
+        if let topBackgroundEdgeEffectNode {
+            let blurFrame = CGRect(origin: CGPoint(), size: CGSize(width: layout.size.width, height: navigationBarHeight + 24.0))
+            transition.updateFrame(node: topBackgroundEdgeEffectNode, frame: blurFrame)
+            topBackgroundEdgeEffectNode.update(
+                rect: blurFrame,
+                edge: WallpaperEdgeEffectEdge(edge: .top, size: 40.0),
+                blur: true,
+                containerSize: wallpaperBounds.size,
+                transition: transition
+            )
+        }
+        
         var bottomBackgroundEdgeEffectNode: WallpaperEdgeEffectNode?
         if let current = self.bottomBackgroundEdgeEffectNode {
             bottomBackgroundEdgeEffectNode = current
@@ -2205,6 +2231,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             bottomBackgroundEdgeEffectNode.update(
                 rect: blurFrame,
                 edge: WallpaperEdgeEffectEdge(edge: .bottom, size: 80.0),
+                blur: false,
                 containerSize: wallpaperBounds.size,
                 transition: transition
             )
@@ -2501,11 +2528,6 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                 dismissedLeftPanelView?.removeFromSuperview()
             })*/
             dismissedFloatingTopicsPanelView.removeFromSuperview()
-        }
-
-        if let navigationBarBackgroundContent = self.navigationBarBackgroundContent {
-            transition.updateFrame(node: navigationBarBackgroundContent, frame: CGRect(origin: .zero, size: CGSize(width: layout.size.width, height: navigationBarHeight + (titleAccessoryPanelBackgroundHeight ?? 0.0) + (translationPanelHeight ?? 0.0))), beginWithCurrentState: true)
-            navigationBarBackgroundContent.update(rect: CGRect(origin: .zero, size: CGSize(width: layout.size.width, height: navigationBarHeight + (titleAccessoryPanelBackgroundHeight ?? 0.0) + (translationPanelHeight ?? 0.0))), within: layout.size, transition: transition)
         }
         
         transition.updateFrame(node: self.contentDimNode, frame: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: layout.size.width, height: apparentInputBackgroundFrame.origin.y)))
@@ -3485,22 +3507,6 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                 self.updatePlainInputSeparator(transition: .immediate)
 
                 self.backgroundNode.updateBubbleTheme(bubbleTheme: chatPresentationInterfaceState.theme, bubbleCorners: chatPresentationInterfaceState.bubbleCorners)
-                
-                if self.backgroundNode.hasExtraBubbleBackground() {
-                    if self.navigationBarBackgroundContent == nil {
-                        if let navigationBarBackgroundContent = self.backgroundNode.makeBubbleBackground(for: .free) {
-                            self.navigationBarBackgroundContent = navigationBarBackgroundContent
-                            
-                            navigationBarBackgroundContent.allowsGroupOpacity = true
-                            navigationBarBackgroundContent.implicitContentUpdate = false
-                            navigationBarBackgroundContent.alpha = 0.3
-                            self.navigationBar?.insertSubnode(navigationBarBackgroundContent, at: 1)
-                        }
-                    }
-                } else {
-                    self.navigationBarBackgroundContent?.removeFromSupernode()
-                    self.navigationBarBackgroundContent = nil
-                }
             }
             
             let keepSendButtonEnabled = chatPresentationInterfaceState.interfaceState.forwardMessageIds != nil || chatPresentationInterfaceState.interfaceState.editMessage != nil

@@ -58,7 +58,6 @@ final class ContactsControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
     
     private var containerLayout: (ContainerViewLayout, CGFloat)?
     
-    var navigationBar: NavigationBar?
     let navigationBarView = ComponentView<Empty>()
     
     var requestDeactivateSearch: (() -> Void)?
@@ -361,7 +360,7 @@ final class ContactsControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
                 strings: self.presentationData.strings,
                 statusBarHeight: layout.statusBarHeight ?? 0.0,
                 sideInset: layout.safeInsets.left,
-                search: ChatListNavigationBar.Search(isEnabled: true),
+                search: nil,//ChatListNavigationBar.Search(isEnabled: true),
                 isSearchActive: self.isSearchDisplayControllerActive,
                 primaryContent: primaryContent,
                 secondaryContent: nil,
@@ -477,7 +476,7 @@ final class ContactsControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
         }
     }
     
-    func activateSearch(placeholderNode: SearchBarPlaceholderNode) {
+    func activateSearch(placeholderNode: SearchBarPlaceholderNode?) {
         guard let (containerLayout, navigationBarHeight) = self.containerLayout, self.searchDisplayController == nil else {
             return
         }
@@ -503,7 +502,7 @@ final class ContactsControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
             if let requestDeactivateSearch = self?.requestDeactivateSearch {
                 requestDeactivateSearch()
             }
-        })
+        }, searchBarIsExternal: placeholderNode == nil)
         
         self.searchDisplayController?.containerLayoutUpdated(containerLayout, navigationBarHeight: navigationBarHeight, transition: .immediate)
         self.searchDisplayController?.activate(insertSubnode: { [weak self] subnode, isSearchBar in
@@ -519,16 +518,22 @@ final class ContactsControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
         }, placeholder: placeholderNode)
     }
     
-    func deactivateSearch(placeholderNode: SearchBarPlaceholderNode, animated: Bool) {
+    func deactivateSearch(placeholderNode: SearchBarPlaceholderNode?, animated: Bool) {
         self.isSearchDisplayControllerActive = false
         if let searchDisplayController = self.searchDisplayController {
-            let previousFrame = placeholderNode.frame
-            placeholderNode.frame = previousFrame.offsetBy(dx: 0.0, dy: 54.0)
+            var previousFrame: CGRect?
+            if let placeholderNode {
+                let previousFrameValue = placeholderNode.frame
+                previousFrame = previousFrameValue
+                placeholderNode.frame = previousFrameValue.offsetBy(dx: 0.0, dy: 54.0)
+            }
             
             searchDisplayController.deactivate(placeholder: placeholderNode, animated: animated)
             self.searchDisplayController = nil
             
-            placeholderNode.frame = previousFrame
+            if let placeholderNode, let previousFrame {
+                placeholderNode.frame = previousFrame
+            }
         }
     }
 }

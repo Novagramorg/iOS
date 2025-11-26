@@ -335,6 +335,7 @@ filegroup(
 
 objc_library(
     name = "Main",
+    module_name = "Main",
     srcs = [
         "Telegram-iOS/main.m"
     ],
@@ -342,6 +343,7 @@ objc_library(
 
 swift_library(
     name = "Lib",
+    module_name = "Lib",
     srcs = glob([
         "Telegram-iOS/Application.swift",
     ]),

@@ -1,11 +1,208 @@
 import UIKit
 import AsyncDisplayKit
+import Display
+import ComponentFlow
+import MultilineTextComponent
 
-public protocol NavigationButtonCustomDisplayNode {
-    var isHighlightable: Bool { get }
+let glassBackArrowImage: UIImage? = {
+    let imageSize = CGSize(width: 44.0, height: 44.0)
+    let topRightPoint = CGPoint(x: 24.6, y: 14.0)
+    let centerPoint = CGPoint(x: 17.0, y: imageSize.height * 0.5)
+    return generateImage(imageSize, rotatedContext: { size, context in
+        context.clear(CGRect(origin: CGPoint(), size: size))
+        context.setStrokeColor(UIColor.white.cgColor)
+        context.setLineWidth(2.0)
+        context.setLineCap(.round)
+        context.setLineJoin(.round)
+        context.move(to: topRightPoint)
+        context.addLine(to: centerPoint)
+        context.addLine(to: CGPoint(x: topRightPoint.x, y: size.height - topRightPoint.y))
+        context.strokePath()
+    })?.withRenderingMode(.alwaysTemplate)
+}()
+
+private final class ItemComponent: Component {
+    enum Content: Equatable {
+        case back
+        case item(UIBarButtonItem)
+    }
+    
+    let color: UIColor
+    let content: Content
+    
+    init(
+        color: UIColor,
+        content: Content
+    ) {
+        self.color = color
+        self.content = content
+    }
+    
+    static func ==(lhs: ItemComponent, rhs: ItemComponent) -> Bool {
+        if lhs.color != rhs.color {
+            return false
+        }
+        if lhs.content != rhs.content {
+            return false
+        }
+        return true
+    }
+    
+    final class View: UIView {
+        private var iconView: UIImageView?
+        private var title: ComponentView<Empty>?
+        
+        private var component: ItemComponent?
+        private weak var state: EmptyComponentState?
+        var isUpdating: Bool = false
+        
+        private var setEnabledListener: Int?
+        private var setTitleListener: Int?
+        
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+        }
+        
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
+        
+        func update(component: ItemComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
+            self.isUpdating = true
+            defer {
+                self.isUpdating = false
+            }
+            
+            if component.content != self.component?.content {
+                if case let .item(item) = self.component?.content {
+                    if let setEnabledListener = self.setEnabledListener {
+                        self.setEnabledListener = nil
+                        item.removeSetEnabledListener(setEnabledListener)
+                    }
+                    if let setTitleListener = self.setTitleListener {
+                        self.setTitleListener = nil
+                        item.removeSetTitleListener(setTitleListener)
+                    }
+                }
+                
+                switch component.content {
+                case .back:
+                    break
+                case let .item(item):
+                    self.setEnabledListener = item.addSetEnabledListener { [weak self] _ in
+                        guard let self else {
+                            return
+                        }
+                        if !self.isUpdating {
+                            self.state?.updated(transition: .immediate)
+                        }
+                    }
+                    self.setTitleListener = item.addSetTitleListener { [weak self] _ in
+                        guard let self else {
+                            return
+                        }
+                        if !self.isUpdating {
+                            self.state?.updated(transition: .immediate)
+                        }
+                    }
+                }
+            }
+            
+            self.component = component
+            self.state = state
+            
+            var iconImage: UIImage?
+            var titleString: String?
+            switch component.content {
+            case .back:
+                iconImage = glassBackArrowImage
+            case let .item(item):
+                if item.image != nil {
+                    iconImage = item.image
+                } else if let title = item.title {
+                    titleString = title
+                }
+            }
+            
+            var size = CGSize(width: 44.0, height: 44.0)
+            
+            if let iconImage {
+                let iconView: UIImageView
+                var iconTransition = transition
+                if let current = self.iconView {
+                    iconView = current
+                } else {
+                    iconTransition = iconTransition.withAnimation(.none)
+                    iconView = UIImageView()
+                    self.iconView = iconView
+                }
+                iconView.image = iconImage
+                iconView.tintColor = component.color
+                
+                let iconFrame = iconImage.size.centered(in: CGRect(origin: CGPoint(), size: size))
+                iconTransition.setFrame(view: iconView, frame: iconFrame)
+            } else if let iconView = self.iconView {
+                self.iconView = nil
+                iconView.removeFromSuperview()
+            }
+            
+            if let titleString {
+                let titleFont: UIFont
+                if case let .item(item) = component.content, case .done = item.style {
+                    titleFont = Font.bold(17.0)
+                } else {
+                    titleFont = Font.regular(17.0)
+                }
+                
+                let title: ComponentView<Empty>
+                if let current = self.title {
+                    title = current
+                } else {
+                    title = ComponentView()
+                    self.title = title
+                }
+                let titleSize = title.update(
+                    transition: .immediate,
+                    component: AnyComponent(MultilineTextComponent(
+                        text: .plain(NSAttributedString(string: titleString, font: titleFont, textColor: component.color))
+                    )),
+                    environment: {},
+                    containerSize: CGSize(width: 200.0, height: 100.0)
+                )
+                
+                let titleInset: CGFloat = 6.0
+                size.width = titleInset * 2.0 + titleSize.width
+                
+                let titleFrame = CGRect(origin: CGPoint(x: titleInset, y: floorToScreenPixels((size.height - titleSize.height) * 0.5)), size: titleSize)
+                if let titleView = title.view {
+                    if titleView.superview == nil {
+                        self.addSubview(titleView)
+                    }
+                    titleView.frame = titleFrame
+                }
+            } else if let title = self.title {
+                self.title = nil
+                if let titleView = title.view {
+                    titleView.removeFromSuperview()
+                }
+            }
+            
+            return size
+        }
+    }
+    
+    func makeView() -> View {
+        return View(frame: CGRect())
+    }
+    
+    func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
+        view.update(component: self, availableSize: availableSize, state: state, environment: environment, transition: transition)
+    }
 }
 
 private final class NavigationButtonItemNode: ImmediateTextNode {
+    private let isGlass: Bool
+    
     private func fontForCurrentState() -> UIFont {
         return self.bold ? UIFont.boldSystemFont(ofSize: 17.0) : UIFont.systemFont(ofSize: 17.0)
     }
@@ -56,7 +253,6 @@ private final class NavigationButtonItemNode: ImmediateTextNode {
     }
     
     private(set) var imageNode: ASImageNode?
-    private let imageRippleNode: ASImageNode
     
     private var _image: UIImage?
     public var image: UIImage? {
@@ -71,10 +267,6 @@ private final class NavigationButtonItemNode: ImmediateTextNode {
                     imageNode.displayWithoutProcessing = true
                     imageNode.displaysAsynchronously = false
                     self.imageNode = imageNode
-                    if self.imageRippleNode.supernode != nil {
-                        self.imageRippleNode.image = nil
-                        self.imageRippleNode.removeFromSupernode()
-                    }
                     
                     self.addSubnode(imageNode)
                 }
@@ -82,10 +274,6 @@ private final class NavigationButtonItemNode: ImmediateTextNode {
             } else if let imageNode = self.imageNode {
                 imageNode.removeFromSupernode()
                 self.imageNode = nil
-                if self.imageRippleNode.supernode != nil {
-                    self.imageRippleNode.image = nil
-                    self.imageRippleNode.removeFromSupernode()
-                }
             }
             
             self.invalidateCalculatedLayout()
@@ -111,14 +299,6 @@ private final class NavigationButtonItemNode: ImmediateTextNode {
         didSet {
             if let text = self._text {
                 self.attributedText = NSAttributedString(string: text, attributes: self.attributesForCurrentState())
-            }
-        }
-    }
-    
-    public var rippleColor: UIColor = UIColor(rgb: 0x000000, alpha: 0.05) {
-        didSet {
-            if self.imageRippleNode.image != nil {
-                self.imageRippleNode.image = generateFilledCircleImage(diameter: 30.0, color: self.rippleColor)
             }
         }
     }
@@ -183,11 +363,8 @@ private final class NavigationButtonItemNode: ImmediateTextNode {
     
     var pointerInteraction: PointerInteraction?
     
-    override public init() {
-        self.imageRippleNode = ASImageNode()
-        self.imageRippleNode.displaysAsynchronously = false
-        self.imageRippleNode.displayWithoutProcessing = true
-        self.imageRippleNode.alpha = 0.0
+    init(isGlass: Bool) {
+        self.isGlass = isGlass
         
         super.init()
         
@@ -195,7 +372,9 @@ private final class NavigationButtonItemNode: ImmediateTextNode {
         
         self.isUserInteractionEnabled = true
         self.isExclusiveTouch = true
-        self.hitTestSlop = UIEdgeInsets(top: -16.0, left: -10.0, bottom: -16.0, right: -10.0)
+        if !isGlass {
+            self.hitTestSlop = UIEdgeInsets(top: -16.0, left: -10.0, bottom: -16.0, right: -10.0)
+        }
         self.displaysAsynchronously = false
         
         self.verticalAlignment = .middle
@@ -231,7 +410,6 @@ private final class NavigationButtonItemNode: ImmediateTextNode {
             let size = CGSize(width: max(nodeSize.width, superSize.width), height: max(44.0, max(nodeSize.height, superSize.height)))
             let imageFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((size.width - nodeSize.width) / 2.0), y: floorToScreenPixels((size.height - nodeSize.height) / 2.0)), size: nodeSize)
             imageNode.frame = imageFrame
-            self.imageRippleNode.frame = imageFrame
             return size
         } else {
             superSize.height = max(44.0, superSize.height)
@@ -268,7 +446,7 @@ private final class NavigationButtonItemNode: ImmediateTextNode {
         self.touchCount = max(0, self.touchCount - touches.count)
         
         var touchInside = true
-        if let touch = touches.first {
+        if let touch = touches.first, !self.isGlass {
             touchInside = self.touchInsideApparentBounds(touch)
         }
         if previousTouchCount != 0 && self.touchCount == 0 && self.isEnabled && touchInside {
@@ -328,7 +506,10 @@ private final class NavigationButtonItemNode: ImmediateTextNode {
 }
 
 
-public final class NavigationButtonNode: ContextControllerSourceNode {
+public final class NavigationButtonNodeImpl: ContextControllerSourceNode, NavigationButtonNode {
+    private let isGlass: Bool
+    private var isBack: Bool = false
+    
     private var nodes: [NavigationButtonItemNode] = []
     
     private var disappearingNodes: [(frame: CGRect, size: CGSize, node: NavigationButtonItemNode)] = []
@@ -357,16 +538,6 @@ public final class NavigationButtonNode: ContextControllerSourceNode {
         }
     }
     
-    public var rippleColor: UIColor = UIColor(rgb: 0x000000, alpha: 0.05) {
-        didSet {
-            if !self.rippleColor.isEqual(oldValue) {
-                for node in self.nodes {
-                    node.rippleColor = self.rippleColor
-                }
-            }
-        }
-    }
-    
     public var disabledColor: UIColor = UIColor(rgb: 0xd0d0d0) {
         didSet {
             if !self.disabledColor.isEqual(oldValue) {
@@ -384,18 +555,20 @@ public final class NavigationButtonNode: ContextControllerSourceNode {
         }
     }
     
-    override public init() {
+    public init(isGlass: Bool) {
+        self.isGlass = isGlass
+        
         super.init()
         
         self.isAccessibilityElement = false
         self.isGestureEnabled = false
     }
     
-    var manualText: String {
+    public var manualText: String {
         return self.nodes.first?.text ?? ""
     }
     
-    var manualAlpha: CGFloat = 1.0 {
+    public var manualAlpha: CGFloat = 1.0 {
         didSet {
             for node in self.nodes {
                 node.alpha = self.manualAlpha
@@ -411,14 +584,15 @@ public final class NavigationButtonNode: ContextControllerSourceNode {
         }
     }
     
-    func updateManualText(_ text: String, isBack: Bool = true) {
+    public func updateManualText(_ text: String, isBack: Bool = true) {
+        self.isBack = isBack
+        
         let node: NavigationButtonItemNode
         if self.nodes.count > 0 {
             node = self.nodes[0]
         } else {
-            node = NavigationButtonItemNode()
+            node = NavigationButtonItemNode(isGlass: self.isGlass)
             node.color = self.color
-            node.rippleColor = self.rippleColor
             node.layer.layerTintColor = self.contentsColor?.cgColor
             node.highlightChanged = { [weak node, weak self] value in
                 if let strongSelf = self, let node = node {
@@ -444,7 +618,9 @@ public final class NavigationButtonNode: ContextControllerSourceNode {
         node.bold = false
         node.isEnabled = true
         node.node = nil
-        node.hitTestSlop = isBack ? UIEdgeInsets(top: 0.0, left: -20.0, bottom: 0.0, right: 0.0) : UIEdgeInsets()
+        if !self.isGlass {
+            node.hitTestSlop = isBack ? UIEdgeInsets(top: 0.0, left: -20.0, bottom: 0.0, right: 0.0) : UIEdgeInsets()
+        }
         
         if 1 < self.nodes.count {
             for i in 1 ..< self.nodes.count {
@@ -454,15 +630,14 @@ public final class NavigationButtonNode: ContextControllerSourceNode {
         }
     }
     
-    func updateItems(_ items: [UIBarButtonItem], animated: Bool) {
+    public func updateItems(_ items: [UIBarButtonItem], animated: Bool) {
         for i in 0 ..< items.count {
             let node: NavigationButtonItemNode
             if self.nodes.count > i {
                 node = self.nodes[i]
             } else {
-                node = NavigationButtonItemNode()
+                node = NavigationButtonItemNode(isGlass: self.isGlass)
                 node.color = self.color
-                node.rippleColor = self.rippleColor
                 node.layer.layerTintColor = self.contentsColor?.cgColor
                 node.highlightChanged = { [weak node, weak self] value in
                     if let strongSelf = self, let node = node {
@@ -523,27 +698,36 @@ public final class NavigationButtonNode: ContextControllerSourceNode {
     }
     
     public func updateLayout(constrainedSize: CGSize, isLandscape: Bool, isLeftAligned: Bool) -> CGSize {
-        var nodeOrigin = CGPoint()
+        var nodeOrigin = CGPoint(x: 0.0, y: 0.0)
         var totalHeight: CGFloat = 0.0
         for i in 0 ..< self.nodes.count {
-            if i != 0 {
+            if i != 0 && !self.isGlass {
                 nodeOrigin.x += 15.0
             }
 
             let node = self.nodes[i]
 
             var nodeSize = node.updateLayout(constrainedSize)
+            var nodeInset: CGFloat = 0.0
+            if self.isGlass {
+                if node.image == nil && node.node == nil {
+                    nodeInset += 10.0
+                }
+                if nodeSize.width + nodeInset * 2.0 < 44.0 {
+                    nodeInset = floorToScreenPixels((44.0 - nodeSize.width) * 0.5)
+                }
+            }
 
             nodeSize.width = ceil(nodeSize.width)
             nodeSize.height = ceil(nodeSize.height)
             totalHeight = max(totalHeight, nodeSize.height)
-            node.frame = CGRect(origin: CGPoint(x: nodeOrigin.x, y: floor((totalHeight - nodeSize.height) / 2.0)), size: nodeSize)
-            nodeOrigin.x += node.bounds.width
-            if isLandscape {
+            node.frame = CGRect(origin: CGPoint(x: nodeOrigin.x + nodeInset, y: floor((totalHeight - nodeSize.height) / 2.0)), size: nodeSize)
+            nodeOrigin.x += nodeInset + node.bounds.width + nodeInset
+            if isLandscape && !self.isGlass {
                 nodeOrigin.x += 16.0
             }
 
-            if node.node == nil && node.imageNode != nil && i == self.nodes.count - 1 {
+            if !self.isGlass && node.node == nil && node.imageNode != nil && i == self.nodes.count - 1 {
                 nodeOrigin.x -= 5.0
             }
         }
@@ -557,11 +741,32 @@ public final class NavigationButtonNode: ContextControllerSourceNode {
         return CGSize(width: nodeOrigin.x, height: totalHeight)
     }
     
-    func internalHitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+    override public func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         if self.nodes.count == 1 {
-            return self.nodes[0].view
+            if self.isGlass && self.isBack {
+                if self.bounds.contains(point) {
+                    return self.nodes[0].view
+                }
+            }
+            if self.bounds.contains(point) {
+                return self.nodes[0].view
+            } else {
+                return nil
+            }
         } else {
             return super.hitTest(point, with: event)
         }
+    }
+    
+    var isEmpty: Bool {
+        if self.isBack {
+            return false
+        }
+        for node in self.nodes {
+            if node.bounds.width != 0.0 {
+                return false
+            }
+        }
+        return true
     }
 }

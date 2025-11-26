@@ -22,6 +22,7 @@ import EmojiStatusComponent
 import AnimationCache
 import MultiAnimationRenderer
 import ComponentDisplayAdapters
+import GlassBackgroundComponent
 
 private let titleFont = Font.with(size: 17.0, design: .regular, weight: .semibold, traits: [.monospacedNumbers])
 private let subtitleFont = Font.regular(13.0)
@@ -170,7 +171,6 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
     private let context: AccountContext
     
     private var theme: PresentationTheme
-    private var hasEmbeddedTitleContent: Bool = false
     private var strings: PresentationStrings
     private var dateTimeFormat: PresentationDateTimeFormat
     private var nameDisplayOrder: PresentationPersonNameOrder
@@ -178,6 +178,7 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
     private let animationRenderer: MultiAnimationRenderer
     
     private let contentContainer: ASDisplayNode
+    private let backgroundView: GlassBackgroundView
     public let titleContainerView: PortalSourceView
     public let titleTextNode: ImmediateAnimatedCountLabelNode
     public let titleLeftIconNode: ASImageNode
@@ -239,7 +240,7 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
     public var titleContent: ChatTitleContent? {
         didSet {
             if let titleContent = self.titleContent {
-                let titleTheme = self.hasEmbeddedTitleContent ? defaultDarkPresentationTheme : self.theme
+                let titleTheme = self.theme
                 
                 var segments: [AnimatedCountLabelNode.Segment] = []
                 var titleLeftIcon: ChatTitleIcon = .none
@@ -487,7 +488,7 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
             }
         }
         
-        let titleTheme = self.hasEmbeddedTitleContent ? defaultDarkPresentationTheme : self.theme
+        let titleTheme = self.theme
         
         var state = ChatTitleActivityNodeState.none
         switch self.networkState {
@@ -739,6 +740,8 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
                 
         self.contentContainer = ASDisplayNode()
         
+        self.backgroundView = GlassBackgroundView()
+        
         self.titleContainerView = PortalSourceView()
         self.titleTextNode = ImmediateAnimatedCountLabelNode()
         
@@ -770,6 +773,7 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
         self.accessibilityTraits = .header
         
         self.addSubnode(self.contentContainer)
+        self.contentContainer.view.addSubview(self.backgroundView)
         self.titleContainerView.addSubnode(self.titleTextNode)
         self.contentContainer.view.addSubview(self.titleContainerView)
         self.contentContainer.addSubnode(self.activityNode)
@@ -818,10 +822,9 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
         }
     }
     
-    public func updateThemeAndStrings(theme: PresentationTheme, strings: PresentationStrings, hasEmbeddedTitleContent: Bool) {
-        if self.theme !== theme || self.strings !== strings || self.hasEmbeddedTitleContent != hasEmbeddedTitleContent {
+    public func updateThemeAndStrings(theme: PresentationTheme, strings: PresentationStrings) {
+        if self.theme !== theme || self.strings !== strings {
             self.theme = theme
-            self.hasEmbeddedTitleContent = hasEmbeddedTitleContent
             self.strings = strings
             
             let titleContent = self.titleContent
@@ -986,106 +989,85 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
         }
         
         let statusSpacing: CGFloat = 3.0
-        let titleSideInset: CGFloat = 6.0
+        let titleSideInset: CGFloat = 12.0 + 8.0
         var titleFrame: CGRect
-        if size.height > 40.0 {
-            var titleInsets: UIEdgeInsets = .zero
-            if case .emojiStatus = self.titleVerifiedIcon, verifiedIconWidth > 0.0 {
-                titleInsets.left = verifiedIconWidth
-            }
-            
-            var titleSize = self.titleTextNode.updateLayout(size: CGSize(width: clearBounds.width - leftIconWidth - credibilityIconWidth - verifiedIconWidth - statusIconWidth - rightIconWidth - titleSideInset * 2.0, height: size.height), insets: titleInsets, animated: titleTransition.isAnimated)
-            titleSize.width += credibilityIconWidth
-            titleSize.width += verifiedIconWidth
-            if statusIconWidth > 0.0 {
-                titleSize.width += statusIconWidth
-                if credibilityIconWidth > 0.0 {
-                    titleSize.width += statusSpacing
-                }
-            }
-            
-            let activitySize = self.activityNode.updateLayout(CGSize(width: clearBounds.size.width - titleSideInset * 2.0, height: clearBounds.size.height), alignment: .center)
-            let titleInfoSpacing: CGFloat = 0.0
-            
-            if activitySize.height.isZero {
-                titleFrame = CGRect(origin: CGPoint(x: floor((clearBounds.width - titleSize.width) / 2.0), y: floor((size.height - titleSize.height) / 2.0)), size: titleSize)
-                if titleFrame.size.width < size.width {
-                    titleFrame.origin.x = -clearBounds.minX + floor((size.width - titleFrame.width) / 2.0)
-                }
-                titleTransition.updateFrameAdditive(view: self.titleContainerView, frame: titleFrame)
-                titleTransition.updateFrameAdditive(node: self.titleTextNode, frame: CGRect(origin: CGPoint(), size: titleFrame.size))
-            } else {
-                let combinedHeight = titleSize.height + activitySize.height + titleInfoSpacing
-                
-                titleFrame = CGRect(origin: CGPoint(x: floor((clearBounds.width - titleSize.width) / 2.0), y: floor((size.height - combinedHeight) / 2.0)), size: titleSize)
-                if titleFrame.size.width < size.width {
-                    titleFrame.origin.x = -clearBounds.minX + floor((size.width - titleFrame.width) / 2.0)
-                }
-                titleFrame.origin.x = max(titleFrame.origin.x, clearBounds.minX + leftIconWidth)
-                titleTransition.updateFrameAdditive(view: self.titleContainerView, frame: titleFrame)
-                titleTransition.updateFrameAdditive(node: self.titleTextNode, frame: CGRect(origin: CGPoint(), size: titleFrame.size))
-                
-                var activityFrame = CGRect(origin: CGPoint(x: floor((clearBounds.width - activitySize.width) / 2.0), y: floor((size.height - combinedHeight) / 2.0) + titleSize.height + titleInfoSpacing), size: activitySize)
-                if activitySize.width < size.width {
-                    activityFrame.origin.x = -clearBounds.minX + floor((size.width - activityFrame.width) / 2.0)
-                }
-                titleTransition.updateFrameAdditiveToCenter(node: self.activityNode, frame: activityFrame)
-            }
-            
-            if let image = self.titleLeftIconNode.image {
-                titleTransition.updateFrame(node: self.titleLeftIconNode, frame: CGRect(origin: CGPoint(x: -image.size.width - 3.0 - UIScreenPixel, y: 4.0), size: image.size))
-            }
-            
-            var nextIconX: CGFloat = titleFrame.width
-            
-            titleTransition.updateFrame(view: self.titleVerifiedIconView, frame: CGRect(origin: CGPoint(x: 0.0, y: floor((titleFrame.height - titleVerifiedSize.height) / 2.0)), size: titleVerifiedSize))
-            
-            self.titleCredibilityIconView.frame = CGRect(origin: CGPoint(x: nextIconX - titleCredibilitySize.width, y: floor((titleFrame.height - titleCredibilitySize.height) / 2.0)), size: titleCredibilitySize)
-            nextIconX -= titleCredibilitySize.width
-            if credibilityIconWidth > 0.0 {
-                nextIconX -= statusSpacing
-            }
-            
-            self.titleStatusIconView.frame = CGRect(origin: CGPoint(x: nextIconX - titleStatusSize.width, y: floor((titleFrame.height - titleStatusSize.height) / 2.0)), size: titleStatusSize)
-            nextIconX -= titleStatusSize.width
         
-            if let image = self.titleRightIconNode.image {
-                self.titleRightIconNode.frame = CGRect(origin: CGPoint(x: titleFrame.width + 3.0 + UIScreenPixel, y: 6.0), size: image.size)
-            }
-        } else {
-            let titleSize = self.titleTextNode.updateLayout(size: CGSize(width: floor(clearBounds.width / 2.0 - leftIconWidth - credibilityIconWidth - verifiedIconWidth - statusIconWidth - rightIconWidth - titleSideInset * 2.0), height: size.height), animated: titleTransition.isAnimated)
-            let activitySize = self.activityNode.updateLayout(CGSize(width: floor(clearBounds.width / 2.0), height: size.height), alignment: .center)
-            
-            let titleInfoSpacing: CGFloat = 8.0
-            let combinedWidth = titleSize.width + leftIconWidth + credibilityIconWidth + verifiedIconWidth + statusIconWidth + rightIconWidth + activitySize.width + titleInfoSpacing
-            
-            titleFrame = CGRect(origin: CGPoint(x: leftIconWidth + floor((clearBounds.width - combinedWidth) / 2.0), y: floor((size.height - titleSize.height) / 2.0)), size: titleSize)
-            
-            titleTransition.updateFrameAdditiveToCenter(view: self.titleContainerView, frame: titleFrame)
-            titleTransition.updateFrameAdditiveToCenter(node: self.titleTextNode, frame: CGRect(origin: CGPoint(), size: titleFrame.size))
-            
-            titleTransition.updateFrameAdditiveToCenter(node: self.activityNode, frame: CGRect(origin: CGPoint(x: floor((clearBounds.width - combinedWidth) / 2.0 + titleSize.width + leftIconWidth + credibilityIconWidth + verifiedIconWidth + statusIconWidth + rightIconWidth + titleInfoSpacing), y: floor((size.height - activitySize.height) / 2.0)), size: activitySize))
-            
-            if let image = self.titleLeftIconNode.image {
-                self.titleLeftIconNode.frame = CGRect(origin: CGPoint(x: titleFrame.minX, y: titleFrame.minY + 4.0), size: image.size)
-            }
-            
-            var nextIconX: CGFloat = titleFrame.maxX
-            
-            self.titleVerifiedIconView.frame = CGRect(origin: CGPoint(x: 0.0, y: floor((titleFrame.height - titleVerifiedSize.height) / 2.0)), size: titleVerifiedSize)
-            
-            self.titleCredibilityIconView.frame = CGRect(origin: CGPoint(x: nextIconX - titleCredibilitySize.width, y: floor((titleFrame.height - titleCredibilitySize.height) / 2.0)), size: titleCredibilitySize)
-            nextIconX -= titleCredibilitySize.width
-            
-            titleTransition.updateFrame(view: self.titleStatusIconView, frame: CGRect(origin: CGPoint(x: nextIconX - titleStatusSize.width, y: floor((titleFrame.height - titleStatusSize.height) / 2.0)), size: titleStatusSize))
-            nextIconX -= titleStatusSize.width
-            
-            if let image = self.titleRightIconNode.image {
-                titleTransition.updateFrame(node: self.titleRightIconNode, frame: CGRect(origin: CGPoint(x: titleFrame.maxX - image.size.width, y: titleFrame.minY + 6.0), size: image.size))
+        var titleInsets: UIEdgeInsets = .zero
+        if case .emojiStatus = self.titleVerifiedIcon, verifiedIconWidth > 0.0 {
+            titleInsets.left = verifiedIconWidth
+        }
+        
+        var titleSize = self.titleTextNode.updateLayout(size: CGSize(width: clearBounds.width - leftIconWidth - credibilityIconWidth - verifiedIconWidth - statusIconWidth - rightIconWidth - titleSideInset * 2.0, height: size.height), insets: titleInsets, animated: titleTransition.isAnimated)
+        titleSize.width += credibilityIconWidth
+        titleSize.width += verifiedIconWidth
+        if statusIconWidth > 0.0 {
+            titleSize.width += statusIconWidth
+            if credibilityIconWidth > 0.0 {
+                titleSize.width += statusSpacing
             }
         }
         
+        let activitySize = self.activityNode.updateLayout(CGSize(width: clearBounds.size.width - titleSideInset * 2.0, height: clearBounds.size.height), alignment: .center)
+        let titleInfoSpacing: CGFloat = 0.0
+        
+        var activityFrame = CGRect()
+        
+        if activitySize.height.isZero {
+            titleFrame = CGRect(origin: CGPoint(x: floor((clearBounds.width - titleSize.width) / 2.0), y: floor((size.height - titleSize.height) / 2.0)), size: titleSize)
+            if titleFrame.size.width < size.width {
+                titleFrame.origin.x = -clearBounds.minX + floor((size.width - titleFrame.width) / 2.0)
+            }
+            titleTransition.updateFrameAdditive(view: self.titleContainerView, frame: titleFrame)
+            titleTransition.updateFrameAdditive(node: self.titleTextNode, frame: CGRect(origin: CGPoint(), size: titleFrame.size))
+        } else {
+            let combinedHeight = titleSize.height + activitySize.height + titleInfoSpacing
+            
+            let contentWidth = max(titleSize.width + rightIconWidth, activitySize.width)
+            var contentX = floor((clearBounds.width - contentWidth) / 2.0)
+            contentX = max(contentX, clearBounds.minX + 20.0)
+            
+            titleFrame = CGRect(origin: CGPoint(x: contentX + floor((contentWidth - titleSize.width) / 2.0), y: floor((size.height - combinedHeight) / 2.0)), size: titleSize)
+            
+            titleFrame.origin.x = max(titleFrame.origin.x, clearBounds.minX + leftIconWidth)
+            titleTransition.updateFrameAdditive(view: self.titleContainerView, frame: titleFrame)
+            titleTransition.updateFrameAdditive(node: self.titleTextNode, frame: CGRect(origin: CGPoint(), size: titleFrame.size))
+            
+            activityFrame = CGRect(origin: CGPoint(x: titleFrame.minX + floor((titleFrame.width - activitySize.width) / 2.0), y: floor((size.height - combinedHeight) / 2.0) + titleSize.height + titleInfoSpacing), size: activitySize)
+            titleTransition.updateFrameAdditiveToCenter(node: self.activityNode, frame: activityFrame.offsetBy(dx: activitySize.width * 0.5, dy: 0.0))
+        }
+        
+        if let image = self.titleLeftIconNode.image {
+            titleTransition.updateFrame(node: self.titleLeftIconNode, frame: CGRect(origin: CGPoint(x: -image.size.width - 3.0 - UIScreenPixel, y: 4.0), size: image.size))
+        }
+        
+        var nextIconX: CGFloat = titleFrame.width
+        
+        titleTransition.updateFrame(view: self.titleVerifiedIconView, frame: CGRect(origin: CGPoint(x: 0.0, y: floor((titleFrame.height - titleVerifiedSize.height) / 2.0)), size: titleVerifiedSize))
+        
+        self.titleCredibilityIconView.frame = CGRect(origin: CGPoint(x: nextIconX - titleCredibilitySize.width, y: floor((titleFrame.height - titleCredibilitySize.height) / 2.0)), size: titleCredibilitySize)
+        nextIconX -= titleCredibilitySize.width
+        if credibilityIconWidth > 0.0 {
+            nextIconX -= statusSpacing
+        }
+        
+        self.titleStatusIconView.frame = CGRect(origin: CGPoint(x: nextIconX - titleStatusSize.width, y: floor((titleFrame.height - titleStatusSize.height) / 2.0)), size: titleStatusSize)
+        nextIconX -= titleStatusSize.width
+    
+        if let image = self.titleRightIconNode.image {
+            self.titleRightIconNode.frame = CGRect(origin: CGPoint(x: titleFrame.width + 3.0 + UIScreenPixel, y: 6.0), size: image.size)
+        }
+        
         self.pointerInteraction = PointerInteraction(view: self, style: .rectangle(CGSize(width: titleFrame.width + 16.0, height: 40.0)))
+        
+        var backgroundFrame = CGRect(origin: CGPoint(x: titleFrame.minX, y: 0.0), size: CGSize(width: titleFrame.width, height: 44.0))
+        if !activityFrame.isEmpty {
+            backgroundFrame.origin.x = min(backgroundFrame.minX, activityFrame.minX)
+            backgroundFrame.size.width = max(backgroundFrame.maxX, activityFrame.maxX) - backgroundFrame.minX
+        }
+        backgroundFrame = backgroundFrame.insetBy(dx: -12.0, dy: 0.0)
+        let componentTransition = ComponentTransition(transition)
+        componentTransition.setFrame(view: self.backgroundView, frame: backgroundFrame)
+        self.backgroundView.update(size: backgroundFrame.size, cornerRadius: backgroundFrame.height * 0.5, isDark: self.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: UIColor(white: self.theme.overallDarkAppearance ? 0.0 : 1.0, alpha: 0.6)), isInteractive: false, transition: componentTransition)
         
         return titleFrame
     }
@@ -1264,7 +1246,7 @@ public final class ChatTitleComponent: Component {
             if contentView.titleContent != component.content {
                 contentView.titleContent = component.content
             }
-            contentView.updateThemeAndStrings(theme: component.theme, strings: component.strings, hasEmbeddedTitleContent: false)
+            contentView.updateThemeAndStrings(theme: component.theme, strings: component.strings)
             
             let _ = contentView.updateLayout(size: availableSize, clearBounds: CGRect(origin: CGPoint(), size: availableSize), transition: transition.containedViewLayoutTransition)
             transition.setFrame(view: contentView, frame: CGRect(origin: CGPoint(), size: availableSize))

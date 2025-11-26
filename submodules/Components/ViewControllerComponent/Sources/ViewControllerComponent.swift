@@ -361,7 +361,7 @@ open class ViewControllerComponentContainer: ViewController {
                     navigationBarPresentationData = NavigationBarPresentationData(presentationData: presentationData)
                 }
                 if let navigationBarPresentationData {
-                    strongSelf.navigationBar?.updatePresentationData(navigationBarPresentationData)
+                    strongSelf.navigationBar?.updatePresentationData(navigationBarPresentationData, transition: .immediate)
                 }
                 
                 if let layout = strongSelf.validLayout {
