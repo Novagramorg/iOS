@@ -61,6 +61,7 @@ private final class SheetContent: CombinedComponent {
         let currencyToggle = Child(TabSelectorComponent.self)
         let amountSection = Child(ListSectionComponent.self)
         let amountAdditionalLabel = Child(MultilineTextComponent.self)
+        let periodSection = Child(ListSectionComponent.self)
         let timestampSection = Child(ListSectionComponent.self)
         let onlyTonSection = Child(ListSectionComponent.self)
         let button = Child(ButtonComponent.self)
@@ -177,7 +178,7 @@ private final class SheetContent: CombinedComponent {
                 
                 if let usdWithdrawRate = withdrawConfiguration.usdWithdrawRate, let amount = state.amount, amount > StarsAmount.zero {
                     let usdRate = Double(usdWithdrawRate) / 1000.0 / 100.0
-                    amountLabel = "≈\(formatTonUsdValue(amount.value, divide: false, rate: usdRate, dateTimeFormat: environment.dateTimeFormat))"
+                    amountLabel = "~\(formatTonUsdValue(amount.value, divide: false, rate: usdRate, dateTimeFormat: environment.dateTimeFormat))"
                 }
             case .reaction:
                 titleString = environment.strings.Stars_SendStars_Title
@@ -231,10 +232,33 @@ private final class SheetContent: CombinedComponent {
                     switch state.currency {
                     case .stars:
                         let usdRate = Double(usdWithdrawRate) / 1000.0 / 100.0
-                        amountLabel = "≈\(formatTonUsdValue(amount.value, divide: false, rate: usdRate, dateTimeFormat: environment.dateTimeFormat))"
+                        amountLabel = "~\(formatTonUsdValue(amount.value, divide: false, rate: usdRate, dateTimeFormat: environment.dateTimeFormat))"
                     case .ton:
                         let usdRate = Double(tonUsdRate) / 1000.0 / 1000000.0
-                        amountLabel = "≈\(formatTonUsdValue(amount.value, divide: false, rate: usdRate, dateTimeFormat: environment.dateTimeFormat))"
+                        amountLabel = "~\(formatTonUsdValue(amount.value, divide: false, rate: usdRate, dateTimeFormat: environment.dateTimeFormat))"
+                    }
+                }
+            case .starGiftOffer:
+                titleString = "Offer to Buy"
+                switch state.currency {
+                case .stars:
+                    amountTitle = "STARS TO OFFER"
+                    minAmount = StarsAmount(value: resaleConfiguration.channelMessageSuggestionMinStarsAmount, nanos: 0)
+                case .ton:
+                    amountTitle = "TON TO OFFER"
+                    minAmount = StarsAmount(value: 0, nanos: 0)
+                }
+                maxAmount = nil
+                amountPlaceholder = "Price"
+                
+                if let usdWithdrawRate = withdrawConfiguration.usdWithdrawRate, let tonUsdRate = withdrawConfiguration.tonUsdRate, let amount = state.amount, amount > StarsAmount.zero {
+                    switch state.currency {
+                    case .stars:
+                        let usdRate = Double(usdWithdrawRate) / 1000.0 / 100.0
+                        amountLabel = "~\(formatTonUsdValue(amount.value, divide: false, rate: usdRate, dateTimeFormat: environment.dateTimeFormat))"
+                    case .ton:
+                        let usdRate = Double(tonUsdRate) / 1000.0 / 1000000.0
+                        amountLabel = "~\(formatTonUsdValue(amount.value, divide: false, rate: usdRate, dateTimeFormat: environment.dateTimeFormat))"
                     }
                 }
             }
@@ -309,8 +333,12 @@ private final class SheetContent: CombinedComponent {
                 tonBalanceValue = tonBalance
             }
             
-            if case let .suggestedPost(mode, _, _, _) = component.mode {
-                var displayCurrencySelector = false
+            let selectedId: AnyHashable = state.currency == .stars ? AnyHashable(0 as Int) : AnyHashable(1 as Int)
+            let starsTitle: String
+            let tonTitle: String
+            var displayCurrencySelector = false
+            switch component.mode {
+            case let .suggestedPost(mode, _, _, _):
                 switch mode {
                 case let .sender(_, isFromAdmin):
                     if isFromAdmin {
@@ -320,74 +348,74 @@ private final class SheetContent: CombinedComponent {
                             displayCurrencySelector = true
                         }
                     }
+                    starsTitle = environment.strings.Chat_PostSuggestion_Suggest_OfferStars
+                    tonTitle = environment.strings.Chat_PostSuggestion_Suggest_OfferTon
                 case .admin:
                     displayCurrencySelector = true
+                    starsTitle = environment.strings.Chat_PostSuggestion_Suggest_RequestStars
+                    tonTitle = environment.strings.Chat_PostSuggestion_Suggest_RequestTon
                 }
-                
-                if displayCurrencySelector {
-                    let selectedId: AnyHashable = state.currency == .stars ? AnyHashable(0 as Int) : AnyHashable(1 as Int)
-                    let starsTitle: String
-                    let tonTitle: String
-                    switch mode {
-                    case .sender:
-                        starsTitle = environment.strings.Chat_PostSuggestion_Suggest_OfferStars
-                        tonTitle = environment.strings.Chat_PostSuggestion_Suggest_OfferTon
-                    case .admin:
-                        starsTitle = environment.strings.Chat_PostSuggestion_Suggest_RequestStars
-                        tonTitle = environment.strings.Chat_PostSuggestion_Suggest_RequestTon
-                    }
-                    
-                    let currencyToggle = currencyToggle.update(
-                        component: TabSelectorComponent(
-                            colors: TabSelectorComponent.Colors(
-                                foreground: theme.list.itemSecondaryTextColor,
-                                selection: theme.list.itemSecondaryTextColor.withMultipliedAlpha(0.15),
-                                simple: true
-                            ),
-                            theme: theme,
-                            customLayout: TabSelectorComponent.CustomLayout(
-                                font: Font.medium(14.0),
-                                spacing: 10.0
-                            ),
-                            items: [
-                                TabSelectorComponent.Item(
-                                    id: AnyHashable(0),
-                                    content: .component(AnyComponent(CurrencyTabItemComponent(icon: .stars, title: starsTitle, theme: theme)))
-                                ),
-                                TabSelectorComponent.Item(
-                                    id: AnyHashable(1),
-                                    content: .component(AnyComponent(CurrencyTabItemComponent(icon: .ton, title: tonTitle, theme: theme)))
-                                )
-                            ],
-                            selectedId: selectedId,
-                            setSelectedId: { [weak state] id in
-                                guard let state else {
-                                    return
-                                }
-                                
-                                let currency: CurrencyAmount.Currency
-                                if id == AnyHashable(0) {
-                                    currency = .stars
-                                } else {
-                                    currency = .ton
-                                }
-                                if state.currency != currency {
-                                    state.currency = currency
-                                    state.amount = nil
-                                }
-                                state.updated(transition: .spring(duration: 0.4))
-                            }
+            case .starGiftOffer:
+                displayCurrencySelector = true
+                starsTitle = "Offer Stars"
+                tonTitle = "Offer TON"
+            default:
+                starsTitle = ""
+                tonTitle = ""
+            }
+
+            if displayCurrencySelector {
+                let currencyToggle = currencyToggle.update(
+                    component: TabSelectorComponent(
+                        colors: TabSelectorComponent.Colors(
+                            foreground: theme.list.itemSecondaryTextColor,
+                            selection: theme.list.itemSecondaryTextColor.withMultipliedAlpha(0.15),
+                            simple: true
                         ),
-                        availableSize: CGSize(width: context.availableSize.width - sideInset * 2.0, height: 100.0),
-                        transition: context.transition
-                    )
-                    contentSize.height -= 17.0
-                    let currencyToggleFrame = CGRect(origin: CGPoint(x: floor((context.availableSize.width - currencyToggle.size.width) * 0.5), y: contentSize.height), size: currencyToggle.size)
-                    context.add(currencyToggle
-                        .position(currencyToggle.size.centered(in: currencyToggleFrame).center))
-                    
-                    contentSize.height += currencyToggle.size.height + 29.0
-                }
+                        theme: theme,
+                        style: .glass,
+                        customLayout: TabSelectorComponent.CustomLayout(
+                            font: Font.medium(14.0),
+                            spacing: 10.0
+                        ),
+                        items: [
+                            TabSelectorComponent.Item(
+                                id: AnyHashable(0),
+                                content: .component(AnyComponent(CurrencyTabItemComponent(icon: .stars, title: starsTitle, theme: theme)))
+                            ),
+                            TabSelectorComponent.Item(
+                                id: AnyHashable(1),
+                                content: .component(AnyComponent(CurrencyTabItemComponent(icon: .ton, title: tonTitle, theme: theme)))
+                            )
+                        ],
+                        selectedId: selectedId,
+                        setSelectedId: { [weak state] id in
+                            guard let state else {
+                                return
+                            }
+                            
+                            let currency: CurrencyAmount.Currency
+                            if id == AnyHashable(0) {
+                                currency = .stars
+                            } else {
+                                currency = .ton
+                            }
+                            if state.currency != currency {
+                                state.currency = currency
+                                state.amount = nil
+                            }
+                            state.updated(transition: .spring(duration: 0.4))
+                        }
+                    ),
+                    availableSize: CGSize(width: context.availableSize.width - sideInset * 2.0, height: 100.0),
+                    transition: context.transition
+                )
+                contentSize.height -= 17.0
+                let currencyToggleFrame = CGRect(origin: CGPoint(x: floor((context.availableSize.width - currencyToggle.size.width) * 0.5), y: contentSize.height), size: currencyToggle.size)
+                context.add(currencyToggle
+                    .position(currencyToggle.size.centered(in: currencyToggleFrame).center))
+                
+                contentSize.height += currencyToggle.size.height + 29.0
             }
             
             let amountFont = Font.regular(13.0)
@@ -446,7 +474,7 @@ private final class SheetContent: CombinedComponent {
                         
                         if let usdWithdrawRate = withdrawConfiguration.usdWithdrawRate {
                             let usdRate = Double(usdWithdrawRate) / 1000.0 / 100.0
-                            amountRightLabel = "≈\(formatTonUsdValue(Int64(starsValue), divide: false, rate: usdRate, dateTimeFormat: environment.dateTimeFormat))"
+                            amountRightLabel = "~\(formatTonUsdValue(Int64(starsValue), divide: false, rate: usdRate, dateTimeFormat: environment.dateTimeFormat))"
                         }
                     } else {
                         amountInfoString = NSAttributedString(attributedString: parseMarkdownIntoAttributedString(environment.strings.Stars_SellGift_AmountInfo("\(resaleConfiguration.starGiftCommissionStarsPermille / 10)%").string, attributes: amountMarkdownAttributes, textAlignment: .natural))
@@ -458,7 +486,7 @@ private final class SheetContent: CombinedComponent {
                         amountInfoString = NSAttributedString(attributedString: parseMarkdownIntoAttributedString(environment.strings.Stars_SellGift_AmountInfo(tonString).string, attributes: amountMarkdownAttributes, textAlignment: .natural))
                         
                         if let tonUsdRate = withdrawConfiguration.tonUsdRate {
-                            amountRightLabel = "≈\(formatTonUsdValue(tonValue, divide: true, rate: tonUsdRate, dateTimeFormat: environment.dateTimeFormat))"
+                            amountRightLabel = "~\(formatTonUsdValue(tonValue, divide: true, rate: tonUsdRate, dateTimeFormat: environment.dateTimeFormat))"
                         }
                     } else {
                         amountInfoString = NSAttributedString(attributedString: parseMarkdownIntoAttributedString(environment.strings.Stars_SellGift_AmountInfo("\(resaleConfiguration.starGiftCommissionTonPermille / 10)%").string, attributes: amountMarkdownAttributes, textAlignment: .natural))
@@ -519,6 +547,20 @@ private final class SheetContent: CombinedComponent {
                         maximumNumberOfLines: 0
                     ))
                 }
+            case let .starGiftOffer(_, uniqueGift, _):
+                let giftTitle = "\(uniqueGift.title) #\(formatCollectibleNumber(uniqueGift.number, dateTimeFormat: environment.dateTimeFormat))"
+                let string: String
+                switch state.currency {
+                case .stars:
+                    string = "Enter the number of Stars you'd like to offer for **\(giftTitle)**."
+                case .ton:
+                    string = "Enter the number of TON you'd like to offer for **\(giftTitle)**."
+                }
+                let amountInfoString = NSAttributedString(attributedString: parseMarkdownIntoAttributedString(string, attributes: amountMarkdownAttributes, textAlignment: .natural))
+                amountFooter = AnyComponent(MultilineTextComponent(
+                    text: .plain(amountInfoString),
+                    maximumNumberOfLines: 0
+                ))
             default:
                 amountFooter = nil
             }
@@ -595,12 +637,14 @@ private final class SheetContent: CombinedComponent {
                 let onlyTonSection = onlyTonSection.update(
                     component: ListSectionComponent(
                         theme: theme,
+                        style: .glass,
                         header: nil,
                         footer: onlyTonFooter,
                         items: [AnyComponentWithIdentity(
                             id: "switch",
                             component: AnyComponent(ListActionItemComponent(
                                 theme: theme,
+                                style: .glass,
                                 title: AnyComponent(VStack([
                                     AnyComponentWithIdentity(id: AnyHashable(0), component: AnyComponent(MultilineTextComponent(
                                         text: .plain(NSAttributedString(
@@ -686,12 +730,14 @@ private final class SheetContent: CombinedComponent {
                 let timestampSection = timestampSection.update(
                     component: ListSectionComponent(
                         theme: theme,
+                        style: .glass,
                         header: nil,
                         footer: timestampFooter,
                         items: [AnyComponentWithIdentity(
                             id: "timestamp",
                             component: AnyComponent(ListActionItemComponent(
                                 theme: theme,
+                                style: .glass,
                                 title: AnyComponent(VStack([
                                     AnyComponentWithIdentity(id: AnyHashable(0), component: AnyComponent(MultilineTextComponent(
                                         text: .plain(NSAttributedString(
@@ -743,6 +789,71 @@ private final class SheetContent: CombinedComponent {
                     .cornerRadius(10.0)
                 )
                 contentSize.height += timestampSection.size.height
+            } else if case let .starGiftOffer(peer, _, _) = component.mode {
+                contentSize.height += 24.0
+                
+                let peerName = peer.compactDisplayTitle
+                
+                let footerString: String
+                switch state.currency {
+                case .stars:
+                    footerString = "Choose how long **\(peerName)** can accept your offer. When the time expires, your Stars will be automatically refunded."
+                case .ton:
+                    footerString = "Choose how long **\(peerName)** can accept your offer. When the time expires, your TON will be automatically refunded."
+                }
+                
+                let periodFooterString = NSAttributedString(attributedString: parseMarkdownIntoAttributedString(footerString, attributes: amountMarkdownAttributes, textAlignment: .natural))
+                let periodFooter = AnyComponent(MultilineTextComponent(
+                    text: .plain(periodFooterString),
+                    maximumNumberOfLines: 0
+                ))
+                
+                let periodSection = periodSection.update(
+                    component: ListSectionComponent(
+                        theme: theme,
+                        style: .glass,
+                        header: nil,
+                        footer: periodFooter,
+                        items: [AnyComponentWithIdentity(
+                            id: "timestamp",
+                            component: AnyComponent(ListActionItemComponent(
+                                theme: theme,
+                                style: .glass,
+                                title: AnyComponent(VStack([
+                                    AnyComponentWithIdentity(id: AnyHashable(0), component: AnyComponent(MultilineTextComponent(
+                                        text: .plain(NSAttributedString(
+                                            string: "Offer Duration",
+                                            font: Font.regular(presentationData.listsFontSize.baseDisplaySize),
+                                            textColor: environment.theme.list.itemPrimaryTextColor
+                                        )),
+                                        maximumNumberOfLines: 1
+                                    ))),
+                                ], alignment: .left, spacing: 2.0)),
+                                icon: ListActionItemComponent.Icon(component: AnyComponentWithIdentity(id: 0, component: AnyComponent(MultilineTextComponent(
+                                    text: .plain(NSAttributedString(
+                                        string: "48 Hours",
+                                        font: Font.regular(presentationData.listsFontSize.baseDisplaySize),
+                                        textColor: environment.theme.list.itemSecondaryTextColor
+                                    )),
+                                    maximumNumberOfLines: 1
+                                )))),
+                                accessory: .expandArrows,
+                                action: { _ in
+                                  
+                                }
+                            ))
+                        )]
+                    ),
+                    environment: {},
+                    availableSize: CGSize(width: context.availableSize.width - sideInset * 2.0, height: .greatestFiniteMagnitude),
+                    transition: context.transition
+                )
+                context.add(periodSection
+                    .position(CGPoint(x: context.availableSize.width / 2.0, y: contentSize.height + periodSection.size.height / 2.0))
+                    .clipsToBounds(true)
+                    .cornerRadius(10.0)
+                )
+                contentSize.height += periodSection.size.height
             }
             
             contentSize.height += 32.0
@@ -788,6 +899,22 @@ private final class SheetContent: CombinedComponent {
                     }
                 case .admin:
                     buttonString = environment.strings.Chat_PostSuggestion_Suggest_UpdateButton
+                }
+            } else if case  .starGiftOffer = component.mode {
+                if let amount = state.amount {
+                    let currencySymbol: String
+                    let currencyAmount: String
+                    switch state.currency {
+                    case .stars:
+                        currencySymbol = "#"
+                        currencyAmount = presentationStringsFormattedNumber(amount, environment.dateTimeFormat.groupingSeparator)
+                    case .ton:
+                        currencySymbol = "$"
+                        currencyAmount = formatTonAmountText(amount.value, dateTimeFormat: environment.dateTimeFormat, maxDecimalPositions: nil)
+                    }
+                    buttonString = "Offer  \(currencySymbol) \(currencyAmount)"
+                } else {
+                    buttonString = "Offer"
                 }
             } else if let amount = state.amount {
                 buttonString = "\(environment.strings.Stars_Withdraw_Withdraw)  # \(presentationStringsFormattedNumber(amount, environment.dateTimeFormat.groupingSeparator))"
@@ -913,8 +1040,9 @@ private final class SheetContent: CombinedComponent {
                                             }
                                         }
                                     }
-                                    
                                     completion(CurrencyAmount(amount: amount, currency: state.currency), state.timestamp)
+                                case let .starGiftOffer(_, _, completion):
+                                    completion(CurrencyAmount(amount: amount, currency: state.currency), state.duration)
                                 }
                                 
                                 controller.dismissAnimated()
@@ -952,6 +1080,7 @@ private final class SheetContent: CombinedComponent {
         fileprivate var amount: StarsAmount?
         fileprivate var currency: CurrencyAmount.Currency = .stars
         fileprivate var timestamp: Int32?
+        fileprivate var duration: Int32 = 120
         
         fileprivate var starsBalance: StarsAmount?
         private var starsStateDisposable: Disposable?
@@ -986,6 +1115,8 @@ private final class SheetContent: CombinedComponent {
                 currency = initialValue.currency
                 amount = initialValue.amount
                 self.timestamp = initialTimestamp
+            case .starGiftOffer:
+                amount = nil
             }
             
             self.currency = currency
@@ -1178,6 +1309,7 @@ public final class StarsWithdrawScreen: ViewControllerComponentContainer {
         case starGiftResell(StarGift.UniqueGift, Bool, completion: (CurrencyAmount) -> Void)
         case paidMessages(current: Int64, minValue: Int64, fractionAfterCommission: Int, kind: StarsWithdrawalScreenSubject.PaidMessageKind, completion: (Int64) -> Void)
         case suggestedPost(mode: SuggestedPostMode, price: CurrencyAmount, timestamp: Int32?, completion: (CurrencyAmount, Int32?) -> Void)
+        case starGiftOffer(peer: EnginePeer, gift: StarGift.UniqueGift, completion: (CurrencyAmount, Int32) -> Void)
     }
     
     private let context: AccountContext
