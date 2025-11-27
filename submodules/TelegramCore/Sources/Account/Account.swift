@@ -457,11 +457,15 @@ public final class TelegramPasskey: Equatable {
     public let id: String
     public let name: String
     public let date: Int32
+    public let emojiId: Int64?
+    public let lastUsageDate: Int32?
 
-    public init(id: String, name: String, date: Int32) {
+    public init(id: String, name: String, date: Int32, emojiId: Int64?, lastUsageDate: Int32?) {
         self.id = id
         self.name = name
         self.date = date
+        self.emojiId = emojiId
+        self.lastUsageDate = lastUsageDate
     }
     
     public static func ==(lhs: TelegramPasskey, rhs: TelegramPasskey) -> Bool {
@@ -474,6 +478,12 @@ public final class TelegramPasskey: Equatable {
         if lhs.date != rhs.date {
             return false
         }
+        if lhs.emojiId != rhs.emojiId {
+            return false
+        }
+        if lhs.lastUsageDate != rhs.lastUsageDate {
+            return false
+        }
         return true
     }
 }
@@ -481,8 +491,8 @@ public final class TelegramPasskey: Equatable {
 extension TelegramPasskey {
     convenience init(apiPasskey: Api.Passkey) {
         switch apiPasskey {
-        case let .passkey(id, name, date):
-            self.init(id: id, name: name, date: date)
+        case let .passkey(_, id, name, date, softwareEmojiId, lastUsageDate):
+            self.init(id: id, name: name, date: date, emojiId: softwareEmojiId, lastUsageDate: lastUsageDate)
         }
     }
 }
@@ -527,7 +537,7 @@ func _internal_requestPasskeyRegistration(network: Network) -> Signal<String?, N
 }
 
 func _internal_requestCreatePasskey(network: Network, id: String, clientData: String, attestationObject: Data) -> Signal<TelegramPasskey?, NoError> {
-    return network.request(Api.functions.account.registerPasskey(credential: .inputPasskeyCredentialPublicKey(id: id, rawId: id, response: .inputPasskeyResponseRegister(clientData: .dataJSON(data: clientData), attestationData: Buffer(data: attestationObject))), name: "iCloud"))
+    return network.request(Api.functions.account.registerPasskey(credential: .inputPasskeyCredentialPublicKey(id: id, rawId: id, response: .inputPasskeyResponseRegister(clientData: .dataJSON(data: clientData), attestationData: Buffer(data: attestationObject)))))
     |> map(Optional.init)
     |> `catch` { _ -> Signal<Api.Passkey?, NoError> in
         return .single(nil)

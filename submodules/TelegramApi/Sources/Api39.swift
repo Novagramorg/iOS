@@ -1039,12 +1039,11 @@ public extension Api.functions.account {
                 }
 }
 public extension Api.functions.account {
-                static func registerPasskey(credential: Api.InputPasskeyCredential, name: String) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Passkey>) {
+                static func registerPasskey(credential: Api.InputPasskeyCredential) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Passkey>) {
                     let buffer = Buffer()
-                    buffer.appendInt32(-810803168)
+                    buffer.appendInt32(1437867990)
                     credential.serialize(buffer, true)
-                    serializeString(name, buffer: buffer, boxed: false)
-                    return (FunctionDescription(name: "account.registerPasskey", parameters: [("credential", String(describing: credential)), ("name", String(describing: name))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.Passkey? in
+                    return (FunctionDescription(name: "account.registerPasskey", parameters: [("credential", String(describing: credential))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.Passkey? in
                         let reader = BufferReader(buffer)
                         var result: Api.Passkey?
                         if let signature = reader.readInt32() {

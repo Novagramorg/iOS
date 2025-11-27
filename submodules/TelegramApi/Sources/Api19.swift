@@ -398,40 +398,52 @@ public extension Api {
 }
 public extension Api {
     enum Passkey: TypeConstructorDescription {
-        case passkey(id: String, name: String, date: Int32)
+        case passkey(flags: Int32, id: String, name: String, date: Int32, softwareEmojiId: Int64?, lastUsageDate: Int32?)
     
     public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
     switch self {
-                case .passkey(let id, let name, let date):
+                case .passkey(let flags, let id, let name, let date, let softwareEmojiId, let lastUsageDate):
                     if boxed {
-                        buffer.appendInt32(1047842022)
+                        buffer.appendInt32(-1738457409)
                     }
+                    serializeInt32(flags, buffer: buffer, boxed: false)
                     serializeString(id, buffer: buffer, boxed: false)
                     serializeString(name, buffer: buffer, boxed: false)
                     serializeInt32(date, buffer: buffer, boxed: false)
+                    if Int(flags) & Int(1 << 0) != 0 {serializeInt64(softwareEmojiId!, buffer: buffer, boxed: false)}
+                    if Int(flags) & Int(1 << 1) != 0 {serializeInt32(lastUsageDate!, buffer: buffer, boxed: false)}
                     break
     }
     }
     
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
-                case .passkey(let id, let name, let date):
-                return ("passkey", [("id", id as Any), ("name", name as Any), ("date", date as Any)])
+                case .passkey(let flags, let id, let name, let date, let softwareEmojiId, let lastUsageDate):
+                return ("passkey", [("flags", flags as Any), ("id", id as Any), ("name", name as Any), ("date", date as Any), ("softwareEmojiId", softwareEmojiId as Any), ("lastUsageDate", lastUsageDate as Any)])
     }
     }
     
         public static func parse_passkey(_ reader: BufferReader) -> Passkey? {
-            var _1: String?
-            _1 = parseString(reader)
+            var _1: Int32?
+            _1 = reader.readInt32()
             var _2: String?
             _2 = parseString(reader)
-            var _3: Int32?
-            _3 = reader.readInt32()
+            var _3: String?
+            _3 = parseString(reader)
+            var _4: Int32?
+            _4 = reader.readInt32()
+            var _5: Int64?
+            if Int(_1!) & Int(1 << 0) != 0 {_5 = reader.readInt64() }
+            var _6: Int32?
+            if Int(_1!) & Int(1 << 1) != 0 {_6 = reader.readInt32() }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            if _c1 && _c2 && _c3 {
-                return Api.Passkey.passkey(id: _1!, name: _2!, date: _3!)
+            let _c4 = _4 != nil
+            let _c5 = (Int(_1!) & Int(1 << 0) == 0) || _5 != nil
+            let _c6 = (Int(_1!) & Int(1 << 1) == 0) || _6 != nil
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 {
+                return Api.Passkey.passkey(flags: _1!, id: _2!, name: _3!, date: _4!, softwareEmojiId: _5, lastUsageDate: _6)
             }
             else {
                 return nil
