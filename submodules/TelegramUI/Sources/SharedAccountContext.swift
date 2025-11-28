@@ -3805,6 +3805,8 @@ public final class SharedAccountContextImpl: SharedAccountContext {
             mode = .suggestedPost(mode: .sender(channel: channel, isFromAdmin: isFromAdmin), price: current, timestamp: timestamp, completion: completion)
         case let .postSuggestionModification(current, timestamp, completion):
             mode = .suggestedPost(mode: .admin, price: current, timestamp: timestamp, completion: completion)
+        case let .starGiftOffer(peer, gift, completion):
+            mode = .starGiftOffer(peer: peer, gift: gift, completion: completion)
         }
         return StarsWithdrawScreen(context: context, mode: mode)
     }
