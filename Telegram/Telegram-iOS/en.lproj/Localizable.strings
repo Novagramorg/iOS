@@ -15432,3 +15432,5 @@ Error: %8$@";
 
 "LiveStream.ErrorMaxAllowedEmoji.Text_1" = "You can send up to %d emoji.";
 "LiveStream.ErrorMaxAllowedEmoji.Text_any" = "You can send up to %d emoji.";
+
+"Stars.Purchase.StarGiftOfferInfo" = "Buy Stars to make a gift buy offer.";

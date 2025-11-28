@@ -70,6 +70,7 @@ public final class ListActionItemComponent: Component {
         case arrow
         case toggle(Toggle)
         case activity
+        case expandArrows
         case custom(CustomAccessory)
     }
     
@@ -373,6 +374,8 @@ public final class ListActionItemComponent: Component {
                 }
             case .arrow:
                 contentRightInset = 30.0
+            case .expandArrows:
+                contentRightInset = 36.0
             case .toggle:
                 contentRightInset = 76.0
             case .activity:
@@ -636,6 +639,32 @@ public final class ListActionItemComponent: Component {
                                 
                 if let image = arrowView.image {
                     let arrowFrame = CGRect(origin: CGPoint(x: availableSize.width - 7.0 - image.size.width, y: floor((contentHeight - image.size.height) * 0.5)), size: image.size)
+                    arrowTransition.setFrame(view: arrowView, frame: arrowFrame)
+                }
+            } else {
+                if let arrowView = self.arrowView {
+                    self.arrowView = nil
+                    arrowView.removeFromSuperview()
+                }
+            }
+            
+            if case .expandArrows = component.accessory {
+                let arrowView: UIImageView
+                var arrowTransition = transition
+                if let current = self.arrowView {
+                    arrowView = current
+                    if themeUpdated {
+                        arrowView.image = PresentationResourcesItemList.disclosureOptionArrowsImage(component.theme)
+                    }
+                } else {
+                    arrowTransition = arrowTransition.withAnimation(.none)
+                    arrowView = UIImageView(image: PresentationResourcesItemList.disclosureOptionArrowsImage(component.theme))
+                    self.arrowView = arrowView
+                    self.addSubview(arrowView)
+                }
+                                
+                if let image = arrowView.image {
+                    let arrowFrame = CGRect(origin: CGPoint(x: availableSize.width - 16.0 - image.size.width, y: floor((contentHeight - image.size.height) * 0.5)), size: image.size)
                     arrowTransition.setFrame(view: arrowView, frame: arrowFrame)
                 }
             } else {
