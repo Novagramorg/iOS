@@ -1141,8 +1141,7 @@ private final class GiftAuctionBidScreenComponent: Component {
         private let sliderPlus = ComponentView<Empty>()
         private let badge = ComponentView<Empty>()
         
-        private var liveStreamPerks: [ComponentView<Empty>] = []
-        private var liveStreamMessagePreview: ComponentView<Empty>?
+        private var auctionStats: [ComponentView<Empty>] = []
         
         private let myGifts = ComponentView<Empty>()
                 
@@ -2366,7 +2365,7 @@ private final class GiftAuctionBidScreenComponent: Component {
                 self.badgeStars.update(size: starsRect.size, color: sliderColor, emitterPosition: CGPoint(x: badgeFrame.midX, y: badgeFrame.maxY - 32.0))
             }
                         
-            var perks: [([AnimatedTextComponent.Item], String)] = []
+            var auctionStats: [([AnimatedTextComponent.Item], String)] = []
             
             var minBidAnimatedItems: [AnimatedTextComponent.Item] = []
             var untilNextDropAnimatedItems: [AnimatedTextComponent.Item] = []
@@ -2458,62 +2457,62 @@ private final class GiftAuctionBidScreenComponent: Component {
                 }
             }
             
-            perks.append((
+            auctionStats.append((
                 minBidAnimatedItems,
                 environment.strings.Gift_AuctionBid_MinimumBid
             ))
             
-            perks.append((
+            auctionStats.append((
                 untilNextDropAnimatedItems,
                 environment.strings.Gift_AuctionBid_UntilNext
             ))
             
-            perks.append((
+            auctionStats.append((
                 dropsLeftAnimatedItems,
                 environment.strings.Gift_AuctionBid_Left
             ))
             
             contentHeight += 54.0
             
-            let perkHeight: CGFloat = 60.0
-            let perkSpacing: CGFloat = 10.0
-            let perkWidth: CGFloat = floor((availableSize.width - sideInset * 2.0 - perkSpacing * CGFloat(perks.count - 1)) / CGFloat(perks.count))
+            let statSpacing: CGFloat = 10.0
+            let statWidth: CGFloat = floor((availableSize.width - sideInset * 2.0 - statSpacing * CGFloat(auctionStats.count - 1)) / CGFloat(auctionStats.count))
+            let statHeight: CGFloat = 60.0
             
-            for i in 0 ..< perks.count {
-                var perkFrame = CGRect(origin: CGPoint(x: sideInset + CGFloat(i) * (perkWidth + perkSpacing), y: contentHeight), size: CGSize(width: perkWidth, height: perkHeight))
-                if i == perks.count - 1 {
-                    perkFrame.size.width = max(0.0, availableSize.width - sideInset - perkFrame.minX)
+            for i in 0 ..< auctionStats.count {
+                var statFrame = CGRect(origin: CGPoint(x: sideInset + CGFloat(i) * (statWidth + statSpacing), y: contentHeight), size: CGSize(width: statWidth, height: statHeight))
+                if i == auctionStats.count - 1 {
+                    statFrame.size.width = max(0.0, availableSize.width - sideInset - statFrame.minX)
                 }
-                let perkView: ComponentView<Empty>
-                if self.liveStreamPerks.count > i {
-                    perkView = self.liveStreamPerks[i]
+                let statView: ComponentView<Empty>
+                if self.auctionStats.count > i {
+                    statView = self.auctionStats[i]
                 } else {
-                    perkView = ComponentView()
-                    self.liveStreamPerks.append(perkView)
+                    statView = ComponentView()
+                    self.auctionStats.append(statView)
                 }
-                let perk = perks[i]
-                let _ = perkView.update(
+                let stat = auctionStats[i]
+                let _ = statView.update(
                     transition: transition,
                     component: AnyComponent(AuctionStatComponent(
                         context: component.context,
-                        gift: i == perks.count - 1 ? component.auctionContext.gift : nil,
-                        title: perk.0,
-                        subtitle: perk.1,
+                        gift: i == auctionStats.count - 1 ? component.auctionContext.gift : nil,
+                        title: stat.0,
+                        subtitle: stat.1,
                         small: false,
                         theme: environment.theme
                     )),
                     environment: {},
-                    containerSize: perkFrame.size
+                    containerSize: statFrame.size
                 )
-                if let perkComponentView = perkView.view {
+                if let perkComponentView = statView.view {
                     if perkComponentView.superview == nil {
                         self.scrollContentView.addSubview(perkComponentView)
                     }
-                    transition.setFrame(view: perkComponentView, frame: perkFrame)
+                    transition.setFrame(view: perkComponentView, frame: statFrame)
                 }
             }
             
-            contentHeight += perkHeight
+            contentHeight += statHeight
             contentHeight += 24.0
             
             let acquiredGiftsCount = self.giftAuctionState?.myState.acquiredCount ?? 0
