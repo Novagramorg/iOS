@@ -498,10 +498,17 @@ swift_library(
         "//submodules/TelegramUI/Components/Contacts/NewContactScreen",
         "//submodules/TelegramUI/Components/Chat/ChatSendAsContextMenu",
         "//submodules/TelegramUI/Components/NavigationBarImpl",
+        "//submodules/TelegramUI/Components/GlobalControlPanelsContext",
+        "//submodules/TelegramUI/Components/MediaPlaybackHeaderPanelComponent",
+        "//submodules/TelegramUI/Components/LiveLocationHeaderPanelComponent",
+        "//submodules/TelegramUI/Components/TranslateHeaderPanelComponent",
+        "//submodules/TelegramUI/Components/AdPanelHeaderPanelComponent",
+        "//submodules/TelegramUI/Components/MessageFeeHeaderPanelComponent",
+        "//submodules/TelegramUI/Components/LegacyChatHeaderPanelComponent",
+        "//submodules/TelegramUI/Components/Chat/ChatSearchNavigationContentNode",
     ] + select({
         "@build_bazel_rules_apple//apple:ios_arm64": appcenter_targets,
         "//build-system:ios_sim_arm64": [],
-        "@build_bazel_rules_apple//apple:ios_x86_64": [],
     }),
     visibility = [
         "//visibility:public",

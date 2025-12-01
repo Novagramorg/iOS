@@ -167,7 +167,7 @@ public final class SearchDisplayController {
         }
         var navigationBarFrame = CGRect(origin: CGPoint(x: 0.0, y: navigationBarOffset), size: CGSize(width: layout.size.width, height: searchBarHeight))
         if self.searchBarIsExternal {
-            navigationBarFrame.size.height -= 10.0
+            navigationBarFrame.size.height -= 50.0
         }
         if layout.statusBarHeight == nil {
             navigationBarFrame.size.height = 64.0
@@ -189,15 +189,15 @@ public final class SearchDisplayController {
         self.containerLayout = (layout, navigationBarHeight)
         
         let bounds = CGRect(origin: CGPoint(), size: layout.size)
-        transition.updateFrame(node: self.backgroundNode, frame: bounds.insetBy(dx: -20.0, dy: -20.0))
+        transition.updateFrame(node: self.backgroundNode, frame: bounds)//.insetBy(dx: -20.0, dy: -20.0))
         
-        var size = layout.size
-        size.width += 20.0 * 2.0
-        transition.updateFrame(node: self.contentNode, frame: CGRect(origin: CGPoint(x: 0.0, y: 20.0), size: size))
+        let size = layout.size
+        //size.width += 20.0 * 2.0
+        transition.updateFrame(node: self.contentNode, frame: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: size))
                                
-        var safeInsets = layout.safeInsets
-        safeInsets.left += 20.0
-        safeInsets.right += 20.0
+        let safeInsets = layout.safeInsets
+        //safeInsets.left += 20.0
+        //safeInsets.right += 20.0
         
         self.contentNode.containerLayoutUpdated(ContainerViewLayout(size: size, metrics: LayoutMetrics(), deviceMetrics: layout.deviceMetrics, intrinsicInsets: layout.intrinsicInsets, safeInsets: safeInsets, additionalInsets: UIEdgeInsets(), statusBarHeight: nil, inputHeight: layout.inputHeight, inputHeightIsInteractivellyChanging: layout.inputHeightIsInteractivellyChanging, inVoiceOver: layout.inVoiceOver), navigationBarHeight: navigationBarHeight, transition: transition)
     }
@@ -218,14 +218,14 @@ public final class SearchDisplayController {
             self.backgroundNode.isTransparent = false
         }
         
-        var size = layout.size
-        size.width += 20.0 * 2.0
+        let size = layout.size
+        //size.width += 20.0 * 2.0
         
-        self.contentNode.frame = CGRect(origin: CGPoint(x: 0.0, y: 20.0), size: size)
+        self.contentNode.frame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: size)
         
-        var safeInsets = layout.safeInsets
-        safeInsets.left += 20.0
-        safeInsets.right += 20.0
+        let safeInsets = layout.safeInsets
+        //safeInsets.left += 20.0
+        //safeInsets.right += 20.0
         self.contentNode.containerLayoutUpdated(ContainerViewLayout(size: size, metrics: LayoutMetrics(), deviceMetrics: layout.deviceMetrics, intrinsicInsets: UIEdgeInsets(), safeInsets: safeInsets, additionalInsets: UIEdgeInsets(), statusBarHeight: nil, inputHeight: nil, inputHeightIsInteractivellyChanging: false, inVoiceOver: false), navigationBarHeight: navigationBarHeight, transition: .immediate)
         
         var contentNavigationBarHeight = navigationBarHeight
@@ -302,7 +302,7 @@ public final class SearchDisplayController {
         }
     }
     
-    public func deactivate(placeholder: SearchBarPlaceholderNode?, animated: Bool = true) {
+    public func deactivate(placeholder: SearchBarPlaceholderNode?, animated: Bool = true, completion: (() -> Void)? = nil) {
         if let searchBar = self.searchBar {
             searchBar.deactivate(clear: false)
         }
@@ -329,10 +329,12 @@ public final class SearchDisplayController {
                 if finished {
                     backgroundNode?.removeFromSupernode()
                 }
+                completion?()
             })
         } else {
             backgroundNode.removeFromSupernode()
             contentNode.removeFromSupernode()
+            completion?()
         }
     }
     

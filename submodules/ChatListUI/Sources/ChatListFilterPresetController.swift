@@ -1283,7 +1283,6 @@ private final class ChatListFilterPresetController: ItemListController {
                 pendingUnpinnedAllMessages: false,
                 activeGroupCallInfo: nil,
                 hasActiveGroupCall: false,
-                importState: nil,
                 threadData: nil,
                 isGeneralThreadClosed: nil,
                 replyMessage: nil,

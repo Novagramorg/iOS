@@ -124,6 +124,7 @@ import AdsInfoScreen
 import PostSuggestionsSettingsScreen
 import ChatSendStarsScreen
 import ChatSendAsContextMenu
+import GlobalControlPanelsContext
 
 extension ChatControllerImpl {
     func reloadChatLocation(chatLocation: ChatLocation, chatLocationContextHolder: Atomic<ChatLocationContextHolder?>, historyNode: ChatHistoryListNodeImpl, apply: @escaping ((ContainedViewLayoutTransition?) -> Void) -> Void) {
@@ -381,6 +382,10 @@ extension ChatControllerImpl {
         if previousState.pinnedMessage != contentData.state.pinnedMessage {
             animated = true
         }
+        if previousState.translationState?.isEnabled != contentData.state.translationState?.isEnabled {
+            animated = true
+        }
+        
         var transition: ContainedViewLayoutTransition = animated ? .animated(duration: 0.4, curve: .spring) : .immediate
         if let forceAnimationTransition {
             transition = forceAnimationTransition
@@ -4589,6 +4594,43 @@ extension ChatControllerImpl {
                 self.displayPostedScheduledMessagesToast(ids: filteredIds)
             })
         }
+        
+        var mediaPlayback = false
+        var liveLocationMode: GlobalControlPanelsContext.LiveLocationMode?
+        if case .standard = self.mode {
+            //mediaAccessoryPanelVisibility = .specific(size: .compact)
+            mediaPlayback = true
+            liveLocationMode = self.chatLocation.peerId.flatMap(GlobalControlPanelsContext.LiveLocationMode.peer)
+        }
+        
+        var groupCallPanelSource: GroupCallPanelSource?
+        switch self.chatLocation {
+        case let .peer(peerId):
+            switch self.subject {
+            case .message, .none:
+                groupCallPanelSource = .peer(peerId)
+            default:
+                break
+            }
+        case .replyThread, .customChatContents:
+            break
+        }
+        
+        let globalControlPanelsContext = GlobalControlPanelsContext(
+            context: self.context,
+            mediaPlayback: mediaPlayback,
+            liveLocationMode: liveLocationMode,
+            groupCalls: groupCallPanelSource
+        )
+        self.globalControlPanelsContext = globalControlPanelsContext
+        self.globalControlPanelsContextStateDisposable = (globalControlPanelsContext.state
+        |> deliverOnMainQueue).startStrict(next: { [weak self] state in
+            guard let self else {
+                return
+            }
+            self.globalControlPanelsContextState = state
+            self.requestLayout(transition: .animated(duration: 0.4, curve: .spring))
+        })
         
         self.displayNodeDidLoad()
     }

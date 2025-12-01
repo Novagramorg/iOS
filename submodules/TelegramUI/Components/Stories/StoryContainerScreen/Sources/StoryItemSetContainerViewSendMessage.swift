@@ -359,7 +359,6 @@ final class StoryItemSetContainerSendMessage: @unchecked(Sendable) {
                 pendingUnpinnedAllMessages: false,
                 activeGroupCallInfo: nil,
                 hasActiveGroupCall: false,
-                importState: nil,
                 threadData: nil,
                 isGeneralThreadClosed: nil,
                 replyMessage: nil,

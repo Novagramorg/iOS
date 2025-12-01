@@ -28,12 +28,6 @@ public final class NavigationBarImpl: ASDisplayNode, NavigationBar {
     public var makeCustomTransitionNode: ((NavigationBar, Bool) -> CustomNavigationTransitionNode?)?
     public var allowsCustomTransition: (() -> Bool)?
     
-    private var collapsed: Bool {
-        get {
-            return self.frame.size.height.isLess(than: 44.0)
-        }
-    }
-    
     public let stripeNode: ASDisplayNode
     public let clippingNode: SparseNode
     private let buttonsContainerNode: ASDisplayNode
@@ -575,7 +569,10 @@ public final class NavigationBarImpl: ASDisplayNode, NavigationBar {
         }
         
         self.clippingNode = SparseNode()
-        self.clippingNode.clipsToBounds = true
+        if case .glass = presentationData.theme.style {
+        } else {
+            self.clippingNode.clipsToBounds = true
+        }
         
         self.buttonsContainerNode = SparseNode()
         self.buttonsContainerNode.clipsToBounds = true
@@ -734,6 +731,11 @@ public final class NavigationBarImpl: ASDisplayNode, NavigationBar {
         }
         
         self.validLayout = (size, defaultHeight, additionalTopHeight, additionalContentHeight, additionalBackgroundHeight, additionalCutout, leftInset, rightInset, appearsHidden, isLandscape)
+        
+        var contentVerticalOrigin = additionalTopHeight
+        if case .glass = self.presentationData.theme.style {
+            contentVerticalOrigin += 4.0
+        }
 
         let backgroundFrame = CGRect(origin: CGPoint(), size: CGSize(width: size.width, height: size.height + additionalBackgroundHeight))
         if self.backgroundNode.frame != backgroundFrame {
@@ -771,7 +773,11 @@ public final class NavigationBarImpl: ASDisplayNode, NavigationBar {
             switch contentNode.mode {
             case .replacement:
                 expansionHeight = contentNode.height - defaultHeight
-                contentNodeFrame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: size.width, height: size.height - additionalContentHeight))
+                if case .glass = self.presentationData.theme.style {
+                    contentNodeFrame = CGRect(origin: CGPoint(x: 0.0, y: contentVerticalOrigin), size: CGSize(width: size.width, height: defaultHeight))
+                } else {
+                    contentNodeFrame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: size.width, height: size.height - additionalContentHeight))
+                }
             case .expansion:
                 expansionHeight = contentNode.height
                 
@@ -790,14 +796,13 @@ public final class NavigationBarImpl: ASDisplayNode, NavigationBar {
         transition.updateFrame(node: self.stripeNode, frame: CGRect(x: (additionalCutout?.width ?? 0.0), y: size.height + additionalBackgroundHeight, width: size.width - (additionalCutout?.width ?? 0.0), height: UIScreenPixel))
         
         let nominalHeight: CGFloat = defaultHeight
-        let contentVerticalOrigin = additionalTopHeight
         
         var leftTitleInset: CGFloat = leftInset + 1.0
         var rightTitleInset: CGFloat = rightInset + 1.0
         
         var leftButtonsWidth: CGFloat = 0.0
         if self.backButtonNodeImpl.view.superview != nil {
-            let backButtonSize = self.backButtonNodeImpl.updateLayout(constrainedSize: CGSize(width: size.width, height: nominalHeight), isLandscape: isLandscape, isLeftAligned: true)
+            let backButtonSize = self.backButtonNodeImpl.updateLayout(constrainedSize: CGSize(width: size.width, height: 44.0), isLandscape: isLandscape, isLeftAligned: true)
             leftTitleInset = backButtonSize.width + backButtonInset + 1.0
             
             if case .glass = self.presentationData.theme.style {
@@ -828,7 +833,7 @@ public final class NavigationBarImpl: ASDisplayNode, NavigationBar {
                 self.badgeNode.alpha = 1.0
             }
         } else if self.leftButtonNodeImpl.view.superview != nil {
-            let leftButtonSize = self.leftButtonNodeImpl.updateLayout(constrainedSize: CGSize(width: size.width, height: nominalHeight), isLandscape: isLandscape, isLeftAligned: true)
+            let leftButtonSize = self.leftButtonNodeImpl.updateLayout(constrainedSize: CGSize(width: size.width, height: 44.0), isLandscape: isLandscape, isLeftAligned: true)
             leftTitleInset = leftButtonSize.width + leftButtonInset + 1.0
             
             var transition = transition
@@ -859,7 +864,7 @@ public final class NavigationBarImpl: ASDisplayNode, NavigationBar {
         
         var rightButtonsWidth: CGFloat = 0.0
         if self.rightButtonNodeImpl.view.superview != nil {
-            let rightButtonSize = self.rightButtonNodeImpl.updateLayout(constrainedSize: (CGSize(width: size.width, height: nominalHeight)), isLandscape: isLandscape, isLeftAligned: false)
+            let rightButtonSize = self.rightButtonNodeImpl.updateLayout(constrainedSize: (CGSize(width: size.width, height: 44.0)), isLandscape: isLandscape, isLeftAligned: false)
             if !self.rightButtonNodeImpl.isEmpty {
                 rightButtonsWidth += rightButtonSize.width
             }
@@ -1003,6 +1008,8 @@ public final class NavigationBarImpl: ASDisplayNode, NavigationBar {
     }
     
     public func setContentNode(_ contentNode: NavigationBarContentNode?, animated: Bool) {
+        let transition: ComponentTransition = animated ? .easeInOut(duration: 0.2) : .immediate
+        
         if self.contentNode !== contentNode {
             if let previous = self.contentNode {
                 if animated {
@@ -1021,22 +1028,31 @@ public final class NavigationBarImpl: ASDisplayNode, NavigationBar {
             self.contentNode?.requestContainerLayout = { [weak self] transition in
                 self?.requestContainerLayout(transition)
             }
-            if let contentNode = contentNode {
-                contentNode.clipsToBounds = true
+            if let contentNode {
                 contentNode.layer.removeAnimation(forKey: "opacity")
-                if self.stripeNode.supernode != nil {
-                    self.insertSubnode(contentNode, belowSubnode: self.stripeNode)
+                if case .glass = self.presentationData.theme.style {
+                    self.addSubnode(contentNode)
                 } else {
-                    self.insertSubnode(contentNode, at: 0)
+                    contentNode.clipsToBounds = true
+                    if self.stripeNode.supernode != nil {
+                        self.insertSubnode(contentNode, belowSubnode: self.stripeNode)
+                    } else {
+                        self.insertSubnode(contentNode, at: 0)
+                    }
                 }
                 if animated {
                     contentNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
                 }
                 
-                if case .replacement = contentNode.mode, !self.buttonsContainerNode.alpha.isZero {
-                    self.buttonsContainerNode.alpha = 0.0
-                    if animated {
-                        self.buttonsContainerNode.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2)
+                if case .replacement = contentNode.mode {
+                    if !self.buttonsContainerNode.alpha.isZero {
+                        self.buttonsContainerNode.alpha = 0.0
+                        if animated {
+                            self.buttonsContainerNode.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2)
+                        }
+                    }
+                    if let backgroundContainer = self.backgroundContainer, !backgroundContainer.alpha.isZero {
+                        transition.setAlpha(view: backgroundContainer, alpha: 0.0)
                     }
                 }
                 
@@ -1046,10 +1062,15 @@ public final class NavigationBarImpl: ASDisplayNode, NavigationBar {
                 } else {
                     self.requestLayout()
                 }
-            } else if self.buttonsContainerNode.alpha.isZero {
-                self.buttonsContainerNode.alpha = 1.0
-                if animated {
-                    self.buttonsContainerNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
+            } else {
+                if self.buttonsContainerNode.alpha.isZero {
+                    self.buttonsContainerNode.alpha = 1.0
+                    if animated {
+                        self.buttonsContainerNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
+                    }
+                }
+                if let backgroundContainer = self.backgroundContainer, backgroundContainer.alpha.isZero {
+                    transition.setAlpha(view: backgroundContainer, alpha: 1.0)
                 }
             }
         }

@@ -10,14 +10,11 @@ import TelegramUIPreferences
 import AccountContext
 import TelegramStringFormatting
 import TextFormat
-import ChatPresentationInterfaceState
 import TextNodeWithEntities
-import ChatControllerInteraction
 
 final class ChatFeePanelNode: ASDisplayNode {
     private let context: AccountContext
-    
-    var controllerInteraction: ChatControllerInteraction?
+    private let removeFee: () -> Void
     
     private let contextContainer: ContextControllerSourceNode
     private let clippingContainer: ASDisplayNode
@@ -28,16 +25,12 @@ final class ChatFeePanelNode: ASDisplayNode {
     
     private let removeButtonNode: HighlightTrackingButtonNode
     private let removeTextNode: ImmediateTextNode
-        
-    private let separatorNode: ASDisplayNode
 
     private var currentLayout: (CGFloat, CGFloat, CGFloat)?
     
-    init(context: AccountContext) {
+    init(context: AccountContext, removeFee: @escaping () -> Void) {
         self.context = context
-        
-        self.separatorNode = ASDisplayNode()
-        self.separatorNode.isLayerBacked = true
+        self.removeFee = removeFee
         
         self.contextContainer = ContextControllerSourceNode()
         
@@ -75,8 +68,6 @@ final class ChatFeePanelNode: ASDisplayNode {
         self.contextContainer.addSubnode(self.removeTextNode)
         self.contextContainer.addSubnode(self.removeButtonNode)
         
-        self.addSubnode(self.separatorNode)
-        
         self.removeButtonNode.addTarget(self, action: #selector(self.removePressed), forControlEvents: [.touchUpInside])
         self.removeButtonNode.highligthedChanged = { [weak self] highlighted in
             if let strongSelf = self {
@@ -93,52 +84,31 @@ final class ChatFeePanelNode: ASDisplayNode {
 
     private var theme: PresentationTheme?
     
-    func updateLayout(width: CGFloat, leftInset: CGFloat, rightInset: CGFloat, leftDisplayInset: CGFloat, transition: ContainedViewLayoutTransition, interfaceState: ChatPresentationInterfaceState) -> CGFloat {
-        if self.theme !== interfaceState.theme {
-            self.theme = interfaceState.theme
-            self.separatorNode.backgroundColor = interfaceState.theme.rootController.navigationBar.separatorColor
-            self.removeTextNode.attributedText = NSAttributedString(string: interfaceState.strings.Chat_PaidMessageFee_RemoveFee, font: Font.regular(17.0), textColor: interfaceState.theme.chat.inputPanel.panelControlAccentColor)
+    func updateLayout(width: CGFloat, theme: PresentationTheme, strings: PresentationStrings, info: MessageFeeHeaderPanelComponent.Info, transition: ContainedViewLayoutTransition) -> CGFloat {
+        let leftInset: CGFloat = 0.0
+        let rightInset: CGFloat = 0.0
+        
+        if self.theme !== theme {
+            self.theme = theme
+            self.removeTextNode.attributedText = NSAttributedString(string: strings.Chat_PaidMessageFee_RemoveFee, font: Font.regular(17.0), textColor: theme.chat.inputPanel.panelControlColor)
         }
         
-        if let removePaidMessageFeeData = interfaceState.removePaidMessageFeeData {
-            let paidMessageStars = removePaidMessageFeeData.amount.value
-            
-            let attributedText = NSMutableAttributedString(string: interfaceState.strings.Chat_PaidMessageFee_Text(removePaidMessageFeeData.peer.compactDisplayTitle, "⭐️\(paidMessageStars)").string, font: Font.regular(12.0), textColor: interfaceState.theme.rootController.navigationBar.secondaryTextColor)
-            let range = (attributedText.string as NSString).range(of: "⭐️")
-            if range.location != NSNotFound {
-                attributedText.addAttribute(ChatTextInputAttributes.customEmoji, value: ChatTextInputTextCustomEmojiAttribute(interactivelySelectedFromPackId: nil, fileId: 0, file: nil, custom: .stars(tinted: true)), range: range)
-                attributedText.addAttribute(.baselineOffset, value: 0.0, range: range)
-            }
-            self.textNode.attributedText = attributedText
-                        
-            self.textNode.visibility = true
-            self.textNode.arguments = TextNodeWithEntities.Arguments(
-                context: self.context,
-                cache: self.context.animationCache,
-                renderer: self.context.animationRenderer,
-                placeholderColor: UIColor(white: 1.0, alpha: 0.1),
-                attemptSynchronous: false
-            )
-        } else if let peer = interfaceState.renderedPeer?.peer.flatMap(EnginePeer.init) {
-            let paidMessageStars = interfaceState.contactStatus?.peerStatusSettings?.paidMessageStars?.value ?? 0
-            
-            let attributedText = NSMutableAttributedString(string: interfaceState.strings.Chat_PaidMessageFee_Text(peer.compactDisplayTitle, "⭐️\(paidMessageStars)").string, font: Font.regular(12.0), textColor: interfaceState.theme.rootController.navigationBar.secondaryTextColor)
-            let range = (attributedText.string as NSString).range(of: "⭐️")
-            if range.location != NSNotFound {
-                attributedText.addAttribute(ChatTextInputAttributes.customEmoji, value: ChatTextInputTextCustomEmojiAttribute(interactivelySelectedFromPackId: nil, fileId: 0, file: nil, custom: .stars(tinted: true)), range: range)
-                attributedText.addAttribute(.baselineOffset, value: 0.0, range: range)
-            }
-            self.textNode.attributedText = attributedText
-                        
-            self.textNode.visibility = true
-            self.textNode.arguments = TextNodeWithEntities.Arguments(
-                context: self.context,
-                cache: self.context.animationCache,
-                renderer: self.context.animationRenderer,
-                placeholderColor: UIColor(white: 1.0, alpha: 0.1),
-                attemptSynchronous: false
-            )
+        let attributedText = NSMutableAttributedString(string: strings.Chat_PaidMessageFee_Text(info.peer.compactDisplayTitle, "⭐️\(info.value)").string, font: Font.regular(12.0), textColor: theme.rootController.navigationBar.secondaryTextColor)
+        let range = (attributedText.string as NSString).range(of: "⭐️")
+        if range.location != NSNotFound {
+            attributedText.addAttribute(ChatTextInputAttributes.customEmoji, value: ChatTextInputTextCustomEmojiAttribute(interactivelySelectedFromPackId: nil, fileId: 0, file: nil, custom: .stars(tinted: true)), range: range)
+            attributedText.addAttribute(.baselineOffset, value: 0.0, range: range)
         }
+        self.textNode.attributedText = attributedText
+                    
+        self.textNode.visibility = true
+        self.textNode.arguments = TextNodeWithEntities.Arguments(
+            context: self.context,
+            cache: self.context.animationCache,
+            renderer: self.context.animationRenderer,
+            placeholderColor: UIColor(white: 1.0, alpha: 0.1),
+            attemptSynchronous: false
+        )
                 
         let sideInset = 12.0
         
@@ -170,7 +140,6 @@ final class ChatFeePanelNode: ASDisplayNode {
         transition.updateFrame(node: self.removeButtonNode, frame: removeFrame.insetBy(dx: -8.0, dy: -4.0))
         
         self.contextContainer.frame = CGRect(origin: CGPoint(), size: CGSize(width: width, height: panelHeight))
-        transition.updateFrame(node: self.separatorNode, frame: CGRect(origin: CGPoint(x: leftDisplayInset, y: 0.0), size: CGSize(width: width - leftDisplayInset, height: UIScreenPixel)))
                 
         self.clippingContainer.frame = CGRect(origin: CGPoint(), size: CGSize(width: width, height: panelHeight))
         self.contentContainer.frame = CGRect(origin: CGPoint(), size: CGSize(width: width, height: panelHeight))
@@ -181,6 +150,6 @@ final class ChatFeePanelNode: ASDisplayNode {
     }
     
     @objc func removePressed() {
-        self.controllerInteraction?.openMessageFeeException()
+        self.removeFee()
     }
 }

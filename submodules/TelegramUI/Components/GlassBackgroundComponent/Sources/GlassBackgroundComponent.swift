@@ -562,6 +562,10 @@ public class GlassBackgroundView: UIView {
         }
         transition.setFrame(view: self.contentContainer, frame: CGRect(origin: CGPoint(), size: size))
     }
+    
+    override public func willMove(toWindow newWindow: UIWindow?) {
+        super.willMove(toWindow: newWindow)
+    }
 }
 
 public final class GlassBackgroundContainerView: UIView {
@@ -642,6 +646,10 @@ public final class GlassBackgroundContainerView: UIView {
         } else if let legacyView = self.legacyView {
             transition.setFrame(view: legacyView, frame: CGRect(origin: CGPoint(), size: size))
         }
+    }
+    
+    override public func willMove(toWindow newWindow: UIWindow?) {
+        super.willMove(toWindow: newWindow)
     }
 }
 

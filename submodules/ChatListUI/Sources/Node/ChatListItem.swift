@@ -3858,6 +3858,9 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                         transition = .immediate
                     }
                     
+                    transition.updateAlpha(node: strongSelf, alpha: item.hiddenOffset ? 0.0 : 1.0)
+                    ComponentTransition(transition).setBlur(layer: strongSelf.layer, radius: item.hiddenOffset ? 8.0 : 0.0)
+                    
                     let contextContainerFrame = CGRect(origin: CGPoint(), size: CGSize(width: layout.contentSize.width, height: itemHeight))
 //                    strongSelf.contextContainer.position = contextContainerFrame.center
                     transition.updatePosition(node: strongSelf.contextContainer, position: contextContainerFrame.center)
@@ -5039,7 +5042,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                     if case let .groupReference(groupReferenceData) = item.content, groupReferenceData.hiddenByDefault {
                         separatorInset = 0.0
                     } else if (!nextIsPinned && isPinned) || last {
-                            separatorInset = 0.0
+                        separatorInset = 0.0
                     } else {
                         separatorInset = editingOffset + leftInset + rawContentRect.origin.x
                     }

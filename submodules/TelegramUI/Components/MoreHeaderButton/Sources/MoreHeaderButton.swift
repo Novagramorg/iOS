@@ -68,6 +68,15 @@ public final class MoreHeaderButton: HighlightableButtonNode {
     @objc private func pressed() {
         self.onPressed?()
     }
+    
+    public func updateColor(color: UIColor) {
+        if self.color != color {
+            self.color = color
+            if let content = self.content {
+                self.setContent(content, animated: false)
+            }
+        }
+    }
 
     private var content: Content?
     public func setContent(_ content: Content, animated: Bool = false) {

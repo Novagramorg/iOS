@@ -16,12 +16,8 @@ import AnimatedNavigationStripeNode
 import ContextUI
 import RadialStatusNode
 import TextFormat
-import ChatPresentationInterfaceState
 import TextNodeWithEntities
-import AnimationCache
-import MultiAnimationRenderer
 import TranslateUI
-import ChatControllerInteraction
 
 private enum PinnedMessageAnimation {
     case slideToTop
@@ -30,9 +26,11 @@ private enum PinnedMessageAnimation {
 
 final class ChatAdPanelNode: ASDisplayNode {
     private let context: AccountContext
-    private(set) var message: Message?
+    private let action: (EngineMessage) -> Void
+    private let contextAction: (EngineMessage, ASDisplayNode, ContextGesture?) -> Void
+    private let close: () -> Void
     
-    var controllerInteraction: ChatControllerInteraction?
+    private(set) var message: EngineMessage?
     
     private let tapButton: HighlightTrackingButtonNode
     
@@ -53,26 +51,23 @@ final class ChatAdPanelNode: ASDisplayNode {
     private let imageNode: TransformImageNode
     private let imageNodeContainer: ASDisplayNode
 
-    private let separatorNode: ASDisplayNode
-
     private var currentLayout: (CGFloat, CGFloat, CGFloat)?
-    private var currentMessage: Message?
     private var previousMediaReference: AnyMediaReference?
-        
+
     private let fetchDisposable = MetaDisposable()
-        
-    private let animationCache: AnimationCache?
-    private let animationRenderer: MultiAnimationRenderer?
             
-    init(context: AccountContext, animationCache: AnimationCache?, animationRenderer: MultiAnimationRenderer?) {
+    init(
+        context: AccountContext,
+        action: @escaping (EngineMessage) -> Void,
+        contextAction: @escaping (EngineMessage, ASDisplayNode, ContextGesture?) -> Void,
+        close: @escaping () -> Void
+    ) {
         self.context = context
-        self.animationCache = animationCache
-        self.animationRenderer = animationRenderer
+        self.action = action
+        self.contextAction = contextAction
+        self.close = close
         
         self.tapButton = HighlightTrackingButtonNode()
-        
-        self.separatorNode = ASDisplayNode()
-        self.separatorNode.isLayerBacked = true
         
         self.contextContainer = ContextControllerSourceNode()
         
@@ -164,8 +159,6 @@ final class ChatAdPanelNode: ASDisplayNode {
         self.contextContainer.addSubnode(self.removeTextNode)
         self.contextContainer.addSubnode(self.removeButtonNode)
         
-        self.addSubnode(self.separatorNode)
-        
         self.removeButtonNode.addTarget(self, action: #selector(self.removePressed), forControlEvents: [.touchUpInside])
         self.removeButtonNode.highligthedChanged = { [weak self] highlighted in
             if let strongSelf = self {
@@ -187,7 +180,7 @@ final class ChatAdPanelNode: ASDisplayNode {
             guard let self, let message = self.message else {
                 return
             }
-            self.controllerInteraction?.adContextAction(message, self.contextContainer, gesture)
+            self.contextAction(message, self.contextContainer, gesture)
         }
         
         self.closeButton.addTarget(self, action: #selector(self.closePressed), forControlEvents: [.touchUpInside])
@@ -201,38 +194,48 @@ final class ChatAdPanelNode: ASDisplayNode {
     private var theme: PresentationTheme?
     
     @objc private func closePressed() {
-        if self.context.isPremium, let adAttribute = self.message?.adAttribute {
+        /*if self.context.isPremium, let adAttribute = self.message?.adAttribute {
             self.controllerInteraction?.removeAd(adAttribute.opaqueId)
         } else {
             self.controllerInteraction?.openNoAdsDemo()
-        }
+        }*/
+        self.close()
     }
     
-    func updateLayout(width: CGFloat, leftInset: CGFloat, rightInset: CGFloat, transition: ContainedViewLayoutTransition, interfaceState: ChatPresentationInterfaceState) -> CGFloat {
-        self.message = interfaceState.adMessage
+    func updateLayout(width: CGFloat, theme: PresentationTheme, strings: PresentationStrings, info: AdPanelHeaderPanelComponent.Info, transition: ContainedViewLayoutTransition) -> CGFloat {
+        let leftInset: CGFloat = 0.0
+        let rightInset: CGFloat = 0.0
+        
+        self.message = info.message
                 
-        if self.theme !== interfaceState.theme {
-            self.theme = interfaceState.theme
-            self.separatorNode.backgroundColor = interfaceState.theme.rootController.navigationBar.separatorColor
-            self.removeBackgroundNode.image = generateStretchableFilledCircleImage(diameter: 15.0, color: interfaceState.theme.chat.inputPanel.panelControlAccentColor.withMultipliedAlpha(0.1))
-            self.removeTextNode.attributedText = NSAttributedString(string: interfaceState.strings.Chat_BotAd_WhatIsThis, font: Font.regular(11.0), textColor: interfaceState.theme.chat.inputPanel.panelControlAccentColor)
-            self.closeButton.setImage(PresentationResourcesChat.chatInputPanelCloseIconImage(interfaceState.theme), for: [])
+        if self.theme !== theme {
+            self.theme = theme
+            self.removeBackgroundNode.image = generateStretchableFilledCircleImage(diameter: 15.0, color: theme.chat.inputPanel.panelControlColor.withMultipliedAlpha(0.1))
+            self.removeTextNode.attributedText = NSAttributedString(string: strings.Chat_BotAd_WhatIsThis, font: Font.regular(11.0), textColor: theme.chat.inputPanel.panelControlColor)
+            self.closeButton.setImage(generateImage(CGSize(width: 12.0, height: 12.0), contextGenerator: { size, context in
+                context.clear(CGRect(origin: CGPoint(), size: size))
+                context.setStrokeColor(theme.chat.inputPanel.panelControlColor.cgColor)
+                context.setLineWidth(1.33)
+                context.setLineCap(.round)
+                context.move(to: CGPoint(x: 1.0, y: 1.0))
+                context.addLine(to: CGPoint(x: size.width - 1.0, y: size.height - 1.0))
+                context.strokePath()
+                context.move(to: CGPoint(x: size.width - 1.0, y: 1.0))
+                context.addLine(to: CGPoint(x: 1.0, y: size.height - 1.0))
+                context.strokePath()
+            }), for: [])
         }
                 
         self.contextContainer.isGestureEnabled = false
         
         let panelHeight: CGFloat
         var hasCloseButton = true
-        if let message = interfaceState.adMessage {
-            panelHeight = self.enqueueTransition(width: width, leftInset: leftInset, rightInset: rightInset, transition: .immediate, animation: nil, message: message, theme: interfaceState.theme, strings: interfaceState.strings, nameDisplayOrder: interfaceState.nameDisplayOrder, dateTimeFormat: interfaceState.dateTimeFormat, accountPeerId: self.context.account.peerId, firstTime: false, isReplyThread: false, translateToLanguage: nil)
-            hasCloseButton = message.media.isEmpty
-        } else {
-            panelHeight = 50.0
-        }
+        let presentationData = self.context.sharedContext.currentPresentationData.with({ $0 })
+        panelHeight = self.enqueueTransition(width: width, leftInset: leftInset, rightInset: rightInset, transition: .immediate, animation: nil, message: info.message, theme: theme, strings: strings, nameDisplayOrder: presentationData.nameDisplayOrder, dateTimeFormat: presentationData.dateTimeFormat, accountPeerId: self.context.account.peerId, firstTime: false, isReplyThread: false, translateToLanguage: nil)
+        hasCloseButton = info.message.media.isEmpty
         
         self.contextContainer.frame = CGRect(origin: CGPoint(), size: CGSize(width: width, height: panelHeight))
         
-        transition.updateFrame(node: self.separatorNode, frame: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: width, height: UIScreenPixel)))
         self.tapButton.frame = CGRect(origin: CGPoint(), size: CGSize(width: width, height: panelHeight))
                 
         self.clippingContainer.frame = CGRect(origin: CGPoint(), size: CGSize(width: width, height: panelHeight))
@@ -249,7 +252,7 @@ final class ChatAdPanelNode: ASDisplayNode {
         return panelHeight
     }
     
-    private func enqueueTransition(width: CGFloat, leftInset: CGFloat, rightInset: CGFloat, transition: ContainedViewLayoutTransition, animation: PinnedMessageAnimation?, message: Message, theme: PresentationTheme, strings: PresentationStrings, nameDisplayOrder: PresentationPersonNameOrder, dateTimeFormat: PresentationDateTimeFormat, accountPeerId: PeerId, firstTime: Bool, isReplyThread: Bool, translateToLanguage: String?) -> CGFloat {
+    private func enqueueTransition(width: CGFloat, leftInset: CGFloat, rightInset: CGFloat, transition: ContainedViewLayoutTransition, animation: PinnedMessageAnimation?, message: EngineMessage, theme: PresentationTheme, strings: PresentationStrings, nameDisplayOrder: PresentationPersonNameOrder, dateTimeFormat: PresentationDateTimeFormat, accountPeerId: PeerId, firstTime: Bool, isReplyThread: Bool, translateToLanguage: String?) -> CGFloat {
         var animationTransition: ContainedViewLayoutTransition = .immediate
         
         if let animation = animation {
@@ -291,16 +294,16 @@ final class ChatAdPanelNode: ASDisplayNode {
         var updatedMediaReference: AnyMediaReference?
         var imageDimensions: CGSize?
                     
-        if !message.containsSecretMedia {
+        if !message._asMessage().containsSecretMedia {
             for media in message.media {
                 if let image = media as? TelegramMediaImage {
-                    updatedMediaReference = .message(message: MessageReference(message), media: image)
+                    updatedMediaReference = .message(message: MessageReference(message._asMessage()), media: image)
                     if let representation = largestRepresentationForPhoto(image) {
                         imageDimensions = representation.dimensions.cgSize
                     }
                     break
                 } else if let file = media as? TelegramMediaFile {
-                    updatedMediaReference = .message(message: MessageReference(message), media: file)
+                    updatedMediaReference = .message(message: MessageReference(message._asMessage()), media: file)
                     if !file.isInstantVideo && !file.isSticker, let representation = largestImageRepresentation(file.previewRepresentations) {
                         imageDimensions = representation.dimensions.cgSize
                     } else if file.isAnimated, let dimensions = file.dimensions {
@@ -316,7 +319,7 @@ final class ChatAdPanelNode: ASDisplayNode {
                         }
                         updatedMediaReference = .standalone(media: thumbnailMedia)
                     case let .full(fullMedia):
-                        updatedMediaReference = .message(message: MessageReference(message), media: fullMedia)
+                        updatedMediaReference = .message(message: MessageReference(message._asMessage()), media: fullMedia)
                         if let image = fullMedia as? TelegramMediaImage {
                             if let representation = largestRepresentationForPhoto(image) {
                                 imageDimensions = representation.dimensions.cgSize
@@ -336,7 +339,7 @@ final class ChatAdPanelNode: ASDisplayNode {
         let imageBoundingSize = CGSize(width: 48.0, height: 48.0)
         var applyImage: (() -> Void)?
         if let imageDimensions {
-            applyImage = imageNodeLayout(TransformImageArguments(corners: ImageCorners(radius: 3.0), imageSize: imageDimensions.aspectFilled(imageBoundingSize), boundingSize: imageBoundingSize, intrinsicInsets: UIEdgeInsets()))
+            applyImage = imageNodeLayout(TransformImageArguments(corners: ImageCorners(radius: 10.0), imageSize: imageDimensions.aspectFilled(imageBoundingSize), boundingSize: imageBoundingSize, intrinsicInsets: UIEdgeInsets()))
             textRightInset += imageBoundingSize.width + 18.0
         } else {
             textRightInset = 27.0
@@ -375,24 +378,24 @@ final class ChatAdPanelNode: ASDisplayNode {
             }
         }
         
-        let (adLayout, adApply) = makeAdLayout(TextNodeLayoutArguments(attributedString: NSAttributedString(string: strings.Chat_BotAd_Title, font: Font.semibold(14.0), textColor: theme.chat.inputPanel.panelControlAccentColor), backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .end, constrainedSize: CGSize(width: width, height: .greatestFiniteMagnitude), alignment: .natural, cutout: nil, insets: .zero))
+        let (adLayout, adApply) = makeAdLayout(TextNodeLayoutArguments(attributedString: NSAttributedString(string: strings.Chat_BotAd_Title, font: Font.semibold(14.0), textColor: theme.chat.inputPanel.panelControlColor), backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .end, constrainedSize: CGSize(width: width, height: .greatestFiniteMagnitude), alignment: .natural, cutout: nil, insets: .zero))
         
         let titleConstrainedSize = CGSize(width: width - contentLeftInset - contentRightInset - textRightInset - adLayout.size.width - 90.0, height: CGFloat.greatestFiniteMagnitude)
         let textConstrainedSize = CGSize(width: width - contentLeftInset - contentRightInset - textRightInset, height: CGFloat.greatestFiniteMagnitude)
                 
         var titleText: String = ""
         if let author = message.author {
-            titleText = EnginePeer(author).compactDisplayTitle
+            titleText = author.compactDisplayTitle
         }
         let (titleLayout, titleApply) = makeTitleLayout(TextNodeLayoutArguments(attributedString: NSAttributedString(string: titleText, font: Font.semibold(14.0), textColor: theme.chat.inputPanel.primaryTextColor), backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .end, constrainedSize: titleConstrainedSize, alignment: .natural, cutout: nil, insets: .zero))
         
-        let (textString, _, isText) = descriptionStringForMessage(contentSettings: context.currentContentSettings.with { $0 }, message: EngineMessage(message), strings: strings, nameDisplayOrder: nameDisplayOrder, dateTimeFormat: dateTimeFormat, accountPeerId: accountPeerId)
+        let (textString, _, isText) = descriptionStringForMessage(contentSettings: context.currentContentSettings.with { $0 }, message: message, strings: strings, nameDisplayOrder: nameDisplayOrder, dateTimeFormat: dateTimeFormat, accountPeerId: accountPeerId)
         
         let messageText: NSAttributedString
         let textFont = Font.regular(14.0)
         if isText {
             var text = message.text
-            var messageEntities = message.textEntitiesAttribute?.entities ?? []
+            var messageEntities = message._asMessage().textEntitiesAttribute?.entities ?? []
             
             if let translateToLanguage = translateToLanguage, !text.isEmpty {
                 for attribute in message.attributes {
@@ -414,7 +417,7 @@ final class ChatAdPanelNode: ASDisplayNode {
             }
             let textColor = theme.chat.inputPanel.primaryTextColor
             if entities.count > 0 {
-                messageText = stringWithAppliedEntities(trimToLineCount(text, lineCount: 1), entities: entities, baseColor: textColor, linkColor: textColor, baseFont: textFont, linkFont: textFont, boldFont: textFont, italicFont: textFont, boldItalicFont: textFont, fixedFont: textFont, blockQuoteFont: textFont, underlineLinks: false, message: message)
+                messageText = stringWithAppliedEntities(trimToLineCount(text, lineCount: 1), entities: entities, baseColor: textColor, linkColor: textColor, baseFont: textFont, linkFont: textFont, boldFont: textFont, italicFont: textFont, boldItalicFont: textFont, fixedFont: textFont, blockQuoteFont: textFont, underlineLinks: false, message: message._asMessage())
             } else {
                 messageText = NSAttributedString(string: foldLineBreaks(text), font: textFont, textColor: textColor)
             }
@@ -444,16 +447,13 @@ final class ChatAdPanelNode: ASDisplayNode {
             let _ = adApply()
             let _ = titleApply()
             
-            var textArguments: TextNodeWithEntities.Arguments?
-            if let cache = self.animationCache, let renderer = self.animationRenderer {
-                textArguments = TextNodeWithEntities.Arguments(
-                    context: self.context,
-                    cache: cache,
-                    renderer: renderer,
-                    placeholderColor: theme.list.mediaPlaceholderColor,
-                    attemptSynchronous: false
-                )
-            }
+            let textArguments = TextNodeWithEntities.Arguments(
+                context: self.context,
+                cache: self.context.animationCache,
+                renderer: self.context.animationRenderer,
+                placeholderColor: theme.list.mediaPlaceholderColor,
+                attemptSynchronous: false
+            )
             let _ = textApply(textArguments)
             
             self.previousMediaReference = updatedMediaReference
@@ -511,13 +511,13 @@ final class ChatAdPanelNode: ASDisplayNode {
         guard let message = self.message else {
             return
         }
-        self.controllerInteraction?.activateAdAction(message.id, nil, false, false)
+        self.action(message)
     }
     
     @objc func removePressed() {
         guard let message = self.message else {
             return
         }
-        self.controllerInteraction?.adContextAction(message, self.contextContainer, nil)
+        self.contextAction(message, self.contextContainer, nil)
     }
 }

@@ -43,6 +43,7 @@ public final class ChatListNavigationBar: Component {
     public let storySubscriptions: EngineStorySubscriptions?
     public let storiesIncludeHidden: Bool
     public let uploadProgress: [EnginePeer.Id: Float]
+    public let headerPanels: AnyComponent<Empty>?
     public let tabsNode: ASDisplayNode?
     public let tabsNodeIsSearch: Bool
     public let accessoryPanelContainer: ASDisplayNode?
@@ -65,6 +66,7 @@ public final class ChatListNavigationBar: Component {
         storySubscriptions: EngineStorySubscriptions?,
         storiesIncludeHidden: Bool,
         uploadProgress: [EnginePeer.Id: Float],
+        headerPanels: AnyComponent<Empty>?,
         tabsNode: ASDisplayNode?,
         tabsNodeIsSearch: Bool,
         accessoryPanelContainer: ASDisplayNode?,
@@ -86,6 +88,7 @@ public final class ChatListNavigationBar: Component {
         self.storySubscriptions = storySubscriptions
         self.storiesIncludeHidden = storiesIncludeHidden
         self.uploadProgress = uploadProgress
+        self.headerPanels = headerPanels
         self.tabsNode = tabsNode
         self.tabsNodeIsSearch = tabsNodeIsSearch
         self.accessoryPanelContainer = accessoryPanelContainer
@@ -133,6 +136,9 @@ public final class ChatListNavigationBar: Component {
             return false
         }
         if lhs.uploadProgress != rhs.uploadProgress {
+            return false
+        }
+        if lhs.headerPanels != rhs.headerPanels {
             return false
         }
         if lhs.tabsNode !== rhs.tabsNode {
@@ -186,10 +192,18 @@ public final class ChatListNavigationBar: Component {
         
         public private(set) var storiesUnlocked: Bool = false
         
+        private let bottomContentsContainer: UIView
+        
         private var tabsNode: ASDisplayNode?
         private var tabsNodeIsSearch: Bool = false
         private weak var disappearingTabsView: UIView?
         private var disappearingTabsViewSearch: Bool = false
+        
+        private var headerPanelsView: ComponentView<Empty>?
+        private var disappearingHeaderPanels: ComponentView<Empty>?
+        public var headerPanels: UIView? {
+            return self.headerPanelsView?.view
+        }
         
         private var currentHeaderComponent: ChatListHeaderComponent?
 
@@ -198,9 +212,13 @@ public final class ChatListNavigationBar: Component {
         override public init(frame: CGRect) {
             self.edgeEffectView = EdgeEffectView()
             
+            self.bottomContentsContainer = UIView()
+            self.bottomContentsContainer.layer.anchorPoint = CGPoint()
+            
             super.init(frame: frame)
             
             self.addSubview(self.edgeEffectView)
+            self.addSubview(self.bottomContentsContainer)
         }
         
         required init?(coder: NSCoder) {
@@ -271,20 +289,14 @@ public final class ChatListNavigationBar: Component {
             let visibleSize = CGSize(width: currentLayout.size.width, height: max(0.0, currentLayout.size.height - clippedScrollOffset))
             
             let previousHeight = self.currentHeight
-            
-            /*self.backgroundView.update(size: CGSize(width: visibleSize.width, height: 1000.0), transition: transition.containedViewLayoutTransition)
-            
-            transition.setBounds(view: self.backgroundView, bounds: CGRect(origin: CGPoint(), size: CGSize(width: visibleSize.width, height: 1000.0)))
-            transition.animatePosition(view: self.backgroundView, from: CGPoint(x: 0.0, y: -visibleSize.height + self.backgroundView.layer.position.y), to: CGPoint(), additive: true)
-            self.backgroundView.layer.position = CGPoint(x: 0.0, y: visibleSize.height)*/
 
             let edgeEffectHeight: CGFloat = currentLayout.size.height + 20.0
             var edgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: currentLayout.size.width, height: edgeEffectHeight))
             if component.isSearchActive {
-                edgeEffectFrame.origin.y -= 46.0
+                edgeEffectFrame.origin.y -= 20.0
             }
             transition.setFrame(view: self.edgeEffectView, frame: edgeEffectFrame)
-            self.edgeEffectView.update(content: component.theme.list.plainBackgroundColor, blur: true, alpha: 0.75, rect: edgeEffectFrame, edge: .top, edgeSize: 40.0, transition: transition)
+            self.edgeEffectView.update(content: component.theme.list.plainBackgroundColor, blur: true, alpha: 0.55, rect: edgeEffectFrame, edge: .top, edgeSize: 40.0, transition: transition)
             
             self.currentHeight = visibleSize.height
             
@@ -461,6 +473,8 @@ public final class ChatListNavigationBar: Component {
                 }
             }
             
+            transition.setPosition(view: self.bottomContentsContainer, position: CGPoint(x: 0.0, y: component.isSearchActive ? -self.bottomContentsContainer.bounds.height : visibleSize.height - self.bottomContentsContainer.bounds.height))
+            
             if component.tabsNode !== self.tabsNode {
                 if let tabsNode = self.tabsNode {
                     tabsNode.layer.anchorPoint = CGPoint()
@@ -564,6 +578,7 @@ public final class ChatListNavigationBar: Component {
                     storySubscriptions: component.storySubscriptions,
                     storiesIncludeHidden: component.storiesIncludeHidden,
                     uploadProgress: storyUploadProgress,
+                    headerPanels: component.headerPanels,
                     tabsNode: component.tabsNode,
                     tabsNodeIsSearch: component.tabsNodeIsSearch,
                     accessoryPanelContainer: component.accessoryPanelContainer,
@@ -622,26 +637,71 @@ public final class ChatListNavigationBar: Component {
             if component.statusBarHeight >= 1.0 {
                 contentHeight += 3.0
             }
-            contentHeight += 44.0
-            contentHeight += 8.0
-            
-            if component.isSearchActive {
-                if component.statusBarHeight < 1.0 {
-                    contentHeight += 8.0
+            if !component.isSearchActive {
+                contentHeight += 44.0
+                contentHeight += 8.0
+                
+                if component.search != nil {
+                    contentHeight += navigationBarSearchContentHeight
                 }
             }
-            if component.search != nil {
-                contentHeight += navigationBarSearchContentHeight
-            }
             
-            if component.tabsNode != nil {
-                contentHeight += 40.0
+            var headersContentHeight: CGFloat = 0.0
+            if let disappearingHeaderPanelsView = self.disappearingHeaderPanels?.view {
+                let headerPanelsFrame = CGRect(origin: CGPoint(x: 0.0, y: headersContentHeight), size: disappearingHeaderPanelsView.bounds.size)
+                transition.setFrame(view: disappearingHeaderPanelsView, frame: headerPanelsFrame)
             }
+            if let headerPanels = component.headerPanels {
+                headersContentHeight += 4.0
+                
+                let headerPanelsView: ComponentView<Empty>
+                var headerPanelsTransition = transition
+                if let current = self.headerPanelsView {
+                    headerPanelsView = current
+                } else {
+                    headerPanelsTransition = headerPanelsTransition.withAnimation(.none)
+                    headerPanelsView = ComponentView()
+                    self.headerPanelsView = headerPanelsView
+                }
+                let headerPanelsSize = headerPanelsView.update(
+                    transition: headerPanelsTransition,
+                    component: headerPanels,
+                    environment: {},
+                    containerSize: CGSize(width: availableSize.width, height: 10000.0)
+                )
+                let headerPanelsFrame = CGRect(origin: CGPoint(x: 0.0, y: headersContentHeight), size: headerPanelsSize)
+                if let headerPanelsComponentView = headerPanelsView.view {
+                    if headerPanelsComponentView.superview == nil {
+                        self.bottomContentsContainer.addSubview(headerPanelsComponentView)
+                        transition.animateAlpha(view: headerPanelsComponentView, from: 0.0, to: 1.0)
+                    }
+                    headerPanelsTransition.setFrame(view: headerPanelsComponentView, frame: headerPanelsFrame)
+                }
+                headersContentHeight += headerPanelsSize.height
+            } else if let headerPanelsView = self.headerPanelsView {
+                self.headerPanelsView = nil
+                self.disappearingHeaderPanels = headerPanelsView
+                
+                if let headerPanelsComponentView = headerPanelsView.view {
+                    transition.setAlpha(view: headerPanelsComponentView, alpha: 0.0, completion: { [weak self, weak headerPanelsComponentView] _ in
+                        guard let self, let headerPanelsComponentView else {
+                            return
+                        }
+                        headerPanelsComponentView.removeFromSuperview()
+                        if self.disappearingHeaderPanels?.view === headerPanelsComponentView {
+                            self.disappearingHeaderPanels = nil
+                        }
+                    })
+                }
+            }
+            headersContentHeight += 3.0
+            transition.setBounds(view: self.bottomContentsContainer, bounds: CGRect(origin: CGPoint(), size: CGSize(width: availableSize.width, height: headersContentHeight)))
             
-            if component.isSearchActive {
-            } else {
-                if component.accessoryPanelContainer != nil {
-                    contentHeight += component.accessoryPanelContainerHeight
+            if !component.isSearchActive {
+                contentHeight += headersContentHeight
+                
+                if component.tabsNode != nil {
+                    contentHeight += 40.0
                 }
             }
             
