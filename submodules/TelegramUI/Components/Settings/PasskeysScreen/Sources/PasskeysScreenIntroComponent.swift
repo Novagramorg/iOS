@@ -182,17 +182,17 @@ final class PasskeysScreenIntroComponent: Component {
             }
             let itemDescs: [ItemDesc] = [
                 ItemDesc(
-                    icon: "Chat List/Archive/IconArchived",
+                    icon: "Settings/Passkeys/Intro1",
                     title: "Create a Passkey",
                     text: "Make a passkey to sign in easily and safely."
                 ),
                 ItemDesc(
-                    icon: "Chat List/Archive/IconHide",
+                    icon: "Settings/Passkeys/Intro2",
                     title: "Log in with Face ID",
                     text: "Use Face ID, Touch ID, or your passcode to sign in."
                 ),
                 ItemDesc(
-                    icon: "Chat List/Archive/IconStories",
+                    icon: "Settings/Passkeys/Intro3",
                     title: "Store Passkey Securely",
                     text: "Your passkey is safely kept in your iCloud Keychain."
                 )

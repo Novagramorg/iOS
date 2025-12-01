@@ -204,7 +204,7 @@ final class PasskeysScreenComponent: Component {
                     }
                     if let credentialId = decodeBase64(passkey.id) {
                         do {
-                            try await updater.reportUnknownPublicKeyCredential(relyingPartyIdentifier: "t.me", credentialID: credentialId)
+                            try await updater.reportUnknownPublicKeyCredential(relyingPartyIdentifier: "telegram.org", credentialID: credentialId)
                         } catch let e {
                             Logger.shared.log("Passkeys", "reportUnknownPublicKeyCredential error: \(e)")
                         }
