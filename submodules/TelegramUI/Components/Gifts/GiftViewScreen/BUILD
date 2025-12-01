@@ -61,6 +61,7 @@ swift_library(
         "//submodules/TelegramUI/Components/Stories/LiveChat/StoryLiveChatMessageComponent",
         "//submodules/TelegramUI/Components/AnimatedTextComponent",
         "//submodules/BotPaymentsUI",
+        "//submodules/TelegramUI/Components/SegmentControlComponent",
     ],
     visibility = [
         "//visibility:public",

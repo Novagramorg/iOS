@@ -71,7 +71,10 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
         fileprivate var giftAuctionAcquiredGifts: [GiftAuctionAcquiredGift] = []
         private var giftAuctionAcquiredGiftsPromise = ValuePromise<[GiftAuctionAcquiredGift]>()
         private var giftAuctionAcquiredGiftsDisposable = MetaDisposable()
-                
+        
+        private(set) var giftValueInfo: StarGift.UniqueGift.ValueInfo?
+        private var giftValueInfoDisposable: Disposable?
+        
         var cachedStarImage: (UIImage, PresentationTheme)?
         
         var cachedChevronImage: (UIImage, PresentationTheme)?
@@ -102,6 +105,17 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
                 if let acquiredCount = auctionState?.myState.acquiredCount, acquiredCount > (previousState?.myState.acquiredCount ?? 0) {
                     self.loadAcquiredGifts()
                 }
+                
+                if !"".isEmpty, self.giftValueInfoDisposable == nil, let auctionState, case let .generic(gift) = auctionState.gift, case .finished = auctionState.auctionState, let slug = gift.auctionSlug {
+                    self.giftValueInfoDisposable = (self.context.engine.payments.getUniqueStarGiftValueInfo(slug: "\(slug)-1")
+                    |> deliverOnMainQueue).start(next: { [weak self] valueInfo in
+                        guard let self else {
+                            return
+                        }
+                        self.giftValueInfo = valueInfo
+                        self.updated(transition: .easeInOut(duration: 0.25))
+                    })
+                }
             })
                         
             self.giftAuctionTimer = SwiftSignalKit.Timer(timeout: 0.5, repeat: true, completion: { [weak self] in
@@ -114,6 +128,7 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
             self.disposable?.dispose()
             self.giftAuctionAcquiredGiftsDisposable.dispose()
             self.giftAuctionTimer?.invalidate()
+            self.giftValueInfoDisposable?.dispose()
         }
         
         func loadAcquiredGifts() {
@@ -291,6 +306,26 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
             controller.present(shareController, in: .window(.root))
         }
         
+        func openGiftResale() {
+            guard let controller = self.getController() as? GiftAuctionViewScreen, let gift = self.giftAuctionState?.gift, case let .generic(gift) = gift else {
+                return
+            }
+            let storeController = self.context.sharedContext.makeGiftStoreController(
+                context: self.context,
+                peerId: self.context.account.peerId,
+                gift: gift
+            )
+            controller.push(storeController)
+        }
+        
+        func openGiftFragmentResale() {
+            guard let controller = self.getController() as? GiftAuctionViewScreen, let navigationController = controller.navigationController as? NavigationController, let url = self.giftValueInfo?.fragmentListedUrl else {
+                return
+            }
+            let presentationData = self.context.sharedContext.currentPresentationData.with { $0 }
+            self.context.sharedContext.openExternalUrl(context: self.context, urlContext: .generic, url: url, forceExternal: true, presentationData: presentationData, navigationController: navigationController, dismissInput: {})
+        }
+        
         func morePressed(view: UIView, gesture: ContextGesture?) {
             guard let controller = self.getController() as? GiftAuctionViewScreen else {
                 return
@@ -367,8 +402,8 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
         let button = Child(ButtonComponent.self)
         
         let acquiredButton = Child(PlainButtonComponent.self)
-//        let telegramSaleButton = Child(PlainButtonComponent.self)
-//        let fragmentSaleButton = Child(PlainButtonComponent.self)
+        let telegramSaleButton = Child(PlainButtonComponent.self)
+        let fragmentSaleButton = Child(PlainButtonComponent.self)
         
         let moreButtonPlayOnce = ActionSlot<Void>()
         
@@ -678,8 +713,13 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
                         guard let state else {
                             return
                         }
+                        #if DEBUG
+                        let giftController = GiftUpgradePreviewScreen(context: component.context)
+                        environment.controller()?.push(giftController)
+                        #else
                         let giftController = GiftAuctionAcquiredScreen(context: component.context, gift: component.auctionContext.gift, acquiredGifts: state.giftAuctionAcquiredGifts)
                         environment.controller()?.push(giftController)
+                        #endif
                     }, animateScale: false),
                     availableSize: CGSize(width: context.availableSize.width - 64.0, height: context.availableSize.height),
                     transition: context.transition
@@ -690,6 +730,98 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
                 originY += 12.0
                 
                 hasAdditionalButtons = true
+            }
+            
+            if let giftValueInfo = state.giftValueInfo, case let .generic(gift) = component.auctionContext.gift {
+                if let listedCount = giftValueInfo.listedCount, listedCount > 0  {
+                    originY += 5.0
+                    
+                    let telegramSaleButton = telegramSaleButton.update(
+                        component: PlainButtonComponent(content: AnyComponent(
+                            HStack([
+                                AnyComponentWithIdentity(id: "count", component: AnyComponent(
+                                    MultilineTextComponent(text: .plain(NSAttributedString(string: presentationStringsFormattedNumber(listedCount, dateTimeFormat.groupingSeparator), font: Font.regular(17.0), textColor: theme.actionSheet.controlAccentColor)))
+                                )),
+                                AnyComponentWithIdentity(id: "spacing", component: AnyComponent(
+                                    Rectangle(color: .clear, width: 8.0, height: 1.0)
+                                )),
+                                AnyComponentWithIdentity(id: "icon", component: AnyComponent(
+                                    GiftItemComponent(
+                                        context: component.context,
+                                        theme: theme,
+                                        strings: strings,
+                                        peer: nil,
+                                        subject: .starGift(gift: gift, price: ""),
+                                        mode: .buttonIcon
+                                    )
+                                )),
+                                AnyComponentWithIdentity(id: "text", component: AnyComponent(
+                                    MultilineTextComponent(text: .plain(NSAttributedString(string: "  \(strings.Gift_Value_ForSaleOnTelegram)", font: Font.regular(17.0), textColor: theme.actionSheet.controlAccentColor)))
+                                )),
+                                AnyComponentWithIdentity(id: "arrow", component: AnyComponent(
+                                    BundleIconComponent(name: "Chat/Context Menu/Arrow", tintColor: theme.actionSheet.controlAccentColor)
+                                ))
+                            ], spacing: 0.0)
+                        ), action: { [weak state] in
+                            guard let state else {
+                                return
+                            }
+                            state.openGiftResale()
+                        }, animateScale: false),
+                        availableSize: CGSize(width: context.availableSize.width - 64.0, height: context.availableSize.height),
+                        transition: context.transition
+                    )
+                    context.add(telegramSaleButton
+                        .position(CGPoint(x: context.availableSize.width / 2.0, y: originY + telegramSaleButton.size.height / 2.0)))
+                    originY += telegramSaleButton.size.height
+                    originY += 12.0
+                    
+                    hasAdditionalButtons = true
+                }
+                
+                if let listedCount = giftValueInfo.fragmentListedCount, listedCount > 0 {
+                    let fragmentSaleButton = fragmentSaleButton.update(
+                        component: PlainButtonComponent(content: AnyComponent(
+                            HStack([
+                                AnyComponentWithIdentity(id: "count", component: AnyComponent(
+                                    MultilineTextComponent(text: .plain(NSAttributedString(string: presentationStringsFormattedNumber(listedCount, dateTimeFormat.groupingSeparator), font: Font.regular(17.0), textColor: theme.actionSheet.controlAccentColor)))
+                                )),
+                                AnyComponentWithIdentity(id: "spacing", component: AnyComponent(
+                                    Rectangle(color: .clear, width: 8.0, height: 1.0)
+                                )),
+                                AnyComponentWithIdentity(id: "icon", component: AnyComponent(
+                                    GiftItemComponent(
+                                        context: component.context,
+                                        theme: theme,
+                                        strings: strings,
+                                        peer: nil,
+                                        subject: .starGift(gift: gift, price: ""),
+                                        mode: .buttonIcon
+                                    )
+                                )),
+                                AnyComponentWithIdentity(id: "text", component: AnyComponent(
+                                    MultilineTextComponent(text: .plain(NSAttributedString(string: "  \(strings.Gift_Value_ForSaleOnFragment)", font: Font.regular(17.0), textColor: theme.actionSheet.controlAccentColor)))
+                                )),
+                                AnyComponentWithIdentity(id: "arrow", component: AnyComponent(
+                                    BundleIconComponent(name: "Chat/Context Menu/Arrow", tintColor: theme.actionSheet.controlAccentColor)
+                                ))
+                            ], spacing: 0.0)
+                        ), action: { [weak state] in
+                            guard let state else {
+                                return
+                            }
+                            state.openGiftFragmentResale()
+                        }, animateScale: false),
+                        availableSize: CGSize(width: context.availableSize.width - 64.0, height: context.availableSize.height),
+                        transition: context.transition
+                    )
+                    context.add(fragmentSaleButton
+                        .position(CGPoint(x: context.availableSize.width / 2.0, y: originY + fragmentSaleButton.size.height / 2.0)))
+                    originY += fragmentSaleButton.size.height
+                    originY += 12.0
+                    
+                    hasAdditionalButtons = true
+                }
             }
             
             if hasAdditionalButtons {

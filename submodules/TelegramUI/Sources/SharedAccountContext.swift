@@ -3860,6 +3860,10 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         return GiftAuctionActiveBidsScreen(context: context)
     }
     
+    public func makeGiftOfferScreen(context: AccountContext, gift: StarGift.UniqueGift, peer: EnginePeer, amount: CurrencyAmount, commit: @escaping () -> Void) -> ViewController {
+        return giftOfferAlertController(context: context, gift: gift, peer: peer, amount: amount, commit: commit)
+    }
+    
     public func makeStorySharingScreen(context: AccountContext, subject: StorySharingSubject, parentController: ViewController) -> ViewController {
         let editorSubject: Signal<MediaEditorScreenImpl.Subject?, NoError>
         switch subject {

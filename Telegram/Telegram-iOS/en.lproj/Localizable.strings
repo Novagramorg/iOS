@@ -15434,3 +15434,35 @@ Error: %8$@";
 "LiveStream.ErrorMaxAllowedEmoji.Text_any" = "You can send up to %d emoji.";
 
 "Stars.Purchase.StarGiftOfferInfo" = "Buy Stars to make a gift buy offer.";
+
+"Notification.StarsGiftOffer.Offer" = "%1$@ offered you %2$@ for your gift %3$@";
+"Notification.StarsGiftOffer.Offer.Stars_1" = "%@ Star";
+"Notification.StarsGiftOffer.Offer.Stars_any" = "%@ Stars";
+"Notification.StarsGiftOffer.OfferYou" = "You offered %1$@ %2$@ for their gift %3$@";
+"Notification.StarsGiftOffer.OfferYou.Stars_1" = "%@ Star";
+"Notification.StarsGiftOffer.OfferYou.Stars_any" = "%@ Stars";
+
+"Notification.StarsGiftOffer.Accepted" = "%1$@ accepted your offer and sold you %2$@ for %3$@";
+"Notification.StarsGiftOffer.Accepted.Stars_1" = "%@ Star";
+"Notification.StarsGiftOffer.Accepted.Stars_any" = "%@ Stars";
+"Notification.StarsGiftOffer.AcceptedYou" = "You sold %1$@ to %2$@ for %3$@";
+"Notification.StarsGiftOffer.AcceptedYou.Stars_1" = "%@ Star";
+"Notification.StarsGiftOffer.AcceptedYou.Stars_any" = "%@ Stars";
+
+"Notification.StarsGiftOffer.Rejected" = "%1$@ rejected your offer for %2$@ – your %3$@ have been refunded";
+"Notification.StarsGiftOffer.Rejected.Stars_1" = "%@ Star";
+"Notification.StarsGiftOffer.Rejected.Stars_any" = "%@ Stars";
+"Notification.StarsGiftOffer.RejectedYou" = "You rejected %1$@'s offer";
+"Notification.StarsGiftOffer.RejectedYou.Stars_1" = "%@ Star";
+"Notification.StarsGiftOffer.RejectedYou.Stars_any" = "%@ Stars";
+
+"Notification.StarsGiftOffer.Expired" = "%1$@ didn't respond to your offer for %2$@ within %3$@ – your %4$@ have been refunded";
+"Notification.StarsGiftOffer.Expired.Stars_1" = "%@ Star";
+"Notification.StarsGiftOffer.Expired.Stars_any" = "%@ Stars";
+"Notification.StarsGiftOffer.ExpiredYou" = "The offer from %1$@ to buy your %2$@ for %3$@ has expired";
+"Notification.StarsGiftOffer.ExpiredYou.Stars_1" = "%@ Star";
+"Notification.StarsGiftOffer.ExpiredYou.Stars_any" = "%@ Stars";
+
+"CreateExternalStream.RevokeStreamKey" = "Revoke Stream Key";
+"CreateExternalStream.Revoke.Text" = "Do you want to revoke the stream key?";
+"CreateExternalStream.Revoke.Revoke" = "Revoke";
