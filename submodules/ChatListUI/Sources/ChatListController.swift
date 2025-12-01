@@ -55,8 +55,6 @@ import TextFormat
 import AvatarUploadToastScreen
 import AdsInfoScreen
 import AdsReportScreen
-import SearchBarNode
-import ChatListFilterTabContainerNode
 
 private final class ContextControllerContentSourceImpl: ContextControllerContentSource {
     let controller: ViewController
@@ -770,8 +768,6 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
         })
         
         self.updateNavigationMetadata()
-
-        self.updateTabBarSearchState(ViewController.TabBarSearchState(isActive: false), transition: .immediate)
     }
 
     required public init(coder aDecoder: NSCoder) {
@@ -2842,9 +2838,14 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
     func updateHeaderContent() -> (primaryContent: ChatListHeaderComponent.Content?, secondaryContent: ChatListHeaderComponent.Content?) {
         var primaryContent: ChatListHeaderComponent.Content?
         if let primaryContext = self.primaryContext {
-            var displayBackButton: Bool = false
-            if self.previousItem != nil {
-                displayBackButton = true
+            var backTitle: String?
+            if let previousItem = self.previousItem {
+                switch previousItem {
+                case let .item(item):
+                    backTitle = item.title ?? self.presentationData.strings.Common_Back
+                case .close:
+                    backTitle = self.presentationData.strings.Common_Close
+                }
             }
             var navigationBackTitle: String?
             if case .chatList(.archive) = self.location {
@@ -2857,7 +2858,8 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                 chatListTitle: primaryContext.chatListTitle,
                 leftButton: primaryContext.leftButton,
                 rightButtons: primaryContext.rightButtons,
-                backPressed: displayBackButton ? { [weak self] in
+                backTitle: backTitle,
+                backPressed: backTitle != nil ? { [weak self] in
                     guard let self else {
                         return
                     }
@@ -2874,6 +2876,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                 chatListTitle: secondaryContext.chatListTitle,
                 leftButton: secondaryContext.leftButton,
                 rightButtons: secondaryContext.rightButtons,
+                backTitle: nil,
                 backPressed: { [weak self] in
                     guard let self else {
                         return
@@ -4635,7 +4638,9 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
             searchContentNode = navigationBarView.searchContentNode
         }
         
-        self.activateSearch(filter: filter, query: query, skipScrolling: false, searchContentNode: searchContentNode)
+        if let searchContentNode {
+            self.activateSearch(filter: filter, query: query, skipScrolling: false, searchContentNode: searchContentNode)
+        }
     }
     
     public func activateSearch(query: String? = nil) {
@@ -4649,37 +4654,45 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
     }
         
     private var previousSearchToggleTimestamp: Double?
-    func activateSearch(filter: ChatListSearchFilter = .chats, query: String? = nil, skipScrolling: Bool = false, searchContentNode: NavigationBarSearchContentNode?) {
-        Task { @MainActor [weak self] in
-            guard let self else {
+    func activateSearch(filter: ChatListSearchFilter = .chats, query: String? = nil, skipScrolling: Bool = false, searchContentNode: NavigationBarSearchContentNode) {
+        let currentTimestamp = CACurrentMediaTime()
+        if let previousSearchActivationTimestamp = self.previousSearchToggleTimestamp, currentTimestamp < previousSearchActivationTimestamp + 0.6 {
+            return
+        }
+        self.previousSearchToggleTimestamp = currentTimestamp
+        
+        if let storyTooltip = self.storyTooltip {
+            storyTooltip.dismiss()
+        }
+        
+        var filter = filter
+        if case .forum = self.chatListDisplayNode.effectiveContainerNode.location {
+            filter = .topics
+        }
+        
+        if self.chatListDisplayNode.searchDisplayController == nil {
+            /*if !skipScrolling, let searchContentNode = self.searchContentNode, searchContentNode.expansionProgress != 1.0 {
+                self.scrollToTop?()
+                DispatchQueue.main.asyncAfter(deadline: DispatchTime.now() + 0.2, execute: { [weak self] in
+                    self?.activateSearch(filter: filter, query: query, skipScrolling: true)
+                })
                 return
-            }
-
-            let currentTimestamp = CACurrentMediaTime()
-            if let previousSearchActivationTimestamp = self.previousSearchToggleTimestamp, currentTimestamp < previousSearchActivationTimestamp + 0.6 {
-                return
-            }
-            self.previousSearchToggleTimestamp = currentTimestamp
+            }*/
+            //TODO:scroll to top?
             
-            if let storyTooltip = self.storyTooltip {
-                storyTooltip.dismiss()
-            }
-            
-            var filter = filter
-            if case .forum = self.chatListDisplayNode.effectiveContainerNode.location {
-                filter = .topics
-            }
-            
-            if self.chatListDisplayNode.searchDisplayController == nil {            
-                let (_, _) = await combineLatest(self.chatListDisplayNode.mainContainerNode.currentItemNode.contentsReady |> take(1), self.context.account.postbox.tailChatListView(groupId: .root, count: 16, summaryComponents: ChatListEntrySummaryComponents(components: [:])) |> take(1)).get()
-
-                do {
+            let _ = (combineLatest(self.chatListDisplayNode.mainContainerNode.currentItemNode.contentsReady |> take(1), self.context.account.postbox.tailChatListView(groupId: .root, count: 16, summaryComponents: ChatListEntrySummaryComponents(components: [:])) |> take(1))
+            |> deliverOnMainQueue).startStandalone(next: { [weak self] _, chatListView in
+                Task { @MainActor in
+                    guard let strongSelf = self else {
+                        return
+                    }
+                    
                     /*if let scrollToTop = strongSelf.scrollToTop {
-                    scrollToTop()
-                    }*/
+                     scrollToTop()
+                     }*/
                     
                     let tabsIsEmpty: Bool
-                    if let (resolvedItems, displayTabsAtBottom, _) = self.tabContainerData {
+                    if let (resolvedItems, displayTabsAtBottom, _) = strongSelf.tabContainerData {
                         tabsIsEmpty = resolvedItems.count <= 1 || displayTabsAtBottom
                     } else {
                         tabsIsEmpty = true
@@ -4689,43 +4702,40 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                     
                     let displaySearchFilters = true
                     
-                    if let filterContainerNodeAndActivate = await self.chatListDisplayNode.activateSearch(placeholderNode: searchContentNode?.placeholderNode, displaySearchFilters: displaySearchFilters, hasDownloads: self.hasDownloads, initialFilter: filter, navigationController: self.navigationController as? NavigationController, searchBarIsExternal: true) {
+                    if let filterContainerNodeAndActivate = await strongSelf.chatListDisplayNode.activateSearch(placeholderNode: searchContentNode.placeholderNode, displaySearchFilters: displaySearchFilters, hasDownloads: strongSelf.hasDownloads, initialFilter: filter, navigationController: strongSelf.navigationController as? NavigationController) {
                         let (filterContainerNode, activate) = filterContainerNodeAndActivate
                         if displaySearchFilters {
                             let searchTabsNode = SparseNode()
-                            self.searchTabsNode = searchTabsNode
+                            strongSelf.searchTabsNode = searchTabsNode
                             searchTabsNode.addSubnode(filterContainerNode)
                         }
                         
                         activate(filter != .downloads)
                         
-                        if let searchContentNode = self.chatListDisplayNode.searchDisplayController?.contentNode as? ChatListSearchContainerNode {
+                        if let searchContentNode = strongSelf.chatListDisplayNode.searchDisplayController?.contentNode as? ChatListSearchContainerNode {
                             searchContentNode.search(filter: filter, query: query)
                         }
                     }
                     
                     let transition: ContainedViewLayoutTransition = .animated(duration: 0.4, curve: .spring)
-                    self.setDisplayNavigationBar(false, transition: transition)
-                    self.updateTabBarSearchState(ViewController.TabBarSearchState(isActive: true), transition: transition)
-                    if let searchBarNode = self.currentTabBarSearchNode?() as? SearchBarNode {
-                        self.chatListDisplayNode.searchDisplayController?.setSearchBar(searchBarNode)
-                        searchBarNode.activate()
-                    }
-
-                    self.isSearchActive = true
-                    if let navigationController = self.navigationController as? NavigationController {
-                        for controller in navigationController.globalOverlayControllers {
-                            if let controller = controller as? VoiceChatOverlayController {
-                                controller.updateVisibility()
-                                break
-                            }
-                        }
+                    strongSelf.setDisplayNavigationBar(false, transition: transition)
+                    
+                    (strongSelf.parent as? TabBarController)?.updateIsTabBarHidden(true, transition: .animated(duration: 0.4, curve: .spring))
+                }
+            })
+            
+            self.isSearchActive = true
+            if let navigationController = self.navigationController as? NavigationController {
+                for controller in navigationController.globalOverlayControllers {
+                    if let controller = controller as? VoiceChatOverlayController {
+                        controller.updateVisibility()
+                        break
                     }
                 }
-            } else if self.isSearchActive {
-                if let searchContentNode = self.chatListDisplayNode.searchDisplayController?.contentNode as? ChatListSearchContainerNode {
-                    searchContentNode.search(filter: filter, query: query)
-                }
+            }
+        } else if self.isSearchActive {
+            if let searchContentNode = self.chatListDisplayNode.searchDisplayController?.contentNode as? ChatListSearchContainerNode {
+                searchContentNode.search(filter: filter, query: query)
             }
         }
     }
@@ -4756,8 +4766,6 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
             }
             completion = self.chatListDisplayNode.deactivateSearch(placeholderNode: searchContentNode.placeholderNode, animated: animated)
             searchContentNode.placeholderNode.frame = previousFrame
-        } else {
-            completion = self.chatListDisplayNode.deactivateSearch(placeholderNode: nil, animated: animated)
         }
         
         self.chatListDisplayNode.tempAllowAvatarExpansion = true
@@ -4772,7 +4780,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
         
         completion?()
         
-        self.updateTabBarSearchState(ViewController.TabBarSearchState(isActive: false), transition: transition)
+        (self.parent as? TabBarController)?.updateIsTabBarHidden(false, transition: .animated(duration: 0.4, curve: .spring))
         
         self.isSearchActive = false
         if let navigationController = self.navigationController as? NavigationController {
@@ -6227,14 +6235,6 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
             let controller = ContextController(context: strongSelf.context, presentationData: strongSelf.presentationData, source: .reference(ChatListTabBarContextReferenceContentSource(controller: strongSelf, sourceView: sourceView)), items: .single(ContextController.Items(content: .list(items))), recognizer: nil, gesture: gesture)
             strongSelf.context.sharedContext.mainWindow?.presentInGlobalOverlay(controller)
         })
-    }
-
-    override public func tabBarActivateSearch() {
-        self.activateSearch()
-    }
-
-    override public func tabBarDeactivateSearch() {
-        self.deactivateSearch(animated: true)
     }
     
     private var playedSignUpCompletedAnimation = false
