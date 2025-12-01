@@ -210,7 +210,7 @@ private final class ItemNode: ASDisplayNode {
         if self.theme !== presentationData.theme {
             self.theme = presentationData.theme
             
-            self.badgeBackgroundActiveNode.image = generateStretchableFilledCircleImage(diameter: 18.0, color: presentationData.theme.chat.inputPanel.panelControlColor)
+            self.badgeBackgroundActiveNode.image = generateStretchableFilledCircleImage(diameter: 18.0, color: presentationData.theme.chatList.unreadBadgeActiveBackgroundColor)
             self.badgeBackgroundInactiveNode.image = generateStretchableFilledCircleImage(diameter: 18.0, color: presentationData.theme.chatList.unreadBadgeInactiveBackgroundColor)
             
             themeUpdated = true
@@ -299,10 +299,10 @@ private final class ItemNode: ASDisplayNode {
         
         if themeUpdated || titleUpdated {
             self.titleNode.attributedText = title.attributedString(font: Font.medium(14.0), textColor: presentationData.theme.list.itemSecondaryTextColor)
-            self.titleActiveNode.attributedText = title.attributedString(font: Font.medium(14.0), textColor: presentationData.theme.chat.inputPanel.panelControlColor)
+            self.titleActiveNode.attributedText = title.attributedString(font: Font.medium(14.0), textColor: presentationData.theme.list.itemAccentColor)
             
             self.shortTitleNode.attributedText = shortTitle.attributedString(font: Font.medium(14.0), textColor: presentationData.theme.list.itemSecondaryTextColor)
-            self.shortTitleActiveNode.attributedText = shortTitle.attributedString(font: Font.medium(14.0), textColor: presentationData.theme.chat.inputPanel.panelControlColor)
+            self.shortTitleActiveNode.attributedText = shortTitle.attributedString(font: Font.medium(14.0), textColor: presentationData.theme.list.itemAccentColor)
         }
         
         if unreadCount != 0 {
@@ -438,8 +438,8 @@ public enum ChatListFilterTabEntryId: Hashable {
 }
 
 public struct ChatListFilterTabEntryUnreadCount: Equatable {
-    public let value: Int
-    public let hasUnmuted: Bool
+    let value: Int
+    let hasUnmuted: Bool
     
     public init(value: Int, hasUnmuted: Bool) {
         self.value = value
@@ -482,14 +482,14 @@ public enum ChatListFilterTabEntry: Equatable {
 public final class ChatListFilterTabContainerNode: ASDisplayNode {
     private let context: AccountContext
     private let scrollNode: ASScrollNode
-    private let selectedBackgroundNode: ASImageNode
+    private let selectedLineNode: ASImageNode
     private var itemNodes: [ChatListFilterTabEntryId: ItemNode] = [:]
     
     public var tabSelected: ((ChatListFilterTabEntryId, Bool) -> Void)?
-    public var tabRequestedDeletion: ((ChatListFilterTabEntryId) -> Void)?
-    public var addFilter: (() -> Void)?
-    public var contextGesture: ((Int32?, ContextExtractedContentContainingNode, ContextGesture, Bool) -> Void)?
-    public var presentPremiumTip: (() -> Void)?
+    var tabRequestedDeletion: ((ChatListFilterTabEntryId) -> Void)?
+    var addFilter: (() -> Void)?
+    var contextGesture: ((Int32?, ContextExtractedContentContainingNode, ContextGesture, Bool) -> Void)?
+    var presentPremiumTip: (() -> Void)?
     
     private var reorderingGesture: ReorderingGestureRecognizer?
     private var reorderingItem: ChatListFilterTabEntryId?
@@ -501,7 +501,7 @@ public final class ChatListFilterTabContainerNode: ASDisplayNode {
     
     private var currentParams: (size: CGSize, sideInset: CGFloat, filters: [ChatListFilterTabEntry], selectedFilter: ChatListFilterTabEntryId?, isReordering: Bool, isEditing: Bool, canReorderAllChats: Bool, filtersLimit: Int32?, transitionFraction: CGFloat, presentationData: PresentationData)?
     
-    public var reorderedFilterIds: [Int32]? {
+    var reorderedFilterIds: [Int32]? {
         return self.reorderedItemIds.flatMap {
             $0.compactMap {
                 switch $0 {
@@ -533,9 +533,9 @@ public final class ChatListFilterTabContainerNode: ASDisplayNode {
         self.context = context
         self.scrollNode = ASScrollNode()
         
-        self.selectedBackgroundNode = ASImageNode()
-        self.selectedBackgroundNode.displaysAsynchronously = false
-        self.selectedBackgroundNode.displayWithoutProcessing = true
+        self.selectedLineNode = ASImageNode()
+        self.selectedLineNode.displaysAsynchronously = false
+        self.selectedLineNode.displayWithoutProcessing = true
         
         super.init()
         
@@ -549,7 +549,7 @@ public final class ChatListFilterTabContainerNode: ASDisplayNode {
         }
         
         self.addSubnode(self.scrollNode)
-        self.scrollNode.addSubnode(self.selectedBackgroundNode)
+        self.scrollNode.addSubnode(self.selectedLineNode)
         
         let reorderingGesture = ReorderingGestureRecognizer(shouldBegin: { [weak self] point in
             guard let strongSelf = self else {
@@ -677,7 +677,7 @@ public final class ChatListFilterTabContainerNode: ASDisplayNode {
     private var previousSelectedFrame: CGRect?
     
     public func cancelAnimations() {
-        self.selectedBackgroundNode.layer.removeAllAnimations()
+        self.selectedLineNode.layer.removeAllAnimations()
         self.scrollNode.layer.removeAllAnimations()
     }
     
@@ -695,7 +695,14 @@ public final class ChatListFilterTabContainerNode: ASDisplayNode {
         let previousContentWidth = self.scrollNode.view.contentSize.width
         
         if self.currentParams?.presentationData.theme !== presentationData.theme {
-            self.selectedBackgroundNode.image = generateStretchableFilledCircleImage(diameter: 36.0, color: presentationData.theme.chatList.itemHighlightedBackgroundColor)
+            self.selectedLineNode.image = generateImage(CGSize(width: 5.0, height: 3.0), rotatedContext: { size, context in
+                context.clear(CGRect(origin: CGPoint(), size: size))
+                context.setFillColor(presentationData.theme.list.itemAccentColor.cgColor)
+                context.fillEllipse(in: CGRect(origin: CGPoint(), size: CGSize(width: 4.0, height: 4.0)))
+                context.fillEllipse(in: CGRect(origin: CGPoint(x: size.width - 4.0, y: 0.0), size: CGSize(width: 4.0, height: 4.0)))
+                context.fill(CGRect(x: 2.0, y: 0.0, width: size.width - 4.0, height: 4.0))
+                context.fill(CGRect(x: 0.0, y: 2.0, width: size.width, height: 2.0))
+            })?.resizableImage(withCapInsets: UIEdgeInsets(top: 3.0, left: 3.0, bottom: 0.0, right: 3.0), resizingMode: .stretch)
         }
         
         if isReordering {
@@ -857,7 +864,7 @@ public final class ChatListFilterTabContainerNode: ASDisplayNode {
         
         let minSpacing: CGFloat = 26.0
         
-        let resolvedSideInset: CGFloat = 25.0 + sideInset
+        let resolvedSideInset: CGFloat = 16.0 + sideInset
         var leftOffset: CGFloat = resolvedSideInset
         
         var longTitlesWidth: CGFloat = resolvedSideInset
@@ -930,13 +937,13 @@ public final class ChatListFilterTabContainerNode: ASDisplayNode {
         }
         
         if let selectedFrame = selectedFrame {
-            let wasAdded = self.selectedBackgroundNode.isHidden
-            self.selectedBackgroundNode.isHidden = false
-            let selectedBackgroundFrame = CGRect(origin: CGPoint(x: selectedFrame.minX - 10.0, y: selectedFrame.minY - floor((36.0 - selectedFrame.height) * 0.5)), size: CGSize(width: selectedFrame.width + 10.0 * 2.0, height: 36.0))
+            let wasAdded = self.selectedLineNode.isHidden
+            self.selectedLineNode.isHidden = false
+            let lineFrame = CGRect(origin: CGPoint(x: selectedFrame.minX, y: size.height - 3.0), size: CGSize(width: selectedFrame.width, height: 3.0))
             if wasAdded {
-                self.selectedBackgroundNode.frame = selectedBackgroundFrame
+                self.selectedLineNode.frame = lineFrame
             } else {
-                transition.updateFrame(node: self.selectedBackgroundNode, frame: selectedBackgroundFrame)
+                transition.updateFrame(node: self.selectedLineNode, frame: lineFrame)
             }
             
             if let previousSelectedFrame = self.previousSelectedFrame {
@@ -965,7 +972,7 @@ public final class ChatListFilterTabContainerNode: ASDisplayNode {
             self.previousSelectedAbsFrame = selectedFrame.offsetBy(dx: -self.scrollNode.bounds.minX, dy: 0.0)
             self.previousSelectedFrame = selectedFrame
         } else {
-            self.selectedBackgroundNode.isHidden = true
+            self.selectedLineNode.isHidden = true
             self.previousSelectedAbsFrame = nil
             self.previousSelectedFrame = nil
         }
