@@ -114,7 +114,7 @@ final class PasskeysScreenIntroComponent: Component {
             let iconSize = self.icon.update(
                 transition: .immediate,
                 component: AnyComponent(LottieComponent(
-                    content: LottieComponent.AppBundleContent(name: "TwoFactorSetupIntro"),
+                    content: LottieComponent.AppBundleContent(name: "passkey_logo"),
                     loop: false
                 )),
                 environment: {},

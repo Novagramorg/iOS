@@ -501,7 +501,7 @@ private enum PrivacyAndSecurityEntry: ItemListNodeEntry {
                     arguments.openTwoStepVerification(data)
                 })
             case let .passkeys(_, text, value):
-                return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, icon: UIImage(bundleImageName: "Settings/Menu/TwoStepAuth")?.precomposed(), title: text, label: value, sectionId: self.section, style: .blocks, action: {
+                return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, icon: UIImage(bundleImageName: "Settings/Menu/Passkeys")?.precomposed(), title: text, label: value, sectionId: self.section, style: .blocks, action: {
                     arguments.openPasskeys()
                 })
             case let .messageAutoremoveTimeout(_, text, value):
