@@ -274,7 +274,7 @@ final class TabBarControllerNode: ASDisplayNode {
                     )
                 },
                 selectedId: selectedId,
-                isTablet: params.layout.metrics.isTablet
+                outerInsets: UIEdgeInsets(top: 0.0, left: sideInset, bottom: tabBarBottomInset, right: sideInset)
             )),
             environment: {},
             containerSize: CGSize(width: params.layout.size.width - sideInset * 2.0, height: 100.0)

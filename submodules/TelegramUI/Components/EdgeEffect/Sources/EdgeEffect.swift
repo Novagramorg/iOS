@@ -2,6 +2,7 @@ import Foundation
 import UIKit
 import Display
 import ComponentFlow
+import ComponentDisplayAdapters
 
 public class EdgeEffectView: UIView {
     public enum Edge {
@@ -108,6 +109,7 @@ public class EdgeEffectView: UIView {
                 self.insertSubview(blurView, at: 0)
                 self.blurView = blurView
             }
+            blurView.update(size: bounds.size, transition: transition.containedViewLayoutTransition)
             transition.setFrame(view: blurView, frame: bounds)
             if let maskLayer = blurView.layer.mask {
                 transition.setFrame(layer: maskLayer, frame: bounds)
@@ -270,5 +272,11 @@ public final class VariableBlurView: UIVisualEffectView {
         let backdropLayer = self.subviews.first?.layer
         backdropLayer?.filters = [variableBlur]
         backdropLayer?.setValue(UIScreenScale, forKey: "scale")
+    }
+    
+    public func update(size: CGSize, transition: ContainedViewLayoutTransition) {
+        for layer in self.layer.sublayers ?? [] {
+            transition.updateFrame(layer: layer, frame: CGRect(origin: CGPoint(), size: size))
+        }
     }
 }

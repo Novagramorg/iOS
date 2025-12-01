@@ -144,6 +144,8 @@ import FaceScanScreen
 import ChatThemeScreen
 import ChatTextInputPanelNode
 import ChatInputAccessoryPanel
+import GlobalControlPanelsContext
+import ChatSearchNavigationContentNode
 
 public final class ChatControllerOverlayPresentationData {
     public let expandData: (ASDisplayNode?, () -> Void)
@@ -623,6 +625,10 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     var lastPostedScheduledMessagesToastTimestamp: Double = 0.0
     var postedScheduledMessagesEventsDisposable: Disposable?
     
+    var globalControlPanelsContext: GlobalControlPanelsContext?
+    var globalControlPanelsContextState: GlobalControlPanelsContext.State?
+    var globalControlPanelsContextStateDisposable: Disposable?
+    
     public init(
         context: AccountContext,
         chatLocation: ChatLocation,
@@ -672,26 +678,6 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         self.chatBackgroundNode = createWallpaperBackgroundNode(context: context, forChatDisplay: true, useSharedAnimationPhase: useSharedAnimationPhase)
         self.wallpaperReady.set(self.chatBackgroundNode.isReady)
         
-        var locationBroadcastPanelSource: LocationBroadcastPanelSource
-        var groupCallPanelSource: GroupCallPanelSource
-        
-        switch chatLocation {
-        case let .peer(peerId):
-            locationBroadcastPanelSource = .peer(peerId)
-            switch subject {
-            case .message, .none:
-                groupCallPanelSource = .peer(peerId)
-            default:
-                groupCallPanelSource = .none
-            }
-        case .replyThread:
-            locationBroadcastPanelSource = .none
-            groupCallPanelSource = .none
-        case .customChatContents:
-            locationBroadcastPanelSource = .none
-            groupCallPanelSource = .none
-        }
-        
         var presentationData = context.sharedContext.currentPresentationData.with { $0 }
         if let forcedTheme = self.forcedTheme {
             presentationData = presentationData.withUpdated(theme: forcedTheme)
@@ -704,7 +690,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         
         self.stickerSettings = ChatInterfaceStickerSettings()
         
-        self.presentationInterfaceState = ChatPresentationInterfaceState(chatWallpaper: self.presentationData.chatWallpaper, theme: self.presentationData.theme, strings: self.presentationData.strings, dateTimeFormat: self.presentationData.dateTimeFormat, nameDisplayOrder: self.presentationData.nameDisplayOrder, limitsConfiguration: context.currentLimitsConfiguration.with { $0 }, fontSize: self.presentationData.chatFontSize, bubbleCorners: self.presentationData.chatBubbleCorners, accountPeerId: context.account.peerId, mode: mode, chatLocation: chatLocation, subject: subject, peerNearbyData: peerNearbyData, greetingData: context.prefetchManager?.preloadedGreetingSticker, pendingUnpinnedAllMessages: false, activeGroupCallInfo: nil, hasActiveGroupCall: false, importState: nil, threadData: nil, isGeneralThreadClosed: nil, replyMessage: nil, accountPeerColor: nil, businessIntro: nil)
+        self.presentationInterfaceState = ChatPresentationInterfaceState(chatWallpaper: self.presentationData.chatWallpaper, theme: self.presentationData.theme, strings: self.presentationData.strings, dateTimeFormat: self.presentationData.dateTimeFormat, nameDisplayOrder: self.presentationData.nameDisplayOrder, limitsConfiguration: context.currentLimitsConfiguration.with { $0 }, fontSize: self.presentationData.chatFontSize, bubbleCorners: self.presentationData.chatBubbleCorners, accountPeerId: context.account.peerId, mode: mode, chatLocation: chatLocation, subject: subject, peerNearbyData: peerNearbyData, greetingData: context.prefetchManager?.preloadedGreetingSticker, pendingUnpinnedAllMessages: false, activeGroupCallInfo: nil, hasActiveGroupCall: false, threadData: nil, isGeneralThreadClosed: nil, replyMessage: nil, accountPeerColor: nil, businessIntro: nil)
         
         if case let .customChatContents(customChatContents) = subject {
             switch customChatContents.kind {
@@ -723,13 +709,6 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         
         self.presentationInterfaceStatePromise = ValuePromise(self.presentationInterfaceState)
         
-        var mediaAccessoryPanelVisibility = MediaAccessoryPanelVisibility.none
-        if case .standard = mode {
-            mediaAccessoryPanelVisibility = .specific(size: .compact)
-        } else {
-            locationBroadcastPanelSource = .none
-            groupCallPanelSource = .none
-        }
         let navigationBarPresentationData: NavigationBarPresentationData?
         switch mode {
         case .inline, .standard(.embedded):
@@ -738,10 +717,10 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             navigationBarPresentationData = NavigationBarPresentationData(presentationData: self.presentationData, hideBackground: false, hideBadge: false, style: .glass)
         }
         
-        self.moreBarButton = MoreHeaderButton(color: self.presentationData.theme.chat.inputPanel.inputControlColor)
+        self.moreBarButton = MoreHeaderButton(color: self.presentationData.theme.chat.inputPanel.panelControlColor)
         self.moreBarButton.isUserInteractionEnabled = true
         
-        super.init(context: context, navigationBarPresentationData: navigationBarPresentationData, mediaAccessoryPanelVisibility: mediaAccessoryPanelVisibility, locationBroadcastPanelSource: locationBroadcastPanelSource, groupCallPanelSource: groupCallPanelSource)
+        super.init(context: context, navigationBarPresentationData: navigationBarPresentationData, mediaAccessoryPanelVisibility: .none, locationBroadcastPanelSource: .none, groupCallPanelSource: .none)
         
         self.automaticallyControlPresentationContextLayout = false
         self.blocksBackgroundWhenInOverlay = true
@@ -4258,7 +4237,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             var message: Message?
             if let historyMessage = self.chatDisplayNode.historyNode.messageInCurrentHistoryView(messageId) {
                 message = historyMessage
-            } else if let panelMessage = self.chatDisplayNode.adPanelNode?.message, panelMessage.id == messageId {
+            } else if let panelMessage = self.chatDisplayNode.adPanelMessage, panelMessage.id == messageId {
                 message = panelMessage
             }
                 
@@ -4520,7 +4499,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                         adOpaqueId = adAttribute.opaqueId
                     }
                 }
-                if adOpaqueId == nil, let panelMessage = self.chatDisplayNode.adPanelNode?.message, let adAttribute = panelMessage.adAttribute {
+                if adOpaqueId == nil, let panelMessage = self.chatDisplayNode.adPanelMessage, let adAttribute = panelMessage.adAttribute {
                     adOpaqueId = adAttribute.opaqueId
                 }
                 let _ = self.context.engine.accountData.updateAdMessagesEnabled(enabled: false).start()
@@ -6176,6 +6155,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         self.newTopicEventsDisposable?.dispose()
         self.updateMessageTodoDisposables?.dispose()
         self.preloadNextChatPeerIdDisposable.dispose()
+        self.globalControlPanelsContextStateDisposable?.dispose()
     }
     
     public func updatePresentationMode(_ mode: ChatControllerPresentationMode) {
@@ -6304,6 +6284,8 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         self.navigationBar?.updatePresentationData(NavigationBarPresentationData(theme: navigationBarTheme, strings: NavigationBarStrings(presentationStrings: self.presentationData.strings)), transition: .immediate)
         
         self.chatTitleView?.updateThemeAndStrings(theme: presentationTheme, strings: self.presentationData.strings)
+        
+        self.moreBarButton.updateColor(color: presentationTheme.chat.inputPanel.panelControlColor)
     }
     
     enum PinnedReferenceMessage {

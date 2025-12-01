@@ -2666,7 +2666,6 @@ public final class EntityInputView: UIInputView, AttachmentTextInputPanelInputVi
             pendingUnpinnedAllMessages: false,
             activeGroupCallInfo: nil,
             hasActiveGroupCall: false,
-            importState: nil,
             threadData: nil,
             isGeneralThreadClosed: nil,
             replyMessage: nil,

@@ -36,6 +36,7 @@ import MultiAnimationRenderer
 import PremiumUI
 import AvatarNode
 import StoryContainerScreen
+import ChatListSearchFiltersContainerNode
 
 private enum ChatListTokenId: Int32 {
     case archive
@@ -107,8 +108,7 @@ public final class ChatListSearchContainerNode: SearchDisplayControllerContentNo
     var dismissSearch: (() -> Void)?
     var openAdInfo: ((ASDisplayNode, AdPeer) -> Void)?
     
-    private let dimNode: ASDisplayNode
-    let filterContainerNode: ChatListSearchFiltersContainerNode
+    private let filterContainerNode: ChatListSearchFiltersContainerNode
     private let paneContainerNode: ChatListSearchPaneContainerNode
     private var selectionPanelNode: ChatListSearchMessageSelectionPanelNode?
     
@@ -181,9 +181,6 @@ public final class ChatListSearchContainerNode: SearchDisplayControllerContentNo
         self.openMessage = originalOpenMessage
         self.present = present
         self.presentInGlobalOverlay = presentInGlobalOverlay
-    
-        self.dimNode = ASDisplayNode()
-        self.dimNode.backgroundColor = UIColor.black.withAlphaComponent(0.5)
         
         self.filterContainerNode = ChatListSearchFiltersContainerNode()
         self.paneContainerNode = ChatListSearchPaneContainerNode(context: context, animationCache: animationCache, animationRenderer: animationRenderer, updatedPresentationData: updatedPresentationData, peersFilter: self.peersFilter, requestPeerType: self.requestPeerType, location: location, searchQuery: self.searchQuery.get(), searchOptions: self.searchOptions.get(), navigationController: navigationController, parentController: parentController())
@@ -193,7 +190,6 @@ public final class ChatListSearchContainerNode: SearchDisplayControllerContentNo
                 
         self.backgroundColor = filter.contains(.excludeRecent) ? nil : self.presentationData.theme.chatList.backgroundColor
         
-//        self.addSubnode(self.dimNode)
         self.addSubnode(self.paneContainerNode)
                 
         let interaction = ChatListSearchInteraction(openPeer: { peer, chatPeer, threadId, value in
@@ -325,6 +321,7 @@ public final class ChatListSearchContainerNode: SearchDisplayControllerContentNo
             parentController()?.view.endEditing(true)
         }
         
+        self.addSubnode(self.filterContainerNode)
         self.filterContainerNode.filterPressed = { [weak self] filter in
             guard let strongSelf = self else {
                 return
@@ -553,9 +550,6 @@ public final class ChatListSearchContainerNode: SearchDisplayControllerContentNo
     
     public override func didLoad() {
         super.didLoad()
-        
-        
-        self.dimNode.view.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(self.dimTapGesture(_:))))
     }
     
     public override var hasDim: Bool {
@@ -705,18 +699,7 @@ public final class ChatListSearchContainerNode: SearchDisplayControllerContentNo
         self.transitionFraction = transitionFraction
         
         if let (layout, _) = self.validLayout {
-            let filters: [ChatListSearchFilter]
-            if let suggestedFilters = self.suggestedFilters, !suggestedFilters.isEmpty {
-                filters = suggestedFilters
-            } else {
-                var isForum = false
-                if case .forum = self.location {
-                    isForum = true
-                }
-                
-                filters = defaultAvailableSearchPanes(isForum: isForum, hasDownloads: !isForum && self.hasDownloads, hasPublicPosts: self.showPublicPostsTab).map(\.filter)
-            }
-            self.filterContainerNode.update(size: CGSize(width: layout.size.width - 40.0, height: 38.0), sideInset: layout.safeInsets.left - 20.0, filters: filters.map { .filter($0) }, displayGlobalPostsNewBadge: self.displayGlobalPostsNewBadge, selectedFilter: self.selectedFilter?.id, transitionFraction: self.transitionFraction, presentationData: self.presentationData, transition: transition)
+            self.updateFilterContainerNode(layout: layout, transition: transition)
         }
     }
     
@@ -762,18 +745,8 @@ public final class ChatListSearchContainerNode: SearchDisplayControllerContentNo
             self.cancel?()
         }
     }
-
-    override public func containerLayoutUpdated(_ layout: ContainerViewLayout, navigationBarHeight: CGFloat, transition: ContainedViewLayoutTransition) {
-        super.containerLayoutUpdated(layout, navigationBarHeight: navigationBarHeight, transition: transition)
-        
-        let isFirstTime = self.validLayout == nil
-        self.validLayout = (layout, navigationBarHeight)
-        
-        let topInset = navigationBarHeight
-        
-        transition.updateFrame(node: self.dimNode, frame: CGRect(origin: CGPoint(x: 0.0, y: topInset), size: CGSize(width: layout.size.width, height: layout.size.height - topInset)))
-        transition.updateFrame(node: self.filterContainerNode, frame: CGRect(origin: CGPoint(x: 0.0, y: navigationBarHeight + 6.0), size: CGSize(width: layout.size.width, height: 38.0)))
-        
+    
+    private func updateFilterContainerNode(layout: ContainerViewLayout, transition: ContainedViewLayoutTransition) {
         var isForum = false
         if case .forum = self.location {
             isForum = true
@@ -786,8 +759,29 @@ public final class ChatListSearchContainerNode: SearchDisplayControllerContentNo
             filters = defaultAvailableSearchPanes(isForum: isForum, hasDownloads: self.hasDownloads, hasPublicPosts: self.showPublicPostsTab).map(\.filter)
         }
         
-        let overflowInset: CGFloat = 20.0
-        self.filterContainerNode.update(size: CGSize(width: layout.size.width - overflowInset * 2.0, height: 38.0), sideInset: layout.safeInsets.left - overflowInset, filters: filters.map { .filter($0) }, displayGlobalPostsNewBadge: self.displayGlobalPostsNewBadge, selectedFilter: self.selectedFilter?.id, transitionFraction: self.transitionFraction, presentationData: self.presentationData, transition: .animated(duration: 0.4, curve: .spring))
+        var filtersSideInset: CGFloat = 12.0
+        if layout.insets(options: [.input]).bottom <= 84.0 {
+            filtersSideInset = 20.0
+        }
+        
+        self.filterContainerNode.update(size: CGSize(width: layout.size.width - (layout.safeInsets.left + filtersSideInset) * 2.0, height: 40.0), sideInset: 0.0, filters: filters.map { .filter($0) }, displayGlobalPostsNewBadge: self.displayGlobalPostsNewBadge, selectedFilter: self.selectedFilter?.id, transitionFraction: self.transitionFraction, presentationData: self.presentationData, transition: .animated(duration: 0.4, curve: .spring))
+    }
+
+    override public func containerLayoutUpdated(_ layout: ContainerViewLayout, navigationBarHeight: CGFloat, transition: ContainedViewLayoutTransition) {
+        super.containerLayoutUpdated(layout, navigationBarHeight: navigationBarHeight, transition: transition)
+        
+        let isFirstTime = self.validLayout == nil
+        self.validLayout = (layout, navigationBarHeight)
+        
+        let topInset = navigationBarHeight
+        
+        var filtersSideInset: CGFloat = 12.0
+        if layout.insets(options: [.input]).bottom <= 84.0 {
+            filtersSideInset = 20.0
+        }
+        
+        transition.updateFrame(node: self.filterContainerNode, frame: CGRect(origin: CGPoint(x: layout.safeInsets.left + filtersSideInset, y: layout.size.height - layout.insets(options: [.input]).bottom - 40.0 + 6.0), size: CGSize(width: layout.size.width - (layout.safeInsets.left + filtersSideInset) * 2.0, height: 40.0)))
+        self.updateFilterContainerNode(layout: layout, transition: transition)
         
         if isFirstTime {
             self.filterContainerNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
@@ -796,7 +790,7 @@ public final class ChatListSearchContainerNode: SearchDisplayControllerContentNo
         
         var bottomIntrinsicInset = layout.intrinsicInsets.bottom
         if case .chatList(.root) = self.location {
-            if layout.safeInsets.left > overflowInset {
+            if layout.safeInsets.left > 20.0 {
                 bottomIntrinsicInset -= 34.0
             } else {
                 bottomIntrinsicInset -= 49.0
@@ -958,8 +952,13 @@ public final class ChatListSearchContainerNode: SearchDisplayControllerContentNo
         } else if case .chatList(.root) = self.location {
             bottomInset -= bottomIntrinsicInset
         }
+        bottomInset += 40.0 - 10.0
         
         let availablePanes: [ChatListSearchPaneKey]
+        var isForum = false
+        if case .forum = self.location {
+            isForum = true
+        }
         if self.displaySearchFilters {
             availablePanes = defaultAvailableSearchPanes(isForum: isForum, hasDownloads: self.hasDownloads, hasPublicPosts: self.hasPublicPostsTab)
         } else {

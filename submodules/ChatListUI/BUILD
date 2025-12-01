@@ -119,6 +119,12 @@ swift_library(
         "//submodules/TelegramUI/Components/AnimatedTextComponent",
         "//submodules/TelegramUI/Components/EdgeEffect",
         "//submodules/TelegramUI/Components/ChatList/ChatListFilterTabContainerNode",
+        "//submodules/TelegramUI/Components/HeaderPanelContainerComponent",
+        "//submodules/TelegramUI/Components/ChatList/ChatListTabsComponent",
+        "//submodules/TelegramUI/Components/GlobalControlPanelsContext",
+        "//submodules/TelegramUI/Components/MediaPlaybackHeaderPanelComponent",
+        "//submodules/TelegramUI/Components/LiveLocationHeaderPanelComponent",
+        "//submodules/TelegramUI/Components/ChatList/ChatListSearchFiltersContainerNode",
     ],
     visibility = [
         "//visibility:public",

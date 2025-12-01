@@ -681,18 +681,19 @@ private class SearchBarTextField: UITextField, UIScrollViewDelegate {
             placeholderYOffset = 1.0
         } else {
         }
-
-        if case .inlineNavigation = self.style {
-            placeholderYOffset += 6.0
-        }
         
         let textRect = self.textRect(forBounds: bounds)
         let labelSize = self.placeholderLabel.updateLayout(textRect.size)
-        self.placeholderLabel.frame = CGRect(origin: CGPoint(x: textRect.minX + placeholderXOffset, y: textRect.minY + textOffset + placeholderYOffset), size: labelSize)
+
+        if case .inlineNavigation = self.style {
+            placeholderYOffset += 0.0//(bounds.height - labelSize.height) * 0.5
+        }
+        
+        self.placeholderLabel.frame = CGRect(origin: CGPoint(x: textRect.minX + placeholderXOffset, y: floorToScreenPixels(bounds.height - labelSize.height) * 0.5), size: labelSize)
                 
         let prefixSize = self.prefixLabel.updateLayout(CGSize(width: floor(bounds.size.width * 0.7), height: bounds.size.height))
         let prefixBounds = bounds.insetBy(dx: 4.0, dy: 4.0)
-        self.prefixLabel.frame = CGRect(origin: CGPoint(x: prefixBounds.minX, y: prefixBounds.minY + textOffset + placeholderYOffset), size: prefixSize)
+        self.prefixLabel.frame = CGRect(origin: CGPoint(x: prefixBounds.minX, y: floorToScreenPixels(bounds.height - prefixSize.height) * 0.5), size: prefixSize)
     }
     
     override func deleteBackward() {

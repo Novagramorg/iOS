@@ -102,15 +102,19 @@ public final class NavigationSearchView: UIView {
     }
 
     private let action: () -> Void
+    private let closeAction: () -> Void
 
     private let backgroundView: GlassBackgroundView
     private let iconView: UIImageView
     private(set) var searchBarNode: SearchBarNode?
+    
+    private var close: (background: GlassBackgroundView, icon: UIImageView)?
 
     private var params: Params?
     
-    public init(action: @escaping () -> Void) {
+    public init(action: @escaping () -> Void, closeAction: @escaping () -> Void) {
         self.action = action
+        self.closeAction = closeAction
 
         self.backgroundView = GlassBackgroundView()
         self.backgroundView.contentView.clipsToBounds = true
@@ -129,6 +133,12 @@ public final class NavigationSearchView: UIView {
             self.action()
         }
     }
+    
+    @objc private func onCloseTapGesture(_ recognizer: UITapGestureRecognizer) {
+        if case .ended = recognizer.state {
+            self.closeAction()
+        }
+    }
 
     required public init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
@@ -144,10 +154,19 @@ public final class NavigationSearchView: UIView {
     }
 
     private func update(params: Params, transition: ComponentTransition) {
-        transition.setFrame(view: self.backgroundView, frame: CGRect(origin: CGPoint(), size: params.size))
+        let backgroundSize: CGSize
+        if params.isActive {
+            backgroundSize = CGSize(width: params.size.width - 48.0 - 8.0, height: params.size.height)
+        } else {
+            backgroundSize = CGSize(width: params.size.width, height: params.size.height)
+        }
+        
+        let previousBackgroundFrame = self.backgroundView.frame
+        
+        transition.setFrame(view: self.backgroundView, frame: CGRect(origin: CGPoint(), size: backgroundSize))
         let alphaTransition: ComponentTransition = transition.animation.isImmediate ? .immediate : .easeInOut(duration: 0.25)
 
-        self.backgroundView.update(size: params.size, cornerRadius: params.size.height * 0.5, isDark: params.theme.overallDarkAppearance, tintColor: GlassBackgroundView.TintColor.init(kind: .panel, color: UIColor(white: params.theme.overallDarkAppearance ? 0.0 : 1.0, alpha: 0.6)), isInteractive: true, transition: transition)
+        self.backgroundView.update(size: backgroundSize, cornerRadius: backgroundSize.height * 0.5, isDark: params.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: UIColor(white: params.theme.overallDarkAppearance ? 0.0 : 1.0, alpha: 0.6)), isInteractive: true, transition: transition)
 
         if self.iconView.image == nil {
             self.iconView.image = UIImage(bundleImageName: "Navigation/Search")?.withRenderingMode(.alwaysTemplate)
@@ -162,7 +181,7 @@ public final class NavigationSearchView: UIView {
                 imageSize = CGSize(width: image.size.width * iconFraction, height: image.size.height * iconFraction)
                 iconFrame = CGRect(origin: CGPoint(x: 12.0, y: floor((params.size.height - imageSize.height) * 0.5)), size: imageSize)
             } else {
-                iconFrame = CGRect(origin: CGPoint(x: floor((params.size.width - image.size.width) * 0.5), y: floor((params.size.height - image.size.height) * 0.5)), size: image.size)
+                iconFrame = CGRect(origin: CGPoint(x: floor((backgroundSize.width - image.size.width) * 0.5), y: floor((params.size.height - image.size.height) * 0.5)), size: image.size)
             }
             transition.setPosition(view: self.iconView, position: iconFrame.center)
             transition.setBounds(view: self.iconView, bounds: CGRect(origin: CGPoint(), size: iconFrame.size))
@@ -199,7 +218,7 @@ public final class NavigationSearchView: UIView {
                 self.backgroundView.contentView.addSubview(searchBarNode.view)
                 searchBarNode.view.alpha = 0.0
             }
-            let searchBarFrame = CGRect(origin: CGPoint(x: 36.0, y: 0.0), size: CGSize(width: params.size.width - 36.0 - 4.0, height: params.size.height))
+            let searchBarFrame = CGRect(origin: CGPoint(x: 36.0, y: 0.0), size: CGSize(width: backgroundSize.width - 36.0 - 4.0, height: params.size.height))
             transition.setFrame(view: searchBarNode.view, frame: searchBarFrame)
             searchBarNode.updateLayout(boundingSize: searchBarFrame.size, leftInset: 0.0, rightInset: 0.0, transition: transition.containedViewLayoutTransition)
             alphaTransition.setAlpha(view: searchBarNode.view, alpha: 1.0)
@@ -209,6 +228,72 @@ public final class NavigationSearchView: UIView {
                 let searchBarNodeView = searchBarNode.view
                 alphaTransition.setAlpha(view: searchBarNode.view, alpha: 0.0, completion: { [weak searchBarNodeView] _ in
                     searchBarNodeView?.removeFromSuperview()
+                })
+            }
+        }
+        
+        if params.isActive {
+            let closeFrame = CGRect(origin: CGPoint(x: params.size.width - 48.0, y: 0.0), size: CGSize(width: 48.0, height: 48.0))
+            
+            let close: (background: GlassBackgroundView, icon: UIImageView)
+            var closeTransition = transition
+            if let current = self.close {
+                close = current
+            } else {
+                closeTransition = closeTransition.withAnimation(.none)
+                close = (GlassBackgroundView(), UIImageView())
+                self.close = close
+                
+                close.icon.image = generateImage(CGSize(width: 40.0, height: 40.0), contextGenerator: { size, context in
+                    context.clear(CGRect(origin: CGPoint(), size: size))
+                    
+                    context.setLineWidth(2.0)
+                    context.setLineCap(.round)
+                    context.setStrokeColor(UIColor.white.cgColor)
+                    
+                    context.beginPath()
+                    context.move(to: CGPoint(x: 12.0, y: 12.0))
+                    context.addLine(to: CGPoint(x: size.width - 12.0, y: size.height - 12.0))
+                    context.move(to: CGPoint(x: size.width - 12.0, y: 12.0))
+                    context.addLine(to: CGPoint(x: 12.0, y: size.height - 12.0))
+                    context.strokePath()
+                })?.withRenderingMode(.alwaysTemplate)
+                
+                close.background.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(self.onCloseTapGesture(_:))))
+                
+                close.background.contentView.addSubview(close.icon)
+                self.insertSubview(close.background, at: 0)
+                
+                if let image = close.icon.image {
+                    close.icon.frame = image.size.centered(in: CGRect(origin: CGPoint(), size: closeFrame.size))
+                }
+                
+                close.background.frame = closeFrame.size.centered(in: previousBackgroundFrame)
+                close.background.update(size: close.background.bounds.size, cornerRadius: close.background.bounds.height * 0.5, isDark: params.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: UIColor(white: params.theme.overallDarkAppearance ? 0.0 : 1.0, alpha: 0.6)), isInteractive: true, transition: .immediate)
+                ComponentTransition.immediate.setScale(view: close.background, scale: 0.001)
+            }
+            
+            close.icon.tintColor = params.theme.chat.inputPanel.panelControlColor
+            
+            transition.setPosition(view: close.background, position: closeFrame.center)
+            transition.setBounds(view: close.background, bounds: CGRect(origin: CGPoint(), size: closeFrame.size))
+            transition.setScale(view: close.background, scale: 1.0)
+            
+            if let image = close.icon.image {
+                transition.setFrame(view: close.icon, frame: image.size.centered(in: CGRect(origin: CGPoint(), size: closeFrame.size)))
+            }
+            
+            close.background.update(size: closeFrame.size, cornerRadius: closeFrame.height * 0.5, isDark: params.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: UIColor(white: params.theme.overallDarkAppearance ? 0.0 : 1.0, alpha: 0.6)), isInteractive: true, transition: closeTransition)
+        } else {
+            if let close = self.close {
+                self.close = nil
+                let closeBackground = close.background
+                let closeFrame = CGSize(width: 48.0, height: 48.0).centered(in: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: params.size))
+                transition.setPosition(view: closeBackground, position: closeFrame.center)
+                transition.setBounds(view: closeBackground, bounds: CGRect(origin: CGPoint(), size: closeFrame.size))
+                closeBackground.update(size: closeFrame.size, cornerRadius: closeFrame.height * 0.5, isDark: params.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: UIColor(white: params.theme.overallDarkAppearance ? 0.0 : 1.0, alpha: 0.6)), isInteractive: true, transition: transition)
+                transition.setScale(view: closeBackground, scale: 0.001, completion: { [weak closeBackground] _ in
+                    closeBackground?.removeFromSuperview()
                 })
             }
         }
@@ -269,7 +354,7 @@ public final class TabBarComponent: Component {
     public let items: [Item]
     public let search: Search?
     public let selectedId: AnyHashable?
-    public let isTablet: Bool
+    public let outerInsets: UIEdgeInsets
     
     public init(
         theme: PresentationTheme,
@@ -277,14 +362,14 @@ public final class TabBarComponent: Component {
         items: [Item],
         search: Search?,
         selectedId: AnyHashable?,
-        isTablet: Bool
+        outerInsets: UIEdgeInsets
     ) {
         self.theme = theme
         self.strings = strings
         self.items = items
         self.search = search
         self.selectedId = selectedId
-        self.isTablet = isTablet
+        self.outerInsets = outerInsets
     }
     
     public static func ==(lhs: TabBarComponent, rhs: TabBarComponent) -> Bool {
@@ -303,7 +388,7 @@ public final class TabBarComponent: Component {
         if lhs.selectedId != rhs.selectedId {
             return false
         }
-        if lhs.isTablet != rhs.isTablet {
+        if lhs.outerInsets != rhs.outerInsets {
             return false
         }
         return true
@@ -663,6 +748,7 @@ public final class TabBarComponent: Component {
             if let search = component.search, search.isActive {
                 tabsFrame.size = CGSize(width: 48.0, height: 48.0)
                 tabsFrame.origin.y = tabsSize.height - 48.0
+                tabsFrame.origin.x = -component.outerInsets.left - tabsFrame.width
             }
 
             transition.setFrame(view: self.contextGestureContainerView, frame: tabsFrame)
@@ -693,8 +779,8 @@ public final class TabBarComponent: Component {
                 let searchFrame: CGRect
                 if search.isActive {
                     size.width = availableSize.width
-                    searchSize = CGSize(width: availableSize.width - 48.0 - 8.0, height: 48.0)
-                    searchFrame = CGRect(origin: CGPoint(x: 48.0 + 8.0, y: size.height - searchSize.height), size: searchSize)
+                    searchSize = CGSize(width: availableSize.width, height: 48.0)
+                    searchFrame = CGRect(origin: CGPoint(x: 0.0, y: size.height - searchSize.height), size: searchSize)
                 } else {
                     searchSize = CGSize(width: barHeight, height: barHeight)
                     size.width += barHeight + 8.0
@@ -707,12 +793,20 @@ public final class TabBarComponent: Component {
                     searchView = current
                 } else {
                     searchViewTransition = searchViewTransition.withAnimation(.none)
-                    searchView = NavigationSearchView(action: { [weak self] in
-                        guard let self, let component = self.component else {
-                            return
+                    searchView = NavigationSearchView(
+                        action: { [weak self] in
+                            guard let self, let component = self.component else {
+                                return
+                            }
+                            component.search?.activate()
+                        },
+                        closeAction: { [weak self] in
+                            guard let self, let component = self.component else {
+                                return
+                            }
+                            component.search?.deactivate()
                         }
-                        component.search?.activate()
-                    })
+                    )
                     self.searchView = searchView
                     self.backgroundContainer.contentView.addSubview(searchView)
                     searchView.frame = CGRect(origin: CGPoint(x: availableSize.width + 50.0, y: 0.0), size: searchSize)

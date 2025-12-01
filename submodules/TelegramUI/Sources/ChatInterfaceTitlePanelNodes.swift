@@ -6,12 +6,9 @@ import ChatPresentationInterfaceState
 import ChatControllerInteraction
 import ComponentFlow
 import ChatSideTopicsPanel
+import LegacyChatHeaderPanelComponent
 
 func titlePanelForChatPresentationInterfaceState(_ chatPresentationInterfaceState: ChatPresentationInterfaceState, context: AccountContext, currentPanel: ChatTitleAccessoryPanelNode?, controllerInteraction: ChatControllerInteraction?, interfaceInteraction: ChatPanelInterfaceInteraction?, force: Bool) -> ChatTitleAccessoryPanelNode? {
-    if "".isEmpty {
-        return nil
-    }
-    
     if !force, case .standard(.embedded) = chatPresentationInterfaceState.mode {
         return nil
     }
