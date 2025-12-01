@@ -9,7 +9,13 @@
       "Skill(superpowers:brainstorming)",
       "Bash(cat:*)",
       "Bash(python3:*)",
-      "Skill(superpowers:writing-plans)"
+      "Skill(superpowers:writing-plans)",
+      "Skill(superpowers:subagent-driven-development)",
+      "Bash(test:*)",
+      "Bash(swift package:*)",
+      "Bash(.build/debug/MakeProject:*)",
+      "Bash(./build-system/MakeProject/.build/debug/MakeProject)",
+      "Bash(xcodebuild:*)"
     ],
     "deny": []
   }
