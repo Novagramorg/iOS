@@ -12,25 +12,32 @@ import BundleIconComponent
 import ListSectionComponent
 import ListActionItemComponent
 import TelegramCore
+import EmojiStatusComponent
 
 final class PasskeysScreenListComponent: Component {
     let context: AccountContext
     let theme: PresentationTheme
+    let strings: PresentationStrings
     let insets: UIEdgeInsets
     let passkeys: [TelegramPasskey]
+    let addPasskeyAction: () -> Void
     let deletePasskeyAction: (String) -> Void
     
     init(
         context: AccountContext,
         theme: PresentationTheme,
+        strings: PresentationStrings,
         insets: UIEdgeInsets,
         passkeys: [TelegramPasskey],
+        addPasskeyAction: @escaping () -> Void,
         deletePasskeyAction: @escaping (String) -> Void
     ) {
         self.context = context
         self.theme = theme
+        self.strings = strings
         self.insets = insets
         self.passkeys = passkeys
+        self.addPasskeyAction = addPasskeyAction
         self.deletePasskeyAction = deletePasskeyAction
     }
     
@@ -39,6 +46,9 @@ final class PasskeysScreenListComponent: Component {
             return false
         }
         if lhs.theme !== rhs.theme {
+            return false
+        }
+        if lhs.strings !== rhs.strings {
             return false
         }
         if lhs.insets != rhs.insets {
@@ -100,6 +110,11 @@ final class PasskeysScreenListComponent: Component {
             self.component = component
             self.state = state
             
+            var maxPasskeys = 5
+            if let data = component.context.currentAppConfiguration.with({ $0 }).data, let maxValue = data["passkeys_account_passkeys_max"] as? Double {
+                maxPasskeys = Int(maxValue)
+            }
+            
             self.backgroundColor = component.theme.list.blocksBackgroundColor
 
             let sideInset: CGFloat = 16.0 + component.insets.left
@@ -112,7 +127,7 @@ final class PasskeysScreenListComponent: Component {
             let iconSize = self.icon.update(
                 transition: .immediate,
                 component: AnyComponent(LottieComponent(
-                    content: LottieComponent.AppBundleContent(name: "TwoFactorSetupIntro"),
+                    content: LottieComponent.AppBundleContent(name: "passkey_logo"),
                     loop: false
                 )),
                 environment: {},
@@ -184,12 +199,49 @@ final class PasskeysScreenListComponent: Component {
                 dateFormatter.dateStyle = .medium
                 let dateString = dateFormatter.string(from: Date(timeIntervalSince1970: Double(passkey.date)))
                 
+                let iconComponent: AnyComponentWithIdentity<Empty>
+                if let emojiId = passkey.emojiId {
+                    iconComponent = AnyComponentWithIdentity(
+                        id: "lottie",
+                        component: AnyComponent(TransformContents<Empty>(
+                            content: AnyComponent(EmojiStatusComponent(
+                                context: component.context,
+                                animationCache: component.context.animationCache,
+                                animationRenderer: component.context.animationRenderer,
+                                content: .animation(
+                                    content: .customEmoji(fileId: emojiId),
+                                    size: CGSize(width: 40.0, height: 40.0),
+                                    placeholderColor: component.theme.list.mediaPlaceholderColor,
+                                    themeColor: nil,
+                                    loopMode: .count(1)
+                                ),
+                                size: CGSize(width: 40.0, height: 40.0),
+                                isVisibleForAnimations: true,
+                                action: nil
+                            )),
+                            translation: CGPoint(x: 0.0, y: 1.0)
+                        ))
+                    )
+                } else {
+                    iconComponent = AnyComponentWithIdentity(
+                        id: "icon",
+                        component: AnyComponent(BundleIconComponent(name: "Settings/Menu/Passkeys", tintColor: nil))
+                    )
+                }
+                
+                //TODO:localize
+                var subtitleString = "created \(dateString)"
+                if let lastUsageDate = passkey.lastUsageDate {
+                    let lastUsedDateString = dateFormatter.string(from: Date(timeIntervalSince1970: Double(lastUsageDate)))
+                    subtitleString.append(" • used \(lastUsedDateString)")
+                }
+                
                 listSectionItems.append(AnyComponentWithIdentity(id: passkey.id, component: AnyComponent(ListActionItemComponent(
                     theme: component.theme,
                     title: AnyComponent(VStack([
                         AnyComponentWithIdentity(id: AnyHashable(0), component: AnyComponent(MultilineTextComponent(
                             text: .plain(NSAttributedString(
-                                string: passkey.name,
+                                string: passkey.name.isEmpty ? "Passkey" : passkey.name, //TODO:localize
                                 font: Font.regular(17.0),
                                 textColor: component.theme.list.itemPrimaryTextColor
                             )),
@@ -197,7 +249,7 @@ final class PasskeysScreenListComponent: Component {
                         ))),
                         AnyComponentWithIdentity(id: AnyHashable(1), component: AnyComponent(MultilineTextComponent(
                             text: .plain(NSAttributedString(
-                                string: "created \(dateString)",
+                                string: subtitleString,
                                 font: Font.regular(14.0),
                                 textColor: component.theme.list.itemSecondaryTextColor
                             )),
@@ -205,18 +257,49 @@ final class PasskeysScreenListComponent: Component {
                         )))
                     ], alignment: .left, spacing: 2.0)),
                     leftIcon: .custom(
-                        AnyComponentWithIdentity(
-                            id: "icon",
-                            component: AnyComponent(BundleIconComponent(name: "Settings/Menu/TwoStepAuth", tintColor: nil))
-                        ),
+                        iconComponent,
                         false
                     ),
+                    accessory: nil,
+                    contextOptions: [ListActionItemComponent.ContextOption(
+                        id: "delete",
+                        title: component.strings.Common_Delete,
+                        color: component.theme.list.itemDisclosureActions.destructive.fillColor,
+                        action: { [weak self] in
+                            guard let self, let component = self.component else {
+                                return
+                            }
+                            component.deletePasskeyAction(passkeyId)
+                        }
+                    )],
+                    action: nil,
+                    highlighting: .default
+                ))))
+            }
+            
+            if component.passkeys.count < maxPasskeys {
+                listSectionItems.append(AnyComponentWithIdentity(id: "_add", component: AnyComponent(ListActionItemComponent(
+                    theme: component.theme,
+                    title: AnyComponent(VStack([
+                        AnyComponentWithIdentity(id: AnyHashable(0), component: AnyComponent(MultilineTextComponent(
+                            text: .plain(NSAttributedString(
+                                string: "Create Passkey", //TODO:localize
+                                font: Font.regular(17.0),
+                                textColor: component.theme.list.itemAccentColor
+                            )),
+                            maximumNumberOfLines: 1
+                        )))
+                    ], alignment: .left, spacing: 2.0)),
+                    leftIcon: .custom(AnyComponentWithIdentity(id: 0, component: AnyComponent(BundleIconComponent(
+                        name: "Chat List/AddIcon",
+                        tintColor: component.theme.list.itemAccentColor
+                    ))), false),
                     accessory: nil,
                     action: { [weak self] _ in
                         guard let self, let component = self.component else {
                             return
                         }
-                        component.deletePasskeyAction(passkeyId)
+                        component.addPasskeyAction()
                     },
                     highlighting: .default
                 ))))
