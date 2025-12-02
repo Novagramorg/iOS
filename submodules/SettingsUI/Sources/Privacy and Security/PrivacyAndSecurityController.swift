@@ -673,12 +673,11 @@ private func privacyAndSecurityControllerEntries(
     entries.append(.twoStepVerification(presentationData.theme, presentationData.strings.PrivacySettings_TwoStepAuth, twoStepAuthString, twoStepAuthData))
     
     if displayPasskeys {
-        //TODO:localize
         var passkeysString = ""
         if let hasPasskeys = hasPasskeys {
-            passkeysString = hasPasskeys ? "On" : "Off"
+            passkeysString = hasPasskeys ? presentationData.strings.PrivacySettings_PasscodeOn : presentationData.strings.PrivacySettings_PasscodeOff
         }
-        entries.append(.passkeys(presentationData.theme, "Passkey", passkeysString))
+        entries.append(.passkeys(presentationData.theme, presentationData.strings.PrivacySettings_Passkey, passkeysString))
     }
     
     if let privacySettings = privacySettings {

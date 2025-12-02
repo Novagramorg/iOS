@@ -123,7 +123,6 @@ final class PasskeysScreenListComponent: Component {
             contentHeight += component.insets.top
             contentHeight += 8.0
 
-            //TODO:localize
             let iconSize = self.icon.update(
                 transition: .immediate,
                 component: AnyComponent(LottieComponent(
@@ -148,7 +147,7 @@ final class PasskeysScreenListComponent: Component {
             let titleSize = self.title.update(
                 transition: .immediate,
                 component: AnyComponent(MultilineTextComponent(
-                    text: .plain(NSAttributedString(string: "Passkeys", font: Font.bold(27.0), textColor: component.theme.list.itemPrimaryTextColor)),
+                    text: .plain(NSAttributedString(string: component.strings.Passkeys_Title, font: Font.bold(27.0), textColor: component.theme.list.itemPrimaryTextColor)),
                     horizontalAlignment: .center,
                     maximumNumberOfLines: 0
                 )),
@@ -169,7 +168,7 @@ final class PasskeysScreenListComponent: Component {
             let subtitleSize = self.subtitle.update(
                 transition: .immediate,
                 component: AnyComponent(BalancedTextComponent(
-                    text: .plain(NSAttributedString(string: "Log in safely and keep your account secure.", font: Font.regular(16.0), textColor: component.theme.list.itemPrimaryTextColor)),
+                    text: .plain(NSAttributedString(string: component.strings.Passkeys_Subtitle, font: Font.regular(16.0), textColor: component.theme.list.itemPrimaryTextColor)),
                     horizontalAlignment: .center,
                     maximumNumberOfLines: 0,
                     lineSpacing: 0.2
@@ -229,11 +228,12 @@ final class PasskeysScreenListComponent: Component {
                     )
                 }
                 
-                //TODO:localize
-                var subtitleString = "created \(dateString)"
+                let subtitleString: String
                 if let lastUsageDate = passkey.lastUsageDate {
                     let lastUsedDateString = dateFormatter.string(from: Date(timeIntervalSince1970: Double(lastUsageDate)))
-                    subtitleString.append(" • used \(lastUsedDateString)")
+                    subtitleString = component.strings.Passkeys_PasskeyCreatedAndUsedPattern(dateString, lastUsedDateString).string
+                } else {
+                    subtitleString = component.strings.Passkeys_PasskeyCreatedPattern(dateString).string
                 }
                 
                 listSectionItems.append(AnyComponentWithIdentity(id: passkey.id, component: AnyComponent(ListActionItemComponent(
@@ -241,7 +241,7 @@ final class PasskeysScreenListComponent: Component {
                     title: AnyComponent(VStack([
                         AnyComponentWithIdentity(id: AnyHashable(0), component: AnyComponent(MultilineTextComponent(
                             text: .plain(NSAttributedString(
-                                string: passkey.name.isEmpty ? "Passkey" : passkey.name, //TODO:localize
+                                string: passkey.name.isEmpty ? component.strings.Passkeys_EmptyName : passkey.name,
                                 font: Font.regular(17.0),
                                 textColor: component.theme.list.itemPrimaryTextColor
                             )),
@@ -283,7 +283,7 @@ final class PasskeysScreenListComponent: Component {
                     title: AnyComponent(VStack([
                         AnyComponentWithIdentity(id: AnyHashable(0), component: AnyComponent(MultilineTextComponent(
                             text: .plain(NSAttributedString(
-                                string: "Create Passkey", //TODO:localize
+                                string: component.strings.Passkeys_AddPasskey,
                                 font: Font.regular(17.0),
                                 textColor: component.theme.list.itemAccentColor
                             )),
@@ -305,7 +305,6 @@ final class PasskeysScreenListComponent: Component {
                 ))))
             }
             
-            //TODO:localize
             let listSectionSize = self.listSection.update(
                 transition: transition,
                 component: AnyComponent(ListSectionComponent(
@@ -314,7 +313,7 @@ final class PasskeysScreenListComponent: Component {
                     header: nil,
                     footer: AnyComponent(MultilineTextComponent(
                         text: .plain(NSAttributedString(
-                            string: "Your passkeys are stored securely in your password manager.",
+                            string: component.strings.Passkeys_ListFooter,
                             font: Font.regular(13.0),
                             textColor: component.theme.list.freeTextColor
                         )),
