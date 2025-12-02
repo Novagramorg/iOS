@@ -17,21 +17,27 @@ import EmojiStatusComponent
 final class PasskeysScreenListComponent: Component {
     let context: AccountContext
     let theme: PresentationTheme
+    let strings: PresentationStrings
     let insets: UIEdgeInsets
     let passkeys: [TelegramPasskey]
+    let addPasskeyAction: () -> Void
     let deletePasskeyAction: (String) -> Void
     
     init(
         context: AccountContext,
         theme: PresentationTheme,
+        strings: PresentationStrings,
         insets: UIEdgeInsets,
         passkeys: [TelegramPasskey],
+        addPasskeyAction: @escaping () -> Void,
         deletePasskeyAction: @escaping (String) -> Void
     ) {
         self.context = context
         self.theme = theme
+        self.strings = strings
         self.insets = insets
         self.passkeys = passkeys
+        self.addPasskeyAction = addPasskeyAction
         self.deletePasskeyAction = deletePasskeyAction
     }
     
@@ -40,6 +46,9 @@ final class PasskeysScreenListComponent: Component {
             return false
         }
         if lhs.theme !== rhs.theme {
+            return false
+        }
+        if lhs.strings !== rhs.strings {
             return false
         }
         if lhs.insets != rhs.insets {
@@ -100,6 +109,11 @@ final class PasskeysScreenListComponent: Component {
         func update(component: PasskeysScreenListComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
             self.component = component
             self.state = state
+            
+            var maxPasskeys = 5
+            if let data = component.context.currentAppConfiguration.with({ $0 }).data, let maxValue = data["passkeys_account_passkeys_max"] as? Double {
+                maxPasskeys = Int(maxValue)
+            }
             
             self.backgroundColor = component.theme.list.blocksBackgroundColor
 
@@ -227,7 +241,7 @@ final class PasskeysScreenListComponent: Component {
                     title: AnyComponent(VStack([
                         AnyComponentWithIdentity(id: AnyHashable(0), component: AnyComponent(MultilineTextComponent(
                             text: .plain(NSAttributedString(
-                                string: passkey.name,
+                                string: passkey.name.isEmpty ? "Passkey" : passkey.name, //TODO:localize
                                 font: Font.regular(17.0),
                                 textColor: component.theme.list.itemPrimaryTextColor
                             )),
@@ -247,11 +261,45 @@ final class PasskeysScreenListComponent: Component {
                         false
                     ),
                     accessory: nil,
+                    contextOptions: [ListActionItemComponent.ContextOption(
+                        id: "delete",
+                        title: component.strings.Common_Delete,
+                        color: component.theme.list.itemDisclosureActions.destructive.fillColor,
+                        action: { [weak self] in
+                            guard let self, let component = self.component else {
+                                return
+                            }
+                            component.deletePasskeyAction(passkeyId)
+                        }
+                    )],
+                    action: nil,
+                    highlighting: .default
+                ))))
+            }
+            
+            if component.passkeys.count < maxPasskeys {
+                listSectionItems.append(AnyComponentWithIdentity(id: "_add", component: AnyComponent(ListActionItemComponent(
+                    theme: component.theme,
+                    title: AnyComponent(VStack([
+                        AnyComponentWithIdentity(id: AnyHashable(0), component: AnyComponent(MultilineTextComponent(
+                            text: .plain(NSAttributedString(
+                                string: "Create Passkey", //TODO:localize
+                                font: Font.regular(17.0),
+                                textColor: component.theme.list.itemAccentColor
+                            )),
+                            maximumNumberOfLines: 1
+                        )))
+                    ], alignment: .left, spacing: 2.0)),
+                    leftIcon: .custom(AnyComponentWithIdentity(id: 0, component: AnyComponent(BundleIconComponent(
+                        name: "Chat List/AddIcon",
+                        tintColor: component.theme.list.itemAccentColor
+                    ))), false),
+                    accessory: nil,
                     action: { [weak self] _ in
                         guard let self, let component = self.component else {
                             return
                         }
-                        component.deletePasskeyAction(passkeyId)
+                        component.addPasskeyAction()
                     },
                     highlighting: .default
                 ))))
