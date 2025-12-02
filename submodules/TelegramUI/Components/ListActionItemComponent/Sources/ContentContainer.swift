@@ -100,18 +100,23 @@ private final class ContextOptionComponent: Component {
 }
 
 final class ContentContainer: UIScrollView, UIScrollViewDelegate {
+    private let closeOtherContextOptions: () -> Void
+    
     private var itemViews: [AnyHashable: ComponentView<Empty>] = [:]
     
     private var ignoreScrollingEvents: Bool = false
     private var draggingBeganInClosedState: Bool = false
+    private var didProcessScrollingCycle: Bool = false
     
     private var contextOptions: [ListActionItemComponent.ContextOption] = []
     private var optionsWidth: CGFloat = 0.0
     
     private var revealedStateTapRecognizer: UITapGestureRecognizer?
     
-    override init(frame: CGRect) {
-        super.init(frame: frame)
+    init(closeOtherContextOptions: @escaping () -> Void) {
+        self.closeOtherContextOptions = closeOtherContextOptions
+        
+        super.init(frame: CGRect())
         
         let revealedStateTapRecognizer = UITapGestureRecognizer(target: self, action: #selector(self.onTapGesture(_:)))
         self.revealedStateTapRecognizer = revealedStateTapRecognizer
@@ -155,9 +160,16 @@ final class ContentContainer: UIScrollView, UIScrollViewDelegate {
     
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
         self.revealedStateTapRecognizer?.isEnabled = self.contentOffset.x > 0.0
+        if self.contentOffset.x > 0.0 {
+            if !self.didProcessScrollingCycle {
+                self.didProcessScrollingCycle = true
+                self.closeOtherContextOptions()
+            }
+        }
     }
     
     func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+        self.didProcessScrollingCycle = false
         self.draggingBeganInClosedState = self.contentOffset.x == 0.0
     }
     
@@ -198,6 +210,10 @@ final class ContentContainer: UIScrollView, UIScrollViewDelegate {
             return nil
         }
         return result
+    }
+    
+    func closeContextOptions() {
+        self.setContentOffset(CGPoint(x: 0.0, y: 0.0), animated: true)
     }
     
     func update(size: CGSize, contextOptions: [ListActionItemComponent.ContextOption], transition: ComponentTransition) {
