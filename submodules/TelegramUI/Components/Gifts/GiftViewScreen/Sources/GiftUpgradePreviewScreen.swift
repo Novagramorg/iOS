@@ -665,7 +665,7 @@ private final class GiftUpgradePreviewScreenComponent: Component {
             }), case let .backdrop(_, _, innerColor, outerColor, _, _, _) = backdropAttribute {
                 let topColor = UIColor(rgb: UInt32(bitPattern: innerColor)).withMultiplied(hue: 1.01, saturation: 1.22, brightness: 1.04)
                 let bottomColor = UIColor(rgb: UInt32(bitPattern: outerColor)).withMultiplied(hue: 0.97, saturation: 1.45, brightness: 0.89)
-                buttonColor = topColor.mixedWith(bottomColor, alpha: 0.8).withMultipliedBrightnessBy(1.2)
+                buttonColor = topColor.mixedWith(bottomColor, alpha: 0.8).withMultipliedBrightnessBy(1.25)
                 
                 secondaryTextColor = topColor.withMultiplied(hue: 1.0, saturation: 1.02, brightness: 1.25).mixedWith(UIColor.white, alpha: 0.3)
             }
@@ -680,6 +680,7 @@ private final class GiftUpgradePreviewScreenComponent: Component {
                     animationOffset: CGPoint(x: 0.0, y: 20.0),
                     animationScale: nil,
                     displayAnimationStars: false,
+                    alwaysAnimateTransition: true,
                     revealedAttributes: Set(),
                     externalState: self.giftCompositionExternalState,
                     requestUpdate: { [weak state] transition in
@@ -944,7 +945,7 @@ private final class GiftUpgradePreviewScreenComponent: Component {
             self.glassContainerView.frame = CGRect(origin: CGPoint(x: rawSideInset, y: 0.0), size: CGSize(width: fillingSize, height: 64.0))
                                            
             let closeButtonSize = self.closeButton.update(
-                transition: .immediate,
+                transition: transition,
                 component: AnyComponent(GlassBarButtonComponent(
                     size: CGSize(width: 40.0, height: 40.0),
                     backgroundColor: buttonColor,
