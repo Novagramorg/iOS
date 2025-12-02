@@ -15466,3 +15466,37 @@ Error: %8$@";
 "CreateExternalStream.RevokeStreamKey" = "Revoke Stream Key";
 "CreateExternalStream.Revoke.Text" = "Do you want to revoke the stream key?";
 "CreateExternalStream.Revoke.Revoke" = "Revoke";
+
+"Gift.AuctionBid.UntilEnd" = "until the end";
+"Gift.AuctionBid.BeforeStart" = "before start";
+"Gift.AuctionBid.RoundSubtitle" = "Round %@ of %@";
+"Gift.AuctionBid.TopWinnersTotal" = "Top 3 of %@ Winners";
+
+"Gift.Acquired.GiftRound" = "%1$@ in round %2$@";
+
+"Gift.Options.Gift.Soon" = "soon";
+
+"Chat.Auction.StartsIn" = "starts in ";
+"Chat.Auction.View" = "VIEW";
+"Chat.Auction.Upcoming" = "Upcoming Auction";
+
+"Gift.Auction.Start" = "Start";
+"Gift.Auction.End" = "End";
+"Gift.Auction.Quantity" = "Quantity";
+"Gift.Auction.TotalRounds" = "Rounds";
+"Gift.Auction.TimeRound" = "Round %@";
+"Gift.Auction.TimeRounds" = "Rounds %@";
+"Gift.Auction.StartsInHours" = "auction starts in {h}:{m}:{s}";
+"Gift.Auction.StartsInMinutes" = "auction starts in {m}:{s}";
+"Gift.Auction.EarlyBid" = "Place an Early Bid";
+
+"Gift.Auction.Hours_1" = "%@ hour";
+"Gift.Auction.Hours_any" = "%@ hours";
+"Gift.Auction.Minutes_1" = "%@ minute";
+"Gift.Auction.Minutes_any" = "%@ minutes";
+"Gift.Auction.HoursEach_1" = "%@ hour each";
+"Gift.Auction.HoursEach_any" = "%@ hours each";
+"Gift.Auction.MinutesEach_1" = "%@ minute each";
+"Gift.Auction.MinutesEach_any" = "%@ minutes each";
+
+"ChatList.Auctions.UpcomingAuction" = "Upcoming Auction";

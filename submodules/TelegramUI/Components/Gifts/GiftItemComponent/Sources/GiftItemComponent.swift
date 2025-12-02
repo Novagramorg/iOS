@@ -539,7 +539,7 @@ public final class GiftItemComponent: Component {
                 animationFile = gift.file
                 backgroundColor = edgeColor
                 secondBackgroundColor = centerColor
-                
+                                
                 emoji = ChatTextInputTextCustomEmojiAttribute(
                     interactivelySelectedFromPackId: nil,
                     fileId: gift.file.fileId.id,
@@ -547,8 +547,14 @@ public final class GiftItemComponent: Component {
                 )
                 
                 let currentTime = Int32(CFAbsoluteTimeGetCurrent() + kCFAbsoluteTimeIntervalSince1970)
-                let endTimeout = max(0, endTime - currentTime)
                 
+                let endTimeout: Int32
+                if let auctionStartDate = gift.auctionStartDate, currentTime < auctionStartDate {
+                    endTimeout = max(0, auctionStartDate - currentTime)
+                    animatedBadgeItems.append(AnimatedTextComponent.Item(id: "starts", content: .text(component.strings.Chat_Auction_StartsIn)))
+                } else {
+                    endTimeout = max(0, endTime - currentTime)
+                }
                 if endTimeout > 0 {
                     let hours = Int(endTimeout / 3600)
                     let minutes = Int((endTimeout % 3600) / 60)

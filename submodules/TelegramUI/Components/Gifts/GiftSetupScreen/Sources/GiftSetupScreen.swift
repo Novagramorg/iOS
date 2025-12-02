@@ -32,7 +32,6 @@ import InAppPurchaseManager
 import BlurredBackgroundComponent
 import ProgressNavigationButtonNode
 import Markdown
-import GiftViewScreen
 import UndoUI
 import ConfettiEffect
 import EdgeEffect
@@ -1596,10 +1595,7 @@ private final class GiftSetupScreenComponent: Component {
                                         guard let self, let component = self.component, let controller = self.environment?.controller(), let upgradePreview else {
                                             return
                                         }
-                                        let previewController = GiftViewScreen(
-                                            context: component.context,
-                                            subject: .upgradePreview(upgradePreview.attributes, peerName)
-                                        )
+                                        let previewController = component.context.sharedContext.makeGiftUpgradePreviewScreen(context: component.context, attributes: upgradePreview.attributes, peerName: peerName)
                                         controller.push(previewController)
                                     })
                                 }
@@ -1712,7 +1708,7 @@ private final class GiftSetupScreenComponent: Component {
                 var remains: Int32 = availability.remains
                 if let auctionState = self.giftAuctionState {
                     switch auctionState.auctionState {
-                    case let .ongoing(_, _, _, _, _, _, _, giftsLeft, _, _):
+                    case let .ongoing(_, _, _, _, _, _, _, giftsLeft, _, _, _, _):
                         remains = giftsLeft
                     case .finished:
                         remains = 0
@@ -1839,7 +1835,7 @@ private final class GiftSetupScreenComponent: Component {
                 )))
                 if let giftAuctionState = self.giftAuctionState {
                     switch giftAuctionState.auctionState {
-                    case let .ongoing(_, _, endTime, _, _, _, _, _, _, _):
+                    case let .ongoing(_, _, endTime, _, _, _, _, _, _, _, _, _):
                         let currentTime = Int32(CFAbsoluteTimeGetCurrent() + kCFAbsoluteTimeIntervalSince1970)
                         
                         let endTimeout = max(0, endTime - currentTime)

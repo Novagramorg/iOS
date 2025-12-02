@@ -188,6 +188,10 @@ public extension TelegramEngine {
         public func sendStarGiftOffer(peerId: EnginePeer.Id, slug: String, amount: CurrencyAmount, duration: Int32, allowPaidStars: Int64?) -> Signal<Never, SendStarGiftOfferError> {
             return _internal_sendStarGiftOffer(account: self.account, peerId: peerId, slug: slug, amount: amount, duration: duration, allowPaidStars: allowPaidStars)
         }
+        
+        public func getStarGiftUpgradeAttributes(giftId: Int64) -> Signal<[StarGift.UniqueGift.Attribute]?, NoError> {
+            return _internal_getStarGiftUpgradeAttributes(account: self.account, giftId: giftId)
+        }
     }
 }
 
