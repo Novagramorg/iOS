@@ -482,16 +482,22 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
             let tableTextColor = theme.list.itemPrimaryTextColor
     
             let currentTime = Int32(CFAbsoluteTimeGetCurrent() + kCFAbsoluteTimeIntervalSince1970)
+            var startTime = currentTime
             var endTime = currentTime
             
+            var isUpcoming = false
             var isEnded = false
             var tableItems: [TableComponent.Item] = []
             if let auctionState = state.giftAuctionState, case let .generic(gift) = component.auctionContext.gift {
+                startTime = auctionState.startDate
                 endTime = auctionState.endDate
                 if case .finished = auctionState.auctionState {
                     isEnded = true
                 } else if auctionState.endDate < currentTime {
                     isEnded = true
+                }
+                if auctionState.startDate > currentTime {
+                    isUpcoming = true
                 }
                 
                 if isEnded {
@@ -574,33 +580,80 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
                     
                     tableItems.append(.init(
                         id: "start",
-                        title: strings.Gift_Auction_Started,
+                        title: isUpcoming ? strings.Gift_Auction_Start : strings.Gift_Auction_Started,
                         component: AnyComponent(
                             MultilineTextComponent(text: .plain(NSAttributedString(string: stringForMediumDate(timestamp: auctionState.startDate, strings: strings, dateTimeFormat: dateTimeFormat), font: tableFont, textColor: tableTextColor)))
                         )
                     ))
                     tableItems.append(.init(
                         id: "ends",
-                        title: strings.Gift_Auction_Ends,
+                        title: isUpcoming ? strings.Gift_Auction_End : strings.Gift_Auction_Ends,
                         component: AnyComponent(
                             MultilineTextComponent(text: .plain(NSAttributedString(string: stringForMediumDate(timestamp: auctionState.endDate, strings: strings, dateTimeFormat: dateTimeFormat), font: tableFont, textColor: tableTextColor)))
                         )
                     ))
-                    if case let .ongoing(_, _, _, _, _, _, _, giftsLeft, currentRound, totalRounds) = auctionState.auctionState {
-                        tableItems.append(.init(
-                            id: "round",
-                            title: strings.Gift_Auction_CurrentRound,
-                            component: AnyComponent(
-                                MultilineTextComponent(text: .plain(NSAttributedString(string: strings.Gift_Auction_Round("\(currentRound)", "\(totalRounds)").string, font: tableFont, textColor: tableTextColor)))
-                            )
-                        ))
-                        tableItems.append(.init(
-                            id: "availability",
-                            title: strings.Gift_Auction_Availability,
-                            component: AnyComponent(
-                                MultilineTextComponent(text: .plain(NSAttributedString(string: strings.Gift_Auction_AvailabilityOf(presentationStringsFormattedNumber(giftsLeft, dateTimeFormat.groupingSeparator), presentationStringsFormattedNumber(gift.availability?.total ?? 0, dateTimeFormat.groupingSeparator)).string, font: tableFont, textColor: tableTextColor)))
-                            )
-                        ))
+
+                    if case let .ongoing(_, _, _, _, _, _, _, giftsLeft, currentRound, totalRounds, rounds, _) = auctionState.auctionState {
+                        if isUpcoming {
+                            tableItems.append(.init(
+                                id: "quantity",
+                                title: strings.Gift_Auction_Quantity,
+                                component: AnyComponent(
+                                    MultilineTextComponent(text: .plain(NSAttributedString(string: presentationStringsFormattedNumber(gift.availability?.total ?? 0, dateTimeFormat.groupingSeparator), font: tableFont, textColor: tableTextColor)))
+                                )
+                            ))
+                            tableItems.append(.init(
+                                id: "rounds",
+                                title: strings.Gift_Auction_TotalRounds,
+                                component: AnyComponent(
+                                    MultilineTextComponent(text: .plain(NSAttributedString(string: presentationStringsFormattedNumber(totalRounds, dateTimeFormat.groupingSeparator), font: tableFont, textColor: tableTextColor)))
+                                )
+                            ))
+                            
+                            for i in 0 ..< rounds.count {
+                                let round = rounds[i]
+                                let start = round.num
+                                var end = totalRounds
+                                if i < rounds.count - 1 {
+                                    let nextRound = rounds[i + 1]
+                                    end = nextRound.num - 1
+                                }
+                                                                
+                                let title: String = start == end ? strings.Gift_Auction_TimeRound("\(start)").string : strings.Gift_Auction_TimeRounds("\(start)-\(end)").string
+                                let value: String
+                                if round.duration % 3600 == 0 {
+                                    let hours = round.duration / 3600
+                                    value = start == end ? strings.Gift_Auction_Hours(hours) : strings.Gift_Auction_HoursEach(hours)
+                                } else {
+                                    let minutes = round.duration / 60
+                                    value = start == end ? strings.Gift_Auction_Minutes(minutes) : strings.Gift_Auction_MinutesEach(minutes)
+                                }
+                                
+                                tableItems.append(.init(
+                                    id: "round_\(i)",
+                                    title: title,
+                                    component: AnyComponent(
+                                        MultilineTextComponent(text: .plain(NSAttributedString(string: value, font: tableFont, textColor: tableTextColor)))
+                                    )
+                                ))
+                            }
+                            
+                        } else {
+                            tableItems.append(.init(
+                                id: "round",
+                                title: strings.Gift_Auction_CurrentRound,
+                                component: AnyComponent(
+                                    MultilineTextComponent(text: .plain(NSAttributedString(string: strings.Gift_Auction_Round("\(currentRound)", "\(totalRounds)").string, font: tableFont, textColor: tableTextColor)))
+                                )
+                            ))
+                            tableItems.append(.init(
+                                id: "availability",
+                                title: strings.Gift_Auction_Availability,
+                                component: AnyComponent(
+                                    MultilineTextComponent(text: .plain(NSAttributedString(string: strings.Gift_Auction_AvailabilityOf(presentationStringsFormattedNumber(giftsLeft, dateTimeFormat.groupingSeparator), presentationStringsFormattedNumber(gift.availability?.total ?? 0, dateTimeFormat.groupingSeparator)).string, font: tableFont, textColor: tableTextColor)))
+                                )
+                            ))
+                        }
                     }
                 }
             }
@@ -713,13 +766,8 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
                         guard let state else {
                             return
                         }
-                        #if DEBUG
-                        let giftController = GiftUpgradePreviewScreen(context: component.context)
-                        environment.controller()?.push(giftController)
-                        #else
                         let giftController = GiftAuctionAcquiredScreen(context: component.context, gift: component.auctionContext.gift, acquiredGifts: state.giftAuctionAcquiredGifts)
                         environment.controller()?.push(giftController)
-                        #endif
                     }, animateScale: false),
                     availableSize: CGSize(width: context.availableSize.width - 64.0, height: context.availableSize.height),
                     transition: context.transition
@@ -839,21 +887,32 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
             
             let buttonChild: _UpdatedChildComponent
             if !isEnded {
-                let buttonAttributedString = NSMutableAttributedString(string: strings.Gift_Auction_Join, font: Font.semibold(17.0), textColor: theme.list.itemCheckColors.foregroundColor, paragraphAlignment: .center)
+                let buttonAttributedString = NSMutableAttributedString(string: isUpcoming ? strings.Gift_Auction_EarlyBid : strings.Gift_Auction_Join, font: Font.semibold(17.0), textColor: theme.list.itemCheckColors.foregroundColor, paragraphAlignment: .center)
                 
-                let endTimeout = max(0, endTime - currentTime)
+                let endTimeout: Int32
+                if currentTime < startTime {
+                    endTimeout = max(0, startTime - currentTime)
+                } else {
+                    endTimeout = max(0, endTime - currentTime)
+                }
                 
                 let hours = Int(endTimeout / 3600)
                 let minutes = Int((endTimeout % 3600) / 60)
                 let seconds = Int(endTimeout % 60)
                 
-                let rawString = hours > 0 ? strings.Gift_Auction_TimeLeftHours : strings.Gift_Auction_TimeLeftMinutes
+                let rawString: String
+                if isUpcoming {
+                    rawString = hours > 0 ? strings.Gift_Auction_StartsInHours : strings.Gift_Auction_StartsInMinutes
+                } else {
+                    rawString = hours > 0 ? strings.Gift_Auction_TimeLeftHours : strings.Gift_Auction_TimeLeftMinutes
+                }
+                
                 var buttonAnimatedTitleItems: [AnimatedTextComponent.Item] = []
                 var startIndex = rawString.startIndex
                 while true {
                     if let range = rawString.range(of: "{", range: startIndex ..< rawString.endIndex) {
                         if range.lowerBound != startIndex {
-                            buttonAnimatedTitleItems.append(AnimatedTextComponent.Item(id: "prefix", content: .text(String(rawString[startIndex ..< range.lowerBound]))))
+                            buttonAnimatedTitleItems.append(AnimatedTextComponent.Item(id: "prefix_\(buttonAnimatedTitleItems.count)", content: .text(String(rawString[startIndex ..< range.lowerBound]))))
                         }
                         
                         startIndex = range.upperBound
@@ -874,7 +933,7 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
                     }
                 }
                 if startIndex != rawString.endIndex {
-                    buttonAnimatedTitleItems.append(AnimatedTextComponent.Item(id: "suffix", content: .text(String(rawString[startIndex ..< rawString.endIndex]))))
+                    buttonAnimatedTitleItems.append(AnimatedTextComponent.Item(id: "suffix_\(buttonAnimatedTitleItems.count)", content: .text(String(rawString[startIndex ..< rawString.endIndex]))))
                 }
 
                 let items: [AnyComponentWithIdentity<Empty>] = [

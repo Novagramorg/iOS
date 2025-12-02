@@ -3839,9 +3839,12 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         return controller
     }
     
-    public func makeGiftWearPreviewScreen(context: AccountContext, gift: StarGift.UniqueGift) -> ViewController {
-        let controller = GiftViewScreen(context: context, subject: .wearPreview(gift))
-        return controller
+    public func makeGiftWearPreviewScreen(context: AccountContext, gift: StarGift, attributes: [StarGift.UniqueGift.Attribute]?) -> ViewController {
+        return GiftViewScreen(context: context, subject: .wearPreview(gift, attributes))
+    }
+    
+    public func makeGiftUpgradePreviewScreen(context: AccountContext, attributes: [StarGift.UniqueGift.Attribute], peerName: String) -> ViewController {
+        return GiftViewScreen(context: context, subject: .upgradePreview(attributes, peerName))
     }
     
     public func makeGiftAuctionInfoScreen(context: AccountContext, auctionContext: GiftAuctionContext, completion: (() -> Void)?) -> ViewController {
