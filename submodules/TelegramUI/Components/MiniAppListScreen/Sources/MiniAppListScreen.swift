@@ -266,7 +266,8 @@ final class MiniAppListScreenComponent: Component {
                     }
                 ))) : nil,
                 rightButtons: rightButtons,
-                backPressed: isModal ? nil : { [weak self] in
+                backTitle: isModal ? nil : strings.Common_Back,
+                backPressed: { [weak self] in
                     guard let self else {
                         return
                     }
@@ -285,8 +286,8 @@ final class MiniAppListScreenComponent: Component {
                     strings: strings,
                     statusBarHeight: statusBarHeight,
                     sideInset: insets.left,
-                    search: ChatListNavigationBar.Search(isEnabled: true),
                     isSearchActive: self.isSearchDisplayControllerActive,
+                    isSearchEnabled: true,
                     primaryContent: headerContent,
                     secondaryContent: nil,
                     secondaryTransition: 0.0,

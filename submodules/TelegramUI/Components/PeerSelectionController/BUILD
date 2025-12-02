@@ -35,7 +35,6 @@ swift_library(
         "//submodules/TextFormat",
         "//submodules/TelegramUI/Components/Chat/ForwardAccessoryPanelNode",
         "//submodules/CounterControllerTitleView",
-        "//submodules/TelegramUI/Components/ChatList/ChatListFilterTabContainerNode",
     ],
     visibility = [
         "//visibility:public",

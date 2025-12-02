@@ -8,6 +8,8 @@ load("@build_bazel_rules_apple//apple:ios.bzl",
     "ios_application",
     "ios_extension",
     "ios_framework",
+    "ios_unit_test",
+    "ios_ui_test",
 )
 
 load("@build_bazel_rules_apple//apple:resources.bzl",
@@ -20,6 +22,7 @@ load("@build_bazel_rules_swift//swift:swift.bzl",
 
 load(
     "@rules_xcodeproj//xcodeproj:defs.bzl",
+    "top_level_target",
     "top_level_targets",
     "xcodeproj",
     "xcode_provisioning_profile",
@@ -493,6 +496,7 @@ associated_domains_fragment = "" if telegram_bundle_id not in official_bundle_id
     <string>applinks:t.me</string>
     <string>applinks:*.t.me</string>
     <string>webcredentials:t.me</string>
+    <string>webcredentials:telegram.org</string>
 </array>
 """
 

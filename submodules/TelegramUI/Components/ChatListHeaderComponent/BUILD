@@ -24,8 +24,6 @@ swift_library(
         "//submodules/Components/ComponentDisplayAdapters",
         "//submodules/SearchUI",
         "//submodules/TelegramUI/Components/MoreHeaderButton",
-        "//submodules/TelegramUI/Components/EdgeEffect",
-        "//submodules/TelegramUI/Components/GlassBackgroundComponent",
     ],
     visibility = [
         "//visibility:public",

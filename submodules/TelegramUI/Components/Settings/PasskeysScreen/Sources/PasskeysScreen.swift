@@ -169,12 +169,12 @@ final class PasskeysScreenComponent: Component {
             }
             let presentationData = component.context.sharedContext.currentPresentationData.with({ $0 })
             //TODO:localize
-            controller.present(standardTextAlertController(theme: AlertControllerTheme(presentationData: presentationData), title: "Delete Passkey?", text: "Once deleted, this passkey can't be used to log in.\n\nDon't forget to remove it from your password manager too.", actions: [TextAlertAction(type: .destructiveAction, title: "Delete", action: { [weak self] in
+            controller.present(standardTextAlertController(theme: AlertControllerTheme(presentationData: presentationData), title: "Delete Passkey?", text: "Once deleted, this passkey can't be used to log in.\n\nDon't forget to remove it from your password manager too.", actions: [TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: {
+            }), TextAlertAction(type: .destructiveAction, title: "Delete", action: { [weak self] in
                 guard let self else {
                     return
                 }
                 self.deletePasskey(id: id)
-            }), TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: {
             })]), in: .window(.root))
         }
         
@@ -204,7 +204,7 @@ final class PasskeysScreenComponent: Component {
                     }
                     if let credentialId = decodeBase64(passkey.id) {
                         do {
-                            try await updater.reportUnknownPublicKeyCredential(relyingPartyIdentifier: "t.me", credentialID: credentialId)
+                            try await updater.reportUnknownPublicKeyCredential(relyingPartyIdentifier: "telegram.org", credentialID: credentialId)
                         } catch let e {
                             Logger.shared.log("Passkeys", "reportUnknownPublicKeyCredential error: \(e)")
                         }

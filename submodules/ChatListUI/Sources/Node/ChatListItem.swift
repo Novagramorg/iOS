@@ -2103,9 +2103,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                 let effectiveBackgroundColor: UIColor
                 if item.isPinned {
                     onlineIcon = PresentationResourcesChatList.recentStatusOnlineIcon(item.presentationData.theme, state: .pinned, voiceChat: self.onlineIsVoiceChat)
-                    //TODO:localize
-                    effectiveBackgroundColor = item.presentationData.theme.chatList.itemBackgroundColor
-                    //effectiveBackgroundColor = item.presentationData.theme.chatList.pinnedItemBackgroundColor
+                    effectiveBackgroundColor = item.presentationData.theme.chatList.pinnedItemBackgroundColor
                 } else {
                     onlineIcon = PresentationResourcesChatList.recentStatusOnlineIcon(item.presentationData.theme, state: .regular, voiceChat: self.onlineIsVoiceChat)
                     effectiveBackgroundColor = item.presentationData.theme.chatList.itemBackgroundColor
@@ -2119,9 +2117,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
             if let avatarLiveBadge = self.avatarLiveBadge {
                 let effectiveBackgroundColor: UIColor
                 if item.isPinned {
-                    //TODO:localize
-                    effectiveBackgroundColor = item.presentationData.theme.chatList.itemBackgroundColor
-                    //effectiveBackgroundColor = item.presentationData.theme.chatList.pinnedItemBackgroundColor
+                    effectiveBackgroundColor = item.presentationData.theme.chatList.pinnedItemBackgroundColor
                 } else {
                     effectiveBackgroundColor = item.presentationData.theme.chatList.itemBackgroundColor
                 }
@@ -4131,9 +4127,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                         
                         let effectiveBackgroundColor: UIColor
                         if item.isPinned {
-                            //TODO:localize
-                            effectiveBackgroundColor = item.presentationData.theme.chatList.itemBackgroundColor
-                            //effectiveBackgroundColor = item.presentationData.theme.chatList.pinnedItemBackgroundColor
+                            effectiveBackgroundColor = item.presentationData.theme.chatList.pinnedItemBackgroundColor
                         } else {
                             effectiveBackgroundColor = item.presentationData.theme.chatList.itemBackgroundColor
                         }
@@ -4154,9 +4148,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                         effectiveBackgroundColor = item.presentationData.theme.chatList.itemHighlightedBackgroundColor
                     } else if case let .chatList(index) = item.index, index.pinningIndex != nil {
                         onlineIcon = PresentationResourcesChatList.recentStatusOnlineIcon(item.presentationData.theme, state: .pinned, voiceChat: onlineIsVoiceChat)
-                        //TODO:localize
-                        effectiveBackgroundColor = item.presentationData.theme.chatList.itemBackgroundColor
-                        //effectiveBackgroundColor = item.presentationData.theme.chatList.pinnedItemBackgroundColor
+                        effectiveBackgroundColor = item.presentationData.theme.chatList.pinnedItemBackgroundColor
                     } else {
                         onlineIcon = PresentationResourcesChatList.recentStatusOnlineIcon(item.presentationData.theme, state: .regular, voiceChat: onlineIsVoiceChat)
                         effectiveBackgroundColor = item.presentationData.theme.chatList.itemBackgroundColor
@@ -5068,9 +5060,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                             backgroundColor = theme.itemBackgroundColor
                             highlightedBackgroundColor = theme.itemHighlightedBackgroundColor
                         } else {
-                            //TODO:localize
-                            backgroundColor = item.presentationData.theme.chatList.itemBackgroundColor
-                            //backgroundColor = theme.pinnedItemBackgroundColor
+                            backgroundColor = theme.pinnedItemBackgroundColor
                             highlightedBackgroundColor = theme.pinnedItemHighlightedBackgroundColor
                         }
                     } else {
