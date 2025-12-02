@@ -14,17 +14,20 @@ final class PasskeysScreenIntroComponent: Component {
     let context: AccountContext
     let theme: PresentationTheme
     let insets: UIEdgeInsets
+    let displaySkip: Bool
     let createPasskeyAction: () -> Void
     
     init(
         context: AccountContext,
         theme: PresentationTheme,
         insets: UIEdgeInsets,
+        displaySkip: Bool,
         createPasskeyAction: @escaping () -> Void
     ) {
         self.context = context
         self.theme = theme
         self.insets = insets
+        self.displaySkip = displaySkip
         self.createPasskeyAction = createPasskeyAction
     }
     
@@ -36,6 +39,9 @@ final class PasskeysScreenIntroComponent: Component {
             return false
         }
         if lhs.insets != rhs.insets {
+            return false
+        }
+        if lhs.displaySkip != rhs.displaySkip {
             return false
         }
         return true
@@ -64,6 +70,7 @@ final class PasskeysScreenIntroComponent: Component {
         private let title = ComponentView<Empty>()
         private let subtitle = ComponentView<Empty>()
         private let actionButton = ComponentView<Empty>()
+        private var skipButton: ComponentView<Empty>?
 
         private var items: [Item] = []
 
@@ -292,6 +299,13 @@ final class PasskeysScreenIntroComponent: Component {
                 environment: {},
                 containerSize: CGSize(width: availableSize.width - buttonInsets.left - buttonInsets.right, height: 52.0)
             )
+            
+            if component.displaySkip {
+                let skipButton: ComponentView<Empty>
+            } else if let skipButton = self.skipButton {
+                self.skipButton = nil
+                skipButton.view?.removeFromSuperview()
+            }
 
             let buttonFrame = CGRect(origin: CGPoint(x: buttonInsets.left, y: availableSize.height - buttonInsets.bottom - actionButtonSize.height), size: actionButtonSize)
 

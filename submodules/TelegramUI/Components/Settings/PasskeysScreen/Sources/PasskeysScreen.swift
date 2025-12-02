@@ -19,17 +19,26 @@ final class PasskeysScreenComponent: Component {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
     
     let context: AccountContext
+    let displaySkip: Bool
     let initialPasskeysData: [TelegramPasskey]?
     let passkeysDataUpdated: ([TelegramPasskey]) -> Void
+    let completion: () -> Void
+    let cancel: () -> Void
     
     init(
         context: AccountContext,
+        displaySkip: Bool,
         initialPasskeysData: [TelegramPasskey]?,
-        passkeysDataUpdated: @escaping ([TelegramPasskey]) -> Void
+        passkeysDataUpdated: @escaping ([TelegramPasskey]) -> Void,
+        completion: @escaping () -> Void,
+        cancel: @escaping () -> Void
     ) {
         self.context = context
+        self.displaySkip = displaySkip
         self.initialPasskeysData = initialPasskeysData
         self.passkeysDataUpdated = passkeysDataUpdated
+        self.completion = completion
+        self.cancel = cancel
     }
     
     static func ==(lhs: PasskeysScreenComponent, rhs: PasskeysScreenComponent) -> Bool {
@@ -353,10 +362,10 @@ final class PasskeysScreenComponent: Component {
 public final class PasskeysScreen: ViewControllerComponentContainer {
     private let context: AccountContext
     
-    public init(context: AccountContext, initialPasskeysData: [TelegramPasskey]?, passkeysDataUpdated: @escaping ([TelegramPasskey]) -> Void) async {
+    public init(context: AccountContext, displaySkip: Bool, initialPasskeysData: [TelegramPasskey]?, passkeysDataUpdated: @escaping ([TelegramPasskey]) -> Void, completion: @escaping () -> Void, cancel: @escaping () -> Void) async {
         self.context = context
         
-        super.init(context: context, component: PasskeysScreenComponent(context: context, initialPasskeysData: initialPasskeysData, passkeysDataUpdated: passkeysDataUpdated), navigationBarAppearance: .transparent)
+        super.init(context: context, component: PasskeysScreenComponent(context: context, displaySkip: displaySkip, initialPasskeysData: initialPasskeysData, passkeysDataUpdated: passkeysDataUpdated), navigationBarAppearance: .transparent)
     }
     
     required public init(coder aDecoder: NSCoder) {
