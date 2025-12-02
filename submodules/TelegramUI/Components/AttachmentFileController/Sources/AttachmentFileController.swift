@@ -207,8 +207,7 @@ private func attachmentFileControllerEntries(presentationData: PresentationData,
     case .recent:
         listTitle = presentationData.strings.Attachment_RecentlySentFiles
     case .audio:
-        //TODO:localize
-        listTitle = "SHARED AUDIO"
+        listTitle = presentationData.strings.Attachment_SharedAudio
     }
     
     if case .audio = mode {
