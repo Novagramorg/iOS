@@ -118,6 +118,7 @@ swift_library(
         "//submodules/TelegramUI/Components/ButtonComponent",
         "//submodules/TelegramUI/Components/AnimatedTextComponent",
         "//submodules/TelegramUI/Components/EdgeEffect",
+        "//submodules/TelegramUI/Components/ChatList/ChatListFilterTabContainerNode",
     ],
     visibility = [
         "//visibility:public",

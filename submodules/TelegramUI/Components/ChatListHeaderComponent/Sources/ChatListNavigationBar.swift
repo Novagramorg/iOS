@@ -9,6 +9,7 @@ import SearchUI
 import AccountContext
 import TelegramCore
 import StoryPeerListComponent
+import EdgeEffect
 
 public final class ChatListNavigationBar: Component {
     public final class AnimationHint {
@@ -20,14 +21,22 @@ public final class ChatListNavigationBar: Component {
             self.crossfadeStoryPeers = crossfadeStoryPeers
         }
     }
+
+    public struct Search: Equatable {
+        public var isEnabled: Bool
+
+        public init(isEnabled: Bool) {
+            self.isEnabled = isEnabled
+        }
+    }
     
     public let context: AccountContext
     public let theme: PresentationTheme
     public let strings: PresentationStrings
     public let statusBarHeight: CGFloat
     public let sideInset: CGFloat
+    public let search: Search?
     public let isSearchActive: Bool
-    public let isSearchEnabled: Bool
     public let primaryContent: ChatListHeaderComponent.Content?
     public let secondaryContent: ChatListHeaderComponent.Content?
     public let secondaryTransition: CGFloat
@@ -48,8 +57,8 @@ public final class ChatListNavigationBar: Component {
         strings: PresentationStrings,
         statusBarHeight: CGFloat,
         sideInset: CGFloat,
+        search: Search?,
         isSearchActive: Bool,
-        isSearchEnabled: Bool,
         primaryContent: ChatListHeaderComponent.Content?,
         secondaryContent: ChatListHeaderComponent.Content?,
         secondaryTransition: CGFloat,
@@ -69,8 +78,8 @@ public final class ChatListNavigationBar: Component {
         self.strings = strings
         self.statusBarHeight = statusBarHeight
         self.sideInset = sideInset
+        self.search = search
         self.isSearchActive = isSearchActive
-        self.isSearchEnabled = isSearchEnabled
         self.primaryContent = primaryContent
         self.secondaryContent = secondaryContent
         self.secondaryTransition = secondaryTransition
@@ -102,10 +111,10 @@ public final class ChatListNavigationBar: Component {
         if lhs.sideInset != rhs.sideInset {
             return false
         }
-        if lhs.isSearchActive != rhs.isSearchActive {
+        if lhs.search != rhs.search {
             return false
         }
-        if lhs.isSearchEnabled != rhs.isSearchEnabled {
+        if lhs.isSearchActive != rhs.isSearchActive {
             return false
         }
         if lhs.primaryContent != rhs.primaryContent {
@@ -155,8 +164,7 @@ public final class ChatListNavigationBar: Component {
     }()
 
     public final class View: UIView {
-        private let backgroundView: BlurredBackgroundView
-        private let separatorLayer: SimpleLayer
+        private let edgeEffectView: EdgeEffectView
         
         public let headerContent = ComponentView<Empty>()
         
@@ -184,17 +192,15 @@ public final class ChatListNavigationBar: Component {
         private var disappearingTabsViewSearch: Bool = false
         
         private var currentHeaderComponent: ChatListHeaderComponent?
+
+        private var currentHeight: CGFloat = 0.0
         
         override public init(frame: CGRect) {
-            self.backgroundView = BlurredBackgroundView(color: .clear, enableBlur: true)
-            self.backgroundView.layer.anchorPoint = CGPoint(x: 0.0, y: 1.0)
-            self.separatorLayer = SimpleLayer()
-            self.separatorLayer.anchorPoint = CGPoint()
+            self.edgeEffectView = EdgeEffectView()
             
             super.init(frame: frame)
             
-            self.addSubview(self.backgroundView)
-            self.layer.addSublayer(self.separatorLayer)
+            self.addSubview(self.edgeEffectView)
         }
         
         required init?(coder: NSCoder) {
@@ -202,7 +208,7 @@ public final class ChatListNavigationBar: Component {
         }
         
         override public func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
-            if !self.backgroundView.frame.contains(point) {
+            if point.y >= self.currentHeight {
                 return nil
             }
             
@@ -248,7 +254,12 @@ public final class ChatListNavigationBar: Component {
             
             let searchOffsetDistance: CGFloat = ChatListNavigationBar.searchScrollHeight
             
-            let minContentOffset: CGFloat = ChatListNavigationBar.searchScrollHeight
+            let minContentOffset: CGFloat
+            if component.search != nil {
+                minContentOffset = ChatListNavigationBar.searchScrollHeight
+            } else {
+                minContentOffset = 0.0
+            }
             
             let clippedScrollOffset = min(minContentOffset, offset)
             if self.clippedScrollOffset == clippedScrollOffset && !self.hasDeferredScrollOffset && !forceUpdate && !allowAvatarsExpansionUpdated {
@@ -259,71 +270,86 @@ public final class ChatListNavigationBar: Component {
             
             let visibleSize = CGSize(width: currentLayout.size.width, height: max(0.0, currentLayout.size.height - clippedScrollOffset))
             
-            let previousHeight = self.separatorLayer.position.y
+            let previousHeight = self.currentHeight
             
-            self.backgroundView.update(size: CGSize(width: visibleSize.width, height: 1000.0), transition: transition.containedViewLayoutTransition)
+            /*self.backgroundView.update(size: CGSize(width: visibleSize.width, height: 1000.0), transition: transition.containedViewLayoutTransition)
             
             transition.setBounds(view: self.backgroundView, bounds: CGRect(origin: CGPoint(), size: CGSize(width: visibleSize.width, height: 1000.0)))
             transition.animatePosition(view: self.backgroundView, from: CGPoint(x: 0.0, y: -visibleSize.height + self.backgroundView.layer.position.y), to: CGPoint(), additive: true)
-            self.backgroundView.layer.position = CGPoint(x: 0.0, y: visibleSize.height)
+            self.backgroundView.layer.position = CGPoint(x: 0.0, y: visibleSize.height)*/
+
+            let edgeEffectHeight: CGFloat = currentLayout.size.height + 20.0
+            var edgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: currentLayout.size.width, height: edgeEffectHeight))
+            if component.isSearchActive {
+                edgeEffectFrame.origin.y -= 46.0
+            }
+            transition.setFrame(view: self.edgeEffectView, frame: edgeEffectFrame)
+            self.edgeEffectView.update(content: component.theme.list.plainBackgroundColor, blur: true, alpha: 0.75, rect: edgeEffectFrame, edge: .top, edgeSize: 40.0, transition: transition)
             
-            transition.setFrameWithAdditivePosition(layer: self.separatorLayer, frame: CGRect(origin: CGPoint(x: 0.0, y: visibleSize.height), size: CGSize(width: visibleSize.width, height: UIScreenPixel)))
+            self.currentHeight = visibleSize.height
             
-            let searchContentNode: NavigationBarSearchContentNode
-            if let current = self.searchContentNode {
-                searchContentNode = current
-                
-                if themeUpdated {
+            if let search = component.search {
+                let searchContentNode: NavigationBarSearchContentNode
+                if let current = self.searchContentNode {
+                    searchContentNode = current
+                    
+                    if themeUpdated {
+                        let placeholder: String
+                        let compactPlaceholder: String
+                        
+                        placeholder = component.strings.Common_Search
+                        compactPlaceholder = component.strings.Common_Search
+                        
+                        searchContentNode.updateThemeAndPlaceholder(theme: component.theme, placeholder: placeholder, compactPlaceholder: compactPlaceholder)
+                    }
+                } else {
                     let placeholder: String
                     let compactPlaceholder: String
                     
                     placeholder = component.strings.Common_Search
                     compactPlaceholder = component.strings.Common_Search
                     
-                    searchContentNode.updateThemeAndPlaceholder(theme: component.theme, placeholder: placeholder, compactPlaceholder: compactPlaceholder)
-                }
-            } else {
-                let placeholder: String
-                let compactPlaceholder: String
-                
-                placeholder = component.strings.Common_Search
-                compactPlaceholder = component.strings.Common_Search
-                
-                searchContentNode = NavigationBarSearchContentNode(
-                    theme: component.theme,
-                    placeholder: placeholder,
-                    compactPlaceholder: compactPlaceholder,
-                    activate: { [weak self] in
-                        guard let self, let component = self.component, let searchContentNode = self.searchContentNode else {
-                            return
+                    searchContentNode = NavigationBarSearchContentNode(
+                        theme: component.theme,
+                        placeholder: placeholder,
+                        compactPlaceholder: compactPlaceholder,
+                        activate: { [weak self] in
+                            guard let self, let component = self.component, let searchContentNode = self.searchContentNode else {
+                                return
+                            }
+                            component.activateSearch(searchContentNode)
                         }
-                        component.activateSearch(searchContentNode)
-                    }
-                )
-                searchContentNode.view.layer.anchorPoint = CGPoint()
-                self.searchContentNode = searchContentNode
-                self.addSubview(searchContentNode.view)
+                    )
+                    searchContentNode.view.layer.anchorPoint = CGPoint()
+                    self.searchContentNode = searchContentNode
+                    self.addSubview(searchContentNode.view)
+                }
+                
+                let searchSize = CGSize(width: currentLayout.size.width - 6.0 * 2.0, height: navigationBarSearchContentHeight)
+                var searchFrame = CGRect(origin: CGPoint(x: 6.0, y: visibleSize.height - searchSize.height), size: searchSize)
+                if component.tabsNode != nil {
+                    searchFrame.origin.y -= 40.0
+                }
+                if !component.isSearchActive {
+                    searchFrame.origin.y -= component.accessoryPanelContainerHeight
+                }
+                
+                let clippedSearchOffset = max(0.0, min(clippedScrollOffset, searchOffsetDistance))
+                let searchOffsetFraction = clippedSearchOffset / searchOffsetDistance
+                searchContentNode.expansionProgress = 1.0 - searchOffsetFraction
+                
+                transition.setFrameWithAdditivePosition(view: searchContentNode.view, frame: searchFrame)
+                
+                searchContentNode.updateLayout(size: searchSize, leftInset: component.sideInset, rightInset: component.sideInset, transition: transition.containedViewLayoutTransition)
+                
+                transition.setAlpha(view: searchContentNode.view, alpha: search.isEnabled ? 1.0 : 0.5)
+                searchContentNode.isUserInteractionEnabled = search.isEnabled
+            } else {
+                if let searchContentNode = self.searchContentNode {
+                    self.searchContentNode = nil
+                    searchContentNode.view.removeFromSuperview()
+                }
             }
-            
-            let searchSize = CGSize(width: currentLayout.size.width - 6.0 * 2.0, height: navigationBarSearchContentHeight)
-            var searchFrame = CGRect(origin: CGPoint(x: 6.0, y: visibleSize.height - searchSize.height), size: searchSize)
-            if component.tabsNode != nil {
-                searchFrame.origin.y -= 40.0
-            }
-            if !component.isSearchActive {
-                searchFrame.origin.y -= component.accessoryPanelContainerHeight
-            }
-            
-            let clippedSearchOffset = max(0.0, min(clippedScrollOffset, searchOffsetDistance))
-            let searchOffsetFraction = clippedSearchOffset / searchOffsetDistance
-            searchContentNode.expansionProgress = 1.0 - searchOffsetFraction
-            
-            transition.setFrameWithAdditivePosition(view: searchContentNode.view, frame: searchFrame)
-            
-            searchContentNode.updateLayout(size: searchSize, leftInset: component.sideInset, rightInset: component.sideInset, transition: transition.containedViewLayoutTransition)
-            
-            transition.setAlpha(view: searchContentNode.view, alpha: component.isSearchEnabled ? 1.0 : 0.5)
-            searchContentNode.isUserInteractionEnabled = component.isSearchEnabled
             
             let headerTransition = transition
             
@@ -455,7 +481,8 @@ public final class ChatListNavigationBar: Component {
             }
             
             var tabsFrame = CGRect(origin: CGPoint(x: 0.0, y: visibleSize.height), size: CGSize(width: visibleSize.width, height: 46.0))
-            if !component.isSearchActive {
+            if component.isSearchActive {
+            } else {
                 tabsFrame.origin.y -= component.accessoryPanelContainerHeight
             }
             if component.tabsNode != nil {
@@ -463,7 +490,8 @@ public final class ChatListNavigationBar: Component {
             }
             
             var accessoryPanelContainerFrame = CGRect(origin: CGPoint(x: 0.0, y: visibleSize.height), size: CGSize(width: visibleSize.width, height: component.accessoryPanelContainerHeight))
-            if !component.isSearchActive {
+            if component.isSearchActive {
+            } else {
                 accessoryPanelContainerFrame.origin.y -= component.accessoryPanelContainerHeight
             }
             
@@ -528,8 +556,8 @@ public final class ChatListNavigationBar: Component {
                     strings: component.strings,
                     statusBarHeight: component.statusBarHeight,
                     sideInset: component.sideInset,
+                    search: component.search,
                     isSearchActive: component.isSearchActive,
-                    isSearchEnabled: component.isSearchEnabled,
                     primaryContent: component.primaryContent,
                     secondaryContent: component.secondaryContent,
                     secondaryTransition: component.secondaryTransition,
@@ -575,8 +603,6 @@ public final class ChatListNavigationBar: Component {
         }
         
         func update(component: ChatListNavigationBar, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
-            let themeUpdated = self.component?.theme !== component.theme
-            
             var uploadProgressUpdated = false
             var storySubscriptionsUpdated = false
             if let previousComponent = self.component {
@@ -591,23 +617,20 @@ public final class ChatListNavigationBar: Component {
             self.component = component
             self.state = state
             
-            if themeUpdated {
-                self.backgroundView.updateColor(color: component.theme.rootController.navigationBar.blurredBackgroundColor, transition: .immediate)
-                self.separatorLayer.backgroundColor = component.theme.rootController.navigationBar.separatorColor.cgColor
-            }
-            
             var contentHeight = component.statusBarHeight
             
             if component.statusBarHeight >= 1.0 {
                 contentHeight += 3.0
             }
             contentHeight += 44.0
+            contentHeight += 8.0
             
             if component.isSearchActive {
                 if component.statusBarHeight < 1.0 {
                     contentHeight += 8.0
                 }
-            } else {
+            }
+            if component.search != nil {
                 contentHeight += navigationBarSearchContentHeight
             }
             
@@ -615,8 +638,11 @@ public final class ChatListNavigationBar: Component {
                 contentHeight += 40.0
             }
             
-            if component.accessoryPanelContainer != nil && !component.isSearchActive {
-                contentHeight += component.accessoryPanelContainerHeight
+            if component.isSearchActive {
+            } else {
+                if component.accessoryPanelContainer != nil {
+                    contentHeight += component.accessoryPanelContainerHeight
+                }
             }
             
             let size = CGSize(width: availableSize.width, height: contentHeight)

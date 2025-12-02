@@ -217,6 +217,18 @@ public protocol CustomViewControllerNavigationDataSummary: AnyObject {
     open var navigationBarRequiresEntireLayoutUpdate: Bool {
         return true
     }
+
+    public struct TabBarSearchState: Equatable {
+        public var isActive: Bool
+
+        public init(isActive: Bool) {
+            self.isActive = isActive
+        }
+    }
+
+    public private(set) var tabBarSearchState: TabBarSearchState?
+    public var tabBarSearchStateUpdated: ((ContainedViewLayoutTransition) -> Void)?
+    public var currentTabBarSearchNode: (() -> ASDisplayNode?)?
     
     private weak var activeInputViewCandidate: UIResponder?
     private weak var activeInputView: UIResponder?
@@ -705,8 +717,21 @@ public protocol CustomViewControllerNavigationDataSummary: AnyObject {
     
     open func tabBarDisabledAction() {
     }
+
+    open func tabBarActivateSearch() {
+    }
+
+    open func tabBarDeactivateSearch() {
+    }
     
     open func tabBarItemSwipeAction(direction: TabBarItemSwipeDirection) {
+    }
+
+    public func updateTabBarSearchState(_ tabBarSearchState: TabBarSearchState?, transition: ContainedViewLayoutTransition) {
+        if self.tabBarSearchState != tabBarSearchState {
+            self.tabBarSearchState = tabBarSearchState
+            self.tabBarSearchStateUpdated?(transition)
+        }
     }
     
     open func updatePossibleControllerDropContent(content: NavigationControllerDropContent?) {
