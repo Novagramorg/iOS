@@ -29,7 +29,7 @@ public final class GiftItemComponent: Component {
         case premium(months: Int32, price: String)
         case starGift(gift: StarGift.Gift, price: String)
         case uniqueGift(gift: StarGift.UniqueGift, price: String?)
-        case auction(gift: StarGift.Gift, centerColor: UIColor, edgeColor: UIColor, endTime: Int32)
+        case auction(gift: StarGift.Gift, endTime: Int32)
         case preview(attributes: [StarGift.UniqueGift.Attribute], rarity: Int32)
     }
     
@@ -533,13 +533,19 @@ public final class GiftItemComponent: Component {
                 } else {
                     emoji = nil
                 }
-            case let .auction(gift, centerColor, edgeColor, endTime):
+            case let .auction(gift, endTime):
                 animationOffset = 16.0
                 explicitAnimationOffset = -16.0
                 animationFile = gift.file
-                backgroundColor = edgeColor
-                secondBackgroundColor = centerColor
-                                
+                
+                if let background = gift.background {
+                    backgroundColor = UIColor(rgb: UInt32(bitPattern: background.edgeColor))
+                    secondBackgroundColor = UIColor(rgb: UInt32(bitPattern: background.centerColor))
+                } else {
+                    backgroundColor = UIColor.black
+                    secondBackgroundColor = UIColor.black
+                }
+                
                 emoji = ChatTextInputTextCustomEmojiAttribute(
                     interactivelySelectedFromPackId: nil,
                     fileId: gift.file.fileId.id,
