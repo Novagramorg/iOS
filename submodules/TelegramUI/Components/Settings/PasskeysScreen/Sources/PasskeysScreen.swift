@@ -19,17 +19,26 @@ final class PasskeysScreenComponent: Component {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
     
     let context: AccountContext
+    let displaySkip: Bool
     let initialPasskeysData: [TelegramPasskey]?
     let passkeysDataUpdated: ([TelegramPasskey]) -> Void
+    let completion: () -> Void
+    let cancel: () -> Void
     
     init(
         context: AccountContext,
+        displaySkip: Bool,
         initialPasskeysData: [TelegramPasskey]?,
-        passkeysDataUpdated: @escaping ([TelegramPasskey]) -> Void
+        passkeysDataUpdated: @escaping ([TelegramPasskey]) -> Void,
+        completion: @escaping () -> Void,
+        cancel: @escaping () -> Void
     ) {
         self.context = context
+        self.displaySkip = displaySkip
         self.initialPasskeysData = initialPasskeysData
         self.passkeysDataUpdated = passkeysDataUpdated
+        self.completion = completion
+        self.cancel = cancel
     }
     
     static func ==(lhs: PasskeysScreenComponent, rhs: PasskeysScreenComponent) -> Bool {
@@ -39,6 +48,7 @@ final class PasskeysScreenComponent: Component {
     class View: UIView, ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding {
         private var intro: ComponentView<Empty>?
         private var list: ComponentView<Empty>?
+        private var activityIndicator: UIActivityIndicatorView?
 
         private var component: PasskeysScreenComponent?
         private var environment: EnvironmentType?
@@ -159,6 +169,8 @@ final class PasskeysScreenComponent: Component {
                     authController.delegate = self
                     authController.presentationContextProvider = self
                     authController.performRequests()
+                    
+                    component.completion()
                 }
             }
         }
@@ -255,11 +267,19 @@ final class PasskeysScreenComponent: Component {
                         context: component.context,
                         theme: environment.theme,
                         insets: UIEdgeInsets(top: environment.statusBarHeight + environment.navigationHeight, left: 0.0, bottom: environment.safeInsets.bottom, right: 0.0),
+                        displaySkip: component.displaySkip,
                         createPasskeyAction: { [weak self] in
                             guard let self else {
                                 return
                             }
                             self.createPasskey()
+                        },
+                        skipAction: { [weak self] in
+                            guard let self, let component = self.component else {
+                                return
+                            }
+                            component.cancel()
+                            self.environment?.controller()?.dismiss()
                         }
                     )),
                     environment: {},
@@ -337,6 +357,27 @@ final class PasskeysScreenComponent: Component {
                 }
             }
             
+            if self.passkeysData == nil {
+                let activityIndicator: UIActivityIndicatorView
+                if let current = self.activityIndicator {
+                    activityIndicator = current
+                } else {
+                    activityIndicator = UIActivityIndicatorView(style: .large)
+                    self.activityIndicator = activityIndicator
+                    self.addSubview(activityIndicator)
+                }
+                activityIndicator.tintColor = environment.theme.list.itemPrimaryTextColor
+                
+                let indicatorSize = activityIndicator.bounds.size
+                activityIndicator.frame = CGRect(origin: CGPoint(x: floor((availableSize.width - indicatorSize.width) / 2.0), y: floor((availableSize.height - indicatorSize.height) / 2.0)), size: indicatorSize)
+                if !activityIndicator.isAnimating {
+                    activityIndicator.startAnimating()
+                }
+            } else if let activityIndicator = self.activityIndicator {
+                self.activityIndicator = nil
+                activityIndicator.removeFromSuperview()
+            }
+            
             return availableSize
         }
     }
@@ -353,10 +394,10 @@ final class PasskeysScreenComponent: Component {
 public final class PasskeysScreen: ViewControllerComponentContainer {
     private let context: AccountContext
     
-    public init(context: AccountContext, initialPasskeysData: [TelegramPasskey]?, passkeysDataUpdated: @escaping ([TelegramPasskey]) -> Void) async {
+    public init(context: AccountContext, displaySkip: Bool, initialPasskeysData: [TelegramPasskey]?, passkeysDataUpdated: @escaping ([TelegramPasskey]) -> Void, completion: @escaping () -> Void, cancel: @escaping () -> Void) {
         self.context = context
         
-        super.init(context: context, component: PasskeysScreenComponent(context: context, initialPasskeysData: initialPasskeysData, passkeysDataUpdated: passkeysDataUpdated), navigationBarAppearance: .transparent)
+        super.init(context: context, component: PasskeysScreenComponent(context: context, displaySkip: displaySkip, initialPasskeysData: initialPasskeysData, passkeysDataUpdated: passkeysDataUpdated, completion: completion, cancel: cancel), navigationBarAppearance: .transparent)
     }
     
     required public init(coder aDecoder: NSCoder) {
