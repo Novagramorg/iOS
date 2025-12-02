@@ -75,7 +75,7 @@ public final class GiftAuctionContext {
         
         public enum AuctionState: Equatable {
             case ongoing(version: Int32, startDate: Int32, endDate: Int32, minBidAmount: Int64, bidLevels: [BidLevel], topBidders: [EnginePeer], nextRoundDate: Int32, giftsLeft: Int32, currentRound: Int32, totalRounds: Int32, rounds: [Round], lastGiftNumber: Int32)
-            case finished(startDate: Int32, endDate: Int32, averagePrice: Int64)
+            case finished(startDate: Int32, endDate: Int32, averagePrice: Int64, listedCount: Int32?, fragmentListedCount: Int32?, fragmentListedUrl: String?)
         }
         
         public struct MyState: Equatable {
@@ -260,9 +260,29 @@ extension GiftAuctionContext.State.AuctionState {
                     rounds.append(.extendable(num: num, duration: duration, extendTop: extendTop, extendWindow: extendWindow))
                 }
             }
-            self = .ongoing(version: version, startDate: startDate, endDate: endDate, minBidAmount: minBidAmount, bidLevels: bidLevels.map(GiftAuctionContext.State.BidLevel.init(apiBidLevel:)), topBidders: topBidders, nextRoundDate: nextRoundAt, giftsLeft: giftsLeft, currentRound: currentRound, totalRounds: totalRounds, rounds: rounds, lastGiftNumber: lastGiftNumber)
-        case let .starGiftAuctionStateFinished(startDate, endDate, averagePrice):
-            self = .finished(startDate: startDate, endDate: endDate, averagePrice: averagePrice)
+            self = .ongoing(
+                version: version,
+                startDate: startDate,
+                endDate: endDate,
+                minBidAmount: minBidAmount,
+                bidLevels: bidLevels.map(GiftAuctionContext.State.BidLevel.init(apiBidLevel:)),
+                topBidders: topBidders,
+                nextRoundDate: nextRoundAt,
+                giftsLeft: giftsLeft,
+                currentRound: currentRound,
+                totalRounds: totalRounds,
+                rounds: rounds,
+                lastGiftNumber: lastGiftNumber
+            )
+        case let .starGiftAuctionStateFinished(_, startDate, endDate, averagePrice, listedCount, fragmentListedCount, fragmentListedUrl):
+            self = .finished(
+                startDate: startDate,
+                endDate: endDate,
+                averagePrice: averagePrice,
+                listedCount: listedCount,
+                fragmentListedCount: fragmentListedCount,
+                fragmentListedUrl: fragmentListedUrl
+            )
         case .starGiftAuctionStateNotModified:
             return nil
         }
@@ -286,9 +306,29 @@ extension GiftAuctionContext.State.AuctionState {
                     rounds.append(.extendable(num: num, duration: duration, extendTop: extendTop, extendWindow: extendWindow))
                 }
             }
-            self = .ongoing(version: version, startDate: startDate, endDate: endDate, minBidAmount: minBidAmount, bidLevels: bidLevels.map(GiftAuctionContext.State.BidLevel.init(apiBidLevel:)), topBidders: topBidders, nextRoundDate: nextRoundAt, giftsLeft: giftsLeft, currentRound: currentRound, totalRounds: totalRounds, rounds: rounds, lastGiftNumber: lastGiftNumber)
-        case let .starGiftAuctionStateFinished(startDate, endDate, averagePrice):
-            self = .finished(startDate: startDate, endDate: endDate, averagePrice: averagePrice)
+            self = .ongoing(
+                version: version,
+                startDate: startDate,
+                endDate: endDate,
+                minBidAmount: minBidAmount,
+                bidLevels: bidLevels.map(GiftAuctionContext.State.BidLevel.init(apiBidLevel:)),
+                topBidders: topBidders,
+                nextRoundDate: nextRoundAt,
+                giftsLeft: giftsLeft,
+                currentRound: currentRound,
+                totalRounds: totalRounds,
+                rounds: rounds,
+                lastGiftNumber: lastGiftNumber
+            )
+        case let .starGiftAuctionStateFinished(_, startDate, endDate, averagePrice, listedCount, fragmentListedCount, fragmentListedUrl):
+            self = .finished(
+                startDate: startDate,
+                endDate: endDate,
+                averagePrice: averagePrice,
+                listedCount: listedCount,
+                fragmentListedCount: fragmentListedCount,
+                fragmentListedUrl: fragmentListedUrl
+            )
         case .starGiftAuctionStateNotModified:
             return nil
         }
@@ -591,7 +631,7 @@ public extension GiftAuctionContext.State {
         switch self.auctionState {
         case let .ongoing(_, startDate, _, _, _, _, _, _, _, _, _, _):
             return startDate
-        case let .finished(startDate, _, _):
+        case let .finished(startDate, _, _, _, _, _):
             return startDate
         }
     }
@@ -600,7 +640,7 @@ public extension GiftAuctionContext.State {
         switch self.auctionState {
         case let .ongoing(_, _, endDate, _, _, _, _, _, _, _, _, _):
             return endDate
-        case let .finished(_, endDate, _):
+        case let .finished(_, endDate, _, _, _, _):
             return endDate
         }
     }

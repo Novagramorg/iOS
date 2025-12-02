@@ -15489,6 +15489,9 @@ Error: %8$@";
 "Gift.Auction.StartsInHours" = "auction starts in {h}:{m}:{s}";
 "Gift.Auction.StartsInMinutes" = "auction starts in {m}:{s}";
 "Gift.Auction.EarlyBid" = "Place an Early Bid";
+"Gift.Auction.ViewVariants" = "View";
+"Gift.Auction.Variants_1" = "%@ Variant";
+"Gift.Auction.Variants_any" = "%@ Variants";
 
 "Gift.Auction.Hours_1" = "%@ hour";
 "Gift.Auction.Hours_any" = "%@ hours";
