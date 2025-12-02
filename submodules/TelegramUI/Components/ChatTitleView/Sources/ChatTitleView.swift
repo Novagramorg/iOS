@@ -1059,7 +1059,7 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
         
         self.pointerInteraction = PointerInteraction(view: self, style: .rectangle(CGSize(width: titleFrame.width + 16.0, height: 40.0)))
         
-        var backgroundFrame = CGRect(origin: CGPoint(x: titleFrame.minX, y: 0.0), size: CGSize(width: titleFrame.width, height: 44.0))
+        var backgroundFrame = CGRect(origin: CGPoint(x: titleFrame.minX, y: 6.0), size: CGSize(width: titleFrame.width, height: 44.0))
         if !activityFrame.isEmpty {
             backgroundFrame.origin.x = min(backgroundFrame.minX, activityFrame.minX)
             backgroundFrame.size.width = max(backgroundFrame.maxX, activityFrame.maxX) - backgroundFrame.minX
