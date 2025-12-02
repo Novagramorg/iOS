@@ -498,6 +498,7 @@ swift_library(
         "//submodules/TelegramUI/Components/AttachmentFileController",
         "//submodules/TelegramUI/Components/Contacts/NewContactScreen",
         "//submodules/TelegramUI/Components/Chat/ChatSendAsContextMenu",
+        "//submodules/TelegramUI/Components/Settings/PasskeysScreen",
     ] + select({
         "@build_bazel_rules_apple//apple:ios_arm64": appcenter_targets,
         "//build-system:ios_sim_arm64": [],

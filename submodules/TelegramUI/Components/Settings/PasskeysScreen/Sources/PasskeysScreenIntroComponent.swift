@@ -13,19 +13,28 @@ import BundleIconComponent
 final class PasskeysScreenIntroComponent: Component {
     let context: AccountContext
     let theme: PresentationTheme
+    let strings: PresentationStrings
     let insets: UIEdgeInsets
+    let displaySkip: Bool
     let createPasskeyAction: () -> Void
+    let skipAction: () -> Void
     
     init(
         context: AccountContext,
         theme: PresentationTheme,
+        strings: PresentationStrings,
         insets: UIEdgeInsets,
-        createPasskeyAction: @escaping () -> Void
+        displaySkip: Bool,
+        createPasskeyAction: @escaping () -> Void,
+        skipAction: @escaping () -> Void
     ) {
         self.context = context
         self.theme = theme
+        self.strings = strings
         self.insets = insets
+        self.displaySkip = displaySkip
         self.createPasskeyAction = createPasskeyAction
+        self.skipAction = skipAction
     }
     
     static func ==(lhs: PasskeysScreenIntroComponent, rhs: PasskeysScreenIntroComponent) -> Bool {
@@ -35,7 +44,13 @@ final class PasskeysScreenIntroComponent: Component {
         if lhs.theme !== rhs.theme {
             return false
         }
+        if lhs.strings !== rhs.strings {
+            return false
+        }
         if lhs.insets != rhs.insets {
+            return false
+        }
+        if lhs.displaySkip != rhs.displaySkip {
             return false
         }
         return true
@@ -64,6 +79,7 @@ final class PasskeysScreenIntroComponent: Component {
         private let title = ComponentView<Empty>()
         private let subtitle = ComponentView<Empty>()
         private let actionButton = ComponentView<Empty>()
+        private var skipButton: ComponentView<Empty>?
 
         private var items: [Item] = []
 
@@ -110,7 +126,6 @@ final class PasskeysScreenIntroComponent: Component {
 
             var contentHeight: CGFloat = 0.0
 
-            //TODO:localize
             let iconSize = self.icon.update(
                 transition: .immediate,
                 component: AnyComponent(LottieComponent(
@@ -135,7 +150,7 @@ final class PasskeysScreenIntroComponent: Component {
             let titleSize = self.title.update(
                 transition: .immediate,
                 component: AnyComponent(MultilineTextComponent(
-                    text: .plain(NSAttributedString(string: "Protect your account", font: Font.bold(27.0), textColor: component.theme.list.itemPrimaryTextColor)),
+                    text: .plain(NSAttributedString(string: component.strings.Passkeys_Into_Title, font: Font.bold(27.0), textColor: component.theme.list.itemPrimaryTextColor)),
                     horizontalAlignment: .center,
                     maximumNumberOfLines: 0
                 )),
@@ -156,7 +171,7 @@ final class PasskeysScreenIntroComponent: Component {
             let subtitleSize = self.subtitle.update(
                 transition: .immediate,
                 component: AnyComponent(BalancedTextComponent(
-                    text: .plain(NSAttributedString(string: "Log in safely and keep your account secure.", font: Font.regular(16.0), textColor: component.theme.list.itemPrimaryTextColor)),
+                    text: .plain(NSAttributedString(string: component.strings.Passkeys_Subtitle, font: Font.regular(16.0), textColor: component.theme.list.itemPrimaryTextColor)),
                     horizontalAlignment: .center,
                     maximumNumberOfLines: 0,
                     lineSpacing: 0.2
@@ -183,18 +198,18 @@ final class PasskeysScreenIntroComponent: Component {
             let itemDescs: [ItemDesc] = [
                 ItemDesc(
                     icon: "Settings/Passkeys/Intro1",
-                    title: "Create a Passkey",
-                    text: "Make a passkey to sign in easily and safely."
+                    title: component.strings.Passkeys_Into_Title0,
+                    text: component.strings.Passkeys_Into_Text0
                 ),
                 ItemDesc(
                     icon: "Settings/Passkeys/Intro2",
-                    title: "Log in with Face ID",
-                    text: "Use Face ID, Touch ID, or your passcode to sign in."
+                    title: component.strings.Passkeys_Into_Title1,
+                    text: component.strings.Passkeys_Into_Text1
                 ),
                 ItemDesc(
                     icon: "Settings/Passkeys/Intro3",
-                    title: "Store Passkey Securely",
-                    text: "Your passkey is safely kept in your iCloud Keychain."
+                    title: component.strings.Passkeys_Into_Title2,
+                    text: component.strings.Passkeys_Into_Text2
                 )
             ]
             for i in 0 ..< itemDescs.count {
@@ -280,7 +295,7 @@ final class PasskeysScreenIntroComponent: Component {
                     ),
                     content: AnyComponentWithIdentity(
                         id: AnyHashable(0),
-                        component: AnyComponent(MultilineTextComponent(text: .plain(NSAttributedString(string: "Create Passkey", font: Font.semibold(17.0), textColor: component.theme.list.itemCheckColors.foregroundColor))))
+                        component: AnyComponent(MultilineTextComponent(text: .plain(NSAttributedString(string: component.strings.Passkeys_ButtonCreate, font: Font.semibold(17.0), textColor: component.theme.list.itemCheckColors.foregroundColor))))
                     ),
                     action: { [weak self] in
                         guard let self, let component = self.component else {
@@ -292,8 +307,55 @@ final class PasskeysScreenIntroComponent: Component {
                 environment: {},
                 containerSize: CGSize(width: availableSize.width - buttonInsets.left - buttonInsets.right, height: 52.0)
             )
+            
+            var skipButtonSize: CGSize?
+            if component.displaySkip {
+                let skipButton: ComponentView<Empty>
+                if let current = self.skipButton {
+                    skipButton = current
+                } else {
+                    skipButton = ComponentView()
+                    self.skipButton = skipButton
+                }
+                skipButtonSize = skipButton.update(
+                    transition: transition,
+                    component: AnyComponent(ButtonComponent(
+                        background: ButtonComponent.Background(
+                            style: .glass,
+                            color: component.theme.chatList.unreadBadgeInactiveBackgroundColor,
+                            foreground: component.theme.list.itemCheckColors.foregroundColor,
+                            pressedColor: component.theme.chatList.unreadBadgeInactiveBackgroundColor.withMultipliedAlpha(0.9),
+                            cornerRadius: 52.0 * 0.5
+                        ),
+                        content: AnyComponentWithIdentity(
+                            id: AnyHashable(0),
+                            component: AnyComponent(MultilineTextComponent(text: .plain(NSAttributedString(string: component.strings.Passkeys_ButtonSkip, font: Font.semibold(17.0), textColor: component.theme.list.itemCheckColors.foregroundColor))))
+                        ),
+                        action: { [weak self] in
+                            guard let self, let component = self.component else {
+                                return
+                            }
+                            component.skipAction()
+                        }
+                    )),
+                    environment: {},
+                    containerSize: CGSize(width: availableSize.width - buttonInsets.left - buttonInsets.right, height: 52.0)
+                )
+            } else if let skipButton = self.skipButton {
+                self.skipButton = nil
+                skipButton.view?.removeFromSuperview()
+            }
 
-            let buttonFrame = CGRect(origin: CGPoint(x: buttonInsets.left, y: availableSize.height - buttonInsets.bottom - actionButtonSize.height), size: actionButtonSize)
+            var buttonFrame = CGRect(origin: CGPoint(x: buttonInsets.left, y: availableSize.height - buttonInsets.bottom - actionButtonSize.height), size: actionButtonSize)
+            if let skipButtonSize, let skipButtonView = self.skipButton?.view {
+                let skipButtonFrame = buttonFrame
+                buttonFrame = buttonFrame.offsetBy(dx: 0.0, dy: -8.0 - skipButtonSize.height)
+                
+                if skipButtonView.superview == nil {
+                    self.addSubview(skipButtonView)
+                }
+                transition.setFrame(view: skipButtonView, frame: skipButtonFrame)
+            }
 
             if let actionButtonView = self.actionButton.view {
                 if actionButtonView.superview == nil {

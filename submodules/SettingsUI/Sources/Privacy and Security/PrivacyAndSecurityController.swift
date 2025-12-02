@@ -673,12 +673,11 @@ private func privacyAndSecurityControllerEntries(
     entries.append(.twoStepVerification(presentationData.theme, presentationData.strings.PrivacySettings_TwoStepAuth, twoStepAuthString, twoStepAuthData))
     
     if displayPasskeys {
-        //TODO:localize
         var passkeysString = ""
         if let hasPasskeys = hasPasskeys {
-            passkeysString = hasPasskeys ? "On" : "Off"
+            passkeysString = hasPasskeys ? presentationData.strings.PrivacySettings_PasscodeOn : presentationData.strings.PrivacySettings_PasscodeOff
         }
-        entries.append(.passkeys(presentationData.theme, "Passkey", passkeysString))
+        entries.append(.passkeys(presentationData.theme, presentationData.strings.PrivacySettings_Passkey, passkeysString))
     }
     
     if let privacySettings = privacySettings {
@@ -1268,9 +1267,9 @@ public func privacyAndSecurityController(
     }, openPasskeys: {
         Task { @MainActor in
             let initialPasskeysData = await (passkeysDataValue.get() |> take(1)).get()
-            let passkeysScreen = await PasskeysScreen(context: context, initialPasskeysData: initialPasskeysData, passkeysDataUpdated: { passkeysData in
+            let passkeysScreen = PasskeysScreen(context: context, displaySkip: false, initialPasskeysData: initialPasskeysData, passkeysDataUpdated: { passkeysData in
                 passkeysDataValue.set(.single(passkeysData))
-            })
+            }, completion: {}, cancel: {})
             pushControllerImpl?(passkeysScreen, true)
         }
     }, openActiveSessions: {
