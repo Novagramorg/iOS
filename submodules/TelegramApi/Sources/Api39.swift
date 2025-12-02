@@ -9912,6 +9912,21 @@ public extension Api.functions.payments {
                 }
 }
 public extension Api.functions.payments {
+                static func getStarGiftUpgradeAttributes(giftId: Int64) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.payments.StarGiftUpgradeAttributes>) {
+                    let buffer = Buffer()
+                    buffer.appendInt32(1828948824)
+                    serializeInt64(giftId, buffer: buffer, boxed: false)
+                    return (FunctionDescription(name: "payments.getStarGiftUpgradeAttributes", parameters: [("giftId", String(describing: giftId))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.payments.StarGiftUpgradeAttributes? in
+                        let reader = BufferReader(buffer)
+                        var result: Api.payments.StarGiftUpgradeAttributes?
+                        if let signature = reader.readInt32() {
+                            result = Api.parse(reader, signature: signature) as? Api.payments.StarGiftUpgradeAttributes
+                        }
+                        return result
+                    })
+                }
+}
+public extension Api.functions.payments {
                 static func getStarGiftUpgradePreview(giftId: Int64) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.payments.StarGiftUpgradePreview>) {
                     let buffer = Buffer()
                     buffer.appendInt32(-1667580751)
