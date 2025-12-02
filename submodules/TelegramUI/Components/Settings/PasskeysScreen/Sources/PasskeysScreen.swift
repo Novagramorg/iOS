@@ -299,8 +299,15 @@ final class PasskeysScreenComponent: Component {
                     component: AnyComponent(PasskeysScreenListComponent(
                         context: component.context,
                         theme: environment.theme,
+                        strings: environment.strings,
                         insets: UIEdgeInsets(top: environment.statusBarHeight, left: 0.0, bottom: environment.safeInsets.bottom, right: 0.0),
                         passkeys: passkeysData,
+                        addPasskeyAction: { [weak self] in
+                            guard let self else {
+                                return
+                            }
+                            self.createPasskey()
+                        },
                         deletePasskeyAction: { [weak self] id in
                             guard let self else {
                                 return
