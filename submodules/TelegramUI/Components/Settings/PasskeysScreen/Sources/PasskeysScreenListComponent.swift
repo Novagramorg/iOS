@@ -12,6 +12,7 @@ import BundleIconComponent
 import ListSectionComponent
 import ListActionItemComponent
 import TelegramCore
+import EmojiStatusComponent
 
 final class PasskeysScreenListComponent: Component {
     let context: AccountContext
@@ -112,7 +113,7 @@ final class PasskeysScreenListComponent: Component {
             let iconSize = self.icon.update(
                 transition: .immediate,
                 component: AnyComponent(LottieComponent(
-                    content: LottieComponent.AppBundleContent(name: "TwoFactorSetupIntro"),
+                    content: LottieComponent.AppBundleContent(name: "passkey_logo"),
                     loop: false
                 )),
                 environment: {},
@@ -184,6 +185,43 @@ final class PasskeysScreenListComponent: Component {
                 dateFormatter.dateStyle = .medium
                 let dateString = dateFormatter.string(from: Date(timeIntervalSince1970: Double(passkey.date)))
                 
+                let iconComponent: AnyComponentWithIdentity<Empty>
+                if let emojiId = passkey.emojiId {
+                    iconComponent = AnyComponentWithIdentity(
+                        id: "lottie",
+                        component: AnyComponent(TransformContents<Empty>(
+                            content: AnyComponent(EmojiStatusComponent(
+                                context: component.context,
+                                animationCache: component.context.animationCache,
+                                animationRenderer: component.context.animationRenderer,
+                                content: .animation(
+                                    content: .customEmoji(fileId: emojiId),
+                                    size: CGSize(width: 40.0, height: 40.0),
+                                    placeholderColor: component.theme.list.mediaPlaceholderColor,
+                                    themeColor: nil,
+                                    loopMode: .count(1)
+                                ),
+                                size: CGSize(width: 40.0, height: 40.0),
+                                isVisibleForAnimations: true,
+                                action: nil
+                            )),
+                            translation: CGPoint(x: 0.0, y: 1.0)
+                        ))
+                    )
+                } else {
+                    iconComponent = AnyComponentWithIdentity(
+                        id: "icon",
+                        component: AnyComponent(BundleIconComponent(name: "Settings/Menu/Passkeys", tintColor: nil))
+                    )
+                }
+                
+                //TODO:localize
+                var subtitleString = "created \(dateString)"
+                if let lastUsageDate = passkey.lastUsageDate {
+                    let lastUsedDateString = dateFormatter.string(from: Date(timeIntervalSince1970: Double(lastUsageDate)))
+                    subtitleString.append(" • used \(lastUsedDateString)")
+                }
+                
                 listSectionItems.append(AnyComponentWithIdentity(id: passkey.id, component: AnyComponent(ListActionItemComponent(
                     theme: component.theme,
                     title: AnyComponent(VStack([
@@ -197,7 +235,7 @@ final class PasskeysScreenListComponent: Component {
                         ))),
                         AnyComponentWithIdentity(id: AnyHashable(1), component: AnyComponent(MultilineTextComponent(
                             text: .plain(NSAttributedString(
-                                string: "created \(dateString)",
+                                string: subtitleString,
                                 font: Font.regular(14.0),
                                 textColor: component.theme.list.itemSecondaryTextColor
                             )),
@@ -205,10 +243,7 @@ final class PasskeysScreenListComponent: Component {
                         )))
                     ], alignment: .left, spacing: 2.0)),
                     leftIcon: .custom(
-                        AnyComponentWithIdentity(
-                            id: "icon",
-                            component: AnyComponent(BundleIconComponent(name: "Settings/Menu/TwoStepAuth", tintColor: nil))
-                        ),
+                        iconComponent,
                         false
                     ),
                     accessory: nil,

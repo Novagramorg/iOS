@@ -324,6 +324,7 @@ public final class AuthorizationSequenceController: NavigationController, ASAuth
                     accountManager: self.sharedContext.accountManager,
                     account: self.account,
                     passkey: passkey,
+                    foreignDatacenter: nil,
                     forcedPasswordSetupNotice: { value in
                         guard let entry = CodableEntry(ApplicationSpecificCounterNotice(value: value)) else {
                             return nil
@@ -332,7 +333,14 @@ public final class AuthorizationSequenceController: NavigationController, ASAuth
                     },
                     syncContacts: syncContacts
                 )
-                |> deliverOnMainQueue).startStrict(next: { _ in
+                |> deliverOnMainQueue).startStrict(next: { [weak self] result in
+                    guard let self else {
+                        return
+                    }
+                    if result.updatedAccount !== self.account {
+                        self.account = result.updatedAccount
+                        self.inAppPurchaseManager = InAppPurchaseManager(engine: .unauthorized(self.engine))
+                    }
                 }, error: { [weak self, weak controller] error in
                     Queue.mainQueue().async {
                         if let strongSelf = self, let controller {
