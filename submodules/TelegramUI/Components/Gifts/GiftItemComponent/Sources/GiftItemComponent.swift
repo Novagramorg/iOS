@@ -168,6 +168,7 @@ public final class GiftItemComponent: Component {
     let isEditing: Bool
     let isDateLocked: Bool
     let isPlaceholder: Bool
+    let animateChanges: Bool
     let mode: Mode
     let action: (() -> Void)?
     let contextAction: ((UIView, ContextGesture) -> Void)?
@@ -193,6 +194,7 @@ public final class GiftItemComponent: Component {
         isEditing: Bool = false,
         isDateLocked: Bool = false,
         isPlaceholder: Bool = false,
+        animateChanges: Bool = false,
         mode: Mode = .generic,
         action: (() -> Void)? = nil,
         contextAction: ((UIView, ContextGesture) -> Void)? = nil
@@ -217,6 +219,7 @@ public final class GiftItemComponent: Component {
         self.isEditing = isEditing
         self.isDateLocked = isDateLocked
         self.isPlaceholder = isPlaceholder
+        self.animateChanges = animateChanges
         self.mode = mode
         self.action = action
         self.contextAction = contextAction
@@ -281,6 +284,9 @@ public final class GiftItemComponent: Component {
             return false
         }
         if lhs.isPlaceholder != rhs.isPlaceholder {
+            return false
+        }
+        if lhs.animateChanges != rhs.animateChanges {
             return false
         }
         if lhs.mode != rhs.mode {
@@ -642,12 +648,22 @@ public final class GiftItemComponent: Component {
             }
             
             var animationTransition = transition
+            var animateBackgroundChange = false
             if self.animationLayer == nil || self.animationFile?.fileId != animationFile?.fileId, let emoji {
                 animationTransition = .immediate
                 self.animationFile = animationFile
+                var animateAppearance = false
                 if let animationLayer = self.animationLayer {
                     self.animationLayer = nil
-                    animationLayer.removeFromSuperlayer()
+                    if component.animateChanges {
+                        animateAppearance = true
+                        animateBackgroundChange = true
+                        animationLayer.animateAlpha(from: 1.0, to: 0.0, duration: 0.25, removeOnCompletion: false, completion: { _ in
+                            animationLayer.removeFromSuperlayer()
+                        })
+                    } else {
+                        animationLayer.removeFromSuperlayer()
+                    }
                 }
                 let animationLayer = InlineStickerItemLayer(
                     context: .account(component.context),
@@ -670,6 +686,9 @@ public final class GiftItemComponent: Component {
                 } else {
                     self.layer.insertSublayer(animationLayer, above: self.backgroundLayer)
                 }
+                if animateAppearance {
+                    animationLayer.animateAlpha(from: 0.0, to: 1.0, duration: 0.25)
+                }
             }
             
             let animationFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((size.width - iconSize.width) / 2.0), y: component.mode == .generic ? animationOffset : (floorToScreenPixels((size.height - iconSize.height) / 2.0) + explicitAnimationOffset)), size: iconSize)
@@ -678,6 +697,11 @@ public final class GiftItemComponent: Component {
             }
             
             if let backgroundColor {
+                if let backgroundView = self.patternView.view as? PeerInfoCoverComponent.View {
+                    if animateBackgroundChange {
+                        backgroundView.animateTransition(background: true, bounce: false)
+                    }
+                }
                 let _ = self.patternView.update(
                     transition: .immediate,
                     component: AnyComponent(PeerInfoCoverComponent(
@@ -694,7 +718,7 @@ public final class GiftItemComponent: Component {
                     environment: {},
                     containerSize: backgroundSize
                 )
-                if let backgroundView = self.patternView.view {
+                if let backgroundView = self.patternView.view as? PeerInfoCoverComponent.View {
                     if backgroundView.superview == nil {
                         backgroundView.layer.cornerRadius = cornerRadius
                         if #available(iOS 13.0, *) {
@@ -1620,7 +1644,7 @@ public final class StarsButtonContentComponent: Component {
                 }
             }
             
-            self.backgroundLayer.backgroundColor = backgroundColor.cgColor
+            transition.setBackgroundColor(layer: self.backgroundLayer, color: backgroundColor)
             transition.setFrame(layer: self.backgroundLayer, frame: CGRect(origin: .zero, size: size))
             self.backgroundLayer.cornerRadius = size.height / 2.0
                         

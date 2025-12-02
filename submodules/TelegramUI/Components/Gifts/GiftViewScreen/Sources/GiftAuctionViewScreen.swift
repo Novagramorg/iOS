@@ -535,7 +535,7 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
                 }), case let .backdrop(_, _, innerColor, outerColor, _, _, _) = backdropAttribute {
                     let topColor = UIColor(rgb: UInt32(bitPattern: innerColor)).withMultiplied(hue: 1.01, saturation: 1.22, brightness: 1.04)
                     let bottomColor = UIColor(rgb: UInt32(bitPattern: outerColor)).withMultiplied(hue: 0.97, saturation: 1.45, brightness: 0.89)
-                    buttonColor = topColor.mixedWith(bottomColor, alpha: 0.8)
+                    buttonColor = topColor.mixedWith(bottomColor, alpha: 0.8).withMultipliedBrightnessBy(1.25)
                     
                     secondaryTextColor = topColor.withMultiplied(hue: 1.0, saturation: 1.02, brightness: 1.25).mixedWith(UIColor.white, alpha: 0.5)
                 }
@@ -677,11 +677,8 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
                         )
                     ))
                 } else {
-//                    var auctionGiftsPerRound: Int32 = 50
-//                    if let auctionGiftsPerRoundValue = gift.auctionGiftsPerRound {
-//                        auctionGiftsPerRound = auctionGiftsPerRoundValue
-//                    }
-                    descriptionText = isUpcoming ? "Upcoming Auction" : "Gift Auction"  //strings.Gift_Auction_Description("\(auctionGiftsPerRound)", gift.title ?? "").string
+                    //TODO:localize
+                    descriptionText = isUpcoming ? "Upcoming Auction" : "Gift Auction"
                     
                     tableItems.append(.init(
                         id: "start",
@@ -787,7 +784,7 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
                     height: 24.0
                 ),
                 availableSize: CGSize(width: context.availableSize.width - sideInset * 2.0 - 50.0, height: CGFloat.greatestFiniteMagnitude),
-                transition: .immediate
+                transition: context.transition
             )
             context.add(description
                 .position(CGPoint(x: context.availableSize.width / 2.0, y: 167.0 + description.size.height / 2.0))
@@ -851,92 +848,6 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
             originY += table.size.height + 26.0
             
             var hasAdditionalButtons = false
-            
-            if case let .generic(gift) = component.auctionContext.gift, let upgradeVariantsCount = gift.upgradeVariantsCount {
-                originY += 5.0
-                
-                
-                var variant1: GiftItemComponent.Subject = .starGift(gift: gift, price: "")
-                var variant2: GiftItemComponent.Subject = .starGift(gift: gift, price: "")
-                var variant3: GiftItemComponent.Subject = .starGift(gift: gift, price: "")
-                if !state.previewModels.isEmpty {
-                    if state.previewModels.count > 0 {
-                        variant1 = .preview(attributes: [state.previewModels[0]], rarity: 0)
-                    }
-                    if state.previewModels.count > 1 {
-                        variant2 = .preview(attributes: [state.previewModels[1]], rarity: 0)
-                    }
-                    if state.previewModels.count > 2 {
-                        variant3 = .preview(attributes: [state.previewModels[2]], rarity: 0)
-                    }
-                }
-                
-                let variantsButton = variantsButton.update(
-                    component: PlainButtonComponent(content: AnyComponent(
-                        HStack([
-                            AnyComponentWithIdentity(id: "view", component: AnyComponent(
-                                MultilineTextComponent(text: .plain(NSAttributedString(string: strings.Gift_Auction_ViewVariants, font: Font.regular(17.0), textColor: theme.actionSheet.controlAccentColor)))
-                            )),
-                            AnyComponentWithIdentity(id: "spacing", component: AnyComponent(
-                                Rectangle(color: .clear, width: 8.0, height: 1.0)
-                            )),
-                            AnyComponentWithIdentity(id: "icon1", component: AnyComponent(
-                                GiftItemComponent(
-                                    context: component.context,
-                                    theme: theme,
-                                    strings: strings,
-                                    peer: nil,
-                                    subject: variant1,
-                                    isPlaceholder: state.previewModels.isEmpty,
-                                    mode: .buttonIcon
-                                )
-                            )),
-                            AnyComponentWithIdentity(id: "icon2", component: AnyComponent(
-                                GiftItemComponent(
-                                    context: component.context,
-                                    theme: theme,
-                                    strings: strings,
-                                    peer: nil,
-                                    subject: variant2,
-                                    isPlaceholder: state.previewModels.isEmpty,
-                                    mode: .buttonIcon
-                                )
-                            )),
-                            AnyComponentWithIdentity(id: "icon3", component: AnyComponent(
-                                GiftItemComponent(
-                                    context: component.context,
-                                    theme: theme,
-                                    strings: strings,
-                                    peer: nil,
-                                    subject: variant3,
-                                    isPlaceholder: state.previewModels.isEmpty,
-                                    mode: .buttonIcon
-                                )
-                            )),
-                            AnyComponentWithIdentity(id: "text", component: AnyComponent(
-                                MultilineTextComponent(text: .plain(NSAttributedString(string: "  \(strings.Gift_Auction_Variants(upgradeVariantsCount))", font: Font.regular(17.0), textColor: theme.actionSheet.controlAccentColor)))
-                            )),
-                            AnyComponentWithIdentity(id: "arrow", component: AnyComponent(
-                                BundleIconComponent(name: "Chat/Context Menu/Arrow", tintColor: theme.actionSheet.controlAccentColor)
-                            ))
-                        ], spacing: 0.0)
-                    ), action: { [weak state] in
-                        guard let state, let attributes = state.giftUpgradeAttributes else {
-                            return
-                        }
-                        let variantsController = component.context.sharedContext.makeGiftUpgradeVariantsPreviewScreen(context: component.context, gift: .generic(gift), attributes: attributes)
-                        environment.controller()?.push(variantsController)
-                    }, animateScale: false),
-                    availableSize: CGSize(width: context.availableSize.width - 64.0, height: context.availableSize.height),
-                    transition: context.transition
-                )
-                context.add(variantsButton
-                    .position(CGPoint(x: context.availableSize.width / 2.0, y: originY + variantsButton.size.height / 2.0)))
-                originY += variantsButton.size.height
-                originY += 12.0
-                
-                hasAdditionalButtons = true
-            }
             
             let acquiredGiftsCount = state.giftAuctionState?.myState.acquiredCount ?? 0
             if acquiredGiftsCount > 0, case let .generic(gift) = component.auctionContext.gift {
@@ -1078,6 +989,96 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
                 }
             }
             
+            if case let .generic(gift) = component.auctionContext.gift, let upgradeVariantsCount = gift.upgradeVariantsCount {
+                originY += 5.0
+                
+                if !hasAdditionalButtons {
+                    originY -= 13.0
+                }
+                
+                var variant1: GiftItemComponent.Subject = .starGift(gift: gift, price: "")
+                var variant2: GiftItemComponent.Subject = .starGift(gift: gift, price: "")
+                var variant3: GiftItemComponent.Subject = .starGift(gift: gift, price: "")
+                if !state.previewModels.isEmpty {
+                    if state.previewModels.count > 0 {
+                        variant1 = .preview(attributes: [state.previewModels[0]], rarity: 0)
+                    }
+                    if state.previewModels.count > 1 {
+                        variant2 = .preview(attributes: [state.previewModels[1]], rarity: 0)
+                    }
+                    if state.previewModels.count > 2 {
+                        variant3 = .preview(attributes: [state.previewModels[2]], rarity: 0)
+                    }
+                }
+                
+                let variantsButton = variantsButton.update(
+                    component: PlainButtonComponent(content: AnyComponent(
+                        HStack([
+                            AnyComponentWithIdentity(id: "view", component: AnyComponent(
+                                MultilineTextComponent(text: .plain(NSAttributedString(string: strings.Gift_Auction_ViewVariants, font: Font.regular(13.0), textColor: theme.actionSheet.controlAccentColor)))
+                            )),
+                            AnyComponentWithIdentity(id: "spacing", component: AnyComponent(
+                                Rectangle(color: .clear, width: 7.0, height: 1.0)
+                            )),
+                            AnyComponentWithIdentity(id: "icon1", component: AnyComponent(
+                                GiftItemComponent(
+                                    context: component.context,
+                                    theme: theme,
+                                    strings: strings,
+                                    peer: nil,
+                                    subject: variant1,
+                                    isPlaceholder: state.previewModels.isEmpty,
+                                    mode: .tableIcon
+                                )
+                            )),
+                            AnyComponentWithIdentity(id: "icon2", component: AnyComponent(
+                                GiftItemComponent(
+                                    context: component.context,
+                                    theme: theme,
+                                    strings: strings,
+                                    peer: nil,
+                                    subject: variant2,
+                                    isPlaceholder: state.previewModels.isEmpty,
+                                    mode: .tableIcon
+                                )
+                            )),
+                            AnyComponentWithIdentity(id: "icon3", component: AnyComponent(
+                                GiftItemComponent(
+                                    context: component.context,
+                                    theme: theme,
+                                    strings: strings,
+                                    peer: nil,
+                                    subject: variant3,
+                                    isPlaceholder: state.previewModels.isEmpty,
+                                    mode: .tableIcon
+                                )
+                            )),
+                            AnyComponentWithIdentity(id: "text", component: AnyComponent(
+                                MultilineTextComponent(text: .plain(NSAttributedString(string: "  \(strings.Gift_Auction_Variants(upgradeVariantsCount))", font: Font.regular(13.0), textColor: theme.actionSheet.controlAccentColor)))
+                            )),
+                            AnyComponentWithIdentity(id: "arrow", component: AnyComponent(
+                                BundleIconComponent(name: "Item List/InlineTextRightArrow", tintColor: theme.actionSheet.controlAccentColor)
+                            ))
+                        ], spacing: 0.0)
+                    ), action: { [weak state] in
+                        guard let state, let attributes = state.giftUpgradeAttributes else {
+                            return
+                        }
+                        let variantsController = component.context.sharedContext.makeGiftUpgradeVariantsPreviewScreen(context: component.context, gift: .generic(gift), attributes: attributes)
+                        environment.controller()?.push(variantsController)
+                    }, animateScale: false),
+                    availableSize: CGSize(width: context.availableSize.width - 64.0, height: context.availableSize.height),
+                    transition: context.transition
+                )
+                context.add(variantsButton
+                    .position(CGPoint(x: context.availableSize.width / 2.0, y: originY + variantsButton.size.height / 2.0)))
+                originY += variantsButton.size.height
+                originY += 12.0
+                originY -= 15.0
+                
+                hasAdditionalButtons = true
+            }
+            
             if hasAdditionalButtons {
                 originY += 21.0
             }
@@ -1200,7 +1201,7 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
             let closeButton = closeButton.update(
                 component: GlassBarButtonComponent(
                     size: CGSize(width: 40.0, height: 40.0),
-                    backgroundColor: buttonColor.withMultipliedBrightnessBy(1.2),
+                    backgroundColor: buttonColor,
                     isDark: theme.overallDarkAppearance,
                     state: .tintedGlass,
                     component: AnyComponentWithIdentity(id: "close", component: AnyComponent(
@@ -1217,7 +1218,7 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
                     }
                 ),
                 availableSize: CGSize(width: 40.0, height: 40.0),
-                transition: .immediate
+                transition: context.transition
             )
             context.add(closeButton
                 .position(CGPoint(x: 16.0 + closeButton.size.width / 2.0, y: 16.0 + closeButton.size.height / 2.0))
@@ -1226,7 +1227,7 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
             let moreButton = moreButton.update(
                 component: GlassBarButtonComponent(
                     size: CGSize(width: 40.0, height: 40.0),
-                    backgroundColor: buttonColor.withMultipliedBrightnessBy(1.2),
+                    backgroundColor: buttonColor,
                     isDark: theme.overallDarkAppearance,
                     state: .tintedGlass,
                     component: AnyComponentWithIdentity(id: "more", component: AnyComponent(
@@ -1248,7 +1249,7 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
                     }
                 ),
                 availableSize: CGSize(width: 40.0, height: 40.0),
-                transition: .immediate
+                transition: context.transition
             )
             context.add(moreButton
                 .position(CGPoint(x: context.availableSize.width - 16.0 - moreButton.size.width / 2.0, y: 16.0 + moreButton.size.height / 2.0))

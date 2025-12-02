@@ -169,7 +169,7 @@ private final class GiftAuctionWearPreviewSheetContent: CombinedComponent {
         let arrow = Child(BundleIconComponent.self)
         let upgradeLabel = Child(MultilineTextComponent.self)
         let remainingCount = Child(GiftRemainingCountComponent.self)
-        //let auctionFooter = Child(MultilineTextComponent.self)
+        let auctionFooter = Child(MultilineTextComponent.self)
         
         let button = Child(ButtonComponent.self)
         
@@ -231,6 +231,7 @@ private final class GiftAuctionWearPreviewSheetContent: CombinedComponent {
                     animationOffset: animationOffset,
                     animationScale: animationScale,
                     displayAnimationStars: true,
+                    animateScaleOnTransition: false,
                     externalState: giftCompositionExternalState,
                     requestUpdate: { [weak state] transition in
                         state?.updated(transition: transition)
@@ -370,6 +371,7 @@ private final class GiftAuctionWearPreviewSheetContent: CombinedComponent {
                     strings: strings,
                     subject: .preview(attributes: attributes, rarity: 0),
                     ribbon: GiftItemComponent.Ribbon(text: "upgraded", color: ribbonColor),
+                    animateChanges: true,
                     mode: .thumbnail
                 ),
                 availableSize: CGSize(width: 120.0, height: 120.0),
@@ -440,8 +442,57 @@ private final class GiftAuctionWearPreviewSheetContent: CombinedComponent {
                 context.add(remainingCount
                     .position(CGPoint(x: context.availableSize.width / 2.0, y: contentHeight))
                 )
+                
+                if let giftsPerRound = gift.auctionGiftsPerRound {
+                    let footerAttributes = MarkdownAttributes(
+                        body: MarkdownAttributeSet(font: Font.regular(13.0), textColor: theme.list.freeTextColor),
+                        bold: MarkdownAttributeSet(font: Font.semibold(13.0), textColor: theme.list.freeTextColor),
+                        link: MarkdownAttributeSet(font: Font.regular(13.0), textColor: theme.list.itemAccentColor),
+                        linkAttribute: { contents in
+                            return (TelegramTextAttributes.URL, contents)
+                        }
+                    )
+                    let parsedString = parseMarkdownIntoAttributedString(strings.Gift_Setup_AuctionInfo(environment.strings.Gift_Setup_AuctionInfo_Gifts(giftsPerRound), strings.Gift_Setup_AuctionInfo_Bidders(giftsPerRound)).string, attributes: footerAttributes)
+                    let auctionFooterText = NSMutableAttributedString(attributedString: parsedString)
+                    
+                    if state.cachedSmallChevronImage == nil || state.cachedSmallChevronImage?.1 !== environment.theme {
+                        state.cachedSmallChevronImage = (generateTintedImage(image: UIImage(bundleImageName: "Item List/InlineTextRightArrow"), color: theme.list.itemAccentColor)!, environment.theme)
+                    }
+                    if let range = auctionFooterText.string.range(of: ">"), let chevronImage = state.cachedSmallChevronImage?.0 {
+                        auctionFooterText.addAttribute(.attachment, value: chevronImage, range: NSRange(range, in: auctionFooterText.string))
+                    }
+                    
+                    let auctionFooter = auctionFooter.update(
+                        component: MultilineTextComponent(
+                            text: .plain(auctionFooterText),
+                            maximumNumberOfLines: 0,
+                            highlightColor: theme.list.itemAccentColor.withAlphaComponent(0.1),
+                            highlightInset: UIEdgeInsets(top: 0.0, left: 0.0, bottom: 0.0, right: -8.0),
+                            highlightAction: { attributes in
+                                if let _ = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.URL)] {
+                                    return NSAttributedString.Key(rawValue: TelegramTextAttributes.URL)
+                                } else {
+                                    return nil
+                                }
+                            },
+                            tapAction: { _, _ in
+                                guard let controller = controller() else {
+                                    return
+                                }
+                                let infoController = component.context.sharedContext.makeGiftAuctionInfoScreen(context: component.context, auctionContext: component.auctionContext, completion: nil)
+                                controller.push(infoController)
+                            }
+                        ),
+                        availableSize: CGSize(width: context.availableSize.width - sideInset * 2.0 - 16.0 * 2.0, height: 10000.0),
+                        transition: context.transition
+                    )
+                    context.add(auctionFooter
+                        .position(CGPoint(x: sideInset + 16.0 + auctionFooter.size.width * 0.5, y: contentHeight + 52.0 + auctionFooter.size.height * 0.5))
+                    )
+                    contentHeight += auctionFooter.size.height
+                }
             }
-            contentHeight += 110.0
+            contentHeight += 80.0
             
             var buttonTitle = strings.Gift_Auction_Join
             if component.auctionContext.isUpcoming {
@@ -521,6 +572,7 @@ final class GiftAuctionWearPreviewSheetComponent: CombinedComponent {
         return { context in
             let environment = context.environment[EnvironmentType.self]
             let controller = environment.controller
+            let theme = environment.theme.withModalBlocksBackground()
             
             let sheet = sheet.update(
                 component: SheetComponent<EnvironmentType>(
@@ -532,7 +584,7 @@ final class GiftAuctionWearPreviewSheetComponent: CombinedComponent {
                         getController: controller
                     )),
                     style: .glass,
-                    backgroundColor: .color(environment.theme.list.blocksBackgroundColor),
+                    backgroundColor: .color(theme.list.blocksBackgroundColor),
                     followContentSizeChanges: true,
                     clipsContent: true,
                     hasDimView: false,
