@@ -2604,11 +2604,6 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                             }, dismiss: {
                                 let _ = context.engine.notices.dismissServerProvidedSuggestion(suggestion: ServerProvidedSuggestion.setupPasskey.id).startStandalone()
                             })
-                            if let layout = strongSelf.validLayout, layout.metrics.isTablet {
-                                controller.navigationPresentation = .standaloneFlatModal
-                            } else {
-                                controller.navigationPresentation = .flatModal
-                            }
                             navigationController.pushViewController(controller)
                         }
                     })
