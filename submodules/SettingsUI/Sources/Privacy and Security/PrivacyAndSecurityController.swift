@@ -1268,9 +1268,9 @@ public func privacyAndSecurityController(
     }, openPasskeys: {
         Task { @MainActor in
             let initialPasskeysData = await (passkeysDataValue.get() |> take(1)).get()
-            let passkeysScreen = await PasskeysScreen(context: context, initialPasskeysData: initialPasskeysData, passkeysDataUpdated: { passkeysData in
+            let passkeysScreen = PasskeysScreen(context: context, displaySkip: false, initialPasskeysData: initialPasskeysData, passkeysDataUpdated: { passkeysData in
                 passkeysDataValue.set(.single(passkeysData))
-            })
+            }, completion: {}, cancel: {})
             pushControllerImpl?(passkeysScreen, true)
         }
     }, openActiveSessions: {

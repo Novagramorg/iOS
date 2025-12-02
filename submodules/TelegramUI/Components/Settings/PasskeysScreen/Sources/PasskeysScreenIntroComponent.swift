@@ -16,19 +16,22 @@ final class PasskeysScreenIntroComponent: Component {
     let insets: UIEdgeInsets
     let displaySkip: Bool
     let createPasskeyAction: () -> Void
+    let skipAction: () -> Void
     
     init(
         context: AccountContext,
         theme: PresentationTheme,
         insets: UIEdgeInsets,
         displaySkip: Bool,
-        createPasskeyAction: @escaping () -> Void
+        createPasskeyAction: @escaping () -> Void,
+        skipAction: @escaping () -> Void
     ) {
         self.context = context
         self.theme = theme
         self.insets = insets
         self.displaySkip = displaySkip
         self.createPasskeyAction = createPasskeyAction
+        self.skipAction = skipAction
     }
     
     static func ==(lhs: PasskeysScreenIntroComponent, rhs: PasskeysScreenIntroComponent) -> Bool {
@@ -300,14 +303,55 @@ final class PasskeysScreenIntroComponent: Component {
                 containerSize: CGSize(width: availableSize.width - buttonInsets.left - buttonInsets.right, height: 52.0)
             )
             
+            var skipButtonSize: CGSize?
             if component.displaySkip {
                 let skipButton: ComponentView<Empty>
+                if let current = self.skipButton {
+                    skipButton = current
+                } else {
+                    skipButton = ComponentView()
+                    self.skipButton = skipButton
+                }
+                //TODO:localize
+                skipButtonSize = skipButton.update(
+                    transition: transition,
+                    component: AnyComponent(ButtonComponent(
+                        background: ButtonComponent.Background(
+                            style: .glass,
+                            color: component.theme.chatList.unreadBadgeInactiveBackgroundColor,
+                            foreground: component.theme.list.itemCheckColors.foregroundColor,
+                            pressedColor: component.theme.chatList.unreadBadgeInactiveBackgroundColor.withMultipliedAlpha(0.9),
+                            cornerRadius: 52.0 * 0.5
+                        ),
+                        content: AnyComponentWithIdentity(
+                            id: AnyHashable(0),
+                            component: AnyComponent(MultilineTextComponent(text: .plain(NSAttributedString(string: "Skip", font: Font.semibold(17.0), textColor: component.theme.list.itemCheckColors.foregroundColor))))
+                        ),
+                        action: { [weak self] in
+                            guard let self, let component = self.component else {
+                                return
+                            }
+                            component.skipAction()
+                        }
+                    )),
+                    environment: {},
+                    containerSize: CGSize(width: availableSize.width - buttonInsets.left - buttonInsets.right, height: 52.0)
+                )
             } else if let skipButton = self.skipButton {
                 self.skipButton = nil
                 skipButton.view?.removeFromSuperview()
             }
 
-            let buttonFrame = CGRect(origin: CGPoint(x: buttonInsets.left, y: availableSize.height - buttonInsets.bottom - actionButtonSize.height), size: actionButtonSize)
+            var buttonFrame = CGRect(origin: CGPoint(x: buttonInsets.left, y: availableSize.height - buttonInsets.bottom - actionButtonSize.height), size: actionButtonSize)
+            if let skipButtonSize, let skipButtonView = self.skipButton?.view {
+                let skipButtonFrame = buttonFrame
+                buttonFrame = buttonFrame.offsetBy(dx: 0.0, dy: -8.0 - skipButtonSize.height)
+                
+                if skipButtonView.superview == nil {
+                    self.addSubview(skipButtonView)
+                }
+                transition.setFrame(view: skipButtonView, frame: skipButtonFrame)
+            }
 
             if let actionButtonView = self.actionButton.view {
                 if actionButtonView.superview == nil {
