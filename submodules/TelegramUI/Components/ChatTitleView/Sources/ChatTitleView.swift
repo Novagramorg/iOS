@@ -14,7 +14,6 @@ import PeerPresenceStatusManager
 import ChatTitleActivityNode
 import LocalizedPeerData
 import PhoneNumberFormat
-import ChatTitleActivityNode
 import AnimatedCountLabelNode
 import AccountContext
 import ComponentFlow
@@ -23,6 +22,7 @@ import AnimationCache
 import MultiAnimationRenderer
 import ComponentDisplayAdapters
 import GlassBackgroundComponent
+import AnimatedTextComponent
 
 private let titleFont = Font.with(size: 17.0, design: .regular, weight: .semibold, traits: [.monospacedNumbers])
 private let subtitleFont = Font.regular(13.0)
@@ -145,13 +145,13 @@ public enum ChatTitleContent: Equatable {
     }
 }
 
-private enum ChatTitleIcon {
+enum ChatTitleIcon {
     case none
     case lock
     case mute
 }
 
-private enum ChatTitleCredibilityIcon: Equatable {
+enum ChatTitleCredibilityIcon: Equatable {
     case none
     case fake
     case scam
@@ -205,7 +205,7 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
     
     private var pointerInteraction: PointerInteraction?
     
-    public var inputActivities: (PeerId, [(Peer, PeerInputActivity)])? {
+    public var inputActivities: ChatTitleComponent.Activities? {
         didSet {
             let _ = self.updateStatus()
         }
@@ -506,51 +506,51 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
             }
             state = .info(NSAttributedString(string: infoText, font: subtitleFont, textColor: titleTheme.rootController.navigationBar.secondaryTextColor), .generic)
         case .online:
-            if let (peerId, inputActivities) = self.inputActivities, !inputActivities.isEmpty, inputActivitiesAllowed {
+            if let inputActivities = self.inputActivities, !inputActivities.items.isEmpty, inputActivitiesAllowed {
                 var stringValue = ""
-                var mergedActivity = inputActivities[0].1
-                for (_, activity) in inputActivities {
-                    if activity != mergedActivity {
+                var mergedActivity = inputActivities.items[0].activity
+                for item in inputActivities.items {
+                    if item.activity != mergedActivity {
                         mergedActivity = .typingText
                         break
                     }
                 }
-                if peerId.namespace == Namespaces.Peer.CloudUser || peerId.namespace == Namespaces.Peer.SecretChat {
+                if inputActivities.peerId.namespace == Namespaces.Peer.CloudUser || inputActivities.peerId.namespace == Namespaces.Peer.SecretChat {
                     switch mergedActivity {
-                        case .typingText:
-                            stringValue = strings.Conversation_typing
-                        case .uploadingFile:
-                            stringValue = strings.Activity_UploadingDocument
-                        case .recordingVoice:
-                            stringValue = strings.Activity_RecordingAudio
-                        case .uploadingPhoto:
-                            stringValue = strings.Activity_UploadingPhoto
-                        case .uploadingVideo:
-                            stringValue = strings.Activity_UploadingVideo
-                        case .playingGame:
-                            stringValue = strings.Activity_PlayingGame
-                        case .recordingInstantVideo:
-                            stringValue = strings.Activity_RecordingVideoMessage
-                        case .uploadingInstantVideo:
-                            stringValue = strings.Activity_UploadingVideoMessage
-                        case .choosingSticker:
-                            stringValue = strings.Activity_ChoosingSticker
-                        case let .seeingEmojiInteraction(emoticon):
-                            stringValue = strings.Activity_EnjoyingAnimations(emoticon).string
-                        case .speakingInGroupCall, .interactingWithEmoji:
-                            stringValue = ""
+                    case .typingText:
+                        stringValue = strings.Conversation_typing
+                    case .uploadingFile:
+                        stringValue = strings.Activity_UploadingDocument
+                    case .recordingVoice:
+                        stringValue = strings.Activity_RecordingAudio
+                    case .uploadingPhoto:
+                        stringValue = strings.Activity_UploadingPhoto
+                    case .uploadingVideo:
+                        stringValue = strings.Activity_UploadingVideo
+                    case .playingGame:
+                        stringValue = strings.Activity_PlayingGame
+                    case .recordingInstantVideo:
+                        stringValue = strings.Activity_RecordingVideoMessage
+                    case .uploadingInstantVideo:
+                        stringValue = strings.Activity_UploadingVideoMessage
+                    case .choosingSticker:
+                        stringValue = strings.Activity_ChoosingSticker
+                    case let .seeingEmojiInteraction(emoticon):
+                        stringValue = strings.Activity_EnjoyingAnimations(emoticon).string
+                    case .speakingInGroupCall, .interactingWithEmoji:
+                        stringValue = ""
                     }
                 } else {
-                    if inputActivities.count > 1 {
-                        let peerTitle = EnginePeer(inputActivities[0].0).compactDisplayTitle
-                        if inputActivities.count == 2 {
-                            let secondPeerTitle = EnginePeer(inputActivities[1].0).compactDisplayTitle
-                            stringValue = strings.Chat_MultipleTypingPair(peerTitle, secondPeerTitle).string
+                    if inputActivities.items.count > 1 {
+                        let peerTitle = inputActivities.items[0].peer.compactDisplayTitle
+                        if inputActivities.items.count == 2 {
+                            let secondPeerTitle = inputActivities.items[1].peer.compactDisplayTitle
+                            stringValue = self.strings.Chat_MultipleTypingPair(peerTitle, secondPeerTitle).string
                         } else {
-                            stringValue = strings.Chat_MultipleTypingMore(peerTitle, String(inputActivities.count - 1)).string
+                            stringValue = self.strings.Chat_MultipleTypingMore(peerTitle, String(inputActivities.items.count - 1)).string
                         }
-                    } else if let (peer, _) = inputActivities.first {
-                        stringValue = EnginePeer(peer).compactDisplayTitle
+                    } else if let item = inputActivities.items.first {
+                        stringValue = item.peer.compactDisplayTitle
                     }
                 }
                 let color = titleTheme.rootController.navigationBar.accentTextColor
@@ -839,7 +839,7 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
         }
     }
     
-    public func updateLayout(size: CGSize, clearBounds: CGRect, transition: ContainedViewLayoutTransition) -> CGRect {
+    public func updateLayout(size: CGSize, clearBounds: CGRect, transition: ContainedViewLayoutTransition) {
         self.validLayout = (size, clearBounds)
         
         self.button.frame = clearBounds
@@ -1068,8 +1068,6 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
         let componentTransition = ComponentTransition(transition)
         componentTransition.setFrame(view: self.backgroundView, frame: backgroundFrame)
         self.backgroundView.update(size: backgroundFrame.size, cornerRadius: backgroundFrame.height * 0.5, isDark: self.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: UIColor(white: self.theme.overallDarkAppearance ? 0.0 : 1.0, alpha: 0.6)), isInteractive: false, transition: componentTransition)
-        
-        return titleFrame
     }
     
     @objc private func buttonPressed() {
@@ -1142,124 +1140,5 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
             snapshotView?.removeFromSuperview()
         })
         snapshotView.layer.animatePosition(from: CGPoint(), to: CGPoint(x: -offset.x, y: -offset.y), duration: 0.5, timingFunction: kCAMediaTimingFunctionSpring, removeOnCompletion: false, additive: true)
-    }
-}
-
-public final class ChatTitleComponent: Component {
-    public let context: AccountContext
-    public let theme: PresentationTheme
-    public let strings: PresentationStrings
-    public let dateTimeFormat: PresentationDateTimeFormat
-    public let nameDisplayOrder: PresentationPersonNameOrder
-    public let content: ChatTitleContent
-    public let tapped: () -> Void
-    public let longTapped: () -> Void
-    
-    public init(
-        context: AccountContext,
-        theme: PresentationTheme,
-        strings: PresentationStrings,
-        dateTimeFormat: PresentationDateTimeFormat,
-        nameDisplayOrder: PresentationPersonNameOrder,
-        content: ChatTitleContent,
-        tapped: @escaping () -> Void,
-        longTapped: @escaping () -> Void
-    ) {
-        self.context = context
-        self.theme = theme
-        self.strings = strings
-        self.dateTimeFormat = dateTimeFormat
-        self.nameDisplayOrder = nameDisplayOrder
-        self.content = content
-        self.tapped = tapped
-        self.longTapped = longTapped
-    }
-    
-    public static func ==(lhs: ChatTitleComponent, rhs: ChatTitleComponent) -> Bool {
-        if lhs.context !== rhs.context {
-            return false
-        }
-        if lhs.theme !== rhs.theme {
-            return false
-        }
-        if lhs.strings !== rhs.strings {
-            return false
-        }
-        if lhs.dateTimeFormat != rhs.dateTimeFormat {
-            return false
-        }
-        if lhs.nameDisplayOrder != rhs.nameDisplayOrder {
-            return false
-        }
-        if lhs.content != rhs.content {
-            return false
-        }
-        return true
-    }
-    
-    public final class View: UIView {
-        public private(set) var contentView: ChatTitleView?
-        
-        private var component: ChatTitleComponent?
-        
-        override init(frame: CGRect) {
-            super.init(frame: frame)
-        }
-        
-        required init?(coder: NSCoder) {
-            fatalError("init(coder:) has not been implemented")
-        }
-        
-        func update(component: ChatTitleComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
-            self.component = component
-            
-            let contentView: ChatTitleView
-            if let current = self.contentView {
-                contentView = current
-            } else {
-                contentView = ChatTitleView(
-                    context: component.context,
-                    theme: component.theme,
-                    strings: component.strings,
-                    dateTimeFormat: component.dateTimeFormat,
-                    nameDisplayOrder: component.nameDisplayOrder,
-                    animationCache: component.context.animationCache,
-                    animationRenderer: component.context.animationRenderer
-                )
-                contentView.pressed = { [weak self] in
-                    guard let self else {
-                        return
-                    }
-                    self.component?.tapped()
-                }
-                contentView.longPressed = { [weak self] in
-                    guard let self else {
-                        return
-                    }
-                    self.component?.longTapped()
-                }
-                contentView.manualLayout = true
-                self.contentView = contentView
-                self.addSubview(contentView)
-            }
-            
-            if contentView.titleContent != component.content {
-                contentView.titleContent = component.content
-            }
-            contentView.updateThemeAndStrings(theme: component.theme, strings: component.strings)
-            
-            let _ = contentView.updateLayout(size: availableSize, clearBounds: CGRect(origin: CGPoint(), size: availableSize), transition: transition.containedViewLayoutTransition)
-            transition.setFrame(view: contentView, frame: CGRect(origin: CGPoint(), size: availableSize))
-            
-            return availableSize
-        }
-    }
-    
-    public func makeView() -> View {
-        return View(frame: CGRect())
-    }
-    
-    public func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
-        return view.update(component: self, availableSize: availableSize, state: state, environment: environment, transition: transition)
     }
 }

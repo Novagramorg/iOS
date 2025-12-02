@@ -7209,7 +7209,10 @@ private final class ChatListLocationContext {
                 strings: presentationData.strings,
                 dateTimeFormat: presentationData.dateTimeFormat,
                 nameDisplayOrder: presentationData.nameDisplayOrder,
+                displayBackground: false,
                 content: .custom(presentationData.strings.ChatList_SelectedTopics(Int32(stateAndFilterId.state.selectedThreadIds.count)), nil, false),
+                activities: nil,
+                networkState: nil,
                 tapped: {
                 },
                 longTapped: {
@@ -7222,7 +7225,10 @@ private final class ChatListLocationContext {
                 strings: presentationData.strings,
                 dateTimeFormat: presentationData.dateTimeFormat,
                 nameDisplayOrder: presentationData.nameDisplayOrder,
+                displayBackground: false,
                 content: .peer(peerView: ChatTitleContent.PeerData(peerView: peerView), customTitle: nil, customSubtitle: nil, onlineMemberCount: onlineMemberCount, isScheduledMessages: false, isMuted: nil, customMessageCount: nil, isEnabled: true),
+                activities: nil,
+                networkState: nil,
                 tapped: { [weak self] in
                     guard let self else {
                         return
