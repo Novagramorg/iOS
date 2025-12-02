@@ -15494,9 +15494,12 @@ Error: %8$@";
 "Gift.Auction.Hours_any" = "%@ hours";
 "Gift.Auction.Minutes_1" = "%@ minute";
 "Gift.Auction.Minutes_any" = "%@ minutes";
+"Gift.Auction.Seconds_1" = "%@ second";
+"Gift.Auction.Seconds_any" = "%@ seconds";
 "Gift.Auction.HoursEach_1" = "%@ hour each";
 "Gift.Auction.HoursEach_any" = "%@ hours each";
 "Gift.Auction.MinutesEach_1" = "%@ minute each";
 "Gift.Auction.MinutesEach_any" = "%@ minutes each";
+"Gift.Auction.Extension" = "+ %1$@ for late bids in top %2$@";
 
 "ChatList.Auctions.UpcomingAuction" = "Upcoming Auction";
