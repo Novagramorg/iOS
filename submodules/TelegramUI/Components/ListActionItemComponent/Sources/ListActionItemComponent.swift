@@ -348,10 +348,14 @@ public final class ListActionItemComponent: Component {
         }
         
         public var customUpdateIsHighlighted: ((Bool) -> Void)?
+        public var enumerateSiblings: (((UIView) -> Void) -> Void)?
         public var separatorInset: CGFloat = 0.0
         
         public override init(frame: CGRect) {
-            self.container = ContentContainer(frame: CGRect())
+            var closeOtherContextOptions: (() -> Void)?
+            self.container = ContentContainer(closeOtherContextOptions: {
+                closeOtherContextOptions?()
+            })
             self.button = HighlightTrackingButton()
             
             super.init(frame: CGRect())
@@ -374,6 +378,20 @@ public final class ListActionItemComponent: Component {
                 if let customUpdateIsHighlighted = self.customUpdateIsHighlighted {
                     customUpdateIsHighlighted(isHighlighted)
                 }
+            }
+            
+            closeOtherContextOptions = { [weak self] in
+                guard let self else {
+                    return
+                }
+                self.enumerateSiblings?({ sibling in
+                    if self === sibling {
+                        return
+                    }
+                    if let view = sibling as? View {
+                        view.container.closeContextOptions()
+                    }
+                })
             }
         }
         
