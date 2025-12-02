@@ -15506,3 +15506,5 @@ Error: %8$@";
 "Gift.Auction.Extension" = "+ %1$@ for late bids in top %2$@";
 
 "ChatList.Auctions.UpcomingAuction" = "Upcoming Auction";
+
+"Gift.AuctionBid.UpcomingBid" = "You placed an early bid";

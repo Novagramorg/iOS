@@ -72,8 +72,15 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
         private var giftAuctionAcquiredGiftsPromise = ValuePromise<[GiftAuctionAcquiredGift]>()
         private var giftAuctionAcquiredGiftsDisposable = MetaDisposable()
         
-        private(set) var giftValueInfo: StarGift.UniqueGift.ValueInfo?
-        private var giftValueInfoDisposable: Disposable?
+        private(set) var giftUpgradeAttributes: [StarGift.UniqueGift.Attribute]?
+        private var previewTimer: SwiftSignalKit.Timer?
+        private(set) var previewModelIndex: Int = -1
+        private(set) var previewBackdropIndex: Int = -1
+        private(set) var previewSymbolIndex: Int = -1
+        
+        private(set) var previewModels: [StarGift.UniqueGift.Attribute] = []
+        private(set) var previewBackdrops: [StarGift.UniqueGift.Attribute] = []
+        private(set) var previewSymbols: [StarGift.UniqueGift.Attribute] = []
         
         var cachedStarImage: (UIImage, PresentationTheme)?
         
@@ -105,30 +112,87 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
                 if let acquiredCount = auctionState?.myState.acquiredCount, acquiredCount > (previousState?.myState.acquiredCount ?? 0) {
                     self.loadAcquiredGifts()
                 }
-                
-                if !"".isEmpty, self.giftValueInfoDisposable == nil, let auctionState, case let .generic(gift) = auctionState.gift, case .finished = auctionState.auctionState, let slug = gift.auctionSlug {
-                    self.giftValueInfoDisposable = (self.context.engine.payments.getUniqueStarGiftValueInfo(slug: "\(slug)-1")
-                    |> deliverOnMainQueue).start(next: { [weak self] valueInfo in
-                        guard let self else {
-                            return
-                        }
-                        self.giftValueInfo = valueInfo
-                        self.updated(transition: .easeInOut(duration: 0.25))
-                    })
-                }
             })
-                        
+                                    
             self.giftAuctionTimer = SwiftSignalKit.Timer(timeout: 0.5, repeat: true, completion: { [weak self] in
                 self?.updated()
             }, queue: Queue.mainQueue())
             self.giftAuctionTimer?.start()
+            
+            if case let .generic(gift) = auctionContext.gift, let upgradeVariantsCount = gift.upgradeVariantsCount, upgradeVariantsCount > 0 {
+                let _ = (context.engine.payments.getStarGiftUpgradeAttributes(giftId: gift.id)
+                |> deliverOnMainQueue).start(next: { [weak self] attributes in
+                    guard let self, let attributes else {
+                        return
+                    }
+                    self.giftUpgradeAttributes = attributes
+                    
+                    let randomModels = Array(attributes.filter({ attribute in
+                        if case .model = attribute {
+                            return true
+                        } else {
+                            return false
+                        }
+                    }).shuffled().prefix(5))
+                    self.previewModels = randomModels
+                    
+                    let randomBackdrops = Array(attributes.filter({ attribute in
+                        if case .backdrop = attribute {
+                            return true
+                        } else {
+                            return false
+                        }
+                    }).shuffled())
+                    self.previewBackdrops = randomBackdrops
+                    
+                    let randomSymbols = Array(attributes.filter({ attribute in
+                        if case .pattern = attribute {
+                            return true
+                        } else {
+                            return false
+                        }
+                    }).shuffled().prefix(5))
+                    self.previewSymbols = randomSymbols
+                    
+                    self.updated()
+                })
+                
+                self.previewTimer = SwiftSignalKit.Timer(timeout: 3.0, repeat: true, completion: { [weak self] in
+                    guard let self else {
+                        return
+                    }
+                    self.previewTimerTick()
+                }, queue: Queue.mainQueue())
+                self.previewTimer?.start()
+            }
         }
         
         deinit {
             self.disposable?.dispose()
             self.giftAuctionAcquiredGiftsDisposable.dispose()
             self.giftAuctionTimer?.invalidate()
-            self.giftValueInfoDisposable?.dispose()
+            self.previewTimer?.invalidate()
+        }
+        
+        private func previewTimerTick() {
+            guard !self.previewModels.isEmpty else { return }
+            self.previewModelIndex = (self.previewModelIndex + 1) % self.previewModels.count
+            
+            let previousSymbolIndex = self.previewSymbolIndex
+            var randomSymbolIndex = previousSymbolIndex
+            while randomSymbolIndex == previousSymbolIndex && !self.previewSymbols.isEmpty {
+                randomSymbolIndex = Int.random(in: 0 ..< self.previewSymbols.count)
+            }
+            if !self.previewSymbols.isEmpty { self.previewSymbolIndex = randomSymbolIndex }
+            
+            let previousBackdropIndex = self.previewBackdropIndex
+            var randomBackdropIndex = previousBackdropIndex
+            while randomBackdropIndex == previousBackdropIndex && !self.previewBackdrops.isEmpty {
+                randomBackdropIndex = Int.random(in: 0 ..< self.previewBackdrops.count)
+            }
+            if !self.previewBackdrops.isEmpty { self.previewBackdropIndex = randomBackdropIndex }
+            
+            self.updated(transition: .easeInOut(duration: 0.25))
         }
         
         func loadAcquiredGifts() {
@@ -186,7 +250,14 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
             }
             self.dismiss(animated: true)
             
-            controller.completion(self.giftAuctionAcquiredGiftsPromise.get())
+            var compactUpgradeAttributes: [StarGift.UniqueGift.Attribute] = []
+            if !self.previewModels.isEmpty {
+                compactUpgradeAttributes.append(contentsOf: self.previewModels)
+                compactUpgradeAttributes.append(contentsOf: self.previewBackdrops)
+                compactUpgradeAttributes.append(contentsOf: self.previewSymbols)
+            }
+            
+            controller.completion(self.giftAuctionAcquiredGiftsPromise.get(), !compactUpgradeAttributes.isEmpty ? compactUpgradeAttributes : nil)
         }
         
         func openPeer(_ peer: EnginePeer, dismiss: Bool = true) {
@@ -319,7 +390,7 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
         }
         
         func openGiftFragmentResale() {
-            guard let controller = self.getController() as? GiftAuctionViewScreen, let navigationController = controller.navigationController as? NavigationController, let url = self.giftValueInfo?.fragmentListedUrl else {
+            guard let controller = self.getController() as? GiftAuctionViewScreen, let navigationController = controller.navigationController as? NavigationController, case let .finished(_, _, _, _, _, fragmentListedUrl) = self.giftAuctionState?.auctionState, let url = fragmentListedUrl else {
                 return
             }
             let presentationData = self.context.sharedContext.currentPresentationData.with { $0 }
@@ -390,22 +461,26 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
     }
     
     static var body: Body {
+        let header = Child(GiftCompositionComponent.self)
         let closeButton = Child(GlassBarButtonComponent.self)
         let moreButton = Child(GlassBarButtonComponent.self)
-        let animation = Child(GiftItemComponent.self)
         
         let title = Child(MultilineTextComponent.self)
-        let description = Child(BalancedTextComponent.self)
+        let description = Child(StarsButtonContentComponent.self)
+        let learnMore = Child(PlainButtonComponent.self)
 
         let table = Child(TableComponent.self)
 
         let button = Child(ButtonComponent.self)
         
+        let variantsButton = Child(PlainButtonComponent.self)
         let acquiredButton = Child(PlainButtonComponent.self)
         let telegramSaleButton = Child(PlainButtonComponent.self)
         let fragmentSaleButton = Child(PlainButtonComponent.self)
         
         let moreButtonPlayOnce = ActionSlot<Void>()
+        
+        let giftCompositionExternalState = GiftCompositionComponent.ExternalState()
         
         return { context in
             let environment = context.environment[ViewControllerComponentContainer.Environment.self].value
@@ -420,49 +495,81 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
             let sideInset: CGFloat = 16.0 + environment.safeInsets.left
             
             var titleString: String = ""
-            var giftIconSubject: GiftItemComponent.Subject?
             var genericGift: StarGift.Gift?
             
             switch component.auctionContext.gift {
             case let .generic(gift):
                 titleString = gift.title ?? ""
-                giftIconSubject = .starGift(gift: gift, price: "")
                 genericGift = gift
             default:
                 break
             }
-            
-            let _ = giftIconSubject
-            let _ = genericGift
-                 
+                             
             var originY: CGFloat = 0.0
-                                    
+                      
+            var buttonColor: UIColor = .white.withAlphaComponent(0.1)
+            var secondaryTextColor: UIColor = .white.withAlphaComponent(0.4)
             if let genericGift {
-                let animation = animation.update(
-                    component: GiftItemComponent(
+                var attributes: [StarGift.UniqueGift.Attribute] = []
+                if state.previewModelIndex == -1 {
+                    attributes.append(.model(name: "", file: genericGift.file, rarity: 0))
+                    if let background = genericGift.background {
+                        attributes.append(.backdrop(name: "", id: 0, innerColor: background.centerColor, outerColor: background.edgeColor, patternColor: 0, textColor: 0, rarity: 0))
+                    }
+                } else if !state.previewModels.isEmpty {
+                    attributes.append(state.previewModels[state.previewModelIndex])
+                    if !state.previewBackdrops.isEmpty {
+                        attributes.append(state.previewBackdrops[state.previewBackdropIndex])
+                    }
+                    if !state.previewSymbols.isEmpty {
+                        attributes.append(state.previewSymbols[state.previewSymbolIndex])
+                    }
+                }
+                
+                if let backdropAttribute = attributes.first(where: { attribute in
+                    if case .backdrop = attribute {
+                        return true
+                    } else {
+                        return false
+                    }
+                }), case let .backdrop(_, _, innerColor, outerColor, _, _, _) = backdropAttribute {
+                    let topColor = UIColor(rgb: UInt32(bitPattern: innerColor)).withMultiplied(hue: 1.01, saturation: 1.22, brightness: 1.04)
+                    let bottomColor = UIColor(rgb: UInt32(bitPattern: outerColor)).withMultiplied(hue: 0.97, saturation: 1.45, brightness: 0.89)
+                    buttonColor = topColor.mixedWith(bottomColor, alpha: 0.8)
+                    
+                    secondaryTextColor = topColor.withMultiplied(hue: 1.0, saturation: 1.02, brightness: 1.25).mixedWith(UIColor.white, alpha: 0.5)
+                }
+                
+                let header = header.update(
+                    component: GiftCompositionComponent(
                         context: component.context,
-                        theme: environment.theme,
-                        strings: environment.strings,
-                        subject: .starGift(gift: genericGift, price: ""),
-                        ribbon: GiftItemComponent.Ribbon(text: strings.Gift_Auction_Auction, color: .orange),
-                        outline: .orange,
-                        mode: .header
+                        theme: theme,
+                        subject: .preview(attributes),
+                        animationOffset: CGPoint(x: 0.0, y: -4.0),
+                        animationScale: nil,
+                        displayAnimationStars: false,
+                        revealedAttributes: Set(),
+                        externalState: giftCompositionExternalState,
+                        requestUpdate: { [weak state] transition in
+                            state?.updated(transition: transition)
+                        }
                     ),
-                    availableSize: CGSize(width: 120.0, height: 120.0),
+                    availableSize: CGSize(width: context.availableSize.width, height: 264.0),
                     transition: context.transition
                 )
-                context.add(animation
-                    .position(CGPoint(x: context.availableSize.width / 2.0, y: 92.0))
+                context.add(header
+                    .position(CGPoint(x: context.availableSize.width / 2.0, y: header.size.height * 0.5))
                 )
+                originY += header.size.height
+                originY += 16.0
             }
-            originY += 177.0
                        
             let title = title.update(
                 component: MultilineTextComponent(
                     text: .plain(NSAttributedString(
                         string: titleString,
-                        font: Font.bold(24.0),
-                        textColor: theme.list.itemPrimaryTextColor,
+                        font: Font.bold(20.0),
+                        textColor: .white,
                         paragraphAlignment: .center
                     )),
                     horizontalAlignment: .center,
@@ -472,11 +579,10 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
                 transition: .immediate
             )
             context.add(title
-                .position(CGPoint(x: context.availableSize.width / 2.0, y: 174.0))
+                .position(CGPoint(x: context.availableSize.width / 2.0, y: 209.0))
             )
                        
             var descriptionText: String = ""
-            var descriptionColor = theme.list.itemSecondaryTextColor
           
             let tableFont = Font.regular(15.0)
             let tableTextColor = theme.list.itemPrimaryTextColor
@@ -502,7 +608,6 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
                 
                 if isEnded {
                     descriptionText = strings.Gift_Auction_Ended
-                    descriptionColor = theme.list.itemDestructiveColor
                     
                     tableItems.append(.init(
                         id: "firstSale",
@@ -572,11 +677,11 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
                         )
                     ))
                 } else {
-                    var auctionGiftsPerRound: Int32 = 50
-                    if let auctionGiftsPerRoundValue = gift.auctionGiftsPerRound {
-                        auctionGiftsPerRound = auctionGiftsPerRoundValue
-                    }
-                    descriptionText = strings.Gift_Auction_Description("\(auctionGiftsPerRound)", gift.title ?? "").string
+//                    var auctionGiftsPerRound: Int32 = 50
+//                    if let auctionGiftsPerRoundValue = gift.auctionGiftsPerRound {
+//                        auctionGiftsPerRound = auctionGiftsPerRoundValue
+//                    }
+                    descriptionText = isUpcoming ? "Upcoming Auction" : "Gift Auction"  //strings.Gift_Auction_Description("\(auctionGiftsPerRound)", gift.title ?? "").string
                     
                     tableItems.append(.init(
                         id: "start",
@@ -670,11 +775,28 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
                     }
                 }
             }
-                        
-            let textFont = Font.regular(15.0)
-            let boldTextFont = Font.semibold(15.0)
-            let textColor = descriptionColor
-            let linkColor = theme.list.itemAccentColor
+                             
+            let description = description.update(
+                component: StarsButtonContentComponent(
+                    context: component.context,
+                    text: descriptionText,
+                    color: buttonColor,
+                    tinted: true,
+                    starsColor: UIColor(white: 1.0, alpha: 0.5),
+                    font: Font.medium(13.0),
+                    height: 24.0
+                ),
+                availableSize: CGSize(width: context.availableSize.width - sideInset * 2.0 - 50.0, height: CGFloat.greatestFiniteMagnitude),
+                transition: .immediate
+            )
+            context.add(description
+                .position(CGPoint(x: context.availableSize.width / 2.0, y: 167.0 + description.size.height / 2.0))
+            )
+            
+            let textFont = Font.regular(13.0)
+            let boldTextFont = Font.semibold(13.0)
+            let textColor = UIColor.white
+            let linkColor = UIColor.white
             let markdownAttributes = MarkdownAttributes(body: MarkdownAttributeSet(font: textFont, textColor: textColor), bold: MarkdownAttributeSet(font: boldTextFont, textColor: textColor), link: MarkdownAttributeSet(font: textFont, textColor: linkColor), linkAttribute: { contents in
                 return (TelegramTextAttributes.URL, contents)
             })
@@ -685,48 +807,35 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
             if state.cachedSmallChevronImage == nil || state.cachedSmallChevronImage?.1 !== environment.theme {
                 state.cachedSmallChevronImage = (generateTintedImage(image: UIImage(bundleImageName: "Item List/InlineTextRightArrow"), color: linkColor)!, theme)
             }
-            descriptionText = descriptionText.replacingOccurrences(of: " >]", with: "\u{00A0}>]")
             
-            let attributedString = parseMarkdownIntoAttributedString(descriptionText, attributes: markdownAttributes, textAlignment: .center).mutableCopy() as! NSMutableAttributedString
-            if let range = attributedString.string.range(of: ">"), let chevronImage = state.cachedChevronImage?.0 {
-                attributedString.addAttribute(.attachment, value: chevronImage, range: NSRange(range, in: attributedString.string))
+            //TODO:localize
+            let learnMoreAttributedString = parseMarkdownIntoAttributedString("Learn more about Telegram Gifts >", attributes: markdownAttributes, textAlignment: .center).mutableCopy() as! NSMutableAttributedString
+            if let range = learnMoreAttributedString.string.range(of: ">"), let chevronImage = state.cachedSmallChevronImage?.0 {
+                learnMoreAttributedString.addAttribute(.attachment, value: chevronImage, range: NSRange(range, in: learnMoreAttributedString.string))
             }
-            
-            let description = description.update(
-                component: BalancedTextComponent(
-                    text: .plain(attributedString),
-                    maximumNumberOfLines: 0,
-                    lineSpacing: 0.2,
-                    highlightColor: linkColor.withAlphaComponent(0.1),
-                    highlightInset: UIEdgeInsets(top: 0.0, left: 0.0, bottom: 0.0, right: -8.0),
-                    highlightAction: { attributes in
-                        if let _ = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.URL)] {
-                            return NSAttributedString.Key(rawValue: TelegramTextAttributes.URL)
-                        } else {
-                            return nil
-                        }
+            let learnMore = learnMore.update(
+                component: PlainButtonComponent(
+                    content: AnyComponent(BalancedTextComponent(
+                        text: .plain(learnMoreAttributedString),
+                        maximumNumberOfLines: 1,
+                        tintColor: secondaryTextColor
+                    )),
+                    action: {
+                        let controller = component.context.sharedContext.makeGiftAuctionInfoScreen(
+                            context: component.context,
+                            auctionContext: component.auctionContext,
+                            completion: nil
+                        )
+                        environment.controller()?.push(controller)
                     },
-                    tapAction: { attributes, _ in
-                        if let _ = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.URL)] as? String {
-                            let controller = component.context.sharedContext.makeGiftAuctionInfoScreen(
-                                context: component.context,
-                                auctionContext: component.auctionContext,
-                                completion: nil
-                            )
-                            environment.controller()?.push(controller)
-                        }
-                    }
+                    animateScale: false
                 ),
-                availableSize: CGSize(width: context.availableSize.width - sideInset * 2.0 - 50.0, height: CGFloat.greatestFiniteMagnitude),
-                transition: .immediate
+                availableSize: context.availableSize,
+                transition: context.transition
             )
-            context.add(description
-                .position(CGPoint(x: context.availableSize.width / 2.0, y: 198.0 + description.size.height / 2.0))
-                .appear(.default(alpha: true))
-                .disappear(.default(alpha: true))
+            context.add(learnMore
+                .position(CGPoint(x: context.availableSize.width / 2.0, y: 238.0))
             )
-            originY += description.size.height
-            originY += 42.0
             
             let table = table.update(
                 component: TableComponent(
@@ -738,12 +847,96 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
             )
             context.add(table
                 .position(CGPoint(x: context.availableSize.width / 2.0, y: originY + table.size.height / 2.0))
-                .appear(.default(alpha: true))
-                .disappear(.default(alpha: true))
             )
             originY += table.size.height + 26.0
             
             var hasAdditionalButtons = false
+            
+            if case let .generic(gift) = component.auctionContext.gift, let upgradeVariantsCount = gift.upgradeVariantsCount {
+                originY += 5.0
+                
+                
+                var variant1: GiftItemComponent.Subject = .starGift(gift: gift, price: "")
+                var variant2: GiftItemComponent.Subject = .starGift(gift: gift, price: "")
+                var variant3: GiftItemComponent.Subject = .starGift(gift: gift, price: "")
+                if !state.previewModels.isEmpty {
+                    if state.previewModels.count > 0 {
+                        variant1 = .preview(attributes: [state.previewModels[0]], rarity: 0)
+                    }
+                    if state.previewModels.count > 1 {
+                        variant2 = .preview(attributes: [state.previewModels[1]], rarity: 0)
+                    }
+                    if state.previewModels.count > 2 {
+                        variant3 = .preview(attributes: [state.previewModels[2]], rarity: 0)
+                    }
+                }
+                
+                let variantsButton = variantsButton.update(
+                    component: PlainButtonComponent(content: AnyComponent(
+                        HStack([
+                            AnyComponentWithIdentity(id: "view", component: AnyComponent(
+                                MultilineTextComponent(text: .plain(NSAttributedString(string: strings.Gift_Auction_ViewVariants, font: Font.regular(17.0), textColor: theme.actionSheet.controlAccentColor)))
+                            )),
+                            AnyComponentWithIdentity(id: "spacing", component: AnyComponent(
+                                Rectangle(color: .clear, width: 8.0, height: 1.0)
+                            )),
+                            AnyComponentWithIdentity(id: "icon1", component: AnyComponent(
+                                GiftItemComponent(
+                                    context: component.context,
+                                    theme: theme,
+                                    strings: strings,
+                                    peer: nil,
+                                    subject: variant1,
+                                    isPlaceholder: state.previewModels.isEmpty,
+                                    mode: .buttonIcon
+                                )
+                            )),
+                            AnyComponentWithIdentity(id: "icon2", component: AnyComponent(
+                                GiftItemComponent(
+                                    context: component.context,
+                                    theme: theme,
+                                    strings: strings,
+                                    peer: nil,
+                                    subject: variant2,
+                                    isPlaceholder: state.previewModels.isEmpty,
+                                    mode: .buttonIcon
+                                )
+                            )),
+                            AnyComponentWithIdentity(id: "icon3", component: AnyComponent(
+                                GiftItemComponent(
+                                    context: component.context,
+                                    theme: theme,
+                                    strings: strings,
+                                    peer: nil,
+                                    subject: variant3,
+                                    isPlaceholder: state.previewModels.isEmpty,
+                                    mode: .buttonIcon
+                                )
+                            )),
+                            AnyComponentWithIdentity(id: "text", component: AnyComponent(
+                                MultilineTextComponent(text: .plain(NSAttributedString(string: "  \(strings.Gift_Auction_Variants(upgradeVariantsCount))", font: Font.regular(17.0), textColor: theme.actionSheet.controlAccentColor)))
+                            )),
+                            AnyComponentWithIdentity(id: "arrow", component: AnyComponent(
+                                BundleIconComponent(name: "Chat/Context Menu/Arrow", tintColor: theme.actionSheet.controlAccentColor)
+                            ))
+                        ], spacing: 0.0)
+                    ), action: { [weak state] in
+                        guard let state, let attributes = state.giftUpgradeAttributes else {
+                            return
+                        }
+                        let variantsController = component.context.sharedContext.makeGiftUpgradeVariantsPreviewScreen(context: component.context, gift: .generic(gift), attributes: attributes)
+                        environment.controller()?.push(variantsController)
+                    }, animateScale: false),
+                    availableSize: CGSize(width: context.availableSize.width - 64.0, height: context.availableSize.height),
+                    transition: context.transition
+                )
+                context.add(variantsButton
+                    .position(CGPoint(x: context.availableSize.width / 2.0, y: originY + variantsButton.size.height / 2.0)))
+                originY += variantsButton.size.height
+                originY += 12.0
+                
+                hasAdditionalButtons = true
+            }
             
             let acquiredGiftsCount = state.giftAuctionState?.myState.acquiredCount ?? 0
             if acquiredGiftsCount > 0, case let .generic(gift) = component.auctionContext.gift {
@@ -793,8 +986,8 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
                 hasAdditionalButtons = true
             }
             
-            if let giftValueInfo = state.giftValueInfo, case let .generic(gift) = component.auctionContext.gift {
-                if let listedCount = giftValueInfo.listedCount, listedCount > 0  {
+            if case let .finished(_, _, _, listedCount, fragmentListedCount, _) = state.giftAuctionState?.auctionState, case let .generic(gift) = component.auctionContext.gift {
+                if let listedCount = listedCount, listedCount > 0  {
                     originY += 5.0
                     
                     let telegramSaleButton = telegramSaleButton.update(
@@ -840,7 +1033,7 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
                     hasAdditionalButtons = true
                 }
                 
-                if let listedCount = giftValueInfo.fragmentListedCount, listedCount > 0 {
+                if let listedCount = fragmentListedCount, listedCount > 0 {
                     let fragmentSaleButton = fragmentSaleButton.update(
                         component: PlainButtonComponent(content: AnyComponent(
                             HStack([
@@ -1007,13 +1200,13 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
             let closeButton = closeButton.update(
                 component: GlassBarButtonComponent(
                     size: CGSize(width: 40.0, height: 40.0),
-                    backgroundColor: theme.rootController.navigationBar.glassBarButtonBackgroundColor,
+                    backgroundColor: buttonColor.withMultipliedBrightnessBy(1.2),
                     isDark: theme.overallDarkAppearance,
-                    state: .generic,
+                    state: .tintedGlass,
                     component: AnyComponentWithIdentity(id: "close", component: AnyComponent(
                         BundleIconComponent(
                             name: "Navigation/Close",
-                            tintColor: theme.rootController.navigationBar.glassBarButtonForegroundColor
+                            tintColor: .white
                         )
                     )),
                     action: { [weak state] _ in
@@ -1033,15 +1226,15 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
             let moreButton = moreButton.update(
                 component: GlassBarButtonComponent(
                     size: CGSize(width: 40.0, height: 40.0),
-                    backgroundColor: theme.rootController.navigationBar.glassBarButtonBackgroundColor,
+                    backgroundColor: buttonColor.withMultipliedBrightnessBy(1.2),
                     isDark: theme.overallDarkAppearance,
-                    state: .generic,
+                    state: .tintedGlass,
                     component: AnyComponentWithIdentity(id: "more", component: AnyComponent(
                         LottieComponent(
                             content: LottieComponent.AppBundleContent(
                                 name: "anim_morewide"
                             ),
-                            color: theme.rootController.navigationBar.glassBarButtonForegroundColor,
+                            color: .white,
                             size: CGSize(width: 34.0, height: 34.0),
                             playOnce: moreButtonPlayOnce
                         )
@@ -1181,12 +1374,12 @@ final class GiftAuctionViewSheetComponent: CombinedComponent {
 }
 
 public final class GiftAuctionViewScreen: ViewControllerComponentContainer {
-    fileprivate let completion: (Signal<[GiftAuctionAcquiredGift], NoError>) -> Void
+    fileprivate let completion: (Signal<[GiftAuctionAcquiredGift], NoError>, [StarGift.UniqueGift.Attribute]?) -> Void
     
     public init(
         context: AccountContext,
         auctionContext: GiftAuctionContext,
-        completion: @escaping (Signal<[GiftAuctionAcquiredGift], NoError>) -> Void
+        completion: @escaping (Signal<[GiftAuctionAcquiredGift], NoError>, [StarGift.UniqueGift.Attribute]?) -> Void
     ) {
         self.completion = completion
         

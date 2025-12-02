@@ -133,6 +133,15 @@ public final class GiftAuctionContext {
         }
     }
     
+    public var isUpcoming: Bool {
+        let currentTime = Int32(CFAbsoluteTimeGetCurrent() + kCFAbsoluteTimeIntervalSince1970)
+        if case let .ongoing(_, startTime, _, _, _, _, _, _, _, _, _, _) = self.auctionState {
+            return currentTime < startTime
+        } else {
+            return false
+        }
+    }
+    
     public convenience init(account: Account, gift: StarGift) {
         self.init(account: account, gift: gift, initialAuctionState: nil, initialMyState: nil, initialTimeout: nil)
     }

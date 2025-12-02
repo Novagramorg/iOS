@@ -103,10 +103,9 @@ private final class GiftUpgradePreviewScreenComponent: Component {
         
         private let giftCompositionExternalState = GiftCompositionComponent.ExternalState()
                         
-        private var previewTimer: SwiftSignalKit.Timer?
         private var isPlaying = true
         private var showRandomizeTip = false
-        
+        private var previewTimer: SwiftSignalKit.Timer?
         private var previewModelIndex: Int = 0
         private var previewBackdropIndex: Int = 0
         private var previewSymbolIndex: Int = 0
@@ -272,7 +271,7 @@ private final class GiftUpgradePreviewScreenComponent: Component {
             self.navigationBarContainer.layer.animatePosition(from: CGPoint(), to: CGPoint(x: 0.0, y: animateOffset), duration: 0.3, timingFunction: CAMediaTimingFunctionName.easeInEaseOut.rawValue, removeOnCompletion: false, additive: true)
         }
         
-        private func timerTick() {
+        private func previewTimerTick() {
             guard !self.previewModels.isEmpty else { return }
             self.previewModelIndex = (self.previewModelIndex + 1) % self.previewModels.count
             
@@ -299,7 +298,7 @@ private final class GiftUpgradePreviewScreenComponent: Component {
                     guard let self else {
                         return
                     }
-                    self.timerTick()
+                    self.previewTimerTick()
                 }, queue: Queue.mainQueue())
                 self.previewTimer?.start()
             } else {
@@ -309,15 +308,11 @@ private final class GiftUpgradePreviewScreenComponent: Component {
         }
         
         private var effectiveGifts: [[StarGift.UniqueGift.Attribute]] = []
-        private func updateEffectiveGifts() {
-            guard let component = self.component else {
-                return
-            }
-            
+        private func updateEffectiveGifts(attributes: [StarGift.UniqueGift.Attribute]) {
             var effectiveGifts: [[StarGift.UniqueGift.Attribute]] = []
             switch self.selectedSection {
             case .models:
-                let models = Array(component.attributes.filter({ attribute in
+                let models = Array(attributes.filter({ attribute in
                     if case .model = attribute {
                         return true
                     } else {
@@ -330,7 +325,7 @@ private final class GiftUpgradePreviewScreenComponent: Component {
             case .backdrops:
                 let selectedModel = self.selectedModel ?? self.previewModels[self.previewModelIndex]
                 let selectedSymbol = self.selectedSymbol ?? self.previewSymbols[self.previewSymbolIndex]
-                let backdrops = Array(component.attributes.filter({ attribute in
+                let backdrops = Array(attributes.filter({ attribute in
                     if case .backdrop = attribute {
                         return true
                     } else {
@@ -346,7 +341,7 @@ private final class GiftUpgradePreviewScreenComponent: Component {
                 }
             case .symbols:
                 let selectedBackdrop = self.selectedBackdrop ?? self.previewBackdrops[self.previewBackdropIndex]
-                let symbols = Array(component.attributes.filter({ attribute in
+                let symbols = Array(attributes.filter({ attribute in
                     if case .pattern = attribute {
                         return true
                     } else {
@@ -568,7 +563,6 @@ private final class GiftUpgradePreviewScreenComponent: Component {
             let sideInset: CGFloat = rawSideInset + 16.0
             
             if self.component == nil {
-                
                 var modelCount: Int32 = 0
                 var backdropCount: Int32 = 0
                 var symbolCount: Int32 = 0
@@ -615,7 +609,7 @@ private final class GiftUpgradePreviewScreenComponent: Component {
                 }).shuffled().prefix(15))
                 self.previewSymbols = randomSymbols
                 
-                self.updateEffectiveGifts()
+                self.updateEffectiveGifts(attributes: component.attributes)
             }
             
             self.component = component
@@ -671,7 +665,7 @@ private final class GiftUpgradePreviewScreenComponent: Component {
             }), case let .backdrop(_, _, innerColor, outerColor, _, _, _) = backdropAttribute {
                 let topColor = UIColor(rgb: UInt32(bitPattern: innerColor)).withMultiplied(hue: 1.01, saturation: 1.22, brightness: 1.04)
                 let bottomColor = UIColor(rgb: UInt32(bitPattern: outerColor)).withMultiplied(hue: 0.97, saturation: 1.45, brightness: 0.89)
-                buttonColor = topColor.mixedWith(bottomColor, alpha: 0.8)
+                buttonColor = topColor.mixedWith(bottomColor, alpha: 0.8).withMultipliedBrightnessBy(1.2)
                 
                 secondaryTextColor = topColor.withMultiplied(hue: 1.0, saturation: 1.02, brightness: 1.25).mixedWith(UIColor.white, alpha: 0.3)
             }
@@ -803,13 +797,13 @@ private final class GiftUpgradePreviewScreenComponent: Component {
                     ],
                     selectedId: "models",
                     action: { [weak self] id in
-                        guard let self, let id = id.base as? SelectedSection else {
+                        guard let self, let component = self.component, let id = id.base as? SelectedSection else {
                             return
                         }
                         self.selectedSection = id
                         self.isPlaying = false
                         
-                        self.updateEffectiveGifts()
+                        self.updateEffectiveGifts(attributes: component.attributes)
                         self.state?.updated(transition: ComponentTransition(animation: .curve(duration: 0.4, curve: .spring))) //.withUserData(AnimationHint(value: .modeChanged)))
                     })),
                 environment: {},
@@ -953,7 +947,7 @@ private final class GiftUpgradePreviewScreenComponent: Component {
                 transition: .immediate,
                 component: AnyComponent(GlassBarButtonComponent(
                     size: CGSize(width: 40.0, height: 40.0),
-                    backgroundColor: secondaryTextColor,
+                    backgroundColor: buttonColor,
                     isDark: false,
                     state: .tintedGlass,
                     component: AnyComponentWithIdentity(id: "close", component: AnyComponent(
@@ -1009,7 +1003,7 @@ private final class GiftUpgradePreviewScreenComponent: Component {
                 transition: transition,
                 component: AnyComponent(GlassBarButtonComponent(
                     size: playbackSize,
-                    backgroundColor: secondaryTextColor,
+                    backgroundColor: buttonColor,
                     isDark: false,
                     state: .tintedGlass,
                     component: AnyComponentWithIdentity(id: "content", component: AnyComponent(
@@ -1036,7 +1030,7 @@ private final class GiftUpgradePreviewScreenComponent: Component {
                             
                             self.showRandomizeTip = false
                             
-                            self.timerTick()
+                            self.previewTimerTick()
                         }
                         self.state?.updated(transition: .easeInOut(duration: 0.25))
                     }
