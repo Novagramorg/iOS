@@ -3867,6 +3867,10 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         return giftOfferAlertController(context: context, gift: gift, peer: peer, amount: amount, commit: commit)
     }
     
+    public func makeGiftUpgradeVariantsPreviewScreen(context: AccountContext, gift: StarGift, attributes: [StarGift.UniqueGift.Attribute]) -> ViewController {
+        return GiftUpgradePreviewScreen(context: context, gift: gift, attributes: attributes)
+    }
+    
     public func makeStorySharingScreen(context: AccountContext, subject: StorySharingSubject, parentController: ViewController) -> ViewController {
         let editorSubject: Signal<MediaEditorScreenImpl.Subject?, NoError>
         switch subject {

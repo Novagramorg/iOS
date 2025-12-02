@@ -518,7 +518,7 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
                             MultilineTextComponent(text: .plain(NSAttributedString(string: stringForMediumDate(timestamp: auctionState.endDate, strings: strings, dateTimeFormat: dateTimeFormat), font: tableFont, textColor: tableTextColor)))
                         )
                     ))
-                    if case let .finished(_, _, averagePrice) = auctionState.auctionState {
+                    if case let .finished(_, _, averagePrice, _, _, _) = auctionState.auctionState {
                         var items: [AnyComponentWithIdentity<Empty>] = []
                         
                         let valueString = "\(presentationStringsFormattedNumber(abs(Int32(clamping: averagePrice)), dateTimeFormat.groupingSeparator))⭐️"
