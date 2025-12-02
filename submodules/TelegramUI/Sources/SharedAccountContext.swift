@@ -90,6 +90,7 @@ import ForumCreateTopicScreen
 import GlassBackgroundComponent
 import AttachmentFileController
 import NewContactScreen
+import PasskeysScreen
 
 private final class AccountUserInterfaceInUseContext {
     let subscribers = Bag<(Bool) -> Void>()
@@ -3867,6 +3868,10 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         return giftOfferAlertController(context: context, gift: gift, peer: peer, amount: amount, commit: commit)
     }
     
+    public func makeGiftUpgradeVariantsPreviewScreen(context: AccountContext, gift: StarGift, attributes: [StarGift.UniqueGift.Attribute]) -> ViewController {
+        return GiftUpgradePreviewScreen(context: context, gift: gift, attributes: attributes)
+    }
+    
     public func makeStorySharingScreen(context: AccountContext, subject: StorySharingSubject, parentController: ViewController) -> ViewController {
         let editorSubject: Signal<MediaEditorScreenImpl.Subject?, NoError>
         switch subject {
@@ -4058,6 +4063,10 @@ public final class SharedAccountContextImpl: SharedAccountContext {
     
     public func makeLoginEmailSetupController(context: AccountContext, blocking: Bool, emailPattern: String?, canAutoDismissIfNeeded: Bool, navigationController: NavigationController?, completion: @escaping () -> Void, dismiss: @escaping () -> Void) -> ViewController {
         return loginEmailSetupController(context: context, blocking: blocking, emailPattern: emailPattern, canAutoDismissIfNeeded: canAutoDismissIfNeeded, navigationController: navigationController, completion: completion, dismiss: dismiss)
+    }
+    
+    public func makePasskeySetupController(context: AccountContext, displaySkip: Bool, navigationController: NavigationController?, completion: @escaping () -> Void, dismiss: @escaping () -> Void) -> ViewController {
+        return PasskeysScreen(context: context, displaySkip: displaySkip, initialPasskeysData: nil, passkeysDataUpdated: { _ in }, completion: completion, cancel: dismiss)
     }
 }
 

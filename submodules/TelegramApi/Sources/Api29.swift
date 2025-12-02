@@ -1,6 +1,6 @@
 public extension Api {
     indirect enum WebPageAttribute: TypeConstructorDescription {
-        case webPageAttributeStarGiftAuction(gift: Api.StarGift, endDate: Int32, centerColor: Int32, edgeColor: Int32, textColor: Int32)
+        case webPageAttributeStarGiftAuction(gift: Api.StarGift, endDate: Int32)
         case webPageAttributeStarGiftCollection(icons: [Api.Document])
         case webPageAttributeStickerSet(flags: Int32, stickers: [Api.Document])
         case webPageAttributeStory(flags: Int32, peer: Api.Peer, id: Int32, story: Api.StoryItem?)
@@ -9,15 +9,12 @@ public extension Api {
     
     public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
     switch self {
-                case .webPageAttributeStarGiftAuction(let gift, let endDate, let centerColor, let edgeColor, let textColor):
+                case .webPageAttributeStarGiftAuction(let gift, let endDate):
                     if boxed {
-                        buffer.appendInt32(55150251)
+                        buffer.appendInt32(29770178)
                     }
                     gift.serialize(buffer, true)
                     serializeInt32(endDate, buffer: buffer, boxed: false)
-                    serializeInt32(centerColor, buffer: buffer, boxed: false)
-                    serializeInt32(edgeColor, buffer: buffer, boxed: false)
-                    serializeInt32(textColor, buffer: buffer, boxed: false)
                     break
                 case .webPageAttributeStarGiftCollection(let icons):
                     if boxed {
@@ -72,8 +69,8 @@ public extension Api {
     
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
-                case .webPageAttributeStarGiftAuction(let gift, let endDate, let centerColor, let edgeColor, let textColor):
-                return ("webPageAttributeStarGiftAuction", [("gift", gift as Any), ("endDate", endDate as Any), ("centerColor", centerColor as Any), ("edgeColor", edgeColor as Any), ("textColor", textColor as Any)])
+                case .webPageAttributeStarGiftAuction(let gift, let endDate):
+                return ("webPageAttributeStarGiftAuction", [("gift", gift as Any), ("endDate", endDate as Any)])
                 case .webPageAttributeStarGiftCollection(let icons):
                 return ("webPageAttributeStarGiftCollection", [("icons", icons as Any)])
                 case .webPageAttributeStickerSet(let flags, let stickers):
@@ -94,19 +91,10 @@ public extension Api {
             }
             var _2: Int32?
             _2 = reader.readInt32()
-            var _3: Int32?
-            _3 = reader.readInt32()
-            var _4: Int32?
-            _4 = reader.readInt32()
-            var _5: Int32?
-            _5 = reader.readInt32()
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            let _c3 = _3 != nil
-            let _c4 = _4 != nil
-            let _c5 = _5 != nil
-            if _c1 && _c2 && _c3 && _c4 && _c5 {
-                return Api.WebPageAttribute.webPageAttributeStarGiftAuction(gift: _1!, endDate: _2!, centerColor: _3!, edgeColor: _4!, textColor: _5!)
+            if _c1 && _c2 {
+                return Api.WebPageAttribute.webPageAttributeStarGiftAuction(gift: _1!, endDate: _2!)
             }
             else {
                 return nil

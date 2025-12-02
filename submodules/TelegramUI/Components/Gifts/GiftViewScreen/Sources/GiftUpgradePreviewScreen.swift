@@ -28,11 +28,17 @@ private final class GiftUpgradePreviewScreenComponent: Component {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
     
     let context: AccountContext
+    let gift: StarGift
+    let attributes: [StarGift.UniqueGift.Attribute]
     
     init(
-        context: AccountContext
+        context: AccountContext,
+        gift: StarGift,
+        attributes: [StarGift.UniqueGift.Attribute]
     ) {
         self.context = context
+        self.gift = gift
+        self.attributes = attributes
     }
     
     static func ==(lhs: GiftUpgradePreviewScreenComponent, rhs: GiftUpgradePreviewScreenComponent) -> Bool {
@@ -96,11 +102,7 @@ private final class GiftUpgradePreviewScreenComponent: Component {
         private var selectedSection: SelectedSection = .models
         
         private let giftCompositionExternalState = GiftCompositionComponent.ExternalState()
-                
-        fileprivate var starGiftsContext: ResaleGiftsContext?
-        fileprivate var starGiftsState: ResaleGiftsContext.State?
-        fileprivate var starGiftsDisposable: Disposable?
-        
+                        
         private var previewTimer: SwiftSignalKit.Timer?
         private var isPlaying = true
         private var showRandomizeTip = false
@@ -189,10 +191,6 @@ private final class GiftUpgradePreviewScreenComponent: Component {
         
         required init?(coder: NSCoder) {
             fatalError("init(coder:) has not been implemented")
-        }
-        
-        deinit {
-            self.starGiftsDisposable?.dispose()
         }
         
         func scrollViewDidScroll(_ scrollView: UIScrollView) {
@@ -312,14 +310,14 @@ private final class GiftUpgradePreviewScreenComponent: Component {
         
         private var effectiveGifts: [[StarGift.UniqueGift.Attribute]] = []
         private func updateEffectiveGifts() {
-            guard let starGiftsState = self.starGiftsState else {
+            guard let component = self.component else {
                 return
             }
             
             var effectiveGifts: [[StarGift.UniqueGift.Attribute]] = []
             switch self.selectedSection {
             case .models:
-                let models = Array(starGiftsState.attributes.filter({ attribute in
+                let models = Array(component.attributes.filter({ attribute in
                     if case .model = attribute {
                         return true
                     } else {
@@ -332,7 +330,7 @@ private final class GiftUpgradePreviewScreenComponent: Component {
             case .backdrops:
                 let selectedModel = self.selectedModel ?? self.previewModels[self.previewModelIndex]
                 let selectedSymbol = self.selectedSymbol ?? self.previewSymbols[self.previewSymbolIndex]
-                let backdrops = Array(starGiftsState.attributes.filter({ attribute in
+                let backdrops = Array(component.attributes.filter({ attribute in
                     if case .backdrop = attribute {
                         return true
                     } else {
@@ -348,7 +346,7 @@ private final class GiftUpgradePreviewScreenComponent: Component {
                 }
             case .symbols:
                 let selectedBackdrop = self.selectedBackdrop ?? self.previewBackdrops[self.previewBackdropIndex]
-                let symbols = Array(starGiftsState.attributes.filter({ attribute in
+                let symbols = Array(component.attributes.filter({ attribute in
                     if case .pattern = attribute {
                         return true
                     } else {
@@ -570,73 +568,54 @@ private final class GiftUpgradePreviewScreenComponent: Component {
             let sideInset: CGFloat = rawSideInset + 16.0
             
             if self.component == nil {
-                let giftIds: [Int64] = [
-                    6014675319464657779,
-                    6042113507581755979,
-                    5936013938331222567
-                ]
                 
-                self.starGiftsContext = ResaleGiftsContext(account: component.context.account, giftId: giftIds.randomElement()!)
-                self.starGiftsDisposable = (self.starGiftsContext!.state
-                                            |> deliverOnMainQueue).start(next: { [weak self] state in
-                    guard let self else {
-                        return
+                var modelCount: Int32 = 0
+                var backdropCount: Int32 = 0
+                var symbolCount: Int32 = 0
+                for attribute in component.attributes {
+                    switch attribute {
+                    case .model:
+                        modelCount += 1
+                    case .backdrop:
+                        backdropCount += 1
+                    case .pattern:
+                        symbolCount += 1
+                    default:
+                        break
                     }
-                    let isFirstTime = self.starGiftsState?.attributes.isEmpty ?? true
-                    self.starGiftsState = state
-                    
-                    var modelCount: Int32 = 0
-                    var backdropCount: Int32 = 0
-                    var symbolCount: Int32 = 0
-                    for attribute in state.attributes {
-                        switch attribute {
-                        case .model:
-                            modelCount += 1
-                        case .backdrop:
-                            backdropCount += 1
-                        case .pattern:
-                            symbolCount += 1
-                        default:
-                            break
-                        }
+                }
+                self.modelCount = modelCount
+                self.backdropCount = backdropCount
+                self.symbolCount = symbolCount
+                
+                let randomModels = Array(component.attributes.filter({ attribute in
+                    if case .model = attribute {
+                        return true
+                    } else {
+                        return false
                     }
-                    self.modelCount = modelCount
-                    self.backdropCount = backdropCount
-                    self.symbolCount = symbolCount
-                    
-                    if isFirstTime {
-                        let randomModels = Array(state.attributes.filter({ attribute in
-                            if case .model = attribute {
-                                return true
-                            } else {
-                                return false
-                            }
-                        }).shuffled().prefix(15))
-                        self.previewModels = randomModels
-                        
-                        let randomBackdrops = Array(state.attributes.filter({ attribute in
-                            if case .backdrop = attribute {
-                                return true
-                            } else {
-                                return false
-                            }
-                        }).shuffled())
-                        self.previewBackdrops = randomBackdrops
-                        
-                        let randomSymbols = Array(state.attributes.filter({ attribute in
-                            if case .pattern = attribute {
-                                return true
-                            } else {
-                                return false
-                            }
-                        }).shuffled().prefix(15))
-                        self.previewSymbols = randomSymbols
-                        
-                        self.updateEffectiveGifts()
+                }).shuffled().prefix(15))
+                self.previewModels = randomModels
+                
+                let randomBackdrops = Array(component.attributes.filter({ attribute in
+                    if case .backdrop = attribute {
+                        return true
+                    } else {
+                        return false
                     }
-                    
-                    self.state?.updated(transition: .immediate)
-                })
+                }).shuffled())
+                self.previewBackdrops = randomBackdrops
+                
+                let randomSymbols = Array(component.attributes.filter({ attribute in
+                    if case .pattern = attribute {
+                        return true
+                    } else {
+                        return false
+                    }
+                }).shuffled().prefix(15))
+                self.previewSymbols = randomSymbols
+                
+                self.updateEffectiveGifts()
             }
             
             self.component = component
@@ -731,8 +710,8 @@ private final class GiftUpgradePreviewScreenComponent: Component {
             contentHeight += headerSize.height
             
             var titleText: String = ""
-            if let gift = self.starGiftsState?.gifts.first, case let .unique(gift) = gift {
-                titleText = gift.title
+            if case let .generic(gift) = component.gift {
+                titleText = gift.title ?? ""
             }
             
             let titleSize = self.title.update(
@@ -1156,11 +1135,17 @@ public class GiftUpgradePreviewScreen: ViewControllerComponentContainer {
     private var didPlayAppearAnimation: Bool = false
     private var isDismissed: Bool = false
     
-    public init(context: AccountContext) {
+    public init(
+        context: AccountContext,
+        gift: StarGift,
+        attributes: [StarGift.UniqueGift.Attribute]
+    ) {
         self.context = context
         
         super.init(context: context, component: GiftUpgradePreviewScreenComponent(
-            context: context
+            context: context,
+            gift: gift,
+            attributes: attributes
         ), navigationBarAppearance: .none, theme: .default)
         
         self.statusBar.statusBarStyle = .Ignore

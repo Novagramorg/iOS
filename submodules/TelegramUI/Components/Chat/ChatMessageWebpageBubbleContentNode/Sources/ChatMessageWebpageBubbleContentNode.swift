@@ -346,7 +346,7 @@ public final class ChatMessageWebpageBubbleContentNode: ChatMessageBubbleContent
                 case "telegram_auction":
                     for attribute in webpage.attributes {
                         if case let .giftAuction(giftAuction) = attribute, case let .generic(gift) = giftAuction.gift {
-                            let media = GiftAuctionPreviewMedia(content: gift, centerColor: UIColor(rgb: UInt32(bitPattern: giftAuction.centerColor)), edgeColor: UIColor(rgb: UInt32(bitPattern: giftAuction.edgeColor)), endTime: giftAuction.endDate)
+                            let media = GiftAuctionPreviewMedia(content: gift, endTime: giftAuction.endDate)
                             mediaAndFlags = ([media], [])
                             break
                         }
