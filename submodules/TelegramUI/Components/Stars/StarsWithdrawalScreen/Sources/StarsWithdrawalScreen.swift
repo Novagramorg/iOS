@@ -27,6 +27,7 @@ import TabSelectorComponent
 import PresentationDataUtils
 import BalanceNeededScreen
 import GlassBarButtonComponent
+import GlassBackgroundComponent
 
 private let amountTag = GenericComponentViewTag()
 
@@ -68,6 +69,7 @@ private final class SheetContent: CombinedComponent {
         let balanceTitle = Child(MultilineTextComponent.self)
         let balanceValue = Child(MultilineTextComponent.self)
         let balanceIcon = Child(BundleIconComponent.self)
+        let durationPicker = Child(MenuComponent.self)
         
         let body: (CombinedComponentContext<SheetContent>) -> CGSize = { (context: CombinedComponentContext<SheetContent>) -> CGSize in
             let environment = context.environment[EnvironmentType.self]
@@ -356,6 +358,7 @@ private final class SheetContent: CombinedComponent {
                     tonTitle = environment.strings.Chat_PostSuggestion_Suggest_RequestTon
                 }
             case .starGiftOffer:
+                //TODO:localize
                 displayCurrencySelector = true
                 starsTitle = "Offer Stars"
                 tonTitle = "Offer TON"
@@ -625,6 +628,7 @@ private final class SheetContent: CombinedComponent {
                     .position(CGPoint(x: context.availableSize.width - amountAdditionalLabel.size.width / 2.0 - sideInset - 16.0, y: contentSize.height - amountAdditionalLabel.size.height / 2.0)))
             }
             
+            var durationFrame = CGRect()
             if case .starGiftResell = component.mode {
                 contentSize.height += 24.0
                 
@@ -808,6 +812,14 @@ private final class SheetContent: CombinedComponent {
                     maximumNumberOfLines: 0
                 ))
                 
+                let hours = state.duration / 3600
+                let durationString: String
+                if hours == 1 {
+                    durationString = "1 Hour"
+                } else {
+                    durationString = "\(hours) Hours"
+                }
+                
                 let periodSection = periodSection.update(
                     component: ListSectionComponent(
                         theme: theme,
@@ -831,15 +843,19 @@ private final class SheetContent: CombinedComponent {
                                 ], alignment: .left, spacing: 2.0)),
                                 icon: ListActionItemComponent.Icon(component: AnyComponentWithIdentity(id: 0, component: AnyComponent(MultilineTextComponent(
                                     text: .plain(NSAttributedString(
-                                        string: "48 Hours",
+                                        string: durationString,
                                         font: Font.regular(presentationData.listsFontSize.baseDisplaySize),
                                         textColor: environment.theme.list.itemSecondaryTextColor
                                     )),
                                     maximumNumberOfLines: 1
                                 )))),
                                 accessory: .expandArrows,
-                                action: { _ in
-                                  
+                                action: { [weak state] _ in
+                                    guard let state else {
+                                        return
+                                    }
+                                    state.isPickingDuration = true
+                                    state.updated(transition: .easeInOut(duration: 0.25))
                                 }
                             ))
                         )]
@@ -853,6 +869,8 @@ private final class SheetContent: CombinedComponent {
                     .clipsToBounds(true)
                     .cornerRadius(10.0)
                 )
+                durationFrame = CGRect(origin: CGPoint(x: context.availableSize.width / 2.0 - periodSection.size.width / 2.0, y: contentSize.height), size: periodSection.size)
+
                 contentSize.height += periodSection.size.height
             }
             
@@ -1065,6 +1083,58 @@ private final class SheetContent: CombinedComponent {
                 contentSize.height += buttonInsets.bottom
             }
             
+            
+            if state.isPickingDuration {
+                let durationPicker = durationPicker.update(
+                    component: MenuComponent(
+                        theme: theme,
+                        sourceFrame: durationFrame.offsetBy(dx: 0.0, dy: 120.0),
+                        component: AnyComponent(DurationMenuComponent(
+                            theme: theme,
+                            strings: environment.strings,
+                            value: state.duration,
+                            valueUpdated: { [weak state] value in
+                                guard let state else {
+                                    return
+                                }
+                                state.isPickingDuration = false
+                                state.duration = value
+                                
+                                state.updated(transition: .easeInOut(duration: 0.25))
+                            }
+                        )),
+                        dismiss: { [weak state] in
+                            guard let state else {
+                                return
+                            }
+                            state.isPickingDuration = false
+                            state.updated(transition: .easeInOut(duration: 0.25))
+                        }
+                    ),
+                    availableSize: contentSize,
+                    transition: context.transition
+                )
+                context.add(durationPicker
+                    .position(CGPoint(x: contentSize.width / 2.0, y: contentSize.height / 2.0))
+                    .appear(ComponentTransition.Appear({ _, view, transition in
+                        if !transition.animation.isImmediate {
+                            if let view = view as? MenuComponent.View {
+                                view.animateIn()
+                            }
+                        }
+                    }))
+                    .disappear(ComponentTransition.Disappear({ view, transition, completion in
+                        if !transition.animation.isImmediate {
+                            if let view = view as? MenuComponent.View {
+                                view.animateOut(completion: completion)
+                            }
+                        } else {
+                            completion()
+                        }
+                    }))
+                )
+            }
+        
             return contentSize
         }
         
@@ -1080,7 +1150,7 @@ private final class SheetContent: CombinedComponent {
         fileprivate var amount: StarsAmount?
         fileprivate var currency: CurrencyAmount.Currency = .stars
         fileprivate var timestamp: Int32?
-        fileprivate var duration: Int32 = 120
+        fileprivate var duration: Int32 = 172800
         
         fileprivate var starsBalance: StarsAmount?
         private var starsStateDisposable: Disposable?
@@ -1090,6 +1160,8 @@ private final class SheetContent: CombinedComponent {
         var cachedStarImage: (UIImage, PresentationTheme)?
         var cachedTonImage: (UIImage, PresentationTheme)?
         var cachedChevronImage: (UIImage, PresentationTheme)?
+        
+        var isPickingDuration = false
         
         init(component: SheetContent) {
             self.context = component.context
@@ -2248,6 +2320,426 @@ private final class CurrencyTabItemComponent: Component {
     }
     
     func update(view: View, availableSize: CGSize, state: State, environment: Environment<EnvironmentType>, transition: ComponentTransition) -> CGSize {
+        return view.update(component: self, availableSize: availableSize, state: state, environment: environment, transition: transition)
+    }
+}
+
+
+private final class MenuComponent: Component {
+    let theme: PresentationTheme
+    let sourceFrame: CGRect
+    let component: AnyComponent<Empty>
+    let dismiss: () -> Void
+
+    init(
+        theme: PresentationTheme,
+        sourceFrame: CGRect,
+        component: AnyComponent<Empty>,
+        dismiss: @escaping () -> Void
+    ) {
+        self.theme = theme
+        self.sourceFrame = sourceFrame
+        self.component = component
+        self.dismiss = dismiss
+    }
+
+    public static func ==(lhs: MenuComponent, rhs: MenuComponent) -> Bool {
+        if lhs.theme !== rhs.theme {
+            return false
+        }
+        if lhs.sourceFrame != rhs.sourceFrame {
+            return false
+        }
+        if lhs.component != rhs.component {
+            return false
+        }
+        return true
+    }
+
+    public final class View: UIView {
+        private let buttonView: UIButton
+        private let containerView: GlassBackgroundContainerView
+        private let backgroundView: GlassBackgroundView
+        private var componentView: ComponentView<Empty>?
+        
+        private var component: MenuComponent?
+        
+        public override init(frame: CGRect) {
+            self.buttonView = UIButton()
+            self.containerView = GlassBackgroundContainerView()
+            self.backgroundView = GlassBackgroundView()
+            
+            super.init(frame: frame)
+            
+            self.addSubview(self.buttonView)
+            self.addSubview(self.containerView)
+            self.containerView.contentView.addSubview(self.backgroundView)
+            
+            self.buttonView.addTarget(self, action: #selector(self.tapped), for: .touchUpInside)
+        }
+        
+        public required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
+        
+        @objc func tapped() {
+            if let component = self.component {
+                component.dismiss()
+            }
+        }
+        
+        func animateIn() {
+            guard let component = self.component else {
+                return
+            }
+            let transition = ComponentTransition.spring(duration: 0.3)
+            transition.animatePosition(view: self.backgroundView, from: component.sourceFrame.center, to: self.backgroundView.center)
+            transition.animateScale(view: self.backgroundView, from: 0.2, to: 1.0)
+            self.containerView.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.1)
+        }
+        
+        public func animateOut(completion: (() -> Void)? = nil) {
+            guard let component = self.component else {
+                return
+            }
+            
+            let transition = ComponentTransition.spring(duration: 0.3)
+            transition.setPosition(view: self.backgroundView, position: component.sourceFrame.center)
+            transition.setScale(view: self.backgroundView, scale: 0.2)
+            self.containerView.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.15, removeOnCompletion: false, completion: { _ in
+                completion?()
+            })
+        }
+                
+        public override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+            if !self.backgroundView.frame.contains(point) && self.buttonView.frame.contains(point) {
+                return self.buttonView
+            }
+            return super.hitTest(point, with: event)
+        }
+        
+        func update(component: MenuComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
+            self.component = component
+            
+            var componentView: ComponentView<Empty>
+            var componentTransition = transition
+            if let current = self.componentView {
+                componentView = current
+            } else {
+                componentTransition = .immediate
+                componentView = ComponentView()
+                self.componentView = componentView
+            }
+            
+            let componentSize = componentView.update(
+                transition: componentTransition,
+                component: component.component,
+                environment: {},
+                containerSize: availableSize
+            )
+            let backgroundFrame = CGRect(origin: CGPoint(x: component.sourceFrame.maxX - componentSize.width, y: component.sourceFrame.minY - componentSize.height - 20.0), size: componentSize)
+            if let view = componentView.view {
+                if view.superview == nil {
+                    self.backgroundView.contentView.addSubview(view)
+                }
+                componentTransition.setFrame(view: view, frame: CGRect(origin: .zero, size: componentSize))
+            }
+            
+            self.backgroundView.update(size: backgroundFrame.size, cornerRadius: 30.0, isDark: component.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: component.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7)), transition: transition)
+            self.backgroundView.frame = backgroundFrame
+            
+            self.containerView.frame = CGRect(origin: .zero, size: availableSize)
+            self.containerView.update(size: availableSize, isDark: component.theme.overallDarkAppearance, transition: transition)
+            
+            self.buttonView.frame = CGRect(origin: .zero, size: availableSize)
+            
+            return availableSize
+        }
+    }
+
+    public func makeView() -> View {
+        return View(frame: CGRect())
+    }
+
+    public func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
+        return view.update(component: self, availableSize: availableSize, state: state, environment: environment, transition: transition)
+    }
+}
+
+private final class MenuButtonComponent: Component {
+    let theme: PresentationTheme
+    let text: String
+    let isSelected: Bool
+    let width: CGFloat?
+    let action: () -> Void
+    
+    init(
+        theme: PresentationTheme,
+        text: String,
+        isSelected: Bool,
+        width: CGFloat?,
+        action: @escaping () -> Void
+    ) {
+        self.theme = theme
+        self.text = text
+        self.isSelected = isSelected
+        self.width = width
+        self.action = action
+    }
+
+    static func ==(lhs: MenuButtonComponent, rhs: MenuButtonComponent) -> Bool {
+        if lhs.theme !== rhs.theme {
+            return false
+        }
+        if lhs.text != rhs.text {
+            return false
+        }
+        if lhs.isSelected != rhs.isSelected {
+            return false
+        }
+        if lhs.width != rhs.width {
+            return false
+        }
+        return true
+    }
+
+    final class View: UIView {
+        private var component: MenuButtonComponent?
+        private weak var componentState: EmptyComponentState?
+        
+        private let selectionLayer = SimpleLayer()
+        private let title = ComponentView<Empty>()
+        private let icon = ComponentView<Empty>()
+        private let button = HighlightTrackingButton()
+                
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+                        
+            self.layer.addSublayer(self.selectionLayer)
+            self.selectionLayer.masksToBounds = true
+            self.selectionLayer.opacity = 0.0
+            
+            self.button.addTarget(self, action: #selector(self.buttonPressed), for: .touchUpInside)
+            
+            self.button.highligthedChanged = { [weak self] highlighted in
+                if let self {
+                    if highlighted {
+                        self.selectionLayer.opacity = 1.0
+                        self.selectionLayer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
+                    } else {
+                        self.selectionLayer.opacity = 0.0
+                        self.selectionLayer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2)
+                    }
+                }
+            }
+        }
+        
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
+        
+        @objc private func buttonPressed() {
+            if let component = self.component {
+                component.action()
+            }
+        }
+                
+        func update(component: MenuButtonComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
+            self.component = component
+            self.componentState = state
+            
+            let leftInset: CGFloat = 60.0
+            let rightInset: CGFloat = 40.0
+                        
+            let titleSize = self.title.update(
+                transition: transition,
+                component: AnyComponent(
+                    Text(text: component.text, font: Font.regular(17.0), color: component.theme.contextMenu.primaryColor)
+                ),
+                environment: {},
+                containerSize: availableSize
+            )
+            let titleFrame = CGRect(origin: CGPoint(x: 60.0, y: floorToScreenPixels((availableSize.height - titleSize.height) / 2.0)), size: titleSize)
+            if let titleView = self.title.view {
+                if titleView.superview == nil {
+                    self.addSubview(titleView)
+                }
+                titleView.frame = titleFrame
+            }
+            
+            let size = CGSize(width: component.width ?? (leftInset + rightInset + titleSize.width), height: availableSize.height)
+            
+            if component.isSelected {
+                let iconSize = self.icon.update(
+                    transition: .immediate,
+                    component: AnyComponent(
+                        BundleIconComponent(
+                            name: "Media Gallery/Check",
+                            tintColor: component.theme.contextMenu.primaryColor
+                        )
+                    ),
+                    environment: {},
+                    containerSize: CGSize(width: 44.0, height: 44.0)
+                )
+                let iconFrame = CGRect(origin: CGPoint(x: 25.0, y: floorToScreenPixels((size.height - iconSize.height) / 2.0)), size: iconSize)
+                if let iconView = self.icon.view {
+                    if iconView.superview == nil {
+                        self.addSubview(iconView)
+                    }
+                    iconView.frame = iconFrame
+                }
+            }
+            
+            self.selectionLayer.backgroundColor = component.theme.contextMenu.itemHighlightedBackgroundColor.withMultipliedAlpha(0.5).cgColor
+            transition.setFrame(layer: self.selectionLayer, frame: CGRect(origin: .zero, size: size).insetBy(dx: 10.0, dy: 0.0))
+            self.selectionLayer.cornerRadius = size.height / 2.0
+                       
+            if self.button.superview == nil {
+                self.addSubview(self.button)
+            }
+            self.button.frame = CGRect(origin: .zero, size: size)
+            
+            return size
+        }
+    }
+
+    func makeView() -> View {
+        return View(frame: CGRect())
+    }
+
+    func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
+        return view.update(component: self, availableSize: availableSize, state: state, environment: environment, transition: transition)
+    }
+}
+
+private final class DurationMenuComponent: Component {
+    let theme: PresentationTheme
+    let strings: PresentationStrings
+    let value: Int32
+    let valueUpdated: (Int32) -> Void
+    
+    init(
+        theme: PresentationTheme,
+        strings: PresentationStrings,
+        value: Int32,
+        valueUpdated: @escaping (Int32) -> Void
+    ) {
+        self.theme = theme
+        self.strings = strings
+        self.value = value
+        self.valueUpdated = valueUpdated
+    }
+
+    public static func ==(lhs: DurationMenuComponent, rhs: DurationMenuComponent) -> Bool {
+        if lhs.theme !== rhs.theme {
+            return false
+        }
+        if lhs.strings !== rhs.strings {
+            return false
+        }
+        if lhs.value != rhs.value {
+            return false
+        }
+        return true
+    }
+
+    public final class View: UIView {
+        private let backgroundView: GlassBackgroundView
+        private var itemViews: [Int32: ComponentView<Empty>] = [:]
+        
+        private var component: DurationMenuComponent?
+        
+        private let values: [Int32] = [
+            21600, 43200, 86400, 129600, 172800, 259200
+        ]
+        
+        private var width: CGFloat?
+        
+        public override init(frame: CGRect) {
+            self.backgroundView = GlassBackgroundView()
+            
+            super.init(frame: frame)
+            
+            self.addSubview(self.backgroundView)
+        }
+        
+        public required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
+                
+        func update(component: DurationMenuComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
+            self.component = component
+            
+            let itemHeight: CGFloat = 40.0
+            
+            var maxWidth: CGFloat = 0.0
+            var originY: CGFloat = 12.0
+            for value in self.values {
+                let itemView: ComponentView<Empty>
+                if let current = self.itemViews[value] {
+                    itemView = current
+                } else {
+                    itemView = ComponentView()
+                    self.itemViews[value] = itemView
+                }
+                
+                let repeatString: String
+                let hours = value / 3600
+                //TODO:localize
+                if hours == 1 {
+                    repeatString = "1 hour"
+                } else {
+                    repeatString = "\(hours) hours"
+                }
+            
+                let itemSize = itemView.update(
+                    transition: transition,
+                    component: AnyComponent(
+                        MenuButtonComponent(
+                            theme: component.theme,
+                            text: repeatString,
+                            isSelected: component.value == value,
+                            width: self.width,
+                            action: { [weak self] in
+                                guard let self else {
+                                    return
+                                }
+                                self.component?.valueUpdated(value)
+                            }
+                        )
+                    ),
+                    environment: {},
+                    containerSize: CGSize(width: availableSize.width, height: itemHeight)
+                )
+                maxWidth = max(maxWidth, itemSize.width)
+                let itemFrame = CGRect(origin: CGPoint(x: 0.0, y: originY), size: itemSize)
+                if let itemView = itemView.view {
+                    if itemView.superview == nil {
+                        self.addSubview(itemView)
+                    }
+                    transition.setFrame(view: itemView, frame: itemFrame)
+                }
+                originY += 40.0
+            }
+            
+            let size = CGSize(width: maxWidth, height: originY + 8.0)
+            
+            if self.width == nil {
+                self.width = maxWidth
+                Queue.mainQueue().justDispatch {
+                    state.updated()
+                }
+            }
+                        
+            return size
+        }
+    }
+
+    public func makeView() -> View {
+        return View(frame: CGRect())
+    }
+
+    public func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
         return view.update(component: self, availableSize: availableSize, state: state, environment: environment, transition: transition)
     }
 }
