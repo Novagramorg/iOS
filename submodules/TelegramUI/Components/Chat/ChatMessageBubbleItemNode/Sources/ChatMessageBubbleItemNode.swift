@@ -2835,13 +2835,13 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                 let buttonApprove = MemoryBuffer(data: Data(bytes: &buttonApproveValue, count: 1))
                 
                 let customInfos: [MemoryBuffer: ChatMessageActionButtonsNode.CustomInfo] = [
-                    buttonDecline: ChatMessageActionButtonsNode.CustomInfo(
-                        isEnabled: true,
-                        icon: .suggestedPostReject
-                    ),
                     buttonApprove: ChatMessageActionButtonsNode.CustomInfo(
                         isEnabled: true,
                         icon: .suggestedPostApprove
+                    ),
+                    buttonDecline: ChatMessageActionButtonsNode.CustomInfo(
+                        isEnabled: true,
+                        icon: .suggestedPostReject
                     )
                 ]
                 //TODO:localize

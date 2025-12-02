@@ -718,12 +718,12 @@ public final class GiftCompositionComponent: Component {
                         animationFile = file
                         component.externalState?.previewModel = self.previewModels[Int(self.previewModelIndex)]
                     }
-                    if case let .pattern(_, file, _) = self.previewPatterns[Int(self.previewPatternIndex)] {
+                    if !self.previewPatterns.isEmpty, case let .pattern(_, file, _) = self.previewPatterns[Int(self.previewPatternIndex)] {
                         patternFile = file
                         files[file.fileId.id] = file
                         component.externalState?.previewSymbol = self.previewPatterns[Int(self.previewPatternIndex)]
                     }
-                    if case let .backdrop(_, _, innerColorValue, outerColorValue, patternColorValue, _, _) = self.previewBackdrops[Int(self.previewBackdropIndex)] {
+                    if !self.previewBackdrops.isEmpty, case let .backdrop(_, _, innerColorValue, outerColorValue, patternColorValue, _, _) = self.previewBackdrops[Int(self.previewBackdropIndex)] {
                         backgroundColor = UIColor(rgb: UInt32(bitPattern: outerColorValue))
                         secondBackgroundColor = UIColor(rgb: UInt32(bitPattern: innerColorValue))
                         patternColor = UIColor(rgb: UInt32(bitPattern: patternColorValue))

@@ -62,6 +62,7 @@ swift_library(
         "//submodules/TelegramUI/Components/AnimatedTextComponent",
         "//submodules/BotPaymentsUI",
         "//submodules/TelegramUI/Components/SegmentControlComponent",
+        "//submodules/TelegramUI/Components/Gifts/GiftRemainingCountComponent",
     ],
     visibility = [
         "//visibility:public",

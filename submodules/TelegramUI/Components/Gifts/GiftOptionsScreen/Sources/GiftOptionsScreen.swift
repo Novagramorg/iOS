@@ -416,15 +416,31 @@ final class GiftOptionsScreenComponent: Component {
                                         let giftController = component.context.sharedContext.makeGiftAuctionViewScreen(
                                             context: component.context,
                                             auctionContext: auctionContext,
-                                            completion: { [weak mainController] acquiredGifts in
-                                                let controller = GiftSetupScreen(
-                                                    context: context,
-                                                    peerId: component.peerId,
-                                                    subject: .starGift(gift, nil),
-                                                    auctionAcquiredGifts: acquiredGifts,
-                                                    completion: nil
-                                                )
-                                                mainController?.push(controller)
+                                            completion: { [weak mainController] acquiredGifts, upgradeAttributes in
+                                                if component.peerId == context.account.peerId, let upgradeAttributes, let navigationController = mainController?.navigationController as? NavigationController {
+                                                    let controller = context.sharedContext.makeGiftAuctionWearPreviewScreen(context: context, auctionContext: auctionContext, acquiredGifts: acquiredGifts, attributes: upgradeAttributes, completion: {
+                                                        let controller = context.sharedContext.makeGiftAuctionBidScreen(
+                                                            context: context,
+                                                            toPeerId: context.account.peerId,
+                                                            text: "",
+                                                            entities: [],
+                                                            hideName: true,
+                                                            auctionContext: auctionContext,
+                                                            acquiredGifts: acquiredGifts
+                                                        )
+                                                        navigationController.pushViewController(controller)
+                                                    })
+                                                    mainController?.push(controller)
+                                                } else {
+                                                    let controller = GiftSetupScreen(
+                                                        context: context,
+                                                        peerId: component.peerId,
+                                                        subject: .starGift(gift, nil),
+                                                        auctionAcquiredGifts: acquiredGifts,
+                                                        completion: nil
+                                                    )
+                                                    mainController?.push(controller)
+                                                }
                                             }
                                         )
                                         mainController?.push(giftController)
