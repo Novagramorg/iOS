@@ -798,8 +798,7 @@ final class QuickReplySetupScreenComponent: Component {
                     }
                 ))) : nil,
                 rightButtons: rightButtons,
-                backTitle: isModal ? nil : strings.Common_Back,
-                backPressed: { [weak self] in
+                backPressed: isModal ? nil :{ [weak self] in
                     guard let self else {
                         return
                     }
@@ -818,8 +817,8 @@ final class QuickReplySetupScreenComponent: Component {
                     strings: strings,
                     statusBarHeight: statusBarHeight,
                     sideInset: insets.left,
+                    search: ChatListNavigationBar.Search(isEnabled: !self.isEditing),
                     isSearchActive: self.isSearchDisplayControllerActive,
-                    isSearchEnabled: !self.isEditing,
                     primaryContent: headerContent,
                     secondaryContent: nil,
                     secondaryTransition: 0.0,

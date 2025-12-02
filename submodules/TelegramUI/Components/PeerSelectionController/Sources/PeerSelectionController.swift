@@ -10,6 +10,7 @@ import AccountContext
 import SearchUI
 import ChatListUI
 import CounterControllerTitleView
+import ChatListFilterTabContainerNode
 
 public final class PeerSelectionControllerImpl: ViewController, PeerSelectionController {
     private let context: AccountContext

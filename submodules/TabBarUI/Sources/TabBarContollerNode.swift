@@ -18,15 +18,18 @@ final class TabBarControllerNode: ASDisplayNode {
         let layout: ContainerViewLayout
         let toolbar: Toolbar?
         let isTabBarHidden: Bool
+        let currentControllerSearchState: ViewController.TabBarSearchState?
         
         init(
             layout: ContainerViewLayout,
             toolbar: Toolbar?,
-            isTabBarHidden: Bool
+            isTabBarHidden: Bool,
+            currentControllerSearchState: ViewController.TabBarSearchState?
         ) {
             self.layout = layout
             self.toolbar = toolbar
             self.isTabBarHidden = isTabBarHidden
+            self.currentControllerSearchState = currentControllerSearchState
         }
     }
     
@@ -51,6 +54,7 @@ final class TabBarControllerNode: ASDisplayNode {
     }
     
     private var theme: PresentationTheme
+    private var strings: PresentationStrings
     private let itemSelected: (Int, Bool, [ASDisplayNode]) -> Void
     private let contextAction: (Int, ContextExtractedContentContainingView, ContextGesture) -> Void
     
@@ -60,24 +64,26 @@ final class TabBarControllerNode: ASDisplayNode {
     private var toolbarNode: ToolbarNode?
     private let toolbarActionSelected: (ToolbarActionOption) -> Void
     private let disabledPressed: () -> Void
+    private let activateSearch: () -> Void
+    private let deactivateSearch: () -> Void
     
     private(set) var tabBarItems: [TabBarNodeItem] = []
     private(set) var selectedIndex: Int = 0
 
-    private(set) var currentControllerNode: ASDisplayNode?
+    private weak var currentController: ViewController?
     
     private var layoutResult: LayoutResult?
     private var isUpdateRequested: Bool = false
     private var isChangingSelectedIndex: Bool = false
     
-    func setCurrentControllerNode(_ node: ASDisplayNode?) -> () -> Void {
-        guard node !== self.currentControllerNode else {
+    func setCurrentController(_ controller: ViewController?) -> () -> Void {
+        guard controller !== self.currentController else {
             return {}
         }
         
-        let previousNode = self.currentControllerNode
-        self.currentControllerNode = node
-        if let currentControllerNode = self.currentControllerNode {
+        let previousNode = self.currentController?.displayNode
+        self.currentController = controller
+        if let currentControllerNode = self.currentController?.displayNode {
             if let previousNode {
                 self.insertSubnode(currentControllerNode, aboveSubnode: previousNode)
             } else {
@@ -89,14 +95,22 @@ final class TabBarControllerNode: ASDisplayNode {
         }
         
         return { [weak self, weak previousNode] in
-            if previousNode !== self?.currentControllerNode {
+            if previousNode !== self?.currentController?.displayNode {
                 previousNode?.removeFromSupernode()
             }
         }
     }
+
+    var currentSearchNode: ASDisplayNode? {
+        if let tabBarComponentView = self.tabBarView.view as? TabBarComponent.View {
+            return tabBarComponentView.currentSearchNode
+        }
+        return nil
+    }
     
-    init(theme: PresentationTheme, itemSelected: @escaping (Int, Bool, [ASDisplayNode]) -> Void, contextAction: @escaping (Int, ContextExtractedContentContainingView, ContextGesture) -> Void, swipeAction: @escaping (Int, TabBarItemSwipeDirection) -> Void, toolbarActionSelected: @escaping (ToolbarActionOption) -> Void, disabledPressed: @escaping () -> Void) {
+    init(theme: PresentationTheme, strings: PresentationStrings, itemSelected: @escaping (Int, Bool, [ASDisplayNode]) -> Void, contextAction: @escaping (Int, ContextExtractedContentContainingView, ContextGesture) -> Void, swipeAction: @escaping (Int, TabBarItemSwipeDirection) -> Void, toolbarActionSelected: @escaping (ToolbarActionOption) -> Void, disabledPressed: @escaping () -> Void, activateSearch: @escaping () -> Void, deactivateSearch: @escaping () -> Void) {
         self.theme = theme
+        self.strings = strings
         self.itemSelected = itemSelected
         self.contextAction = contextAction
         self.disabledOverlayNode = ASDisplayNode()
@@ -104,7 +118,9 @@ final class TabBarControllerNode: ASDisplayNode {
         self.disabledOverlayNode.alpha = 0.0
         self.toolbarActionSelected = toolbarActionSelected
         self.disabledPressed = disabledPressed
-        
+        self.activateSearch = activateSearch
+        self.deactivateSearch = deactivateSearch
+
         super.init()
         
         self.setViewBlock({
@@ -163,7 +179,7 @@ final class TabBarControllerNode: ASDisplayNode {
     }
     
     func containerLayoutUpdated(_ layout: ContainerViewLayout, toolbar: Toolbar?, transition: ContainedViewLayoutTransition) -> CGFloat {
-        let params = Params(layout: layout, toolbar: toolbar, isTabBarHidden: self.tabBarHidden)
+        let params = Params(layout: layout, toolbar: toolbar, isTabBarHidden: self.tabBarHidden, currentControllerSearchState: self.currentController?.tabBarSearchState)
         if let layoutResult = self.layoutResult, layoutResult.params == params {
             return layoutResult.bottomInset
         } else {
@@ -179,18 +195,27 @@ final class TabBarControllerNode: ASDisplayNode {
     }
     
     private func updateImpl(params: Params, transition: ContainedViewLayoutTransition) -> CGFloat {
-        var options: ContainerViewLayoutInsetOptions = []
-        if params.layout.metrics.widthClass == .regular {
-            options.insert(.input)
+        var panelsBottomInset: CGFloat = params.layout.insets(options: []).bottom
+        if params.layout.metrics.widthClass == .regular, let inputHeight = params.layout.inputHeight, inputHeight != 0.0 {
+            panelsBottomInset = inputHeight + 8.0
         }
-        
-        var bottomInset: CGFloat = params.layout.insets(options: options).bottom
-        if bottomInset == 0.0 {
-            bottomInset = 8.0
+        if panelsBottomInset == 0.0 {
+            panelsBottomInset = 8.0
         } else {
-            bottomInset = max(bottomInset, 8.0)
+            panelsBottomInset = max(panelsBottomInset, 8.0)
         }
-        let sideInset: CGFloat = 20.0
+
+        var tabBarBottomInset: CGFloat = panelsBottomInset
+        if let currentController = self.currentController {
+            if let tabBarSearchState = currentController.tabBarSearchState, tabBarSearchState.isActive, let inputHeight = params.layout.inputHeight, inputHeight != 0.0 {
+                tabBarBottomInset = max(tabBarBottomInset, inputHeight + 8.0)
+            }
+        }
+
+        var sideInset: CGFloat = 12.0
+        if tabBarBottomInset <= 28.0 {
+            sideInset = 20.0
+        }
         
         var selectedId: AnyHashable?
         if self.selectedIndex < self.tabBarItems.count {
@@ -208,6 +233,7 @@ final class TabBarControllerNode: ASDisplayNode {
             transition: tabBarTransition,
             component: AnyComponent(TabBarComponent(
                 theme: self.theme,
+                strings: self.strings,
                 items: self.tabBarItems.map { item in
                     let itemId = AnyHashable(ObjectIdentifier(item.item))
                     return TabBarComponent.Item(
@@ -230,13 +256,30 @@ final class TabBarControllerNode: ASDisplayNode {
                         }
                     )
                 },
+                search: self.currentController?.tabBarSearchState.flatMap { tabBarSearchState in
+                    return TabBarComponent.Search(
+                        isActive: tabBarSearchState.isActive,
+                        activate: { [weak self] in
+                            guard let self else {
+                                return
+                            }
+                            self.activateSearch()
+                        },
+                        deactivate: { [weak self] in
+                            guard let self else {
+                                return
+                            }
+                            self.deactivateSearch()
+                        }
+                    )
+                },
                 selectedId: selectedId,
                 isTablet: params.layout.metrics.isTablet
             )),
             environment: {},
             containerSize: CGSize(width: params.layout.size.width - sideInset * 2.0, height: 100.0)
         )
-        let tabBarFrame = CGRect(origin: CGPoint(x: floor((params.layout.size.width - tabBarSize.width) * 0.5), y: params.layout.size.height - (self.tabBarHidden ? 0.0 : (tabBarSize.height + bottomInset))), size: tabBarSize)
+        let tabBarFrame = CGRect(origin: CGPoint(x: floor((params.layout.size.width - tabBarSize.width) * 0.5), y: params.layout.size.height - (self.tabBarHidden ? 0.0 : (tabBarSize.height + tabBarBottomInset))), size: tabBarSize)
         
         if let tabBarComponentView = self.tabBarView.view {
             if tabBarComponentView.superview == nil {
@@ -248,13 +291,13 @@ final class TabBarControllerNode: ASDisplayNode {
         
         transition.updateFrame(node: self.disabledOverlayNode, frame: tabBarFrame)
         
-        let toolbarHeight = 50.0 + params.layout.insets(options: options).bottom
+        let toolbarHeight = 50.0 + panelsBottomInset
         let toolbarFrame = CGRect(origin: CGPoint(x: 0.0, y: params.layout.size.height - toolbarHeight), size: CGSize(width: params.layout.size.width, height: toolbarHeight))
         
         if let toolbar = params.toolbar {
             if let toolbarNode = self.toolbarNode {
                 transition.updateFrame(node: toolbarNode, frame: toolbarFrame)
-                toolbarNode.updateLayout(size: toolbarFrame.size, leftInset: params.layout.safeInsets.left, rightInset: params.layout.safeInsets.right, additionalSideInsets: params.layout.additionalInsets, bottomInset: bottomInset, toolbar: toolbar, transition: transition)
+                toolbarNode.updateLayout(size: toolbarFrame.size, leftInset: params.layout.safeInsets.left, rightInset: params.layout.safeInsets.right, additionalSideInsets: params.layout.additionalInsets, bottomInset: panelsBottomInset, toolbar: toolbar, transition: transition)
             } else {
                 let toolbarNode = ToolbarNode(theme: ToolbarTheme(theme: self.theme), displaySeparator: true, left: { [weak self] in
                     self?.toolbarActionSelected(.left)
@@ -264,7 +307,7 @@ final class TabBarControllerNode: ASDisplayNode {
                     self?.toolbarActionSelected(.middle)
                 })
                 toolbarNode.frame = toolbarFrame
-                toolbarNode.updateLayout(size: toolbarFrame.size, leftInset: params.layout.safeInsets.left, rightInset: params.layout.safeInsets.right, additionalSideInsets: params.layout.additionalInsets, bottomInset: bottomInset, toolbar: toolbar, transition: .immediate)
+                toolbarNode.updateLayout(size: toolbarFrame.size, leftInset: params.layout.safeInsets.left, rightInset: params.layout.safeInsets.right, additionalSideInsets: params.layout.additionalInsets, bottomInset: panelsBottomInset, toolbar: toolbar, transition: .immediate)
                 self.addSubnode(toolbarNode)
                 self.toolbarNode = toolbarNode
                 if transition.isAnimated {
