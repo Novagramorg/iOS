@@ -13,6 +13,7 @@ import BundleIconComponent
 final class PasskeysScreenIntroComponent: Component {
     let context: AccountContext
     let theme: PresentationTheme
+    let strings: PresentationStrings
     let insets: UIEdgeInsets
     let displaySkip: Bool
     let createPasskeyAction: () -> Void
@@ -21,6 +22,7 @@ final class PasskeysScreenIntroComponent: Component {
     init(
         context: AccountContext,
         theme: PresentationTheme,
+        strings: PresentationStrings,
         insets: UIEdgeInsets,
         displaySkip: Bool,
         createPasskeyAction: @escaping () -> Void,
@@ -28,6 +30,7 @@ final class PasskeysScreenIntroComponent: Component {
     ) {
         self.context = context
         self.theme = theme
+        self.strings = strings
         self.insets = insets
         self.displaySkip = displaySkip
         self.createPasskeyAction = createPasskeyAction
@@ -39,6 +42,9 @@ final class PasskeysScreenIntroComponent: Component {
             return false
         }
         if lhs.theme !== rhs.theme {
+            return false
+        }
+        if lhs.strings !== rhs.strings {
             return false
         }
         if lhs.insets != rhs.insets {
@@ -120,7 +126,6 @@ final class PasskeysScreenIntroComponent: Component {
 
             var contentHeight: CGFloat = 0.0
 
-            //TODO:localize
             let iconSize = self.icon.update(
                 transition: .immediate,
                 component: AnyComponent(LottieComponent(
@@ -145,7 +150,7 @@ final class PasskeysScreenIntroComponent: Component {
             let titleSize = self.title.update(
                 transition: .immediate,
                 component: AnyComponent(MultilineTextComponent(
-                    text: .plain(NSAttributedString(string: "Protect your account", font: Font.bold(27.0), textColor: component.theme.list.itemPrimaryTextColor)),
+                    text: .plain(NSAttributedString(string: component.strings.Passkeys_Into_Title, font: Font.bold(27.0), textColor: component.theme.list.itemPrimaryTextColor)),
                     horizontalAlignment: .center,
                     maximumNumberOfLines: 0
                 )),
@@ -166,7 +171,7 @@ final class PasskeysScreenIntroComponent: Component {
             let subtitleSize = self.subtitle.update(
                 transition: .immediate,
                 component: AnyComponent(BalancedTextComponent(
-                    text: .plain(NSAttributedString(string: "Log in safely and keep your account secure.", font: Font.regular(16.0), textColor: component.theme.list.itemPrimaryTextColor)),
+                    text: .plain(NSAttributedString(string: component.strings.Passkeys_Subtitle, font: Font.regular(16.0), textColor: component.theme.list.itemPrimaryTextColor)),
                     horizontalAlignment: .center,
                     maximumNumberOfLines: 0,
                     lineSpacing: 0.2
@@ -193,18 +198,18 @@ final class PasskeysScreenIntroComponent: Component {
             let itemDescs: [ItemDesc] = [
                 ItemDesc(
                     icon: "Settings/Passkeys/Intro1",
-                    title: "Create a Passkey",
-                    text: "Make a passkey to sign in easily and safely."
+                    title: component.strings.Passkeys_Into_Title0,
+                    text: component.strings.Passkeys_Into_Text0
                 ),
                 ItemDesc(
                     icon: "Settings/Passkeys/Intro2",
-                    title: "Log in with Face ID",
-                    text: "Use Face ID, Touch ID, or your passcode to sign in."
+                    title: component.strings.Passkeys_Into_Title1,
+                    text: component.strings.Passkeys_Into_Text1
                 ),
                 ItemDesc(
                     icon: "Settings/Passkeys/Intro3",
-                    title: "Store Passkey Securely",
-                    text: "Your passkey is safely kept in your iCloud Keychain."
+                    title: component.strings.Passkeys_Into_Title2,
+                    text: component.strings.Passkeys_Into_Text2
                 )
             ]
             for i in 0 ..< itemDescs.count {
@@ -290,7 +295,7 @@ final class PasskeysScreenIntroComponent: Component {
                     ),
                     content: AnyComponentWithIdentity(
                         id: AnyHashable(0),
-                        component: AnyComponent(MultilineTextComponent(text: .plain(NSAttributedString(string: "Create Passkey", font: Font.semibold(17.0), textColor: component.theme.list.itemCheckColors.foregroundColor))))
+                        component: AnyComponent(MultilineTextComponent(text: .plain(NSAttributedString(string: component.strings.Passkeys_ButtonCreate, font: Font.semibold(17.0), textColor: component.theme.list.itemCheckColors.foregroundColor))))
                     ),
                     action: { [weak self] in
                         guard let self, let component = self.component else {
@@ -312,7 +317,6 @@ final class PasskeysScreenIntroComponent: Component {
                     skipButton = ComponentView()
                     self.skipButton = skipButton
                 }
-                //TODO:localize
                 skipButtonSize = skipButton.update(
                     transition: transition,
                     component: AnyComponent(ButtonComponent(
@@ -325,7 +329,7 @@ final class PasskeysScreenIntroComponent: Component {
                         ),
                         content: AnyComponentWithIdentity(
                             id: AnyHashable(0),
-                            component: AnyComponent(MultilineTextComponent(text: .plain(NSAttributedString(string: "Skip", font: Font.semibold(17.0), textColor: component.theme.list.itemCheckColors.foregroundColor))))
+                            component: AnyComponent(MultilineTextComponent(text: .plain(NSAttributedString(string: component.strings.Passkeys_ButtonSkip, font: Font.semibold(17.0), textColor: component.theme.list.itemCheckColors.foregroundColor))))
                         ),
                         action: { [weak self] in
                             guard let self, let component = self.component else {

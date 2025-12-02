@@ -576,11 +576,10 @@ final class AuthorizationSequencePhoneEntryControllerNode: ASDisplayNode {
     }
     
     func updateDisplayPasskeyLoginOption() {
-        //TODO:localize
         if self.account == nil {
             return
         }
-        let attributedText = NSMutableAttributedString(attributedString: parseMarkdownIntoAttributedString("Enter your phone number\nor [log in using Passkey >](passkey)", attributes: MarkdownAttributes(
+        let attributedText = NSMutableAttributedString(attributedString: parseMarkdownIntoAttributedString(self.strings.Login_PhoneWithPasskeySubtitle, attributes: MarkdownAttributes(
             body: MarkdownAttributeSet(font: Font.regular(17.0), textColor: self.theme.list.itemPrimaryTextColor),
             bold: MarkdownAttributeSet(font: Font.semibold(17.0), textColor: self.theme.list.itemPrimaryTextColor),
             link: MarkdownAttributeSet(font: Font.regular(17.0), textColor: self.theme.list.itemAccentColor),
@@ -607,7 +606,7 @@ final class AuthorizationSequencePhoneEntryControllerNode: ASDisplayNode {
         let titleInset: CGFloat = layout.size.width > 320.0 ? 18.0 : 0.0
         let additionalBottomInset: CGFloat = layout.size.width > 320.0 ? 80.0 : 10.0
         
-        self.titleNode.attributedText = NSAttributedString(string: self.account == nil ? strings.Login_NewNumber : strings.Login_PhoneTitle, font: Font.bold(28.0), textColor: self.theme.list.itemPrimaryTextColor)
+        self.titleNode.attributedText = NSAttributedString(string: self.account == nil ? self.strings.Login_NewNumber : self.strings.Login_PhoneTitle, font: Font.bold(28.0), textColor: self.theme.list.itemPrimaryTextColor)
         self.titleActivateAreaNode.accessibilityLabel = self.titleNode.attributedText?.string ?? ""
         
         let inset: CGFloat = 24.0

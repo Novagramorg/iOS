@@ -180,9 +180,8 @@ final class PasskeysScreenComponent: Component {
                 return
             }
             let presentationData = component.context.sharedContext.currentPresentationData.with({ $0 })
-            //TODO:localize
-            controller.present(standardTextAlertController(theme: AlertControllerTheme(presentationData: presentationData), title: "Delete Passkey?", text: "Once deleted, this passkey can't be used to log in.\n\nDon't forget to remove it from your password manager too.", actions: [TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: {
-            }), TextAlertAction(type: .destructiveAction, title: "Delete", action: { [weak self] in
+            controller.present(standardTextAlertController(theme: AlertControllerTheme(presentationData: presentationData), title: environment.strings.Passkeys_DeleteAlert_Title, text: environment.strings.Passkeys_DeleteAlert_Text, actions: [TextAlertAction(type: .genericAction, title: environment.strings.Common_Cancel, action: {
+            }), TextAlertAction(type: .destructiveAction, title: environment.strings.Passkeys_DeleteAlert_Action, action: { [weak self] in
                 guard let self else {
                     return
                 }
@@ -266,6 +265,7 @@ final class PasskeysScreenComponent: Component {
                     component: AnyComponent(PasskeysScreenIntroComponent(
                         context: component.context,
                         theme: environment.theme,
+                        strings: environment.strings,
                         insets: UIEdgeInsets(top: environment.statusBarHeight + environment.navigationHeight, left: 0.0, bottom: environment.safeInsets.bottom, right: 0.0),
                         displaySkip: component.displaySkip,
                         createPasskeyAction: { [weak self] in
