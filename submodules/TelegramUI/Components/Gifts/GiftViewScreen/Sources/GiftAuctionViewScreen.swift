@@ -71,7 +71,10 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
         fileprivate var giftAuctionAcquiredGifts: [GiftAuctionAcquiredGift] = []
         private var giftAuctionAcquiredGiftsPromise = ValuePromise<[GiftAuctionAcquiredGift]>()
         private var giftAuctionAcquiredGiftsDisposable = MetaDisposable()
-                
+        
+        private(set) var giftValueInfo: StarGift.UniqueGift.ValueInfo?
+        private var giftValueInfoDisposable: Disposable?
+        
         var cachedStarImage: (UIImage, PresentationTheme)?
         
         var cachedChevronImage: (UIImage, PresentationTheme)?
@@ -102,6 +105,17 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
                 if let acquiredCount = auctionState?.myState.acquiredCount, acquiredCount > (previousState?.myState.acquiredCount ?? 0) {
                     self.loadAcquiredGifts()
                 }
+                
+                if !"".isEmpty, self.giftValueInfoDisposable == nil, let auctionState, case let .generic(gift) = auctionState.gift, case .finished = auctionState.auctionState, let slug = gift.auctionSlug {
+                    self.giftValueInfoDisposable = (self.context.engine.payments.getUniqueStarGiftValueInfo(slug: "\(slug)-1")
+                    |> deliverOnMainQueue).start(next: { [weak self] valueInfo in
+                        guard let self else {
+                            return
+                        }
+                        self.giftValueInfo = valueInfo
+                        self.updated(transition: .easeInOut(duration: 0.25))
+                    })
+                }
             })
                         
             self.giftAuctionTimer = SwiftSignalKit.Timer(timeout: 0.5, repeat: true, completion: { [weak self] in
@@ -114,6 +128,7 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
             self.disposable?.dispose()
             self.giftAuctionAcquiredGiftsDisposable.dispose()
             self.giftAuctionTimer?.invalidate()
+            self.giftValueInfoDisposable?.dispose()
         }
         
         func loadAcquiredGifts() {
@@ -291,6 +306,26 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
             controller.present(shareController, in: .window(.root))
         }
         
+        func openGiftResale() {
+            guard let controller = self.getController() as? GiftAuctionViewScreen, let gift = self.giftAuctionState?.gift, case let .generic(gift) = gift else {
+                return
+            }
+            let storeController = self.context.sharedContext.makeGiftStoreController(
+                context: self.context,
+                peerId: self.context.account.peerId,
+                gift: gift
+            )
+            controller.push(storeController)
+        }
+        
+        func openGiftFragmentResale() {
+            guard let controller = self.getController() as? GiftAuctionViewScreen, let navigationController = controller.navigationController as? NavigationController, let url = self.giftValueInfo?.fragmentListedUrl else {
+                return
+            }
+            let presentationData = self.context.sharedContext.currentPresentationData.with { $0 }
+            self.context.sharedContext.openExternalUrl(context: self.context, urlContext: .generic, url: url, forceExternal: true, presentationData: presentationData, navigationController: navigationController, dismissInput: {})
+        }
+        
         func morePressed(view: UIView, gesture: ContextGesture?) {
             guard let controller = self.getController() as? GiftAuctionViewScreen else {
                 return
@@ -367,8 +402,8 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
         let button = Child(ButtonComponent.self)
         
         let acquiredButton = Child(PlainButtonComponent.self)
-//        let telegramSaleButton = Child(PlainButtonComponent.self)
-//        let fragmentSaleButton = Child(PlainButtonComponent.self)
+        let telegramSaleButton = Child(PlainButtonComponent.self)
+        let fragmentSaleButton = Child(PlainButtonComponent.self)
         
         let moreButtonPlayOnce = ActionSlot<Void>()
         
@@ -447,16 +482,22 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
             let tableTextColor = theme.list.itemPrimaryTextColor
     
             let currentTime = Int32(CFAbsoluteTimeGetCurrent() + kCFAbsoluteTimeIntervalSince1970)
+            var startTime = currentTime
             var endTime = currentTime
             
+            var isUpcoming = false
             var isEnded = false
             var tableItems: [TableComponent.Item] = []
             if let auctionState = state.giftAuctionState, case let .generic(gift) = component.auctionContext.gift {
+                startTime = auctionState.startDate
                 endTime = auctionState.endDate
                 if case .finished = auctionState.auctionState {
                     isEnded = true
                 } else if auctionState.endDate < currentTime {
                     isEnded = true
+                }
+                if auctionState.startDate > currentTime {
+                    isUpcoming = true
                 }
                 
                 if isEnded {
@@ -539,33 +580,93 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
                     
                     tableItems.append(.init(
                         id: "start",
-                        title: strings.Gift_Auction_Started,
+                        title: isUpcoming ? strings.Gift_Auction_Start : strings.Gift_Auction_Started,
                         component: AnyComponent(
                             MultilineTextComponent(text: .plain(NSAttributedString(string: stringForMediumDate(timestamp: auctionState.startDate, strings: strings, dateTimeFormat: dateTimeFormat), font: tableFont, textColor: tableTextColor)))
                         )
                     ))
                     tableItems.append(.init(
                         id: "ends",
-                        title: strings.Gift_Auction_Ends,
+                        title: isUpcoming ? strings.Gift_Auction_End : strings.Gift_Auction_Ends,
                         component: AnyComponent(
                             MultilineTextComponent(text: .plain(NSAttributedString(string: stringForMediumDate(timestamp: auctionState.endDate, strings: strings, dateTimeFormat: dateTimeFormat), font: tableFont, textColor: tableTextColor)))
                         )
                     ))
-                    if case let .ongoing(_, _, _, _, _, _, _, giftsLeft, currentRound, totalRounds) = auctionState.auctionState {
-                        tableItems.append(.init(
-                            id: "round",
-                            title: strings.Gift_Auction_CurrentRound,
-                            component: AnyComponent(
-                                MultilineTextComponent(text: .plain(NSAttributedString(string: strings.Gift_Auction_Round("\(currentRound)", "\(totalRounds)").string, font: tableFont, textColor: tableTextColor)))
-                            )
-                        ))
-                        tableItems.append(.init(
-                            id: "availability",
-                            title: strings.Gift_Auction_Availability,
-                            component: AnyComponent(
-                                MultilineTextComponent(text: .plain(NSAttributedString(string: strings.Gift_Auction_AvailabilityOf(presentationStringsFormattedNumber(giftsLeft, dateTimeFormat.groupingSeparator), presentationStringsFormattedNumber(gift.availability?.total ?? 0, dateTimeFormat.groupingSeparator)).string, font: tableFont, textColor: tableTextColor)))
-                            )
-                        ))
+
+                    if case let .ongoing(_, _, _, _, _, _, _, giftsLeft, currentRound, totalRounds, rounds, _) = auctionState.auctionState {
+                        if isUpcoming {
+                            tableItems.append(.init(
+                                id: "quantity",
+                                title: strings.Gift_Auction_Quantity,
+                                component: AnyComponent(
+                                    MultilineTextComponent(text: .plain(NSAttributedString(string: presentationStringsFormattedNumber(gift.availability?.total ?? 0, dateTimeFormat.groupingSeparator), font: tableFont, textColor: tableTextColor)))
+                                )
+                            ))
+                            tableItems.append(.init(
+                                id: "rounds",
+                                title: strings.Gift_Auction_TotalRounds,
+                                component: AnyComponent(
+                                    MultilineTextComponent(text: .plain(NSAttributedString(string: presentationStringsFormattedNumber(totalRounds, dateTimeFormat.groupingSeparator), font: tableFont, textColor: tableTextColor)))
+                                )
+                            ))
+                            
+                            for i in 0 ..< rounds.count {
+                                let round = rounds[i]
+                                let start = round.num
+                                var end = totalRounds
+                                if i < rounds.count - 1 {
+                                    let nextRound = rounds[i + 1]
+                                    end = nextRound.num - 1
+                                }
+                                                                
+                                let title: String = start == end ? strings.Gift_Auction_TimeRound("\(start)").string : strings.Gift_Auction_TimeRounds("\(start)-\(end)").string
+                                var value: String
+                                if round.duration % 3600 == 0 {
+                                    let hours = round.duration / 3600
+                                    value = start == end ? strings.Gift_Auction_Hours(hours) : strings.Gift_Auction_HoursEach(hours)
+                                } else {
+                                    let minutes = round.duration / 60
+                                    value = start == end ? strings.Gift_Auction_Minutes(minutes) : strings.Gift_Auction_MinutesEach(minutes)
+                                }
+                                
+                                if case let .extendable(_, _, top, window) = round {
+                                    var windowString: String
+                                    if window % 60 == 0 {
+                                        windowString = strings.Gift_Auction_Minutes(window)
+                                    } else {
+                                        windowString = strings.Gift_Auction_Seconds(window)
+                                    }
+                                    value += " \(strings.Gift_Auction_Extension(windowString, "\(top)").string)"
+                                }
+                                
+                                tableItems.append(.init(
+                                    id: "round_\(i)",
+                                    title: title,
+                                    component: AnyComponent(
+                                        MultilineTextComponent(
+                                            text: .plain(NSAttributedString(string: value, font: tableFont, textColor: tableTextColor)),
+                                            maximumNumberOfLines: 3
+                                        )
+                                    )
+                                ))
+                            }
+                            
+                        } else {
+                            tableItems.append(.init(
+                                id: "round",
+                                title: strings.Gift_Auction_CurrentRound,
+                                component: AnyComponent(
+                                    MultilineTextComponent(text: .plain(NSAttributedString(string: strings.Gift_Auction_Round("\(currentRound)", "\(totalRounds)").string, font: tableFont, textColor: tableTextColor)))
+                                )
+                            ))
+                            tableItems.append(.init(
+                                id: "availability",
+                                title: strings.Gift_Auction_Availability,
+                                component: AnyComponent(
+                                    MultilineTextComponent(text: .plain(NSAttributedString(string: strings.Gift_Auction_AvailabilityOf(presentationStringsFormattedNumber(giftsLeft, dateTimeFormat.groupingSeparator), presentationStringsFormattedNumber(gift.availability?.total ?? 0, dateTimeFormat.groupingSeparator)).string, font: tableFont, textColor: tableTextColor)))
+                                )
+                            ))
+                        }
                     }
                 }
             }
@@ -692,6 +793,98 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
                 hasAdditionalButtons = true
             }
             
+            if let giftValueInfo = state.giftValueInfo, case let .generic(gift) = component.auctionContext.gift {
+                if let listedCount = giftValueInfo.listedCount, listedCount > 0  {
+                    originY += 5.0
+                    
+                    let telegramSaleButton = telegramSaleButton.update(
+                        component: PlainButtonComponent(content: AnyComponent(
+                            HStack([
+                                AnyComponentWithIdentity(id: "count", component: AnyComponent(
+                                    MultilineTextComponent(text: .plain(NSAttributedString(string: presentationStringsFormattedNumber(listedCount, dateTimeFormat.groupingSeparator), font: Font.regular(17.0), textColor: theme.actionSheet.controlAccentColor)))
+                                )),
+                                AnyComponentWithIdentity(id: "spacing", component: AnyComponent(
+                                    Rectangle(color: .clear, width: 8.0, height: 1.0)
+                                )),
+                                AnyComponentWithIdentity(id: "icon", component: AnyComponent(
+                                    GiftItemComponent(
+                                        context: component.context,
+                                        theme: theme,
+                                        strings: strings,
+                                        peer: nil,
+                                        subject: .starGift(gift: gift, price: ""),
+                                        mode: .buttonIcon
+                                    )
+                                )),
+                                AnyComponentWithIdentity(id: "text", component: AnyComponent(
+                                    MultilineTextComponent(text: .plain(NSAttributedString(string: "  \(strings.Gift_Value_ForSaleOnTelegram)", font: Font.regular(17.0), textColor: theme.actionSheet.controlAccentColor)))
+                                )),
+                                AnyComponentWithIdentity(id: "arrow", component: AnyComponent(
+                                    BundleIconComponent(name: "Chat/Context Menu/Arrow", tintColor: theme.actionSheet.controlAccentColor)
+                                ))
+                            ], spacing: 0.0)
+                        ), action: { [weak state] in
+                            guard let state else {
+                                return
+                            }
+                            state.openGiftResale()
+                        }, animateScale: false),
+                        availableSize: CGSize(width: context.availableSize.width - 64.0, height: context.availableSize.height),
+                        transition: context.transition
+                    )
+                    context.add(telegramSaleButton
+                        .position(CGPoint(x: context.availableSize.width / 2.0, y: originY + telegramSaleButton.size.height / 2.0)))
+                    originY += telegramSaleButton.size.height
+                    originY += 12.0
+                    
+                    hasAdditionalButtons = true
+                }
+                
+                if let listedCount = giftValueInfo.fragmentListedCount, listedCount > 0 {
+                    let fragmentSaleButton = fragmentSaleButton.update(
+                        component: PlainButtonComponent(content: AnyComponent(
+                            HStack([
+                                AnyComponentWithIdentity(id: "count", component: AnyComponent(
+                                    MultilineTextComponent(text: .plain(NSAttributedString(string: presentationStringsFormattedNumber(listedCount, dateTimeFormat.groupingSeparator), font: Font.regular(17.0), textColor: theme.actionSheet.controlAccentColor)))
+                                )),
+                                AnyComponentWithIdentity(id: "spacing", component: AnyComponent(
+                                    Rectangle(color: .clear, width: 8.0, height: 1.0)
+                                )),
+                                AnyComponentWithIdentity(id: "icon", component: AnyComponent(
+                                    GiftItemComponent(
+                                        context: component.context,
+                                        theme: theme,
+                                        strings: strings,
+                                        peer: nil,
+                                        subject: .starGift(gift: gift, price: ""),
+                                        mode: .buttonIcon
+                                    )
+                                )),
+                                AnyComponentWithIdentity(id: "text", component: AnyComponent(
+                                    MultilineTextComponent(text: .plain(NSAttributedString(string: "  \(strings.Gift_Value_ForSaleOnFragment)", font: Font.regular(17.0), textColor: theme.actionSheet.controlAccentColor)))
+                                )),
+                                AnyComponentWithIdentity(id: "arrow", component: AnyComponent(
+                                    BundleIconComponent(name: "Chat/Context Menu/Arrow", tintColor: theme.actionSheet.controlAccentColor)
+                                ))
+                            ], spacing: 0.0)
+                        ), action: { [weak state] in
+                            guard let state else {
+                                return
+                            }
+                            state.openGiftFragmentResale()
+                        }, animateScale: false),
+                        availableSize: CGSize(width: context.availableSize.width - 64.0, height: context.availableSize.height),
+                        transition: context.transition
+                    )
+                    context.add(fragmentSaleButton
+                        .position(CGPoint(x: context.availableSize.width / 2.0, y: originY + fragmentSaleButton.size.height / 2.0)))
+                    originY += fragmentSaleButton.size.height
+                    originY += 12.0
+                    
+                    hasAdditionalButtons = true
+                }
+            }
+            
             if hasAdditionalButtons {
                 originY += 21.0
             }
@@ -707,21 +900,32 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
             
             let buttonChild: _UpdatedChildComponent
             if !isEnded {
-                let buttonAttributedString = NSMutableAttributedString(string: strings.Gift_Auction_Join, font: Font.semibold(17.0), textColor: theme.list.itemCheckColors.foregroundColor, paragraphAlignment: .center)
+                let buttonAttributedString = NSMutableAttributedString(string: isUpcoming ? strings.Gift_Auction_EarlyBid : strings.Gift_Auction_Join, font: Font.semibold(17.0), textColor: theme.list.itemCheckColors.foregroundColor, paragraphAlignment: .center)
                 
-                let endTimeout = max(0, endTime - currentTime)
+                let endTimeout: Int32
+                if currentTime < startTime {
+                    endTimeout = max(0, startTime - currentTime)
+                } else {
+                    endTimeout = max(0, endTime - currentTime)
+                }
                 
                 let hours = Int(endTimeout / 3600)
                 let minutes = Int((endTimeout % 3600) / 60)
                 let seconds = Int(endTimeout % 60)
                 
-                let rawString = hours > 0 ? strings.Gift_Auction_TimeLeftHours : strings.Gift_Auction_TimeLeftMinutes
+                let rawString: String
+                if isUpcoming {
+                    rawString = hours > 0 ? strings.Gift_Auction_StartsInHours : strings.Gift_Auction_StartsInMinutes
+                } else {
+                    rawString = hours > 0 ? strings.Gift_Auction_TimeLeftHours : strings.Gift_Auction_TimeLeftMinutes
+                }
+                
                 var buttonAnimatedTitleItems: [AnimatedTextComponent.Item] = []
                 var startIndex = rawString.startIndex
                 while true {
                     if let range = rawString.range(of: "{", range: startIndex ..< rawString.endIndex) {
                         if range.lowerBound != startIndex {
-                            buttonAnimatedTitleItems.append(AnimatedTextComponent.Item(id: "prefix", content: .text(String(rawString[startIndex ..< range.lowerBound]))))
+                            buttonAnimatedTitleItems.append(AnimatedTextComponent.Item(id: "prefix_\(buttonAnimatedTitleItems.count)", content: .text(String(rawString[startIndex ..< range.lowerBound]))))
                         }
                         
                         startIndex = range.upperBound
@@ -742,7 +946,7 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
                     }
                 }
                 if startIndex != rawString.endIndex {
-                    buttonAnimatedTitleItems.append(AnimatedTextComponent.Item(id: "suffix", content: .text(String(rawString[startIndex ..< rawString.endIndex]))))
+                    buttonAnimatedTitleItems.append(AnimatedTextComponent.Item(id: "suffix_\(buttonAnimatedTitleItems.count)", content: .text(String(rawString[startIndex ..< rawString.endIndex]))))
                 }
 
                 let items: [AnyComponentWithIdentity<Empty>] = [

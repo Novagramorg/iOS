@@ -15432,3 +15432,74 @@ Error: %8$@";
 
 "LiveStream.ErrorMaxAllowedEmoji.Text_1" = "You can send up to %d emoji.";
 "LiveStream.ErrorMaxAllowedEmoji.Text_any" = "You can send up to %d emoji.";
+
+"Stars.Purchase.StarGiftOfferInfo" = "Buy Stars to make a gift buy offer.";
+
+"Notification.StarsGiftOffer.Offer" = "%1$@ offered you %2$@ for your gift %3$@";
+"Notification.StarsGiftOffer.Offer.Stars_1" = "%@ Star";
+"Notification.StarsGiftOffer.Offer.Stars_any" = "%@ Stars";
+"Notification.StarsGiftOffer.OfferYou" = "You offered %1$@ %2$@ for their gift %3$@";
+"Notification.StarsGiftOffer.OfferYou.Stars_1" = "%@ Star";
+"Notification.StarsGiftOffer.OfferYou.Stars_any" = "%@ Stars";
+
+"Notification.StarsGiftOffer.Accepted" = "%1$@ accepted your offer and sold you %2$@ for %3$@";
+"Notification.StarsGiftOffer.Accepted.Stars_1" = "%@ Star";
+"Notification.StarsGiftOffer.Accepted.Stars_any" = "%@ Stars";
+"Notification.StarsGiftOffer.AcceptedYou" = "You sold %1$@ to %2$@ for %3$@";
+"Notification.StarsGiftOffer.AcceptedYou.Stars_1" = "%@ Star";
+"Notification.StarsGiftOffer.AcceptedYou.Stars_any" = "%@ Stars";
+
+"Notification.StarsGiftOffer.Rejected" = "%1$@ rejected your offer for %2$@ – your %3$@ have been refunded";
+"Notification.StarsGiftOffer.Rejected.Stars_1" = "%@ Star";
+"Notification.StarsGiftOffer.Rejected.Stars_any" = "%@ Stars";
+"Notification.StarsGiftOffer.RejectedYou" = "You rejected %1$@'s offer";
+"Notification.StarsGiftOffer.RejectedYou.Stars_1" = "%@ Star";
+"Notification.StarsGiftOffer.RejectedYou.Stars_any" = "%@ Stars";
+
+"Notification.StarsGiftOffer.Expired" = "%1$@ didn't respond to your offer for %2$@ within %3$@ – your %4$@ have been refunded";
+"Notification.StarsGiftOffer.Expired.Stars_1" = "%@ Star";
+"Notification.StarsGiftOffer.Expired.Stars_any" = "%@ Stars";
+"Notification.StarsGiftOffer.ExpiredYou" = "The offer from %1$@ to buy your %2$@ for %3$@ has expired";
+"Notification.StarsGiftOffer.ExpiredYou.Stars_1" = "%@ Star";
+"Notification.StarsGiftOffer.ExpiredYou.Stars_any" = "%@ Stars";
+
+"CreateExternalStream.RevokeStreamKey" = "Revoke Stream Key";
+"CreateExternalStream.Revoke.Text" = "Do you want to revoke the stream key?";
+"CreateExternalStream.Revoke.Revoke" = "Revoke";
+
+"Gift.AuctionBid.UntilEnd" = "until the end";
+"Gift.AuctionBid.BeforeStart" = "before start";
+"Gift.AuctionBid.RoundSubtitle" = "Round %@ of %@";
+"Gift.AuctionBid.TopWinnersTotal" = "Top 3 of %@ Winners";
+
+"Gift.Acquired.GiftRound" = "%1$@ in round %2$@";
+
+"Gift.Options.Gift.Soon" = "soon";
+
+"Chat.Auction.StartsIn" = "starts in ";
+"Chat.Auction.View" = "VIEW";
+"Chat.Auction.Upcoming" = "Upcoming Auction";
+
+"Gift.Auction.Start" = "Start";
+"Gift.Auction.End" = "End";
+"Gift.Auction.Quantity" = "Quantity";
+"Gift.Auction.TotalRounds" = "Rounds";
+"Gift.Auction.TimeRound" = "Round %@";
+"Gift.Auction.TimeRounds" = "Rounds %@";
+"Gift.Auction.StartsInHours" = "auction starts in {h}:{m}:{s}";
+"Gift.Auction.StartsInMinutes" = "auction starts in {m}:{s}";
+"Gift.Auction.EarlyBid" = "Place an Early Bid";
+
+"Gift.Auction.Hours_1" = "%@ hour";
+"Gift.Auction.Hours_any" = "%@ hours";
+"Gift.Auction.Minutes_1" = "%@ minute";
+"Gift.Auction.Minutes_any" = "%@ minutes";
+"Gift.Auction.Seconds_1" = "%@ second";
+"Gift.Auction.Seconds_any" = "%@ seconds";
+"Gift.Auction.HoursEach_1" = "%@ hour each";
+"Gift.Auction.HoursEach_any" = "%@ hours each";
+"Gift.Auction.MinutesEach_1" = "%@ minute each";
+"Gift.Auction.MinutesEach_any" = "%@ minutes each";
+"Gift.Auction.Extension" = "+ %1$@ for late bids in top %2$@";
+
+"ChatList.Auctions.UpcomingAuction" = "Upcoming Auction";

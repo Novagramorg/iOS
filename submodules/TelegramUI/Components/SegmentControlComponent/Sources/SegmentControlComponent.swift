@@ -7,10 +7,15 @@ import ComponentDisplayAdapters
 import TelegramPresentationData
 import SegmentedControlNode
 
-final class SegmentControlComponent: Component {
-    struct Item: Equatable {
+public final class SegmentControlComponent: Component {
+    public struct Item: Equatable {
         var id: AnyHashable
         var title: String
+        
+        public init(id: AnyHashable, title: String) {
+            self.id = id
+            self.title = title
+        }
     }
     
     let theme: PresentationTheme
@@ -18,7 +23,7 @@ final class SegmentControlComponent: Component {
     let selectedId: AnyHashable?
     let action: (AnyHashable) -> Void
     
-    init(
+    public init(
         theme: PresentationTheme,
         items: [Item],
         selectedId: AnyHashable?,
@@ -30,7 +35,7 @@ final class SegmentControlComponent: Component {
         self.action = action
     }
     
-    static func ==(lhs: SegmentControlComponent, rhs: SegmentControlComponent) -> Bool {
+    public static func ==(lhs: SegmentControlComponent, rhs: SegmentControlComponent) -> Bool {
         if lhs.theme !== rhs.theme {
             return false
         }
@@ -80,7 +85,7 @@ final class SegmentControlComponent: Component {
         }
     }
     
-    class View: UIView {
+    public class View: UIView {
         private let title = ComponentView<Empty>()
         
         private var component: SegmentControlComponent?
@@ -88,7 +93,7 @@ final class SegmentControlComponent: Component {
         private var nativeSegmentedView: SegmentedControlView?
         private var legacySegmentedNode: SegmentedControlNode?
         
-        override init(frame: CGRect) {
+        public override init(frame: CGRect) {
             super.init(frame: frame)
         }
         
@@ -171,11 +176,11 @@ final class SegmentControlComponent: Component {
         }
     }
     
-    func makeView() -> View {
+    public func makeView() -> View {
         return View(frame: CGRect())
     }
     
-    func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
+    public func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
         return view.update(component: self, availableSize: availableSize, state: state, environment: environment, transition: transition)
     }
 }
