@@ -620,7 +620,7 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
                                 }
                                                                 
                                 let title: String = start == end ? strings.Gift_Auction_TimeRound("\(start)").string : strings.Gift_Auction_TimeRounds("\(start)-\(end)").string
-                                let value: String
+                                var value: String
                                 if round.duration % 3600 == 0 {
                                     let hours = round.duration / 3600
                                     value = start == end ? strings.Gift_Auction_Hours(hours) : strings.Gift_Auction_HoursEach(hours)
@@ -629,11 +629,24 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
                                     value = start == end ? strings.Gift_Auction_Minutes(minutes) : strings.Gift_Auction_MinutesEach(minutes)
                                 }
                                 
+                                if case let .extendable(_, _, top, window) = round {
+                                    var windowString: String
+                                    if window % 60 == 0 {
+                                        windowString = strings.Gift_Auction_Minutes(window)
+                                    } else {
+                                        windowString = strings.Gift_Auction_Seconds(window)
+                                    }
+                                    value += " \(strings.Gift_Auction_Extension(windowString, "\(top)").string)"
+                                }
+                                
                                 tableItems.append(.init(
                                     id: "round_\(i)",
                                     title: title,
                                     component: AnyComponent(
-                                        MultilineTextComponent(text: .plain(NSAttributedString(string: value, font: tableFont, textColor: tableTextColor)))
+                                        MultilineTextComponent(
+                                            text: .plain(NSAttributedString(string: value, font: tableFont, textColor: tableTextColor)),
+                                            maximumNumberOfLines: 3
+                                        )
                                     )
                                 ))
                             }
