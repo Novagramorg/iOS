@@ -157,6 +157,12 @@ public final class AuthorizationSequencePhoneEntryController: ViewController, MF
             strongSelf.account = account
             strongSelf.accountUpdated?(account)
         }
+        self.controllerNode.retryPasskey = { [weak self] in
+            guard let self else {
+                return
+            }
+            self.loadAndPresentPasskey(force: true)
+        }
         
         if let (code, name, number) = self.currentData {
             self.controllerNode.codeAndNumber = (code, name, number)
@@ -194,7 +200,11 @@ public final class AuthorizationSequencePhoneEntryController: ViewController, MF
             self.controllerNode.updateCountryCode()
         }
         
-        if #available(iOS 15.0, *) {
+        self.loadAndPresentPasskey(force: false)
+    }
+    
+    private func loadAndPresentPasskey(force: Bool) {
+        if #available(iOS 16.0, *) {
             Task { @MainActor [weak self] in
                 guard let self, let account = self.account else {
                     return
@@ -235,7 +245,11 @@ public final class AuthorizationSequencePhoneEntryController: ViewController, MF
                 let authController = ASAuthorizationController(authorizationRequests: [platformKeyRequest])
                 authController.delegate = self
                 authController.presentationContextProvider = self
-                authController.performRequests()
+                if force {
+                    authController.performRequests()
+                } else {
+                    authController.performRequests(options: [.preferImmediatelyAvailableCredentials])
+                }
             }
         }
     }
@@ -290,6 +304,12 @@ public final class AuthorizationSequencePhoneEntryController: ViewController, MF
     }
 
     public func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: any Error) {
+        if (error as NSError).domain == "com.apple.AuthenticationServices.AuthorizationError" && (error as NSError).code == 1001 {
+            self.controllerNode.updateDisplayPasskeyLoginOption()
+            if let validLayout = self.validLayout {
+                self.containerLayoutUpdated(validLayout, transition: .immediate)
+            }
+        }
     }
     
     public func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {

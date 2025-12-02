@@ -93,11 +93,9 @@ open class TabBarControllerImpl: ViewController, TabBarController {
     private let pendingControllerDisposable = MetaDisposable()
     
     private var theme: PresentationTheme
-    private var strings: PresentationStrings
     
-    public init(theme: PresentationTheme, strings: PresentationStrings) {
+    public init(theme: PresentationTheme) {
         self.theme = theme
-        self.strings = strings
         
         super.init(navigationBarPresentationData: nil)
         
@@ -154,7 +152,7 @@ open class TabBarControllerImpl: ViewController, TabBarController {
     }
     
     override open func loadDisplayNode() {
-        self.displayNode = TabBarControllerNode(theme: self.theme, strings: self.strings, itemSelected: { [weak self] index, longTap, itemNodes in
+        self.displayNode = TabBarControllerNode(theme: self.theme, itemSelected: { [weak self] index, longTap, itemNodes in
             if let strongSelf = self {
                 if longTap, let controller = strongSelf.controllers[index] as? TabBarContainedController {
                     controller.presentTabBarPreviewingController(sourceNodes: itemNodes)
@@ -237,16 +235,6 @@ open class TabBarControllerImpl: ViewController, TabBarController {
             self?.currentController?.toolbarActionSelected(action: action)
         }, disabledPressed: { [weak self] in
             self?.currentController?.tabBarDisabledAction()
-        }, activateSearch: { [weak self] in
-            guard let self else {
-                return
-            }
-            self.currentController?.tabBarActivateSearch()
-        }, deactivateSearch: { [weak self] in
-            guard let self else {
-                return
-            }
-            self.currentController?.tabBarDeactivateSearch()
         })
         
         self.updateSelectedIndex()
@@ -275,8 +263,7 @@ open class TabBarControllerImpl: ViewController, TabBarController {
         }
         if let currentController = self.currentController {
             currentController.willMove(toParent: nil)
-            currentController.tabBarSearchStateUpdated = nil
-            currentController.currentTabBarSearchNode = nil
+            //self.tabBarControllerNode.currentControllerNode = nil
             
             if animated {
                 currentController.view.layer.animateScale(from: 1.0, to: transitionScale, duration: 0.12, timingFunction: kCAMediaTimingFunctionSpring, removeOnCompletion: false, completion: { completed in
@@ -299,7 +286,7 @@ open class TabBarControllerImpl: ViewController, TabBarController {
             currentController.willMove(toParent: self)
             self.addChild(currentController)
             
-            let commit = self.tabBarControllerNode.setCurrentController(currentController)
+            let commit = self.tabBarControllerNode.setCurrentControllerNode(currentController.displayNode)
             if animated {
                 currentController.view.layer.animateScale(from: transitionScale, to: 1.0, duration: 0.15, delay: 0.1, timingFunction: kCAMediaTimingFunctionSpring)
                 currentController.view.layer.allowsGroupOpacity = true
@@ -316,22 +303,6 @@ open class TabBarControllerImpl: ViewController, TabBarController {
 
             currentController.displayNode.recursivelyEnsureDisplaySynchronously(true)
             self.statusBar.statusBarStyle = currentController.statusBar.statusBarStyle
-
-            currentController.tabBarSearchStateUpdated = { [weak self] transition in
-                guard let self else {
-                    return
-                }
-                if let layout = self.validLayout {
-                    self.containerLayoutUpdated(layout, transition: transition)
-                }
-            }
-
-            currentController.currentTabBarSearchNode = { [weak self] in
-                guard let self else {
-                    return nil
-                }
-                return self.tabBarControllerNode.currentSearchNode
-            }
         }
         
         if let layout = self.validLayout {
