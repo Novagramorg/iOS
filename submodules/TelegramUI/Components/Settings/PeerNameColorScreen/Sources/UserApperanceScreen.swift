@@ -774,6 +774,7 @@ final class UserAppearanceScreenComponent: Component {
                                 releasedBy: nil,
                                 valueAmount: nil,
                                 valueCurrency: nil,
+                                valueUsdAmount: nil,
                                 flags: [],
                                 themePeerId: nil,
                                 peerColor: nil,

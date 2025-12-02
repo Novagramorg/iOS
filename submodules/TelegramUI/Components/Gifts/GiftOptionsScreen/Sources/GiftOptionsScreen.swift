@@ -585,6 +585,7 @@ final class GiftOptionsScreenComponent: Component {
                             self.starsItems[itemId] = visibleItem
                         }
                         
+                        let currentTime = Int32(CFAbsoluteTimeGetCurrent() + kCFAbsoluteTimeIntervalSince1970)
                         var ribbon: GiftItemComponent.Ribbon?
                         var outline: GiftItemComponent.Outline?
                         var isSoldOut = false
@@ -608,7 +609,11 @@ final class GiftOptionsScreenComponent: Component {
                                 let text: String
                                 var ribbonColor: GiftItemComponent.Ribbon.Color = .blue
                                 if gift.flags.contains(.isAuction) {
-                                    text = environment.strings.Gift_Options_Gift_Auction
+                                    if let auctionStartDate = gift.auctionStartDate, currentTime < auctionStartDate {
+                                        text = environment.strings.Gift_Options_Gift_Soon
+                                    } else {
+                                        text = environment.strings.Gift_Options_Gift_Auction
+                                    }
                                     ribbonColor = .orange
                                     outline = .orange
                                 } else if let perUserLimit = gift.perUserLimit, component.peerId.namespace != Namespaces.Peer.CloudChannel {
@@ -624,7 +629,11 @@ final class GiftOptionsScreenComponent: Component {
                             if !isSoldOut && gift.flags.contains(.requiresPremium) {
                                 let text: String
                                 if gift.flags.contains(.isAuction) {
-                                    text = environment.strings.Gift_Options_Gift_Auction
+                                    if let auctionStartDate = gift.auctionStartDate, currentTime < auctionStartDate {
+                                        text = environment.strings.Gift_Options_Gift_Soon
+                                    } else {
+                                        text = environment.strings.Gift_Options_Gift_Auction
+                                    }
                                 } else if component.context.isPremium, let perUserLimit = gift.perUserLimit {
                                     text = environment.strings.Gift_Options_Gift_Premium_Left(perUserLimit.remains)
                                 } else {
@@ -661,7 +670,9 @@ final class GiftOptionsScreenComponent: Component {
                         case let .generic(gift):
                             if gift.flags.contains(.isAuction) {
                                 var action = environment.strings.Gift_Options_Gift_JoinAuction
-                                if gift.availability?.remains == 0 {
+                                if let auctionStartDate = gift.auctionStartDate, currentTime < auctionStartDate {
+                                    action = environment.strings.Gift_Options_Gift_ViewAuction
+                                } else if gift.availability?.remains == 0 {
                                     action = environment.strings.Gift_Options_Gift_ViewAuction
                                 }
                                 subject = .starGift(gift: gift, price: action)

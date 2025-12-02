@@ -18,6 +18,10 @@ import UIKitRuntimeUtils
 public final class GiftCompositionComponent: Component {
     public class ExternalState {
         public fileprivate(set) var previewPatternColor: UIColor?
+        public fileprivate(set) var previewModel: StarGift.UniqueGift.Attribute?
+        public fileprivate(set) var previewBackdrop: StarGift.UniqueGift.Attribute?
+        public fileprivate(set) var previewSymbol: StarGift.UniqueGift.Attribute?
+        
         public init() {
             self.previewPatternColor = nil
         }
@@ -671,18 +675,23 @@ public final class GiftCompositionComponent: Component {
                 loop = true
                 self.stopSpinIfNeeded()
                 
-                if self.previewModels.isEmpty {
+                if self.previewModels.isEmpty || sampleAttributes.count == 3 {
                     var models: [StarGift.UniqueGift.Attribute] = []
                     var patterns: [StarGift.UniqueGift.Attribute] = []
                     var backdrops: [StarGift.UniqueGift.Attribute] = []
                     for attribute in sampleAttributes {
                         switch attribute {
-                        case .model:   models.append(attribute)
+                        case .model: models.append(attribute)
                         case .pattern: patterns.append(attribute)
                         case .backdrop: backdrops.append(attribute)
                         default: break
                         }
                     }
+                    
+                    if self.previewModels != models && sampleAttributes.count == 3 {
+                        self.animatePreviewTransition = true
+                    }
+                    
                     self.previewModels = models
                     self.previewPatterns = patterns
                     self.previewBackdrops = backdrops
@@ -707,19 +716,22 @@ public final class GiftCompositionComponent: Component {
                     }
                     if case let .model(_, file, _) = self.previewModels[Int(self.previewModelIndex)] {
                         animationFile = file
+                        component.externalState?.previewModel = self.previewModels[Int(self.previewModelIndex)]
                     }
                     if case let .pattern(_, file, _) = self.previewPatterns[Int(self.previewPatternIndex)] {
                         patternFile = file
                         files[file.fileId.id] = file
+                        component.externalState?.previewSymbol = self.previewPatterns[Int(self.previewPatternIndex)]
                     }
                     if case let .backdrop(_, _, innerColorValue, outerColorValue, patternColorValue, _, _) = self.previewBackdrops[Int(self.previewBackdropIndex)] {
                         backgroundColor = UIColor(rgb: UInt32(bitPattern: outerColorValue))
                         secondBackgroundColor = UIColor(rgb: UInt32(bitPattern: innerColorValue))
                         patternColor = UIColor(rgb: UInt32(bitPattern: patternColorValue))
+                        component.externalState?.previewBackdrop = self.previewBackdrops[Int(self.previewBackdropIndex)]
                     }
                 }
                 
-                if self.previewTimer == nil {
+                if self.previewTimer == nil && sampleAttributes.count > 3 {
                     self.previewTimer = SwiftSignalKit.Timer(timeout: 2.0, repeat: true, completion: { [weak self] in
                         guard let self, !self.previewModels.isEmpty else { return }
                         self.previewModelIndex = (self.previewModelIndex + 1) % Int32(self.previewModels.count)

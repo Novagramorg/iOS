@@ -3839,9 +3839,12 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         return controller
     }
     
-    public func makeGiftWearPreviewScreen(context: AccountContext, gift: StarGift.UniqueGift) -> ViewController {
-        let controller = GiftViewScreen(context: context, subject: .wearPreview(gift))
-        return controller
+    public func makeGiftWearPreviewScreen(context: AccountContext, gift: StarGift, attributes: [StarGift.UniqueGift.Attribute]?) -> ViewController {
+        return GiftViewScreen(context: context, subject: .wearPreview(gift, attributes))
+    }
+    
+    public func makeGiftUpgradePreviewScreen(context: AccountContext, attributes: [StarGift.UniqueGift.Attribute], peerName: String) -> ViewController {
+        return GiftViewScreen(context: context, subject: .upgradePreview(attributes, peerName))
     }
     
     public func makeGiftAuctionInfoScreen(context: AccountContext, auctionContext: GiftAuctionContext, completion: (() -> Void)?) -> ViewController {
@@ -3858,6 +3861,10 @@ public final class SharedAccountContextImpl: SharedAccountContext {
     
     public func makeGiftAuctionActiveBidsScreen(context: AccountContext) -> ViewController {
         return GiftAuctionActiveBidsScreen(context: context)
+    }
+    
+    public func makeGiftOfferScreen(context: AccountContext, gift: StarGift.UniqueGift, peer: EnginePeer, amount: CurrencyAmount, commit: @escaping () -> Void) -> ViewController {
+        return giftOfferAlertController(context: context, gift: gift, peer: peer, amount: amount, commit: commit)
     }
     
     public func makeStorySharingScreen(context: AccountContext, subject: StorySharingSubject, parentController: ViewController) -> ViewController {

@@ -1671,7 +1671,8 @@ func _internal_sendStarsPaymentForm(account: Account, formId: Int64, source: Bot
                                             collectionIds: nil,
                                             prepaidUpgradeHash: nil,
                                             upgradeSeparate: false,
-                                            dropOriginalDetailsStars: dropOriginalDetailsStars
+                                            dropOriginalDetailsStars: dropOriginalDetailsStars,
+                                            number: nil
                                         )
                                     }
                                 }
