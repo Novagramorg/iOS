@@ -360,6 +360,7 @@ func managedUniqueStarGifts(accountPeerId: PeerId, postbox: Postbox, network: Ne
                                     releasedBy: nil,
                                     valueAmount: nil,
                                     valueCurrency: nil,
+                                    valueUsdAmount: nil,
                                     flags: [],
                                     themePeerId: nil,
                                     peerColor: nil,

@@ -280,7 +280,7 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
         for media in item.message.media {
             if let action = media as? TelegramMediaAction {
                 switch action.action {
-                case let .starGift(gift, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _):
+                case let .starGift(gift, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _):
                     releasedBy = gift.releasedBy
                 case let .starGiftUnique(gift, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _):
                     releasedBy = gift.releasedBy
@@ -430,6 +430,7 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                 var buttonTitle = item.presentationData.strings.Notification_PremiumGift_View
                 var buttonIcon: String?
                 var ribbonTitle = ""
+                var customRibbonColors: [UIColor]?
                 var textSpacing: CGFloat = 0.0
                 var isStarGift = false
                 
@@ -554,7 +555,7 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                                 buttonTitle = item.presentationData.strings.Notification_PremiumPrize_View
                                 hasServiceMessage = false
                             }
-                        case let .starGift(gift, convertStars, giftText, giftEntities, _, savedToProfile, converted, upgraded, canUpgrade, upgradeStars, isRefunded, isPrepaidUpgrade, _, channelPeerId, senderPeerId, _, _, _, _, _, toPeerId):
+                        case let .starGift(gift, convertStars, giftText, giftEntities, _, savedToProfile, converted, upgraded, canUpgrade, upgradeStars, isRefunded, isPrepaidUpgrade, _, channelPeerId, senderPeerId, _, _, _, _, _, toPeerId, _):
                             var incoming = incoming
                             var convertStars = convertStars
                             if case let .generic(gift) = gift {
@@ -686,7 +687,7 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                                     }
                                 }
                             }
-                        case let .starGiftUnique(gift, isUpgrade, _, _, _, _, isRefunded, _, _, _, _, _, _, _, _, _, _):
+                        case let .starGiftUnique(gift, isUpgrade, _, _, _, _, isRefunded, _, _, _, _, _, _, _, _, _, fromOffer):
                             if case let .unique(uniqueGift) = gift {
                                 isStarGift = true
                                 
@@ -715,7 +716,13 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                                     title = item.presentationData.strings.Notification_StarGift_Title(authorName).string
                                 }    
                                 text = isStoryEntity ? "**\(item.presentationData.strings.Notification_StarGift_Collectible) #\(formatCollectibleNumber(uniqueGift.number, dateTimeFormat: item.presentationData.dateTimeFormat))**" : "**\(uniqueGift.title) #\(formatCollectibleNumber(uniqueGift.number, dateTimeFormat: item.presentationData.dateTimeFormat))**"
-                                ribbonTitle = isStoryEntity ? "" : item.presentationData.strings.Notification_StarGift_Gift
+                                if fromOffer {
+                                    //TODO:localize
+                                    ribbonTitle = incoming ? "" : "sold"
+                                    customRibbonColors = [UIColor(rgb: 0xd9433a), UIColor(rgb: 0xff645b)]
+                                } else {
+                                    ribbonTitle = isStoryEntity ? "" : item.presentationData.strings.Notification_StarGift_Gift
+                                }
                                 buttonTitle = isStoryEntity ? "" : item.presentationData.strings.Notification_StarGift_View
                                 modelTitle = item.presentationData.strings.Notification_StarGift_Model
                                 backdropTitle = item.presentationData.strings.Notification_StarGift_Backdrop
@@ -1285,7 +1292,9 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                             
                             if ribbonTextLayout.size.width > 0.0 {
                                 if strongSelf.ribbonBackgroundNode.image == nil {
-                                    if let uniqueBackgroundColor {
+                                    if let customRibbonColors {
+                                        strongSelf.ribbonBackgroundNode.image = generateGradientTintedImage(image: UIImage(bundleImageName: "Premium/GiftRibbon"), colors: customRibbonColors, direction: .mirroredDiagonal)
+                                    } else if let uniqueBackgroundColor {
                                         let colors = [
                                             uniqueBackgroundColor.withMultiplied(hue: 0.97, saturation: 1.45, brightness: 0.89),
                                             uniqueBackgroundColor.withMultiplied(hue: 1.01, saturation: 1.22, brightness: 1.04)

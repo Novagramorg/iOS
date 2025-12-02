@@ -18,7 +18,7 @@ import TooltipUI
 import MultilineTextComponent
 import TelegramStringFormatting
 
-private final class GiftTransferAlertContentNode: AlertContentNode {
+private final class GiftOfferAlertContentNode: AlertContentNode {
     private let context: AccountContext
     private let strings: PresentationStrings
     private var presentationTheme: PresentationTheme
@@ -355,7 +355,8 @@ private final class GiftTransferAlertContentNode: AlertContentNode {
             component: AnyComponent(
                 TableComponent(
                     theme: self.presentationTheme,
-                    items: tableItems
+                    items: tableItems,
+                    semiTransparent: true
                 )
             ),
             environment: {},
@@ -422,29 +423,43 @@ private final class GiftTransferAlertContentNode: AlertContentNode {
     }
 }
 
-public func giftTransferAlertController(
+public func giftOfferAlertController(
     context: AccountContext,
     gift: StarGift.UniqueGift,
     peer: EnginePeer,
-    transferStars: Int64,
-    navigationController: NavigationController?,
+    amount: CurrencyAmount,
     commit: @escaping () -> Void
 ) -> AlertController {
     let presentationData = context.sharedContext.currentPresentationData.with { $0 }
     let strings = presentationData.strings
     
-    let title = strings.Gift_Transfer_Confirmation_Title
-    let text: String
-    let buttonText: String
-    if transferStars > 0 {
-        text = strings.Gift_Transfer_Confirmation_Text("\(gift.title) #\(presentationStringsFormattedNumber(gift.number, presentationData.dateTimeFormat.groupingSeparator))", peer.displayTitle(strings: strings, displayOrder: presentationData.nameDisplayOrder), strings.Gift_Transfer_Confirmation_Text_Stars(Int32(clamping: transferStars))).string
-        buttonText = "\(strings.Gift_Transfer_Confirmation_Transfer)  $  \(transferStars)"
-    } else {
-        text = strings.Gift_Transfer_Confirmation_TextFree("\(gift.title) #\(presentationStringsFormattedNumber(gift.number, presentationData.dateTimeFormat.groupingSeparator))", peer.displayTitle(strings: strings, displayOrder: presentationData.nameDisplayOrder)).string
-        buttonText = strings.Gift_Transfer_Confirmation_TransferFree
+    let title = "Confirm Sale"
+    let buttonText: String = "Confirm Sale"
+    
+    let priceString: String
+    switch amount.currency {
+    case .stars:
+        priceString = "\(amount.amount) Stars"
+    case .ton:
+        priceString = "\(amount.amount) TON"
     }
     
-    var contentNode: GiftTransferAlertContentNode?
+    let resaleConfiguration = StarsSubscriptionConfiguration.with(appConfiguration: context.currentAppConfiguration.with { $0 })
+    let finalPriceString: String
+    switch amount.currency {
+    case .stars:
+        let starsValue = Int32(floor(Float(amount.amount.value) * Float(resaleConfiguration.starGiftCommissionStarsPermille) / 1000.0))
+        finalPriceString = "\(starsValue) Stars"
+    case .ton:
+        let tonValue = Int64(Float(amount.amount.value) * Float(resaleConfiguration.starGiftCommissionTonPermille) / 1000.0)
+        finalPriceString = formatTonAmountText(tonValue, dateTimeFormat: presentationData.dateTimeFormat, maxDecimalPositions: 3) + " TON"
+    }
+    
+    let giftTitle = "\(gift.title) #\(formatCollectibleNumber(gift.number, dateTimeFormat: presentationData.dateTimeFormat))"
+    let text = "Do you want to sell **\(giftTitle)** to \(peer.displayTitle(strings: strings, displayOrder: presentationData.nameDisplayOrder)) for **\(priceString)**? You'll receive **\(finalPriceString)** after fees."
+    
+    
+    var contentNode: GiftOfferAlertContentNode?
     var dismissImpl: ((Bool) -> Void)?
     let actions: [TextAlertAction] = [TextAlertAction(type: .defaultAction, title: buttonText, action: { [weak contentNode] in
         contentNode?.inProgress = true
@@ -453,9 +468,9 @@ public func giftTransferAlertController(
         dismissImpl?(true)
     })]
     
-    contentNode = GiftTransferAlertContentNode(context: context, theme: AlertControllerTheme(presentationData: presentationData), ptheme: presentationData.theme, strings: strings, gift: gift, peer: peer, title: title, text: text, actions: actions)
+    contentNode = GiftOfferAlertContentNode(context: context, theme: AlertControllerTheme(presentationData: presentationData), ptheme: presentationData.theme, strings: strings, gift: gift, peer: peer, title: title, text: text, actions: actions)
     
-    let controller = ChatMessagePaymentAlertController(context: context, presentationData: presentationData, contentNode: contentNode!, navigationController: navigationController, chatPeerId: context.account.peerId, showBalance: transferStars > 0)
+    let controller = ChatMessagePaymentAlertController(context: context, presentationData: presentationData, contentNode: contentNode!, navigationController: nil, chatPeerId: context.account.peerId, showBalance: false)
     contentNode?.getController = { [weak controller] in
         return controller
     }
