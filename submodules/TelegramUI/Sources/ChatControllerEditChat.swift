@@ -48,7 +48,16 @@ extension ChatControllerImpl {
                                 contentNode.setErrorText(errorText: self.presentationData.strings.QuickReply_ShortcutExistsInlineError)
                             }
                         } else {
-                            self.chatTitleView?.titleContent = .custom("\(value)", nil, false)
+                            self.chatTitleView?.update(
+                                context: self.context,
+                                theme: self.presentationData.theme,
+                                strings: self.presentationData.strings,
+                                dateTimeFormat: self.presentationData.dateTimeFormat,
+                                nameDisplayOrder: self.presentationData.nameDisplayOrder,
+                                content: .custom("\(value)", nil, false),
+                                transition: .immediate
+                            )
+                            
                             alertController?.view.endEditing(true)
                             alertController?.dismissAnimated()
                             
@@ -93,7 +102,15 @@ extension ChatControllerImpl {
                     } else {
                         linkUrl = link.url
                     }
-                    self.chatTitleView?.titleContent = .custom(value.isEmpty ? self.presentationData.strings.Business_Links_EditLinkTitle : value, linkUrl, false)
+                    self.chatTitleView?.update(
+                        context: self.context,
+                        theme: self.presentationData.theme,
+                        strings: self.presentationData.strings,
+                        dateTimeFormat: self.presentationData.dateTimeFormat,
+                        nameDisplayOrder: self.presentationData.nameDisplayOrder,
+                        content: .custom(value.isEmpty ? self.presentationData.strings.Business_Links_EditLinkTitle : value, linkUrl, false),
+                        transition: .immediate
+                    )
                     if case let .customChatContents(customChatContents) = self.subject {
                         customChatContents.businessLinkUpdate(message: link.message, entities: link.entities, title: value.isEmpty ? nil : value)
                     }

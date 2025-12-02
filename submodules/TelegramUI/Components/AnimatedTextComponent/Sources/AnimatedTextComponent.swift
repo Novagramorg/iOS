@@ -4,6 +4,7 @@ import Display
 import ComponentFlow
 import TelegramPresentationData
 import BundleIconComponent
+import MultilineTextComponent
 
 extension ComponentTransition {
     func animateBlur(layer: CALayer, from: CGFloat, to: CGFloat, delay: Double = 0.0, removeOnCompletion: Bool = true, completion: ((Bool) -> Void)? = nil) {
@@ -46,6 +47,7 @@ public final class AnimatedTextComponent: Component {
     public let items: [Item]
     public let noDelay: Bool
     public let animateScale: Bool
+    public let animateSlide: Bool
     public let preferredDirectionIsDown: Bool
     public let blur: Bool
     
@@ -55,6 +57,7 @@ public final class AnimatedTextComponent: Component {
         items: [Item],
         noDelay: Bool = false,
         animateScale: Bool = true,
+        animateSlide: Bool = true,
         preferredDirectionIsDown: Bool = false,
         blur: Bool = false
     ) {
@@ -63,6 +66,7 @@ public final class AnimatedTextComponent: Component {
         self.items = items
         self.noDelay = noDelay
         self.animateScale = animateScale
+        self.animateSlide = animateSlide
         self.preferredDirectionIsDown = preferredDirectionIsDown
         self.blur = blur
     }
@@ -81,6 +85,9 @@ public final class AnimatedTextComponent: Component {
             return false
         }
         if lhs.animateScale != rhs.animateScale {
+            return false
+        }
+        if lhs.animateSlide != rhs.animateSlide {
             return false
         }
         if lhs.preferredDirectionIsDown != rhs.preferredDirectionIsDown {
@@ -238,10 +245,8 @@ public final class AnimatedTextComponent: Component {
                     var characterOffset: CGPoint = .zero
                     switch character {
                     case let .text(text):
-                        characterComponent = AnyComponent(Text(
-                            text: String(text),
-                            font: component.font,
-                            color: component.color
+                        characterComponent = AnyComponent(MultilineTextComponent(
+                            text: .plain(NSAttributedString(string: text, font: component.font, textColor: component.color))
                         ))
                     case let .icon(iconName, tint, offset):
                         characterComponent = AnyComponent(BundleIconComponent(
@@ -305,7 +310,9 @@ public final class AnimatedTextComponent: Component {
                             if component.blur {
                                 ComponentTransition.easeInOut(duration: 0.2).animateBlur(layer: characterComponentView.layer, from: transitionBlurRadius, to: 0.0, delay: delayNorm * delayWidth)
                             }
-                            characterComponentView.layer.animatePosition(from: CGPoint(x: 0.0, y: characterSize.height * offsetNorm), to: CGPoint(), duration: 0.4, delay: delayNorm * delayWidth, timingFunction: kCAMediaTimingFunctionSpring, additive: true)
+                            if component.animateSlide {
+                                characterComponentView.layer.animatePosition(from: CGPoint(x: 0.0, y: characterSize.height * offsetNorm), to: CGPoint(), duration: 0.4, delay: delayNorm * delayWidth, timingFunction: kCAMediaTimingFunctionSpring, additive: true)
+                            }
                             characterComponentView.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.18, delay: delayNorm * delayWidth)
                         }
                     }
@@ -342,7 +349,9 @@ public final class AnimatedTextComponent: Component {
                             } else {
                                 targetY = characterComponentView.center.y - characterComponentView.bounds.height * offsetNorm
                             }
-                            outScaleTransition.setPosition(view: characterComponentView, position: CGPoint(x: characterComponentView.center.x, y: targetY), delay: delayNorm * delayWidth)
+                            if component.animateSlide {
+                                outScaleTransition.setPosition(view: characterComponentView, position: CGPoint(x: characterComponentView.center.x, y: targetY), delay: delayNorm * delayWidth)
+                            }
                             outAlphaTransition.setAlpha(view: characterComponentView, alpha: 0.0, delay: delayNorm * delayWidth, completion: { [weak characterComponentView] _ in
                                 characterComponentView?.removeFromSuperview()
                             })

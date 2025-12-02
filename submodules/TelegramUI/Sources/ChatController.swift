@@ -295,7 +295,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     let chatThemePromise = Promise<ChatTheme?>()
     let chatWallpaperPromise = Promise<TelegramWallpaper?>()
     
-    var chatTitleView: ChatTitleView?
+    var chatTitleView: ChatNavigationBarTitleView?
     var leftNavigationButton: ChatNavigationButton?
     var rightNavigationButton: ChatNavigationButton?
     var secondaryRightNavigationButton: ChatNavigationButton?
@@ -5139,14 +5139,10 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             return true
         }
         
-        self.chatTitleView = ChatTitleView(context: self.context, theme: self.presentationData.theme, strings: self.presentationData.strings, dateTimeFormat: self.presentationData.dateTimeFormat, nameDisplayOrder: self.presentationData.nameDisplayOrder, animationCache: controllerInteraction.presentationContext.animationCache, animationRenderer: controllerInteraction.presentationContext.animationRenderer)
-        
-        if case .messageOptions = self.subject {
-            self.chatTitleView?.disableAnimations = true
-        }
+        self.chatTitleView = ChatNavigationBarTitleView(frame: CGRect())
         
         self.navigationItem.titleView = self.chatTitleView
-        self.chatTitleView?.longPressed = { [weak self] in
+        self.chatTitleView?.longTapAction = { [weak self] in
             if let strongSelf = self, let peerView = strongSelf.contentData?.state.peerView, let peer = peerView.peers[peerView.peerId], peer.restrictionText(platform: "ios", contentSettings: strongSelf.context.currentContentSettings.with { $0 }) == nil && !strongSelf.presentationInterfaceState.isNotAccessible {
                 if case .standard(.previewing) = strongSelf.mode {
                 } else {
@@ -5532,7 +5528,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         self.moreBarButton.addTarget(self, action: #selector(self.moreButtonPressed), forControlEvents: .touchUpInside)
         
         self.navigationItem.titleView = self.chatTitleView
-        self.chatTitleView?.pressed = { [weak self] in
+        self.chatTitleView?.tapAction = { [weak self] in
             self?.navigationButtonAction(.openChatInfo(expandAvatar: false, section: nil))
         }
         
@@ -6098,7 +6094,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         
         self.networkStateDisposable = (context.account.networkState |> deliverOnMainQueue).startStrict(next: { [weak self] state in
             if let strongSelf = self, case .standard(.default) = strongSelf.presentationInterfaceState.mode {
-                strongSelf.chatTitleView?.networkState = state
+                strongSelf.chatTitleView?.updateNetworkState(networkState: state, transition: .spring(duration: 0.4))
             }
         })
         
@@ -6330,8 +6326,6 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         }
         
         self.navigationBar?.updatePresentationData(NavigationBarPresentationData(theme: navigationBarTheme, strings: NavigationBarStrings(presentationStrings: self.presentationData.strings)), transition: .immediate)
-        
-        self.chatTitleView?.updateThemeAndStrings(theme: presentationTheme, strings: self.presentationData.strings)
         
         self.moreBarButton.updateColor(color: presentationTheme.chat.inputPanel.panelControlColor)
     }
@@ -7197,7 +7191,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             self.storedAnimateFromSnapshotState = nil
 
             if let titleViewSnapshotState = snapshotState.titleViewSnapshotState {
-                self.chatTitleView?.animateFromSnapshot(titleViewSnapshotState)
+                self.chatTitleView?.animateFromSnapshot(titleViewSnapshotState, direction: .up)
             }
             if let avatarSnapshotState = snapshotState.avatarSnapshotState {
                 (self.chatInfoNavigationButton?.buttonItem.customDisplayNode as? ChatAvatarNavigationNode)?.animateFromSnapshot(avatarSnapshotState)
@@ -7396,7 +7390,6 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         super.containerLayoutUpdated(layout, transition: transition)
         
         self.validLayout = layout
-        self.chatTitleView?.layout = layout
         
         switch self.presentationInterfaceState.mode {
         case .standard, .inline:

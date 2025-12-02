@@ -719,7 +719,7 @@ private final class ItemListTextWithSubtitleTitleView: UIView, NavigationBarTitl
         }
     }
     
-    func updateLayout(size: CGSize, clearBounds: CGRect, transition: ContainedViewLayoutTransition) -> CGRect {
+    func updateLayout(size: CGSize, clearBounds: CGRect, transition: ContainedViewLayoutTransition) {
         self.validLayout = (size, clearBounds)
         
         let titleSize = self.titleNode.updateLayout(size)
@@ -731,8 +731,6 @@ private final class ItemListTextWithSubtitleTitleView: UIView, NavigationBarTitl
             
         self.titleNode.frame = titleFrame
         self.subtitleNode.frame = subtitleFrame
-        
-        return titleFrame
     }
     
     func animateLayoutTransition() {
