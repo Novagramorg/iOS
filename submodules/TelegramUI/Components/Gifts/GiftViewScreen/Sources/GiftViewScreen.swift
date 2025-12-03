@@ -2546,7 +2546,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                 titleString = strings.Gift_View_UnavailableTitle
             } else if let arguments = subject.arguments {
                 if let toPeerId = arguments.auctionToPeerId {
-                    isSelfGift =  arguments.messageId?.peerId.isTelegramNotifications == true && toPeerId == component.context.account.peerId
+                    isSelfGift = arguments.messageId?.peerId.isTelegramNotifications == true && toPeerId == component.context.account.peerId
                 } else {
                     isSelfGift = arguments.messageId?.peerId == component.context.account.peerId
                 }
@@ -2604,7 +2604,9 @@ private final class GiftViewSheetContent: CombinedComponent {
                     isMyOwnedUniqueGift = true
                 }
                 
-                if isSelfGift {
+                if let number = arguments.giftNumber, let title = genericGift?.title {
+                    titleString = "\(title) #\(formatCollectibleNumber(number, dateTimeFormat: environment.dateTimeFormat))"
+                } else if isSelfGift {
                     titleString = strings.Gift_View_Self_Title
                 } else {
                     titleString = incoming ? strings.Gift_View_ReceivedTitle : strings.Gift_View_Title
