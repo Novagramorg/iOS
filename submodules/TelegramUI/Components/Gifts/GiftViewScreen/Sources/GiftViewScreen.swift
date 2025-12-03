@@ -1438,9 +1438,8 @@ private final class GiftViewSheetContent: CombinedComponent {
                     self?.shareGift()
                 })))
                 
-                //TODO:localize
                 if case let .unique(uniqueGift) = arguments.gift, case let .peerId(ownerPeerId) = uniqueGift.owner, ownerPeerId != self.context.account.peerId, uniqueGift.minOfferStars != nil {
-                    items.append(.action(ContextMenuActionItem(text: "Offer to Buy", icon: { theme in
+                    items.append(.action(ContextMenuActionItem(text: presentationData.strings.Gift_View_Context_BuyOffer, icon: { theme in
                         return generateTintedImage(image: UIImage(bundleImageName: "Media Grid/Paid"), color: theme.contextMenu.primaryColor)
                     }, action: { [weak self] c, _ in
                         c?.dismiss(completion: nil)

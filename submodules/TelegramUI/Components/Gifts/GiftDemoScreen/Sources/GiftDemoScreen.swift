@@ -316,7 +316,7 @@ private final class DemoSheetContent: CombinedComponent {
                 playOnce: state.playButtonAnimation
             ))))
             buttonTitle.append(AnyComponentWithIdentity(id: 1, component: AnyComponent(ButtonTextContentComponent(
-                text: strings.Gifts_Demo_Understood,
+                text: strings.Gift_Demo_Understood,
                 badge: 0,
                 textColor: theme.list.itemCheckColors.foregroundColor,
                 badgeBackground: theme.list.itemCheckColors.foregroundColor,
@@ -497,7 +497,7 @@ private final class GiftDemoListComponent: CombinedComponent {
             var contentSize = CGSize(width: context.availableSize.width, height: 32.0)
         
             let title = title.update(
-                component: MultilineTextComponent(text: .plain(NSAttributedString(string: strings.Gifts_Demo_Title, font: Font.bold(25.0), textColor: titleColor))),
+                component: MultilineTextComponent(text: .plain(NSAttributedString(string: strings.Gift_Demo_Title, font: Font.bold(25.0), textColor: titleColor))),
                 availableSize: context.availableSize,
                 transition: context.transition
             )
@@ -509,7 +509,7 @@ private final class GiftDemoListComponent: CombinedComponent {
             
             let description = description.update(
                 component: BalancedTextComponent(
-                    text: .plain(NSAttributedString(string: strings.Gifts_Demo_Description, font: Font.regular(15.0), textColor: textColor)),
+                    text: .plain(NSAttributedString(string: strings.Gift_Demo_Description, font: Font.regular(15.0), textColor: textColor)),
                     horizontalAlignment: .center,
                     maximumNumberOfLines: 0,
                     lineSpacing: 0.2
@@ -528,9 +528,9 @@ private final class GiftDemoListComponent: CombinedComponent {
                 AnyComponentWithIdentity(
                     id: "unique",
                     component: AnyComponent(InfoParagraphComponent(
-                        title: strings.Gifts_Demo_Unique_Title,
+                        title: strings.Gift_Demo_Unique_Title,
                         titleColor: titleColor,
-                        text: strings.Gifts_Demo_Unique_Text,
+                        text: strings.Gift_Demo_Unique_Text,
                         textColor: textColor,
                         accentColor: iconColor,
                         iconName: "Premium/Collectible/Unique",
@@ -542,9 +542,9 @@ private final class GiftDemoListComponent: CombinedComponent {
                 AnyComponentWithIdentity(
                     id: "tradable",
                     component: AnyComponent(InfoParagraphComponent(
-                        title: strings.Gifts_Demo_Tradable_Title,
+                        title: strings.Gift_Demo_Tradable_Title,
                         titleColor: titleColor,
-                        text: strings.Gifts_Demo_Tradable_Text,
+                        text: strings.Gift_Demo_Tradable_Text,
                         textColor: textColor,
                         accentColor: iconColor,
                         iconName: "Premium/Collectible/Transferable",
@@ -556,9 +556,9 @@ private final class GiftDemoListComponent: CombinedComponent {
                 AnyComponentWithIdentity(
                     id: "wearable",
                     component: AnyComponent(InfoParagraphComponent(
-                        title: strings.Gifts_Demo_Wearable_Title,
+                        title: strings.Gift_Demo_Wearable_Title,
                         titleColor: titleColor,
-                        text: strings.Gifts_Demo_Wearable_Text,
+                        text: strings.Gift_Demo_Wearable_Text,
                         textColor: textColor,
                         accentColor: iconColor,
                         iconName: "Premium/Collectible/Tradable",

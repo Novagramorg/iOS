@@ -677,8 +677,7 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
                         )
                     ))
                 } else {
-                    //TODO:localize
-                    descriptionText = isUpcoming ? "Upcoming Auction" : "Gift Auction"
+                    descriptionText = isUpcoming ? strings.Gift_Auction_UpcomingAuction : strings.Gift_Auction_GiftAuction
                     
                     tableItems.append(.init(
                         id: "start",
@@ -805,8 +804,7 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
                 state.cachedSmallChevronImage = (generateTintedImage(image: UIImage(bundleImageName: "Item List/InlineTextRightArrow"), color: linkColor)!, theme)
             }
             
-            //TODO:localize
-            let learnMoreAttributedString = parseMarkdownIntoAttributedString("Learn more about Telegram Gifts >", attributes: markdownAttributes, textAlignment: .center).mutableCopy() as! NSMutableAttributedString
+            let learnMoreAttributedString = parseMarkdownIntoAttributedString(strings.Gift_Auction_LearnMore, attributes: markdownAttributes, textAlignment: .center).mutableCopy() as! NSMutableAttributedString
             if let range = learnMoreAttributedString.string.range(of: ">"), let chevronImage = state.cachedSmallChevronImage?.0 {
                 learnMoreAttributedString.addAttribute(.attachment, value: chevronImage, range: NSRange(range, in: learnMoreAttributedString.string))
             }

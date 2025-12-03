@@ -15539,12 +15539,56 @@ Error: %8$@";
 "Passkeys.AddPasskey" = "Create Passkey";
 "Passkeys.ListFooter" = "Your passkeys are stored securely in your password manager.";
 
-"Gifts.Demo.Title" = "Unique Collectibles";
-"Gifts.Demo.Description" = "Telegram Gifts are collectible items you can trade or showcase on your profile.";
-"Gifts.Demo.Unique.Title" = "Unique";
-"Gifts.Demo.Unique.Text" = "Upgrade your gifts to get a unique number, model, backdrop and symbol.";
-"Gifts.Demo.Tradable.Title" = "Tradable";
-"Gifts.Demo.Tradable.Text" = "Sell your gift on Telegram or on third-party NFT marketplaces.";
-"Gifts.Demo.Wearable.Title" = "Wearable";
-"Gifts.Demo.Wearable.Text" = "Display gifts on your page and set them as profile covers or statuses.";
-"Gifts.Demo.Understood" = "Understood";
+"Gift.Demo.Title" = "Unique Collectibles";
+"Gift.Demo.Description" = "Telegram Gifts are collectible items you can trade or showcase on your profile.";
+"Gift.Demo.Unique.Title" = "Unique";
+"Gift.Demo.Unique.Text" = "Upgrade your gifts to get a unique number, model, backdrop and symbol.";
+"Gift.Demo.Tradable.Title" = "Tradable";
+"Gift.Demo.Tradable.Text" = "Sell your gift on Telegram or on third-party NFT marketplaces.";
+"Gift.Demo.Wearable.Title" = "Wearable";
+"Gift.Demo.Wearable.Text" = "Display gifts on your page and set them as profile covers or statuses.";
+"Gift.Demo.Understood" = "Understood";
+
+"Gift.Variants.RandomTraits" = "Random Traits";
+"Gift.Variants.SelectedTraits" = "Selected Traits";
+"Gift.Variants.Randomize" = "Randomize Traits";
+"Gift.Variants.Model" = "model";
+"Gift.Variants.Backdrop" = "backdrop";
+"Gift.Variants.Symbol" = "symbol";
+"Gift.Variants.Models" = "Models";
+"Gift.Variants.Backdrops" = "Backdrops";
+"Gift.Variants.Symbols" = "Symbols";
+
+"Gift.Variants.CollectionInfo" = "This collection features";
+"Gift.Variants.CollectionInfo.Model_1" = "%@ unique model";
+"Gift.Variants.CollectionInfo.Model_any" = "%@ unique models";
+"Gift.Variants.CollectionInfo.Backdrop_1" = "%@ unique backdrop";
+"Gift.Variants.CollectionInfo.Backdrop_any" = "%@ unique backdrops";
+"Gift.Variants.CollectionInfo.Symbol_1" = "%@ unique symbol";
+"Gift.Variants.CollectionInfo.Symbol_any" = "%@ unique symbols";
+
+"Gift.Auction.GiftAuction" = "Upcoming Auction";
+"Gift.Auction.UpcomingAuction" = "Upcoming Auction";
+"Gift.Auction.LearnMore" = "Learn more about Telegram Gifts >";
+
+"Gift.AuctionBid.UpcomingTitle" = "Place an Early Bid";
+
+"Gift.View.Context.BuyOffer" = "Offer to Buy";
+
+"Gift.Offer.Title" = "Offer to Buy";
+"Gift.Offer.OfferStars" = "Offer Stars";
+"Gift.Offer.OfferTon" = "Offer TON";
+"Gift.Offer.PriceSectionStars" = "STARS TO OFFER";
+"Gift.Offer.PriceSectionTon" = "TON TO OFFER";
+"Gift.Offer.PricePlaceholder" = "Price";
+"Gift.Offer.PriceDescriptionStars" = "Enter the number of Stars you'd like to offer for **%@**.";
+"Gift.Offer.PriceDescriptionTon" = "Enter the number of TON you'd like to offer for **%@**.";
+"Gift.Offer.Duration" = "Offer Duration";
+"Gift.Offer.DurationDescriptionStars" = "Choose how long **%@** can accept your offer. When the time expires, your Stars will be automatically refunded.";
+"Gift.Offer.DurationDescriptionTon" = "Choose how long **%@** can accept your offer. When the time expires, your TON will be automatically refunded.";
+"Gift.Offer.Duration.Hours_1" = "%@ Hour";
+"Gift.Offer.Duration.Hours_any" = "%@ Hours";
+"Gift.Offer.Offer" = "Offer";
+
+
+"Notification.StarGift.Sold" = "sold";
