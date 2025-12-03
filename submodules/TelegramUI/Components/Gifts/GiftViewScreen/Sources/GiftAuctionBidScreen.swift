@@ -2697,8 +2697,7 @@ private final class GiftAuctionBidScreenComponent: Component {
             
             let titleString: String
             if isUpcoming {
-                //TODO:localize
-                titleString = "Place an Early Bid"
+                titleString = environment.strings.Gift_AuctionBid_UpcomingTitle
             } else {
                 titleString = environment.strings.Gift_AuctionBid_Title
             }
