@@ -38,6 +38,7 @@ import EdgeEffect
 import AnimatedTextComponent
 import GlassBarButtonComponent
 import MessageInputPanelComponent
+import GiftRemainingCountComponent
 
 private final class GiftSetupScreenComponent: Component {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
@@ -1719,7 +1720,7 @@ private final class GiftSetupScreenComponent: Component {
                 let sold = total - remains
                 let remainingCountSize = self.remainingCount.update(
                     transition: transition,
-                    component: AnyComponent(RemainingCountComponent(
+                    component: AnyComponent(GiftRemainingCountComponent(
                         inactiveColor: theme.list.itemBlocksBackgroundColor,
                         activeColors: [UIColor(rgb: 0x72d6ff), UIColor(rgb: 0x32a0f9)],
                         inactiveTitle: environment.strings.Gift_Send_Remains(remains),

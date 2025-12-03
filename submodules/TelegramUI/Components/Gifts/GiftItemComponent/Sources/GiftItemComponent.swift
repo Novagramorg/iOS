@@ -167,6 +167,8 @@ public final class GiftItemComponent: Component {
     let isPinned: Bool
     let isEditing: Bool
     let isDateLocked: Bool
+    let isPlaceholder: Bool
+    let animateChanges: Bool
     let mode: Mode
     let action: (() -> Void)?
     let contextAction: ((UIView, ContextGesture) -> Void)?
@@ -191,6 +193,8 @@ public final class GiftItemComponent: Component {
         isPinned: Bool = false,
         isEditing: Bool = false,
         isDateLocked: Bool = false,
+        isPlaceholder: Bool = false,
+        animateChanges: Bool = false,
         mode: Mode = .generic,
         action: (() -> Void)? = nil,
         contextAction: ((UIView, ContextGesture) -> Void)? = nil
@@ -214,6 +218,8 @@ public final class GiftItemComponent: Component {
         self.isPinned = isPinned
         self.isEditing = isEditing
         self.isDateLocked = isDateLocked
+        self.isPlaceholder = isPlaceholder
+        self.animateChanges = animateChanges
         self.mode = mode
         self.action = action
         self.contextAction = contextAction
@@ -275,6 +281,12 @@ public final class GiftItemComponent: Component {
             return false
         }
         if lhs.isDateLocked != rhs.isDateLocked {
+            return false
+        }
+        if lhs.isPlaceholder != rhs.isPlaceholder {
+            return false
+        }
+        if lhs.animateChanges != rhs.animateChanges {
             return false
         }
         if lhs.mode != rhs.mode {
@@ -636,12 +648,22 @@ public final class GiftItemComponent: Component {
             }
             
             var animationTransition = transition
+            var animateBackgroundChange = false
             if self.animationLayer == nil || self.animationFile?.fileId != animationFile?.fileId, let emoji {
                 animationTransition = .immediate
                 self.animationFile = animationFile
+                var animateAppearance = false
                 if let animationLayer = self.animationLayer {
                     self.animationLayer = nil
-                    animationLayer.removeFromSuperlayer()
+                    if component.animateChanges {
+                        animateAppearance = true
+                        animateBackgroundChange = true
+                        animationLayer.animateAlpha(from: 1.0, to: 0.0, duration: 0.25, removeOnCompletion: false, completion: { _ in
+                            animationLayer.removeFromSuperlayer()
+                        })
+                    } else {
+                        animationLayer.removeFromSuperlayer()
+                    }
                 }
                 let animationLayer = InlineStickerItemLayer(
                     context: .account(component.context),
@@ -664,6 +686,9 @@ public final class GiftItemComponent: Component {
                 } else {
                     self.layer.insertSublayer(animationLayer, above: self.backgroundLayer)
                 }
+                if animateAppearance {
+                    animationLayer.animateAlpha(from: 0.0, to: 1.0, duration: 0.25)
+                }
             }
             
             let animationFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((size.width - iconSize.width) / 2.0), y: component.mode == .generic ? animationOffset : (floorToScreenPixels((size.height - iconSize.height) / 2.0) + explicitAnimationOffset)), size: iconSize)
@@ -672,6 +697,11 @@ public final class GiftItemComponent: Component {
             }
             
             if let backgroundColor {
+                if let backgroundView = self.patternView.view as? PeerInfoCoverComponent.View {
+                    if animateBackgroundChange {
+                        backgroundView.animateTransition(background: true, bounce: false)
+                    }
+                }
                 let _ = self.patternView.update(
                     transition: .immediate,
                     component: AnyComponent(PeerInfoCoverComponent(
@@ -688,7 +718,7 @@ public final class GiftItemComponent: Component {
                     environment: {},
                     containerSize: backgroundSize
                 )
-                if let backgroundView = self.patternView.view {
+                if let backgroundView = self.patternView.view as? PeerInfoCoverComponent.View {
                     if backgroundView.superview == nil {
                         backgroundView.layer.cornerRadius = cornerRadius
                         if #available(iOS 13.0, *) {
@@ -917,7 +947,7 @@ public final class GiftItemComponent: Component {
                 let buttonSize = self.button.update(
                     transition: transition,
                     component: AnyComponent(
-                        ButtonContentComponent(
+                        StarsButtonContentComponent(
                             context: component.context,
                             text: price,
                             color: buttonColor,
@@ -1468,28 +1498,34 @@ public final class GiftItemComponent: Component {
     }
 }
 
-private final class ButtonContentComponent: Component {
+public final class StarsButtonContentComponent: Component {
     let context: AccountContext
     let text: String
     let color: UIColor
     let tinted: Bool
     let starsColor: UIColor?
+    let font: UIFont
+    let height: CGFloat
     
     public init(
         context: AccountContext,
         text: String,
         color: UIColor,
         tinted: Bool = false,
-        starsColor: UIColor? = nil
+        starsColor: UIColor? = nil,
+        font: UIFont = Font.semibold(11.0),
+        height: CGFloat = 30.0
     ) {
         self.context = context
         self.text = text
         self.color = color
         self.tinted = tinted
         self.starsColor = starsColor
+        self.font = font
+        self.height = height
     }
 
-    public static func ==(lhs: ButtonContentComponent, rhs: ButtonContentComponent) -> Bool {
+    public static func ==(lhs: StarsButtonContentComponent, rhs: StarsButtonContentComponent) -> Bool {
         if lhs.context !== rhs.context {
             return false
         }
@@ -1505,11 +1541,17 @@ private final class ButtonContentComponent: Component {
         if lhs.starsColor != rhs.starsColor {
             return false
         }
+        if lhs.font != rhs.font {
+            return false
+        }
+        if lhs.height != rhs.height {
+            return false
+        }
         return true
     }
 
     public final class View: UIView {
-        private var component: ButtonContentComponent?
+        private var component: StarsButtonContentComponent?
         private weak var componentState: EmptyComponentState?
         
         private let backgroundLayer = SimpleLayer()
@@ -1528,7 +1570,7 @@ private final class ButtonContentComponent: Component {
             fatalError("init(coder:) has not been implemented")
         }
         
-        func update(component: ButtonContentComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
+        func update(component: StarsButtonContentComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
             self.component = component
             self.componentState = state
             
@@ -1537,7 +1579,7 @@ private final class ButtonContentComponent: Component {
                 textColor = .white
             }
                         
-            let attributedText = NSMutableAttributedString(string: component.text, font: Font.semibold(11.0), textColor: textColor)
+            let attributedText = NSMutableAttributedString(string: component.text, font: component.font, textColor: textColor)
             let range = (attributedText.string as NSString).range(of: "#")
             if range.location != NSNotFound {
                 attributedText.addAttribute(ChatTextInputAttributes.customEmoji, value: ChatTextInputTextCustomEmojiAttribute(interactivelySelectedFromPackId: nil, fileId: 0, file: nil, custom: .stars(tinted: component.tinted)), range: range)
@@ -1563,7 +1605,7 @@ private final class ButtonContentComponent: Component {
             )
             
             let padding: CGFloat = 9.0
-            let size = CGSize(width: titleSize.width + padding * 2.0, height: 30.0)
+            let size = CGSize(width: titleSize.width + padding * 2.0, height: component.height)
             
             if let starsColor = component.starsColor {
                 let starsLayer: StarsButtonEffectLayer
@@ -1574,8 +1616,10 @@ private final class ButtonContentComponent: Component {
                     self.layer.addSublayer(starsLayer)
                     self.starsLayer = starsLayer
                 }
+                starsLayer.masksToBounds = true
                 starsLayer.frame = CGRect(origin: .zero, size: size)
                 starsLayer.update(color: starsColor, size: size)
+                starsLayer.cornerRadius = size.height * 0.5
             } else {
                 self.starsLayer?.removeFromSuperlayer()
                 self.starsLayer = nil
@@ -1600,7 +1644,7 @@ private final class ButtonContentComponent: Component {
                 }
             }
             
-            self.backgroundLayer.backgroundColor = backgroundColor.cgColor
+            transition.setBackgroundColor(layer: self.backgroundLayer, color: backgroundColor)
             transition.setFrame(layer: self.backgroundLayer, frame: CGRect(origin: .zero, size: size))
             self.backgroundLayer.cornerRadius = size.height / 2.0
                         
