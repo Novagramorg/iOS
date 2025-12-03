@@ -15507,7 +15507,9 @@ Error: %8$@";
 
 "ChatList.Auctions.UpcomingAuction" = "Upcoming Auction";
 
-"Gift.AuctionBid.UpcomingBid" = "You placed an early bid";
+"Gift.AuctionBid.UpcomingBid" = "You've placed an early bid";
+"ChatList.Auctions.Status.UpcomingBid" = "You've placed an early bid.";
+"Gift.ActiveAuctions.UpcomingBid" = "You've placed an early bid";
 
 "Login.PhoneWithPasskeySubtitle" = "Enter your phone number\nor [log in using Passkey >](passkey)";
 "PrivacySettings.Passkey" = "Passkey";
@@ -15536,3 +15538,13 @@ Error: %8$@";
 "Passkeys.PasskeyCreatedAndUsedPattern" = "created %1$@ • used %2$@";
 "Passkeys.AddPasskey" = "Create Passkey";
 "Passkeys.ListFooter" = "Your passkeys are stored securely in your password manager.";
+
+"Gifts.Demo.Title" = "Unique Collectibles";
+"Gifts.Demo.Description" = "Telegram Gifts are collectible items you can trade or showcase on your profile.";
+"Gifts.Demo.Unique.Title" = "Unique";
+"Gifts.Demo.Unique.Text" = "Upgrade your gifts to get a unique number, model, backdrop and symbol.";
+"Gifts.Demo.Tradable.Title" = "Tradable";
+"Gifts.Demo.Tradable.Text" = "Sell your gift on Telegram or on third-party NFT marketplaces.";
+"Gifts.Demo.Wearable.Title" = "Wearable";
+"Gifts.Demo.Wearable.Text" = "Display gifts on your page and set them as profile covers or statuses.";
+"Gifts.Demo.Understood" = "Understood";

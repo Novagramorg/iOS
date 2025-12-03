@@ -25,6 +25,7 @@ import GiftItemComponent
 import GiftAnimationComponent
 import GlassBarButtonComponent
 import GiftRemainingCountComponent
+import AnimatedTextComponent
 
 private final class GiftAuctionWearPreviewSheetContent: CombinedComponent {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
@@ -63,7 +64,11 @@ private final class GiftAuctionWearPreviewSheetContent: CombinedComponent {
         var peerMap: [EnginePeer.Id: EnginePeer] = [:]
         
         var cachedSmallChevronImage: (UIImage, PresentationTheme)?
-                
+        
+        private var disposable: Disposable?
+        private(set) var giftAuctionState: GiftAuctionContext.State?
+        private var giftAuctionTimer: SwiftSignalKit.Timer?
+        
         private var previewTimer: SwiftSignalKit.Timer?
         private(set) var previewModelIndex: Int = 0
         private(set) var previewBackdropIndex: Int = 0
@@ -75,12 +80,12 @@ private final class GiftAuctionWearPreviewSheetContent: CombinedComponent {
         
         init(
             context: AccountContext,
+            auctionContext: GiftAuctionContext,
             attributes: [StarGift.UniqueGift.Attribute]
         ) {
             self.context = context
             
             super.init()
-            
             
             for attribute in attributes {
                 switch attribute {
@@ -123,9 +128,25 @@ private final class GiftAuctionWearPreviewSheetContent: CombinedComponent {
                 self.previewTimerTick()
             }, queue: Queue.mainQueue())
             self.previewTimer?.start()
+            
+            self.disposable = (auctionContext.state
+            |> deliverOnMainQueue).start(next: { [weak self] auctionState in
+                guard let self else {
+                    return
+                }
+                self.giftAuctionState = auctionState
+                self.updated()
+            })
+            
+            self.giftAuctionTimer = SwiftSignalKit.Timer(timeout: 0.5, repeat: true, completion: { [weak self] in
+                self?.updated()
+            }, queue: Queue.mainQueue())
+            self.giftAuctionTimer?.start()
         }
         
         deinit {
+            self.disposable?.dispose()
+            self.giftAuctionTimer?.invalidate()
             self.peerDisposable?.dispose()
             self.previewTimer?.invalidate()
         }
@@ -154,7 +175,7 @@ private final class GiftAuctionWearPreviewSheetContent: CombinedComponent {
 
 
     func makeState() -> State {
-        return State(context: self.context, attributes: self.attributes)
+        return State(context: self.context, auctionContext: self.auctionContext, attributes: self.attributes)
     }
     
     static var body: Body {
@@ -408,17 +429,18 @@ private final class GiftAuctionWearPreviewSheetContent: CombinedComponent {
             contentHeight += 137.0
 
             if case let .generic(gift) = component.auctionContext.gift, let availability = gift.availability {
-                let remains: Int32 = availability.remains
-//                if let auctionState = component.auctionContext.currentState {
-//                    switch auctionState.auctionState {
-//                    case let .ongoing(_, _, _, _, _, _, _, giftsLeft, _, _, _, _):
-//                        remains = giftsLeft
-//                    case .finished:
-//                        remains = 0
-//                    }
-//                }
-                let total: Int32 = availability.total
+                var remains: Int32 = availability.remains
+                if let auctionState = state.giftAuctionState {
+                    switch auctionState.auctionState {
+                    case let .ongoing(_, _, _, _, _, _, _, giftsLeft, _, _, _, _):
+                        remains = giftsLeft
+                    case .finished:
+                        remains = 0
+                    }
+                }
+                let total = availability.total
                 let position = CGFloat(remains) / CGFloat(total)
+                let sold = total - remains
                 let remainingCount = remainingCount.update(
                     component: GiftRemainingCountComponent(
                         inactiveColor: theme.list.itemBlocksBackgroundColor,
@@ -427,7 +449,7 @@ private final class GiftAuctionWearPreviewSheetContent: CombinedComponent {
                         inactiveValue: "",
                         inactiveTitleColor: theme.list.itemSecondaryTextColor,
                         activeTitle: "",
-                        activeValue: "",
+                        activeValue: sold > 0 ? strings.Gift_Send_Sold(sold) : "",
                         activeTitleColor: .white,
                         badgeText: "",
                         badgePosition: position,
@@ -494,10 +516,76 @@ private final class GiftAuctionWearPreviewSheetContent: CombinedComponent {
             }
             contentHeight += 80.0
             
-            var buttonTitle = strings.Gift_Auction_Join
-            if component.auctionContext.isUpcoming {
-                buttonTitle = strings.Gift_Auction_EarlyBid
+            let currentTime = Int32(CFAbsoluteTimeGetCurrent() + kCFAbsoluteTimeIntervalSince1970)
+            var startTime = currentTime
+            var endTime = currentTime
+            var isUpcoming = false
+            
+            if let auctionState = state.giftAuctionState {
+                startTime = auctionState.startDate
+                endTime = auctionState.endDate
             }
+            
+            var buttonTitle = strings.Gift_Auction_Join
+            let endTimeout: Int32
+            if currentTime < startTime {
+                isUpcoming = true
+                endTimeout = max(0, startTime - currentTime)
+            } else {
+                endTimeout = max(0, endTime - currentTime)
+            }
+            
+            let hours = Int(endTimeout / 3600)
+            let minutes = Int((endTimeout % 3600) / 60)
+            let seconds = Int(endTimeout % 60)
+            
+            let rawString: String
+            if isUpcoming {
+                buttonTitle = strings.Gift_Auction_EarlyBid
+                rawString = hours > 0 ? strings.Gift_Auction_StartsInHours : strings.Gift_Auction_StartsInMinutes
+            } else {
+                rawString = hours > 0 ? strings.Gift_Auction_TimeLeftHours : strings.Gift_Auction_TimeLeftMinutes
+            }
+            
+            var buttonAnimatedTitleItems: [AnimatedTextComponent.Item] = []
+            var startIndex = rawString.startIndex
+            while true {
+                if let range = rawString.range(of: "{", range: startIndex ..< rawString.endIndex) {
+                    if range.lowerBound != startIndex {
+                        buttonAnimatedTitleItems.append(AnimatedTextComponent.Item(id: "prefix_\(buttonAnimatedTitleItems.count)", content: .text(String(rawString[startIndex ..< range.lowerBound]))))
+                    }
+                    
+                    startIndex = range.upperBound
+                    if let endRange = rawString.range(of: "}", range: startIndex ..< rawString.endIndex) {
+                        let controlString = rawString[range.upperBound ..< endRange.lowerBound]
+                        if controlString == "h" {
+                            buttonAnimatedTitleItems.append(AnimatedTextComponent.Item(id: "h", content: .number(hours, minDigits: 2)))
+                        } else if controlString == "m" {
+                            buttonAnimatedTitleItems.append(AnimatedTextComponent.Item(id: "m", content: .number(minutes, minDigits: 2)))
+                        } else if controlString == "s" {
+                            buttonAnimatedTitleItems.append(AnimatedTextComponent.Item(id: "s", content: .number(seconds, minDigits: 2)))
+                        }
+                        
+                        startIndex = endRange.upperBound
+                    }
+                } else {
+                    break
+                }
+            }
+            if startIndex != rawString.endIndex {
+                buttonAnimatedTitleItems.append(AnimatedTextComponent.Item(id: "suffix_\(buttonAnimatedTitleItems.count)", content: .text(String(rawString[startIndex ..< rawString.endIndex]))))
+            }
+
+            let buttonAttributedString = NSMutableAttributedString(string: buttonTitle, font: Font.semibold(17.0), textColor: theme.list.itemCheckColors.foregroundColor, paragraphAlignment: .center)
+            let items: [AnyComponentWithIdentity<Empty>] = [
+                AnyComponentWithIdentity(id: AnyHashable(0), component: AnyComponent(MultilineTextComponent(text: .plain(buttonAttributedString)))),
+                AnyComponentWithIdentity(id: AnyHashable(1), component: AnyComponent(AnimatedTextComponent(
+                    font: Font.with(size: 12.0, weight: .medium, traits: .monospacedNumbers),
+                    color: theme.list.itemCheckColors.foregroundColor.withAlphaComponent(0.7),
+                    items: buttonAnimatedTitleItems,
+                    noDelay: true
+                )))
+            ]
             
             let buttonInsets = ContainerViewLayout.concentricInsets(bottomInset: environment.safeInsets.bottom, innerDiameter: 52.0, sideInset: 30.0)
             let buttonSize = CGSize(width: context.availableSize.width - buttonInsets.left - buttonInsets.right, height: 52.0)
@@ -511,8 +599,8 @@ private final class GiftAuctionWearPreviewSheetContent: CombinedComponent {
                 component: ButtonComponent(
                     background: buttonBackground,
                     content: AnyComponentWithIdentity(
-                        id: AnyHashable("ok"),
-                        component: AnyComponent(MultilineTextComponent(text: .plain(NSAttributedString(string: buttonTitle, font: Font.semibold(17.0), textColor: theme.list.itemCheckColors.foregroundColor, paragraphAlignment: .center))))
+                        id: AnyHashable("bid"),
+                        component: AnyComponent(VStack(items, spacing: 1.0))
                     ),
                     isEnabled: true,
                     displaysProgress: false,
@@ -523,7 +611,7 @@ private final class GiftAuctionWearPreviewSheetContent: CombinedComponent {
                         }
                     }),
                 availableSize: buttonSize,
-                transition: context.transition
+                transition: .spring(duration: 0.2)
             )
             
             let buttonFrame = CGRect(origin: CGPoint(x: buttonInsets.left, y: contentHeight), size: button.size)

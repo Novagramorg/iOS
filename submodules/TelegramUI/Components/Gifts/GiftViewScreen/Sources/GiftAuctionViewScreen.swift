@@ -818,10 +818,8 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
                         tintColor: secondaryTextColor
                     )),
                     action: {
-                        let controller = component.context.sharedContext.makeGiftAuctionInfoScreen(
-                            context: component.context,
-                            auctionContext: component.auctionContext,
-                            completion: nil
+                        let controller = component.context.sharedContext.makeGiftDemoScreen(
+                            context: component.context
                         )
                         environment.controller()?.push(controller)
                     },
@@ -1157,7 +1155,7 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
                     component: ButtonComponent(
                         background: buttonBackground,
                         content: AnyComponentWithIdentity(
-                            id: AnyHashable("buy"),
+                            id: AnyHashable("bid"),
                             component: AnyComponent(VStack(items, spacing: 1.0))
                         ),
                         isEnabled: true,

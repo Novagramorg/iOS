@@ -1870,7 +1870,7 @@ private final class GiftAuctionBidScreenComponent: Component {
                     maxBidAmount = max(maxBidAmount, Int64(Double(firstLevel.amount) * 1.5))
                 }
             }
-            var currentValue = max(Int(minBidAmount), 100)
+            var currentValue = Int(minBidAmount)
             var minAllowedRealValue: Int64 = minBidAmount
             if let myBidAmount = state.myState.bidAmount {
                 if let component, let bidPeerId = state.myState.bidPeerId, bidPeerId != component.toPeerId || forceMinimum, let myMinBidAmount = state.myState.minBidAmount {
