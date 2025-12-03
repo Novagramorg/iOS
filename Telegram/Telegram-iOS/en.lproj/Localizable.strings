@@ -15506,3 +15506,33 @@ Error: %8$@";
 "Gift.Auction.Extension" = "+ %1$@ for late bids in top %2$@";
 
 "ChatList.Auctions.UpcomingAuction" = "Upcoming Auction";
+
+"Gift.AuctionBid.UpcomingBid" = "You placed an early bid";
+
+"Login.PhoneWithPasskeySubtitle" = "Enter your phone number\nor [log in using Passkey >](passkey)";
+"PrivacySettings.Passkey" = "Passkey";
+"Attachment.SharedAudio" = "SHARED AUDIO";
+"Attachment.FilesSearchPlaceholder" = "Search shared audio";
+"Chat.GiftPurchaseOffer.Reject" = "Reject";
+"Chat.GiftPurchaseOffer.Accept" = "Accept";
+
+"Passkeys.DeleteAlert.Title" = "Delete Passkey?";
+"Passkeys.DeleteAlert.Text" = "Once deleted, this passkey can't be used to log in.\n\nDon't forget to remove it from your password manager too.";
+"Passkeys.DeleteAlert.Action" = "Delete";
+"Passkeys.Into.Title" = "Protect your account";
+"Passkeys.Subtitle" = "Log in safely and keep your account secure.";
+"Passkeys.Into.Title0" = "Create a Passkey";
+"Passkeys.Into.Text0" = "Make a passkey to sign in easily and safely.";
+"Passkeys.Into.Title1" = "Log in with Face ID";
+"Passkeys.Into.Text1" = "Use Face ID, Touch ID, or your passcode to sign in.";
+"Passkeys.Into.Title2" = "Store Passkey Securely";
+"Passkeys.Into.Text2" = "Your passkey is safely kept in your iCloud Keychain.";
+"Passkeys.ButtonCreate" = "Create Passkey";
+"Passkeys.ButtonSkip" = "Skip";
+"Passkeys.Title" = "Passkeys";
+"Passkeys.Subtitle" = "Log in safely and keep your account secure.";
+"Passkeys.EmptyName" = "Passkey";
+"Passkeys.PasskeyCreatedPattern" = "created %@";
+"Passkeys.PasskeyCreatedAndUsedPattern" = "created %1$@ • used %2$@";
+"Passkeys.AddPasskey" = "Create Passkey";
+"Passkeys.ListFooter" = "Your passkeys are stored securely in your password manager.";

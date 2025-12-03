@@ -138,7 +138,6 @@ private final class AttachmentFileSearchItemNode: ItemListControllerSearchNode {
         transition.updateFrame(node: self.containerNode, frame: CGRect(origin: CGPoint(x: 0.0, y: navigationBarHeight), size: CGSize(width: layout.size.width, height: layout.size.height - navigationBarHeight)))
         self.containerNode.containerLayoutUpdated(layout.withUpdatedSize(CGSize(width: layout.size.width, height: layout.size.height - navigationBarHeight)), navigationBarHeight: 0.0, transition: transition)
         
-        //TODO:localize
         let searchInputSize = self.searchInput.update(
             transition: .immediate,
             component: AnyComponent(
@@ -147,7 +146,7 @@ private final class AttachmentFileSearchItemNode: ItemListControllerSearchNode {
                     strings: self.presentationData.strings,
                     metrics: layout.metrics,
                     safeInsets: layout.safeInsets,
-                    placeholder: self.mode == .audio ? "Search shared audio" : self.presentationData.strings.Attachment_FilesSearchPlaceholder,
+                    placeholder: self.mode == .audio ? self.presentationData.strings.Attachment_FilesSearchPlaceholder : self.presentationData.strings.Attachment_FilesSearchPlaceholder,
                     updated: { [weak self] query in
                         guard let self else {
                             return

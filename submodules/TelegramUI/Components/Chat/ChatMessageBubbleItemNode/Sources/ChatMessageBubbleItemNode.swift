@@ -2835,16 +2835,15 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                 let buttonApprove = MemoryBuffer(data: Data(bytes: &buttonApproveValue, count: 1))
                 
                 let customInfos: [MemoryBuffer: ChatMessageActionButtonsNode.CustomInfo] = [
-                    buttonDecline: ChatMessageActionButtonsNode.CustomInfo(
-                        isEnabled: true,
-                        icon: .suggestedPostReject
-                    ),
                     buttonApprove: ChatMessageActionButtonsNode.CustomInfo(
                         isEnabled: true,
                         icon: .suggestedPostApprove
+                    ),
+                    buttonDecline: ChatMessageActionButtonsNode.CustomInfo(
+                        isEnabled: true,
+                        icon: .suggestedPostReject
                     )
                 ]
-                //TODO:localize
                 let (minWidth, buttonsLayout) = actionButtonsLayout(
                     item.context,
                     item.presentationData.theme,
@@ -2854,8 +2853,8 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                     ReplyMarkupMessageAttribute(
                         rows: [
                             ReplyMarkupRow(buttons: [
-                                ReplyMarkupButton(title: "Reject", titleWhenForwarded: nil, action: .callback(requiresPassword: false, data: buttonDecline)),
-                                ReplyMarkupButton(title: "Accept", titleWhenForwarded: nil, action: .callback(requiresPassword: false, data: buttonApprove))
+                                ReplyMarkupButton(title: item.presentationData.strings.Chat_GiftPurchaseOffer_Reject, titleWhenForwarded: nil, action: .callback(requiresPassword: false, data: buttonDecline)),
+                                ReplyMarkupButton(title: item.presentationData.strings.Chat_GiftPurchaseOffer_Accept, titleWhenForwarded: nil, action: .callback(requiresPassword: false, data: buttonApprove))
                             ])
                         ],
                         flags: [],
