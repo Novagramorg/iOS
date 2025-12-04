@@ -2049,7 +2049,8 @@ private final class PremiumIntroScreenContentComponent: CombinedComponent {
                                 }
                                 subtitle = "\(environment.strings.Gift_Options_Premium_Months(product.months)) • \(product.price)"
                             } else {
-                                subtitle = product.price
+                                //subtitle = product.price
+                                subtitle = "\(environment.strings.Gift_Options_Premium_Months(product.months)) • \(product.price)"
                             }
                         }
                         if product.isCurrent {

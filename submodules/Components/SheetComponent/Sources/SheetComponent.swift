@@ -157,40 +157,6 @@ public final class SheetComponent<ChildEnvironmentType: Sendable & Equatable>: C
         }
     }
     
-    final class BackgroundView: UIView {
-        let topCornersView = UIView()
-        let bottomCornersView = UIView()
-        
-        override init(frame: CGRect) {
-            super.init(frame: frame)
-            
-            self.topCornersView.clipsToBounds = true
-            self.topCornersView.layer.cornerCurve = .continuous
-            self.topCornersView.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
-            
-            self.bottomCornersView.clipsToBounds = true
-            self.bottomCornersView.layer.cornerCurve = .continuous
-            self.bottomCornersView.layer.maskedCorners = [.layerMinXMaxYCorner, .layerMaxXMaxYCorner]
-            
-            self.addSubview(self.topCornersView)
-            self.topCornersView.addSubview(self.bottomCornersView)
-        }
-        
-        required init?(coder: NSCoder) {
-            preconditionFailure()
-        }
-        
-        func update(size: CGSize, color: UIColor, topCornerRadius: CGFloat, bottomCornerRadius: CGFloat, transition: ComponentTransition) {
-            transition.setCornerRadius(layer: self.topCornersView.layer, cornerRadius: topCornerRadius)
-            transition.setCornerRadius(layer: self.bottomCornersView.layer, cornerRadius: bottomCornerRadius)
-            
-            transition.setFrame(view: self.topCornersView, frame: CGRect(origin: .zero, size: size))
-            transition.setFrame(view: self.bottomCornersView, frame: CGRect(origin: .zero, size: size))
-            
-            transition.setBackgroundColor(view: self.bottomCornersView, color: color)
-        }
-    }
-        
     public final class View: UIView, UIScrollViewDelegate, ComponentTaggedView {
         public final class Tag {
             public init() {
@@ -208,9 +174,9 @@ public final class SheetComponent<ChildEnvironmentType: Sendable & Equatable>: C
         
         private let dimView: UIView
         private let scrollView: ScrollView
-        private let backgroundView: BackgroundView
+        private let backgroundView: SheetBackgroundView
         private var effectView: UIVisualEffectView?
-        private let clipView: BackgroundView
+        private let clipView: SheetBackgroundView
         private let contentView: ComponentView<ChildEnvironmentType>
         private var headerView: ComponentView<Empty>?
         
@@ -233,8 +199,8 @@ public final class SheetComponent<ChildEnvironmentType: Sendable & Equatable>: C
             self.scrollView.showsHorizontalScrollIndicator = false
             self.scrollView.alwaysBounceVertical = true
             
-            self.backgroundView = BackgroundView()
-            self.clipView = BackgroundView()
+            self.backgroundView = SheetBackgroundView()
+            self.clipView = SheetBackgroundView()
             
             self.contentView = ComponentView<ChildEnvironmentType>()
             
@@ -587,5 +553,39 @@ public final class SheetComponent<ChildEnvironmentType: Sendable & Equatable>: C
     
     public func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<EnvironmentType>, transition: ComponentTransition) -> CGSize {
         return view.update(component: self, availableSize: availableSize, state: state, environment: environment, transition: transition)
+    }
+}
+
+public final class SheetBackgroundView: UIView {
+    let topCornersView = UIView()
+    let bottomCornersView = UIView()
+    
+    public override init(frame: CGRect) {
+        super.init(frame: frame)
+        
+        self.topCornersView.clipsToBounds = true
+        self.topCornersView.layer.cornerCurve = .continuous
+        self.topCornersView.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
+        
+        self.bottomCornersView.clipsToBounds = true
+        self.bottomCornersView.layer.cornerCurve = .continuous
+        self.bottomCornersView.layer.maskedCorners = [.layerMinXMaxYCorner, .layerMaxXMaxYCorner]
+        
+        self.addSubview(self.topCornersView)
+        self.topCornersView.addSubview(self.bottomCornersView)
+    }
+    
+    required init?(coder: NSCoder) {
+        preconditionFailure()
+    }
+    
+    public func update(size: CGSize, color: UIColor, topCornerRadius: CGFloat, bottomCornerRadius: CGFloat, transition: ComponentTransition) {
+        transition.setCornerRadius(layer: self.topCornersView.layer, cornerRadius: topCornerRadius)
+        transition.setCornerRadius(layer: self.bottomCornersView.layer, cornerRadius: bottomCornerRadius)
+        
+        transition.setFrame(view: self.topCornersView, frame: CGRect(origin: .zero, size: size))
+        transition.setFrame(view: self.bottomCornersView, frame: CGRect(origin: .zero, size: size))
+        
+        transition.setBackgroundColor(view: self.bottomCornersView, color: color)
     }
 }
