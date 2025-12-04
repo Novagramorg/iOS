@@ -16,6 +16,7 @@ import ChatMessagePaymentAlertController
 import ActivityIndicator
 import TooltipUI
 import MultilineTextComponent
+import BalancedTextComponent
 import TelegramStringFormatting
 
 private final class GiftOfferAlertContentNode: AlertContentNode {
@@ -24,6 +25,7 @@ private final class GiftOfferAlertContentNode: AlertContentNode {
     private var presentationTheme: PresentationTheme
     private let title: String
     private let text: String
+    private let amount: CurrencyAmount
     private let gift: StarGift.UniqueGift
     
     private let titleNode: ASTextNode
@@ -32,6 +34,7 @@ private final class GiftOfferAlertContentNode: AlertContentNode {
     private let arrowNode: ASImageNode
     private let avatarNode: AvatarNode
     private let tableView = ComponentView<Empty>()
+    private let valueDelta = ComponentView<Empty>()
     
     private let modelButtonTag = GenericComponentViewTag()
     private let backdropButtonTag = GenericComponentViewTag()
@@ -68,6 +71,7 @@ private final class GiftOfferAlertContentNode: AlertContentNode {
         peer: EnginePeer,
         title: String,
         text: String,
+        amount: CurrencyAmount,
         actions: [TextAlertAction]
     ) {
         self.context = context
@@ -75,6 +79,7 @@ private final class GiftOfferAlertContentNode: AlertContentNode {
         self.presentationTheme = ptheme
         self.title = title
         self.text = text
+        self.amount = amount
         self.gift = gift
         
         self.titleNode = ASTextNode()
@@ -339,17 +344,6 @@ private final class GiftOfferAlertContentNode: AlertContentNode {
             }
         }
 
-        if let valueAmount = self.gift.valueAmount, let valueCurrency = self.gift.valueCurrency {
-            tableItems.append(.init(
-                id: "fiatValue",
-                title: strings.Gift_Unique_Value,
-                component: AnyComponent(
-                    MultilineTextComponent(text: .plain(NSAttributedString(string: "~\(formatCurrencyAmount(valueAmount, currency: valueCurrency))", font: tableFont, textColor: tableTextColor)))
-                ),
-                insets: UIEdgeInsets(top: 0.0, left: 10.0, bottom: 0.0, right: 12.0)
-            ))
-        }
-        
         let tableSize = self.tableView.update(
             transition: .immediate,
             component: AnyComponent(
@@ -370,7 +364,57 @@ private final class GiftOfferAlertContentNode: AlertContentNode {
             view.frame = tableFrame
         }
         
-        let resultSize = CGSize(width: contentWidth, height: avatarSize.height + titleSize.height + textSize.height + tableSize.height + actionsHeight + 40.0 + insets.top + insets.bottom)
+        var valueDeltaHeight: CGFloat = 0.0
+        if let valueAmount = self.gift.valueUsdAmount {
+            let resaleConfiguration = StarsSubscriptionConfiguration.with(appConfiguration: self.context.currentAppConfiguration.with { $0 })
+
+            let usdRate: Double
+            switch self.amount.currency {
+            case .stars:
+                usdRate = Double(resaleConfiguration.usdWithdrawRate) / 1000.0 / 100.0
+            case .ton:
+                usdRate = Double(resaleConfiguration.tonUsdRate) / 1000.0 / 1000000.0
+            }
+            let offerUsdValue = Double(self.amount.amount.value) * usdRate
+            let giftUsdValue = Double(valueAmount) / 100.0
+            
+            let fraction = giftUsdValue / offerUsdValue
+            let percentage = Int(fraction * 100) - 100
+            
+            if percentage > 20 {
+                let textColor = self.presentationTheme.list.itemDestructiveColor
+                let markdownAttributes = MarkdownAttributes(
+                    body: MarkdownAttributeSet(font: Font.regular(13.0), textColor: textColor),
+                    bold: MarkdownAttributeSet(font: Font.semibold(13.0), textColor: textColor),
+                    link: MarkdownAttributeSet(font: Font.regular(13.0), textColor: textColor),
+                    linkAttribute: { url in
+                        return ("URL", url)
+                    }
+                )
+                let valueDeltaSize = self.valueDelta.update(
+                    transition: .immediate,
+                    component: AnyComponent(
+                        BalancedTextComponent(
+                            text: .markdown(text: strings.Chat_GiftPurchaseOffer_AcceptConfirmation_BadValue("\(percentage)%").string, attributes: markdownAttributes),
+                            horizontalAlignment: .center,
+                            maximumNumberOfLines: 0
+                        )
+                    ),
+                    environment: {},
+                    containerSize: CGSize(width: contentWidth - 32.0, height: size.height)
+                )
+                let valueDeltaFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((size.width - valueDeltaSize.width) / 2.0), y: avatarSize.height + titleSize.height + textSize.height + 73.0 + tableSize.height), size: valueDeltaSize)
+                if let view = self.valueDelta.view {
+                    if view.superview == nil {
+                        self.view.addSubview(view)
+                    }
+                    view.frame = valueDeltaFrame
+                }
+                valueDeltaHeight += valueDeltaSize.height + 10.0
+            }
+        }
+        
+        let resultSize = CGSize(width: contentWidth, height: avatarSize.height + titleSize.height + textSize.height + tableSize.height + actionsHeight + valueDeltaHeight + 40.0 + insets.top + insets.bottom)
         transition.updateFrame(node: self.actionNodesSeparator, frame: CGRect(origin: CGPoint(x: 0.0, y: resultSize.height - actionsHeight - UIScreenPixel), size: CGSize(width: resultSize.width, height: UIScreenPixel)))
         
         var actionOffset: CGFloat = 0.0
@@ -380,14 +424,14 @@ private final class GiftOfferAlertContentNode: AlertContentNode {
             if separatorIndex >= 0 {
                 let separatorNode = self.actionVerticalSeparators[separatorIndex]
                 do {
-                        transition.updateFrame(node: separatorNode, frame: CGRect(origin: CGPoint(x: 0.0, y: resultSize.height - actionsHeight + actionOffset - UIScreenPixel), size: CGSize(width: resultSize.width, height: UIScreenPixel)))
+                    transition.updateFrame(node: separatorNode, frame: CGRect(origin: CGPoint(x: 0.0, y: resultSize.height - actionsHeight + actionOffset - UIScreenPixel), size: CGSize(width: resultSize.width, height: UIScreenPixel)))
                 }
             }
             separatorIndex += 1
             
             let currentActionWidth: CGFloat
             do {
-                    currentActionWidth = resultSize.width
+                currentActionWidth = resultSize.width
             }
             
             let actionNodeFrame: CGRect
@@ -433,13 +477,13 @@ public func giftOfferAlertController(
     let presentationData = context.sharedContext.currentPresentationData.with { $0 }
     let strings = presentationData.strings
     
-    let title = "Confirm Sale"
-    let buttonText: String = "Confirm Sale"
+    let title = strings.Chat_GiftPurchaseOffer_AcceptConfirmation_Title
+    let buttonText: String = strings.Chat_GiftPurchaseOffer_AcceptConfirmation_Confirm
     
     let priceString: String
     switch amount.currency {
     case .stars:
-        priceString = "\(amount.amount) Stars"
+        priceString = strings.Chat_GiftPurchaseOffer_AcceptConfirmation_Text_Stars(Int32(clamping: amount.amount.value))
     case .ton:
         priceString = "\(amount.amount) TON"
     }
@@ -449,15 +493,14 @@ public func giftOfferAlertController(
     switch amount.currency {
     case .stars:
         let starsValue = Int32(floor(Float(amount.amount.value) * Float(resaleConfiguration.starGiftCommissionStarsPermille) / 1000.0))
-        finalPriceString = "\(starsValue) Stars"
+        finalPriceString = strings.Chat_GiftPurchaseOffer_AcceptConfirmation_Text_Stars(starsValue)
     case .ton:
         let tonValue = Int64(Float(amount.amount.value) * Float(resaleConfiguration.starGiftCommissionTonPermille) / 1000.0)
         finalPriceString = formatTonAmountText(tonValue, dateTimeFormat: presentationData.dateTimeFormat, maxDecimalPositions: 3) + " TON"
     }
     
     let giftTitle = "\(gift.title) #\(formatCollectibleNumber(gift.number, dateTimeFormat: presentationData.dateTimeFormat))"
-    let text = "Do you want to sell **\(giftTitle)** to \(peer.displayTitle(strings: strings, displayOrder: presentationData.nameDisplayOrder)) for **\(priceString)**? You'll receive **\(finalPriceString)** after fees."
-    
+    let text = strings.Chat_GiftPurchaseOffer_AcceptConfirmation_Text(giftTitle, peer.displayTitle(strings: strings, displayOrder: presentationData.nameDisplayOrder), priceString, finalPriceString).string
     
     var contentNode: GiftOfferAlertContentNode?
     var dismissImpl: ((Bool) -> Void)?
@@ -468,7 +511,7 @@ public func giftOfferAlertController(
         dismissImpl?(true)
     })]
     
-    contentNode = GiftOfferAlertContentNode(context: context, theme: AlertControllerTheme(presentationData: presentationData), ptheme: presentationData.theme, strings: strings, gift: gift, peer: peer, title: title, text: text, actions: actions)
+    contentNode = GiftOfferAlertContentNode(context: context, theme: AlertControllerTheme(presentationData: presentationData), ptheme: presentationData.theme, strings: strings, gift: gift, peer: peer, title: title, text: text, amount: amount, actions: actions)
     
     let controller = ChatMessagePaymentAlertController(context: context, presentationData: presentationData, contentNode: contentNode!, navigationController: nil, chatPeerId: context.account.peerId, showBalance: false)
     contentNode?.getController = { [weak controller] in

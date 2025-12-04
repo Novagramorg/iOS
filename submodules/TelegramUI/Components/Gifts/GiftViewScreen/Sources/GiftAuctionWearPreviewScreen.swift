@@ -335,8 +335,7 @@ private final class GiftAuctionWearPreviewSheetContent: CombinedComponent {
                 state.cachedSmallChevronImage = (generateTintedImage(image: UIImage(bundleImageName: "Item List/InlineTextRightArrow"), color: linkColor)!, theme)
             }
             
-            //TODO:localize
-            let learnMoreAttributedString = parseMarkdownIntoAttributedString("Learn more about wearing Telegram Gifts >", attributes: markdownAttributes, textAlignment: .center).mutableCopy() as! NSMutableAttributedString
+            let learnMoreAttributedString = parseMarkdownIntoAttributedString(strings.Gift_WearPreview_LearnMore, attributes: markdownAttributes, textAlignment: .center).mutableCopy() as! NSMutableAttributedString
             if let range = learnMoreAttributedString.string.range(of: ">"), let chevronImage = state.cachedSmallChevronImage?.0 {
                 learnMoreAttributedString.addAttribute(.attachment, value: chevronImage, range: NSRange(range, in: learnMoreAttributedString.string))
             }
@@ -367,7 +366,7 @@ private final class GiftAuctionWearPreviewSheetContent: CombinedComponent {
                         theme: theme,
                         strings: strings,
                         subject: .starGift(gift: gift, price: ""),
-                        ribbon: GiftItemComponent.Ribbon(text: "limited", color: .blue),
+                        ribbon: GiftItemComponent.Ribbon(text: strings.Gift_WearPreview_Limited, color: .blue),
                         mode: .thumbnail
                     ),
                     availableSize: CGSize(width: 120.0, height: 120.0),
@@ -391,7 +390,7 @@ private final class GiftAuctionWearPreviewSheetContent: CombinedComponent {
                     theme: theme,
                     strings: strings,
                     subject: .preview(attributes: attributes, rarity: 0),
-                    ribbon: GiftItemComponent.Ribbon(text: "upgraded", color: ribbonColor),
+                    ribbon: GiftItemComponent.Ribbon(text: strings.Gift_WearPreview_Upgraded, color: ribbonColor),
                     animateChanges: true,
                     mode: .thumbnail
                 ),
@@ -414,7 +413,7 @@ private final class GiftAuctionWearPreviewSheetContent: CombinedComponent {
             
             let upgradeLabel = upgradeLabel.update(
                 component: MultilineTextComponent(
-                    text: .plain(NSAttributedString(string: "Free\nUpgrade", font: Font.medium(13.0), textColor: theme.list.itemSecondaryTextColor)),
+                    text: .plain(NSAttributedString(string: strings.Gift_WearPreview_FreeUpgrade, font: Font.medium(13.0), textColor: theme.list.itemSecondaryTextColor)),
                     horizontalAlignment: .center,
                     maximumNumberOfLines: 2,
                     lineSpacing: 0.1

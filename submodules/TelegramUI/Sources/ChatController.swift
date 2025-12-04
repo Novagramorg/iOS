@@ -2425,7 +2425,21 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                 
                 switch buttonType {
                 case 0:
-                    let _ = strongSelf.context.engine.payments.resolveStarGiftOffer(messageId: message.id, accept: false).startStandalone()
+                    let _ = (strongSelf.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: message.id.peerId))
+                    |> deliverOnMainQueue).start(next: { [weak self] peer in
+                        guard let self, let peer else {
+                            return
+                        }
+                        self.present(textAlertController(context: self.context, updatedPresentationData: self.updatedPresentationData, title: self.presentationData.strings.Chat_GiftPurchaseOffer_RejectConfirmation_Title, text: self.presentationData.strings.Chat_GiftPurchaseOffer_RejectConfirmation_Text(peer.compactDisplayTitle).string, actions: [
+                            TextAlertAction(type: .genericAction, title: self.presentationData.strings.Common_Cancel, action: {}),
+                            TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Chat_GiftPurchaseOffer_RejectConfirmation_Reject, action: { [weak self] in
+                                guard let self else {
+                                    return
+                                }
+                                let _ = self.context.engine.payments.resolveStarGiftOffer(messageId: message.id, accept: false).startStandalone()
+                            })
+                        ], parseMarkdown: true), in: .window(.root))
+                    })
                 case 1:
                     let _ = (strongSelf.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: message.id.peerId))
                     |> deliverOnMainQueue).start(next: { [weak self] peer in

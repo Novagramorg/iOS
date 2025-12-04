@@ -94,6 +94,8 @@ private final class GiftUpgradePreviewScreenComponent: Component {
         
         private var attributeInfos: [ComponentView<Empty>] = []
         
+        private let topEdgeSolidView = UIView()
+        private let topEdgeEffectView: EdgeEffectView
         private let segmentControl = ComponentView<Empty>()
         private let descriptionText = ComponentView<Empty>()
         
@@ -145,6 +147,9 @@ private final class GiftUpgradePreviewScreenComponent: Component {
             self.backgroundHandleView = UIImageView()
             
             self.navigationBarContainer = SparseContainerView()
+            
+            self.topEdgeEffectView = EdgeEffectView()
+            self.topEdgeEffectView.alpha = 0.0
             
             self.glassContainerView = GlassBackgroundContainerView()
             
@@ -234,6 +239,8 @@ private final class GiftUpgradePreviewScreenComponent: Component {
             
             var topOffsetFraction = self.scrollView.bounds.minY / 100.0
             topOffsetFraction = max(0.0, min(1.0, topOffsetFraction))
+            
+            self.topEdgeEffectView.alpha = max(0.0, min(1.0, self.scrollView.bounds.minY / 8.0))
             
             let minScale: CGFloat = (itemLayout.containerSize.width - 6.0 * 2.0) / itemLayout.containerSize.width
             let minScaledTranslation: CGFloat = (itemLayout.containerSize.height - itemLayout.containerSize.height * minScale) * 0.5 - 6.0
@@ -785,6 +792,14 @@ private final class GiftUpgradePreviewScreenComponent: Component {
                 }
             }
             
+            let edgeEffectHeight: CGFloat = 44.0
+            let edgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: contentHeight + 44.0), size: CGSize(width: availableSize.width, height: edgeEffectHeight))
+            let edgeSolidFrame = CGRect(origin: CGPoint(x: 0.0, y: contentHeight), size: CGSize(width: availableSize.width, height: 44.0))
+            transition.setFrame(view: self.topEdgeSolidView, frame: edgeSolidFrame)
+            transition.setFrame(view: self.topEdgeEffectView, frame: edgeEffectFrame)
+            self.topEdgeSolidView.backgroundColor = theme.list.blocksBackgroundColor
+            self.topEdgeEffectView.update(content: theme.list.blocksBackgroundColor, blur: true, alpha: 1.0, rect: edgeEffectFrame, edge: .top, edgeSize: edgeEffectFrame.height, transition: transition)
+            
             contentHeight += 16.0
             
             let segmentedSize = self.segmentControl.update(
@@ -792,9 +807,9 @@ private final class GiftUpgradePreviewScreenComponent: Component {
                 component: AnyComponent(SegmentControlComponent(
                     theme: environment.theme,
                     items: [
-                        SegmentControlComponent.Item(id: AnyHashable(SelectedSection.models), title: "Models"),
-                        SegmentControlComponent.Item(id: AnyHashable(SelectedSection.backdrops), title: "Backgrounds"),
-                        SegmentControlComponent.Item(id: AnyHashable(SelectedSection.symbols), title: "Symbols")
+                        SegmentControlComponent.Item(id: AnyHashable(SelectedSection.models), title: environment.strings.Gift_Variants_Models),
+                        SegmentControlComponent.Item(id: AnyHashable(SelectedSection.backdrops), title: environment.strings.Gift_Variants_Backdrops),
+                        SegmentControlComponent.Item(id: AnyHashable(SelectedSection.symbols), title: environment.strings.Gift_Variants_Symbols)
                     ],
                     selectedId: "models",
                     action: { [weak self] id in
@@ -805,7 +820,7 @@ private final class GiftUpgradePreviewScreenComponent: Component {
                         self.isPlaying = false
                         
                         self.updateEffectiveGifts(attributes: component.attributes)
-                        self.state?.updated(transition: ComponentTransition(animation: .curve(duration: 0.4, curve: .spring))) //.withUserData(AnimationHint(value: .modeChanged)))
+                        self.state?.updated(transition: ComponentTransition(animation: .curve(duration: 0.4, curve: .spring)))
                     })),
                 environment: {},
                 containerSize: CGSize(width: fillingSize - 8.0 * 2.0, height: 100.0)
@@ -813,22 +828,30 @@ private final class GiftUpgradePreviewScreenComponent: Component {
             let segmentedControlFrame = CGRect(origin: CGPoint(x: floor((fillingSize - segmentedSize.width) * 0.5), y: contentHeight), size: segmentedSize)
             if let segmentedControlComponentView = self.segmentControl.view {
                 if segmentedControlComponentView.superview == nil {
-                    self.scrollContentView.addSubview(segmentedControlComponentView)
+                    self.navigationBarContainer.addSubview(self.topEdgeSolidView)
+                    self.navigationBarContainer.addSubview(self.topEdgeEffectView)
+                    self.navigationBarContainer.addSubview(segmentedControlComponentView)
                 }
                 transition.setFrame(view: segmentedControlComponentView, frame: segmentedControlFrame)
             }
             contentHeight += segmentedSize.height
             contentHeight += 18.0
             
+            let itemHeight: CGFloat = 126.0
+            let itemSpacing: CGFloat = 10.0
             
             let descriptionText: String
+            let itemCount: Int32
             switch self.selectedSection {
             case .models:
-                descriptionText = "This collection features **\(self.modelCount)** unique models."
+                descriptionText = environment.strings.Gift_Variants_CollectionInfo(environment.strings.Gift_Variants_CollectionInfo_Model(self.modelCount)).string
+                itemCount = self.modelCount
             case .backdrops:
-                descriptionText = "This collection features **\(self.backdropCount)** unique backdrops."
+                descriptionText = environment.strings.Gift_Variants_CollectionInfo(environment.strings.Gift_Variants_CollectionInfo_Backdrop(self.backdropCount)).string
+                itemCount = self.backdropCount
             case .symbols:
-                descriptionText = "This collection features **\(self.symbolCount)** unique symbols."
+                descriptionText = environment.strings.Gift_Variants_CollectionInfo(environment.strings.Gift_Variants_CollectionInfo_Symbol(self.symbolCount)).string
+                itemCount = self.symbolCount
             }
             
             let descriptionFont = Font.regular(13.0)
@@ -839,7 +862,7 @@ private final class GiftUpgradePreviewScreenComponent: Component {
             })
             
             let descriptionSize = self.descriptionText.update(
-                transition: transition,
+                transition: .immediate,
                 component: AnyComponent(MultilineTextComponent(
                     text: .markdown(text: descriptionText, attributes: descriptionMarkdownAttributes)
                 )),
@@ -851,10 +874,12 @@ private final class GiftUpgradePreviewScreenComponent: Component {
                 if descriptionView.superview == nil {
                     self.scrollContentView.addSubview(descriptionView)
                 }
-                transition.setFrame(view: descriptionView, frame: descriptionFrame)
+                descriptionView.frame = descriptionFrame
             }
             contentHeight += descriptionSize.height
             contentHeight += 26.0
+            
+            contentHeight += (itemHeight + itemSpacing) * ceil(CGFloat(itemCount) / 3.0)
             
             if self.backgroundHandleView.image == nil {
                 self.backgroundHandleView.image = generateStretchableFilledCircleImage(diameter: 5.0, color: .white)?.withRenderingMode(.alwaysTemplate)
@@ -896,44 +921,20 @@ private final class GiftUpgradePreviewScreenComponent: Component {
             if let closeButtonView = self.closeButton.view {
                 if closeButtonView.superview == nil {
                     self.navigationBarContainer.addSubview(self.glassContainerView)
-                    self.glassContainerView.contentView.addSubview(closeButtonView)
+                    self.navigationBarContainer.addSubview(closeButtonView)
                 }
                 transition.setFrame(view: closeButtonView, frame: closeButtonFrame)
             }
-            
-            var playbackItems: [AnyComponentWithIdentity<Empty>] = []
-            var playbackSize = CGSize(width: 40.0, height: 40.0)
-            if self.isPlaying {
-                playbackItems.append(AnyComponentWithIdentity(id: "pause", component: AnyComponent(
-                    BundleIconComponent(
-                        name: "Media Gallery/PictureInPicturePause",
-                        tintColor: .white
-                    )
-                )))
-            } else {
-                if self.showRandomizeTip {
-                    playbackItems.append(AnyComponentWithIdentity(id: "label", component: AnyComponent(
-                        MultilineTextComponent(text: .plain(NSAttributedString(string: "Randomize Traits", font: Font.semibold(17.0), textColor: .white)))
-                    )))
-                    playbackSize.width = 186.0
-                }
-                playbackItems.append(AnyComponentWithIdentity(id: "play", component: AnyComponent(
-                    BundleIconComponent(
-                        name: "Media Gallery/PlayButton",
-                        tintColor: .white
-                    )
-                )))
-            }
-            
+    
             let playbackButtonSize = self.playbackButton.update(
                 transition: transition,
                 component: AnyComponent(GlassBarButtonComponent(
-                    size: playbackSize,
+                    size: nil,
                     backgroundColor: buttonColor,
                     isDark: false,
                     state: .tintedGlass,
                     component: AnyComponentWithIdentity(id: "content", component: AnyComponent(
-                        HStack(playbackItems, spacing: 1.0)
+                        PlayButtonComponent(isPlay: !self.isPlaying, title: !self.isPlaying && self.showRandomizeTip ? environment.strings.Gift_Variants_Randomize : nil)
                     )),
                     action: { [weak self] _ in
                         guard let self else {
@@ -962,19 +963,15 @@ private final class GiftUpgradePreviewScreenComponent: Component {
                     }
                 )),
                 environment: {},
-                containerSize: playbackSize
+                containerSize: CGSize(width: 160.0, height: 40.0)
             )
             let playbackButtonFrame = CGRect(origin: CGPoint(x: fillingSize - 16.0 - playbackButtonSize.width, y: 16.0), size: playbackButtonSize)
             if let playbackButtonView = self.playbackButton.view {
                 if playbackButtonView.superview == nil {
-                    playbackButtonView.clipsToBounds = true
                     self.glassContainerView.contentView.addSubview(playbackButtonView)
                 }
                 transition.setFrame(view: playbackButtonView, frame: playbackButtonFrame)
             }
-            
-            //TODO:release
-            contentHeight += 126.0 * 17.0
             
             let containerInset: CGFloat = environment.statusBarHeight + 10.0
             contentHeight += environment.safeInsets.bottom
@@ -1181,15 +1178,15 @@ private final class AttributeInfoComponent: Component {
             switch component.attribute {
             case let .model(name, _, rarityValue):
                 title = name
-                subtitle = "model"
+                subtitle = component.strings.Gift_Variants_Model
                 rarity = rarityValue
             case let .backdrop(name, _, _, _, _, _, rarityValue):
                 title = name
-                subtitle = "backdrop"
+                subtitle = component.strings.Gift_Variants_Backdrop
                 rarity = rarityValue
             case let .pattern(name, _, rarityValue):
                 title = name
-                subtitle = "symbol"
+                subtitle = component.strings.Gift_Variants_Symbol
                 rarity = rarityValue
             default:
                 title = ""
@@ -1284,3 +1281,154 @@ private final class AttributeInfoComponent: Component {
         return view.update(component: self, availableSize: availableSize, state: state, environment: environment, transition: transition)
     }
 }
+
+
+private final class PlayButtonComponent: Component {
+    let isPlay: Bool
+    let title: String?
+    
+    public init(
+        isPlay: Bool,
+        title: String?
+    ) {
+        self.isPlay = isPlay
+        self.title = title
+    }
+    
+    static func ==(lhs: PlayButtonComponent, rhs: PlayButtonComponent) -> Bool {
+        if lhs.isPlay != rhs.isPlay {
+            return false
+        }
+        if lhs.title != rhs.title {
+            return false
+        }
+        return true
+    }
+
+    final class View: UIView {
+        private var component: PlayButtonComponent?
+        private weak var componentState: EmptyComponentState?
+        
+        private let containerView = UIView()
+        private let titleContainerView = UIView()
+        private let title = ComponentView<Empty>()
+        private let play = ComponentView<Empty>()
+        private let pause = ComponentView<Empty>()
+        
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+            
+            self.containerView.clipsToBounds = true
+            self.containerView.layer.cornerRadius = 20.0
+            self.addSubview(self.containerView)
+            
+            self.titleContainerView.clipsToBounds = true
+            self.containerView.addSubview(self.titleContainerView)
+        }
+        
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
+        
+        func update(component: PlayButtonComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
+            self.component = component
+            self.componentState = state
+            
+            var contentSize = CGSize(width: 15.0, height: 21.0)
+            
+            var titleSize = CGSize()
+            if let titleString = component.title {
+                titleSize = self.title.update(
+                    transition: .immediate,
+                    component: AnyComponent(MultilineTextComponent(text: .plain(NSAttributedString(string: titleString, font: Font.semibold(17.0), textColor: .white)))),
+                    environment: {},
+                    containerSize: availableSize
+                )
+                let titleFrame = CGRect(origin: CGPoint(x: 9.0, y: 10.0), size: titleSize)
+                if let titleView = self.title.view {
+                    titleView.alpha = 1.0
+                    if titleView.superview == nil {
+                        self.titleContainerView.addSubview(titleView)
+                        transition.animateAlpha(view: titleView, from: 0.0, to: 1.0)
+                    }
+                    titleView.frame = titleFrame
+                }
+                contentSize.width += titleSize.width + 4.0
+            } else if let titleView = self.title.view {
+                transition.setAlpha(view: titleView, alpha: 0.0, completion: { finished in
+                    if finished {
+                        titleView.removeFromSuperview()
+                    }
+                })
+            }
+            transition.setFrame(view: self.titleContainerView, frame: CGRect(origin: .zero, size: CGSize(width: titleSize.width + 14.0, height: 40.0)))
+            
+            if component.isPlay {
+                let iconSize = self.play.update(
+                    transition: .immediate,
+                    component: AnyComponent(BundleIconComponent(name: "Media Gallery/PlayButton", tintColor: .white)),
+                    environment: {},
+                    containerSize: availableSize
+                )
+                let iconFrame = CGRect(origin: CGPoint(x: contentSize.width - iconSize.width + 21.0, y: 5.0), size: iconSize)
+                if let iconView = self.play.view {
+                    iconView.alpha = 1.0
+                    if iconView.superview == nil {
+                        self.containerView.addSubview(iconView)
+                        transition.animateAlpha(view: iconView, from: 0.0, to: 1.0)
+                        transition.animateScale(view: iconView, from: 0.01, to: 1.0)
+                    }
+                    transition.setFrame(view: iconView, frame: iconFrame)
+                }
+            } else if let iconView = self.play.view {
+                transition.setAlpha(view: iconView, alpha: 0.0, completion: { finished in
+                    if finished {
+                        iconView.removeFromSuperview()
+                    }
+                })
+                transition.animateScale(view: iconView, from: 1.0, to: 0.01)
+            }
+            
+            if !component.isPlay {
+                let iconSize = self.pause.update(
+                    transition: .immediate,
+                    component: AnyComponent(BundleIconComponent(name: "Media Gallery/PictureInPicturePause", tintColor: .white)),
+                    environment: {},
+                    containerSize: availableSize
+                )
+                let iconFrame = CGRect(origin: CGPoint(x: contentSize.width - iconSize.width + 12.0 - UIScreenPixel, y: 13.0 - UIScreenPixel), size: iconSize)
+                if let iconView = self.pause.view {
+                    iconView.alpha = 1.0
+                    if iconView.superview == nil {
+                        self.containerView.addSubview(iconView)
+                        transition.animateAlpha(view: iconView, from: 0.0, to: 1.0)
+                        transition.animateScale(view: iconView, from: 0.01, to: 1.0)
+                    }
+                    transition.setFrame(view: iconView, frame: iconFrame)
+                }
+            } else if let iconView = self.pause.view {
+                transition.setAlpha(view: iconView, alpha: 0.0, completion: { finished in
+                    if finished {
+                        iconView.removeFromSuperview()
+                    }
+                })
+                transition.animateScale(view: iconView, from: 1.0, to: 0.01)
+            }
+            
+            let containerWidth: CGFloat = contentSize.width + 26.0
+            let containerFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((contentSize.width - containerWidth) / 2.0), y: floorToScreenPixels((contentSize.height - 40.0) / 2.0)), size: CGSize(width: containerWidth, height: 40.0))
+            transition.setFrame(view: self.containerView, frame: containerFrame)
+            
+            return contentSize
+        }
+    }
+
+    func makeView() -> View {
+        return View(frame: CGRect())
+    }
+
+    func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
+        return view.update(component: self, availableSize: availableSize, state: state, environment: environment, transition: transition)
+    }
+}
+
