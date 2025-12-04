@@ -15570,7 +15570,7 @@ Error: %8$@";
 "Gift.Variants.CollectionInfo.Symbol_1" = "**%@** unique symbol";
 "Gift.Variants.CollectionInfo.Symbol_any" = "**%@** unique symbols";
 
-"Gift.Auction.GiftAuction" = "Upcoming Auction";
+"Gift.Auction.GiftAuction" = "Gift Auction";
 "Gift.Auction.UpcomingAuction" = "Upcoming Auction";
 "Gift.Auction.LearnMore" = "Learn more about Telegram Gifts >";
 

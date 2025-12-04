@@ -66,9 +66,6 @@ private final class SheetContent: CombinedComponent {
         let timestampSection = Child(ListSectionComponent.self)
         let onlyTonSection = Child(ListSectionComponent.self)
         let button = Child(ButtonComponent.self)
-        let balanceTitle = Child(MultilineTextComponent.self)
-        let balanceValue = Child(MultilineTextComponent.self)
-        let balanceIcon = Child(BundleIconComponent.self)
         let durationPicker = Child(MenuComponent.self)
         
         let body: (CombinedComponentContext<SheetContent>) -> CGSize = { (context: CombinedComponentContext<SheetContent>) -> CGSize in
@@ -88,37 +85,7 @@ private final class SheetContent: CombinedComponent {
             var contentSize = CGSize(width: context.availableSize.width, height: 18.0)
             
             let constrainedTitleWidth = context.availableSize.width - 16.0 * 2.0
-            
-            if case let .suggestedPost(mode, _, _, _) = component.mode {
-                var displayBalance = false
-                switch mode {
-                case let .sender(_, isFromAdmin):
-                    displayBalance = !isFromAdmin
-                case .admin:
-                    break
-                }
-                
-                if displayBalance {
-                    let balance = balance.update(
-                        component: BalanceComponent(
-                            context: component.context,
-                            theme: environment.theme,
-                            strings: environment.strings,
-                            currency: state.currency,
-                            balance: state.currency == .stars ? state.starsBalance : state.tonBalance,
-                            alignment: .right
-                        ),
-                        availableSize: CGSize(width: 200.0, height: 200.0),
-                        transition: .immediate
-                    )
-                    let balanceFrame = CGRect(origin: CGPoint(x: context.availableSize.width - balance.size.width - 15.0, y: floor((56.0 - balance.size.height) * 0.5)), size: balance.size)
-                    context.add(balance
-                        .anchorPoint(CGPoint(x: 1.0, y: 0.0))
-                        .position(CGPoint(x: balanceFrame.maxX, y: balanceFrame.minY))
-                    )
-                }
-            }
-            
+                        
             let closeButton = closeButton.update(
                 component: GlassBarButtonComponent(
                     size: CGSize(width: 40.0, height: 40.0),
@@ -276,60 +243,45 @@ private final class SheetContent: CombinedComponent {
             contentSize.height += title.size.height
             contentSize.height += 56.0
             
-            let balance: StarsAmount?
-            if case .accountWithdraw = component.mode {
-                balance = state.starsBalance
-            } else if case .reaction = component.mode {
-                balance = state.starsBalance
-            } else if case let .withdraw(starsState, _) = component.mode {
-                balance = starsState.balances.availableBalance.amount
-            } else {
-                balance = nil
+            var displayBalance = false
+            var currentBalance = state.currency == .stars ? state.starsBalance : state.tonBalance
+            switch component.mode {
+            case .accountWithdraw, .reaction:
+                displayBalance = true
+            case let .suggestedPost(mode, _, _, _):
+                switch mode {
+                case let .sender(_, isFromAdmin):
+                    displayBalance = !isFromAdmin
+                case .admin:
+                    break
+                }
+            case let .withdraw(starsState, _):
+                currentBalance = starsState.balances.availableBalance.amount
+                displayBalance = true
+            default:
+                break
             }
-            
-            if let balance {
-                let balanceTitle = balanceTitle.update(
-                    component: MultilineTextComponent(
-                        text: .plain(NSAttributedString(
-                            string: environment.strings.Stars_Transfer_Balance,
-                            font: Font.regular(14.0),
-                            textColor: theme.list.itemPrimaryTextColor
-                        )),
-                        maximumNumberOfLines: 1
+          
+            if displayBalance {
+                let balance = balance.update(
+                    component: BalanceComponent(
+                        context: component.context,
+                        theme: environment.theme,
+                        strings: environment.strings,
+                        currency: state.currency,
+                        balance: currentBalance,
+                        alignment: .right
                     ),
-                    availableSize: context.availableSize,
+                    availableSize: CGSize(width: 200.0, height: 200.0),
                     transition: .immediate
                 )
-                let balanceValue = balanceValue.update(
-                    component: MultilineTextComponent(
-                        text: .plain(NSAttributedString(
-                            string: presentationStringsFormattedNumber(balance, environment.dateTimeFormat.groupingSeparator),
-                            font: Font.semibold(16.0),
-                            textColor: theme.list.itemPrimaryTextColor
-                        )),
-                        maximumNumberOfLines: 1
-                    ),
-                    availableSize: context.availableSize,
-                    transition: .immediate
+                let balanceFrame = CGRect(origin: CGPoint(x: context.availableSize.width - balance.size.width - 20.0, y: floor((66.0 - balance.size.height) * 0.5)), size: balance.size)
+                context.add(balance
+                    .anchorPoint(CGPoint(x: 1.0, y: 0.0))
+                    .position(CGPoint(x: balanceFrame.maxX, y: balanceFrame.minY))
                 )
-                let balanceIcon = balanceIcon.update(
-                    component: BundleIconComponent(name: "Premium/Stars/StarSmall", tintColor: nil),
-                    availableSize: context.availableSize,
-                    transition: .immediate
-                )
+            }
                 
-                let topBalanceOriginY = 11.0
-                context.add(balanceTitle
-                    .position(CGPoint(x: 16.0 + environment.safeInsets.left + balanceTitle.size.width / 2.0, y: topBalanceOriginY + balanceTitle.size.height / 2.0))
-                )
-                context.add(balanceIcon
-                    .position(CGPoint(x: 16.0 + environment.safeInsets.left + balanceIcon.size.width / 2.0, y: topBalanceOriginY + balanceTitle.size.height + balanceValue.size.height / 2.0 + 1.0 + UIScreenPixel))
-                )
-                context.add(balanceValue
-                    .position(CGPoint(x: 16.0 + environment.safeInsets.left + balanceIcon.size.width + 3.0 + balanceValue.size.width / 2.0, y: topBalanceOriginY + balanceTitle.size.height + balanceValue.size.height / 2.0 + 2.0 - UIScreenPixel))
-                )
-            }
-            
             var tonBalanceValue: StarsAmount = .zero
             if let tonBalance = state.tonBalance {
                 tonBalanceValue = tonBalance
@@ -1836,6 +1788,7 @@ public final class AmountFieldComponent: Component {
                         text = "\(formatTonAmountText(value, dateTimeFormat: PresentationDateTimeFormat(timeFormat: component.dateTimeFormat.timeFormat, dateFormat: component.dateTimeFormat.dateFormat, dateSeparator: "", dateSuffix: "", requiresFullYear: false, decimalSeparator: ".", groupingSeparator: ""), maxDecimalPositions: nil))"
                     }
                     self.textField.text = text
+                    self.placeholderView.view?.isHidden = text.isEmpty
                 } else {
                     self.textField.text = ""
                 }
