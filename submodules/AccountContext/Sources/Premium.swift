@@ -144,6 +144,7 @@ public enum StarsPurchasePurpose: Equatable {
     case sendMessage(peerId: EnginePeer.Id, requiredStars: Int64)
     case buyStarGift(requiredStars: Int64)
     case removeOriginalDetailsStarGift(requiredStars: Int64)
+    case starGiftOffer(requiredStars: Int64)
 }
 
 public struct PremiumConfiguration {
