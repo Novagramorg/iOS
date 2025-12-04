@@ -601,7 +601,9 @@ public final class GiftItemComponent: Component {
                 }
             case let .preview(attributes, _):
                 animationOffset = 16.0
-                explicitAnimationOffset = -4.0
+                if component.mode != .tableIcon {
+                    explicitAnimationOffset = -4.0
+                }
                 for attribute in attributes {
                     switch attribute {
                     case let .model(_, file, _):

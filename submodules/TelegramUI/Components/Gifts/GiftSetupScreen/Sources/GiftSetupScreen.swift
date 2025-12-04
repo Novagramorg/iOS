@@ -1727,7 +1727,7 @@ private final class GiftSetupScreenComponent: Component {
                         inactiveValue: "",
                         inactiveTitleColor: theme.list.itemSecondaryTextColor,
                         activeTitle: "",
-                        activeValue: environment.strings.Gift_Send_Sold(sold),
+                        activeValue: sold > 0 ? environment.strings.Gift_Send_Sold(sold) : "",
                         activeTitleColor: .white,
                         badgeText: "",
                         badgePosition: position,
@@ -1830,22 +1830,30 @@ private final class GiftSetupScreenComponent: Component {
             
             var buttonTitleItems: [AnyComponentWithIdentity<Empty>] = []
             if let _ = self.giftAuction {
-                let buttonAttributedString = NSMutableAttributedString(string: environment.strings.Gift_Setup_PlaceBid, font: Font.semibold(17.0), textColor: theme.list.itemCheckColors.foregroundColor, paragraphAlignment: .center)
-                buttonTitleItems.append(AnyComponentWithIdentity(id: "bid", component: AnyComponent(
-                    MultilineTextComponent(text: .plain(buttonAttributedString))
-                )))
+                var isUpcoming = false
                 if let giftAuctionState = self.giftAuctionState {
                     switch giftAuctionState.auctionState {
-                    case let .ongoing(_, _, endTime, _, _, _, _, _, _, _, _, _):
+                    case let .ongoing(_, startTime, endTime, _, _, _, _, _, _, _, _, _):
                         let currentTime = Int32(CFAbsoluteTimeGetCurrent() + kCFAbsoluteTimeIntervalSince1970)
-                        
-                        let endTimeout = max(0, endTime - currentTime)
+                        let endTimeout: Int32
+                        if currentTime < startTime {
+                            endTimeout = max(0, startTime - currentTime)
+                            isUpcoming = true
+                        } else {
+                            endTimeout = max(0, endTime - currentTime)
+                        }
                         
                         let hours = Int(endTimeout / 3600)
                         let minutes = Int((endTimeout % 3600) / 60)
                         let seconds = Int(endTimeout % 60)
                         
-                        let rawString = hours > 0 ? environment.strings.Gift_Auction_TimeLeftHours : environment.strings.Gift_Auction_TimeLeftMinutes
+                        let rawString: String
+                        if isUpcoming {
+                            rawString = hours > 0 ? environment.strings.Gift_Auction_StartsInHours : environment.strings.Gift_Auction_StartsInMinutes
+                        } else {
+                            rawString = hours > 0 ? environment.strings.Gift_Auction_TimeLeftHours : environment.strings.Gift_Auction_TimeLeftMinutes
+                        }
+                        
                         var buttonAnimatedTitleItems: [AnimatedTextComponent.Item] = []
                         var startIndex = rawString.startIndex
                         while true {
@@ -1885,6 +1893,10 @@ private final class GiftSetupScreenComponent: Component {
                         buttonIsEnabled = false
                     }
                 }
+                let buttonAttributedString = NSMutableAttributedString(string: isUpcoming ? environment.strings.Gift_Auction_EarlyBid : environment.strings.Gift_Setup_PlaceBid, font: Font.semibold(17.0), textColor: theme.list.itemCheckColors.foregroundColor, paragraphAlignment: .center)
+                buttonTitleItems.insert(AnyComponentWithIdentity(id: "bid", component: AnyComponent(
+                    MultilineTextComponent(text: .plain(buttonAttributedString))
+                )), at: 0)
             } else {
                 let buttonAttributedString = NSMutableAttributedString(string: buttonString, font: Font.semibold(17.0), textColor: theme.list.itemCheckColors.foregroundColor, paragraphAlignment: .center)
                 if let range = buttonAttributedString.string.range(of: "#"), let starImage = self.cachedStarImage?.0 {

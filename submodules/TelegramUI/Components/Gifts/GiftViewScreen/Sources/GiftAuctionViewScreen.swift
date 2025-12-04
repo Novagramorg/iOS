@@ -78,6 +78,8 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
         private(set) var previewBackdropIndex: Int = -1
         private(set) var previewSymbolIndex: Int = -1
         
+        private var disposables = DisposableSet()
+        private var fetchedFiles = Set<Int64>()
         private(set) var previewModels: [StarGift.UniqueGift.Attribute] = []
         private(set) var previewBackdrops: [StarGift.UniqueGift.Attribute] = []
         private(set) var previewSymbols: [StarGift.UniqueGift.Attribute] = []
@@ -154,6 +156,16 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
                     }).shuffled().prefix(5))
                     self.previewSymbols = randomSymbols
                     
+                    for case let .model(_, file, _) in self.previewModels where !self.fetchedFiles.contains(file.fileId.id) {
+                        self.disposables.add(freeMediaFileResourceInteractiveFetched(account: context.account, userLocation: .other, fileReference: .standalone(media: file), resource: file.resource).start())
+                        self.fetchedFiles.insert(file.fileId.id)
+                    }
+                    
+                    for case let .pattern(_, file, _) in self.previewSymbols where !self.fetchedFiles.contains(file.fileId.id) {
+                        self.disposables.add(freeMediaFileResourceInteractiveFetched(account: context.account, userLocation: .other, fileReference: .standalone(media: file), resource: file.resource).start())
+                        self.fetchedFiles.insert(file.fileId.id)
+                    }
+                    
                     self.updated()
                 })
                 
@@ -169,6 +181,7 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
         
         deinit {
             self.disposable?.dispose()
+            self.disposables.dispose()
             self.giftAuctionAcquiredGiftsDisposable.dispose()
             self.giftAuctionTimer?.invalidate()
             self.previewTimer?.invalidate()
@@ -509,78 +522,6 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
                       
             var buttonColor: UIColor = .white.withAlphaComponent(0.1)
             var secondaryTextColor: UIColor = .white.withAlphaComponent(0.4)
-            if let genericGift {
-                var attributes: [StarGift.UniqueGift.Attribute] = []
-                if state.previewModelIndex == -1 {
-                    attributes.append(.model(name: "", file: genericGift.file, rarity: 0))
-                    if let background = genericGift.background {
-                        attributes.append(.backdrop(name: "", id: 0, innerColor: background.centerColor, outerColor: background.edgeColor, patternColor: 0, textColor: 0, rarity: 0))
-                    }
-                } else if !state.previewModels.isEmpty {
-                    attributes.append(state.previewModels[state.previewModelIndex])
-                    if !state.previewBackdrops.isEmpty {
-                        attributes.append(state.previewBackdrops[state.previewBackdropIndex])
-                    }
-                    if !state.previewSymbols.isEmpty {
-                        attributes.append(state.previewSymbols[state.previewSymbolIndex])
-                    }
-                }
-                
-                if let backdropAttribute = attributes.first(where: { attribute in
-                    if case .backdrop = attribute {
-                        return true
-                    } else {
-                        return false
-                    }
-                }), case let .backdrop(_, _, innerColor, outerColor, _, _, _) = backdropAttribute {
-                    let topColor = UIColor(rgb: UInt32(bitPattern: innerColor)).withMultiplied(hue: 1.01, saturation: 1.22, brightness: 1.04)
-                    let bottomColor = UIColor(rgb: UInt32(bitPattern: outerColor)).withMultiplied(hue: 0.97, saturation: 1.45, brightness: 0.89)
-                    buttonColor = topColor.mixedWith(bottomColor, alpha: 0.8).withMultipliedBrightnessBy(1.25)
-                    
-                    secondaryTextColor = topColor.withMultiplied(hue: 1.0, saturation: 1.02, brightness: 1.25).mixedWith(UIColor.white, alpha: 0.5)
-                }
-                
-                let header = header.update(
-                    component: GiftCompositionComponent(
-                        context: component.context,
-                        theme: theme,
-                        subject: .preview(attributes),
-                        animationOffset: CGPoint(x: 0.0, y: -4.0),
-                        animationScale: nil,
-                        displayAnimationStars: false,
-                        revealedAttributes: Set(),
-                        externalState: giftCompositionExternalState,
-                        requestUpdate: { [weak state] transition in
-                            state?.updated(transition: transition)
-                        }
-                    ),
-                    availableSize: CGSize(width: context.availableSize.width, height: 264.0),
-                    transition: context.transition
-                )
-                context.add(header
-                    .position(CGPoint(x: context.availableSize.width / 2.0, y: header.size.height * 0.5))
-                )
-                originY += header.size.height
-                originY += 16.0
-            }
-                       
-            let title = title.update(
-                component: MultilineTextComponent(
-                    text: .plain(NSAttributedString(
-                        string: titleString,
-                        font: Font.bold(20.0),
-                        textColor: .white,
-                        paragraphAlignment: .center
-                    )),
-                    horizontalAlignment: .center,
-                    maximumNumberOfLines: 1
-                ),
-                availableSize: CGSize(width: context.availableSize.width - sideInset * 2.0 - 60.0, height: CGFloat.greatestFiniteMagnitude),
-                transition: .immediate
-            )
-            context.add(title
-                .position(CGPoint(x: context.availableSize.width / 2.0, y: 209.0))
-            )
                        
             var descriptionText: String = ""
           
@@ -771,14 +712,89 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
                     }
                 }
             }
-                             
+            
+            if let genericGift {
+                var attributes: [StarGift.UniqueGift.Attribute] = []
+                if state.previewModelIndex == -1 {
+                    attributes.append(.model(name: "", file: genericGift.file, rarity: 0))
+                    if let background = genericGift.background {
+                        attributes.append(.backdrop(name: "", id: 0, innerColor: background.centerColor, outerColor: background.edgeColor, patternColor: 0, textColor: 0, rarity: 0))
+                    }
+                } else if !state.previewModels.isEmpty {
+                    attributes.append(state.previewModels[state.previewModelIndex])
+                    if !state.previewBackdrops.isEmpty {
+                        attributes.append(state.previewBackdrops[state.previewBackdropIndex])
+                    }
+                    if !state.previewSymbols.isEmpty {
+                        attributes.append(state.previewSymbols[state.previewSymbolIndex])
+                    }
+                }
+                
+                if let backdropAttribute = attributes.first(where: { attribute in
+                    if case .backdrop = attribute {
+                        return true
+                    } else {
+                        return false
+                    }
+                }), case let .backdrop(_, _, innerColor, outerColor, _, _, _) = backdropAttribute {
+                    let topColor = UIColor(rgb: UInt32(bitPattern: innerColor)).withMultiplied(hue: 1.01, saturation: 1.22, brightness: 1.04)
+                    let bottomColor = UIColor(rgb: UInt32(bitPattern: outerColor)).withMultiplied(hue: 0.97, saturation: 1.45, brightness: 0.89)
+                    buttonColor = topColor.mixedWith(bottomColor, alpha: 0.8).withMultipliedBrightnessBy(1.25)
+                    
+                    secondaryTextColor = topColor.withMultiplied(hue: 1.0, saturation: 1.02, brightness: 1.25).mixedWith(UIColor.white, alpha: 0.5)
+                }
+                
+                let headerHeight: CGFloat = 264.0
+                
+                let header = header.update(
+                    component: GiftCompositionComponent(
+                        context: component.context,
+                        theme: theme,
+                        subject: .preview(attributes),
+                        animationOffset: CGPoint(x: 0.0, y: -4.0),
+                        animationScale: nil,
+                        displayAnimationStars: false,
+                        revealedAttributes: Set(),
+                        externalState: giftCompositionExternalState,
+                        requestUpdate: { [weak state] transition in
+                            state?.updated(transition: transition)
+                        }
+                    ),
+                    availableSize: CGSize(width: context.availableSize.width, height: headerHeight),
+                    transition: context.transition
+                )
+                context.add(header
+                    .position(CGPoint(x: context.availableSize.width / 2.0, y: header.size.height * 0.5))
+                )
+                originY += header.size.height
+                originY += 16.0
+            }
+                       
+            let title = title.update(
+                component: MultilineTextComponent(
+                    text: .plain(NSAttributedString(
+                        string: titleString,
+                        font: Font.bold(20.0),
+                        textColor: .white,
+                        paragraphAlignment: .center
+                    )),
+                    horizontalAlignment: .center,
+                    maximumNumberOfLines: 1
+                ),
+                availableSize: CGSize(width: context.availableSize.width - sideInset * 2.0 - 60.0, height: CGFloat.greatestFiniteMagnitude),
+                transition: .immediate
+            )
+            context.add(title
+                .position(CGPoint(x: context.availableSize.width / 2.0, y: 209.0))
+            )
+             
             let description = description.update(
                 component: StarsButtonContentComponent(
                     context: component.context,
                     text: descriptionText,
                     color: buttonColor,
                     tinted: true,
-                    starsColor: UIColor(white: 1.0, alpha: 0.5),
+                    starsColor: isEnded ? .clear : UIColor(white: 1.0, alpha: 0.5),
                     font: Font.medium(13.0),
                     height: 24.0
                 ),
@@ -1198,7 +1214,7 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
                 component: GlassBarButtonComponent(
                     size: CGSize(width: 40.0, height: 40.0),
                     backgroundColor: buttonColor,
-                    isDark: theme.overallDarkAppearance,
+                    isDark: false,
                     state: .tintedGlass,
                     component: AnyComponentWithIdentity(id: "close", component: AnyComponent(
                         BundleIconComponent(
@@ -1224,7 +1240,7 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
                 component: GlassBarButtonComponent(
                     size: CGSize(width: 40.0, height: 40.0),
                     backgroundColor: buttonColor,
-                    isDark: theme.overallDarkAppearance,
+                    isDark: false,
                     state: .tintedGlass,
                     component: AnyComponentWithIdentity(id: "more", component: AnyComponent(
                         LottieComponent(

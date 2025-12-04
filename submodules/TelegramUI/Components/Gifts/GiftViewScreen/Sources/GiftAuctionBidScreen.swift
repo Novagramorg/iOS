@@ -2493,7 +2493,19 @@ private final class GiftAuctionBidScreenComponent: Component {
                     untilNextRoundAnimatedItems.append(AnimatedTextComponent.Item(id: "s", content: .number(seconds, minDigits: 2)))
                 }
                 
-                dropsLeftAnimatedItems = [AnimatedTextComponent.Item(id: "drops", content: .number(Int(dropsLeft), minDigits: 1))]
+                if dropsLeft >= 10000 {
+                    var compactString = compactNumericCountString(Int(dropsLeft), decimalSeparator: ".", showDecimalPart: false)
+                    let suffix = String(compactString.suffix(1))
+                    compactString.removeLast()
+                    if let value = Int(compactString) {
+                        dropsLeftAnimatedItems = [
+                            AnimatedTextComponent.Item(id: "drops", content: .number(value, minDigits: 1)),
+                            AnimatedTextComponent.Item(id: "suffix", content: .text(suffix))
+                        ]
+                    }
+                } else {
+                    dropsLeftAnimatedItems = [AnimatedTextComponent.Item(id: "drops", content: .number(Int(dropsLeft), minDigits: 1))]
+                }
             }
             
             auctionStats.append((

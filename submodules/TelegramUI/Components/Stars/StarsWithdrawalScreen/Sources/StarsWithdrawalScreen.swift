@@ -1449,6 +1449,14 @@ public final class StarsWithdrawScreen: ViewControllerComponentContainer {
             case .ton:
                 break
             }
+        } else if case .starGiftOffer = self.mode {
+            switch currency {
+            case .stars:
+                text = presentationData.strings.Gift_Offer_GiftMinAmountToast_Text("\(presentationData.strings.Stars_Withdraw_Withdraw_ErrorMinimum_Stars(Int32(clamping: minAmount)))").string
+            case .ton:
+                let amountString = formatTonAmountText(minAmount, dateTimeFormat: presentationData.dateTimeFormat) + " TON"
+                text = presentationData.strings.Gift_Offer_GiftMinAmountToast_Text(amountString).string
+            }
         }
         
         let resultController = UndoOverlayController(
@@ -2682,14 +2690,8 @@ private final class DurationMenuComponent: Component {
                     self.itemViews[value] = itemView
                 }
                 
-                let repeatString: String
                 let hours = value / 3600
-                //TODO:localize
-                if hours == 1 {
-                    repeatString = "1 hour"
-                } else {
-                    repeatString = "\(hours) hours"
-                }
+                let repeatString: String = component.strings.Gift_Offer_Duration_Hours(Int32(hours))
             
                 let itemSize = itemView.update(
                     transition: transition,
