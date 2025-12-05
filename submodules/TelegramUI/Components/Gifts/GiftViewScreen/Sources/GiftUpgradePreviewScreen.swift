@@ -732,15 +732,23 @@ private final class GiftUpgradePreviewScreenComponent: Component {
                 transition.setFrame(view: titleView, frame: titleFrame)
             }
             
+            var subtitleItems: [AnimatedTextComponent.Item] = []
+            let subtitleString = self.isPlaying ? environment.strings.Gift_Variants_RandomTraits : environment.strings.Gift_Variants_SelectedTraits
+            let words = subtitleString.components(separatedBy: " ")
+            for i in 0 ..< words.count {
+                var text = words[i]
+                if i > 0 {
+                    text = " \(text)"
+                }
+                subtitleItems.append(AnimatedTextComponent.Item(id: text.lowercased(), content: .text(text)))
+            }
+            
             let subtitleSize = self.subtitle.update(
                 transition: .spring(duration: 0.2),
                 component: AnyComponent(AnimatedTextComponent(
                     font: Font.regular(14.0),
                     color: secondaryTextColor,
-                    items: [
-                        AnimatedTextComponent.Item(id: self.isPlaying ? "random" : "selected", content: .text(self.isPlaying ? "Random" : "Selected")),
-                        AnimatedTextComponent.Item(id: "traits", content: .text(" Traits"))
-                    ],
+                    items: subtitleItems,
                     noDelay: true,
                     blur: true
                 )),
