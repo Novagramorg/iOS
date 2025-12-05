@@ -459,10 +459,10 @@ public func makeAttachmentFileControllerImpl(context: AccountContext, updatedPre
         let updatedTheme = presentationData.theme.withModalBlocksBackground()
         presentationData = presentationData.withUpdated(theme: updatedTheme)
         
-        let barButtonSize = CGSize(width: 40.0, height: 40.0)
+        let barButtonSize = CGSize(width: 44.0, height: 44.0)
         let closeButton = GlassBarButtonComponent(
             size: barButtonSize,
-            backgroundColor: presentationData.theme.rootController.navigationBar.glassBarButtonBackgroundColor,
+            backgroundColor: nil,
             isDark: presentationData.theme.overallDarkAppearance,
             state: .generic,
             component: AnyComponentWithIdentity(id: "close", component: AnyComponent(
@@ -489,7 +489,7 @@ public func makeAttachmentFileControllerImpl(context: AccountContext, updatedPre
                 
         let searchButton = GlassBarButtonComponent(
             size: barButtonSize,
-            backgroundColor: presentationData.theme.rootController.navigationBar.glassBarButtonBackgroundColor,
+            backgroundColor: nil,
             isDark: presentationData.theme.overallDarkAppearance,
             state: .generic,
             component: AnyComponentWithIdentity(id: "search", component: AnyComponent(

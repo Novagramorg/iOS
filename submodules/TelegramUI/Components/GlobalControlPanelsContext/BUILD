@@ -15,6 +15,8 @@ swift_library(
         "//submodules/AccountContext",
         "//submodules/TelegramUIPreferences",
         "//submodules/TelegramCallsUI",
+        "//submodules/Display",
+        "//submodules/UndoUI",
     ],
     visibility = [
         "//visibility:public",

@@ -544,8 +544,8 @@ public class GlassBackgroundView: UIView {
                             nativeParamsView.lumaMin = 0.0
                             nativeParamsView.lumaMax = 0.15
                         } else {
-                            nativeParamsView.lumaMin = 0.6
-                            nativeParamsView.lumaMax = 0.61
+                            nativeParamsView.lumaMin = 0.7
+                            nativeParamsView.lumaMax = 0.71
                         }
                     }
                 }
@@ -638,8 +638,8 @@ public final class GlassBackgroundContainerView: UIView {
                 nativeParamsView.lumaMin = 0.0
                 nativeParamsView.lumaMax = 0.15
             } else {
-                nativeParamsView.lumaMin = 0.6
-                nativeParamsView.lumaMax = 0.61
+                nativeParamsView.lumaMin = 0.7
+                nativeParamsView.lumaMax = 0.71
             }
             
             transition.setFrame(view: nativeView, frame: CGRect(origin: CGPoint(), size: size))

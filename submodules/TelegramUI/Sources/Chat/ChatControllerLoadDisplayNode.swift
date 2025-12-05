@@ -4630,7 +4630,8 @@ extension ChatControllerImpl {
             context: self.context,
             mediaPlayback: mediaPlayback,
             liveLocationMode: liveLocationMode,
-            groupCalls: groupCallPanelSource
+            groupCalls: groupCallPanelSource,
+            chatListNotices: false
         )
         self.globalControlPanelsContext = globalControlPanelsContext
         self.globalControlPanelsContextStateDisposable = (globalControlPanelsContext.state

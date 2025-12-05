@@ -53,11 +53,15 @@ public extension NavigationBarTheme {
         let disabledButtonColor: UIColor
         let badgeBackgroundColor: UIColor
         let badgeTextColor: UIColor
+        var edgeEffectColor = edgeEffectColor
         if case .glass = style {
             buttonColor = rootControllerTheme.chat.inputPanel.panelControlColor
             disabledButtonColor = buttonColor.withMultipliedAlpha(0.5)
             badgeBackgroundColor = rootControllerTheme.chat.inputPanel.panelControlColor
-            badgeTextColor = rootControllerTheme.list.itemCheckColors.foregroundColor
+            badgeTextColor = rootControllerTheme.overallDarkAppearance ? .black : rootControllerTheme.list.itemCheckColors.foregroundColor
+            if edgeEffectColor == nil {
+                edgeEffectColor = rootControllerTheme.list.plainBackgroundColor
+            }
         } else {
             buttonColor = theme.buttonColor
             disabledButtonColor = theme.disabledButtonColor

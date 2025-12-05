@@ -4,11 +4,28 @@ import AsyncDisplayKit
 import Display
 import TelegramPresentationData
 import SearchBarNode
+import GlassBackgroundComponent
+import ComponentFlow
+import ComponentDisplayAdapters
+import AppBundle
+import ActivityIndicator
 
 private let searchBarFont = Font.regular(17.0)
 public let navigationBarSearchContentHeight: CGFloat = 54.0
 
 public class NavigationBarSearchContentNode: NavigationBarContentNode {
+    private struct Params: Equatable {
+        let size: CGSize
+        let leftInset: CGFloat
+        let rightInset: CGFloat
+        
+        init(size: CGSize, leftInset: CGFloat, rightInset: CGFloat) {
+            self.size = size
+            self.leftInset = leftInset
+            self.rightInset = rightInset
+        }
+    }
+    
     public var theme: PresentationTheme?
     public var placeholder: String
     public var compactPlaceholder: String
@@ -19,8 +36,6 @@ public class NavigationBarSearchContentNode: NavigationBarContentNode {
     private var disabledOverlay: ASDisplayNode?
     
     public var expansionProgress: CGFloat = 1.0
-    
-    public var additionalHeight: CGFloat = 0.0
 
     private var validLayout: (CGSize, CGFloat, CGFloat)?
     
@@ -158,7 +173,7 @@ public class NavigationBarSearchContentNode: NavigationBarContentNode {
     }
     
     override public var nominalHeight: CGFloat {
-        return navigationBarSearchContentHeight + self.additionalHeight
+        return 60.0
     }
     
     override public var mode: NavigationBarContentMode {

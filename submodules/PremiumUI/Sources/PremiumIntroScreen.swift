@@ -2960,6 +2960,7 @@ private final class PremiumIntroScreenContentComponent: CombinedComponent {
 private final class PremiumIntroScreenComponent: CombinedComponent {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
     
+    let overNavigationContainer: UIView
     let screenContext: PremiumIntroScreen.ScreenContext
     let mode: PremiumIntroScreen.Mode
     let source: PremiumSource
@@ -2972,7 +2973,8 @@ private final class PremiumIntroScreenComponent: CombinedComponent {
     let copyLink: (String) -> Void
     let shareLink: (String) -> Void
     
-    init(screenContext: PremiumIntroScreen.ScreenContext, mode: PremiumIntroScreen.Mode, source: PremiumSource, forceDark: Bool, forceHasPremium: Bool, updateInProgress: @escaping (Bool) -> Void, present: @escaping (ViewController) -> Void, push: @escaping (ViewController) -> Void, completion: @escaping () -> Void, copyLink: @escaping (String) -> Void, shareLink: @escaping (String) -> Void) {
+    init(overNavigationContainer: UIView, screenContext: PremiumIntroScreen.ScreenContext, mode: PremiumIntroScreen.Mode, source: PremiumSource, forceDark: Bool, forceHasPremium: Bool, updateInProgress: @escaping (Bool) -> Void, present: @escaping (ViewController) -> Void, push: @escaping (ViewController) -> Void, completion: @escaping () -> Void, copyLink: @escaping (String) -> Void, shareLink: @escaping (String) -> Void) {
+        self.overNavigationContainer = overNavigationContainer
         self.screenContext = screenContext
         self.mode = mode
         self.source = source
@@ -3415,8 +3417,6 @@ private final class PremiumIntroScreenComponent: CombinedComponent {
         let star = Child(PremiumStarComponent.self)
         let emoji = Child(EmojiHeaderComponent.self)
         let coin = Child(PremiumCoinComponent.self)
-        let topPanel = Child(BlurredBackgroundComponent.self)
-        let topSeparator = Child(Rectangle.self)
         let title = Child(MultilineTextComponent.self)
         let secondaryTitle = Child(MultilineTextWithEntitiesComponent.self)
         let bottomEdgeEffect = Child(EdgeEffectComponent.self)
@@ -3503,22 +3503,6 @@ private final class PremiumIntroScreenComponent: CombinedComponent {
                     transition: context.transition
                 )
             }
-            
-            let topPanel = topPanel.update(
-                component: BlurredBackgroundComponent(
-                    color: environment.theme.rootController.navigationBar.blurredBackgroundColor
-                ),
-                availableSize: CGSize(width: context.availableSize.width, height: environment.navigationHeight),
-                transition: context.transition
-            )
-            
-            let topSeparator = topSeparator.update(
-                component: Rectangle(
-                    color: environment.theme.rootController.navigationBar.separatorColor
-                ),
-                availableSize: CGSize(width: context.availableSize.width, height: UIScreenPixel),
-                transition: context.transition
-            )
             
             let titleString: String
             if case .premiumGift = context.component.source {
@@ -3743,14 +3727,12 @@ private final class PremiumIntroScreenComponent: CombinedComponent {
                 .position(CGPoint(x: context.availableSize.width / 2.0, y: context.availableSize.height / 2.0))
             )
                         
-            let topPanelAlpha: CGFloat
             let titleOffset: CGFloat
             let titleScale: CGFloat
             let titleOffsetDelta = (topInset + 160.0) - (environment.statusBarHeight + (environment.navigationHeight - environment.statusBarHeight) / 2.0)
             let titleAlpha: CGFloat
             
             if let topContentOffset = state.topContentOffset {
-                topPanelAlpha = min(20.0, max(0.0, topContentOffset - 95.0)) / 20.0
                 let topContentOffset = topContentOffset + max(0.0, min(1.0, topContentOffset / titleOffsetDelta)) * 10.0
                 titleOffset = topContentOffset
                 let fraction = max(0.0, min(1.0, titleOffset / titleOffsetDelta))
@@ -3762,36 +3744,29 @@ private final class PremiumIntroScreenComponent: CombinedComponent {
                     titleAlpha = 1.0
                 }
             } else {
-                topPanelAlpha = 0.0
                 titleScale = 1.0
                 titleOffset = 0.0
                 titleAlpha = state.otherPeerName != nil ? 0.0 : 1.0
             }
             
-            context.add(header
+            context.addWithExternalContainer(header
                 .position(CGPoint(x: context.availableSize.width / 2.0, y: topInset + header.size.height / 2.0 - 30.0 - titleOffset * titleScale))
-                .scale(titleScale)
+                .scale(titleScale),
+                container: context.component.overNavigationContainer
             )
             
-            context.add(topPanel
-                .position(CGPoint(x: context.availableSize.width / 2.0, y: topPanel.size.height / 2.0))
-                .opacity(topPanelAlpha)
-            )
-            context.add(topSeparator
-                .position(CGPoint(x: context.availableSize.width / 2.0, y: topPanel.size.height))
-                .opacity(topPanelAlpha)
-            )
-            
-            context.add(title
+            context.addWithExternalContainer(title
                 .position(CGPoint(x: context.availableSize.width / 2.0, y: max(topInset + 160.0 - titleOffset, environment.statusBarHeight + (environment.navigationHeight - environment.statusBarHeight) / 2.0)))
                 .scale(titleScale)
-                .opacity(titleAlpha)
+                .opacity(titleAlpha),
+                container: context.component.overNavigationContainer
             )
             
-            context.add(secondaryTitle
+            context.addWithExternalContainer(secondaryTitle
                 .position(CGPoint(x: context.availableSize.width / 2.0, y: max(topInset + 160.0 - titleOffset, environment.statusBarHeight + (environment.navigationHeight - environment.statusBarHeight) / 2.0)))
                 .scale(titleScale)
-                .opacity(max(0.0, 1.0 - titleAlpha * 1.8))
+                .opacity(max(0.0, 1.0 - titleAlpha * 1.8)),
+                container: context.component.overNavigationContainer
             )
             
             var isUnusedGift = false
@@ -3989,6 +3964,8 @@ public final class PremiumIntroScreen: ViewControllerComponentContainer {
     public weak var containerView: UIView?
     public var animationColor: UIColor?
     
+    private let overNavigationContainer: UIView
+    
     public convenience init(context: AccountContext, mode: Mode = .premium, source: PremiumSource, modal: Bool = true, forceDark: Bool = false, forceHasPremium: Bool = false) {
         self.init(screenContext: .accountContext(context), mode: mode, source: source, modal: modal, forceDark: forceDark, forceHasPremium: forceHasPremium)
     }
@@ -4005,7 +3982,11 @@ public final class PremiumIntroScreen: ViewControllerComponentContainer {
         var completionImpl: (() -> Void)?
         var copyLinkImpl: ((String) -> Void)?
         var shareLinkImpl: ((String) -> Void)?
+        
+        self.overNavigationContainer = UIView()
+        
         super.init(component: PremiumIntroScreenComponent(
+            overNavigationContainer: self.overNavigationContainer,
             screenContext: screenContext,
             mode: mode,
             source: source,
@@ -4107,10 +4088,18 @@ public final class PremiumIntroScreen: ViewControllerComponentContainer {
             context.account.viewTracker.keepQuickRepliesApproximatelyUpdated()
             context.account.viewTracker.keepBusinessLinksApproximatelyUpdated()
         }
+        
+        if let navigationBar = self.navigationBar {
+            navigationBar.view.insertSubview(self.overNavigationContainer, aboveSubview: navigationBar.backgroundView)
+        }
     }
     
     required public init(coder aDecoder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+    
+    override public func viewDidLoad() {
+        super.viewDidLoad()
     }
     
     public override func viewWillDisappear(_ animated: Bool) {
@@ -4145,10 +4134,10 @@ public final class PremiumIntroScreen: ViewControllerComponentContainer {
         super.containerLayoutUpdated(layout, transition: transition)
         
         if !self.didSetReady {
-            if let view = self.node.hostView.findTaggedView(tag: PremiumCoinComponent.View.Tag()) as? PremiumCoinComponent.View {
+            if let view = findTaggedComponentViewImpl(view: self.view, tag: PremiumCoinComponent.View.Tag()) as? PremiumCoinComponent.View {
                 self.didSetReady = true
                 self._ready.set(view.ready)
-            } else if let view = self.node.hostView.findTaggedView(tag: PremiumStarComponent.View.Tag()) as? PremiumStarComponent.View {
+            } else if let view = findTaggedComponentViewImpl(view: self.view, tag: PremiumStarComponent.View.Tag()) as? PremiumStarComponent.View {
                 self.didSetReady = true
                 self._ready.set(view.ready)
                 
@@ -4161,7 +4150,7 @@ public final class PremiumIntroScreen: ViewControllerComponentContainer {
                     self.containerView = nil
                     self.animationColor = nil
                 }
-            } else if let view = self.node.hostView.findTaggedView(tag: EmojiHeaderComponent.View.Tag()) as? EmojiHeaderComponent.View {
+            } else if let view = findTaggedComponentViewImpl(view: self.view, tag: EmojiHeaderComponent.View.Tag()) as? EmojiHeaderComponent.View {
                 self.didSetReady = true
                 self._ready.set(view.ready)
                 

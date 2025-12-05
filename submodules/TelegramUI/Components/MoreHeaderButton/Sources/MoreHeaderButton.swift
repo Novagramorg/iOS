@@ -52,7 +52,7 @@ public final class MoreHeaderButton: HighlightableButtonNode {
             strongSelf.contextAction?(strongSelf.containerNode, gesture)
         }
 
-        self.containerNode.frame = CGRect(origin: CGPoint(), size: CGSize(width: 30.0, height: 44.0))
+        self.containerNode.frame = CGRect(origin: CGPoint(), size: CGSize(width: 44.0, height: 44.0))
         self.referenceNode.frame = self.containerNode.bounds
 
         //self.iconNode.image = MoreHeaderButton.optionsCircleImage(color: color)
@@ -174,7 +174,7 @@ public final class MoreHeaderButton: HighlightableButtonNode {
     }
 
     override public func calculateSizeThatFits(_ constrainedSize: CGSize) -> CGSize {
-        return CGSize(width: 22.0, height: 44.0)
+        return CGSize(width: 44.0, height: 44.0)
     }
 
     public func onLayout() {

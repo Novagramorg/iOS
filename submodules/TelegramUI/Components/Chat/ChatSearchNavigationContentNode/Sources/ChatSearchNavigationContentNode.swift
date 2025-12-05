@@ -151,7 +151,7 @@ public final class ChatSearchNavigationContentNode: NavigationBarContentNode {
         
         let transition = ComponentTransition(transition)
         
-        let backgroundFrame = CGRect(origin: CGPoint(x: leftInset + 16.0, y: floor((size.height - 44.0) * 0.5)), size: CGSize(width: size.width - 16.0 * 2.0 - leftInset - rightInset - 44.0 - 8.0, height: 44.0))
+        let backgroundFrame = CGRect(origin: CGPoint(x: leftInset + 16.0, y: 6.0), size: CGSize(width: size.width - 16.0 * 2.0 - leftInset - rightInset - 44.0 - 8.0, height: 44.0))
         let closeFrame = CGRect(origin: CGPoint(x: size.width - 16.0 - rightInset - 44.0, y: backgroundFrame.minY), size: CGSize(width: 44.0, height: 44.0))
         
         transition.setFrame(view: self.backgroundContainer, frame: CGRect(origin: CGPoint(), size: size))

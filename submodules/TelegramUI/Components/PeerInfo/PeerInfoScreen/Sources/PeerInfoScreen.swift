@@ -104,7 +104,6 @@ import AttachmentUI
 import BoostLevelIconComponent
 import PeerInfoChatPaneNode
 import PeerInfoChatListPaneNode
-import GroupStickerPackSetupController
 import PeerNameColorItem
 import PeerSelectionScreen
 import UIKitRuntimeUtils
@@ -593,7 +592,6 @@ private final class PeerInfoInteraction {
     let editingOpenPreHistorySetup: () -> Void
     let editingOpenAutoremoveMesages: () -> Void
     let openPermissions: () -> Void
-    let editingOpenStickerPackSetup: () -> Void
     let openLocation: () -> Void
     let editingOpenSetupLocation: () -> Void
     let openPeerInfo: (Peer, Bool) -> Void
@@ -670,7 +668,6 @@ private final class PeerInfoInteraction {
         editingOpenPreHistorySetup: @escaping () -> Void,
         editingOpenAutoremoveMesages: @escaping () -> Void,
         openPermissions: @escaping () -> Void,
-        editingOpenStickerPackSetup: @escaping () -> Void,
         openLocation: @escaping () -> Void,
         editingOpenSetupLocation: @escaping () -> Void,
         openPeerInfo: @escaping (Peer, Bool) -> Void,
@@ -746,7 +743,6 @@ private final class PeerInfoInteraction {
         self.editingOpenPreHistorySetup = editingOpenPreHistorySetup
         self.editingOpenAutoremoveMesages = editingOpenAutoremoveMesages
         self.openPermissions = openPermissions
-        self.editingOpenStickerPackSetup = editingOpenStickerPackSetup
         self.openLocation = openLocation
         self.editingOpenSetupLocation = editingOpenSetupLocation
         self.openPeerInfo = openPeerInfo
@@ -3272,9 +3268,6 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
             },
             openPermissions: { [weak self] in
                 self?.openPermissions()
-            },
-            editingOpenStickerPackSetup: { [weak self] in
-                self?.editingOpenStickerPackSetup()
             },
             openLocation: { [weak self] in
                 self?.openLocation()
@@ -9807,13 +9800,6 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
             return
         }
         self.controller?.push(channelPermissionsController(context: self.context, updatedPresentationData: self.controller?.updatedPresentationData, peerId: peer.id))
-    }
-    
-    private func editingOpenStickerPackSetup() {
-        guard let data = self.data, let peer = data.peer, let cachedData = data.cachedData as? CachedChannelData else {
-            return
-        }
-        self.controller?.push(groupStickerPackSetupController(context: self.context, updatedPresentationData: self.controller?.updatedPresentationData, peerId: peer.id, currentPackInfo: cachedData.stickerPack))
     }
     
     private func openLocation() {

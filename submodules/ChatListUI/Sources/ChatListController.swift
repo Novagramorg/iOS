@@ -224,7 +224,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
     
     private var fullScreenEffectView: RippleEffectView?
     
-    private let globalControlPanelsContext: GlobalControlPanelsContext
+    let globalControlPanelsContext: GlobalControlPanelsContext
     private(set) var globalControlPanelsContextState: GlobalControlPanelsContext.State?
     private var globalControlPanelsContextStateDisposable: Disposable?
     
@@ -249,9 +249,13 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
         self.animationRenderer = context.animationRenderer
         
         let groupCallPanelSource: GroupCallPanelSource
+        var chatListNotices = false
         switch self.location {
-        case .chatList:
+        case let .chatList(groupId):
             groupCallPanelSource = .all
+            if case .root = groupId {
+                chatListNotices = true
+            }
         case let .forum(peerId):
             groupCallPanelSource = .peer(peerId)
         case .savedMessagesChats:
@@ -266,7 +270,8 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
             context: context,
             mediaPlayback: true,
             liveLocationMode: .all,
-            groupCalls: groupCallPanelSource
+            groupCalls: groupCallPanelSource,
+            chatListNotices: chatListNotices
         )
                 
         super.init(context: context, navigationBarPresentationData: nil, mediaAccessoryPanelVisibility: .none, locationBroadcastPanelSource: .none, groupCallPanelSource: .none)
@@ -4808,6 +4813,14 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
             self.push(controller)
             return
         }
+        
+        #if DEBUG
+        if "".isEmpty {
+            (self.navigationController as? NavigationController)?.pushViewController(oldChannelsController(context: self.context, intent: .join, completed: { value in
+            }))
+            return
+        }
+        #endif
         
         guard let navigationController = self.navigationController as? NavigationController else {
             return

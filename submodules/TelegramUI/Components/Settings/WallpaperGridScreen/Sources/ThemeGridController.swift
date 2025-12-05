@@ -45,8 +45,6 @@ public final class ThemeGridController: ViewController {
     private let presentationDataPromise = Promise<PresentationData>()
     private var presentationDataDisposable: Disposable?
     
-    private var searchContentNode: NavigationBarSearchContentNode?
-    
     private var isEmpty: Bool?
     private var editingMode: Bool = false
     
@@ -81,9 +79,6 @@ public final class ThemeGridController: ViewController {
         
         self.scrollToTop = { [weak self] in
             if let strongSelf = self {
-                if let searchContentNode = strongSelf.searchContentNode {
-                    searchContentNode.updateExpansionProgress(1.0, animated: true)
-                }
                 strongSelf.controllerNode.scrollToTop()
             }
         }
@@ -182,7 +177,6 @@ public final class ThemeGridController: ViewController {
                         } else {
                             uploadCustomWallpaper(context: strongSelf.context, wallpaper: wallpaper, mode: options, editedImage: editedImage, cropRect: cropRect, brightness: brightness, completion: { [weak self, weak controller] in
                                 if let strongSelf = self {
-                                    strongSelf.deactivateSearch(animated: false)
                                     strongSelf.controllerNode.scrollToTop(animated: false)
                                 }
                                 if let controller = controller {
@@ -392,9 +386,6 @@ public final class ThemeGridController: ViewController {
             }
         })
         self.controllerNode.navigationBar = self.navigationBar
-        self.controllerNode.requestDeactivateSearch = { [weak self] in
-            self?.deactivateSearch(animated: true)
-        }
         self.controllerNode.requestWallpaperRemoval = { [weak self] in
             if let self {
                 self.completion(.remove)
@@ -403,10 +394,6 @@ public final class ThemeGridController: ViewController {
         }
         self.controllerNode.gridNode.visibleContentOffsetChanged = { [weak self] offset in
             if let strongSelf = self {
-                if let searchContentNode = strongSelf.searchContentNode {
-                    searchContentNode.updateGridVisibleContentOffset(offset)
-                }
-                
                 var previousContentOffsetValue: CGFloat?
                 if let previousContentOffset = strongSelf.previousContentOffset, case let .known(value) = previousContentOffset {
                     previousContentOffsetValue = value
@@ -425,12 +412,6 @@ public final class ThemeGridController: ViewController {
                 }
                 
                 strongSelf.previousContentOffset = offset
-            }
-        }
-
-        self.controllerNode.gridNode.scrollingCompleted = { [weak self] in
-            if let strongSelf = self, let searchContentNode = strongSelf.searchContentNode {
-                let _ = strongSelf.controllerNode.fixNavigationSearchableGridNodeScrolling(searchNode: searchContentNode)
             }
         }
         
@@ -490,34 +471,6 @@ public final class ThemeGridController: ViewController {
         super.containerLayoutUpdated(layout, transition: transition)
         
         self.controllerNode.containerLayoutUpdated(layout, navigationBarHeight: self.cleanNavigationHeight, transition: transition)
-    }
-    
-    func activateSearch() {
-        if self.displayNavigationBar {
-            let _ = (self.controllerNode.ready.get()
-            |> take(1)
-            |> deliverOnMainQueue).start(completed: { [weak self] in
-                guard let strongSelf = self else {
-                    return
-                }
-                if let scrollToTop = strongSelf.scrollToTop {
-                    scrollToTop()
-                }
-                if let searchContentNode = strongSelf.searchContentNode {
-                    strongSelf.controllerNode.activateSearch(placeholderNode: searchContentNode.placeholderNode)
-                }
-                strongSelf.setDisplayNavigationBar(false, transition: .animated(duration: 0.5, curve: .spring))
-            })
-        }
-    }
-    
-    func deactivateSearch(animated: Bool) {
-        if !self.displayNavigationBar {
-            self.setDisplayNavigationBar(true, transition: animated ? .animated(duration: 0.5, curve: .spring) : .immediate)
-            if let searchContentNode = self.searchContentNode {
-                self.controllerNode.deactivateSearch(placeholderNode: searchContentNode.placeholderNode, animated: animated)
-            }
-        }
     }
     
     @objc func editPressed() {

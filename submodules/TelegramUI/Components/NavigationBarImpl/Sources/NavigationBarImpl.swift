@@ -540,6 +540,14 @@ public final class NavigationBarImpl: ASDisplayNode, NavigationBar {
     private var edgeEffectView: EdgeEffectView?
     private var backgroundContainer: GlassBackgroundContainerView?
     
+    public var backgroundView: UIView {
+        if let edgeEffectView = self.edgeEffectView {
+            return edgeEffectView
+        } else {
+            return self.backgroundNode.view
+        }
+    }
+    
     public init(presentationData: NavigationBarPresentationData) {
         self.presentationData = presentationData
         self.stripeNode = ASDisplayNode()
@@ -734,7 +742,7 @@ public final class NavigationBarImpl: ASDisplayNode, NavigationBar {
         
         var contentVerticalOrigin = additionalTopHeight
         if case .glass = self.presentationData.theme.style {
-            contentVerticalOrigin += 4.0
+            contentVerticalOrigin += 2.0
         }
 
         let backgroundFrame = CGRect(origin: CGPoint(), size: CGSize(width: size.width, height: size.height + additionalBackgroundHeight))
@@ -744,8 +752,10 @@ public final class NavigationBarImpl: ASDisplayNode, NavigationBar {
         }
         
         if let backgroundContainer = self.backgroundContainer {
-            transition.updateFrame(view: backgroundContainer, frame: backgroundFrame)
-            backgroundContainer.update(size: backgroundFrame.size, isDark: self.presentationData.theme.overallDarkAppearance, transition: ComponentTransition(transition))
+            var backgroundContainerFrame = backgroundFrame
+            backgroundContainerFrame.size.height += 44.0
+            transition.updateFrame(view: backgroundContainer, frame: backgroundContainerFrame)
+            backgroundContainer.update(size: backgroundContainerFrame.size, isDark: self.presentationData.theme.overallDarkAppearance, transition: ComponentTransition(transition))
         }
         
         if let edgeEffectView = self.edgeEffectView {
@@ -755,7 +765,7 @@ public final class NavigationBarImpl: ASDisplayNode, NavigationBar {
                 edgeEffectView.isHidden = false
                 let edgeEffectFrame = CGRect(origin: CGPoint(), size: CGSize(width: size.width, height: size.height + additionalBackgroundHeight + 20.0))
                 transition.updateFrame(view: edgeEffectView, frame: edgeEffectFrame)
-                edgeEffectView.update(content: self.presentationData.theme.edgeEffectColor ?? .white, blur: true, rect: CGRect(origin: CGPoint(), size: edgeEffectFrame.size), edge: .top, edgeSize: 40.0, transition: ComponentTransition(transition))
+                edgeEffectView.update(content: self.presentationData.theme.edgeEffectColor ?? .white, blur: true, rect: CGRect(origin: CGPoint(), size: edgeEffectFrame.size), edge: .top, edgeSize: 50.0, transition: ComponentTransition(transition))
             }
         }
         
@@ -795,7 +805,7 @@ public final class NavigationBarImpl: ASDisplayNode, NavigationBar {
         
         transition.updateFrame(node: self.stripeNode, frame: CGRect(x: (additionalCutout?.width ?? 0.0), y: size.height + additionalBackgroundHeight, width: size.width - (additionalCutout?.width ?? 0.0), height: UIScreenPixel))
         
-        let nominalHeight: CGFloat = defaultHeight
+        let nominalHeight: CGFloat = 56.0
         
         var leftTitleInset: CGFloat = leftInset + 1.0
         var rightTitleInset: CGFloat = rightInset + 1.0
@@ -910,15 +920,15 @@ public final class NavigationBarImpl: ASDisplayNode, NavigationBar {
                 
                 let rightButtonsBackgroundFrame = CGRect(origin: CGPoint(x: size.width - rightInset - 16.0 - rightButtonsWidth, y: contentVerticalOrigin + floor((nominalHeight - 44.0) * 0.5)), size: CGSize(width: rightButtonsWidth, height: 44.0))
                 var rightButtonsBackgroundTransition = ComponentTransition(transition)
-                if rightButtonsBackgroundView.alpha == 0.0 {
+                if rightButtonsBackgroundView.isHidden {
                     rightButtonsBackgroundTransition = .immediate
                 }
                 
                 rightButtonsBackgroundTransition.setFrame(view: rightButtonsBackgroundView, frame: rightButtonsBackgroundFrame)
-                transition.updateAlpha(layer: rightButtonsBackgroundView.layer, alpha: 1.0)
+                rightButtonsBackgroundView.isHidden = false
                 rightButtonsBackgroundView.update(size: rightButtonsBackgroundFrame.size, cornerRadius: rightButtonsBackgroundFrame.height * 0.5, isDark: self.presentationData.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: UIColor(white: self.presentationData.theme.overallDarkAppearance ? 0.0 : 1.0, alpha: 0.6)), isInteractive: true, transition: rightButtonsBackgroundTransition)
             } else {
-                transition.updateAlpha(layer: rightButtonsBackgroundView.layer, alpha: 0.0)
+                rightButtonsBackgroundView.isHidden = true
             }
         }
         

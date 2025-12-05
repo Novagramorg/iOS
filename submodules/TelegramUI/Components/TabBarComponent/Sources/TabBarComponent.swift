@@ -259,7 +259,7 @@ public final class NavigationSearchView: UIView {
                     context.strokePath()
                 })?.withRenderingMode(.alwaysTemplate)
                 
-                close.background.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(self.onCloseTapGesture(_:))))
+                close.background.contentView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(self.onCloseTapGesture(_:))))
                 
                 close.background.contentView.addSubview(close.icon)
                 self.insertSubview(close.background, at: 0)

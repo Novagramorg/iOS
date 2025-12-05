@@ -28,6 +28,7 @@ import ChatListTabsComponent
 import PremiumUI
 import MediaPlaybackHeaderPanelComponent
 import LiveLocationHeaderPanelComponent
+import ChatListHeaderNoticeComponent
 
 public enum ChatListContainerNodeFilter: Equatable {
     case all
@@ -1361,10 +1362,70 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
         let headerContent = self.controller?.updateHeaderContent()
         
         var panels: [HeaderPanelContainerComponent.Panel] = []
+        if let chatListNotice = self.controller?.globalControlPanelsContextState?.chatListNotice {
+            panels.append(HeaderPanelContainerComponent.Panel(
+                key: "chatListNotice",
+                orderIndex: 0,
+                component: AnyComponent(ChatListHeaderNoticeComponent(
+                    context: self.context,
+                    theme: self.presentationData.theme,
+                    strings: self.presentationData.strings,
+                    data: chatListNotice,
+                    activateAction: { [weak self] notice in
+                        guard let self else {
+                            return
+                        }
+                        switch notice {
+                        case .clearStorage:
+                            self.effectiveContainerNode.currentItemNode.interaction?.openStorageManagement()
+                        case .setupPassword:
+                            self.effectiveContainerNode.currentItemNode.interaction?.openPasswordSetup()
+                        case .premiumUpgrade, .premiumAnnualDiscount, .premiumRestore:
+                            self.effectiveContainerNode.currentItemNode.interaction?.openPremiumIntro()
+                        case .xmasPremiumGift:
+                            self.effectiveContainerNode.currentItemNode.interaction?.openPremiumGift([], nil)
+                        case .premiumGrace:
+                            self.effectiveContainerNode.currentItemNode.interaction?.openPremiumManagement()
+                        case .setupBirthday:
+                            self.effectiveContainerNode.currentItemNode.interaction?.openBirthdaySetup()
+                        case let .birthdayPremiumGift(peers, birthdays):
+                            self.effectiveContainerNode.currentItemNode.interaction?.openPremiumGift(peers, birthdays)
+                        case .reviewLogin:
+                            break
+                        case let .starsSubscriptionLowBalance(amount, _):
+                            self.effectiveContainerNode.currentItemNode.interaction?.openStarsTopup(amount.value)
+                        case .setupPhoto:
+                            self.effectiveContainerNode.currentItemNode.interaction?.openPhotoSetup()
+                        case .accountFreeze:
+                            self.effectiveContainerNode.currentItemNode.interaction?.openAccountFreezeInfo()
+                        case let .link(_, url, _, _):
+                            self.effectiveContainerNode.currentItemNode.interaction?.openUrl(url)
+                        }
+                    },
+                    dismissAction: { [weak self] notice in
+                        guard let self, let controller = self.controller else {
+                            return
+                        }
+                        controller.globalControlPanelsContext.dismissChatListNotice(parentController: controller, notice: notice)
+                    },
+                    selectAction: { [weak self] notice, isPositive in
+                        guard let self else {
+                            return
+                        }
+                        switch notice {
+                        case let .reviewLogin(newSessionReview, _):
+                            self.effectiveContainerNode.currentItemNode.interaction?.performActiveSessionAction(newSessionReview, isPositive)
+                        default:
+                            break
+                        }
+                    }
+                )))
+            )
+        }
         if let mediaPlayback = self.controller?.globalControlPanelsContextState?.mediaPlayback {
             panels.append(HeaderPanelContainerComponent.Panel(
                 key: "media",
-                orderIndex: 0,
+                orderIndex: 1,
                 component: AnyComponent(MediaPlaybackHeaderPanelComponent(
                     context: self.context,
                     theme: self.presentationData.theme,
@@ -1379,7 +1440,7 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
         if let liveLocation = self.controller?.globalControlPanelsContextState?.liveLocation {
             panels.append(HeaderPanelContainerComponent.Panel(
                 key: "liveLocation",
-                orderIndex: 1,
+                orderIndex: 2,
                 component: AnyComponent(LiveLocationHeaderPanelComponent(
                     context: self.context,
                     theme: self.presentationData.theme,
