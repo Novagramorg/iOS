@@ -15570,7 +15570,7 @@ Error: %8$@";
 "Gift.Variants.CollectionInfo.Symbol_1" = "**%@** unique symbol";
 "Gift.Variants.CollectionInfo.Symbol_any" = "**%@** unique symbols";
 
-"Gift.Auction.GiftAuction" = "Upcoming Auction";
+"Gift.Auction.GiftAuction" = "Gift Auction";
 "Gift.Auction.UpcomingAuction" = "Upcoming Auction";
 "Gift.Auction.LearnMore" = "Learn more about Telegram Gifts >";
 
@@ -15614,7 +15614,7 @@ Error: %8$@";
 "Notification.StarGiftOffer.Expiration.Hours_any" = "%@ h";
 "Notification.StarGiftOffer.Expiration.Minutes_1" = "%@ m";
 "Notification.StarGiftOffer.Expiration.Minutes_any" = "%@ m";
-"Notification.StarGiftOffer.Expiration.Delimiter" = "";
+"Notification.StarGiftOffer.Expiration.Delimiter" = " ";
 
 "Chat.GiftPurchaseOffer.AcceptConfirmation.Title" = "Confirm Sale";
 "Chat.GiftPurchaseOffer.AcceptConfirmation.Text" = "Do you want to sell **%1$@** to %2$@ for **%3$@**? You'll receive **%4$@** after fees.";

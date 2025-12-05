@@ -3822,31 +3822,33 @@ final class CachedStartGiftUpgradeAttributes: Codable {
 
 func _internal_getStarGiftUpgradeAttributes(account: Account, giftId: Int64) -> Signal<[StarGift.UniqueGift.Attribute]?, NoError> {
     return account.postbox.transaction { transaction in
-        if let cachedGifts = transaction.retrieveItemCacheEntry(id: giftUpgradesId(giftId: giftId))?.get(CachedStartGiftUpgradeAttributes.self) {
-            return .single(cachedGifts.attributes)
-        } else {
-            return account.network.request(Api.functions.payments.getStarGiftUpgradeAttributes(giftId: giftId))
-            |> map(Optional.init)
-            |> `catch` { _ -> Signal<Api.payments.StarGiftUpgradeAttributes?, NoError> in
+        let remote = account.network.request(Api.functions.payments.getStarGiftUpgradeAttributes(giftId: giftId))
+        |> map(Optional.init)
+        |> `catch` { _ -> Signal<Api.payments.StarGiftUpgradeAttributes?, NoError> in
+            return .single(nil)
+        }
+        |> mapToSignal { result -> Signal<[StarGift.UniqueGift.Attribute]?, NoError> in
+            guard let result else {
                 return .single(nil)
             }
-            |> mapToSignal { result -> Signal<[StarGift.UniqueGift.Attribute]?, NoError> in
-                guard let result else {
-                    return .single(nil)
-                }
-                switch result {
-                case let .starGiftUpgradeAttributes(apiAttributes):
-                    let attributes = apiAttributes.compactMap { StarGift.UniqueGift.Attribute(apiAttribute: $0) }
-                    return account.postbox.transaction { transaction in
-                        if !attributes.isEmpty {
-                            if let entry = CodableEntry(CachedStartGiftUpgradeAttributes(attributes: attributes)) {
-                                transaction.putItemCacheEntry(id: giftUpgradesId(giftId: giftId), entry: entry)
-                            }
+            switch result {
+            case let .starGiftUpgradeAttributes(apiAttributes):
+                let attributes = apiAttributes.compactMap { StarGift.UniqueGift.Attribute(apiAttribute: $0) }
+                return account.postbox.transaction { transaction in
+                    if !attributes.isEmpty {
+                        if let entry = CodableEntry(CachedStartGiftUpgradeAttributes(attributes: attributes)) {
+                            transaction.putItemCacheEntry(id: giftUpgradesId(giftId: giftId), entry: entry)
                         }
-                        return attributes
                     }
+                    return attributes
                 }
             }
+        }
+        if let cachedGifts = transaction.retrieveItemCacheEntry(id: giftUpgradesId(giftId: giftId))?.get(CachedStartGiftUpgradeAttributes.self) {
+            return .single(cachedGifts.attributes)
+            |> then(remote)
+        } else {
+            return remote
         }
     }
     |> switchToLatest

@@ -409,8 +409,8 @@ private final class GiftUpgradePreviewScreenComponent: Component {
                 var isSelected = false
                 for attribute in attributeList {
                     switch attribute {
-                    case let .model(name, _, rarityValue):
-                        itemId += name
+                    case let .model(name, file, rarityValue):
+                        itemId += "\(file.fileId.id)"
                         if self.selectedSection == .models {
                             title = name
                             rarity = rarityValue
@@ -418,8 +418,8 @@ private final class GiftUpgradePreviewScreenComponent: Component {
                             
                             isSelected = self.selectedModel == attribute
                         }
-                    case let .backdrop(name, _, _, _, _, _, rarityValue):
-                        itemId += name
+                    case let .backdrop(name, id, _, _, _, _, rarityValue):
+                        itemId += "\(id)"
                         if self.selectedSection == .backdrops {
                             title = name
                             rarity = rarityValue
@@ -427,8 +427,8 @@ private final class GiftUpgradePreviewScreenComponent: Component {
                             
                             isSelected = self.selectedBackdrop == attribute
                         }
-                    case let .pattern(name, _, rarityValue):
-                        itemId += name
+                    case let .pattern(name, file, rarityValue):
+                        itemId += "\(file.fileId.id)"
                         if self.selectedSection == .symbols {
                             title = name
                             rarity = rarityValue
@@ -732,15 +732,23 @@ private final class GiftUpgradePreviewScreenComponent: Component {
                 transition.setFrame(view: titleView, frame: titleFrame)
             }
             
+            var subtitleItems: [AnimatedTextComponent.Item] = []
+            let subtitleString = self.isPlaying ? environment.strings.Gift_Variants_RandomTraits : environment.strings.Gift_Variants_SelectedTraits
+            let words = subtitleString.components(separatedBy: " ")
+            for i in 0 ..< words.count {
+                var text = words[i]
+                if i > 0 {
+                    text = " \(text)"
+                }
+                subtitleItems.append(AnimatedTextComponent.Item(id: text.lowercased(), content: .text(text)))
+            }
+            
             let subtitleSize = self.subtitle.update(
                 transition: .spring(duration: 0.2),
                 component: AnyComponent(AnimatedTextComponent(
                     font: Font.regular(14.0),
                     color: secondaryTextColor,
-                    items: [
-                        AnimatedTextComponent.Item(id: self.isPlaying ? "random" : "selected", content: .text(self.isPlaying ? "Random" : "Selected")),
-                        AnimatedTextComponent.Item(id: "traits", content: .text(" Traits"))
-                    ],
+                    items: subtitleItems,
                     noDelay: true,
                     blur: true
                 )),
