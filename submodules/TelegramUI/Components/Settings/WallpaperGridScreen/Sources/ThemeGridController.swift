@@ -124,7 +124,6 @@ public final class ThemeGridController: ViewController {
         
         self.statusBar.statusBarStyle = self.presentationData.theme.rootController.statusBarStyle.style
         self.navigationBar?.updatePresentationData(NavigationBarPresentationData(presentationData: self.presentationData), transition: .immediate)
-        self.searchContentNode?.updateThemeAndPlaceholder(theme: self.presentationData.theme, placeholder: self.presentationData.strings.Wallpaper_Search)
         
         if self.isNodeLoaded {
             self.controllerNode.updatePresentationData(self.presentationData)
@@ -476,7 +475,6 @@ public final class ThemeGridController: ViewController {
     @objc func editPressed() {
         self.editingMode = true
         self.navigationItem.rightBarButtonItem = UIBarButtonItem(title: self.presentationData.strings.Common_Done, style: .done, target: self, action: #selector(self.donePressed))
-        self.searchContentNode?.setIsEnabled(false, animated: true)
         self.controllerNode.updateState { state in
             var state = state
             state.editing = true
@@ -487,7 +485,6 @@ public final class ThemeGridController: ViewController {
     @objc func donePressed() {
         self.editingMode = false
         self.navigationItem.rightBarButtonItem = UIBarButtonItem(title: self.presentationData.strings.Common_Edit, style: .plain, target: self, action: #selector(self.editPressed))
-        self.searchContentNode?.setIsEnabled(true, animated: true)
         self.controllerNode.updateState { state in
             var state = state
             state.editing = false
