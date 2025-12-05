@@ -114,8 +114,21 @@ final class GiftAuctionAccessoryPanel: ASDisplayNode {
         var buttonAnimatedTitleItems: [AnimatedTextComponent.Item] = []
         
         if self.states.count == 1, let auctionState = self.states.first {
+            var isUpcoming = false
+            var startTime = currentTime
+            var endTime = currentTime
+            if case let .ongoing(_, startDate, _, _, _, _, nextRoundDate, _, _, _, _, _) = auctionState.auctionState {
+                startTime = startDate
+                endTime = nextRoundDate
+                if currentTime < startDate {
+                    isUpcoming = true
+                }
+            }
+            
             let place = auctionState.place ?? 1
-            if case let .generic(gift) = auctionState.gift, let auctionGiftsPerRound = gift.auctionGiftsPerRound, place > auctionGiftsPerRound {
+            if isUpcoming {
+                subtitleText = self.strings.ChatList_Auctions_Status_UpcomingBid
+            } else if case let .generic(gift) = auctionState.gift, let auctionGiftsPerRound = gift.auctionGiftsPerRound, place > auctionGiftsPerRound {
                 subtitleText = self.strings.ChatList_Auctions_Status_Single_Outbid
                 subtitleTextColor = self.theme.list.itemDestructiveColor
                 isOutbid = true
@@ -133,13 +146,6 @@ final class GiftAuctionAccessoryPanel: ASDisplayNode {
                     placeText = self.strings.ChatList_Auctions_Status_Single_PlaceNTh("\(place)").string
                 }
                 subtitleText = self.strings.ChatList_Auctions_Status_Single_Winning(placeText).string
-            }
-            
-            var startTime = currentTime
-            var endTime = currentTime
-            if case let .ongoing(_, startDate, _, _, _, _, nextRoundDate, _, _, _, _, _) = auctionState.auctionState {
-                startTime = startDate
-                endTime = nextRoundDate
             }
             
             let endTimeout: Int32

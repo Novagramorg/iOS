@@ -1075,6 +1075,15 @@ public extension StarGift {
         }
     }
     
+    var title: String {
+        switch self {
+        case let .generic(gift):
+            return gift.title ?? ""
+        case let .unique(gift):
+            return gift.title
+        }
+    }
+    
     var releasedBy: EnginePeer.Id? {
         switch self {
         case let .generic(gift):

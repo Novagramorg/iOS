@@ -39,6 +39,8 @@ public final class GiftCompositionComponent: Component {
     let animationOffset: CGPoint?
     let animationScale: CGFloat?
     let displayAnimationStars: Bool
+    let animateScaleOnTransition: Bool
+    let alwaysAnimateTransition: Bool
     let revealedAttributes: Set<StarGift.UniqueGift.Attribute.AttributeType>
     let externalState: ExternalState?
     let requestUpdate: (ComponentTransition) -> Void
@@ -50,6 +52,8 @@ public final class GiftCompositionComponent: Component {
         animationOffset: CGPoint? = nil,
         animationScale: CGFloat? = nil,
         displayAnimationStars: Bool = false,
+        animateScaleOnTransition: Bool = true,
+        alwaysAnimateTransition: Bool = false,
         revealedAttributes: Set<StarGift.UniqueGift.Attribute.AttributeType> = Set(),
         externalState: ExternalState? = nil,
         requestUpdate: @escaping (ComponentTransition) -> Void = { _ in }
@@ -60,6 +64,8 @@ public final class GiftCompositionComponent: Component {
         self.animationOffset = animationOffset
         self.animationScale = animationScale
         self.displayAnimationStars = displayAnimationStars
+        self.animateScaleOnTransition = animateScaleOnTransition
+        self.alwaysAnimateTransition = alwaysAnimateTransition
         self.revealedAttributes = revealedAttributes
         self.externalState = externalState
         self.requestUpdate = requestUpdate
@@ -82,6 +88,9 @@ public final class GiftCompositionComponent: Component {
             return false
         }
         if lhs.displayAnimationStars != rhs.displayAnimationStars {
+            return false
+        }
+        if lhs.animateScaleOnTransition != rhs.animateScaleOnTransition {
             return false
         }
         if lhs.revealedAttributes != rhs.revealedAttributes {
@@ -718,12 +727,12 @@ public final class GiftCompositionComponent: Component {
                         animationFile = file
                         component.externalState?.previewModel = self.previewModels[Int(self.previewModelIndex)]
                     }
-                    if case let .pattern(_, file, _) = self.previewPatterns[Int(self.previewPatternIndex)] {
+                    if !self.previewPatterns.isEmpty, case let .pattern(_, file, _) = self.previewPatterns[Int(self.previewPatternIndex)] {
                         patternFile = file
                         files[file.fileId.id] = file
                         component.externalState?.previewSymbol = self.previewPatterns[Int(self.previewPatternIndex)]
                     }
-                    if case let .backdrop(_, _, innerColorValue, outerColorValue, patternColorValue, _, _) = self.previewBackdrops[Int(self.previewBackdropIndex)] {
+                    if !self.previewBackdrops.isEmpty, case let .backdrop(_, _, innerColorValue, outerColorValue, patternColorValue, _, _) = self.previewBackdrops[Int(self.previewBackdropIndex)] {
                         backgroundColor = UIColor(rgb: UInt32(bitPattern: outerColorValue))
                         secondBackgroundColor = UIColor(rgb: UInt32(bitPattern: innerColorValue))
                         patternColor = UIColor(rgb: UInt32(bitPattern: patternColorValue))
@@ -767,7 +776,9 @@ public final class GiftCompositionComponent: Component {
             }
             
             var animateTransition = false
-            if self.animatePreviewTransition {
+            if component.alwaysAnimateTransition {
+                animateTransition = true
+            } else if self.animatePreviewTransition {
                 animateTransition = true
                 self.animatePreviewTransition = false
             } else if let previousComponent, case .preview = previousComponent.subject, case .unique = component.subject {
@@ -787,6 +798,9 @@ public final class GiftCompositionComponent: Component {
                         if case .unique = component.subject {
                             bounce = self.previewPatternIndex == -1
                             background = false
+                        }
+                        if !component.animateScaleOnTransition {
+                            bounce = false
                         }
                         backgroundView.animateTransition(background: background, bounce: bounce)
                     }

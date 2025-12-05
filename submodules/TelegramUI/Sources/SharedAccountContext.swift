@@ -91,6 +91,7 @@ import GlassBackgroundComponent
 import AttachmentFileController
 import NewContactScreen
 import PasskeysScreen
+import GiftDemoScreen
 
 private final class AccountUserInterfaceInUseContext {
     let subscribers = Bag<(Bool) -> Void>()
@@ -3856,7 +3857,7 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         return GiftAuctionBidScreen(context: context, toPeerId: toPeerId, text: text, entities: entities, hideName: hideName, auctionContext: auctionContext, acquiredGifts: acquiredGifts)
     }
     
-    public func makeGiftAuctionViewScreen(context: AccountContext, auctionContext: GiftAuctionContext, completion: @escaping (Signal<[GiftAuctionAcquiredGift], NoError>) -> Void) -> ViewController {
+    public func makeGiftAuctionViewScreen(context: AccountContext, auctionContext: GiftAuctionContext, completion: @escaping (Signal<[GiftAuctionAcquiredGift], NoError>, [StarGift.UniqueGift.Attribute]?) -> Void) -> ViewController {
         return GiftAuctionViewScreen(context: context, auctionContext: auctionContext, completion: completion)
     }
     
@@ -3870,6 +3871,14 @@ public final class SharedAccountContextImpl: SharedAccountContext {
     
     public func makeGiftUpgradeVariantsPreviewScreen(context: AccountContext, gift: StarGift, attributes: [StarGift.UniqueGift.Attribute]) -> ViewController {
         return GiftUpgradePreviewScreen(context: context, gift: gift, attributes: attributes)
+    }
+    
+    public func makeGiftAuctionWearPreviewScreen(context: AccountContext, auctionContext: GiftAuctionContext, acquiredGifts: Signal<[GiftAuctionAcquiredGift], NoError>?, attributes: [StarGift.UniqueGift.Attribute], completion: @escaping () -> Void) -> ViewController {
+        return GiftAuctionWearPreviewScreen(context: context, auctionContext: auctionContext, attributes: attributes, completion: completion)
+    }
+    
+    public func makeGiftDemoScreen(context: AccountContext) -> ViewController {
+        return GiftDemoScreen(context: context)
     }
     
     public func makeStorySharingScreen(context: AccountContext, subject: StorySharingSubject, parentController: ViewController) -> ViewController {
