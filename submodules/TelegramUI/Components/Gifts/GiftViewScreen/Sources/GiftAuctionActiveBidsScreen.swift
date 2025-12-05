@@ -663,11 +663,13 @@ private final class ActiveAuctionComponent: Component {
             var titleText: String = ""
             var subtitleText: String = ""
             var subtitleTextColor = component.theme.list.itemPrimaryTextColor
-            if case let .ongoing(_, _, _, _, _, _, nextRoundDate, _, currentRound, totalRound, _, _) = component.state.auctionState, let myBid = component.state.myState.bidAmount {
+            if case let .ongoing(_, startDate, _, _, _, _, nextRoundDate, _, currentRound, totalRound, _, _) = component.state.auctionState, let myBid = component.state.myState.bidAmount {
                 titleText = component.strings.Gift_ActiveAuctions_Round("\(currentRound)", "\(totalRound)").string
                 
                 let bidString = "#\(presentationStringsFormattedNumber(Int32(clamping: myBid), component.dateTimeFormat.groupingSeparator))"
-                if let place = component.state.place, case let .generic(gift) = component.state.gift, let auctionGiftsPerRound = gift.auctionGiftsPerRound, place > auctionGiftsPerRound {
+                if component.currentTime < startDate {
+                    subtitleText = component.strings.Gift_ActiveAuctions_UpcomingBid
+                } else if let place = component.state.place, case let .generic(gift) = component.state.gift, let auctionGiftsPerRound = gift.auctionGiftsPerRound, place > auctionGiftsPerRound {
                     subtitleText = component.strings.Gift_ActiveAuctions_Outbid(bidString).string
                     subtitleTextColor = component.theme.list.itemDestructiveColor
                 } else {

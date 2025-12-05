@@ -508,6 +508,7 @@ swift_library(
         "//submodules/TelegramUI/Components/LegacyChatHeaderPanelComponent",
         "//submodules/TelegramUI/Components/Chat/ChatSearchNavigationContentNode",
         "//submodules/TelegramUI/Components/Settings/PasskeysScreen",
+        "//submodules/TelegramUI/Components/Gifts/GiftDemoScreen",
     ] + select({
         "@build_bazel_rules_apple//apple:ios_arm64": appcenter_targets,
         "//build-system:ios_sim_arm64": [],

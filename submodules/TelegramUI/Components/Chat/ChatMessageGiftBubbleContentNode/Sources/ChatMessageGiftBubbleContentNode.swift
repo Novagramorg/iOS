@@ -717,8 +717,7 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                                 }    
                                 text = isStoryEntity ? "**\(item.presentationData.strings.Notification_StarGift_Collectible) #\(formatCollectibleNumber(uniqueGift.number, dateTimeFormat: item.presentationData.dateTimeFormat))**" : "**\(uniqueGift.title) #\(formatCollectibleNumber(uniqueGift.number, dateTimeFormat: item.presentationData.dateTimeFormat))**"
                                 if fromOffer {
-                                    //TODO:localize
-                                    ribbonTitle = incoming ? "" : "sold"
+                                    ribbonTitle = incoming ? "" : item.presentationData.strings.Notification_StarGift_Sold
                                     customRibbonColors = [UIColor(rgb: 0xd9433a), UIColor(rgb: 0xff645b)]
                                 } else {
                                     ribbonTitle = isStoryEntity ? "" : item.presentationData.strings.Notification_StarGift_Gift

@@ -1515,15 +1515,31 @@ func openResolvedUrlImpl(
                     let controller = context.sharedContext.makeGiftAuctionViewScreen(
                         context: context,
                         auctionContext: auctionContext,
-                        completion: { [weak navigationController] acquiredGifts in
-                            let controller = GiftSetupScreen(
-                                context: context,
-                                peerId: context.account.peerId,
-                                subject: .starGift(gift, nil),
-                                auctionAcquiredGifts: acquiredGifts,
-                                completion: nil
-                            )
-                            navigationController?.pushViewController(controller)
+                        completion: { [weak navigationController] acquiredGifts, upgradeAttributes in
+                            if let upgradeAttributes {
+                                let controller = context.sharedContext.makeGiftAuctionWearPreviewScreen(context: context, auctionContext: auctionContext, acquiredGifts: acquiredGifts, attributes: upgradeAttributes, completion: {
+                                    let controller = context.sharedContext.makeGiftAuctionBidScreen(
+                                        context: context,
+                                        toPeerId: context.account.peerId,
+                                        text: "",
+                                        entities: [],
+                                        hideName: true,
+                                        auctionContext: auctionContext,
+                                        acquiredGifts: acquiredGifts
+                                    )
+                                    navigationController?.pushViewController(controller)
+                                })
+                                navigationController?.pushViewController(controller)
+                            } else {
+                                let controller = GiftSetupScreen(
+                                    context: context,
+                                    peerId: context.account.peerId,
+                                    subject: .starGift(gift, nil),
+                                    auctionAcquiredGifts: acquiredGifts,
+                                    completion: nil
+                                )
+                                navigationController?.pushViewController(controller)
+                            }
                         }
                     )
                     navigationController?.pushViewController(controller)

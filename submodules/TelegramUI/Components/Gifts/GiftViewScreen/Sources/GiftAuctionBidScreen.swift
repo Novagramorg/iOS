@@ -612,7 +612,7 @@ private final class PeerComponent: Component {
             var color = component.theme.list.itemSecondaryTextColor
             switch component.status {
             case .winning:
-                color = component.theme.list.itemDisclosureActions.constructive.fillColor
+                color = UIColor(rgb: 0x53a939)
             case .outbid, .returned:
                 color = component.theme.list.itemDestructiveColor
             default:
@@ -1870,7 +1870,7 @@ private final class GiftAuctionBidScreenComponent: Component {
                     maxBidAmount = max(maxBidAmount, Int64(Double(firstLevel.amount) * 1.5))
                 }
             }
-            var currentValue = max(Int(minBidAmount), 100)
+            var currentValue = Int(minBidAmount)
             var minAllowedRealValue: Int64 = minBidAmount
             if let myBidAmount = state.myState.bidAmount {
                 if let component, let bidPeerId = state.myState.bidPeerId, bidPeerId != component.toPeerId || forceMinimum, let myMinBidAmount = state.myState.minBidAmount {
@@ -2061,7 +2061,7 @@ private final class GiftAuctionBidScreenComponent: Component {
                     if case .finished = auctionState?.auctionState, let controller = self.environment?.controller() {
                         if let navigationController = controller.navigationController as? NavigationController {
                             controller.dismiss()
-                            let auctionController = context.sharedContext.makeGiftAuctionViewScreen(context: context, auctionContext: auctionContext, completion: { _ in })
+                            let auctionController = context.sharedContext.makeGiftAuctionViewScreen(context: context, auctionContext: auctionContext, completion: { _, _ in })
                             navigationController.pushViewController(auctionController)
                         }
                     }
@@ -2197,8 +2197,12 @@ private final class GiftAuctionBidScreenComponent: Component {
             var topBidsTitleComponent: AnyComponent<Empty>?
             var topBidsComponents: [(EnginePeer.Id, AnyComponent<Empty>)] = []
             
+            var isUpcoming = false
             let place: Int32
-            if let giftAuctionState = self.giftAuctionState, case let .ongoing(_, _, _, _, bidLevels, topBidders, _, _, _, _, _, lastGiftNumber) = giftAuctionState.auctionState {
+            if let giftAuctionState = self.giftAuctionState, case let .ongoing(_, startDate, _, _, bidLevels, topBidders, _, _, _, _, _, lastGiftNumber) = giftAuctionState.auctionState {
+                if currentTime < startDate {
+                    isUpcoming = true
+                }
                 var myBidAmount = Int64(self.amount.realValue)
                 var myBidDate = currentTime
                 var isBiddingUp = true
@@ -2220,6 +2224,9 @@ private final class GiftAuctionBidScreenComponent: Component {
                 if isBiddingUp {
                     bidTitleColor = environment.theme.list.itemSecondaryTextColor
                     bidTitle = environment.strings.Gift_AuctionBid_BidPreview
+                } else if isUpcoming {
+                    bidTitleColor = environment.theme.list.itemSecondaryTextColor
+                    bidTitle = environment.strings.Gift_AuctionBid_UpcomingBid
                 } else if giftAuctionState.myState.isReturned {
                     bidTitle = environment.strings.Gift_AuctionBid_Outbid
                     bidTitleColor = environment.theme.list.itemDestructiveColor
@@ -2486,7 +2493,19 @@ private final class GiftAuctionBidScreenComponent: Component {
                     untilNextRoundAnimatedItems.append(AnimatedTextComponent.Item(id: "s", content: .number(seconds, minDigits: 2)))
                 }
                 
-                dropsLeftAnimatedItems = [AnimatedTextComponent.Item(id: "drops", content: .number(Int(dropsLeft), minDigits: 1))]
+                if dropsLeft >= 10000 {
+                    var compactString = compactNumericCountString(Int(dropsLeft), decimalSeparator: ".", showDecimalPart: false)
+                    let suffix = String(compactString.suffix(1))
+                    compactString.removeLast()
+                    if let value = Int(compactString) {
+                        dropsLeftAnimatedItems = [
+                            AnimatedTextComponent.Item(id: "drops", content: .number(value, minDigits: 1)),
+                            AnimatedTextComponent.Item(id: "suffix", content: .text(suffix))
+                        ]
+                    }
+                } else {
+                    dropsLeftAnimatedItems = [AnimatedTextComponent.Item(id: "drops", content: .number(Int(dropsLeft), minDigits: 1))]
+                }
             }
             
             auctionStats.append((
@@ -2688,10 +2707,17 @@ private final class GiftAuctionBidScreenComponent: Component {
             var initialContentHeight = contentHeight
             let clippingY: CGFloat
             
+            let titleString: String
+            if isUpcoming {
+                titleString = environment.strings.Gift_AuctionBid_UpcomingTitle
+            } else {
+                titleString = environment.strings.Gift_AuctionBid_Title
+            }
+            
             let titleSize = self.title.update(
                 transition: .immediate,
                 component: AnyComponent(MultilineTextComponent(
-                    text: .plain(NSAttributedString(string: environment.strings.Gift_AuctionBid_Title, font: Font.semibold(17.0), textColor: environment.theme.list.itemPrimaryTextColor))
+                    text: .plain(NSAttributedString(string: titleString, font: Font.semibold(17.0), textColor: environment.theme.list.itemPrimaryTextColor))
                 )),
                 environment: {},
                 containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 100.0)
@@ -2708,13 +2734,13 @@ private final class GiftAuctionBidScreenComponent: Component {
             let subtitleSize = self.subtitle.update(
                 transition: .immediate,
                 component: AnyComponent(MultilineTextComponent(
-                    text: .plain(NSAttributedString(string: subtitleString, font: Font.regular(13.0), textColor: environment.theme.list.itemSecondaryTextColor))
+                    text: .plain(NSAttributedString(string: isUpcoming ? "" : subtitleString, font: Font.regular(13.0), textColor: environment.theme.list.itemSecondaryTextColor))
                 )),
                 environment: {},
                 containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 100.0)
             )
             
-            let titleFrame = CGRect(origin: CGPoint(x: floor((availableSize.width - titleSize.width) * 0.5), y: 19.0), size: titleSize)
+            let titleFrame = CGRect(origin: CGPoint(x: floor((availableSize.width - titleSize.width) * 0.5), y: isUpcoming ? 27.0 : 19.0), size: titleSize)
             if let titleView = self.title.view {
                 if titleView.superview == nil {
                     self.navigationBarContainer.addSubview(titleView)

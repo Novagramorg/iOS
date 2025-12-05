@@ -129,7 +129,7 @@ public class ChatMessageGiftOfferBubbleContentNode: ChatMessageBubbleContentNode
                     let priceString: String
                     switch amount.currency {
                     case .stars:
-                        priceString = "\(amount.amount) Stars"
+                        priceString = item.presentationData.strings.Notification_StarGiftOffer_Offer_Stars(Int32(clamping: amount.amount.value))
                     case .ton:
                         priceString = "\(amount.amount) TON"
                     }
@@ -143,41 +143,35 @@ public class ChatMessageGiftOfferBubbleContentNode: ChatMessageBubbleContentNode
                         giftTitle = ""
                     }
                     
-                    //TODO:localize
                     if incoming {
-                        text = "**\(peerName)** offered you **\(priceString)** for your gift **\(giftTitle)**."
+                        text = item.presentationData.strings.Notification_StarGiftOffer_Offer(peerName, priceString, giftTitle).string
                     } else {
-                        text = "You offered **\(peerName)** **\(priceString)** for their gift **\(giftTitle)**."
+                        text = item.presentationData.strings.Notification_StarGiftOffer_OfferYou(peerName, priceString, giftTitle).string
                     }
                     
                     if isAccepted {
-                        additionalText = "This offer was accepted."
+                        additionalText = item.presentationData.strings.Notification_StarGiftOffer_Status_Accepted
                     } else if isDeclined {
-                        additionalText = "This offer was rejected."
+                        additionalText = item.presentationData.strings.Notification_StarGiftOffer_Status_Rejected
                     } else if expireDate > currentTimestamp {
                         func textForTimeout(_ value: Int32) -> String {
                             if value < 3600 {
                                 let minutes = value / 60
-                                //let seconds = value % 60
-                                //let secondsPadding = seconds < 10 ? "0" : ""
-                                return "\(minutes)m" //\(secondsPadding)\(seconds)"
+                                return item.presentationData.strings.Notification_StarGiftOffer_Expiration_Minutes(minutes)
                             } else {
                                 let hours = value / 3600
                                 let minutes = (value % 3600) / 60
-                                let minutesPadding = minutes < 10 ? "0" : ""
-                                //let seconds = value % 60
-                                //let secondsPadding = seconds < 10 ? "0" : ""
-                                return "\(hours)h \(minutesPadding)\(minutes)m" //:\(secondsPadding)\(seconds)"
+                                return item.presentationData.strings.Notification_StarGiftOffer_Expiration_Hours(hours) + item.presentationData.strings.Notification_StarGiftOffer_Expiration_Delimiter + item.presentationData.strings.Notification_StarGiftOffer_Expiration_Minutes(minutes)
                             }
                         }
                         let delta = expireDate - currentTimestamp
-                        additionalText = "This offer expires in \(textForTimeout(delta))."
-                        
+                        additionalText = item.presentationData.strings.Notification_StarGiftOffer_Status_Expires(textForTimeout(delta)).string
+
                         if incoming {
                             hasActionButtons = true
                         }
                     } else {
-                        additionalText = "This offer has expired."
+                        additionalText = item.presentationData.strings.Notification_StarGiftOffer_Status_Expired
                     }
                 } else {
                     text = ""
@@ -277,8 +271,6 @@ public class ChatMessageGiftOfferBubbleContentNode: ChatMessageBubbleContentNode
                                 )
                                 if let giftIconView = strongSelf.giftIcon.view {
                                     if giftIconView.superview == nil {
-                                       // backgroundView.layer.cornerRadius = 20.0
-                                        //backgroundView.clipsToBounds = true
                                         strongSelf.view.addSubview(giftIconView)
                                     }
                                     giftIconView.frame = CGRect(origin: CGPoint(x: mediaBackgroundFrame.minX + floorToScreenPixels((mediaBackgroundFrame.width - iconSize.width) / 2.0), y: mediaBackgroundFrame.minY + 17.0), size: iconSize)

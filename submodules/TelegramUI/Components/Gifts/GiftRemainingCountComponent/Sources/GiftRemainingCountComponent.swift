@@ -6,15 +6,11 @@ import TelegramCore
 import SwiftSignalKit
 import AccountContext
 import TelegramPresentationData
-import PresentationDataUtils
 import ComponentFlow
 import MultilineTextComponent
-import Markdown
-import TextFormat
-import RoundedRectWithTailPath
 import GlassBackgroundComponent
 
-public class RemainingCountComponent: Component {
+public class GiftRemainingCountComponent: Component {
     private let inactiveColor: UIColor
     private let activeColors: [UIColor]
     private let inactiveTitle: String
@@ -62,7 +58,7 @@ public class RemainingCountComponent: Component {
         self.groupingSeparator = groupingSeparator
     }
     
-    public static func ==(lhs: RemainingCountComponent, rhs: RemainingCountComponent) -> Bool {
+    public static func ==(lhs: GiftRemainingCountComponent, rhs: GiftRemainingCountComponent) -> Bool {
         if lhs.inactiveColor != rhs.inactiveColor {
             return false
         }
@@ -109,7 +105,7 @@ public class RemainingCountComponent: Component {
     }
     
     public final class View: UIView {
-        private var component: RemainingCountComponent?
+        private var component: GiftRemainingCountComponent?
         
         private let container: UIView
         private let inactiveBackground: SimpleLayer
@@ -162,7 +158,7 @@ public class RemainingCountComponent: Component {
         }
         
         var previousAvailableSize: CGSize?
-        func update(component: RemainingCountComponent, availableSize: CGSize, transition: ComponentTransition) -> CGSize {
+        func update(component: GiftRemainingCountComponent, availableSize: CGSize, transition: ComponentTransition) -> CGSize {
             self.component = component
             self.inactiveBackground.backgroundColor = component.inactiveColor.cgColor
             self.activeBackground.backgroundColor = component.activeColors.last?.cgColor
