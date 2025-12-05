@@ -18,10 +18,16 @@ class ProjectGenerator {
         let modules = try loadModules(from: modulesPath.string)
         print("Loaded \(modules.count) modules")
 
-        // Filter out empty modules
+        // Filter out empty modules, but keep:
+        // - Modules with source files (excluding .a)
+        // - Static library modules (only .a files)
+        // - XCFramework imports
         let validModules = modules.filter { name, module in
-            let sources = module.sources.filter { !$0.hasSuffix(".a") }
-            return !sources.isEmpty || module.type == "apple_static_xcframework_import"
+            let nonStaticSources = module.sources.filter { !$0.hasSuffix(".a") }
+            let staticLibs = module.sources.filter { $0.hasSuffix(".a") }
+            return !nonStaticSources.isEmpty ||
+                   !staticLibs.isEmpty ||
+                   module.type == "apple_static_xcframework_import"
         }
         print("Processing \(validModules.count) non-empty modules")
 

@@ -343,6 +343,8 @@ class TargetBuilder {
 
             // Track all frameworks we've added to avoid duplicates
             var linkedFrameworks: Set<String> = []
+            // Track library search paths for static libraries
+            var staticLibSearchPaths: Set<String> = []
 
             // Add target dependency (only for direct deps)
             for depName in deps {
@@ -375,18 +377,26 @@ class TargetBuilder {
                     // Link static libraries directly
                     for libPath in getStaticLibraries(for: depName) {
                         let libName = Path(libPath).lastComponent
-                        // Use absolute path to the static library in bazel-out
-                        let absolutePath = "$(SRCROOT)/../\(libPath)"
+                        // Create an absolute path to the project root then to the static library
+                        // SRCROOT is xcode-files, so we need to go up one level to get to telegram-ios
+                        let projectRoot = outputDir.parent()
+                        let absoluteLibPath = (projectRoot + libPath).string
                         let libRef = PBXFileReference(
-                            sourceTree: .group,
+                            sourceTree: .absolute,
                             name: libName,
                             lastKnownFileType: "archive.ar",
-                            path: absolutePath
+                            path: absoluteLibPath
                         )
                         pbxproj.add(object: libRef)
                         let buildFile = PBXBuildFile(file: libRef)
                         pbxproj.add(object: buildFile)
                         frameworksPhase.files?.append(buildFile)
+
+                        // Add the library's directory to LIBRARY_SEARCH_PATHS
+                        let libDir = Path(absoluteLibPath).parent().string
+                        if !staticLibSearchPaths.contains(libDir) {
+                            staticLibSearchPaths.insert(libDir)
+                        }
                     }
                     linkedFrameworks.insert(depName)
                     continue
@@ -412,7 +422,7 @@ class TargetBuilder {
             }
 
             // Update build configurations with dependency paths
-            if !depHeaderPaths.isEmpty || !deps.isEmpty {
+            if !depHeaderPaths.isEmpty || !deps.isEmpty || !staticLibSearchPaths.isEmpty {
                 for config in target.buildConfigurationList?.buildConfigurations ?? [] {
                     // Add header search paths
                     if !depHeaderPaths.isEmpty {
@@ -422,6 +432,11 @@ class TargetBuilder {
                     // Ensure framework and module search paths include built products
                     config.buildSettings["FRAMEWORK_SEARCH_PATHS"] = "$(inherited) $(BUILT_PRODUCTS_DIR)"
                     config.buildSettings["SWIFT_INCLUDE_PATHS"] = "$(inherited) $(BUILT_PRODUCTS_DIR)"
+                    // Add library search paths for static libraries
+                    if !staticLibSearchPaths.isEmpty {
+                        let existing = config.buildSettings["LIBRARY_SEARCH_PATHS"] as? String ?? "$(inherited)"
+                        config.buildSettings["LIBRARY_SEARCH_PATHS"] = existing + " " + staticLibSearchPaths.sorted().joined(separator: " ")
+                    }
                 }
             }
 

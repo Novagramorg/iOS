@@ -111,6 +111,11 @@ public final class HeaderPanelContainerComponent: Component {
         }
         
         func update(component: HeaderPanelContainerComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
+            var isAnimatingReplacement = false
+            if let previousComponent = self.component {
+                isAnimatingReplacement = !component.panels.contains(where: { panel in previousComponent.panels.contains(where: { $0.key == panel.key }) })
+            }
+            
             self.component = component
             self.state = state
             
@@ -183,7 +188,11 @@ public final class HeaderPanelContainerComponent: Component {
                         panelView.addSubview(panelComponentView)
                         transition.animateAlpha(view: panelView, from: 0.0, to: 1.0)
                         panelView.separator.opacity = 0.0
-                        panelView.frame = CGRect(origin: panelFrame.origin, size: CGSize(width: panelFrame.width, height: 0.0))
+                        if isAnimatingReplacement {
+                            panelView.frame = panelFrame
+                        } else {
+                            panelView.frame = CGRect(origin: panelFrame.origin, size: CGSize(width: panelFrame.width, height: 0.0))
+                        }
                     }
                     
                     panelView.separator.backgroundColor = component.theme.list.itemPlainSeparatorColor.cgColor
@@ -209,7 +218,9 @@ public final class HeaderPanelContainerComponent: Component {
                     transition.setAlpha(layer: separator, alpha: 0.0, completion: { [weak separator] _ in
                         separator?.removeFromSuperlayer()
                     })
-                    transition.setFrame(view: panelView, frame: CGRect(origin: panelView.frame.origin, size: CGSize(width: panelView.bounds.width, height: 0.0)))
+                    if !isAnimatingReplacement {
+                        transition.setFrame(view: panelView, frame: CGRect(origin: panelView.frame.origin, size: CGSize(width: panelView.bounds.width, height: 0.0)))
+                    }
                 }
             }
             for key in removedPanelKeys {

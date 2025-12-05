@@ -137,7 +137,7 @@ public final class ChatSearchNavigationContentNode: NavigationBarContentNode {
     }
     
     override public var nominalHeight: CGFloat {
-        return 54.0
+        return 60.0
     }
     
     @objc private func onCloseTapGesture(_ recognizer: UITapGestureRecognizer) {
