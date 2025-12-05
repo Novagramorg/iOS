@@ -416,6 +416,7 @@ public class GlassBackgroundView: UIView {
                 let nativeFrame = CGRect(origin: CGPoint(), size: size)
                 transition.setFrame(view: nativeView, frame: nativeFrame)
             }
+            nativeView.overrideUserInterfaceStyle = isDark ? .dark : .light
         }
         if let backgroundNode = self.backgroundNode {
             backgroundNode.updateColor(color: .clear, forceKeepBlur: tintColor.color.alpha != 1.0, transition: transition.containedViewLayoutTransition)
