@@ -129,41 +129,43 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
                     }
                     self.giftUpgradeAttributes = attributes
                     
-                    let randomModels = Array(attributes.filter({ attribute in
-                        if case .model = attribute {
-                            return true
-                        } else {
-                            return false
+                    if self.previewModels.isEmpty {
+                        let randomModels = Array(attributes.filter({ attribute in
+                            if case .model = attribute {
+                                return true
+                            } else {
+                                return false
+                            }
+                        }).shuffled().prefix(5))
+                        self.previewModels = randomModels
+                        
+                        let randomBackdrops = Array(attributes.filter({ attribute in
+                            if case .backdrop = attribute {
+                                return true
+                            } else {
+                                return false
+                            }
+                        }).shuffled())
+                        self.previewBackdrops = randomBackdrops
+                        
+                        let randomSymbols = Array(attributes.filter({ attribute in
+                            if case .pattern = attribute {
+                                return true
+                            } else {
+                                return false
+                            }
+                        }).shuffled().prefix(5))
+                        self.previewSymbols = randomSymbols
+                                
+                        for case let .model(_, file, _) in self.previewModels where !self.fetchedFiles.contains(file.fileId.id) {
+                            self.disposables.add(freeMediaFileResourceInteractiveFetched(account: context.account, userLocation: .other, fileReference: .standalone(media: file), resource: file.resource).start())
+                            self.fetchedFiles.insert(file.fileId.id)
                         }
-                    }).shuffled().prefix(5))
-                    self.previewModels = randomModels
-                    
-                    let randomBackdrops = Array(attributes.filter({ attribute in
-                        if case .backdrop = attribute {
-                            return true
-                        } else {
-                            return false
+                        
+                        for case let .pattern(_, file, _) in self.previewSymbols where !self.fetchedFiles.contains(file.fileId.id) {
+                            self.disposables.add(freeMediaFileResourceInteractiveFetched(account: context.account, userLocation: .other, fileReference: .standalone(media: file), resource: file.resource).start())
+                            self.fetchedFiles.insert(file.fileId.id)
                         }
-                    }).shuffled())
-                    self.previewBackdrops = randomBackdrops
-                    
-                    let randomSymbols = Array(attributes.filter({ attribute in
-                        if case .pattern = attribute {
-                            return true
-                        } else {
-                            return false
-                        }
-                    }).shuffled().prefix(5))
-                    self.previewSymbols = randomSymbols
-                    
-                    for case let .model(_, file, _) in self.previewModels where !self.fetchedFiles.contains(file.fileId.id) {
-                        self.disposables.add(freeMediaFileResourceInteractiveFetched(account: context.account, userLocation: .other, fileReference: .standalone(media: file), resource: file.resource).start())
-                        self.fetchedFiles.insert(file.fileId.id)
-                    }
-                    
-                    for case let .pattern(_, file, _) in self.previewSymbols where !self.fetchedFiles.contains(file.fileId.id) {
-                        self.disposables.add(freeMediaFileResourceInteractiveFetched(account: context.account, userLocation: .other, fileReference: .standalone(media: file), resource: file.resource).start())
-                        self.fetchedFiles.insert(file.fileId.id)
                     }
                     
                     self.updated()
