@@ -78,7 +78,8 @@ private final class GiftUpgradePreviewScreenComponent: Component {
         private let containerView: UIView
         private let backgroundLayer: SimpleLayer
         private let navigationBarContainer: SparseContainerView
-        private let glassContainerView: GlassBackgroundContainerView
+        private let closeGlassContainerView: GlassBackgroundContainerView
+        private let playbackGlassContainerView: GlassBackgroundContainerView
         private let scrollView: ScrollView
         private let scrollContentClippingView: SparseContainerView
         private let scrollContentView: UIView
@@ -151,7 +152,8 @@ private final class GiftUpgradePreviewScreenComponent: Component {
             self.topEdgeEffectView = EdgeEffectView()
             self.topEdgeEffectView.alpha = 0.0
             
-            self.glassContainerView = GlassBackgroundContainerView()
+            self.closeGlassContainerView = GlassBackgroundContainerView()
+            self.playbackGlassContainerView = GlassBackgroundContainerView()
             
             self.scrollView = ScrollView()
             
@@ -372,10 +374,18 @@ private final class GiftUpgradePreviewScreenComponent: Component {
         
             let visibleBounds = self.scrollView.bounds.insetBy(dx: 0.0, dy: -10.0)
             
-            let sideInset: CGFloat = 16.0 + environment.safeInsets.left
+            let fillingSize: CGFloat
+            if case .regular = environment.metrics.widthClass {
+                fillingSize = min(itemLayout.containerSize.width, 414.0) - environment.safeInsets.left * 2.0
+            } else {
+                fillingSize = min(itemLayout.containerSize.width, environment.deviceMetrics.screenSize.width) - environment.safeInsets.left * 2.0
+            }
+            
+            let rawSideInset: CGFloat = floor((itemLayout.containerSize.width - fillingSize) * 0.5)
+            let sideInset: CGFloat = rawSideInset + 16.0
             
             let optionSpacing: CGFloat = 10.0
-            let optionWidth = (itemLayout.containerSize.width - sideInset * 2.0 - optionSpacing * 2.0) / 3.0
+            let optionWidth = (fillingSize - 16.0 * 2.0 - optionSpacing * 2.0) / 3.0
             let optionSize = CGSize(width: optionWidth, height: 126.0)
             
             let topInset: CGFloat = 393.0
@@ -520,7 +530,7 @@ private final class GiftUpgradePreviewScreenComponent: Component {
                     }
                 }
                 itemFrame.origin.x += itemFrame.width + optionSpacing
-                if itemFrame.maxX > itemLayout.containerSize.width {
+                if itemFrame.maxX > rawSideInset + fillingSize {
                     itemFrame.origin.x = sideInset
                     itemFrame.origin.y += optionSize.height + optionSpacing
                 }
@@ -634,6 +644,7 @@ private final class GiftUpgradePreviewScreenComponent: Component {
             
             var buttonColor: UIColor = .white.withAlphaComponent(0.1)
             var secondaryTextColor: UIColor = .white.withAlphaComponent(0.4)
+            var badgeColor: UIColor = .white.withAlphaComponent(0.4)
             
             var attributes: [StarGift.UniqueGift.Attribute] = []
             if !self.previewModels.isEmpty {
@@ -670,11 +681,16 @@ private final class GiftUpgradePreviewScreenComponent: Component {
                     return false
                 }
             }), case let .backdrop(_, _, innerColor, outerColor, _, _, _) = backdropAttribute {
-                let topColor = UIColor(rgb: UInt32(bitPattern: innerColor)).withMultiplied(hue: 1.01, saturation: 1.22, brightness: 1.04)
-                let bottomColor = UIColor(rgb: UInt32(bitPattern: outerColor)).withMultiplied(hue: 0.97, saturation: 1.45, brightness: 0.89)
-                buttonColor = topColor.mixedWith(bottomColor, alpha: 0.8).withMultipliedBrightnessBy(1.25)
+                buttonColor = UIColor(rgb: UInt32(bitPattern: innerColor)).withMultipliedBrightnessBy(1.05)
                 
-                secondaryTextColor = topColor.withMultiplied(hue: 1.0, saturation: 1.02, brightness: 1.25).mixedWith(UIColor.white, alpha: 0.3)
+                badgeColor = UIColor(rgb: UInt32(bitPattern: innerColor)).withMultipliedBrightnessBy(1.05)
+                let outer = UIColor(rgb: UInt32(bitPattern: outerColor))
+                if outer.lightness < 0.06 {
+                    badgeColor = UIColor(rgb: UInt32(bitPattern: innerColor)).withMultipliedBrightnessBy(1.45)
+                } else if outer.lightness < 0.295 {
+                    badgeColor = UIColor(rgb: UInt32(bitPattern: innerColor)).withMultipliedBrightnessBy(1.19)
+                }
+                secondaryTextColor = UIColor(rgb: UInt32(bitPattern: innerColor)).withMultiplied(hue: 1.0, saturation: 1.02, brightness: 1.25).mixedWith(UIColor.white, alpha: 0.3)
             }
             
             var contentHeight: CGFloat = 0.0
@@ -695,9 +711,9 @@ private final class GiftUpgradePreviewScreenComponent: Component {
                     }
                 )),
                 environment: {},
-                containerSize: CGSize(width: availableSize.width, height: 300.0),
+                containerSize: CGSize(width: fillingSize, height: 300.0),
             )
-            let headerFrame = CGRect(origin: CGPoint(x: floor((fillingSize - headerSize.width) * 0.5), y: 0.0), size: headerSize)
+            let headerFrame = CGRect(origin: CGPoint(x: floor((availableSize.width - headerSize.width) * 0.5), y: 0.0), size: headerSize)
             if let headerView = self.header.view {
                 if headerView.superview == nil {
                     headerView.isUserInteractionEnabled = false
@@ -724,7 +740,7 @@ private final class GiftUpgradePreviewScreenComponent: Component {
                 environment: {},
                 containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 100.0)
             )
-            let titleFrame = CGRect(origin: CGPoint(x: floor((fillingSize - titleSize.width) * 0.5), y: contentHeight - 124.0), size: titleSize)
+            let titleFrame = CGRect(origin: CGPoint(x: floor((availableSize.width - titleSize.width) * 0.5), y: contentHeight - 124.0), size: titleSize)
             if let titleView = self.title.view {
                 if titleView.superview == nil {
                     self.navigationBarContainer.addSubview(titleView)
@@ -755,7 +771,7 @@ private final class GiftUpgradePreviewScreenComponent: Component {
                 environment: {},
                 containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 100.0)
             )
-            let subtitleFrame = CGRect(origin: CGPoint(x: floor((fillingSize - subtitleSize.width) * 0.5), y: contentHeight - 97.0), size: subtitleSize)
+            let subtitleFrame = CGRect(origin: CGPoint(x: floor((availableSize.width - subtitleSize.width) * 0.5), y: contentHeight - 97.0), size: subtitleSize)
             if let subtitleView = self.subtitle.view {
                 if subtitleView.superview == nil {
                     self.navigationBarContainer.addSubview(subtitleView)
@@ -763,9 +779,8 @@ private final class GiftUpgradePreviewScreenComponent: Component {
                 transition.setFrame(view: subtitleView, frame: subtitleFrame)
             }
             
-            
             let attributeSpacing: CGFloat = 10.0
-            let attributeWidth: CGFloat = floor((fillingSize - sideInset * 2.0 - attributeSpacing * CGFloat(attributes.count - 1)) / CGFloat(attributes.count))
+            let attributeWidth: CGFloat = floor((fillingSize - attributeSpacing * CGFloat(attributes.count - 1)) / CGFloat(attributes.count))
             let attributeHeight: CGFloat = 45.0
             
             for i in 0 ..< attributes.count {
@@ -785,8 +800,9 @@ private final class GiftUpgradePreviewScreenComponent: Component {
                     transition: transition,
                     component: AnyComponent(AttributeInfoComponent(
                         strings: environment.strings,
-                        backgroundColor: buttonColor,
-                        secondaryTextColor: secondaryTextColor,
+                        backgroundColor: UIColor.white.withAlphaComponent(0.16),
+                        secondaryTextColor: secondaryTextColor.mixedWith(.white, alpha: 0.3),
+                        badgeColor: badgeColor,
                         attribute: attribute
                     )),
                     environment: {},
@@ -801,8 +817,8 @@ private final class GiftUpgradePreviewScreenComponent: Component {
             }
             
             let edgeEffectHeight: CGFloat = 44.0
-            let edgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: contentHeight + 44.0), size: CGSize(width: availableSize.width, height: edgeEffectHeight))
-            let edgeSolidFrame = CGRect(origin: CGPoint(x: 0.0, y: contentHeight), size: CGSize(width: availableSize.width, height: 44.0))
+            let edgeEffectFrame = CGRect(origin: CGPoint(x: rawSideInset, y: contentHeight + 44.0), size: CGSize(width: fillingSize, height: edgeEffectHeight))
+            let edgeSolidFrame = CGRect(origin: CGPoint(x: rawSideInset, y: contentHeight), size: CGSize(width: fillingSize, height: 44.0))
             transition.setFrame(view: self.topEdgeSolidView, frame: edgeSolidFrame)
             transition.setFrame(view: self.topEdgeEffectView, frame: edgeEffectFrame)
             self.topEdgeSolidView.backgroundColor = theme.list.blocksBackgroundColor
@@ -833,7 +849,7 @@ private final class GiftUpgradePreviewScreenComponent: Component {
                 environment: {},
                 containerSize: CGSize(width: fillingSize - 8.0 * 2.0, height: 100.0)
             )
-            let segmentedControlFrame = CGRect(origin: CGPoint(x: floor((fillingSize - segmentedSize.width) * 0.5), y: contentHeight), size: segmentedSize)
+            let segmentedControlFrame = CGRect(origin: CGPoint(x: floor((availableSize.width - segmentedSize.width) * 0.5), y: contentHeight), size: segmentedSize)
             if let segmentedControlComponentView = self.segmentControl.view {
                 if segmentedControlComponentView.superview == nil {
                     self.navigationBarContainer.addSubview(self.topEdgeSolidView)
@@ -877,7 +893,7 @@ private final class GiftUpgradePreviewScreenComponent: Component {
                 environment: {},
                 containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 100.0)
             )
-            let descriptionFrame = CGRect(origin: CGPoint(x: floor((fillingSize - descriptionSize.width) * 0.5), y: contentHeight), size: descriptionSize)
+            let descriptionFrame = CGRect(origin: CGPoint(x: floor((availableSize.width - descriptionSize.width) * 0.5), y: contentHeight), size: descriptionSize)
             if let descriptionView = self.descriptionText.view {
                 if descriptionView.superview == nil {
                     self.scrollContentView.addSubview(descriptionView)
@@ -899,9 +915,12 @@ private final class GiftUpgradePreviewScreenComponent: Component {
             }
             transition.setFrame(view: self.backgroundHandleView, frame: backgroundHandleFrame)
             
-            self.glassContainerView.update(size: CGSize(width: fillingSize, height: 64.0), isDark: false, transition: .immediate)
-            self.glassContainerView.frame = CGRect(origin: CGPoint(x: rawSideInset, y: 0.0), size: CGSize(width: fillingSize, height: 64.0))
-                                           
+            self.playbackGlassContainerView.update(size: CGSize(width: fillingSize, height: 64.0), isDark: false, transition: .immediate)
+            self.playbackGlassContainerView.frame = CGRect(origin: CGPoint(x: rawSideInset, y: 0.0), size: CGSize(width: fillingSize, height: 64.0))
+            
+            self.closeGlassContainerView.update(size: CGSize(width: 64.0, height: 64.0), isDark: false, transition: .immediate)
+            self.closeGlassContainerView.frame = CGRect(origin: CGPoint(x: rawSideInset, y: 0.0), size: CGSize(width: 64.0, height: 64.0))
+            
             let closeButtonSize = self.closeButton.update(
                 transition: transition,
                 component: AnyComponent(GlassBarButtonComponent(
@@ -928,8 +947,9 @@ private final class GiftUpgradePreviewScreenComponent: Component {
             let closeButtonFrame = CGRect(origin: CGPoint(x: 16.0, y: 16.0), size: closeButtonSize)
             if let closeButtonView = self.closeButton.view {
                 if closeButtonView.superview == nil {
-                    self.navigationBarContainer.addSubview(self.glassContainerView)
-                    self.navigationBarContainer.addSubview(closeButtonView)
+                    self.navigationBarContainer.addSubview(self.playbackGlassContainerView)
+                    self.navigationBarContainer.addSubview(self.closeGlassContainerView)
+                    self.closeGlassContainerView.contentView.addSubview(closeButtonView)
                 }
                 transition.setFrame(view: closeButtonView, frame: closeButtonFrame)
             }
@@ -976,7 +996,7 @@ private final class GiftUpgradePreviewScreenComponent: Component {
             let playbackButtonFrame = CGRect(origin: CGPoint(x: fillingSize - 16.0 - playbackButtonSize.width, y: 16.0), size: playbackButtonSize)
             if let playbackButtonView = self.playbackButton.view {
                 if playbackButtonView.superview == nil {
-                    self.glassContainerView.contentView.addSubview(playbackButtonView)
+                    self.playbackGlassContainerView.contentView.addSubview(playbackButtonView)
                 }
                 transition.setFrame(view: playbackButtonView, frame: playbackButtonFrame)
             }
@@ -1120,17 +1140,20 @@ private final class AttributeInfoComponent: Component {
     let strings: PresentationStrings
     let backgroundColor: UIColor
     let secondaryTextColor: UIColor
+    let badgeColor: UIColor
     let attribute: StarGift.UniqueGift.Attribute
     
     init(
         strings: PresentationStrings,
         backgroundColor: UIColor,
         secondaryTextColor: UIColor,
+        badgeColor: UIColor,
         attribute: StarGift.UniqueGift.Attribute
     ) {
         self.strings = strings
         self.backgroundColor = backgroundColor
         self.secondaryTextColor = secondaryTextColor
+        self.badgeColor = badgeColor
         self.attribute = attribute
     }
     
@@ -1142,6 +1165,9 @@ private final class AttributeInfoComponent: Component {
             return false
         }
         if lhs.secondaryTextColor != rhs.secondaryTextColor {
+            return false
+        }
+        if lhs.badgeColor != rhs.badgeColor {
             return false
         }
         if lhs.attribute != rhs.attribute {
@@ -1201,9 +1227,7 @@ private final class AttributeInfoComponent: Component {
                 subtitle = ""
                 rarity = 0
             }
-        
-            let _ = rarity
-            
+                    
             let titleSize = self.title.update(
                 transition: .spring(duration: 0.2),
                 component: AnyComponent(AnimatedTextComponent(
@@ -1274,7 +1298,7 @@ private final class AttributeInfoComponent: Component {
             
             let badgeBackgroundFrame = badgeFrame.insetBy(dx: -5.5, dy: -2.0)
             transition.setFrame(layer: self.badgeBackground, frame: badgeBackgroundFrame)
-            transition.setBackgroundColor(layer: self.badgeBackground, color: component.backgroundColor.mixedWith(component.secondaryTextColor, alpha: 0.5))
+            transition.setBackgroundColor(layer: self.badgeBackground, color: component.badgeColor)
             
             
             return availableSize

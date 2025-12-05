@@ -305,7 +305,11 @@ public final class SheetComponent<ChildEnvironmentType: Sendable & Equatable>: C
             
             let transition = ContainedViewLayoutTransition.animated(duration: 0.4, curve: .spring)
             let targetPosition = self.scrollView.center
-            self.scrollView.center = targetPosition.offsetBy(dx: 0.0, dy: self.scrollView.contentSize.height)
+            var offset: CGFloat = self.scrollView.contentSize.height
+            if self.isCentered {
+                offset = self.frame.height + self.scrollView.frame.height * 0.5
+            }
+            self.scrollView.center = targetPosition.offsetBy(dx: 0.0, dy: offset)
             transition.animateView(allowUserInteraction: true, {
                 self.scrollView.center = targetPosition
             })
@@ -338,18 +342,27 @@ public final class SheetComponent<ChildEnvironmentType: Sendable & Equatable>: C
                 let contentOffset = (self.scrollView.contentOffset.y + self.scrollView.contentInset.top - self.scrollView.contentSize.height) * -1.0
                 let dismissalOffset = self.scrollView.contentSize.height + abs(contentView.frame.minY)
                 let delta = dismissalOffset - contentOffset
+                var targetPosition = self.scrollView.center.y + delta
+                if self.isCentered {
+                    targetPosition = self.frame.height + self.scrollView.frame.height * 0.5
+                }
                 
-                transition.updatePosition(layer: self.scrollView.layer, position: CGPoint(x: self.scrollView.center.x, y: self.scrollView.center.y + delta), completion: { _ in
+                transition.updatePosition(layer: self.scrollView.layer, position: CGPoint(x: self.scrollView.center.x, y: targetPosition), completion: { _ in
                     completion()
                 })
             } else {
-                self.scrollView.layer.animatePosition(from: CGPoint(), to: CGPoint(x: 0.0, y: self.scrollView.contentSize.height + abs(contentView.frame.minY)), duration: 0.25, timingFunction: CAMediaTimingFunctionName.easeInEaseOut.rawValue, removeOnCompletion: false, additive: true, completion: { _ in
+                var targetOffset: CGFloat = self.scrollView.contentSize.height + abs(contentView.frame.minY)
+                if self.isCentered {
+                    targetOffset = self.frame.height + self.scrollView.frame.height * 0.5
+                }
+                self.scrollView.layer.animatePosition(from: CGPoint(), to: CGPoint(x: 0.0, y: targetOffset), duration: 0.25, timingFunction: CAMediaTimingFunctionName.easeInEaseOut.rawValue, removeOnCompletion: false, additive: true, completion: { _ in
                     completion()
                 })
             }
         }
         
         private var currentHasInputHeight = false
+        private var isCentered = false
         private var currentAvailableSize: CGSize?
         func update(component: SheetComponent<ChildEnvironmentType>, availableSize: CGSize, state: EmptyComponentState, environment: Environment<EnvironmentType>, transition: ComponentTransition) -> CGSize {
             let previousHasInputHeight = self.currentHasInputHeight
@@ -364,6 +377,7 @@ public final class SheetComponent<ChildEnvironmentType: Sendable & Equatable>: C
             }
             
             self.component = component
+            self.isCentered = sheetEnvironment.isCentered
             self.currentHasInputHeight = sheetEnvironment.hasInputHeight
             
             if self.isAnimatingOut {

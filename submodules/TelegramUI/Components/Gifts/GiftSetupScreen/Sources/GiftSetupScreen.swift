@@ -39,6 +39,7 @@ import AnimatedTextComponent
 import GlassBarButtonComponent
 import MessageInputPanelComponent
 import GiftRemainingCountComponent
+import GlassBackgroundComponent
 
 private final class GiftSetupScreenComponent: Component {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
@@ -113,6 +114,7 @@ private final class GiftSetupScreenComponent: Component {
         private let upgradeSection = ComponentView<Empty>()
         private let hideSection = ComponentView<Empty>()
         
+        private let glassContainerView = GlassBackgroundContainerView()
         private let inputPanel = ComponentView<Empty>()
         private let inputPanelExternalState = MessageInputPanelComponent.ExternalState()
         
@@ -1366,11 +1368,16 @@ private final class GiftSetupScreenComponent: Component {
                     transition.setFrame(view: introContentView, frame: CGRect(origin: CGPoint(x: rawSideInset, y: 0.0), size: introContentSize))
                 }
                 
-                let inputPanelFrame = CGRect(origin: CGPoint(x: rawSideInset + inputPanelInset, y: contentHeight + introContentSize.height - inputPanelInset - inputPanelSize.height + 6.0), size: inputPanelSize)
+                let glassContainerFrame = CGRect(origin: CGPoint(x: rawSideInset + inputPanelInset, y: contentHeight + introContentSize.height - inputPanelInset - inputPanelSize.height + 6.0 - 20.0), size: CGSize(width: inputPanelSize.width, height: inputPanelSize.height + 40.0))
+                self.glassContainerView.update(size: glassContainerFrame.size, isDark: theme.overallDarkAppearance, transition: transition)
+                
+                let inputPanelFrame = CGRect(origin: CGPoint(x: 0.0, y: 20.0), size: inputPanelSize)
                 if let inputPanelView = self.inputPanel.view {
                     if inputPanelView.superview == nil {
-                        self.scrollContentView.addSubview(inputPanelView)
+                        self.scrollContentView.addSubview(self.glassContainerView)
+                        self.glassContainerView.contentView.addSubview(inputPanelView)
                     }
+                    transition.setFrame(view: self.glassContainerView, frame: glassContainerFrame)
                     transition.setFrame(view: inputPanelView, frame: inputPanelFrame)
                 }
             }

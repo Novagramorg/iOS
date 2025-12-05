@@ -738,12 +738,9 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
                     } else {
                         return false
                     }
-                }), case let .backdrop(_, _, innerColor, outerColor, _, _, _) = backdropAttribute {
-                    let topColor = UIColor(rgb: UInt32(bitPattern: innerColor)).withMultiplied(hue: 1.01, saturation: 1.22, brightness: 1.04)
-                    let bottomColor = UIColor(rgb: UInt32(bitPattern: outerColor)).withMultiplied(hue: 0.97, saturation: 1.45, brightness: 0.89)
-                    buttonColor = topColor.mixedWith(bottomColor, alpha: 0.8).withMultipliedBrightnessBy(1.25)
-                    
-                    secondaryTextColor = topColor.withMultiplied(hue: 1.0, saturation: 1.02, brightness: 1.25).mixedWith(UIColor.white, alpha: 0.5)
+                }), case let .backdrop(_, _, innerColor, _, _, _, _) = backdropAttribute {
+                    buttonColor = UIColor(rgb: UInt32(bitPattern: innerColor)).withMultipliedBrightnessBy(1.05)
+                    secondaryTextColor = UIColor(rgb: UInt32(bitPattern: innerColor)).withMultiplied(hue: 1.0, saturation: 1.02, brightness: 1.25).mixedWith(UIColor.white, alpha: 0.3)
                 }
                 
                 let headerHeight: CGFloat = 264.0
