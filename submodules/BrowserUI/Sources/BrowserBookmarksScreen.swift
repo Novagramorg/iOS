@@ -429,12 +429,6 @@ public final class BrowserBookmarksScreen: ViewController {
                 searchContentNode.updateListVisibleContentOffset(offset)
             }
         }
-//        
-//        self.node.historyNode.didEndScrolling = { [weak self] _ in
-//            if let strongSelf = self, let searchContentNode = strongSelf.searchContentNode {
-//                let _ = fixNavigationSearchableListNodeScrolling(strongSelf.node.historyNode, searchNode: searchContentNode)
-//            }
-//        }
         
         self.displayNodeDidLoad()
     }

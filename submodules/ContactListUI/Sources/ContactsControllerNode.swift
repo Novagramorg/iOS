@@ -485,7 +485,7 @@ final class ContactsControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
         self.isSearchDisplayControllerActive = true
         self.storiesUnlocked = false
         
-        self.searchDisplayController = SearchDisplayController(presentationData: self.presentationData, mode: .list, contentNode: ContactsSearchContainerNode(context: self.context, onlyWriteable: false, categories: [.cloudContacts, .global, .deviceContacts], addContact: { [weak self] phoneNumber in
+        self.searchDisplayController = SearchDisplayController(presentationData: self.presentationData, mode: .list, contentNode: ContactsSearchContainerNode(context: self.context, glass: true, externalSearchBar: true, onlyWriteable: false, categories: [.cloudContacts, .global, .deviceContacts], addContact: { [weak self] phoneNumber in
             if let requestAddContact = self?.requestAddContact {
                 requestAddContact(phoneNumber)
             }

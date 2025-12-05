@@ -280,9 +280,9 @@ open class ViewControllerComponentContainer: ViewController {
         case .none:
             navigationBarPresentationData = nil
         case .transparent:
-            navigationBarPresentationData = NavigationBarPresentationData(presentationData: presentationData, hideBackground: true, hideBadge: false, hideSeparator: true)
+            navigationBarPresentationData = NavigationBarPresentationData(presentationData: presentationData, hideBackground: true, hideBadge: false, hideSeparator: true, style: .glass)
         case .default:
-            navigationBarPresentationData = NavigationBarPresentationData(presentationData: presentationData)
+            navigationBarPresentationData = NavigationBarPresentationData(presentationData: presentationData, style: .glass)
         }
         super.init(navigationBarPresentationData: navigationBarPresentationData)
         
@@ -308,9 +308,9 @@ open class ViewControllerComponentContainer: ViewController {
         case .none:
             navigationBarPresentationData = nil
         case .transparent:
-            navigationBarPresentationData = NavigationBarPresentationData(presentationData: presentationData, hideBackground: true, hideBadge: false, hideSeparator: true)
+            navigationBarPresentationData = NavigationBarPresentationData(presentationData: presentationData, hideBackground: true, hideBadge: false, hideSeparator: true, style: .glass)
         case .default:
-            navigationBarPresentationData = NavigationBarPresentationData(presentationData: presentationData)
+            navigationBarPresentationData = NavigationBarPresentationData(presentationData: presentationData, style: .glass)
         }
         super.init(navigationBarPresentationData: navigationBarPresentationData)
         
@@ -356,9 +356,9 @@ open class ViewControllerComponentContainer: ViewController {
                 case .none:
                     navigationBarPresentationData = nil
                 case .transparent:
-                    navigationBarPresentationData = NavigationBarPresentationData(presentationData: presentationData, hideBackground: true, hideBadge: false, hideSeparator: true)
+                    navigationBarPresentationData = NavigationBarPresentationData(presentationData: presentationData, hideBackground: true, hideBadge: false, hideSeparator: true, style: .glass)
                 case .default:
-                    navigationBarPresentationData = NavigationBarPresentationData(presentationData: presentationData)
+                    navigationBarPresentationData = NavigationBarPresentationData(presentationData: presentationData, style: .glass)
                 }
                 if let navigationBarPresentationData {
                     strongSelf.navigationBar?.updatePresentationData(navigationBarPresentationData, transition: .immediate)

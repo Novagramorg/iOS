@@ -46,6 +46,8 @@ class ProjectGenerator {
             "CLANG_CXX_LANGUAGE_STANDARD": "c++17",
             "CLANG_ENABLE_MODULES": "YES",
             "CLANG_ENABLE_OBJC_ARC": "YES",
+            "CLANG_ENABLE_EXPLICIT_MODULES": "NO",  // Disable explicit module builds for ObjC-Swift interop
+            "SWIFT_ENABLE_EXPLICIT_MODULES": "NO",  // Disable explicit module builds for Swift
             "ENABLE_STRICT_OBJC_MSGSEND": "YES",
             "GCC_NO_COMMON_BLOCKS": "YES",
             "IPHONEOS_DEPLOYMENT_TARGET": "13.0",

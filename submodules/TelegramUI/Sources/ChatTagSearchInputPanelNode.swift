@@ -573,7 +573,7 @@ final class ChatTagSearchInputPanelNode: ChatInputPanelNode {
         rightControlsBackgroundFrame.origin.x -= rightControlsBackgroundFrame.width
         transition.setFrame(view: self.rightControlsBackgroundView, frame: rightControlsBackgroundFrame)
         self.rightControlsBackgroundView.update(size: rightControlsBackgroundFrame.size, cornerRadius: rightControlsBackgroundFrame.height * 0.5, isDark: params.interfaceState.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: params.interfaceState.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7)), transition: transition)
-        transition.setAlpha(view: self.rightControlsBackgroundView, alpha: rightControlsRect.isEmpty ? 0.0 : 1.0)
+        self.rightControlsBackgroundView.isHidden = rightControlsRect.isEmpty
 
         return height
     }

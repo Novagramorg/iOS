@@ -1533,7 +1533,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                 containerSize: CGSize(width: layout.size.width - layout.safeInsets.left - layout.safeInsets.right, height: layout.size.height)
             )
             headerPanelsSize = headerPanelsSizeValue
-            floatingTopicsPanelInsets.top += 8.0 + headerPanelsSizeValue.height
+            floatingTopicsPanelInsets.top += headerPanelsSizeValue.height
         } else if let headerPanelsView = self.headerPanelsView {
             self.headerPanelsView = nil
             if let headerPanelsComponentView = headerPanelsView.view {
@@ -2387,7 +2387,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             topBackgroundEdgeEffectNode.update(
                 rect: blurFrame,
                 edge: WallpaperEdgeEffectEdge(edge: .top, size: 40.0),
-                blur: true,
+                blur: false,
                 containerSize: wallpaperBounds.size,
                 transition: transition
             )
@@ -2449,7 +2449,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         transition.updateFrame(node: self.inputPanelBackgroundNode, frame: apparentInputBackgroundFrame, beginWithCurrentState: true)
         
         if let headerPanelsComponentView = self.headerPanelsView?.view, let headerPanelsSize {
-            let headerPanelsFrame = CGRect(origin: CGPoint(x: layout.safeInsets.left, y: sidePanelTopInset + 8.0), size: headerPanelsSize)
+            let headerPanelsFrame = CGRect(origin: CGPoint(x: layout.safeInsets.left, y: sidePanelTopInset), size: headerPanelsSize)
             var headerPanelsTransition = ComponentTransition(transition)
             if headerPanelsComponentView.superview == nil {
                 headerPanelsTransition.animateAlpha(view: headerPanelsComponentView, from: 0.0, to: 1.0)
@@ -2457,7 +2457,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                 self.floatingTopicsPanelContainer.view.addSubview(headerPanelsComponentView)
             }
             headerPanelsTransition.setFrame(view: headerPanelsComponentView, frame: headerPanelsFrame)
-            sidePanelTopInset += 8.0 + headerPanelsSize.height
+            sidePanelTopInset += headerPanelsSize.height
         }
         
         let floatingTopicsPanelContainerFrame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: 0.0, height: layout.size.height))

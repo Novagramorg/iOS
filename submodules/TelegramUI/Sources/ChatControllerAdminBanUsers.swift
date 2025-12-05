@@ -429,6 +429,7 @@ extension ChatControllerImpl {
                 return
             }
             
+            
             if messageIds.count == 1, let message = messages.values.compactMap({ $0 }).first, let repeatAttribute = message.attributes.first(where: { $0 is ScheduledRepeatAttribute }) as? ScheduledRepeatAttribute {
                 let commit = { [weak self] in
                     guard let self else {

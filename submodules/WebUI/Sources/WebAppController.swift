@@ -3510,7 +3510,7 @@ public final class WebAppController: ViewController, AttachmentContainable {
     
     private func updateNavigationButtons() {
         if case .attachMenu = self.source {
-            let barButtonSize = CGSize(width: 40.0, height: 40.0)
+            let barButtonSize = CGSize(width: 44.0, height: 44.0)
             let closeComponent: AnyComponentWithIdentity<Empty> = AnyComponentWithIdentity(
                 id: "close",
                 component: AnyComponent(GlassBarButtonComponent(

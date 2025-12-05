@@ -327,13 +327,23 @@ open class ItemListController: ViewController, KeyShortcutResponder, Presentable
             Queue.mainQueue().async {
                 if let strongSelf = self {
                     let previousState = previousControllerState.swap(controllerState)
+                    let isFirstTime = previousState == nil
                     if previousState?.title != controllerState.title {
+                        var previousHadContentNode = false
+                        switch previousState?.title {
+                        case .textWithTabs:
+                            previousHadContentNode = true
+                        default:
+                            break
+                        }
                         switch controllerState.title {
                             case let .text(text):
                                 strongSelf.title = text
                                 strongSelf.navigationItem.titleView = nil
                                 strongSelf.segmentedTitleView = nil
-                                strongSelf.navigationBar?.setContentNode(nil, animated: false)
+                                if previousHadContentNode {
+                                    strongSelf.navigationBar?.setContentNode(nil, animated: false)
+                                }
                                 if strongSelf.isNodeLoaded {
                                     strongSelf.controllerNode.panRecognizer?.isEnabled = false
                                 }
@@ -341,7 +351,9 @@ open class ItemListController: ViewController, KeyShortcutResponder, Presentable
                                 strongSelf.title = ""
                                 strongSelf.navigationItem.titleView = ItemListTextWithSubtitleTitleView(theme: controllerState.presentationData.theme, title: title, subtitle: subtitle)
                                 strongSelf.segmentedTitleView = nil
-                                strongSelf.navigationBar?.setContentNode(nil, animated: false)
+                                if previousHadContentNode {
+                                    strongSelf.navigationBar?.setContentNode(nil, animated: false)
+                                }
                                 if strongSelf.isNodeLoaded {
                                     strongSelf.controllerNode.panRecognizer?.isEnabled = false
                                 }
@@ -359,7 +371,9 @@ open class ItemListController: ViewController, KeyShortcutResponder, Presentable
                                         }
                                     }
                                 }
-                                strongSelf.navigationBar?.setContentNode(nil, animated: false)
+                                if previousHadContentNode {
+                                    strongSelf.navigationBar?.setContentNode(nil, animated: false)
+                                }
                                 if strongSelf.isNodeLoaded {
                                     strongSelf.controllerNode.panRecognizer?.isEnabled = false
                                 }
@@ -516,7 +530,7 @@ open class ItemListController: ViewController, KeyShortcutResponder, Presentable
                         }
                     }
                     
-                    if strongSelf.presentationData != controllerState.presentationData {
+                    if strongSelf.presentationData != controllerState.presentationData || isFirstTime {
                         strongSelf.presentationData = controllerState.presentationData
                         
                         strongSelf.navigationBar?.updatePresentationData(NavigationBarPresentationData(theme: NavigationBarTheme(rootControllerTheme: strongSelf.presentationData.theme, hideBackground: strongSelf.hideNavigationBarBackground, hideSeparator: strongSelf.hideNavigationBarBackground, edgeEffectColor: state.0.style == .blocks ? strongSelf.presentationData.theme.list.blocksBackgroundColor : strongSelf.presentationData.theme.list.plainBackgroundColor, style: .glass), strings: NavigationBarStrings(presentationStrings: strongSelf.presentationData.strings)), transition: .immediate)

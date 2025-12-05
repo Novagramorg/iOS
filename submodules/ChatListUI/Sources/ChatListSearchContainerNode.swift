@@ -37,6 +37,9 @@ import PremiumUI
 import AvatarNode
 import StoryContainerScreen
 import ChatListSearchFiltersContainerNode
+import EdgeEffect
+import ComponentFlow
+import ComponentDisplayAdapters
 
 private enum ChatListTokenId: Int32 {
     case archive
@@ -107,6 +110,8 @@ public final class ChatListSearchContainerNode: SearchDisplayControllerContentNo
     
     var dismissSearch: (() -> Void)?
     var openAdInfo: ((ASDisplayNode, AdPeer) -> Void)?
+    
+    private let edgeEffectView: EdgeEffectView
     
     private let filterContainerNode: ChatListSearchFiltersContainerNode
     private let paneContainerNode: ChatListSearchPaneContainerNode
@@ -181,6 +186,8 @@ public final class ChatListSearchContainerNode: SearchDisplayControllerContentNo
         self.openMessage = originalOpenMessage
         self.present = present
         self.presentInGlobalOverlay = presentInGlobalOverlay
+        
+        self.edgeEffectView = EdgeEffectView()
         
         self.filterContainerNode = ChatListSearchFiltersContainerNode()
         self.paneContainerNode = ChatListSearchPaneContainerNode(context: context, animationCache: animationCache, animationRenderer: animationRenderer, updatedPresentationData: updatedPresentationData, peersFilter: self.peersFilter, requestPeerType: self.requestPeerType, location: location, searchQuery: self.searchQuery.get(), searchOptions: self.searchOptions.get(), navigationController: navigationController, parentController: parentController())
@@ -320,6 +327,8 @@ public final class ChatListSearchContainerNode: SearchDisplayControllerContentNo
         self.paneContainerNode.requesDismissInput = {
             parentController()?.view.endEditing(true)
         }
+        
+        self.view.addSubview(self.edgeEffectView)
         
         self.addSubnode(self.filterContainerNode)
         self.filterContainerNode.filterPressed = { [weak self] filter in
@@ -921,7 +930,7 @@ public final class ChatListSearchContainerNode: SearchDisplayControllerContentNo
                     return strongSelf.context.sharedContext.chatAvailableMessageActions(engine: strongSelf.context.engine, accountPeerId: strongSelf.context.account.peerId, messageIds: messageIds, messages: messages, peers: peers)
                 }
                 self.selectionPanelNode = selectionPanelNode
-                self.addSubnode(selectionPanelNode)
+                self.insertSubnode(selectionPanelNode, aboveSubnode: self.filterContainerNode)
             }
             selectionPanelNode.selectedMessages = selectedMessageIds
             
@@ -942,7 +951,7 @@ public final class ChatListSearchContainerNode: SearchDisplayControllerContentNo
             })
         }
         
-        transition.updateFrame(node: self.paneContainerNode, frame: CGRect(x: 0.0, y: topInset, width: layout.size.width, height: layout.size.height - topInset))
+        transition.updateFrame(node: self.paneContainerNode, frame: CGRect(x: 0.0, y: 0.0, width: layout.size.width, height: layout.size.height))
         
         var bottomInset = layout.intrinsicInsets.bottom
         if let inputHeight = layout.inputHeight {
@@ -964,8 +973,16 @@ public final class ChatListSearchContainerNode: SearchDisplayControllerContentNo
         } else {
             availablePanes = isForum ? [.topics] : [.chats]
         }
+        
+        bottomInset += 44.0
+        
+        let edgeEffectHeight: CGFloat = bottomInset
+        let edgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: layout.size.height - edgeEffectHeight), size: CGSize(width: layout.size.width, height: edgeEffectHeight))
+        transition.updateFrame(view: self.edgeEffectView, frame: edgeEffectFrame)
+        self.edgeEffectView.update(content: self.presentationData.theme.list.plainBackgroundColor, rect: edgeEffectFrame, edge: .bottom, edgeSize: min(edgeEffectHeight, 50.0), transition: ComponentTransition(transition))
+        transition.updateAlpha(layer: self.edgeEffectView.layer, alpha: edgeEffectHeight > 21.0 ? 1.0 : 0.0)
 
-        self.paneContainerNode.update(size: CGSize(width: layout.size.width, height: layout.size.height - topInset), sideInset: layout.safeInsets.left, bottomInset: bottomInset, visibleHeight: layout.size.height - topInset, presentationData: self.presentationData, availablePanes: availablePanes, transition: transition)
+        self.paneContainerNode.update(size: CGSize(width: layout.size.width, height: layout.size.height), sideInset: layout.safeInsets.left, topInset: topInset, bottomInset: bottomInset, visibleHeight: layout.size.height, presentationData: self.presentationData, availablePanes: availablePanes, transition: transition)
     }
     
     private var currentMessages: ([EnginePeer.Id: EnginePeer], [EngineMessage.Id: EngineMessage]) {

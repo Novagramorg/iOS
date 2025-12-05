@@ -21,7 +21,9 @@ class SymlinkManager {
         guard path.exists else { return }
         do {
             for item in try path.children() {
-                if item.lastComponent == ".build" { continue }
+                let name = item.lastComponent
+                // Skip build artifacts and xcodeproj bundles
+                if name == ".build" || name.hasSuffix(".xcodeproj") { continue }
                 previousFiles.insert(item)
                 if item.isDirectory && !item.isSymlink {
                     scanDirectory(item)

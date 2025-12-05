@@ -76,3 +76,4 @@ Telegram.LSP.json
 spm-files
 xcode-files
 .bsp/**
+/.claude/

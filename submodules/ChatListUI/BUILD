@@ -125,6 +125,7 @@ swift_library(
         "//submodules/TelegramUI/Components/MediaPlaybackHeaderPanelComponent",
         "//submodules/TelegramUI/Components/LiveLocationHeaderPanelComponent",
         "//submodules/TelegramUI/Components/ChatList/ChatListSearchFiltersContainerNode",
+        "//submodules/TelegramUI/Components/ChatList/ChatListHeaderNoticeComponent",
     ],
     visibility = [
         "//visibility:public",

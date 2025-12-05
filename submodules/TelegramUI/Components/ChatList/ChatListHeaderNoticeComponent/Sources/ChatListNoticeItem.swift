@@ -5,7 +5,6 @@ import Display
 import SwiftSignalKit
 import TelegramCore
 import TelegramPresentationData
-import ListSectionHeaderNode
 import AppBundle
 import ItemListUI
 import Markdown
@@ -14,6 +13,7 @@ import MergedAvatarsNode
 import TextNodeWithEntities
 import TextFormat
 import AvatarNode
+import GlobalControlPanelsContext
 
 class ChatListNoticeItem: ListViewItem {
     enum Action {
@@ -25,12 +25,12 @@ class ChatListNoticeItem: ListViewItem {
     let context: AccountContext
     let theme: PresentationTheme
     let strings: PresentationStrings
-    let notice: ChatListNotice
+    let notice: GlobalControlPanelsContext.ChatListNotice
     let action: (Action) -> Void
     
     let selectable: Bool = true
     
-    init(context: AccountContext, theme: PresentationTheme, strings: PresentationStrings, notice: ChatListNotice, action: @escaping (Action) -> Void) {
+    init(context: AccountContext, theme: PresentationTheme, strings: PresentationStrings, notice: GlobalControlPanelsContext.ChatListNotice, action: @escaping (Action) -> Void) {
         self.context = context
         self.theme = theme
         self.strings = strings
@@ -140,9 +140,6 @@ final class ChatListNoticeItemNode: ItemListRevealOptionsItemNode {
         self.contentContainer.addSubnode(self.arrowNode)
         
         self.addSubnode(self.contentContainer)
-        self.addSubnode(self.separatorNode)
-        
-        self.zPosition = 1.0
     }
     
     @objc private func closePressed() {
@@ -329,8 +326,6 @@ final class ChatListNoticeItemNode: ItemListRevealOptionsItemNode {
                     strongSelf.item = item
                     
                     if themeUpdated {
-                        strongSelf.contentContainer.backgroundColor = item.theme.chatList.pinnedItemBackgroundColor
-                        strongSelf.separatorNode.backgroundColor = item.theme.chatList.itemSeparatorColor
                         strongSelf.arrowNode.image = PresentationResourcesItemList.disclosureArrowImage(item.theme)
                     }
                     
@@ -502,7 +497,7 @@ final class ChatListNoticeItemNode: ItemListRevealOptionsItemNode {
                     
                     strongSelf.updateLayout(size: layout.contentSize, leftInset: params.leftInset, rightInset: params.rightInset)
                     
-                    //strongSelf.contentContainer.frame = CGRect(origin: CGPoint(), size: layout.contentSize)
+                    strongSelf.contentContainer.frame = CGRect(origin: CGPoint(), size: layout.contentSize)
                     
                     switch item.notice {
                     default:

@@ -256,9 +256,9 @@ public protocol CustomViewControllerNavigationDataSummary: AnyObject {
         if self._presentedInModal && self._hasGlassStyle {
             defaultNavigationBarHeight = 66.0
         } else if self._presentedInModal && layout.orientation == .portrait {
-            defaultNavigationBarHeight = 56.0
+            defaultNavigationBarHeight = 60.0
         } else {
-            defaultNavigationBarHeight = 44.0 + 12.0
+            defaultNavigationBarHeight = 60.0
         }
         let navigationBarHeight: CGFloat = statusBarHeight + (self.navigationBar?.contentHeight(defaultHeight: defaultNavigationBarHeight) ?? defaultNavigationBarHeight)
 

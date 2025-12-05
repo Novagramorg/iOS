@@ -47,22 +47,3 @@ public func fixNavigationSearchableListNodeScrolling(_ listNode: ListView, searc
     }
     return false
 }
-
-func fixNavigationSearchableGridNodeScrolling(_ gridNode: GridNode, searchNode: NavigationBarSearchContentNode) -> Bool {
-    if searchNode.expansionProgress > 0.0 && searchNode.expansionProgress < 1.0 {
-        let scrollToItem: GridNodeScrollToItem
-        let targetProgress: CGFloat
-        if searchNode.expansionProgress < 0.6 {
-            scrollToItem = GridNodeScrollToItem(index: 0, position: .top(-navigationBarSearchContentHeight), transition: .animated(duration: 0.3, curve: .easeInOut), directionHint: .up, adjustForSection: true, adjustForTopInset: true)
-            targetProgress = 0.0
-        } else {
-            scrollToItem = GridNodeScrollToItem(index: 0, position: .top(0.0), transition: .animated(duration: 0.3, curve: .easeInOut), directionHint: .up, adjustForSection: true, adjustForTopInset: true)
-            targetProgress = 1.0
-        }
-        searchNode.updateExpansionProgress(targetProgress, animated: true)
-        
-        gridNode.transaction(GridNodeTransaction(deleteItems: [], insertItems: [], updateItems: [], scrollToItem: scrollToItem, updateLayout: nil, itemTransition: .immediate, stationaryItems: .none, updateFirstIndexInSectionOffset: nil, updateOpaqueState: nil, synchronousLoads: false), completion: { _ in })
-        return true
-    }
-    return false
-}

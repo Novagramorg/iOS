@@ -749,7 +749,7 @@ public final class NavigationButtonNodeImpl: ContextControllerSourceNode, Naviga
                 }
             }
             if self.bounds.contains(point) {
-                return self.nodes[0].view
+                return self.nodes[0].view.hitTest(self.view.convert(point, to: self.nodes[0].view), with: event)
             } else {
                 return nil
             }
