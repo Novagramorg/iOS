@@ -1141,6 +1141,8 @@ public final class GiftItemComponent: Component {
             } else {
                 if [.buttonIcon, .tableIcon].contains(component.mode) {
                     
+                } else if case .upgradePreview = component.mode {
+                    self.backgroundLayer.backgroundColor = component.theme.list.itemModalBlocksBackgroundColor.cgColor
                 } else {
                     self.backgroundLayer.backgroundColor = component.theme.list.itemBlocksBackgroundColor.cgColor
                 }
