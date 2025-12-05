@@ -213,11 +213,13 @@ private final class SheetContent: CombinedComponent {
                 case .stars:
                     amountTitle = environment.strings.Gift_Offer_PriceSectionStars
                     minAmount = StarsAmount(value: gift.minOfferStars ?? resaleConfiguration.starGiftResaleMinStarsAmount, nanos: 0)
+                    maxAmount = StarsAmount(value: resaleConfiguration.starGiftResaleMaxStarsAmount, nanos: 0)
                 case .ton:
                     amountTitle = environment.strings.Gift_Offer_PriceSectionTon
                     minAmount = StarsAmount(value: resaleConfiguration.starGiftResaleMinTonAmount, nanos: 0)
+                    maxAmount = StarsAmount(value: resaleConfiguration.starGiftResaleMaxTonAmount, nanos: 0)
                 }
-                maxAmount = nil
+                
                 amountPlaceholder = environment.strings.Gift_Offer_PricePlaceholder
                 
                 if let usdWithdrawRate = withdrawConfiguration.usdWithdrawRate, let tonUsdRate = withdrawConfiguration.tonUsdRate, let amount = state.amount, amount > StarsAmount.zero {
