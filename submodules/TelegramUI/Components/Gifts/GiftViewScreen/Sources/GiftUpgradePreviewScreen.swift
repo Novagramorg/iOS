@@ -409,8 +409,8 @@ private final class GiftUpgradePreviewScreenComponent: Component {
                 var isSelected = false
                 for attribute in attributeList {
                     switch attribute {
-                    case let .model(name, _, rarityValue):
-                        itemId += name
+                    case let .model(name, file, rarityValue):
+                        itemId += "\(file.fileId.id)"
                         if self.selectedSection == .models {
                             title = name
                             rarity = rarityValue
@@ -418,8 +418,8 @@ private final class GiftUpgradePreviewScreenComponent: Component {
                             
                             isSelected = self.selectedModel == attribute
                         }
-                    case let .backdrop(name, _, _, _, _, _, rarityValue):
-                        itemId += name
+                    case let .backdrop(name, id, _, _, _, _, rarityValue):
+                        itemId += "\(id)"
                         if self.selectedSection == .backdrops {
                             title = name
                             rarity = rarityValue
@@ -427,8 +427,8 @@ private final class GiftUpgradePreviewScreenComponent: Component {
                             
                             isSelected = self.selectedBackdrop == attribute
                         }
-                    case let .pattern(name, _, rarityValue):
-                        itemId += name
+                    case let .pattern(name, file, rarityValue):
+                        itemId += "\(file.fileId.id)"
                         if self.selectedSection == .symbols {
                             title = name
                             rarity = rarityValue
