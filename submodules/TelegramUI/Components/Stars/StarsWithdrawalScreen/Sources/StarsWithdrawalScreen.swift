@@ -1769,7 +1769,14 @@ public final class AmountFieldComponent: Component {
             guard let component = self.component, let value = component.value else {
                 return
             }
-            self.textField.text = "\(value)"
+            var text = ""
+            switch component.currency {
+            case .stars:
+                text = "\(value)"
+            case .ton:
+                text = "\(formatTonAmountText(value, dateTimeFormat: PresentationDateTimeFormat(timeFormat: component.dateTimeFormat.timeFormat, dateFormat: component.dateTimeFormat.dateFormat, dateSeparator: "", dateSuffix: "", requiresFullYear: false, decimalSeparator: ".", groupingSeparator: ""), maxDecimalPositions: nil))"
+            }
+            self.textField.text = text
             self.placeholderView.view?.isHidden = !(self.textField.text ?? "").isEmpty
         }
         
