@@ -5164,42 +5164,50 @@ final class GiftViewSheetComponent: CombinedComponent {
             
             var headerContent: AnyComponent<Empty>?
             if let arguments = context.component.subject.arguments, case .unique = arguments.gift, let fromPeerId = arguments.fromPeerId, var fromPeerName = arguments.fromPeerName, arguments.fromPeerId != context.component.context.account.peerId && !(arguments.fromPeerId?.isTelegramNotifications ?? false) {
-                let dateString = stringForMediumDate(timestamp: arguments.date, strings: environment.strings, dateTimeFormat: environment.dateTimeFormat, withTime: false)
-                
-                if fromPeerName.count > 25 {
-                    fromPeerName = "\(fromPeerName.prefix(25))…"
+                var showSenderInfo = false
+                if arguments.incoming {
+                    showSenderInfo = true
+                } else if arguments.peerId == context.component.context.account.peerId {
+                    showSenderInfo = true
                 }
-                let rawString = environment.strings.Gift_View_SenderInfo(fromPeerName, dateString).string
-                let attributedString = parseMarkdownIntoAttributedString(rawString, attributes: MarkdownAttributes(body: MarkdownAttributeSet(font: Font.regular(13.0), textColor: .white), bold: MarkdownAttributeSet(font: Font.semibold(13.0), textColor: .white), link: MarkdownAttributeSet(font: Font.regular(13.0), textColor: .white), linkAttribute: { _ in return nil }))
-                
-                let context = context.component.context
-                headerContent = AnyComponent(
-                    PlainButtonComponent(content: AnyComponent(HeaderContentComponent(attributedText: attributedString)), action: {
-                        if let controller = controller(), let navigationController = controller.navigationController as? NavigationController {
-                            let _ = (context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: fromPeerId))
-                            |> deliverOnMainQueue).start(next: { [weak navigationController] peer in
-                                guard let peer, let navigationController else {
-                                    return
-                                }
-                                context.sharedContext.navigateToChatController(NavigateToChatControllerParams(
-                                    navigationController: navigationController,
-                                    chatController: nil,
-                                    context: context,
-                                    chatLocation: .peer(peer),
-                                    subject: nil,
-                                    botStart: nil,
-                                    updateTextInputState: nil,
-                                    keepStack: .always,
-                                    useExisting: true,
-                                    purposefulAction: nil,
-                                    scrollToEndIfExists: false,
-                                    activateMessageSearch: nil,
-                                    animated: true
-                                ))
-                            })
-                        }
-                    })
-                )
+                if showSenderInfo {
+                    let dateString = stringForMediumDate(timestamp: arguments.date, strings: environment.strings, dateTimeFormat: environment.dateTimeFormat, withTime: false)
+                    
+                    if fromPeerName.count > 25 {
+                        fromPeerName = "\(fromPeerName.prefix(25))…"
+                    }
+                    let rawString = environment.strings.Gift_View_SenderInfo(fromPeerName, dateString).string
+                    let attributedString = parseMarkdownIntoAttributedString(rawString, attributes: MarkdownAttributes(body: MarkdownAttributeSet(font: Font.regular(13.0), textColor: .white), bold: MarkdownAttributeSet(font: Font.semibold(13.0), textColor: .white), link: MarkdownAttributeSet(font: Font.regular(13.0), textColor: .white), linkAttribute: { _ in return nil }))
+                    
+                    let context = context.component.context
+                    headerContent = AnyComponent(
+                        PlainButtonComponent(content: AnyComponent(HeaderContentComponent(attributedText: attributedString)), action: {
+                            if let controller = controller(), let navigationController = controller.navigationController as? NavigationController {
+                                let _ = (context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: fromPeerId))
+                                         |> deliverOnMainQueue).start(next: { [weak navigationController] peer in
+                                    guard let peer, let navigationController else {
+                                        return
+                                    }
+                                    context.sharedContext.navigateToChatController(NavigateToChatControllerParams(
+                                        navigationController: navigationController,
+                                        chatController: nil,
+                                        context: context,
+                                        chatLocation: .peer(peer),
+                                        subject: nil,
+                                        botStart: nil,
+                                        updateTextInputState: nil,
+                                        keepStack: .always,
+                                        useExisting: true,
+                                        purposefulAction: nil,
+                                        scrollToEndIfExists: false,
+                                        activateMessageSearch: nil,
+                                        animated: true
+                                    ))
+                                })
+                            }
+                        })
+                    )
+                }
             }
             
             let sheet = sheet.update(
