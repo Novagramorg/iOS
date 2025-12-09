@@ -2645,7 +2645,7 @@ private final class GiftAuctionBidScreenComponent: Component {
                     component: AnyComponentWithIdentity(id: "close", component: AnyComponent(
                         BundleIconComponent(
                             name: "Navigation/Close",
-                            tintColor: environment.theme.rootController.navigationBar.glassBarButtonForegroundColor
+                            tintColor: environment.theme.chat.inputPanel.panelControlColor
                         )
                     )),
                     action: { [weak self] _ in
@@ -2678,7 +2678,7 @@ private final class GiftAuctionBidScreenComponent: Component {
                             content: LottieComponent.AppBundleContent(
                                 name: "anim_morewide"
                             ),
-                            color: environment.theme.rootController.navigationBar.glassBarButtonForegroundColor,
+                            color: environment.theme.chat.inputPanel.panelControlColor,
                             size: CGSize(width: 34.0, height: 34.0),
                             playOnce: self.moreButtonPlayOnce
                         )

@@ -608,7 +608,7 @@ private final class SettingsSearchItemNode: ItemListControllerSearchNode {
             }
         }, resolvedFaqUrl: self.resolvedFaqUrl, exceptionsList: self.exceptionsList, archivedStickerPacks: self.archivedStickerPacks, privacySettings: self.privacySettings, hasTwoStepAuth: self.hasTwoStepAuth, twoStepAuthData: self.twoStepAuthData, activeSessionsContext: self.activeSessionsContext, webSessionsContext: self.webSessionsContext), cancel: { [weak self] in
             self?.cancel()
-        })
+        }, fieldStyle: placeholderNode.fieldStyle)
         
         self.searchDisplayController?.containerLayoutUpdated(containerLayout, navigationBarHeight: navigationBarHeight, transition: .immediate)
         self.searchDisplayController?.activate(insertSubnode: { [weak self, weak placeholderNode] subnode, isSearchBar in

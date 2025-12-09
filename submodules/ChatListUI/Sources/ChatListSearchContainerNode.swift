@@ -768,12 +768,15 @@ public final class ChatListSearchContainerNode: SearchDisplayControllerContentNo
             filters = defaultAvailableSearchPanes(isForum: isForum, hasDownloads: self.hasDownloads, hasPublicPosts: self.showPublicPostsTab).map(\.filter)
         }
         
-        var filtersSideInset: CGFloat = 12.0
-        if layout.insets(options: [.input]).bottom <= 84.0 {
-            filtersSideInset = 20.0
+        var filtersInsets = UIEdgeInsets(top: 0.0, left: 12.0, bottom: layout.insets(options: [.input]).bottom + 34.0, right: 12.0)
+        if layout.insets(options: [.input]).bottom <= 30.0 {
+            filtersInsets = ContainerViewLayout.concentricInsets(bottomInset: layout.insets(options: [.input]).bottom, innerDiameter: 40.0, sideInset: 32.0)
+        } else if layout.insets(options: [.input]).bottom <= 84.0 {
+            filtersInsets.left = 20.0
+            filtersInsets.right = filtersInsets.left
         }
         
-        self.filterContainerNode.update(size: CGSize(width: layout.size.width - (layout.safeInsets.left + filtersSideInset) * 2.0, height: 40.0), sideInset: 0.0, filters: filters.map { .filter($0) }, displayGlobalPostsNewBadge: self.displayGlobalPostsNewBadge, selectedFilter: self.selectedFilter?.id, transitionFraction: self.transitionFraction, presentationData: self.presentationData, transition: .animated(duration: 0.4, curve: .spring))
+        self.filterContainerNode.update(size: CGSize(width: layout.size.width - (layout.safeInsets.left + filtersInsets.left) * 2.0, height: 40.0), sideInset: 0.0, filters: filters.map { .filter($0) }, displayGlobalPostsNewBadge: self.displayGlobalPostsNewBadge, selectedFilter: self.selectedFilter?.id, transitionFraction: self.transitionFraction, presentationData: self.presentationData, transition: .animated(duration: 0.4, curve: .spring))
     }
 
     override public func containerLayoutUpdated(_ layout: ContainerViewLayout, navigationBarHeight: CGFloat, transition: ContainedViewLayoutTransition) {
@@ -784,12 +787,20 @@ public final class ChatListSearchContainerNode: SearchDisplayControllerContentNo
         
         let topInset = navigationBarHeight
         
-        var filtersSideInset: CGFloat = 12.0
-        if layout.insets(options: [.input]).bottom <= 84.0 {
-            filtersSideInset = 20.0
+        var filtersInsets = UIEdgeInsets(top: 0.0, left: 12.0, bottom: layout.insets(options: [.input]).bottom, right: 12.0)
+        if layout.insets(options: [.input]).bottom <= 30.0 {
+            filtersInsets = ContainerViewLayout.concentricInsets(bottomInset: layout.insets(options: [.input]).bottom, innerDiameter: 40.0, sideInset: 32.0)
+        } else if layout.insets(options: [.input]).bottom <= 84.0 {
+            filtersInsets.left = 20.0
+            filtersInsets.right = filtersInsets.left
+        } else {
+            if let inputHeight = layout.inputHeight, filtersInsets.bottom == inputHeight {
+                filtersInsets.bottom += 8.0
+            }
+            filtersInsets.bottom = max(8.0, filtersInsets.bottom)
         }
         
-        transition.updateFrame(node: self.filterContainerNode, frame: CGRect(origin: CGPoint(x: layout.safeInsets.left + filtersSideInset, y: layout.size.height - layout.insets(options: [.input]).bottom - 40.0 + 6.0), size: CGSize(width: layout.size.width - (layout.safeInsets.left + filtersSideInset) * 2.0, height: 40.0)))
+        transition.updateFrame(node: self.filterContainerNode, frame: CGRect(origin: CGPoint(x: layout.safeInsets.left + filtersInsets.left, y: layout.size.height - filtersInsets.bottom - 40.0), size: CGSize(width: layout.size.width - (layout.safeInsets.left + filtersInsets.left) * 2.0, height: 40.0)))
         self.updateFilterContainerNode(layout: layout, transition: transition)
         
         if isFirstTime {

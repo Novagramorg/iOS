@@ -15,7 +15,6 @@ swift_library(
         "//submodules/Display",
         "//submodules/TelegramPresentationData",
         "//submodules/SearchBarNode",
-        "//submodules/ChatListSearchItemNode",
         "//submodules/TelegramUI/Components/GlassBackgroundComponent",
         "//submodules/ComponentFlow",
         "//submodules/Components/ComponentDisplayAdapters",

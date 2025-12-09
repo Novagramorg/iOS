@@ -293,7 +293,7 @@ public final class ContactsSearchContainerNode: SearchDisplayControllerContentNo
         self.themeAndStringsPromise = Promise((self.presentationData.theme, self.presentationData.strings))
         
         self.dimNode = ASDisplayNode()
-        self.dimNode.backgroundColor = glass ? .clear : UIColor.black.withAlphaComponent(0.5)
+        self.dimNode.backgroundColor = .clear
         
         self.backgroundNode = ASDisplayNode()
         self.backgroundNode.backgroundColor = self.presentationData.theme.list.plainBackgroundColor
@@ -693,8 +693,22 @@ public final class ContactsSearchContainerNode: SearchDisplayControllerContentNo
         
         self.backgroundNode.frame = CGRect(origin: .zero, size: CGSize(width: layout.size.width, height: navigationBarHeight))
         
-        self.listNode.frame = CGRect(origin: CGPoint(x: 0.0, y: navigationBarHeight), size: CGSize(width: layout.size.width, height: layout.size.height - topInset))
-        self.listNode.transaction(deleteIndices: [], insertIndicesAndItems: [], updateIndicesAndItems: [], options: [.Synchronous], scrollToItem: nil, updateSizeAndInsets: ListViewUpdateSizeAndInsets(size: layout.size, insets: UIEdgeInsets(top: 0.0, left: layout.safeInsets.left, bottom: layout.intrinsicInsets.bottom, right: layout.safeInsets.right), duration: 0.0, curve: .Default(duration: nil)), stationaryItemRange: nil, updateOpaqueState: nil, completion: { _ in })
+        self.listNode.frame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: layout.size.width, height: layout.size.height))
+        let listDuration: Double
+        let listCurve: ListViewAnimationCurve
+        switch transition {
+        case .immediate:
+            listDuration = 0.0
+            listCurve = .Default(duration: nil)
+        case let .animated(duration, curve):
+            listDuration = duration
+            if case .spring = curve {
+                listCurve = .Spring(duration: duration)
+            } else {
+                listCurve = .Default(duration: nil)
+            }
+        }
+        self.listNode.transaction(deleteIndices: [], insertIndicesAndItems: [], updateIndicesAndItems: [], options: [.Synchronous], scrollToItem: nil, updateSizeAndInsets: ListViewUpdateSizeAndInsets(size: layout.size, insets: UIEdgeInsets(top: topInset, left: layout.safeInsets.left, bottom: layout.intrinsicInsets.bottom, right: layout.safeInsets.right), duration: listDuration, curve: listCurve), stationaryItemRange: nil, updateOpaqueState: nil, completion: { _ in })
         
         let size = layout.size
         let sideInset = layout.safeInsets.left
@@ -797,14 +811,14 @@ public final class ContactsSearchContainerNode: SearchDisplayControllerContentNo
                     strongSelf.containerLayoutUpdated(layout, navigationBarHeight: navigationBarHeight, transition: .immediate)
                 }
                 
-                let containerTransition = ContainedViewLayoutTransition.animated(duration: 0.3, curve: .easeInOut)
-                containerTransition.updateAlpha(node: strongSelf.listNode, alpha: isSearching ? 1.0 : 0.0)
-                containerTransition.updateAlpha(node: strongSelf.backgroundNode, alpha: isSearching ? 1.0 : 0.0)
+                //let containerTransition = ContainedViewLayoutTransition.animated(duration: 0.3, curve: .easeInOut)
+                ContainedViewLayoutTransition.immediate.updateAlpha(node: strongSelf.listNode, alpha: isSearching ? 1.0 : 0.0)
+                ContainedViewLayoutTransition.immediate.updateAlpha(node: strongSelf.backgroundNode, alpha: isSearching ? 1.0 : 0.0)
                 strongSelf.dimNode.isHidden = isSearching
                 
-                containerTransition.updateAlpha(node: strongSelf.emptyResultsAnimationNode, alpha: emptyResults ? 1.0 : 0.0)
-                containerTransition.updateAlpha(node: strongSelf.emptyResultsTitleNode, alpha: emptyResults ? 1.0 : 0.0)
-                containerTransition.updateAlpha(node: strongSelf.emptyResultsTextNode, alpha: emptyResults ? 1.0 : 0.0)
+                ContainedViewLayoutTransition.immediate.updateAlpha(node: strongSelf.emptyResultsAnimationNode, alpha: emptyResults ? 1.0 : 0.0)
+                ContainedViewLayoutTransition.immediate.updateAlpha(node: strongSelf.emptyResultsTitleNode, alpha: emptyResults ? 1.0 : 0.0)
+                ContainedViewLayoutTransition.immediate.updateAlpha(node: strongSelf.emptyResultsTextNode, alpha: emptyResults ? 1.0 : 0.0)
                 strongSelf.emptyResultsAnimationNode.visibility = emptyResults
             })
         }

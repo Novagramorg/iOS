@@ -342,7 +342,7 @@ public class ContactsController: ViewController {
         }
         
         self.contactsNode.contactListNode.activateSearch = { [weak self] in
-            self?.activateSearch()
+            self?.activateSearch(isFromTabBar: false)
         }
         
         self.contactsNode.contactListNode.openPeer = { [weak self] peer, _, _, _ in
@@ -579,12 +579,17 @@ public class ContactsController: ViewController {
         self.sortButton.contextAction?(self.sortButton.containerNode, nil)
     }
     
-    private func activateSearch() {
-        self.contactsNode.activateSearch(placeholderNode: self.searchContentNode()?.placeholderNode)
-        self.updateTabBarSearchState(ViewController.TabBarSearchState(isActive: true), transition: .animated(duration: 0.5, curve: .spring))
-        if let searchBarNode = self.currentTabBarSearchNode?() as? SearchBarNode {
-            self.contactsNode.searchDisplayController?.setSearchBar(searchBarNode)
-            searchBarNode.activate()
+    private func activateSearch(isFromTabBar: Bool) {
+        let placeholderNode = isFromTabBar ? nil : self.searchContentNode()?.placeholderNode
+        self.contactsNode.activateSearch(placeholderNode: placeholderNode)
+        if placeholderNode != nil {
+            (self.parent as? TabBarController)?.updateIsTabBarHidden(true, transition: .animated(duration: 0.5, curve: .spring))
+        } else {
+            self.updateTabBarSearchState(ViewController.TabBarSearchState(isActive: true), transition: .animated(duration: 0.5, curve: .spring))
+            if let searchBarNode = self.currentTabBarSearchNode?() as? SearchBarNode {
+                self.contactsNode.searchDisplayController?.setSearchBar(searchBarNode)
+                searchBarNode.activate()
+            }
         }
         self.requestLayout(transition: .animated(duration: 0.5, curve: .spring))
     }
@@ -592,6 +597,7 @@ public class ContactsController: ViewController {
     private func deactivateSearch(animated: Bool) {
         self.contactsNode.deactivateSearch(placeholderNode: self.searchContentNode()?.placeholderNode, animated: animated)
         self.updateTabBarSearchState(ViewController.TabBarSearchState(isActive: false), transition: .animated(duration: 0.5, curve: .spring))
+        (self.parent as? TabBarController)?.updateIsTabBarHidden(false, transition: .animated(duration: 0.5, curve: .spring))
         self.requestLayout(transition: .animated(duration: 0.5, curve: .spring))
     }
     
@@ -799,7 +805,7 @@ public class ContactsController: ViewController {
     }
     
     override public func tabBarActivateSearch() {
-        self.activateSearch()
+        self.activateSearch(isFromTabBar: true)
     }
 
     override public func tabBarDeactivateSearch() {

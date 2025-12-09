@@ -113,7 +113,9 @@ public final class PeerSelectionControllerImpl: ViewController, PeerSelectionCon
         self.immediatelyActivateMultipleSelection = params.immediatelyActivateMultipleSelection
         self.multipleSelectionLimit = params.multipleSelectionLimit
         
-        super.init(navigationBarPresentationData: NavigationBarPresentationData(presentationData: self.presentationData))
+        super.init(navigationBarPresentationData: NavigationBarPresentationData(presentationData: self.presentationData, style: .glass))
+        
+        self._hasGlassStyle = true
         
         self.statusBar.statusBarStyle = self.presentationData.theme.rootController.statusBarStyle.style
         
@@ -245,7 +247,7 @@ public final class PeerSelectionControllerImpl: ViewController, PeerSelectionCon
     
     private func updateThemeAndStrings() {
         self.statusBar.statusBarStyle = self.presentationData.theme.rootController.statusBarStyle.style
-        self.navigationBar?.updatePresentationData(NavigationBarPresentationData(presentationData: self.presentationData), transition: .immediate)
+        self.navigationBar?.updatePresentationData(NavigationBarPresentationData(presentationData: self.presentationData, style: .glass), transition: .immediate)
         self.searchContentNode?.updateThemeAndPlaceholder(theme: self.presentationData.theme, placeholder: self.presentationData.strings.Common_Search)
         self.title = self.customTitle ?? self.presentationData.strings.Conversation_ForwardTitle
         self.navigationItem.backBarButtonItem = UIBarButtonItem(title: self.presentationData.strings.Common_Back, style: .plain, target: nil, action: nil)

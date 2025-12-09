@@ -168,7 +168,11 @@ public final class GlassBarButtonComponent: Component {
                 componentTransition.setFrame(view: view, frame: componentFrame)
             }
             
-            let effectiveState = component.state ?? .glass
+            let effectiveState: DisplayState = component.state ?? .glass
+            /*if "".isEmpty {
+                effectiveState = .glass
+            }*/
+            
             var genericAlpha: CGFloat = 1.0
             var glassAlpha: CGFloat = 1.0
             switch effectiveState {

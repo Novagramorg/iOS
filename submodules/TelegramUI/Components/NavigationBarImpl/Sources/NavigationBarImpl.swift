@@ -794,6 +794,9 @@ public final class NavigationBarImpl: ASDisplayNode, NavigationBar {
                 let additionalExpansionHeight: CGFloat = self.secondaryContentNode != nil && appearsHidden ? (self.secondaryContentHeight * self.secondaryContentNodeDisplayFraction) : 0.0
                 contentNodeFrame = CGRect(origin: CGPoint(x: 0.0, y: size.height - (appearsHidden ? 0.0 : additionalContentHeight) - expansionHeight - apparentAdditionalHeight - additionalExpansionHeight), size: CGSize(width: size.width, height: expansionHeight))
                 if appearsHidden {
+                    contentNodeFrame.origin.y = size.height - contentNode.height + contentVerticalOrigin
+                }
+                if appearsHidden {
                     if self.secondaryContentNode != nil {
                         contentNodeFrame.origin.y += self.secondaryContentHeight * self.secondaryContentNodeDisplayFraction
                     }
@@ -805,7 +808,7 @@ public final class NavigationBarImpl: ASDisplayNode, NavigationBar {
         
         transition.updateFrame(node: self.stripeNode, frame: CGRect(x: (additionalCutout?.width ?? 0.0), y: size.height + additionalBackgroundHeight, width: size.width - (additionalCutout?.width ?? 0.0), height: UIScreenPixel))
         
-        let nominalHeight: CGFloat = 56.0
+        let nominalHeight: CGFloat = 60.0
         
         var leftTitleInset: CGFloat = leftInset + 1.0
         var rightTitleInset: CGFloat = rightInset + 1.0
@@ -947,10 +950,7 @@ public final class NavigationBarImpl: ASDisplayNode, NavigationBar {
                 }
                 self.titleNode.alpha = 1.0
                 
-                var titleOffset: CGFloat = 0.0
-                if self.presentationData.theme.backgroundColor == .clear && self.presentationData.theme.separatorColor == .clear {
-                    titleOffset += 3.0
-                }
+                let titleOffset: CGFloat = 0.0
                 transition.updateFrame(node: self.titleNode, frame: CGRect(origin: CGPoint(x: floor((size.width - titleSize.width) / 2.0), y: contentVerticalOrigin + titleOffset + floorToScreenPixels((nominalHeight - titleSize.height) / 2.0)), size: titleSize))
             }
         }

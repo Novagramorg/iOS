@@ -15,7 +15,6 @@ import PeerOnlineMarkerNode
 import LocalizedPeerData
 import PeerPresenceStatusManager
 import PhotoResources
-import ChatListSearchItemNode
 import ContextUI
 import ChatInterfaceState
 import TextFormat
@@ -454,7 +453,7 @@ private final class ChatListItemTagListComponent: Component {
     }
 }
 
-public class ChatListItem: ListViewItem, ChatListSearchItemNeighbour {
+public class ChatListItem: ListViewItem {
     public enum EnabledContextActions {
         public struct Actions: OptionSet {
             public var rawValue: Int32

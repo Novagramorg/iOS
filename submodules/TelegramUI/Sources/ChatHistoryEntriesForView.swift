@@ -41,7 +41,6 @@ func chatHistoryEntriesForView(
     includeUnreadEntry: Bool,
     includeEmptyEntry: Bool,
     includeChatInfoEntry: Bool,
-    includeSearchEntry: Bool,
     includeEmbeddedSavedChatInfo: Bool,
     reverse: Bool,
     groupMessages: Bool,
@@ -678,12 +677,6 @@ func chatHistoryEntriesForView(
                 )
                 nextAdMessageId += 1
                 entries.append(.MessageEntry(updatedMessage, presentationData, false, nil, .none, ChatMessageEntryAttributes(rank: nil, isContact: false, contentTypeHint: .generic, updatingMedia: nil, isPlaying: false, isCentered: false, authorStoryStats: nil, displayContinueThreadFooter: false)))
-            }
-        }
-    } else if includeSearchEntry {
-        if view.laterId == nil {
-            if !view.entries.isEmpty {
-                entries.append(.SearchEntry(presentationData.theme.theme, presentationData.strings))
             }
         }
     }

@@ -60,7 +60,7 @@ public final class ChatSearchNavigationContentNode: NavigationBarContentNode {
                 primaryText: theme.chat.inputPanel.panelControlColor,
                 placeholder: theme.chat.inputPanel.inputPlaceholderColor,
                 inputIcon: theme.chat.inputPanel.inputControlColor,
-                inputClear: theme.chat.inputPanel.inputControlColor,
+                inputClear: theme.chat.inputPanel.panelControlColor,
                 accent: theme.chat.inputPanel.panelControlAccentColor,
                 keyboard: theme.rootController.keyboardColor
             ),
@@ -242,7 +242,7 @@ public final class ChatSearchNavigationContentNode: NavigationBarContentNode {
                     primaryText: presentationInterfaceState.theme.chat.inputPanel.panelControlColor,
                     placeholder: presentationInterfaceState.theme.chat.inputPanel.inputPlaceholderColor,
                     inputIcon: presentationInterfaceState.theme.chat.inputPanel.inputControlColor,
-                    inputClear: presentationInterfaceState.theme.chat.inputPanel.inputControlColor,
+                    inputClear: presentationInterfaceState.theme.chat.inputPanel.panelControlColor,
                     accent: presentationInterfaceState.theme.chat.inputPanel.panelControlAccentColor,
                     keyboard: presentationInterfaceState.theme.rootController.keyboardColor
                 ),

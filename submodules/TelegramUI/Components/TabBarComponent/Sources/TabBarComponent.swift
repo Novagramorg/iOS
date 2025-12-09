@@ -202,7 +202,7 @@ public final class NavigationSearchView: UIView {
                         primaryText: params.theme.chat.inputPanel.panelControlColor,
                         placeholder: params.theme.chat.inputPanel.inputPlaceholderColor,
                         inputIcon: params.theme.chat.inputPanel.inputControlColor,
-                        inputClear: params.theme.chat.inputPanel.inputControlColor,
+                        inputClear: params.theme.chat.inputPanel.panelControlColor,
                         accent: params.theme.chat.inputPanel.panelControlAccentColor,
                         keyboard: params.theme.rootController.keyboardColor
                     ),

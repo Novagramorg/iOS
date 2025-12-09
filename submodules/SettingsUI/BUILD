@@ -23,7 +23,6 @@ swift_library(
         "//submodules/PresentationDataUtils:PresentationDataUtils",
         "//submodules/AvatarNode:AvatarNode",
         "//submodules/CallListUI:CallListUI",
-        "//submodules/ChatListSearchItemNode:ChatListSearchItemNode",
         "//submodules/ChatListSearchItemHeader:ChatListSearchItemHeader",
         "//submodules/ChatListUI:ChatListUI",
         "//submodules/ContactsPeerItem:ContactsPeerItem",

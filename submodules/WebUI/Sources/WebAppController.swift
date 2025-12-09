@@ -3521,7 +3521,7 @@ public final class WebAppController: ViewController, AttachmentContainable {
                     component: AnyComponentWithIdentity(id: self.controllerNode.hasBackButton ? "back" : "close", component: AnyComponent(
                         BundleIconComponent(
                             name: self.controllerNode.hasBackButton ? "Navigation/Back" : "Navigation/Close",
-                            tintColor: self.presentationData.theme.rootController.navigationBar.glassBarButtonForegroundColor
+                            tintColor: self.presentationData.theme.chat.inputPanel.panelControlColor
                         )
                     )),
                     action: { [weak self] _ in
@@ -3542,7 +3542,7 @@ public final class WebAppController: ViewController, AttachmentContainable {
                             content: LottieComponent.AppBundleContent(
                                 name: "anim_morewide"
                             ),
-                            color: self.presentationData.theme.rootController.navigationBar.glassBarButtonForegroundColor,
+                            color: self.presentationData.theme.chat.inputPanel.panelControlColor,
                             size: CGSize(width: 34.0, height: 34.0),
                             playOnce: self.moreButtonPlayOnce
                         )

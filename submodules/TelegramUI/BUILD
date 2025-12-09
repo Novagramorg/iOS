@@ -153,7 +153,6 @@ swift_library(
         "//submodules/ChatListSearchItemHeader:ChatListSearchItemHeader",
         "//submodules/ItemListPeerItem:ItemListPeerItem",
         "//submodules/ContactsPeerItem:ContactsPeerItem",
-        "//submodules/ChatListSearchItemNode:ChatListSearchItemNode",
         "//submodules/TelegramPermissionsUI:TelegramPermissionsUI",
         "//submodules/PeersNearbyIconNode:PeersNearbyIconNode",
         "//submodules/SolidRoundedButtonNode:SolidRoundedButtonNode",

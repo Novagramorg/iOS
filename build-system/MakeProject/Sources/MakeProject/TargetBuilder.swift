@@ -440,20 +440,56 @@ class TargetBuilder {
                 }
             }
 
-            // Add SDK frameworks
+            // Collect SDK frameworks from this module and all transitive dependencies
+            var allSdkFrameworks: Set<String> = []
             if let sdkFrameworks = module.sdkFrameworks {
-                for framework in sdkFrameworks {
-                    let fileRef = PBXFileReference(
-                        sourceTree: .sdkRoot,
-                        name: "\(framework).framework",
-                        lastKnownFileType: "wrapper.framework",
-                        path: "System/Library/Frameworks/\(framework).framework"
-                    )
-                    pbxproj.add(object: fileRef)
-                    let buildFile = PBXBuildFile(file: fileRef)
-                    pbxproj.add(object: buildFile)
-                    frameworksPhase.files?.append(buildFile)
+                allSdkFrameworks.formUnion(sdkFrameworks)
+            }
+            for depName in allDeps {
+                if let depModule = modules[depName], let depFrameworks = depModule.sdkFrameworks {
+                    allSdkFrameworks.formUnion(depFrameworks)
                 }
+            }
+
+            // Add SDK frameworks
+            for framework in allSdkFrameworks {
+                let fileRef = PBXFileReference(
+                    sourceTree: .sdkRoot,
+                    name: "\(framework).framework",
+                    lastKnownFileType: "wrapper.framework",
+                    path: "System/Library/Frameworks/\(framework).framework"
+                )
+                pbxproj.add(object: fileRef)
+                let buildFile = PBXBuildFile(file: fileRef)
+                pbxproj.add(object: buildFile)
+                frameworksPhase.files?.append(buildFile)
+            }
+
+            // Collect SDK dylibs from this module and all transitive dependencies
+            var allSdkDylibs: Set<String> = []
+            if let sdkDylibs = module.sdkDylibs {
+                allSdkDylibs.formUnion(sdkDylibs)
+            }
+            for depName in allDeps {
+                if let depModule = modules[depName], let depDylibs = depModule.sdkDylibs {
+                    allSdkDylibs.formUnion(depDylibs)
+                }
+            }
+
+            // Add SDK dylibs (system libraries like libz, libiconv, etc.)
+            for dylib in allSdkDylibs {
+                // Clean up the library name - remove 'lib' prefix if present
+                let libName = dylib.hasPrefix("lib") ? String(dylib.dropFirst(3)) : dylib
+                let fileRef = PBXFileReference(
+                    sourceTree: .sdkRoot,
+                    name: "lib\(libName).tbd",
+                    lastKnownFileType: "sourcecode.text-based-dylib-definition",
+                    path: "usr/lib/lib\(libName).tbd"
+                )
+                pbxproj.add(object: fileRef)
+                let buildFile = PBXBuildFile(file: fileRef)
+                pbxproj.add(object: buildFile)
+                frameworksPhase.files?.append(buildFile)
             }
         }
     }

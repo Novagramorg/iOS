@@ -157,6 +157,8 @@ public final class SearchDisplayController {
     }
     
     public func containerLayoutUpdated(_ layout: ContainerViewLayout, navigationBarHeight: CGFloat, transition: ContainedViewLayoutTransition) {
+        let defaultNavigationBarHeight = navigationBarHeight
+        
         let statusBarHeight: CGFloat = layout.statusBarHeight ?? 0.0
         let searchBarHeight: CGFloat = max(20.0, statusBarHeight) + 44.0
         let navigationBarOffset: CGFloat
@@ -173,14 +175,20 @@ public final class SearchDisplayController {
             navigationBarFrame.size.height = 64.0
         }
         navigationBarFrame.size.height += 10.0
-        let navigationBarHeight = navigationBarFrame.maxY
+        var navigationBarHeight = navigationBarFrame.maxY
         
         if !self.searchBarIsExternal, let searchBar = self.searchBar {
             let searchBarFrame: CGRect
             if case .navigation = self.mode {
-                searchBarFrame = CGRect(x: 0.0, y: 0.0, width: layout.size.width, height: 54.0)
+                if case .glass = searchBar.fieldStyle {
+                    navigationBarHeight = defaultNavigationBarHeight
+                    searchBarFrame = CGRect(x: 0.0, y: 0.0, width: layout.size.width, height: 44.0)
+                } else {
+                    searchBarFrame = CGRect(x: 0.0, y: 0.0, width: layout.size.width, height: 54.0)
+                }
             } else {
                 searchBarFrame = navigationBarFrame
+                navigationBarHeight = navigationBarFrame.maxY + 8.0
             }
             transition.updateFrame(node: searchBar, frame: searchBarFrame)
             searchBar.updateLayout(boundingSize: searchBarFrame.size, leftInset: layout.safeInsets.left, rightInset: layout.safeInsets.right, transition: transition)
@@ -236,8 +244,6 @@ public final class SearchDisplayController {
         if !self.contentNode.hasDim {
             self.backgroundNode.alpha = 1.0
             self.backgroundNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2, timingFunction: CAMediaTimingFunctionName.linear.rawValue)
-            
-            self.backgroundNode.layer.animateScale(from: 0.85, to: 1.0, duration: 0.5, timingFunction: kCAMediaTimingFunctionSpring)
         }
         
         if !self.searchBarIsExternal {
@@ -247,7 +253,7 @@ public final class SearchDisplayController {
                 }
             } else {
                 if let placeholder = placeholder {
-                    let initialTextBackgroundFrame = placeholder.convert(placeholder.backgroundNode.frame, to: nil)
+                    let initialTextBackgroundFrame = placeholder.convert(placeholder.backgroundView.frame, to: nil)
                     let contentNodePosition = self.backgroundNode.layer.position
                     if contentNode.animateBackgroundAppearance {
                         self.backgroundNode.layer.animatePosition(from: CGPoint(x: contentNodePosition.x, y: contentNodePosition.y + (initialTextBackgroundFrame.maxY + 8.0 - contentNavigationBarHeight)), to: contentNodePosition, duration: 0.5, timingFunction: kCAMediaTimingFunctionSpring)

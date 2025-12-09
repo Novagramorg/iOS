@@ -1098,7 +1098,7 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
     private var toolbarNode: ToolbarNode?
     var toolbarActionSelected: ((ToolbarActionOption) -> Void)?
     
-    private var isSearchDisplayControllerActive: Bool = false
+    private var isSearchDisplayControllerActive: ChatListNavigationBar.ActiveSearch?
     private var skipSearchDisplayControllerLayout: Bool = false
     private(set) var searchDisplayController: SearchDisplayController?
     private var disappearingSearchDisplayController: SearchDisplayController?
@@ -1556,8 +1556,8 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
                 strings: self.presentationData.strings,
                 statusBarHeight: layout.statusBarHeight ?? 0.0,
                 sideInset: layout.safeInsets.left,
-                search: nil, //ChatListNavigationBar.Search(isEnabled: true),
-                isSearchActive: self.isSearchDisplayControllerActive,
+                search: ChatListNavigationBar.Search(isEnabled: true),
+                activeSearch: self.isSearchDisplayControllerActive,
                 primaryContent: headerContent?.primaryContent,
                 secondaryContent: headerContent?.secondaryContent,
                 secondaryTransition: self.inlineStackContainerTransitionFraction,
@@ -1654,7 +1654,7 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
         }
         
         var offset = resultingOffset
-        if self.isSearchDisplayControllerActive {
+        if self.isSearchDisplayControllerActive != nil {
             offset = 0.0
         }
         
@@ -1715,8 +1715,7 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
         var storiesInset = storiesInset
         
         let navigationBarLayout = self.updateNavigationBar(layout: layout, deferScrollApplication: true, transition: ComponentTransition(transition))
-        //self.mainContainerNode.initialScrollingOffset = ChatListNavigationBar.searchScrollHeight + navigationBarLayout.storiesInset
-        self.mainContainerNode.initialScrollingOffset = navigationBarLayout.storiesInset
+        self.mainContainerNode.initialScrollingOffset = ChatListNavigationBar.searchScrollHeight + navigationBarLayout.storiesInset
         
         navigationBarHeight = navigationBarLayout.navigationHeight
         visualNavigationHeight = navigationBarLayout.navigationHeight
@@ -1891,7 +1890,7 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
             if let requestDeactivateSearch = self?.requestDeactivateSearch {
                 requestDeactivateSearch()
             }
-        }, searchBarIsExternal: searchBarIsExternal)
+        }, fieldStyle: placeholderNode?.fieldStyle ?? .modern, searchBarIsExternal: searchBarIsExternal)
         self.mainContainerNode.accessibilityElementsHidden = true
         self.inlineStackContainerNode?.accessibilityElementsHidden = true
                 
@@ -1900,7 +1899,7 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
                 return
             }
             
-            strongSelf.isSearchDisplayControllerActive = true
+            strongSelf.isSearchDisplayControllerActive = ChatListNavigationBar.ActiveSearch(isExternal: placeholderNode == nil)
             
             strongSelf.searchDisplayController?.containerLayoutUpdated(containerLayout, navigationBarHeight: cleanNavigationBarHeight, transition: .immediate)
             strongSelf.searchDisplayController?.activate(insertSubnode: { [weak self] subnode, isSearchBar in
@@ -1910,7 +1909,7 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
                 
                 if isSearchBar {
                     if let navigationBarComponentView = self.navigationBarView.view as? ChatListNavigationBar.View {
-                        navigationBarComponentView.addSubnode(subnode)
+                        navigationBarComponentView.searchContentNode?.addSubnode(subnode)
                     }
                 } else {
                     self.insertSubnode(subnode, aboveSubnode: self.debugListView)
@@ -1923,7 +1922,7 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
     
     func deactivateSearch(placeholderNode: SearchBarPlaceholderNode?, animated: Bool) -> (() -> Void)? {
         if let searchDisplayController = self.searchDisplayController {
-            self.isSearchDisplayControllerActive = false
+            self.isSearchDisplayControllerActive = nil
             self.searchDisplayController = nil
             self.disappearingSearchDisplayController = searchDisplayController
             self.mainContainerNode.accessibilityElementsHidden = false
