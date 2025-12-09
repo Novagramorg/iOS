@@ -1084,6 +1084,9 @@ final class GiftOptionsScreenComponent: Component {
                             guard let self, let component = self.component, let controller = controller(), let navigationController = controller.navigationController as? NavigationController else {
                                 return
                             }
+                            guard component.peerId != component.context.account.peerId else {
+                                return
+                            }
                             let _ = (component.context.engine.data.get(
                                 TelegramEngine.EngineData.Item.Peer.Peer(id: component.peerId)
                             )

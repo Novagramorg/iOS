@@ -142,6 +142,7 @@ final class TableComponent: CombinedComponent {
             var innerTotalOffset: CGFloat = 0.0
             var hasRowBackground = false
             var rowBackgroundIsLast = false
+            var hasStraightSide = false
             
             for item in context.component.items {
                 let insets: UIEdgeInsets
@@ -193,6 +194,12 @@ final class TableComponent: CombinedComponent {
                         rowBackgroundIsLast = true
                     }
                     hasRowBackground = true
+                }
+                if item.title == nil {
+                    if i != 0 {
+                        rowBackgroundIsLast = true
+                    }
+                    hasStraightSide = true
                 }
                 
                 i += 1
@@ -247,8 +254,8 @@ final class TableComponent: CombinedComponent {
                     context.clear(bounds)
                     
                     var offset: CGFloat = 0.0
-                    if hasRowBackground {
-                        offset = rowBackgroundIsLast ? borderRadius : -borderRadius
+                    if hasStraightSide {
+                        offset = rowBackgroundIsLast ? 0.0 : -borderRadius
                         
                         bounds.origin.y += offset
                         bounds.size.height += borderRadius
