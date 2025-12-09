@@ -293,7 +293,7 @@ private final class DemoSheetContent: CombinedComponent {
             let bottomEdgeEffectHeight = 108.0
             let bottomEdgeEffect = bottomEdgeEffect.update(
                 component: EdgeEffectComponent(
-                    color: .clear,
+                    color: environment.theme.actionSheet.opaqueItemBackgroundColor,
                     blur: true,
                     alpha: 1.0,
                     size: CGSize(width: context.availableSize.width, height: bottomEdgeEffectHeight),
