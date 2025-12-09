@@ -2586,7 +2586,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
                     component: AnyComponentWithIdentity(id: isBack ? "back" : "close", component: AnyComponent(
                         BundleIconComponent(
                             name: isBack ? "Navigation/Back" : "Navigation/Close",
-                            tintColor: self.presentationData.theme.rootController.navigationBar.glassBarButtonForegroundColor
+                            tintColor: self.presentationData.theme.chat.inputPanel.panelControlColor
                         )
                     )),
                     action: { [weak self] _ in
@@ -2619,7 +2619,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
                             content: LottieComponent.AppBundleContent(
                                 name: "anim_morewide"
                             ),
-                            color: self.presentationData.theme.rootController.navigationBar.glassBarButtonForegroundColor,
+                            color: self.presentationData.theme.chat.inputPanel.panelControlColor,
                             size: CGSize(width: 34.0, height: 34.0),
                             playOnce: self.moreButtonPlayOnce
                         )

@@ -11,7 +11,6 @@ import TelegramUIPreferences
 import MediaResources
 import AccountContext
 import TemporaryCachedPeerDataManager
-import ChatListSearchItemNode
 import Emoji
 import AppBundle
 import ListMessageItem
@@ -229,7 +228,7 @@ private func mappedInsertEntries(context: AccountContext, chatLocation: ChatLoca
                 switch mode {
                     case .bubbles:
                         item = ChatMessageItemImpl(presentationData: presentationData, context: context, chatLocation: chatLocation, associatedData: associatedData, controllerInteraction: controllerInteraction, content: .message(message: message, read: read, selection: selection, attributes: attributes, location: location), disableDate: disableFloatingDateHeaders || message.timestamp < 10)
-                    case let .list(_, _, _, displayHeaders, hintLinks, isGlobalSearch):
+                    case let .list(_, _, displayHeaders, hintLinks, isGlobalSearch):
                         let displayHeader: Bool
                         switch displayHeaders {
                         case .none:
@@ -267,10 +266,6 @@ private func mappedInsertEntries(context: AccountContext, chatLocation: ChatLoca
                     item = ChatNewThreadInfoItem(controllerInteraction: controllerInteraction, presentationData: presentationData, context: context)
                 }
                 return ListViewInsertItem(index: entry.index, previousIndex: entry.previousIndex, item: item, directionHint: entry.directionHint)
-            case let .SearchEntry(theme, strings):
-                return ListViewInsertItem(index: entry.index, previousIndex: entry.previousIndex, item: ChatListSearchItem(theme: theme, placeholder: strings.Common_Search, activate: {
-                    controllerInteraction.openSearch()
-                }), directionHint: entry.directionHint)
         }
     }
 }
@@ -288,7 +283,7 @@ private func mappedUpdateEntries(context: AccountContext, chatLocation: ChatLoca
                 switch mode {
                     case .bubbles:
                         item = ChatMessageItemImpl(presentationData: presentationData, context: context, chatLocation: chatLocation, associatedData: associatedData, controllerInteraction: controllerInteraction, content: .message(message: message, read: read, selection: selection, attributes: attributes, location: location), disableDate: disableFloatingDateHeaders || message.timestamp < 10)
-                    case let .list(_, _, _, displayHeaders, hintLinks, isGlobalSearch):
+                    case let .list(_, _, displayHeaders, hintLinks, isGlobalSearch):
                         let displayHeader: Bool
                         switch displayHeaders {
                         case .none:
@@ -326,10 +321,6 @@ private func mappedUpdateEntries(context: AccountContext, chatLocation: ChatLoca
                     item = ChatNewThreadInfoItem(controllerInteraction: controllerInteraction, presentationData: presentationData, context: context)
                 }
                 return ListViewUpdateItem(index: entry.index, previousIndex: entry.previousIndex, item: item, directionHint: entry.directionHint)
-            case let .SearchEntry(theme, strings):
-                return ListViewUpdateItem(index: entry.index, previousIndex: entry.previousIndex, item: ChatListSearchItem(theme: theme, placeholder: strings.Common_Search, activate: {
-                    controllerInteraction.openSearch()
-                }), directionHint: entry.directionHint)
         }
     }
 }
@@ -2022,13 +2013,10 @@ public final class ChatHistoryListNodeImpl: ListView, ChatHistoryNode, ChatHisto
                 
                 var reverse = false
                 var reverseGroups = false
-                var includeSearchEntry = false
-                if case let .list(search, reverseValue, reverseGroupsValue, _, _, _) = mode {
-                    includeSearchEntry = search
+                if case let .list(reverseValue, reverseGroupsValue, _, _, _) = mode {
                     reverse = reverseValue
                     reverseGroups = reverseGroupsValue
                 }
-                
                 
                 var isPremium = false
                 if case let .user(user) = accountPeer, user.isPremium {
@@ -2087,7 +2075,6 @@ public final class ChatHistoryListNodeImpl: ListView, ChatHistoryNode, ChatHisto
                     includeUnreadEntry: mode == .bubbles,
                     includeEmptyEntry: mode == .bubbles && tag == nil,
                     includeChatInfoEntry: mode == .bubbles,
-                    includeSearchEntry: includeSearchEntry && tag != nil,
                     includeEmbeddedSavedChatInfo: includeEmbeddedSavedChatInfo,
                     reverse: reverse,
                     groupMessages: mode == .bubbles,
@@ -4551,7 +4538,7 @@ public final class ChatHistoryListNodeImpl: ListView, ChatHistoryNode, ChatHisto
                             switch self.mode {
                             case .bubbles:
                                 item = ChatMessageItemImpl(presentationData: presentationData, context: self.context, chatLocation: self.chatLocation, associatedData: associatedData, controllerInteraction: self.controllerInteraction, content: .message(message: message, read: read, selection: selection, attributes: attributes, location: location), disableDate: disableFloatingDateHeaders)
-                            case let .list(_, _, _, displayHeaders, hintLinks, isGlobalSearch):
+                            case let .list(_, _, displayHeaders, hintLinks, isGlobalSearch):
                                 let displayHeader: Bool
                                 switch displayHeaders {
                                 case .none:
@@ -4629,7 +4616,7 @@ public final class ChatHistoryListNodeImpl: ListView, ChatHistoryNode, ChatHisto
                                 switch self.mode {
                                     case .bubbles:
                                         item = ChatMessageItemImpl(presentationData: presentationData, context: self.context, chatLocation: self.chatLocation, associatedData: associatedData, controllerInteraction: self.controllerInteraction, content: .message(message: message, read: read, selection: selection, attributes: attributes, location: location), disableDate: disableFloatingDateHeaders)
-                                    case let .list(_, _, _, displayHeaders, hintLinks, isGlobalSearch):
+                                    case let .list(_, _, displayHeaders, hintLinks, isGlobalSearch):
                                         let displayHeader: Bool
                                         switch displayHeaders {
                                         case .none:

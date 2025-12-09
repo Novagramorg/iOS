@@ -229,7 +229,7 @@ public final class NavigationButtonComponent: Component {
                     self.addSubnode(moreButton)
                 }
                 
-                let buttonSize = CGSize(width: 30.0, height: 44.0)
+                let buttonSize = CGSize(width: 44.0, height: 44.0)
                 size.width = 44.0
                 
                 moreButton.setContent(.more(MoreHeaderButton.optionsCircleImage(color: theme.rootController.navigationBar.buttonColor)))

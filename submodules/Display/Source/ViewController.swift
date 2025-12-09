@@ -254,9 +254,7 @@ public protocol CustomViewControllerNavigationDataSummary: AnyObject {
         let statusBarHeight: CGFloat = layout.statusBarHeight ?? 0.0
         var defaultNavigationBarHeight: CGFloat
         if self._presentedInModal && self._hasGlassStyle {
-            defaultNavigationBarHeight = 66.0
-        } else if self._presentedInModal && layout.orientation == .portrait {
-            defaultNavigationBarHeight = 60.0
+            defaultNavigationBarHeight = 68.0
         } else {
             defaultNavigationBarHeight = 60.0
         }
@@ -459,14 +457,29 @@ public protocol CustomViewControllerNavigationDataSummary: AnyObject {
         }
         if let navigationBar = self.navigationBar {
             if let contentNode = navigationBar.contentNode, case .expansion = contentNode.mode, !self.displayNavigationBar {
-                navigationBarFrame.origin.y -= navigationLayout.defaultContentHeight
-                navigationBarFrame.size.height += contentNode.height + navigationLayout.defaultContentHeight + statusBarHeight
+                navigationBarFrame.origin.y -= navigationLayout.defaultContentHeight + statusBarHeight
+                navigationBarFrame.size.height += contentNode.height + navigationLayout.defaultContentHeight + statusBarHeight * 2.0
+                if self._presentedInModal && self._hasGlassStyle {
+                    navigationBarFrame.size.height += 8.0
+                }
             }
+            //navigationBar.backgroundColor = .blue
             if let _ = navigationBar.contentNode, let _ = navigationBar.secondaryContentNode, !self.displayNavigationBar {
                 navigationBarFrame.size.height += navigationBar.secondaryContentHeight
             }
             
-            navigationBar.updateLayout(size: navigationBarFrame.size, defaultHeight: navigationLayout.defaultContentHeight, additionalTopHeight: statusBarHeight, additionalContentHeight: self.additionalNavigationBarHeight, additionalBackgroundHeight: additionalBackgroundHeight, additionalCutout: additionalCutout, leftInset: layout.safeInsets.left, rightInset: layout.safeInsets.right, appearsHidden: !self.displayNavigationBar, isLandscape: isLandscape, transition: transition)
+            var additionalTopHeight = statusBarHeight
+            if !self.displayNavigationBar {
+                additionalTopHeight -= statusBarHeight
+                if statusBarHeight != 0.0 {
+                    additionalTopHeight += 6.0
+                }
+            }
+            if self._presentedInModal && self._hasGlassStyle {
+                additionalTopHeight += 8.0
+            }
+            
+            navigationBar.updateLayout(size: navigationBarFrame.size, defaultHeight: navigationLayout.defaultContentHeight, additionalTopHeight: additionalTopHeight, additionalContentHeight: self.additionalNavigationBarHeight, additionalBackgroundHeight: additionalBackgroundHeight, additionalCutout: additionalCutout, leftInset: layout.safeInsets.left, rightInset: layout.safeInsets.right, appearsHidden: !self.displayNavigationBar, isLandscape: isLandscape, transition: transition)
             if !transition.isAnimated {
                 navigationBar.layer.removeAnimation(forKey: "bounds")
                 navigationBar.layer.removeAnimation(forKey: "position")

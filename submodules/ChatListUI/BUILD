@@ -29,7 +29,6 @@ swift_library(
         "//submodules/ActivityIndicator:ActivityIndicator",
         "//submodules/SearchBarNode:SearchBarNode",
         "//submodules/ChatListSearchRecentPeersNode:ChatListSearchRecentPeersNode",
-        "//submodules/ChatListSearchItemNode:ChatListSearchItemNode",
         "//submodules/ChatListSearchItemHeader:ChatListSearchItemHeader",
         "//submodules/TemporaryCachedPeerDataManager:TemporaryCachedPeerDataManager",
         "//submodules/PeerPresenceStatusManager:PeerPresenceStatusManager",

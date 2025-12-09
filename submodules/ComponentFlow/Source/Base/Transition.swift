@@ -489,7 +489,25 @@ public struct ComponentTransition {
     }
     
     public func setAlpha(view: UIView, alpha: CGFloat, delay: Double = 0.0, completion: ((Bool) -> Void)? = nil) {
-        self.setAlpha(layer: view.layer, alpha: alpha, delay: delay, completion: completion)
+        if view.alpha == alpha {
+            completion?(true)
+            return
+        }
+        switch self.animation {
+        case .none:
+            view.alpha = alpha
+            view.layer.removeAnimation(forKey: "opacity")
+            completion?(true)
+        case .curve:
+            let previousAlpha: Float
+            if view.layer.animation(forKey: "opacity") != nil {
+                previousAlpha = view.layer.presentation()?.opacity ?? Float(view.alpha)
+            } else {
+                previousAlpha = Float(view.alpha)
+            }
+            view.alpha = alpha
+            self.animateAlpha(layer: view.layer, from: CGFloat(previousAlpha), to: alpha, delay: delay, completion: completion)
+        }
     }
     
     public func setAlpha(layer: CALayer, alpha: CGFloat, delay: Double = 0.0, completion: ((Bool) -> Void)? = nil) {

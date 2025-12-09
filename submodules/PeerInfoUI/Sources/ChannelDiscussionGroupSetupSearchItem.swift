@@ -164,7 +164,7 @@ private final class ChannelDiscussionSearchNavigationContentNode: NavigationBarC
                 primaryText: theme.chat.inputPanel.panelControlColor,
                 placeholder: theme.chat.inputPanel.inputPlaceholderColor,
                 inputIcon: theme.chat.inputPanel.inputControlColor,
-                inputClear: theme.chat.inputPanel.inputControlColor,
+                inputClear: theme.chat.inputPanel.panelControlColor,
                 accent: theme.chat.inputPanel.panelControlAccentColor,
                 keyboard: theme.rootController.keyboardColor
             ),

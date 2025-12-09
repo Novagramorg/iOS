@@ -286,7 +286,7 @@ final class MiniAppListScreenComponent: Component {
                     statusBarHeight: statusBarHeight,
                     sideInset: insets.left,
                     search: ChatListNavigationBar.Search(isEnabled: true),
-                    isSearchActive: self.isSearchDisplayControllerActive,
+                    activeSearch: self.isSearchDisplayControllerActive ? ChatListNavigationBar.ActiveSearch(isExternal: false) : nil,
                     primaryContent: headerContent,
                     secondaryContent: nil,
                     secondaryTransition: 0.0,

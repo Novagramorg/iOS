@@ -11436,6 +11436,9 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
         guard let (layout, navigationBarHeight) = self.validLayout, self.searchDisplayController == nil else {
             return
         }
+        guard let controller = self.controller else {
+            return
+        }
         
         if let currentPaneKey = self.paneContainerNode.currentPaneKey, case .savedMessages = currentPaneKey, let paneNode = self.paneContainerNode.currentPane?.node as? PeerInfoChatPaneNode {
             paneNode.activateSearch()
@@ -11448,8 +11451,6 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
         self.headerNode.navigationButtonContainer.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.3, timingFunction: CAMediaTimingFunctionName.easeOut.rawValue)
         
         if self.isSettings {
-            (self.controller?.parent as? TabBarController)?.updateIsTabBarHidden(true, transition: .animated(duration: 0.3, curve: .linear))
-            
             if let settings = self.data?.globalSettings {
                 self.searchDisplayController = SearchDisplayController(presentationData: self.presentationData, mode: .list, placeholder: self.presentationData.strings.Settings_Search, hasBackground: true, hasSeparator: true, contentNode: SettingsSearchContainerNode(context: self.context, openResult: { [weak self] result in
                     if let strongSelf = self, let navigationController = strongSelf.controller?.navigationController as? NavigationController {
@@ -11478,7 +11479,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                     }
                 }, resolvedFaqUrl: self.cachedFaq.get(), exceptionsList: .single(settings.notificationExceptions), archivedStickerPacks: .single(settings.archivedStickerPacks), privacySettings: .single(settings.privacySettings), hasTwoStepAuth: self.hasTwoStepAuth.get(), twoStepAuthData: self.twoStepAccessConfiguration.get(), activeSessionsContext: self.activeSessionsContextAndCount.get() |> map { $0?.0 }, webSessionsContext: self.activeSessionsContextAndCount.get() |> map { $0?.2 }), cancel: { [weak self] in
                     self?.deactivateSearch()
-                })
+                }, searchBarIsExternal: true)
             }
         } else if let currentPaneKey = self.paneContainerNode.currentPaneKey, case .members = currentPaneKey {
             self.searchDisplayController = SearchDisplayController(presentationData: self.presentationData, mode: .list, placeholder: self.presentationData.strings.Common_Search, hasBackground: true, hasSeparator: true, contentNode: ChannelMembersSearchContainerNode(context: self.context, forceTheme: nil, peerId: self.peerId, mode: .searchMembers, filters: [], searchContext: self.groupMembersSearchContext, openPeer: { [weak self] peer, participant in
@@ -11592,25 +11593,34 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
             transition.updateAlpha(node: navigationBar, alpha: 0.0)
         }
         
-        self.searchDisplayController?.containerLayoutUpdated(layout, navigationBarHeight: navigationBarHeight + 10.0, transition: .immediate)
+        self.searchDisplayController?.containerLayoutUpdated(layout, navigationBarHeight: navigationBarHeight, transition: .immediate)
         self.searchDisplayController?.activate(insertSubnode: { [weak self] subnode, isSearchBar in
             if let strongSelf = self, let navigationBar = strongSelf.controller?.navigationBar {
                 strongSelf.insertSubnode(subnode, belowSubnode: navigationBar)
             }
         }, placeholder: nil)
         
+        if self.isSettings {
+            controller.updateTabBarSearchState(ViewController.TabBarSearchState(isActive: true), transition: transition)
+            if let searchBarNode = controller.currentTabBarSearchNode?() as? SearchBarNode {
+                self.searchDisplayController?.setSearchBar(searchBarNode)
+                searchBarNode.activate()
+            }
+        }
+        
         self.containerLayoutUpdated(layout: layout, navigationHeight: navigationBarHeight, transition: .immediate)
     }
     
-    private func deactivateSearch() {
-        guard let searchDisplayController = self.searchDisplayController else {
+    func deactivateSearch() {
+        guard let controller = self.controller, let searchDisplayController = self.searchDisplayController else {
             return
         }
         self.searchDisplayController = nil
         searchDisplayController.deactivate(placeholder: nil)
         
         if self.isSettings {
-            (self.controller?.parent as? TabBarController)?.updateIsTabBarHidden(false, transition: .animated(duration: 0.3, curve: .linear))
+            (self.controller?.parent as? TabBarController)?.updateIsTabBarHidden(false, transition: .animated(duration: 0.4, curve: .spring))
+            controller.updateTabBarSearchState(ViewController.TabBarSearchState(isActive: false), transition: .animated(duration: 0.4, curve: .spring))
         }
         
         let transition: ContainedViewLayoutTransition = .animated(duration: 0.35, curve: .easeInOut)
@@ -14274,6 +14284,10 @@ public final class PeerInfoScreenImpl: ViewController, PeerInfoScreen, KeyShortc
     
     override public func tabBarActivateSearch() {
         self.controllerNode.activateSearch()
+    }
+    
+    override public func tabBarDeactivateSearch() {
+        self.controllerNode.deactivateSearch()
     }
     
     public static func openSavedMessagesMoreMenu(context: AccountContext, sourceController: ViewController, isViewingAsTopics: Bool, sourceView: UIView, gesture: ContextGesture?) {

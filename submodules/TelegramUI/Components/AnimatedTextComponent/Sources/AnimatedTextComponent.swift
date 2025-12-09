@@ -227,7 +227,7 @@ public final class AnimatedTextComponent: Component {
                     itemText = [.icon(iconName, tint, offset)]
                 }
                 var index = 0
-                for character in itemText {
+                characterLoop: for character in itemText {
                     let characterKey = CharacterKey(itemId: item.id, index: index, value: character.value)
                     index += 1
                     
@@ -245,9 +245,17 @@ public final class AnimatedTextComponent: Component {
                     var characterOffset: CGPoint = .zero
                     switch character {
                     case let .text(text):
-                        characterComponent = AnyComponent(MultilineTextComponent(
-                            text: .plain(NSAttributedString(string: text, font: component.font, textColor: component.color))
-                        ))
+                        if text == " " {
+                            let spaceSize = NSAttributedString(string: " ", font: component.font, textColor: .black).boundingRect(with: CGSize(width: 100.0, height: 100.0), options: .usesLineFragmentOrigin, context: nil).size
+                            size.height = max(size.height, ceil(spaceSize.height))
+                            size.width += max(0.0, ceil(spaceSize.width))
+                            
+                            continue characterLoop
+                        } else {
+                            characterComponent = AnyComponent(MultilineTextComponent(
+                                text: .plain(NSAttributedString(string: text, font: component.font, textColor: component.color))
+                            ))
+                        }
                     case let .icon(iconName, tint, offset):
                         characterComponent = AnyComponent(BundleIconComponent(
                             name: iconName,
@@ -318,7 +326,7 @@ public final class AnimatedTextComponent: Component {
                     }
                     
                     size.height = max(size.height, characterSize.height)
-                    size.width += max(0.0, characterSize.width - UIScreenPixel * 2.0)
+                    size.width += max(0.0, characterSize.width - UIScreenPixel)
                 }
             }
             

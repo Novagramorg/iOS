@@ -7269,6 +7269,10 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     override public func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         
+        if #available(iOS 18.0, *) {
+        } else {
+            //TODO:release
+        }
         UIView.performWithoutAnimation {
             self.view.endEditing(true)
         }
