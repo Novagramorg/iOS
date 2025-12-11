@@ -1769,8 +1769,15 @@ public final class AmountFieldComponent: Component {
             guard let component = self.component, let value = component.value else {
                 return
             }
-            self.textField.text = "\(value)"
-            self.placeholderView.view?.isHidden = self.textField.text?.isEmpty ?? false
+            var text = ""
+            switch component.currency {
+            case .stars:
+                text = "\(value)"
+            case .ton:
+                text = "\(formatTonAmountText(value, dateTimeFormat: PresentationDateTimeFormat(timeFormat: component.dateTimeFormat.timeFormat, dateFormat: component.dateTimeFormat.dateFormat, dateSeparator: "", dateSuffix: "", requiresFullYear: false, decimalSeparator: ".", groupingSeparator: ""), maxDecimalPositions: nil))"
+            }
+            self.textField.text = text
+            self.placeholderView.view?.isHidden = !(self.textField.text ?? "").isEmpty
         }
         
         func update(component: AmountFieldComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<EnvironmentType>, transition: ComponentTransition) -> CGSize {
@@ -1790,7 +1797,7 @@ public final class AmountFieldComponent: Component {
                         text = "\(formatTonAmountText(value, dateTimeFormat: PresentationDateTimeFormat(timeFormat: component.dateTimeFormat.timeFormat, dateFormat: component.dateTimeFormat.dateFormat, dateSeparator: "", dateSuffix: "", requiresFullYear: false, decimalSeparator: ".", groupingSeparator: ""), maxDecimalPositions: nil))"
                     }
                     self.textField.text = text
-                    self.placeholderView.view?.isHidden = text.isEmpty
+                    self.placeholderView.view?.isHidden = !text.isEmpty
                 } else {
                     self.textField.text = ""
                 }
