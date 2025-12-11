@@ -507,6 +507,7 @@ public func giftOfferAlertController(
     let actions: [TextAlertAction] = [TextAlertAction(type: .defaultAction, title: buttonText, action: { [weak contentNode] in
         contentNode?.inProgress = true
         commit()
+        dismissImpl?(true)
     }), TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: {
         dismissImpl?(true)
     })]
