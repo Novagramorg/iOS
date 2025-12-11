@@ -40,6 +40,7 @@ import ChatThemeScreen
 import ProfileLevelRatingBarComponent
 import AnimatedTextComponent
 import InfoParagraphComponent
+import ChatMessagePaymentAlertController
 
 private final class GiftViewSheetContent: CombinedComponent {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
@@ -2337,6 +2338,7 @@ private final class GiftViewSheetContent: CombinedComponent {
             guard let gift = self.subject.arguments?.gift, case let .unique(uniqueGift) = gift, case let .peerId(ownerPeerId) = uniqueGift.owner, let controller = self.getController() else {
                 return
             }
+            let presentationData = self.context.sharedContext.currentPresentationData.with { $0 }
             let _ = (self.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: ownerPeerId))
             |> deliverOnMainQueue).start(next: { [weak self] peer in
                 guard let self, let peer else {
@@ -2346,13 +2348,41 @@ private final class GiftViewSheetContent: CombinedComponent {
                     guard let self else {
                         return
                     }
-                    self.commitGiftBuyOffer(peer: peer, price: amount, duration: duration)
+                    
+                    let _ = (self.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.SendPaidMessageStars(id: peer.id))
+                    |> deliverOnMainQueue).start(next: { [weak self, weak controller] sendPaidMessageStars in
+                        guard let self else {
+                            return
+                        }
+                        let action: (Int64?) -> Void = { allowPaidStars in
+                            self.commitGiftBuyOffer(peer: peer, price: amount, duration: duration, allowPaidStars: allowPaidStars)
+                        }
+                        if let sendPaidMessageStars, sendPaidMessageStars.value > 0 {
+                            let alertController = chatMessagePaymentAlertController(
+                                context: nil,
+                                presentationData: presentationData,
+                                updatedPresentationData: nil,
+                                peers: [EngineRenderedPeer(peer: peer)],
+                                count: 1,
+                                amount: sendPaidMessageStars,
+                                totalAmount: nil,
+                                hasCheck: false,
+                                navigationController: controller?.navigationController as? NavigationController,
+                                completion: { _ in
+                                    action(sendPaidMessageStars.value)
+                                }
+                            )
+                            controller?.present(alertController, in: .window(.root))
+                        } else {
+                            action(nil)
+                        }
+                    })
                 }))
                 controller.push(buyController)
             })
         }
         
-        func commitGiftBuyOffer(peer: EnginePeer, price: CurrencyAmount, duration: Int32) {
+        func commitGiftBuyOffer(peer: EnginePeer, price: CurrencyAmount, duration: Int32, allowPaidStars: Int64?) {
             guard let gift = self.subject.arguments?.gift, case let .unique(uniqueGift) = gift, let starsContext = self.context.starsContext, let starsState = starsContext.currentState else {
                 return
             }
@@ -2362,7 +2392,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                 guard let self else {
                     return
                 }
-                self.upgradeDisposable = (context.engine.payments.sendStarGiftOffer(peerId: peer.id, slug: uniqueGift.slug, amount: price, duration: duration, allowPaidStars: nil)
+                self.upgradeDisposable = (context.engine.payments.sendStarGiftOffer(peerId: peer.id, slug: uniqueGift.slug, amount: price, duration: duration, allowPaidStars: allowPaidStars)
                 |> deliverOnMainQueue).start(error: { _ in
                 }, completed: { [weak self, weak starsContext] in
                     guard let self else {
@@ -2383,11 +2413,15 @@ private final class GiftViewSheetContent: CombinedComponent {
                     guard let self, let controller = self.getController() else {
                         return
                     }
+                    var finalStars = price.amount.value
+                    if let allowPaidStars {
+                        finalStars += allowPaidStars
+                    }
                     let purchaseController = context.sharedContext.makeStarsPurchaseScreen(
                         context: context,
                         starsContext: starsContext,
                         options: options ?? [],
-                        purpose: .starGiftOffer(requiredStars: price.amount.value),
+                        purpose: .starGiftOffer(requiredStars: finalStars),
                         targetPeerId: nil,
                         customTheme: nil,
                         completion: { [weak self, weak starsContext] stars in
@@ -2411,7 +2445,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                                         self.inProgress = false
                                         self.updated()
                                         
-                                        self.commitGiftBuyOffer(peer: peer, price: price, duration: duration)
+                                        self.commitGiftBuyOffer(peer: peer, price: price, duration: duration, allowPaidStars: allowPaidStars)
                                     } else {
                                         proceed()
                                     }
@@ -5164,42 +5198,50 @@ final class GiftViewSheetComponent: CombinedComponent {
             
             var headerContent: AnyComponent<Empty>?
             if let arguments = context.component.subject.arguments, case .unique = arguments.gift, let fromPeerId = arguments.fromPeerId, var fromPeerName = arguments.fromPeerName, arguments.fromPeerId != context.component.context.account.peerId && !(arguments.fromPeerId?.isTelegramNotifications ?? false) {
-                let dateString = stringForMediumDate(timestamp: arguments.date, strings: environment.strings, dateTimeFormat: environment.dateTimeFormat, withTime: false)
-                
-                if fromPeerName.count > 25 {
-                    fromPeerName = "\(fromPeerName.prefix(25))…"
+                var showSenderInfo = false
+                if arguments.incoming {
+                    showSenderInfo = true
+                } else if arguments.peerId == context.component.context.account.peerId {
+                    showSenderInfo = true
                 }
-                let rawString = environment.strings.Gift_View_SenderInfo(fromPeerName, dateString).string
-                let attributedString = parseMarkdownIntoAttributedString(rawString, attributes: MarkdownAttributes(body: MarkdownAttributeSet(font: Font.regular(13.0), textColor: .white), bold: MarkdownAttributeSet(font: Font.semibold(13.0), textColor: .white), link: MarkdownAttributeSet(font: Font.regular(13.0), textColor: .white), linkAttribute: { _ in return nil }))
-                
-                let context = context.component.context
-                headerContent = AnyComponent(
-                    PlainButtonComponent(content: AnyComponent(HeaderContentComponent(attributedText: attributedString)), action: {
-                        if let controller = controller(), let navigationController = controller.navigationController as? NavigationController {
-                            let _ = (context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: fromPeerId))
-                            |> deliverOnMainQueue).start(next: { [weak navigationController] peer in
-                                guard let peer, let navigationController else {
-                                    return
-                                }
-                                context.sharedContext.navigateToChatController(NavigateToChatControllerParams(
-                                    navigationController: navigationController,
-                                    chatController: nil,
-                                    context: context,
-                                    chatLocation: .peer(peer),
-                                    subject: nil,
-                                    botStart: nil,
-                                    updateTextInputState: nil,
-                                    keepStack: .always,
-                                    useExisting: true,
-                                    purposefulAction: nil,
-                                    scrollToEndIfExists: false,
-                                    activateMessageSearch: nil,
-                                    animated: true
-                                ))
-                            })
-                        }
-                    })
-                )
+                if showSenderInfo {
+                    let dateString = stringForMediumDate(timestamp: arguments.date, strings: environment.strings, dateTimeFormat: environment.dateTimeFormat, withTime: false)
+                    
+                    if fromPeerName.count > 25 {
+                        fromPeerName = "\(fromPeerName.prefix(25))…"
+                    }
+                    let rawString = environment.strings.Gift_View_SenderInfo(fromPeerName, dateString).string
+                    let attributedString = parseMarkdownIntoAttributedString(rawString, attributes: MarkdownAttributes(body: MarkdownAttributeSet(font: Font.regular(13.0), textColor: .white), bold: MarkdownAttributeSet(font: Font.semibold(13.0), textColor: .white), link: MarkdownAttributeSet(font: Font.regular(13.0), textColor: .white), linkAttribute: { _ in return nil }))
+                    
+                    let context = context.component.context
+                    headerContent = AnyComponent(
+                        PlainButtonComponent(content: AnyComponent(HeaderContentComponent(attributedText: attributedString)), action: {
+                            if let controller = controller(), let navigationController = controller.navigationController as? NavigationController {
+                                let _ = (context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: fromPeerId))
+                                         |> deliverOnMainQueue).start(next: { [weak navigationController] peer in
+                                    guard let peer, let navigationController else {
+                                        return
+                                    }
+                                    context.sharedContext.navigateToChatController(NavigateToChatControllerParams(
+                                        navigationController: navigationController,
+                                        chatController: nil,
+                                        context: context,
+                                        chatLocation: .peer(peer),
+                                        subject: nil,
+                                        botStart: nil,
+                                        updateTextInputState: nil,
+                                        keepStack: .always,
+                                        useExisting: true,
+                                        purposefulAction: nil,
+                                        scrollToEndIfExists: false,
+                                        activateMessageSearch: nil,
+                                        animated: true
+                                    ))
+                                })
+                            }
+                        })
+                    )
+                }
             }
             
             let sheet = sheet.update(
