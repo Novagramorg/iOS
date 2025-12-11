@@ -79,23 +79,6 @@ public enum ChatListNodeEntryPromoInfo: Equatable {
     case psa(type: String, message: String?)
 }
 
-public enum ChatListNotice: Equatable {
-    case clearStorage(sizeFraction: Double)
-    case setupPassword
-    case premiumUpgrade(discount: Int32)
-    case premiumAnnualDiscount(discount: Int32)
-    case premiumRestore(discount: Int32)
-    case xmasPremiumGift
-    case setupBirthday
-    case birthdayPremiumGift(peers: [EnginePeer], birthdays: [EnginePeer.Id: TelegramBirthday])
-    case reviewLogin(newSessionReview: NewSessionReview, totalCount: Int)
-    case premiumGrace
-    case starsSubscriptionLowBalance(amount: StarsAmount, peers: [EnginePeer])
-    case setupPhoto(EnginePeer)
-    case accountFreeze
-    case link(id: String, url: String, title: ServerSuggestionInfo.Item.Text, subtitle: ServerSuggestionInfo.Item.Text)
-}
-
 enum ChatListNodeEntry: Comparable, Identifiable {
     struct PeerEntryData: Equatable {
         var index: EngineChatList.Item.Index
@@ -409,7 +392,6 @@ enum ChatListNodeEntry: Comparable, Identifiable {
     case ArchiveIntro(presentationData: ChatListPresentationData)
     case EmptyIntro(presentationData: ChatListPresentationData)
     case SectionHeader(presentationData: ChatListPresentationData, displayHide: Bool)
-    case Notice(presentationData: ChatListPresentationData, notice: ChatListNotice)
     case AdditionalCategory(index: Int, id: Int, title: String, image: UIImage?, appearance: ChatListNodeAdditionalCategory.Appearance, selected: Bool, presentationData: ChatListPresentationData)
     
     var sortIndex: ChatListNodeEntrySortIndex {
@@ -430,8 +412,6 @@ enum ChatListNodeEntry: Comparable, Identifiable {
             return .index(.chatList(EngineChatList.Item.Index.ChatList.absoluteUpperBound.successor))
         case .SectionHeader:
             return .sectionHeader
-        case .Notice:
-            return .index(.chatList(EngineChatList.Item.Index.ChatList.absoluteUpperBound.successor.successor))
         case let .AdditionalCategory(index, _, _, _, _, _, _):
             return .additionalCategory(index)
         }
@@ -460,8 +440,6 @@ enum ChatListNodeEntry: Comparable, Identifiable {
             return .EmptyIntro
         case .SectionHeader:
             return .SectionHeader
-        case .Notice:
-            return .Notice
         case let .AdditionalCategory(_, id, _, _, _, _, _):
             return .additionalCategory(id)
         }
@@ -534,18 +512,6 @@ enum ChatListNodeEntry: Comparable, Identifiable {
                 } else {
                     return false
                 }
-            case let .Notice(lhsPresentationData, lhsInfo):
-                if case let .Notice(rhsPresentationData, rhsInfo) = rhs {
-                    if lhsPresentationData !== rhsPresentationData {
-                        return false
-                    }
-                    if lhsInfo != rhsInfo {
-                        return false
-                    }
-                    return true
-                } else {
-                    return false
-                }
             case let .AdditionalCategory(lhsIndex, lhsId, lhsTitle, lhsImage, lhsAppearance, lhsSelected, lhsPresentationData):
                 if case let .AdditionalCategory(rhsIndex, rhsId, rhsTitle, rhsImage, rhsAppearance, rhsSelected, rhsPresentationData) = rhs {
                     if lhsIndex != rhsIndex {
@@ -595,7 +561,7 @@ struct ChatListContactPeer {
     }
 }
 
-func chatListNodeEntriesForView(view: EngineChatList, state: ChatListNodeState, savedMessagesPeer: EnginePeer?, foundPeers: [(EnginePeer, EnginePeer?)], hideArchivedFolderByDefault: Bool, displayArchiveIntro: Bool, notice: ChatListNotice?, mode: ChatListNodeMode, chatListLocation: ChatListControllerLocation, contacts: [ChatListContactPeer], accountPeerId: EnginePeer.Id, isMainTab: Bool) -> (entries: [ChatListNodeEntry], loading: Bool) {
+func chatListNodeEntriesForView(view: EngineChatList, state: ChatListNodeState, savedMessagesPeer: EnginePeer?, foundPeers: [(EnginePeer, EnginePeer?)], hideArchivedFolderByDefault: Bool, displayArchiveIntro: Bool, mode: ChatListNodeMode, chatListLocation: ChatListControllerLocation, contacts: [ChatListContactPeer], accountPeerId: EnginePeer.Id, isMainTab: Bool) -> (entries: [ChatListNodeEntry], loading: Bool) {
     var groupItems = view.groupItems
     if isMainTab && state.archiveStoryState != nil && groupItems.isEmpty {
         groupItems.append(EngineChatList.GroupItem(
@@ -925,10 +891,6 @@ func chatListNodeEntriesForView(view: EngineChatList, state: ChatListNodeState, 
                 }
             }) {
                 result.append(.EmptyIntro(presentationData: state.presentationData))
-            }
-            
-            if let notice {
-                result.append(.Notice(presentationData: state.presentationData, notice: notice))
             }
             
             result.append(.HeaderEntry)

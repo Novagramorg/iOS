@@ -1393,7 +1393,7 @@ final class LocationPickerControllerNode: ViewControllerTracingNode, CLLocationM
                     component: AnyComponentWithIdentity(id: isPickingLocation ? "back" : "close", component: AnyComponent(
                         BundleIconComponent(
                             name: isPickingLocation ? "Navigation/Back" : "Navigation/Close",
-                            tintColor: self.presentationData.theme.rootController.navigationBar.glassBarButtonForegroundColor
+                            tintColor: self.presentationData.theme.chat.inputPanel.panelControlColor
                         )
                     )),
                     action: { [weak self] _ in
@@ -1428,7 +1428,7 @@ final class LocationPickerControllerNode: ViewControllerTracingNode, CLLocationM
                     component: AnyComponentWithIdentity(id: "search", component: AnyComponent(
                         BundleIconComponent(
                             name: "Navigation/Search",
-                            tintColor: self.presentationData.theme.rootController.navigationBar.glassBarButtonForegroundColor
+                            tintColor: self.presentationData.theme.chat.inputPanel.panelControlColor
                         )
                     )),
                     action: { [weak self] _ in

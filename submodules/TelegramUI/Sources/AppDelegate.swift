@@ -42,6 +42,7 @@ import TelegramUIDeclareEncodables
 import ContextMenuScreen
 import MetalEngine
 import RecaptchaEnterprise
+import NavigationBarImpl
 
 #if canImport(AppCenter)
 import AppCenter
@@ -329,6 +330,10 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         })
         
         let launchStartTime = CFAbsoluteTimeGetCurrent()
+        
+        defaultNavigationBarImpl = { presentationData in
+            return NavigationBarImpl(presentationData: presentationData)
+        }
         
         let (window, hostView) = nativeWindowHostView()
         let statusBarHost = ApplicationStatusBarHost(scene: window.windowScene)

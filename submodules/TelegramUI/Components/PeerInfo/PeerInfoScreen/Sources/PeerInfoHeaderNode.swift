@@ -648,11 +648,11 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         let avatarOverlayFarme = self.editingContentNode.convert(self.editingContentNode.avatarNode.frame, to: self)
         transition.updateFrame(node: self.avatarOverlayNode, frame: avatarOverlayFarme)
         
-        var transitionSourceHeight: CGFloat = 0.0
-        var transitionFraction: CGFloat = 0.0
-        var transitionSourceAvatarFrame: CGRect?
-        var transitionSourceTitleFrame = CGRect()
-        var transitionSourceSubtitleFrame = CGRect()
+        let transitionSourceHeight: CGFloat = 0.0
+        let transitionFraction: CGFloat = 0.0
+        let transitionSourceAvatarFrame: CGRect? = nil
+        let transitionSourceTitleFrame = CGRect()
+        let transitionSourceSubtitleFrame = CGRect()
         
         let avatarFrame = CGRect(origin: CGPoint(x: floor((width - avatarSize) / 2.0), y: statusBarHeight + 22.0), size: CGSize(width: avatarSize, height: avatarSize))
         
@@ -766,7 +766,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         let backgroundBannerAlpha: CGFloat
         
         var effectiveSeparatorAlpha: CGFloat
-        if let navigationTransition = self.navigationTransition {
+        /*if let navigationTransition = self.navigationTransition {
             transitionSourceHeight = navigationTransition.sourceNavigationBar.backgroundNode.bounds.height
             transitionFraction = navigationTransition.fraction
             
@@ -799,7 +799,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                 self.avatarListNode.animateAvatarCollapse(transition: transition)
             }
             self.avatarClippingNode.clipsToBounds = false
-        } else {
+        } else*/ do {
             let backgroundTransitionStepDistance: CGFloat = 50.0
             var backgroundTransitionDistance: CGFloat = navigationHeight + panelWithAvatarHeight - backgroundTransitionStepDistance
             if self.isSettings || self.isMyProfile {

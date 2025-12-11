@@ -15,7 +15,6 @@ import PeerOnlineMarkerNode
 import LocalizedPeerData
 import PeerPresenceStatusManager
 import PhotoResources
-import ChatListSearchItemNode
 import ContextUI
 import ChatInterfaceState
 import TextFormat
@@ -454,7 +453,7 @@ private final class ChatListItemTagListComponent: Component {
     }
 }
 
-public class ChatListItem: ListViewItem, ChatListSearchItemNeighbour {
+public class ChatListItem: ListViewItem {
     public enum EnabledContextActions {
         public struct Actions: OptionSet {
             public var rawValue: Int32
@@ -2103,7 +2102,9 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                 let effectiveBackgroundColor: UIColor
                 if item.isPinned {
                     onlineIcon = PresentationResourcesChatList.recentStatusOnlineIcon(item.presentationData.theme, state: .pinned, voiceChat: self.onlineIsVoiceChat)
-                    effectiveBackgroundColor = item.presentationData.theme.chatList.pinnedItemBackgroundColor
+                    //TODO:localize
+                    effectiveBackgroundColor = item.presentationData.theme.chatList.itemBackgroundColor
+                    //effectiveBackgroundColor = item.presentationData.theme.chatList.pinnedItemBackgroundColor
                 } else {
                     onlineIcon = PresentationResourcesChatList.recentStatusOnlineIcon(item.presentationData.theme, state: .regular, voiceChat: self.onlineIsVoiceChat)
                     effectiveBackgroundColor = item.presentationData.theme.chatList.itemBackgroundColor
@@ -2117,7 +2118,9 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
             if let avatarLiveBadge = self.avatarLiveBadge {
                 let effectiveBackgroundColor: UIColor
                 if item.isPinned {
-                    effectiveBackgroundColor = item.presentationData.theme.chatList.pinnedItemBackgroundColor
+                    //TODO:localize
+                    effectiveBackgroundColor = item.presentationData.theme.chatList.itemBackgroundColor
+                    //effectiveBackgroundColor = item.presentationData.theme.chatList.pinnedItemBackgroundColor
                 } else {
                     effectiveBackgroundColor = item.presentationData.theme.chatList.itemBackgroundColor
                 }
@@ -3854,6 +3857,9 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                         transition = .immediate
                     }
                     
+                    transition.updateAlpha(node: strongSelf, alpha: item.hiddenOffset ? 0.0 : 1.0)
+                    ComponentTransition(transition).setBlur(layer: strongSelf.layer, radius: item.hiddenOffset ? 8.0 : 0.0)
+                    
                     let contextContainerFrame = CGRect(origin: CGPoint(), size: CGSize(width: layout.contentSize.width, height: itemHeight))
 //                    strongSelf.contextContainer.position = contextContainerFrame.center
                     transition.updatePosition(node: strongSelf.contextContainer, position: contextContainerFrame.center)
@@ -4127,7 +4133,9 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                         
                         let effectiveBackgroundColor: UIColor
                         if item.isPinned {
-                            effectiveBackgroundColor = item.presentationData.theme.chatList.pinnedItemBackgroundColor
+                            //TODO:localize
+                            effectiveBackgroundColor = item.presentationData.theme.chatList.itemBackgroundColor
+                            //effectiveBackgroundColor = item.presentationData.theme.chatList.pinnedItemBackgroundColor
                         } else {
                             effectiveBackgroundColor = item.presentationData.theme.chatList.itemBackgroundColor
                         }
@@ -4148,7 +4156,9 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                         effectiveBackgroundColor = item.presentationData.theme.chatList.itemHighlightedBackgroundColor
                     } else if case let .chatList(index) = item.index, index.pinningIndex != nil {
                         onlineIcon = PresentationResourcesChatList.recentStatusOnlineIcon(item.presentationData.theme, state: .pinned, voiceChat: onlineIsVoiceChat)
-                        effectiveBackgroundColor = item.presentationData.theme.chatList.pinnedItemBackgroundColor
+                        //TODO:localize
+                        effectiveBackgroundColor = item.presentationData.theme.chatList.itemBackgroundColor
+                        //effectiveBackgroundColor = item.presentationData.theme.chatList.pinnedItemBackgroundColor
                     } else {
                         onlineIcon = PresentationResourcesChatList.recentStatusOnlineIcon(item.presentationData.theme, state: .regular, voiceChat: onlineIsVoiceChat)
                         effectiveBackgroundColor = item.presentationData.theme.chatList.itemBackgroundColor
@@ -5031,7 +5041,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                     if case let .groupReference(groupReferenceData) = item.content, groupReferenceData.hiddenByDefault {
                         separatorInset = 0.0
                     } else if (!nextIsPinned && isPinned) || last {
-                            separatorInset = 0.0
+                        separatorInset = 0.0
                     } else {
                         separatorInset = editingOffset + leftInset + rawContentRect.origin.x
                     }
@@ -5060,7 +5070,9 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                             backgroundColor = theme.itemBackgroundColor
                             highlightedBackgroundColor = theme.itemHighlightedBackgroundColor
                         } else {
-                            backgroundColor = theme.pinnedItemBackgroundColor
+                            //TODO:localize
+                            backgroundColor = item.presentationData.theme.chatList.itemBackgroundColor
+                            //backgroundColor = theme.pinnedItemBackgroundColor
                             highlightedBackgroundColor = theme.pinnedItemHighlightedBackgroundColor
                         }
                     } else {

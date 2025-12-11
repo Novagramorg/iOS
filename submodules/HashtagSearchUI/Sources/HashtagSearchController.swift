@@ -87,7 +87,7 @@ public final class HashtagSearchController: TelegramBaseController {
                 if previousTheme !== presentationData.theme || previousStrings !== presentationData.strings {
                     self.statusBar.statusBarStyle = self.presentationData.theme.rootController.statusBarStyle.style
                     
-                    self.navigationBar?.updatePresentationData(NavigationBarPresentationData(presentationData: self.presentationData))
+                    self.navigationBar?.updatePresentationData(NavigationBarPresentationData(presentationData: self.presentationData), transition: .immediate)
                     self.controllerNode.updatePresentationData(self.presentationData)
                 }
             }

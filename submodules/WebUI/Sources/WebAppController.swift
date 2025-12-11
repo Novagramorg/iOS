@@ -3510,7 +3510,7 @@ public final class WebAppController: ViewController, AttachmentContainable {
     
     private func updateNavigationButtons() {
         if case .attachMenu = self.source {
-            let barButtonSize = CGSize(width: 40.0, height: 40.0)
+            let barButtonSize = CGSize(width: 44.0, height: 44.0)
             let closeComponent: AnyComponentWithIdentity<Empty> = AnyComponentWithIdentity(
                 id: "close",
                 component: AnyComponent(GlassBarButtonComponent(
@@ -3521,7 +3521,7 @@ public final class WebAppController: ViewController, AttachmentContainable {
                     component: AnyComponentWithIdentity(id: self.controllerNode.hasBackButton ? "back" : "close", component: AnyComponent(
                         BundleIconComponent(
                             name: self.controllerNode.hasBackButton ? "Navigation/Back" : "Navigation/Close",
-                            tintColor: self.presentationData.theme.rootController.navigationBar.glassBarButtonForegroundColor
+                            tintColor: self.presentationData.theme.chat.inputPanel.panelControlColor
                         )
                     )),
                     action: { [weak self] _ in
@@ -3542,7 +3542,7 @@ public final class WebAppController: ViewController, AttachmentContainable {
                             content: LottieComponent.AppBundleContent(
                                 name: "anim_morewide"
                             ),
-                            color: self.presentationData.theme.rootController.navigationBar.glassBarButtonForegroundColor,
+                            color: self.presentationData.theme.chat.inputPanel.panelControlColor,
                             size: CGSize(width: 34.0, height: 34.0),
                             playOnce: self.moreButtonPlayOnce
                         )
@@ -3621,6 +3621,7 @@ public final class WebAppController: ViewController, AttachmentContainable {
         if let backgroundColor = self.controllerNode.headerColor, let textColor = self.controllerNode.headerPrimaryTextColor {
             navigationBarPresentationData = NavigationBarPresentationData(
                 theme: NavigationBarTheme(
+                    overallDarkAppearance: false,
                     buttonColor: textColor,
                     disabledButtonColor: textColor,
                     primaryTextColor: textColor,
@@ -3639,7 +3640,7 @@ public final class WebAppController: ViewController, AttachmentContainable {
                 strings: NavigationBarStrings(back: "", close: "")
             )
         }
-        self.navigationBar?.updatePresentationData(navigationBarPresentationData)
+        self.navigationBar?.updatePresentationData(navigationBarPresentationData, transition: .immediate)
     }
     
     @objc fileprivate func cancelPressed() {
