@@ -369,17 +369,15 @@ class BazelCommandLine:
         print(subprocess.list2cmdline(combined_arguments))
         call_executable(combined_arguments)
 
-    def get_spm_aspect_invocation(self):
+    def invoke_spm_build(self):
         combined_arguments = [
             self.build_environment.bazel_path
         ]
         combined_arguments += self.get_startup_bazel_arguments()
         combined_arguments += ['build']
 
-        if self.custom_target is not None:
-            combined_arguments += [self.custom_target]
-        else:
-            combined_arguments += ['Telegram/Telegram']
+        # Build the generate_spm target directly to get the dependency tree JSON
+        combined_arguments += ['//Telegram:spm_build_root']
 
         if self.continue_on_error:
             combined_arguments += ['--keep_going']
@@ -409,8 +407,6 @@ class BazelCommandLine:
 
         combined_arguments += self.configuration_args
 
-        combined_arguments += ['--aspects', '//build-system/bazel-utils:spm.bzl%spm_text_aspect']
-        
         print(subprocess.list2cmdline(combined_arguments))
         call_executable(combined_arguments)
 
@@ -719,7 +715,7 @@ def query(bazel, arguments):
     bazel_command_line.invoke_query(query_args)
 
 
-def get_spm_aspect_invocation(bazel, arguments):
+def build_spm(bazel, arguments):
     bazel_command_line = BazelCommandLine(
         bazel=bazel,
         override_bazel_version=arguments.overrideBazelVersion,
@@ -741,13 +737,12 @@ def get_spm_aspect_invocation(bazel, arguments):
 
     bazel_command_line.set_configuration(arguments.configuration)
     bazel_command_line.set_build_number(arguments.buildNumber)
-    bazel_command_line.set_custom_target(arguments.target)
     bazel_command_line.set_continue_on_error(False)
     bazel_command_line.set_show_actions(False)
     bazel_command_line.set_enable_sandbox(False)
     bazel_command_line.set_split_swiftmodules(False)
 
-    bazel_command_line.get_spm_aspect_invocation()
+    bazel_command_line.invoke_spm_build()
 
 def add_codesigning_common_arguments(current_parser: argparse.ArgumentParser):
     configuration_group = current_parser.add_mutually_exclusive_group(required=True)
@@ -1188,13 +1183,7 @@ if __name__ == '__main__':
         metavar='query_string'
     )
 
-    spm_parser = subparsers.add_parser('spm', help='Generate SPM package')
-    spm_parser.add_argument(
-        '--target',
-        type=str,
-        help='A custom bazel target name to build.',
-        metavar='target_name'
-    )
+    spm_parser = subparsers.add_parser('spm', help='Generate SPM package (outputs bazel-bin/Telegram/spm_build_root_modules.json)')
     spm_parser.add_argument(
         '--buildNumber',
         required=False,
@@ -1351,7 +1340,7 @@ if __name__ == '__main__':
         elif args.commandName == 'query':
             query(bazel=bazel_path, arguments=args)
         elif args.commandName == 'spm':
-            get_spm_aspect_invocation(bazel=bazel_path, arguments=args)
+            build_spm(bazel=bazel_path, arguments=args)
         else:
             raise Exception('Unknown command')
     except KeyboardInterrupt:

@@ -124,6 +124,9 @@ import AdsInfoScreen
 import PostSuggestionsSettingsScreen
 import ChatSendStarsScreen
 import ChatSendAsContextMenu
+import GlobalControlPanelsContext
+import ComponentFlow
+import ComponentDisplayAdapters
 
 extension ChatControllerImpl {
     func reloadChatLocation(chatLocation: ChatLocation, chatLocationContextHolder: Atomic<ChatLocationContextHolder?>, historyNode: ChatHistoryListNodeImpl, apply: @escaping ((ContainedViewLayoutTransition?) -> Void) -> Void) {
@@ -227,17 +230,6 @@ extension ChatControllerImpl {
             return
         }
         self.navigationBar?.userInfo = contentData.state.navigationUserInfo
-        
-        if self.chatTitleView?.titleContent != contentData.state.chatTitleContent {
-            var animateTitleContents = false
-            if !synchronous,  case let .messageOptions(_, _, info) = self.subject, case .reply = info {
-                animateTitleContents = true
-            }
-            if animateTitleContents && self.chatTitleView?.titleContent != nil {
-                self.chatTitleView?.animateLayoutTransition()
-            }
-            self.chatTitleView?.titleContent = contentData.state.chatTitleContent
-        }
         
         if let infoAvatar = contentData.state.infoAvatar {
             switch infoAvatar {
@@ -381,12 +373,35 @@ extension ChatControllerImpl {
         if previousState.pinnedMessage != contentData.state.pinnedMessage {
             animated = true
         }
+        if previousState.translationState?.isEnabled != contentData.state.translationState?.isEnabled {
+            animated = true
+        }
+        if previousState.chatTitleContent != contentData.state.chatTitleContent {
+            animated = true
+        }
+        
         var transition: ContainedViewLayoutTransition = animated ? .animated(duration: 0.4, curve: .spring) : .immediate
         if let forceAnimationTransition {
             transition = forceAnimationTransition
         }
         if !self.willAppear {
             transition = .immediate
+        }
+        
+        if let chatTitleContent = contentData.state.chatTitleContent {
+            var titleTransition = ComponentTransition(transition)
+            if case .messageOptions = self.subject {
+                titleTransition = titleTransition.withAnimation(.none)
+            }
+            self.chatTitleView?.update(
+                context: self.context,
+                theme: self.presentationData.theme,
+                strings: self.presentationData.strings,
+                dateTimeFormat: self.presentationData.dateTimeFormat,
+                nameDisplayOrder: self.presentationData.nameDisplayOrder,
+                content: chatTitleContent,
+                transition: titleTransition
+            )
         }
         
         self.updateChatPresentationInterfaceState(transition: transition, interactive: false, { presentationInterfaceState in
@@ -4590,6 +4605,44 @@ extension ChatControllerImpl {
             })
         }
         
+        var mediaPlayback = false
+        var liveLocationMode: GlobalControlPanelsContext.LiveLocationMode?
+        if case .standard = self.mode {
+            //mediaAccessoryPanelVisibility = .specific(size: .compact)
+            mediaPlayback = true
+            liveLocationMode = self.chatLocation.peerId.flatMap(GlobalControlPanelsContext.LiveLocationMode.peer)
+        }
+        
+        var groupCallPanelSource: GroupCallPanelSource?
+        switch self.chatLocation {
+        case let .peer(peerId):
+            switch self.subject {
+            case .message, .none:
+                groupCallPanelSource = .peer(peerId)
+            default:
+                break
+            }
+        case .replyThread, .customChatContents:
+            break
+        }
+        
+        let globalControlPanelsContext = GlobalControlPanelsContext(
+            context: self.context,
+            mediaPlayback: mediaPlayback,
+            liveLocationMode: liveLocationMode,
+            groupCalls: groupCallPanelSource,
+            chatListNotices: false
+        )
+        self.globalControlPanelsContext = globalControlPanelsContext
+        self.globalControlPanelsContextStateDisposable = (globalControlPanelsContext.state
+        |> deliverOnMainQueue).startStrict(next: { [weak self] state in
+            guard let self else {
+                return
+            }
+            self.globalControlPanelsContextState = state
+            self.requestLayout(transition: .animated(duration: 0.4, curve: .spring))
+        })
+        
         self.displayNodeDidLoad()
     }
     
@@ -4745,7 +4798,18 @@ extension ChatControllerImpl {
                                         return true
                                 }
                             })
-                            strongSelf.chatTitleView?.inputActivities = (peerId, displayActivities)
+                            strongSelf.chatTitleView?.updateActivities(
+                                activities: ChatTitleComponent.Activities(
+                                    peerId: peerId,
+                                    items: displayActivities.map { item -> ChatTitleComponent.Activities.Item in
+                                        return ChatTitleComponent.Activities.Item(
+                                            peer: EnginePeer(item.0),
+                                            activity: item.1
+                                        )
+                                    }
+                                ),
+                                transition: .spring(duration: 0.4)
+                            )
                             
                             strongSelf.peerInputActivitiesPromise.set(.single(activities))
                             

@@ -13,7 +13,7 @@ public final class GlassBarButtonComponent: Component {
     }
     
     public let size: CGSize?
-    public let backgroundColor: UIColor
+    public let backgroundColor: UIColor?
     public let isDark: Bool
     public let state: DisplayState?
     public let isEnabled: Bool
@@ -22,7 +22,7 @@ public final class GlassBarButtonComponent: Component {
 
     public init(
         size: CGSize?,
-        backgroundColor: UIColor,
+        backgroundColor: UIColor?,
         isDark: Bool,
         state: DisplayState? = nil,
         isEnabled: Bool = true,
@@ -168,7 +168,11 @@ public final class GlassBarButtonComponent: Component {
                 componentTransition.setFrame(view: view, frame: componentFrame)
             }
             
-            let effectiveState = component.state ?? .glass
+            let effectiveState: DisplayState = component.state ?? .glass
+            /*if "".isEmpty {
+                effectiveState = .glass
+            }*/
+            
             var genericAlpha: CGFloat = 1.0
             var glassAlpha: CGFloat = 1.0
             switch effectiveState {
@@ -181,8 +185,9 @@ public final class GlassBarButtonComponent: Component {
             }
             
             let cornerRadius = containerSize.height * 0.5
-            self.genericBackgroundView.update(size: containerSize, cornerRadius: cornerRadius, isDark: component.isDark, tintColor: .init(kind: .custom, color: component.backgroundColor), transition: transition)
-            
+            if let backgroundColor = component.backgroundColor {
+                self.genericBackgroundView.update(size: containerSize, cornerRadius: cornerRadius, isDark: component.isDark, tintColor: .init(kind: .custom, color: backgroundColor), transition: transition)
+            }
                         
             let bounds = CGRect(origin: .zero, size: containerSize)
             transition.setFrame(view: self.containerView, frame: bounds)
@@ -196,7 +201,7 @@ public final class GlassBarButtonComponent: Component {
             
             transition.setFrame(view: self.genericBackgroundView, frame: bounds)
             
-            if glassAlpha == 1.0 {
+            if glassAlpha == 1.0, let backgroundColor = component.backgroundColor {
                 let glassBackgroundView: GlassBackgroundView
                 var glassBackgroundTransition = transition
                 if let current = self.glassBackgroundView {
@@ -210,7 +215,7 @@ public final class GlassBarButtonComponent: Component {
                     
                     transition.animateAlpha(view: glassBackgroundView, from: 0.0, to: 1.0)
                 }
-                glassBackgroundView.update(size: containerSize, cornerRadius: cornerRadius, isDark: component.isDark, tintColor: .init(kind: effectiveState == .tintedGlass ? .custom : .panel , color: component.backgroundColor.withMultipliedAlpha(effectiveState == .tintedGlass ? 1.0 : 0.7)), transition: glassBackgroundTransition)
+                glassBackgroundView.update(size: containerSize, cornerRadius: cornerRadius, isDark: component.isDark, tintColor: .init(kind: effectiveState == .tintedGlass ? .custom : .panel , color: backgroundColor.withMultipliedAlpha(effectiveState == .tintedGlass ? 1.0 : 0.7)), transition: glassBackgroundTransition)
                 glassBackgroundTransition.setFrame(view: glassBackgroundView, frame: bounds)
             } else if let glassBackgroundView = self.glassBackgroundView {
                 self.glassBackgroundView = nil
@@ -310,7 +315,7 @@ public final class BarComponentHostNode: ASDisplayNode {
                         transition.animateScale(view: view, from: 0.01, to: 1.0)
                     }
                 }
-                view.frame = CGRect(origin: CGPoint(x: 0.0, y: 3.0), size: self.size)
+                view.frame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: self.size)
             }
         }
     }

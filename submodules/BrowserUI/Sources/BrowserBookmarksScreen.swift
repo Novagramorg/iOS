@@ -196,7 +196,6 @@ public final class BrowserBookmarksScreen: ViewController {
                 controllerInteraction: self.controllerInteraction,
                 selectedMessages: .single(nil),
                 mode: .list(
-                    search: false,
                     reversed: false,
                     reverseGroups: false,
                     displayHeaders: .none,
@@ -287,9 +286,9 @@ public final class BrowserBookmarksScreen: ViewController {
             }
             let tagMask: MessageTags = .webPage
             
-            self.searchDisplayController = SearchDisplayController(presentationData: self.presentationData, mode: .list, placeholder: self.presentationData.strings.Common_Search, hasBackground: true, contentNode: ChatHistorySearchContainerNode(context: self.context, peerId: self.context.account.peerId, threadId: nil, tagMask: tagMask, interfaceInteraction: self.controllerInteraction), cancel: { [weak self] in
+            self.searchDisplayController = SearchDisplayController(presentationData: self.presentationData, mode: .navigation, placeholder: self.presentationData.strings.Common_Search, hasBackground: true, contentNode: ChatHistorySearchContainerNode(context: self.context, peerId: self.context.account.peerId, threadId: nil, tagMask: tagMask, interfaceInteraction: self.controllerInteraction), cancel: { [weak self] in
                 self?.controller?.deactivateSearch()
-            })
+            }, fieldStyle: placeholderNode.fieldStyle)
             
             self.searchDisplayController?.containerLayoutUpdated(layout, navigationBarHeight: navigationBarHeight, transition: .immediate)
             self.searchDisplayController?.activate(insertSubnode: { [weak self, weak placeholderNode] subnode, isSearchBar in
@@ -372,7 +371,9 @@ public final class BrowserBookmarksScreen: ViewController {
         self.openUrl = openUrl
         self.addBookmark = addBookmark
         
-        super.init(navigationBarPresentationData: NavigationBarPresentationData(presentationData: self.presentationData))
+        super.init(navigationBarPresentationData: NavigationBarPresentationData(presentationData: self.presentationData, style: .glass))
+        
+        self._hasGlassStyle = true
                 
         self.navigationPresentation = .modal
         self.supportedOrientations = ViewControllerSupportedOrientations(regularSize: .all, compactSize: .portrait)
@@ -429,19 +430,13 @@ public final class BrowserBookmarksScreen: ViewController {
                 searchContentNode.updateListVisibleContentOffset(offset)
             }
         }
-//        
-//        self.node.historyNode.didEndScrolling = { [weak self] _ in
-//            if let strongSelf = self, let searchContentNode = strongSelf.searchContentNode {
-//                let _ = fixNavigationSearchableListNodeScrolling(strongSelf.node.historyNode, searchNode: searchContentNode)
-//            }
-//        }
         
         self.displayNodeDidLoad()
     }
     
     private func updateThemeAndStrings() {
         self.statusBar.statusBarStyle = self.presentationData.theme.rootController.statusBarStyle.style
-        self.navigationBar?.updatePresentationData(NavigationBarPresentationData(presentationData: self.presentationData))
+        self.navigationBar?.updatePresentationData(NavigationBarPresentationData(presentationData: self.presentationData, style: .glass), transition: .immediate)
         self.searchContentNode?.updateThemeAndPlaceholder(theme: self.presentationData.theme, placeholder: self.presentationData.strings.Common_Search)
     }
     

@@ -326,7 +326,11 @@ public final class ChatListTitleView: UIView, NavigationBarTitleView, Navigation
         }
     }
     
-    public func updateLayout(size: CGSize, clearBounds: CGRect, transition: ContainedViewLayoutTransition) -> CGRect {
+    public func updateLayout(size: CGSize, clearBounds: CGRect, transition: ContainedViewLayoutTransition) {
+        let _ = self.updateLayoutInternal(size: size, clearBounds: clearBounds, transition: transition)
+    }
+    
+    public func updateLayoutInternal(size: CGSize, clearBounds: CGRect, transition: ContainedViewLayoutTransition) -> CGRect {
         self.validLayout = (size, clearBounds)
         
         var indicatorPadding: CGFloat = 0.0

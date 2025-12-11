@@ -7,7 +7,6 @@ import TelegramPresentationData
 import ItemListUI
 import PresentationDataUtils
 import ActivityIndicator
-import ChatListSearchItemNode
 import ShimmerEffect
 
 public struct LocalizationListItemEditing: Equatable {
@@ -314,7 +313,7 @@ class LocalizationListItemNode: ItemListRevealOptionsItemNode {
                     if strongSelf.maskNode.supernode == nil {
                         strongSelf.addSubnode(strongSelf.maskNode)
                     }
-                    let hasCorners = itemListHasRoundedBlockLayout(params)
+                    let hasCorners = itemListHasRoundedBlockLayout(params) && !item.alwaysPlain
                     var hasTopCorners = false
                     var hasBottomCorners = false
                     switch neighbors.top {

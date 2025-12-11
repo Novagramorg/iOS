@@ -459,16 +459,16 @@ public func makeAttachmentFileControllerImpl(context: AccountContext, updatedPre
         let updatedTheme = presentationData.theme.withModalBlocksBackground()
         presentationData = presentationData.withUpdated(theme: updatedTheme)
         
-        let barButtonSize = CGSize(width: 40.0, height: 40.0)
+        let barButtonSize = CGSize(width: 44.0, height: 44.0)
         let closeButton = GlassBarButtonComponent(
             size: barButtonSize,
-            backgroundColor: presentationData.theme.rootController.navigationBar.glassBarButtonBackgroundColor,
+            backgroundColor: nil,
             isDark: presentationData.theme.overallDarkAppearance,
             state: .generic,
             component: AnyComponentWithIdentity(id: "close", component: AnyComponent(
                 BundleIconComponent(
                     name: "Navigation/Close",
-                    tintColor: presentationData.theme.rootController.navigationBar.glassBarButtonForegroundColor
+                    tintColor: presentationData.theme.chat.inputPanel.panelControlColor
                 )
             )),
             action: { _ in
@@ -489,13 +489,13 @@ public func makeAttachmentFileControllerImpl(context: AccountContext, updatedPre
                 
         let searchButton = GlassBarButtonComponent(
             size: barButtonSize,
-            backgroundColor: presentationData.theme.rootController.navigationBar.glassBarButtonBackgroundColor,
+            backgroundColor: nil,
             isDark: presentationData.theme.overallDarkAppearance,
             state: .generic,
             component: AnyComponentWithIdentity(id: "search", component: AnyComponent(
                 BundleIconComponent(
                     name: "Navigation/Search",
-                    tintColor: presentationData.theme.rootController.navigationBar.glassBarButtonForegroundColor
+                    tintColor: presentationData.theme.chat.inputPanel.panelControlColor
                 )
             )),
             action: { _ in
@@ -509,7 +509,7 @@ public func makeAttachmentFileControllerImpl(context: AccountContext, updatedPre
             }
         )
         let searchButtonComponent = state.searching ? nil : AnyComponentWithIdentity(id: "search", component: AnyComponent(searchButton))
-        let searchButtonNode = existingSearchButton.modify { current in
+        let searchButtonNode: BarComponentHostNode? = !state.searching ? existingSearchButton.modify { current in
             let buttonNode: BarComponentHostNode
             if let current {
                 buttonNode = current
@@ -518,7 +518,7 @@ public func makeAttachmentFileControllerImpl(context: AccountContext, updatedPre
                 buttonNode = BarComponentHostNode(component: searchButtonComponent, size: barButtonSize)
             }
             return buttonNode
-        }
+        } : nil
                 
         let previousRecentDocuments = previousRecentDocuments.swap(recentDocuments)
         let crossfade = previousRecentDocuments == nil && recentDocuments != nil
@@ -542,6 +542,7 @@ public func makeAttachmentFileControllerImpl(context: AccountContext, updatedPre
         case .recent:
             title = presentationData.strings.Attachment_File
         case .audio:
+            //TODO:localize
             title = "Audio"
         }
         

@@ -398,7 +398,7 @@ public final class AuthorizationSequenceCountrySelectionController: ViewControll
                 component: AnyComponentWithIdentity(id: "close", component: AnyComponent(
                     BundleIconComponent(
                         name: "Navigation/Close",
-                        tintColor: self.theme.rootController.navigationBar.glassBarButtonForegroundColor
+                        tintColor: self.theme.chat.inputPanel.panelControlColor
                     )
                 )),
                 action: { [weak self] _ in
@@ -419,7 +419,7 @@ public final class AuthorizationSequenceCountrySelectionController: ViewControll
                     component: AnyComponentWithIdentity(id: "search", component: AnyComponent(
                         BundleIconComponent(
                             name: "Navigation/Search",
-                            tintColor: self.theme.rootController.navigationBar.glassBarButtonForegroundColor
+                            tintColor: self.theme.chat.inputPanel.panelControlColor
                         )
                     )),
                     action: { [weak self] _ in

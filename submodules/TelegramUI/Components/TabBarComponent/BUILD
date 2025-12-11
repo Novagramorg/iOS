@@ -22,6 +22,7 @@ swift_library(
         "//submodules/UIKitRuntimeUtils",
         "//submodules/TelegramUI/Components/LiquidLens",
         "//submodules/AppBundle",
+        "//submodules/SearchBarNode",
     ],
     visibility = [
         "//visibility:public",

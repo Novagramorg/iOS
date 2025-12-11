@@ -292,7 +292,7 @@ public final class SearchInputPanelComponent: Component {
                     component: AnyComponentWithIdentity(id: "close", component: AnyComponent(
                         BundleIconComponent(
                             name: "Navigation/Close",
-                            tintColor: component.theme.rootController.navigationBar.glassBarButtonForegroundColor
+                            tintColor: component.theme.chat.inputPanel.panelControlColor
                         )
                     )),
                     action: { [weak self] _ in

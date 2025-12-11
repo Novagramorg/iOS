@@ -104,7 +104,6 @@ import AttachmentUI
 import BoostLevelIconComponent
 import PeerInfoChatPaneNode
 import PeerInfoChatListPaneNode
-import GroupStickerPackSetupController
 import PeerNameColorItem
 import PeerSelectionScreen
 import UIKitRuntimeUtils
@@ -468,7 +467,7 @@ final class PeerInfoSelectionPanelNode: ASDisplayNode {
         self.backgroundNode.updateColor(color: presentationData.theme.rootController.navigationBar.blurredBackgroundColor, transition: .immediate)
         self.separatorNode.backgroundColor = presentationData.theme.rootController.navigationBar.separatorColor
         
-        let interfaceState = ChatPresentationInterfaceState(chatWallpaper: .color(0), theme: presentationData.theme, strings: presentationData.strings, dateTimeFormat: presentationData.dateTimeFormat, nameDisplayOrder: presentationData.nameDisplayOrder, limitsConfiguration: .defaultValue, fontSize: .regular, bubbleCorners: PresentationChatBubbleCorners(mainRadius: 16.0, auxiliaryRadius: 8.0, mergeBubbleCorners: true), accountPeerId: self.context.account.peerId, mode: .standard(.default), chatLocation: .peer(id: self.peerId), subject: nil, peerNearbyData: nil, greetingData: nil, pendingUnpinnedAllMessages: false, activeGroupCallInfo: nil, hasActiveGroupCall: false, importState: nil, threadData: nil, isGeneralThreadClosed: nil, replyMessage: nil, accountPeerColor: nil, businessIntro: nil)
+        let interfaceState = ChatPresentationInterfaceState(chatWallpaper: .color(0), theme: presentationData.theme, strings: presentationData.strings, dateTimeFormat: presentationData.dateTimeFormat, nameDisplayOrder: presentationData.nameDisplayOrder, limitsConfiguration: .defaultValue, fontSize: .regular, bubbleCorners: PresentationChatBubbleCorners(mainRadius: 16.0, auxiliaryRadius: 8.0, mergeBubbleCorners: true), accountPeerId: self.context.account.peerId, mode: .standard(.default), chatLocation: .peer(id: self.peerId), subject: nil, peerNearbyData: nil, greetingData: nil, pendingUnpinnedAllMessages: false, activeGroupCallInfo: nil, hasActiveGroupCall: false, threadData: nil, isGeneralThreadClosed: nil, replyMessage: nil, accountPeerColor: nil, businessIntro: nil)
         let panelHeight = self.selectionPanel.updateLayout(width: layout.size.width, leftInset: layout.safeInsets.left, rightInset: layout.safeInsets.right, bottomInset: layout.intrinsicInsets.bottom, additionalSideInsets: UIEdgeInsets(), maxHeight: layout.size.height, maxOverlayHeight: layout.size.height, isSecondary: false, transition: transition, interfaceState: interfaceState, metrics: layout.metrics, isMediaInputExpanded: false)
         
         transition.updateFrame(node: self.selectionPanel, frame: CGRect(origin: CGPoint(), size: CGSize(width: layout.size.width, height: panelHeight)))
@@ -593,7 +592,6 @@ private final class PeerInfoInteraction {
     let editingOpenPreHistorySetup: () -> Void
     let editingOpenAutoremoveMesages: () -> Void
     let openPermissions: () -> Void
-    let editingOpenStickerPackSetup: () -> Void
     let openLocation: () -> Void
     let editingOpenSetupLocation: () -> Void
     let openPeerInfo: (Peer, Bool) -> Void
@@ -670,7 +668,6 @@ private final class PeerInfoInteraction {
         editingOpenPreHistorySetup: @escaping () -> Void,
         editingOpenAutoremoveMesages: @escaping () -> Void,
         openPermissions: @escaping () -> Void,
-        editingOpenStickerPackSetup: @escaping () -> Void,
         openLocation: @escaping () -> Void,
         editingOpenSetupLocation: @escaping () -> Void,
         openPeerInfo: @escaping (Peer, Bool) -> Void,
@@ -746,7 +743,6 @@ private final class PeerInfoInteraction {
         self.editingOpenPreHistorySetup = editingOpenPreHistorySetup
         self.editingOpenAutoremoveMesages = editingOpenAutoremoveMesages
         self.openPermissions = openPermissions
-        self.editingOpenStickerPackSetup = editingOpenStickerPackSetup
         self.openLocation = openLocation
         self.editingOpenSetupLocation = editingOpenSetupLocation
         self.openPeerInfo = openPeerInfo
@@ -3272,9 +3268,6 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
             },
             openPermissions: { [weak self] in
                 self?.openPermissions()
-            },
-            editingOpenStickerPackSetup: { [weak self] in
-                self?.editingOpenStickerPackSetup()
             },
             openLocation: { [weak self] in
                 self?.openLocation()
@@ -9809,13 +9802,6 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
         self.controller?.push(channelPermissionsController(context: self.context, updatedPresentationData: self.controller?.updatedPresentationData, peerId: peer.id))
     }
     
-    private func editingOpenStickerPackSetup() {
-        guard let data = self.data, let peer = data.peer, let cachedData = data.cachedData as? CachedChannelData else {
-            return
-        }
-        self.controller?.push(groupStickerPackSetupController(context: self.context, updatedPresentationData: self.controller?.updatedPresentationData, peerId: peer.id, currentPackInfo: cachedData.stickerPack))
-    }
-    
     private func openLocation() {
         guard let data = self.data, let peer = data.peer else {
             return
@@ -11446,8 +11432,11 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
         }
     }
     
-    private func activateSearch() {
+    func activateSearch() {
         guard let (layout, navigationBarHeight) = self.validLayout, self.searchDisplayController == nil else {
+            return
+        }
+        guard let controller = self.controller else {
             return
         }
         
@@ -11462,8 +11451,6 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
         self.headerNode.navigationButtonContainer.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.3, timingFunction: CAMediaTimingFunctionName.easeOut.rawValue)
         
         if self.isSettings {
-            (self.controller?.parent as? TabBarController)?.updateIsTabBarHidden(true, transition: .animated(duration: 0.3, curve: .linear))
-            
             if let settings = self.data?.globalSettings {
                 self.searchDisplayController = SearchDisplayController(presentationData: self.presentationData, mode: .list, placeholder: self.presentationData.strings.Settings_Search, hasBackground: true, hasSeparator: true, contentNode: SettingsSearchContainerNode(context: self.context, openResult: { [weak self] result in
                     if let strongSelf = self, let navigationController = strongSelf.controller?.navigationController as? NavigationController {
@@ -11492,7 +11479,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                     }
                 }, resolvedFaqUrl: self.cachedFaq.get(), exceptionsList: .single(settings.notificationExceptions), archivedStickerPacks: .single(settings.archivedStickerPacks), privacySettings: .single(settings.privacySettings), hasTwoStepAuth: self.hasTwoStepAuth.get(), twoStepAuthData: self.twoStepAccessConfiguration.get(), activeSessionsContext: self.activeSessionsContextAndCount.get() |> map { $0?.0 }, webSessionsContext: self.activeSessionsContextAndCount.get() |> map { $0?.2 }), cancel: { [weak self] in
                     self?.deactivateSearch()
-                })
+                }, searchBarIsExternal: true)
             }
         } else if let currentPaneKey = self.paneContainerNode.currentPaneKey, case .members = currentPaneKey {
             self.searchDisplayController = SearchDisplayController(presentationData: self.presentationData, mode: .list, placeholder: self.presentationData.strings.Common_Search, hasBackground: true, hasSeparator: true, contentNode: ChannelMembersSearchContainerNode(context: self.context, forceTheme: nil, peerId: self.peerId, mode: .searchMembers, filters: [], searchContext: self.groupMembersSearchContext, openPeer: { [weak self] peer, participant in
@@ -11606,25 +11593,34 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
             transition.updateAlpha(node: navigationBar, alpha: 0.0)
         }
         
-        self.searchDisplayController?.containerLayoutUpdated(layout, navigationBarHeight: navigationBarHeight + 10.0, transition: .immediate)
+        self.searchDisplayController?.containerLayoutUpdated(layout, navigationBarHeight: navigationBarHeight, transition: .immediate)
         self.searchDisplayController?.activate(insertSubnode: { [weak self] subnode, isSearchBar in
             if let strongSelf = self, let navigationBar = strongSelf.controller?.navigationBar {
                 strongSelf.insertSubnode(subnode, belowSubnode: navigationBar)
             }
         }, placeholder: nil)
         
+        if self.isSettings {
+            controller.updateTabBarSearchState(ViewController.TabBarSearchState(isActive: true), transition: transition)
+            if let searchBarNode = controller.currentTabBarSearchNode?() as? SearchBarNode {
+                self.searchDisplayController?.setSearchBar(searchBarNode)
+                searchBarNode.activate()
+            }
+        }
+        
         self.containerLayoutUpdated(layout: layout, navigationHeight: navigationBarHeight, transition: .immediate)
     }
     
-    private func deactivateSearch() {
-        guard let searchDisplayController = self.searchDisplayController else {
+    func deactivateSearch() {
+        guard let controller = self.controller, let searchDisplayController = self.searchDisplayController else {
             return
         }
         self.searchDisplayController = nil
         searchDisplayController.deactivate(placeholder: nil)
         
         if self.isSettings {
-            (self.controller?.parent as? TabBarController)?.updateIsTabBarHidden(false, transition: .animated(duration: 0.3, curve: .linear))
+            (self.controller?.parent as? TabBarController)?.updateIsTabBarHidden(false, transition: .animated(duration: 0.4, curve: .spring))
+            controller.updateTabBarSearchState(ViewController.TabBarSearchState(isActive: false), transition: .animated(duration: 0.4, curve: .spring))
         }
         
         let transition: ContainedViewLayoutTransition = .animated(duration: 0.35, curve: .easeInOut)
@@ -13604,6 +13600,7 @@ public final class PeerInfoScreenImpl: ViewController, PeerInfoScreen, KeyShortc
         let baseNavigationBarPresentationData = NavigationBarPresentationData(presentationData: self.presentationData)
         super.init(navigationBarPresentationData: NavigationBarPresentationData(
             theme: NavigationBarTheme(
+                overallDarkAppearance: true,
                 buttonColor: .white,
                 disabledButtonColor: .white,
                 primaryTextColor: .white,
@@ -13786,22 +13783,11 @@ public final class PeerInfoScreenImpl: ViewController, PeerInfoScreen, KeyShortc
         }
            
         if self.chatLocation.peerId != nil {
-            /*self.navigationBar?.shouldTransitionInline = { [weak self] in
-                guard let strongSelf = self else {
-                    return false
-                }
-                if strongSelf.navigationItem.leftBarButtonItem != nil {
-                    return false
-                }
-                if strongSelf.controllerNode.scrollNode.view.contentOffset.y > .ulpOfOne {
-                    return false
-                }
-                if strongSelf.controllerNode.headerNode.isAvatarExpanded {
-                    return false
-                }
-                return false
-            }*/
             self.navigationBar?.makeCustomTransitionNode = { [weak self] other, isInteractive in
+                if "".isEmpty {
+                    return nil
+                }
+                
                 guard let strongSelf = self else {
                     return nil
                 }
@@ -13923,6 +13909,8 @@ public final class PeerInfoScreenImpl: ViewController, PeerInfoScreen, KeyShortc
             }
             self._readyProxy.set(.single(true))
         })
+
+        self.updateTabBarSearchState(ViewController.TabBarSearchState(isActive: false), transition: .immediate)
     }
     
     required init(coder aDecoder: NSCoder) {
@@ -14171,9 +14159,9 @@ public final class PeerInfoScreenImpl: ViewController, PeerInfoScreen, KeyShortc
             chatNavigationStack = summary.peerNavigationItems.filter({ $0 != ChatNavigationStackItem(peerId: self.peerId, threadId: self.chatLocation.threadId) })
         }
         
-        if !chatNavigationStack.isEmpty {
-            self.navigationBar?.backButtonNode.isGestureEnabled = true
-            self.navigationBar?.backButtonNode.activated = { [weak self] gesture, _ in
+        if !chatNavigationStack.isEmpty, let backButtonNode = self.navigationBar?.backButtonNode as? ContextControllerSourceNode {
+            backButtonNode.isGestureEnabled = true
+            backButtonNode.activated = { [weak self] gesture, _ in
                 guard let strongSelf = self, let backButtonNode = strongSelf.navigationBar?.backButtonNode, let navigationController = strongSelf.navigationController as? NavigationController else {
                     gesture.cancel()
                     return
@@ -14292,6 +14280,14 @@ public final class PeerInfoScreenImpl: ViewController, PeerInfoScreen, KeyShortc
     public func openBirthdaySetup() {
         self.controllerNode.interaction.updateIsEditingBirthdate(true)
         self.controllerNode.headerNode.navigationButtonContainer.performAction?(.edit, nil, nil)
+    }
+    
+    override public func tabBarActivateSearch() {
+        self.controllerNode.activateSearch()
+    }
+    
+    override public func tabBarDeactivateSearch() {
+        self.controllerNode.deactivateSearch()
     }
     
     public static func openSavedMessagesMoreMenu(context: AccountContext, sourceController: ViewController, isViewingAsTopics: Bool, sourceView: UIView, gesture: ContextGesture?) {
@@ -14461,7 +14457,7 @@ private final class PeerInfoNavigationTransitionNode: ASDisplayNode, CustomNavig
     }
     
     func setup(topNavigationBar: NavigationBar, bottomNavigationBar: NavigationBar) {
-        if let _ = bottomNavigationBar.userInfo as? PeerInfoNavigationSourceTag {
+        /*if let _ = bottomNavigationBar.userInfo as? PeerInfoNavigationSourceTag {
             self.topNavigationBar = topNavigationBar
             self.bottomNavigationBar = bottomNavigationBar
         } else {
@@ -14473,54 +14469,10 @@ private final class PeerInfoNavigationTransitionNode: ASDisplayNode, CustomNavig
         topNavigationBar.isHidden = true
         bottomNavigationBar.isHidden = true
         
-        if let topNavigationBar = self.topNavigationBar, let bottomNavigationBar = self.bottomNavigationBar {
+        if let _ = self.topNavigationBar, let bottomNavigationBar = self.bottomNavigationBar {
             self.addSubnode(bottomNavigationBar.additionalContentNode)
-
-            if let headerView = bottomNavigationBar.customHeaderContentView as? ChatListHeaderComponent.View {
-                if let previousBackButtonArrow = headerView.makeTransitionBackArrowView(accentColor: self.presentationData.theme.rootController.navigationBar.accentTextColor) {
-                    self.previousBackButtonArrow = previousBackButtonArrow
-                    self.view.addSubview(previousBackButtonArrow)
-                }
-                if let previousBackButton = headerView.makeTransitionBackButtonView(accentColor: self.presentationData.theme.rootController.navigationBar.accentTextColor) {
-                    self.previousBackButton = previousBackButton
-                    self.view.addSubview(previousBackButton)
-                }
-            } else {
-                if let previousBackButtonArrow = bottomNavigationBar.makeTransitionBackArrowView(accentColor: self.presentationData.theme.rootController.navigationBar.accentTextColor) {
-                    self.previousBackButtonArrow = previousBackButtonArrow
-                    self.view.addSubview(previousBackButtonArrow)
-                }
-                if let previousBackButton = bottomNavigationBar.makeTransitionBackButtonView(accentColor: self.presentationData.theme.rootController.navigationBar.accentTextColor) {
-                    self.previousBackButton = previousBackButton
-                    self.view.addSubview(previousBackButton)
-                }
-            }
-                
-            if let currentBackButtonArrow = topNavigationBar.makeTransitionBackArrowNode(accentColor: .white) {
-                self.currentBackButtonArrow = currentBackButtonArrow
-                //self.addSubnode(currentBackButtonArrow)
-            }
             
-            if let headerView = bottomNavigationBar.customHeaderContentView as? ChatListHeaderComponent.View {
-                let _ = headerView
-            } else {
-                if let previousBackButtonBadge = bottomNavigationBar.makeTransitionBadgeNode() {
-                    self.previousBackButtonBadge = previousBackButtonBadge
-                    self.addSubnode(previousBackButtonBadge)
-                }
-            }
-            
-            if let currentBackButton = topNavigationBar.makeTransitionBackButtonNode(accentColor: .white) {
-                self.currentBackButton = currentBackButton
-                //self.addSubnode(currentBackButton)
-            }
-            
-            if let headerView = bottomNavigationBar.customHeaderContentView as? ChatListHeaderComponent.View {
-                if let previousRightButton = headerView.rightButtonView?.layer.snapshotContentTree() {
-                    self.previousRightButton = previousRightButton
-                    self.view.layer.addSublayer(previousRightButton)
-                }
-            } else {
+            do {
                 if let avatarNavigationNode = bottomNavigationBar.rightButtonNode.singleCustomNode as? ChatAvatarNavigationNode, let previousAvatarView = avatarNavigationNode.view.snapshotContentTree() {
                     self.previousAvatarView = previousAvatarView
                     self.view.addSubview(previousAvatarView)
@@ -14545,11 +14497,7 @@ private final class PeerInfoNavigationTransitionNode: ASDisplayNode, CustomNavig
             }
             
             var previousTitleView: UIView?
-            if let headerView = bottomNavigationBar.customHeaderContentView as? ChatListHeaderComponent.View {
-                if let componentView = headerView.titleContentView as? ChatTitleComponent.View {
-                    previousTitleView = componentView.contentView
-                }
-            } else {
+            do {
                 previousTitleView = bottomNavigationBar.titleView
             }
             
@@ -14569,7 +14517,7 @@ private final class PeerInfoNavigationTransitionNode: ASDisplayNode, CustomNavig
                 self.previousStatusNode = (previousStatusContainerNode, previousStatusNode)
                 self.addSubnode(previousStatusContainerNode)
             }
-        }
+        }*/
     }
     
     func update(containerSize: CGSize, fraction: CGFloat, transition: ContainedViewLayoutTransition) {
@@ -14580,13 +14528,7 @@ private final class PeerInfoNavigationTransitionNode: ASDisplayNode, CustomNavig
         let fraction = self.reverseFraction ? (1.0 - fraction) : fraction
         
         if let previousBackButtonArrow = self.previousBackButtonArrow {
-            if let headerView = bottomNavigationBar.customHeaderContentView as? ChatListHeaderComponent.View {
-                if let backArrowView = headerView.backArrowView {
-                    let previousBackButtonArrowFrame = backArrowView.convert(backArrowView.bounds, to: bottomNavigationBar.view)
-                    previousBackButtonArrow.frame = previousBackButtonArrowFrame
-                    transition.updateAlpha(layer: previousBackButtonArrow.layer, alpha: fraction)
-                }
-            } else {
+            do {
                 let previousBackButtonArrowFrame = bottomNavigationBar.backButtonArrow.view.convert(bottomNavigationBar.backButtonArrow.view.bounds, to: bottomNavigationBar.view)
                 previousBackButtonArrow.frame = previousBackButtonArrowFrame
                 transition.updateAlpha(layer: previousBackButtonArrow.layer, alpha: fraction)
@@ -14594,13 +14536,7 @@ private final class PeerInfoNavigationTransitionNode: ASDisplayNode, CustomNavig
         }
         
         if let previousBackButton = self.previousBackButton {
-            if let headerView = bottomNavigationBar.customHeaderContentView as? ChatListHeaderComponent.View {
-                if let backButtonTitleView = headerView.backButtonTitleView {
-                    let previousBackButtonFrame = backButtonTitleView.convert(backButtonTitleView.bounds, to: bottomNavigationBar.view)
-                    previousBackButton.frame = previousBackButtonFrame
-                    transition.updateAlpha(layer: previousBackButton.layer, alpha: fraction)
-                }
-            } else {
+            do {
                 let previousBackButtonFrame = bottomNavigationBar.backButtonNode.view.convert(bottomNavigationBar.backButtonNode.view.bounds, to: bottomNavigationBar.view)
                 previousBackButton.frame = previousBackButtonFrame
                 transition.updateAlpha(layer: previousBackButton.layer, alpha: fraction)
@@ -14608,13 +14544,7 @@ private final class PeerInfoNavigationTransitionNode: ASDisplayNode, CustomNavig
         }
         
         if let previousRightButton = self.previousRightButton {
-            if let headerView = bottomNavigationBar.customHeaderContentView as? ChatListHeaderComponent.View {
-                if let rightButtonView = headerView.rightButtonView {
-                    let previousRightButtonFrame = rightButtonView.convert(rightButtonView.bounds, to: bottomNavigationBar.view)
-                    previousRightButton.frame = previousRightButtonFrame
-                    transition.updateAlpha(layer: previousRightButton, alpha: fraction)
-                }
-            } else {
+            do {
                 let previousRightButtonFrame = bottomNavigationBar.rightButtonNode.view.convert(bottomNavigationBar.rightButtonNode.view.bounds, to: bottomNavigationBar.view)
                 previousRightButton.frame = previousRightButtonFrame
                 transition.updateAlpha(layer: previousRightButton, alpha: fraction)
@@ -14643,11 +14573,7 @@ private final class PeerInfoNavigationTransitionNode: ASDisplayNode, CustomNavig
         }
         
         var previousTitleView: UIView?
-        if let headerView = bottomNavigationBar.customHeaderContentView as? ChatListHeaderComponent.View {
-            if let componentView = headerView.titleContentView as? ChatTitleComponent.View {
-                previousTitleView = componentView.contentView
-            }
-        } else {
+        do {
             previousTitleView = bottomNavigationBar.titleView
         }
         

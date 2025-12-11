@@ -569,7 +569,9 @@ public func chatMessageRemovePaymentAlertController(
     let title = strings.Chat_PaidMessage_RemoveFee_Title
     
     let text: String
-    if let context, chatPeer.id != context.account.peerId {
+    if case .user = chatPeer {
+        text = strings.Chat_PaidMessage_RemoveFee_Text(peer.compactDisplayTitle).string
+    } else if let context, chatPeer.id != context.account.peerId {
         text = strings.Channel_RemoveFeeAlert_Text(peer.compactDisplayTitle).string
     } else {
         text = strings.Chat_PaidMessage_RemoveFee_Text(peer.compactDisplayTitle).string
