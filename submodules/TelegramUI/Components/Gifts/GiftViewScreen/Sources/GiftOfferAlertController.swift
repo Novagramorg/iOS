@@ -485,7 +485,7 @@ public func giftOfferAlertController(
     case .stars:
         priceString = strings.Chat_GiftPurchaseOffer_AcceptConfirmation_Text_Stars(Int32(clamping: amount.amount.value))
     case .ton:
-        priceString = "\(amount.amount) TON"
+        priceString = formatTonAmountText(amount.amount.value, dateTimeFormat: presentationData.dateTimeFormat) + " TON"
     }
     
     let resaleConfiguration = StarsSubscriptionConfiguration.with(appConfiguration: context.currentAppConfiguration.with { $0 })

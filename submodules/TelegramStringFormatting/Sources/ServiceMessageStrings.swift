@@ -1663,7 +1663,7 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                     case .stars:
                         priceString = strings.Notification_StarsGiftOffer_OfferYou_Stars(Int32(clamping: amount.amount.value))
                     case .ton:
-                        priceString = "\(amount.amount) TON"
+                        priceString = formatTonAmountText(amount.amount.value, dateTimeFormat: dateTimeFormat) + " TON"
                     }
                     
                     attributedString = addAttributesToStringWithRanges(strings.Notification_StarsGiftOffer_OfferYou(peerName, priceString, giftTitle)._tuple, body: bodyAttributes, argumentAttributes: attributes)
@@ -1673,7 +1673,7 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                     case .stars:
                         priceString = strings.Notification_StarsGiftOffer_Offer_Stars(Int32(clamping: amount.amount.value))
                     case .ton:
-                        priceString = "\(amount.amount) TON"
+                        priceString = formatTonAmountText(amount.amount.value, dateTimeFormat: dateTimeFormat) + " TON"
                     }
                     
                     attributedString = addAttributesToStringWithRanges(strings.Notification_StarsGiftOffer_Offer(peerName, priceString, giftTitle)._tuple, body: bodyAttributes, argumentAttributes: attributes)
@@ -1696,7 +1696,7 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                         case .stars:
                             priceString = strings.Notification_StarsGiftOffer_ExpiredYou_Stars(Int32(clamping: amount.amount.value))
                         case .ton:
-                            priceString = "\(amount.amount) TON"
+                            priceString = formatTonAmountText(amount.amount.value, dateTimeFormat: dateTimeFormat) + " TON"
                         }
                         
                         var attributes = peerMentionsAttributes(primaryTextColor: primaryTextColor, peerIds: peerIds)
@@ -1709,7 +1709,7 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                         case .stars:
                             priceString = strings.Notification_StarsGiftOffer_Expired_Stars(Int32(clamping: amount.amount.value))
                         case .ton:
-                            priceString = "\(amount.amount) TON"
+                            priceString = formatTonAmountText(amount.amount.value, dateTimeFormat: dateTimeFormat) + " TON"
                         }
                         
                         let timeString = "[TODO]"
@@ -1730,7 +1730,7 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                         case .stars:
                             priceString = strings.Notification_StarsGiftOffer_Rejected_Stars(Int32(clamping: amount.amount.value))
                         case .ton:
-                            priceString = "\(amount.amount) TON"
+                            priceString = formatTonAmountText(amount.amount.value, dateTimeFormat: dateTimeFormat) + " TON"
                         }
                         
                         var attributes = peerMentionsAttributes(primaryTextColor: primaryTextColor, peerIds: peerIds)
