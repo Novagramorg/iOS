@@ -13490,6 +13490,8 @@ public final class PeerInfoScreenImpl: ViewController, PeerInfoScreen, KeyShortc
 
     private var tabBarItemDisposable: Disposable?
 
+    var avatarPickerHolder: Any?
+    
     var controllerNode: PeerInfoScreenNode {
         return self.displayNode as! PeerInfoScreenNode
     }
