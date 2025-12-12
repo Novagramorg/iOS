@@ -3777,126 +3777,188 @@ public func avatarMediaPickerController(
     performDelete: @escaping () -> Void,
     completion: @escaping (Any?, UIView?, CGRect, UIImage?, Bool, @escaping (Bool?) -> (UIView, CGRect)?, @escaping () -> Void) -> Void,
     dismissed: @escaping () -> Void
-) -> ViewController {
-    let presentationData = context.sharedContext.currentPresentationData.with({ $0 })
-    let updatedPresentationData: (PresentationData, Signal<PresentationData, NoError>) = (presentationData, .single(presentationData))
-    let controller = AttachmentController(
-        context: context,
-        updatedPresentationData: updatedPresentationData,
-        style: .glass,
-        chatLocation: nil,
-        buttons: [.standalone],
-        initialButton: .standalone,
-        fromMenu: false,
-        hasTextInput: false,
-        makeEntityInputView: {
-        return nil
-    })
-    controller.forceSourceRect = true
-    controller.getSourceRect = getSourceRect
-    controller.requestController = { [weak controller] _, present in
-        var mainButtonState: AttachmentMainButtonState?
-        
-        if canDelete {
-            mainButtonState = AttachmentMainButtonState(text: presentationData.strings.MediaPicker_RemovePhoto, font: .regular, background: .color(.clear), textColor: presentationData.theme.actionSheet.destructiveActionTextColor, isVisible: true, progress: .none, isEnabled: true, hasShimmer: false)
+) -> (controller: ViewController?, holder: Any?) {
+    if #available(iOS 14.0, *), PHPhotoLibrary.authorizationStatus(for: .readWrite) != .authorized {
+        final class PickerDelegate: NSObject, PHPickerViewControllerDelegate {
+            var completion: ((Any?, UIView?, CGRect, UIImage?, Bool, @escaping (Bool?) -> (UIView, CGRect)?, @escaping () -> Void) -> Void)?
+            
+            func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
+                picker.dismiss(animated: true)
+
+                for item in results {
+                    if item.itemProvider.canLoadObject(ofClass: UIImage.self) {
+                        item.itemProvider.loadObject(ofClass: UIImage.self) { image, error in
+                            if let uiImage = image as? UIImage {
+                                Queue.mainQueue().async {
+                                    self.completion?(uiImage, nil, CGRect(), nil, false, { _ in return nil }, {})
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
         
-        let mediaPickerController = MediaPickerScreenImpl(
+        let holder = PickerDelegate()
+        holder.completion = completion
+        
+        let openMediaPicker = {
+            var configuration = PHPickerConfiguration(photoLibrary: .shared())
+            configuration.filter = .images
+            configuration.selectionLimit = 1
+            
+            let picker = PHPickerViewController(configuration: configuration)
+            picker.delegate = holder
+            (context.sharedContext.mainWindow?.viewController as? NavigationController)?.topViewController?.present(picker, animated: true, completion: nil)
+        }
+        let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+        let controller = ActionSheetController(presentationData: presentationData)
+        let dismissAction: () -> Void = { [weak controller] in
+            controller?.dismissAnimated()
+        }
+        
+        var items: [ActionSheetButtonItem] = [
+            ActionSheetButtonItem(title: presentationData.strings.Settings_SetNewProfilePhotoOrVideo, color: .accent, action: {
+                dismissAction()
+                openMediaPicker()
+            }),
+            ActionSheetButtonItem(title: presentationData.strings.ProfilePhoto_SetEmoji, color: .accent, action: {
+                dismissAction()
+                completion(nil, nil, CGRect(), nil, false, { _ in return nil }, {})
+            })
+        ]
+        if canDelete {
+            items.append(ActionSheetButtonItem(title: presentationData.strings.MediaPicker_RemovePhoto, color: .destructive, action: {
+                dismissAction()
+                performDelete()
+            }))
+        }
+        controller.setItemGroups([
+            ActionSheetItemGroup(items: items),
+            ActionSheetItemGroup(items: [ActionSheetButtonItem(title: presentationData.strings.Common_Cancel, action: { dismissAction() })])
+        ])
+        return (controller, holder)
+    } else {
+        let presentationData = context.sharedContext.currentPresentationData.with({ $0 })
+        let updatedPresentationData: (PresentationData, Signal<PresentationData, NoError>) = (presentationData, .single(presentationData))
+        let controller = AttachmentController(
             context: context,
             updatedPresentationData: updatedPresentationData,
             style: .glass,
-            peer: nil,
-            threadTitle: nil,
             chatLocation: nil,
-            bannedSendPhotos: nil,
-            bannedSendVideos: nil,
-            subject: .assets(nil, .createAvatar),
-            mainButtonState: mainButtonState,
-            mainButtonAction: { [weak controller] in
-                controller?.dismiss(animated: true)
-                performDelete()
-            }
-        )
-        mediaPickerController.customSelection = { controller, result in
-            if let result = result as? PHAsset {
-                controller.updateHiddenMediaId(result.localIdentifier)
-                if let transitionView = controller.transitionView(for: result.localIdentifier, snapshot: false) {
-                    let transitionOut: (Bool?) -> (UIView, CGRect)? = { isNew in
-                        if let isNew {
-                            if isNew {
-                                controller.updateHiddenMediaId(nil)
-                                if let transitionView = controller.defaultTransitionView() {
-                                    return (transitionView, transitionView.bounds)
-                                }
-                            } else if let transitionView = controller.transitionView(for: result.localIdentifier, snapshot: false) {
-                                return (transitionView, transitionView.bounds)
-                            }
-                        }
-                        return nil
-                    }
-                    completion(result, transitionView, transitionView.bounds, controller.transitionImage(for: result.localIdentifier), false, transitionOut, { [weak controller] in
-                        controller?.updateHiddenMediaId(nil)
-                    })
-                }
-            }
-        }
-        mediaPickerController.openAvatarEditor = { [weak controller] in
-            completion(nil, nil, .zero, nil, false, { _ in return nil }, {
+            buttons: [.standalone],
+            initialButton: .standalone,
+            fromMenu: false,
+            hasTextInput: false,
+            makeEntityInputView: {
+                return nil
             })
-            controller?.dismiss(animated: true)
-        }
-        mediaPickerController.openCamera = { [weak controller] cameraHolder in
-            let _ = controller
-            guard let cameraHolder = cameraHolder as? CameraHolder else {
-                return
+        controller.forceSourceRect = true
+        controller.getSourceRect = getSourceRect
+        controller.requestController = { [weak controller] _, present in
+            var mainButtonState: AttachmentMainButtonState?
+            
+            if canDelete {
+                mainButtonState = AttachmentMainButtonState(text: presentationData.strings.MediaPicker_RemovePhoto, font: .regular, background: .color(.clear), textColor: presentationData.theme.actionSheet.destructiveActionTextColor, isVisible: true, progress: .none, isEnabled: true, hasShimmer: false)
             }
             
-            var returnToCameraImpl: (() -> Void)?
-
-            let cameraScreen = context.sharedContext.makeCameraScreen(
+            let mediaPickerController = MediaPickerScreenImpl(
                 context: context,
-                mode: .avatar,
-                cameraHolder: cameraHolder,
-                transitionIn: CameraScreenTransitionIn(
-                    sourceView: cameraHolder.parentView,
-                    sourceRect: cameraHolder.parentView.bounds,
-                    sourceCornerRadius: 0.0,
-                    useFillAnimation: false
-                ),
-                transitionOut: { _ in
-                    return CameraScreenTransitionOut(
-                        destinationView: cameraHolder.parentView,
-                        destinationRect: cameraHolder.parentView.bounds,
-                        destinationCornerRadius: 0.0
-                    )
-                },
-                completion: { result, commit in
-                    completion(result, nil, .zero, nil, true, { _ in return nil }, {
-                        returnToCameraImpl?()
-                    })
-                },
-                transitionedOut: { [weak cameraHolder] in
-                    if let cameraHolder {
-                        cameraHolder.restore()
-                    }
+                updatedPresentationData: updatedPresentationData,
+                style: .glass,
+                peer: nil,
+                threadTitle: nil,
+                chatLocation: nil,
+                bannedSendPhotos: nil,
+                bannedSendVideos: nil,
+                subject: .assets(nil, .createAvatar),
+                mainButtonState: mainButtonState,
+                mainButtonAction: { [weak controller] in
+                    controller?.dismiss(animated: true)
+                    performDelete()
                 }
             )
-            controller?.push(cameraScreen)
-            
-            returnToCameraImpl = { [weak cameraScreen] in
-                if let cameraScreen = cameraScreen as? CameraScreen {
-                    cameraScreen.returnFromEditor()
+            mediaPickerController.customSelection = { controller, result in
+                if let result = result as? PHAsset {
+                    controller.updateHiddenMediaId(result.localIdentifier)
+                    if let transitionView = controller.transitionView(for: result.localIdentifier, snapshot: false) {
+                        let transitionOut: (Bool?) -> (UIView, CGRect)? = { isNew in
+                            if let isNew {
+                                if isNew {
+                                    controller.updateHiddenMediaId(nil)
+                                    if let transitionView = controller.defaultTransitionView() {
+                                        return (transitionView, transitionView.bounds)
+                                    }
+                                } else if let transitionView = controller.transitionView(for: result.localIdentifier, snapshot: false) {
+                                    return (transitionView, transitionView.bounds)
+                                }
+                            }
+                            return nil
+                        }
+                        completion(result, transitionView, transitionView.bounds, controller.transitionImage(for: result.localIdentifier), false, transitionOut, { [weak controller] in
+                            controller?.updateHiddenMediaId(nil)
+                        })
+                    }
                 }
             }
+            mediaPickerController.openAvatarEditor = { [weak controller] in
+                completion(nil, nil, .zero, nil, false, { _ in return nil }, {
+                })
+                controller?.dismiss(animated: true)
+            }
+            mediaPickerController.openCamera = { [weak controller] cameraHolder in
+                let _ = controller
+                guard let cameraHolder = cameraHolder as? CameraHolder else {
+                    return
+                }
+                
+                var returnToCameraImpl: (() -> Void)?
+                
+                let cameraScreen = context.sharedContext.makeCameraScreen(
+                    context: context,
+                    mode: .avatar,
+                    cameraHolder: cameraHolder,
+                    transitionIn: CameraScreenTransitionIn(
+                        sourceView: cameraHolder.parentView,
+                        sourceRect: cameraHolder.parentView.bounds,
+                        sourceCornerRadius: 0.0,
+                        useFillAnimation: false
+                    ),
+                    transitionOut: { _ in
+                        return CameraScreenTransitionOut(
+                            destinationView: cameraHolder.parentView,
+                            destinationRect: cameraHolder.parentView.bounds,
+                            destinationCornerRadius: 0.0
+                        )
+                    },
+                    completion: { result, commit in
+                        completion(result, nil, .zero, nil, true, { _ in return nil }, {
+                            returnToCameraImpl?()
+                        })
+                    },
+                    transitionedOut: { [weak cameraHolder] in
+                        if let cameraHolder {
+                            cameraHolder.restore()
+                        }
+                    }
+                )
+                controller?.push(cameraScreen)
+                
+                returnToCameraImpl = { [weak cameraScreen] in
+                    if let cameraScreen = cameraScreen as? CameraScreen {
+                        cameraScreen.returnFromEditor()
+                    }
+                }
+            }
+            present(mediaPickerController, mediaPickerController.mediaPickerContext)
         }
-        present(mediaPickerController, mediaPickerController.mediaPickerContext)
+        controller.willDismiss = {
+            dismissed()
+        }
+        controller.navigationPresentation = .flatModal
+        controller.supportedOrientations = ViewControllerSupportedOrientations(regularSize: .all, compactSize: .portrait)
+        return (controller, nil)
     }
-    controller.willDismiss = {
-        dismissed()
-    }
-    controller.navigationPresentation = .flatModal
-    controller.supportedOrientations = ViewControllerSupportedOrientations(regularSize: .all, compactSize: .portrait)
-    return controller
 }
 
 

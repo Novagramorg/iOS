@@ -1376,7 +1376,7 @@ public protocol SharedAccountContext: AnyObject {
     func makeBotPreviewEditorScreen(context: AccountContext, source: Any?, target: Stories.PendingTarget, transitionArguments: (UIView, CGRect, UIImage?)?, transitionOut: @escaping () -> BotPreviewEditorTransitionOut?, externalState: MediaEditorTransitionOutExternalState, completion: @escaping (MediaEditorScreenResult, @escaping (@escaping () -> Void) -> Void) -> Void, cancelled: @escaping () -> Void) -> ViewController
     func makeStickerEditorScreen(context: AccountContext, source: Any?, intro: Bool, transitionArguments: (UIView, CGRect, UIImage?)?, completion: @escaping (TelegramMediaFile, [String], @escaping () -> Void) -> Void, cancelled: @escaping () -> Void) -> ViewController
     func makeStickerMediaPickerScreen(context: AccountContext, getSourceRect: @escaping () -> CGRect?, completion: @escaping (Any?, UIView?, CGRect, UIImage?, Bool, @escaping (Bool?) -> (UIView, CGRect)?, @escaping () -> Void) -> Void, dismissed: @escaping () -> Void) -> ViewController
-    func makeAvatarMediaPickerScreen(context: AccountContext, getSourceRect: @escaping () -> CGRect?, canDelete: Bool, performDelete: @escaping () -> Void, completion: @escaping (Any?, UIView?, CGRect, UIImage?, Bool, @escaping (Bool?) -> (UIView, CGRect)?, @escaping () -> Void) -> Void, dismissed: @escaping () -> Void) -> ViewController
+    func makeAvatarMediaPickerScreen(context: AccountContext, getSourceRect: @escaping () -> CGRect?, canDelete: Bool, performDelete: @escaping () -> Void, completion: @escaping (Any?, UIView?, CGRect, UIImage?, Bool, @escaping (Bool?) -> (UIView, CGRect)?, @escaping () -> Void) -> Void, dismissed: @escaping () -> Void) -> (ViewController?, Any?)
     func makeStoryMediaPickerScreen(context: AccountContext, isDark: Bool, forCollage: Bool, selectionLimit: Int?, getSourceRect: @escaping () -> CGRect, completion: @escaping (Any, UIView, CGRect, UIImage?, @escaping (Bool?) -> (UIView, CGRect)?, @escaping () -> Void) -> Void, multipleCompletion: @escaping ([Any], Bool) -> Void, dismissed: @escaping () -> Void, groupsPresented: @escaping () -> Void) -> ViewController
     func makeStickerPickerScreen(context: AccountContext, inputData: Promise<StickerPickerInput>, completion: @escaping (FileMediaReference) -> Void) -> ViewController
     func makeProxySettingsController(sharedContext: SharedAccountContext, account: UnauthorizedAccount) -> ViewController
@@ -1678,7 +1678,7 @@ public struct StarsSubscriptionConfiguration {
         return StarsSubscriptionConfiguration(
             maxFee: 2500,
             usdWithdrawRate: 1200,
-            tonUsdRate: 0,
+            tonUsdRate: 1.0,
             paidMessageMaxAmount: 10000,
             paidMessageCommissionPermille: 850,
             paidMessagesAvailable: false,
@@ -1698,7 +1698,7 @@ public struct StarsSubscriptionConfiguration {
         
     public let maxFee: Int64
     public let usdWithdrawRate: Int64
-    public let tonUsdRate: Int64
+    public let tonUsdRate: Double
     public let paidMessageMaxAmount: Int64
     public let paidMessageCommissionPermille: Int32
     public let paidMessagesAvailable: Bool
@@ -1717,7 +1717,7 @@ public struct StarsSubscriptionConfiguration {
     fileprivate init(
         maxFee: Int64,
         usdWithdrawRate: Int64,
-        tonUsdRate: Int64,
+        tonUsdRate: Double,
         paidMessageMaxAmount: Int64,
         paidMessageCommissionPermille: Int32,
         paidMessagesAvailable: Bool,
@@ -1756,7 +1756,7 @@ public struct StarsSubscriptionConfiguration {
         if let data = appConfiguration.data {
             let maxFee = (data["stars_subscription_amount_max"] as? Double).flatMap(Int64.init) ?? StarsSubscriptionConfiguration.defaultValue.maxFee
             let usdWithdrawRate = (data["stars_usd_withdraw_rate_x1000"] as? Double).flatMap(Int64.init) ?? StarsSubscriptionConfiguration.defaultValue.usdWithdrawRate
-            let tonUsdRate = (data["ton_usd_rate"] as? Double).flatMap(Int64.init) ?? StarsSubscriptionConfiguration.defaultValue.tonUsdRate
+            let tonUsdRate = (data["ton_usd_rate"] as? Double) ?? StarsSubscriptionConfiguration.defaultValue.tonUsdRate
             let paidMessageMaxAmount = (data["stars_paid_message_amount_max"] as? Double).flatMap(Int64.init) ?? StarsSubscriptionConfiguration.defaultValue.paidMessageMaxAmount
             let paidMessageCommissionPermille = (data["stars_paid_message_commission_permille"] as? Double).flatMap(Int32.init) ?? StarsSubscriptionConfiguration.defaultValue.paidMessageCommissionPermille
             let paidMessagesAvailable = (data["stars_paid_messages_available"] as? Bool) ?? StarsSubscriptionConfiguration.defaultValue.paidMessagesAvailable
