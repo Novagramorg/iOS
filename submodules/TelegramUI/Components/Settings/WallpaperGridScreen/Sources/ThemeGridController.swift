@@ -65,7 +65,7 @@ public final class ThemeGridController: ViewController {
         self.presentationData = context.sharedContext.currentPresentationData.with { $0 }
         self.presentationDataPromise.set(.single(self.presentationData))
         
-        super.init(navigationBarPresentationData: NavigationBarPresentationData(presentationData: self.presentationData))
+        super.init(navigationBarPresentationData: NavigationBarPresentationData(presentationData: self.presentationData, style: .glass))
         
         switch mode {
         case .generic:
@@ -123,7 +123,7 @@ public final class ThemeGridController: ViewController {
         }
         
         self.statusBar.statusBarStyle = self.presentationData.theme.rootController.statusBarStyle.style
-        self.navigationBar?.updatePresentationData(NavigationBarPresentationData(presentationData: self.presentationData), transition: .immediate)
+        self.navigationBar?.updatePresentationData(NavigationBarPresentationData(presentationData: self.presentationData, style: .glass), transition: .immediate)
         
         if self.isNodeLoaded {
             self.controllerNode.updatePresentationData(self.presentationData)
