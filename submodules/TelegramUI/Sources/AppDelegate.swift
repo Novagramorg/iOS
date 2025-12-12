@@ -1,5 +1,5 @@
 import UIKit
-import SwiftSignalKit
+@preconcurrency import SwiftSignalKit
 import Display
 import TelegramCore
 import UserNotifications
@@ -41,7 +41,7 @@ import MediaEditor
 import TelegramUIDeclareEncodables
 import ContextMenuScreen
 import MetalEngine
-import RecaptchaEnterprise
+import RecaptchaEnterpriseSDK
 import NavigationBarImpl
 
 #if canImport(AppCenter)

@@ -1809,7 +1809,7 @@ ios_application(
         #"//third-party/boringssl:ssl",
         #"//third-party/boringssl:crypto",
         #"//submodules/TelegramVoip",
-        #"//third-party/recaptcha:RecaptchaEnterprise",
+        #"//third-party/recaptcha:RecaptchaEnterpriseSDK",
         "//submodules/TelegramUI",
     ],
 )

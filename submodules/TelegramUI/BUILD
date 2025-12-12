@@ -49,7 +49,7 @@ swift_library(
         "-warnings-as-errors",
     ],
     deps = [
-        "//third-party/recaptcha:RecaptchaEnterprise",
+        "//third-party/recaptcha:RecaptchaEnterpriseSDK",
         "//submodules/SSignalKit/SwiftSignalKit:SwiftSignalKit",
         "//submodules/SSignalKit/SSignalKit:SSignalKit",
         "//submodules/AsyncDisplayKit:AsyncDisplayKit",
