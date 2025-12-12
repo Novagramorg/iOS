@@ -504,7 +504,7 @@ public func makeDefaultDarkPresentationTheme(extendingThemeReference: Presentati
         pinnedBadgeColor: UIColor(rgb: 0x767677),
         pinnedSearchBarColor: UIColor(rgb: 0x272728),
         regularSearchBarColor: UIColor(rgb: 0x272728),
-        sectionHeaderFillColor: UIColor(rgb: 0x1c1c1d),
+        sectionHeaderFillColor: .black,
         sectionHeaderTextColor: UIColor(rgb: 0xffffff),
         verifiedIconFillColor: UIColor(rgb: 0xffffff),
         verifiedIconForegroundColor:  UIColor(rgb: 0x000000),

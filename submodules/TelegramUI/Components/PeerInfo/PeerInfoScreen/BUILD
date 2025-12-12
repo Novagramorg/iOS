@@ -168,6 +168,7 @@ swift_library(
         "//submodules/TelegramUI/Components/MediaManager/PeerMessagesMediaPlaylist",
         "//submodules/TelegramUI/Components/TextFieldComponent",
         "//submodules/TelegramUI/Components/EdgeEffect",
+        "//submodules/TelegramUI/Components/GlassBackgroundComponent",
     ],
     visibility = [
         "//visibility:public",

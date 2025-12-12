@@ -206,6 +206,7 @@ public final class NavigationSearchView: UIView {
                         accent: params.theme.chat.inputPanel.panelControlAccentColor,
                         keyboard: params.theme.rootController.keyboardColor
                     ),
+                    presentationTheme: params.theme,
                     strings: params.strings,
                     fieldStyle: .inlineNavigation,
                     icon: .loupe,

@@ -81,6 +81,7 @@ final class GroupStickerSearchNavigationContentNode: NavigationBarContentNode, I
                 accent: theme.chat.inputPanel.panelControlAccentColor,
                 keyboard: theme.rootController.keyboardColor
             ),
+            presentationTheme: theme,
             strings: strings,
             fieldStyle: .inlineNavigation,
             forceSeparator: false,
@@ -127,7 +128,7 @@ final class GroupStickerSearchNavigationContentNode: NavigationBarContentNode, I
     
     func updateTheme(_ theme: PresentationTheme) {
         self.theme = theme
-        self.searchBar.updateThemeAndStrings(theme: SearchBarNodeTheme(theme: self.theme), strings: self.strings)
+        self.searchBar.updateThemeAndStrings(theme: SearchBarNodeTheme(theme: self.theme), presentationTheme: self.theme, strings: self.strings)
         self.updatePlaceholder()
     }
     

@@ -359,6 +359,9 @@ public final class ChatListNavigationBar: Component {
                 let searchOffsetFraction = clippedSearchOffset / searchOffsetDistance
                 searchContentNode.expansionProgress = 1.0 - searchOffsetFraction
                 embeddedSearchBarExpansionHeight = 60.0 - floorToScreenPixels((1.0 - searchOffsetFraction) * searchSize.height)
+                if searchOffsetFraction > 0.0 {
+                    searchFrame.origin.y -= (60.0 - 44.0) * 0.5 * searchOffsetFraction
+                }
                 
                 searchFrameValue = searchFrame
                 transition.setFrameWithAdditivePosition(view: searchContentNode.view, frame: searchFrame)
@@ -479,7 +482,7 @@ public final class ChatListNavigationBar: Component {
                 if component.statusBarHeight < 1.0 {
                     headerContentY = 0.0
                 } else {
-                    headerContentY = component.statusBarHeight + 5.0
+                    headerContentY = component.statusBarHeight + 10.0
                 }
             }
             let headerContentFrame = CGRect(origin: CGPoint(x: 0.0, y: headerContentY), size: headerContentSize)
@@ -683,7 +686,7 @@ public final class ChatListNavigationBar: Component {
                 }
             } else {
                 contentHeight += 44.0
-                contentHeight += 8.0
+                contentHeight += 7.0
                 
                 if component.search != nil {
                     contentHeight += navigationBarSearchContentHeight
@@ -696,8 +699,6 @@ public final class ChatListNavigationBar: Component {
                 transition.setFrame(view: disappearingHeaderPanelsView, frame: headerPanelsFrame)
             }
             if let headerPanels = component.headerPanels {
-                headersContentHeight += 4.0
-                
                 let headerPanelsView: ComponentView<Empty>
                 var headerPanelsTransition = transition
                 if let current = self.headerPanelsView {

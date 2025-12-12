@@ -535,9 +535,12 @@ public class GlassBackgroundView: UIView {
                             if transition.animation.isImmediate {
                                 nativeView.effect = glassEffect
                             } else {
-                                UIView.animate(withDuration: 0.2, animations: {
-                                    nativeView.effect = glassEffect
-                                })
+                                if let glassEffect, let currentEffect = nativeView.effect as? UIGlassEffect, currentEffect.tintColor == glassEffect.tintColor, currentEffect.isInteractive == glassEffect.isInteractive {
+                                } else {
+                                    UIView.animate(withDuration: 0.15, animations: {
+                                        nativeView.effect = glassEffect
+                                    })
+                                }
                             }
                         }
                         

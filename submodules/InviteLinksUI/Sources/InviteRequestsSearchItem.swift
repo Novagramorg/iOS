@@ -38,7 +38,7 @@ final class SearchNavigationContentNode: NavigationBarContentNode, ItemListContr
         
         self.cancel = cancel
         
-        self.searchBar = SearchBarNode(theme: SearchBarNodeTheme(theme: theme, hasSeparator: false), strings: strings, fieldStyle: .modern, displayBackground: false)
+        self.searchBar = SearchBarNode(theme: SearchBarNodeTheme(theme: theme, hasSeparator: false), presentationTheme: theme, strings: strings, fieldStyle: .modern, displayBackground: false)
         
         super.init()
         
@@ -66,7 +66,7 @@ final class SearchNavigationContentNode: NavigationBarContentNode, ItemListContr
     
     func updateTheme(_ theme: PresentationTheme) {
         self.theme = theme
-        self.searchBar.updateThemeAndStrings(theme: SearchBarNodeTheme(theme: self.theme), strings: self.strings)
+        self.searchBar.updateThemeAndStrings(theme: SearchBarNodeTheme(theme: self.theme), presentationTheme: self.theme, strings: self.strings)
         self.updatePlaceholder()
     }
     

@@ -79,7 +79,7 @@ final class HashtagSearchNavigationContentNode: NavigationBarContentNode {
         var initialQuery = initialQuery
         initialQuery.removeFirst()
         
-        self.searchBar = SearchBarNode(theme: SearchBarNodeTheme(theme: theme, hasSeparator: false), strings: strings, fieldStyle: .modern, icon: icon, displayBackground: false)
+        self.searchBar = SearchBarNode(theme: SearchBarNodeTheme(theme: theme, hasSeparator: false), presentationTheme: theme, strings: strings, fieldStyle: .modern, icon: icon, displayBackground: false)
         self.searchBar.text = initialQuery
         self.searchBar.placeholderString = NSAttributedString(string: strings.HashtagSearch_SearchPlaceholder, font: searchBarFont, textColor: theme.rootController.navigationSearchBar.inputPlaceholderTextColor)
         
@@ -111,7 +111,7 @@ final class HashtagSearchNavigationContentNode: NavigationBarContentNode {
     
     func updateTheme(_ theme: PresentationTheme) {
         self.theme = theme
-        self.searchBar.updateThemeAndStrings(theme: SearchBarNodeTheme(theme: theme, hasSeparator: false), strings: self.strings)
+        self.searchBar.updateThemeAndStrings(theme: SearchBarNodeTheme(theme: theme, hasSeparator: false), presentationTheme: theme, strings: self.strings)
     }
     
     func setQueryUpdated(_ f: @escaping (String) -> Void) {

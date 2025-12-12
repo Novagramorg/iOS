@@ -714,7 +714,7 @@ public func makeDefaultDarkTintedPresentationTheme(extendingThemeReference: Pres
         pinnedBadgeColor: mainSecondaryTextColor.withAlphaComponent(0.5),
         pinnedSearchBarColor: accentColor.withMultiplied(hue: 1.029, saturation: 0.609, brightness: 0.12),
         regularSearchBarColor: accentColor.withMultiplied(hue: 1.029, saturation: 0.609, brightness: 0.12),
-        sectionHeaderFillColor: mainBackgroundColor,
+        sectionHeaderFillColor: .black,
         sectionHeaderTextColor: mainSecondaryTextColor.withAlphaComponent(0.5),
         verifiedIconFillColor: accentColor,
         verifiedIconForegroundColor: .white,

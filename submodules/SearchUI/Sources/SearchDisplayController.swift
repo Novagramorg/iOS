@@ -57,7 +57,7 @@ public final class SearchDisplayController {
         self.searchBarIsExternal = searchBarIsExternal
 
         if !searchBarIsExternal {
-            self.searchBar = SearchBarNode(theme: SearchBarNodeTheme(theme: presentationData.theme, hasBackground: hasBackground, hasSeparator: hasSeparator, inline: inline), strings: presentationData.strings, fieldStyle: fieldStyle, forceSeparator: hasSeparator, displayBackground: hasBackground)
+            self.searchBar = SearchBarNode(theme: SearchBarNodeTheme(theme: presentationData.theme, hasBackground: hasBackground, hasSeparator: hasSeparator, inline: inline), presentationTheme: presentationData.theme, strings: presentationData.strings, fieldStyle: fieldStyle, forceSeparator: hasSeparator, displayBackground: hasBackground)
         }
         self.backgroundNode = BackgroundNode()
         self.backgroundNode.allowsGroupOpacity = true
@@ -143,7 +143,7 @@ public final class SearchDisplayController {
     
     public func updatePresentationData(_ presentationData: PresentationData) {
         if !self.searchBarIsExternal {
-            self.searchBar?.updateThemeAndStrings(theme: SearchBarNodeTheme(theme: presentationData.theme, hasSeparator: self.hasSeparator, inline: self.inline), strings: presentationData.strings)
+            self.searchBar?.updateThemeAndStrings(theme: SearchBarNodeTheme(theme: presentationData.theme, hasSeparator: self.hasSeparator, inline: self.inline), presentationTheme: presentationData.theme, strings: presentationData.strings)
         }
         self.contentNode.updatePresentationData(presentationData)
         
