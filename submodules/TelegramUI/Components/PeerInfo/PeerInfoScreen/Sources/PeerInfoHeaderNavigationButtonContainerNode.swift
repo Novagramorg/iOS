@@ -89,7 +89,7 @@ final class PeerInfoHeaderNavigationButtonContainerNode: SparseNode {
             button.updateContentsColor(contentsColor: spec.isForExpandedView ? expandedButtonContentsColor : normalButtonContentsColor, transition: transition)
         }
         
-        for spec in self.currentRightButtons.reversed() {
+        for spec in self.currentRightButtons {
             guard let button = self.rightButtonNodes[spec] else {
                 continue
             }
@@ -212,7 +212,7 @@ final class PeerInfoHeaderNavigationButtonContainerNode: SparseNode {
         if self.currentRightButtons != rightButtons || presentationData.strings !== self.presentationData?.strings {
             self.currentRightButtons = rightButtons
             
-            for spec in rightButtons.reversed() {
+            for spec in rightButtons {
                 let buttonNode: PeerInfoHeaderNavigationButton
                 var wasAdded = false
                 
@@ -286,7 +286,7 @@ final class PeerInfoHeaderNavigationButtonContainerNode: SparseNode {
                 }
             }
         } else {
-            for spec in rightButtons.reversed() {
+            for spec in rightButtons {
                 var key = spec.key
                 if key == .more || key == .search || key == .sort {
                     key = .moreSearchSort

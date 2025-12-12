@@ -264,6 +264,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         self.backgroundBannerView = UIView()
         self.backgroundBannerView.clipsToBounds = true
         self.backgroundBannerView.isUserInteractionEnabled = false
+        self.backgroundBannerView.layer.allowsGroupOpacity = true
         
         self.buttonsContainerNode = SparseNode()
         self.buttonsContainerNode.clipsToBounds = true
@@ -499,7 +500,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             
             self.appliedCustomNavigationContentNode = self.customNavigationContentNode
             if let customNavigationContentNode = self.customNavigationContentNode {
-                self.addSubnode(customNavigationContentNode)
+                self.searchBarContainer.addSubnode(customNavigationContentNode)
                 customNavigationContentNode.frame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: width, height: navigationHeight))
                 customNavigationContentNode.alpha = 0.0
                 transition.updateAlpha(node: customNavigationContentNode, alpha: 1.0)
@@ -2504,7 +2505,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         }
         
         let edgeEffectHeight: CGFloat = 40.0
-        let edgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: backgroundFrame.width, height: navigationHeight + 10.0))
+        let edgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: backgroundFrame.width, height: navigationHeight + 18.0))
         
         let panelsExpansionBackgroundFrame = CGRect(origin: CGPoint(x: 0.0, y: -2000.0 + paneContainerY - contentOffset), size: CGSize(width: width, height: 2000.0))
         

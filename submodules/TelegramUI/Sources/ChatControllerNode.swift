@@ -2179,12 +2179,12 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         }
         if let bottomBackgroundEdgeEffectNode {
             var blurFrame = inputBackgroundFrame
-            blurFrame.origin.y -= 26.0
+            blurFrame.origin.y -= 18.0
             blurFrame.size.height = max(100.0, layout.size.height - blurFrame.origin.y)
             transition.updateFrame(node: bottomBackgroundEdgeEffectNode, frame: blurFrame)
             bottomBackgroundEdgeEffectNode.update(
                 rect: blurFrame,
-                edge: WallpaperEdgeEffectEdge(edge: .bottom, size: 80.0),
+                edge: WallpaperEdgeEffectEdge(edge: .bottom, size: 100.0),
                 blur: false,
                 containerSize: wallpaperBounds.size,
                 transition: transition
@@ -2382,11 +2382,12 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             }
         }
         if let topBackgroundEdgeEffectNode {
-            let blurFrame = CGRect(origin: CGPoint(), size: CGSize(width: layout.size.width, height: listInsets.bottom + 10.0))
+            var blurFrame = CGRect(origin: CGPoint(), size: CGSize(width: layout.size.width, height: max(100.0, listInsets.bottom + 10.0)))
+            blurFrame.origin.y = listInsets.bottom + 10.0 - blurFrame.height
             transition.updateFrame(node: topBackgroundEdgeEffectNode, frame: blurFrame)
             topBackgroundEdgeEffectNode.update(
                 rect: blurFrame,
-                edge: WallpaperEdgeEffectEdge(edge: .top, size: 40.0),
+                edge: WallpaperEdgeEffectEdge(edge: .top, size: 100.0),
                 blur: false,
                 containerSize: wallpaperBounds.size,
                 transition: transition
