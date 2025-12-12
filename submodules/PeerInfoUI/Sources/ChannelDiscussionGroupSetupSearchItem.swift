@@ -168,6 +168,7 @@ private final class ChannelDiscussionSearchNavigationContentNode: NavigationBarC
                 accent: theme.chat.inputPanel.panelControlAccentColor,
                 keyboard: theme.rootController.keyboardColor
             ),
+            presentationTheme: theme,
             strings: strings,
             fieldStyle: .inlineNavigation,
             forceSeparator: false,

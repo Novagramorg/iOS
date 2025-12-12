@@ -478,6 +478,7 @@ final class PeerSelectionScreenComponent: Component {
                     let searchBarTheme = SearchBarNodeTheme(theme: environment.theme, hasSeparator: false)
                     searchBarNode = SearchBarNode(
                         theme: searchBarTheme,
+                        presentationTheme: environment.theme,
                         strings: environment.strings,
                         fieldStyle: .modern,
                         displayBackground: false

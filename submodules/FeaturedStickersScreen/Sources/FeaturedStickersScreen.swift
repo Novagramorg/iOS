@@ -980,7 +980,7 @@ private final class SearchNavigationContentNode: NavigationBarContentNode {
         
         self.cancel = cancel
         
-        self.searchBar = SearchBarNode(theme: SearchBarNodeTheme(theme: theme), strings: strings, fieldStyle: .modern, cancelText: strings.Common_Done)
+        self.searchBar = SearchBarNode(theme: SearchBarNodeTheme(theme: theme), presentationTheme: theme, strings: strings, fieldStyle: .modern, cancelText: strings.Common_Done)
         let placeholderText = placeholder?(strings) ?? strings.Common_Search
         let searchBarFont = Font.regular(17.0)
         
@@ -1004,7 +1004,7 @@ private final class SearchNavigationContentNode: NavigationBarContentNode {
         self.theme = theme
         self.strings = strings
         
-        self.searchBar.updateThemeAndStrings(theme: SearchBarNodeTheme(theme: theme), strings: strings)
+        self.searchBar.updateThemeAndStrings(theme: SearchBarNodeTheme(theme: theme), presentationTheme: theme, strings: strings)
     }
     
     func setQueryUpdated(_ f: @escaping (String, String?) -> Void) {

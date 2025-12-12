@@ -894,6 +894,9 @@ public class SearchBarNode: ASDisplayNode, UITextFieldDelegate {
     
     public var tokensUpdated: (([SearchBarToken]) -> Void)?
     
+    private let inlineSearchPlaceholder: SearchBarPlaceholderNode
+    private var inlineSearchPlaceholderContentsView: SearchBarPlaceholderContentView?
+    
     private let backgroundNode: NavigationBackgroundNode
     private let separatorNode: ASDisplayNode
     private let textBackgroundNode: ASDisplayNode
@@ -972,6 +975,9 @@ public class SearchBarNode: ASDisplayNode, UITextFieldDelegate {
                 if let takenSearchPlaceholderContentView = self.takenSearchPlaceholderContentView {
                     takenSearchPlaceholderContentView.updateSearchIconVisibility(isVisible: !self.activity)
                 }
+                if let inlineSearchPlaceholderContentsView = self.inlineSearchPlaceholderContentsView {
+                    inlineSearchPlaceholderContentsView.updateSearchIconVisibility(isVisible: !self.activity)
+                }
             }
         }
     }
@@ -999,14 +1005,21 @@ public class SearchBarNode: ASDisplayNode, UITextFieldDelegate {
     public let fieldStyle: SearchBarStyle
     private let forceSeparator: Bool
     private var theme: SearchBarNodeTheme?
+    private var presentationTheme: PresentationTheme
     private var strings: PresentationStrings?
     private let cancelText: String?
     
-    public init(theme: SearchBarNodeTheme, strings: PresentationStrings, fieldStyle: SearchBarStyle = .legacy, icon: Icon = .loupe, forceSeparator: Bool = false, displayBackground: Bool = true, cancelText: String? = nil) {
+    private var isAnimatingOut: Bool = false
+    
+    public init(theme: SearchBarNodeTheme, presentationTheme: PresentationTheme, strings: PresentationStrings, fieldStyle: SearchBarStyle = .legacy, icon: Icon = .loupe, forceSeparator: Bool = false, displayBackground: Bool = true, cancelText: String? = nil) {
+        self.presentationTheme = presentationTheme
+        
         self.fieldStyle = fieldStyle
         self.forceSeparator = forceSeparator
         self.cancelText = cancelText
         self.icon = icon
+        
+        self.inlineSearchPlaceholder = SearchBarPlaceholderNode(fieldStyle: .glass)
                 
         self.backgroundNode = NavigationBackgroundNode(color: theme.background)
         self.backgroundNode.isUserInteractionEnabled = false
@@ -1043,7 +1056,9 @@ public class SearchBarNode: ASDisplayNode, UITextFieldDelegate {
         super.init()
         
         switch self.fieldStyle {
-        case .glass, .inlineNavigation:
+        case .glass:
+            break
+        case .inlineNavigation:
             break
         case .legacy, .modern:
             self.addSubnode(self.backgroundNode)
@@ -1085,11 +1100,11 @@ public class SearchBarNode: ASDisplayNode, UITextFieldDelegate {
         self.cancelButton.addTarget(self, action: #selector(self.cancelPressed), forControlEvents: .touchUpInside)
         self.clearButton.addTarget(self, action: #selector(self.clearPressed), forControlEvents: .touchUpInside)
         
-        self.updateThemeAndStrings(theme: theme, strings: strings)
+        self.updateThemeAndStrings(theme: theme, presentationTheme: presentationTheme, strings: strings)
         self.updateIsEmpty(animated: false)
     }
         
-    public func updateThemeAndStrings(theme: SearchBarNodeTheme, strings: PresentationStrings) {
+    public func updateThemeAndStrings(theme: SearchBarNodeTheme, presentationTheme: PresentationTheme, strings: PresentationStrings) {
         if self.theme != theme || self.strings !== strings {
             self.clearButton.accessibilityLabel = strings.WebSearch_RecentSectionClear
             self.cancelButton.accessibilityLabel = self.cancelText ?? strings.Common_Cancel
@@ -1122,6 +1137,7 @@ public class SearchBarNode: ASDisplayNode, UITextFieldDelegate {
         }
         
         self.theme = theme
+        self.presentationTheme = presentationTheme
         self.strings = strings
         if let (boundingSize, leftInset, rightInset) = self.validLayout {
             self.updateLayout(boundingSize: boundingSize, leftInset: leftInset, rightInset: rightInset, transition: .immediate)
@@ -1184,6 +1200,45 @@ public class SearchBarNode: ASDisplayNode, UITextFieldDelegate {
         transition.updateFrame(node: self.clearButton, frame: CGRect(origin: CGPoint(x: textBackgroundFrame.maxX - 6.0 - clearSize.width, y: textBackgroundFrame.minY + floor((textBackgroundFrame.size.height - clearSize.height) / 2.0)), size: clearSize))
         
         self.textField.frame = textFrame
+        
+        let searchPlaceholderFrame = CGRect(origin: CGPoint(x: 16.0, y: 0.0), size: CGSize(width: max(0.0, boundingSize.width - 16.0 * 2.0), height: 44.0))
+        
+        if case .glass = self.fieldStyle, self.takenSearchPlaceholderContentView == nil {
+            transition.updateFrame(node: self.inlineSearchPlaceholder, frame: searchPlaceholderFrame)
+            if let theme = self.theme {
+                let _ = self.inlineSearchPlaceholder.updateLayout(
+                    placeholderString: self.placeholderString,
+                    compactPlaceholderString: self.placeholderString,
+                    constrainedSize: searchPlaceholderFrame.size,
+                    expansionProgress: 1.0,
+                    iconColor: theme.inputIcon,
+                    foregroundColor: self.presentationTheme.chat.inputPanel.panelControlColor,
+                    backgroundColor: self.presentationTheme.rootController.navigationBar.opaqueBackgroundColor,
+                    controlColor: self.presentationTheme.chat.inputPanel.panelControlColor,
+                    transition: transition
+                )
+                if self.inlineSearchPlaceholderContentsView == nil {
+                    let inlineSearchPlaceholderContentsView = self.inlineSearchPlaceholder.takeContents()
+                    inlineSearchPlaceholderContentsView.onCancel = { [weak self] in
+                        guard let self else {
+                            return
+                        }
+                        self.cancel?()
+                    }
+                    self.inlineSearchPlaceholderContentsView = inlineSearchPlaceholderContentsView
+                    self.view.insertSubview(inlineSearchPlaceholderContentsView, at: 0)
+                }
+            }
+            if let inlineSearchPlaceholderContentsView = self.inlineSearchPlaceholderContentsView {
+                inlineSearchPlaceholderContentsView.update(size: searchPlaceholderFrame.size, isActive: true, transition: transition)
+                transition.updateFrame(view: inlineSearchPlaceholderContentsView, frame: searchPlaceholderFrame)
+            }
+        }
+        
+        if !self.isAnimatingOut, let takenSearchPlaceholderContentView = self.takenSearchPlaceholderContentView {
+            transition.updateFrame(view: takenSearchPlaceholderContentView, frame: searchPlaceholderFrame)
+            takenSearchPlaceholderContentView.update(size: searchPlaceholderFrame.size, isActive: true, transition: transition)
+        }
     }
     
     @objc private func tapGesture(_ recognizer: UITapGestureRecognizer) {
@@ -1201,6 +1256,8 @@ public class SearchBarNode: ASDisplayNode, UITextFieldDelegate {
     }
     
     public func animateIn(from node: SearchBarPlaceholderNode, duration: Double, timingFunction: String) {
+        self.inlineSearchPlaceholder.isHidden = true
+        
         let takenSearchPlaceholderContentView = node.takeContents()
         takenSearchPlaceholderContentView.onCancel = { [weak self] in
             guard let self else {
@@ -1210,6 +1267,9 @@ public class SearchBarNode: ASDisplayNode, UITextFieldDelegate {
         }
         self.takenSearchPlaceholderContentView = takenSearchPlaceholderContentView
         self.view.insertSubview(takenSearchPlaceholderContentView, at: 0)
+        if let inlineSearchPlaceholderContentsView  = self.inlineSearchPlaceholderContentsView {
+            inlineSearchPlaceholderContentsView.removeFromSuperview()
+        }
         
         let sourceFrame = node.view.convert(node.bounds, to: self.view)
         let targetFrame = CGRect(origin: CGPoint(x: 16.0, y: 0.0), size: CGSize(width: max(0.0, self.bounds.width - 16.0 * 2.0), height: 44.0))
@@ -1271,6 +1331,8 @@ public class SearchBarNode: ASDisplayNode, UITextFieldDelegate {
     }
     
     public func transitionOut(to node: SearchBarPlaceholderNode, transition: ContainedViewLayoutTransition, completion: @escaping () -> Void) {
+        self.isAnimatingOut = true
+        
         /*let targetTextBackgroundFrame = node.view.convert(node.backgroundView.frame, to: self.view)
         
         let duration: Double = transition.isAnimated ? 0.5 : 0.0
@@ -1531,6 +1593,7 @@ public class SearchBarNode: ASDisplayNode, UITextFieldDelegate {
         if let takenSearchPlaceholderContentView = self.takenSearchPlaceholderContentView {
             takenSearchPlaceholderContentView.updatePlaceholderVisibility(isVisible: isEmpty)
         }
+        self.inlineSearchPlaceholderContentsView?.updatePlaceholderVisibility(isVisible: isEmpty)
         
         let clearIsHidden = (textIsEmpty && tokensEmpty) && self.prefixString == nil
         transition.updateAlpha(node: self.clearButton.imageNode, alpha: clearIsHidden ? 0.0 : 1.0)

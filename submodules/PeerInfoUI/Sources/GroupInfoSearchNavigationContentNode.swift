@@ -83,6 +83,7 @@ final class GroupInfoSearchNavigationContentNode: NavigationBarContentNode, Item
                 accent: theme.chat.inputPanel.panelControlAccentColor,
                 keyboard: theme.rootController.keyboardColor
             ),
+            presentationTheme: theme,
             strings: strings,
             fieldStyle: .inlineNavigation,
             forceSeparator: false,

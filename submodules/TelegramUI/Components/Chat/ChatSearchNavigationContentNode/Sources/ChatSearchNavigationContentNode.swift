@@ -64,6 +64,7 @@ public final class ChatSearchNavigationContentNode: NavigationBarContentNode {
                 accent: theme.chat.inputPanel.panelControlAccentColor,
                 keyboard: theme.rootController.keyboardColor
             ),
+            presentationTheme: theme,
             strings: strings,
             fieldStyle: .inlineNavigation,
             forceSeparator: false,
@@ -246,6 +247,7 @@ public final class ChatSearchNavigationContentNode: NavigationBarContentNode {
                     accent: presentationInterfaceState.theme.chat.inputPanel.panelControlAccentColor,
                     keyboard: presentationInterfaceState.theme.rootController.keyboardColor
                 ),
+                presentationTheme: presentationInterfaceState.theme,
                 strings: presentationInterfaceState.strings
             )
             

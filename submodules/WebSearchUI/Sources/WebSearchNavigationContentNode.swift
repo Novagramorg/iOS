@@ -22,7 +22,7 @@ final class WebSearchNavigationContentNode: NavigationBarContentNode {
         self.theme = theme
         self.strings = strings
         
-        self.searchBar = SearchBarNode(theme: SearchBarNodeTheme(theme: theme, hasSeparator: false), strings: strings, fieldStyle: .modern, displayBackground: !attachment)
+        self.searchBar = SearchBarNode(theme: SearchBarNodeTheme(theme: theme, hasSeparator: false), presentationTheme: theme, strings: strings, fieldStyle: .modern, displayBackground: !attachment)
         self.searchBar.hasCancelButton = attachment
         self.searchBar.placeholderString = NSAttributedString(string: attachment ? strings.Attachment_SearchWeb : strings.Common_Search, font: searchBarFont, textColor: theme.rootController.navigationSearchBar.inputPlaceholderTextColor)
         

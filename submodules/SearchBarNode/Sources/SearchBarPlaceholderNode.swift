@@ -49,13 +49,15 @@ public final class SearchBarPlaceholderContentView: UIView {
     }
     
     let fieldStyle: SearchBarStyle
-    let backgroundNode: ASDisplayNode?
+    let plainBackgroundView: UIImageView
     let glassBackgroundView: GlassBackgroundView?
     private var fillBackgroundColor: UIColor
     private var foregroundColor: UIColor
     private var iconColor: UIColor
     let iconNode: ASImageNode
     let labelNode: TextNode
+    let plainIconNode: ASImageNode
+    let plainLabelNode: TextNode
     
     private var close: (background: GlassBackgroundView, icon: UIImageView)?
     
@@ -72,20 +74,13 @@ public final class SearchBarPlaceholderContentView: UIView {
         self.foregroundColor = UIColor(rgb: 0xededed)
         self.iconColor = UIColor(rgb: 0x000000, alpha: 0.0)
         
+        self.plainBackgroundView = UIImageView()
+        
         switch fieldStyle {
         case .legacy, .modern:
-            let backgroundNode = ASDisplayNode()
-            backgroundNode.isLayerBacked = false
-            backgroundNode.displaysAsynchronously = false
-            backgroundNode.backgroundColor = self.foregroundColor
-            backgroundNode.cornerRadius = self.fieldStyle.cornerDiameter / 2.0
-            self.backgroundNode = backgroundNode
-            
             self.glassBackgroundView = nil
         case .inlineNavigation, .glass:
             self.glassBackgroundView = GlassBackgroundView()
-            
-            self.backgroundNode = nil
         }
         
         self.iconNode = ASImageNode()
@@ -96,20 +91,27 @@ public final class SearchBarPlaceholderContentView: UIView {
         self.labelNode.isOpaque = false
         self.labelNode.isUserInteractionEnabled = false
         
+        self.plainIconNode = ASImageNode()
+        self.plainIconNode.displaysAsynchronously = false
+        self.plainIconNode.displayWithoutProcessing = true
+        
+        self.plainLabelNode = TextNode()
+        self.plainLabelNode.isOpaque = false
+        self.plainLabelNode.isUserInteractionEnabled = false
+        
         super.init(frame: CGRect())
         
-        if let backgroundNode = self.backgroundNode {
-            backgroundNode.isUserInteractionEnabled = true
-            self.addSubview(backgroundNode.view)
-        }
+        self.plainBackgroundView.isUserInteractionEnabled = true
+        self.addSubview(self.plainBackgroundView)
+        
+        self.plainBackgroundView.addSubview(self.plainIconNode.view)
+        self.plainBackgroundView.addSubview(self.plainLabelNode.view)
+        
         if let glassBackgroundView = self.glassBackgroundView {
             self.addSubview(glassBackgroundView)
             
             glassBackgroundView.contentView.addSubview(self.iconNode.view)
             glassBackgroundView.contentView.addSubview(self.labelNode.view)
-        } else {
-            self.addSubview(self.iconNode.view)
-            self.addSubview(self.labelNode.view)
         }
     }
     
@@ -161,6 +163,7 @@ public final class SearchBarPlaceholderContentView: UIView {
     
     private func updateLayout(params: Params, transition: ContainedViewLayoutTransition) -> CGFloat {
         let labelLayout = TextNode.asyncLayout(self.labelNode)
+        let plainLabelLayout = TextNode.asyncLayout(self.plainLabelNode)
         let currentForegroundColor = self.foregroundColor
         let currentIconColor = self.iconColor
         
@@ -172,6 +175,7 @@ public final class SearchBarPlaceholderContentView: UIView {
         }
         
         let (labelLayoutResult, labelApply) = labelLayout(TextNodeLayoutArguments(attributedString: placeholderString, backgroundColor: .clear, maximumNumberOfLines: 1, truncationType: .end, constrainedSize: params.constrainedSize, alignment: .natural, cutout: nil, insets: UIEdgeInsets()))
+        let (_, plainLabelApply) = plainLabelLayout(TextNodeLayoutArguments(attributedString: placeholderString, backgroundColor: .clear, maximumNumberOfLines: 1, truncationType: .end, constrainedSize: params.constrainedSize, alignment: .natural, cutout: nil, insets: UIEdgeInsets()))
         
         var updatedColor: UIColor?
         var updatedIconImage: UIImage?
@@ -185,19 +189,19 @@ public final class SearchBarPlaceholderContentView: UIView {
         let height = params.constrainedSize.height * params.expansionProgress
         
         let _ = labelApply()
+        let _ = plainLabelApply()
         
         self.fillBackgroundColor = params.backgroundColor
         self.foregroundColor = params.foregroundColor
         self.iconColor = params.iconColor
-        if let backgroundNode = self.backgroundNode {
-            backgroundNode.isUserInteractionEnabled = params.expansionProgress > 0.9999
-        }
+        self.plainBackgroundView.isUserInteractionEnabled = params.expansionProgress > 0.9999
         
-        if let updatedColor, let backgroundNode = self.backgroundNode {
-            backgroundNode.backgroundColor = updatedColor
+        if let updatedColor {
+            self.plainBackgroundView.backgroundColor = updatedColor
         }
         if let updatedIconImage {
             self.iconNode.image = updatedIconImage
+            self.plainIconNode.image = updatedIconImage
         }
         
         self.placeholderString = placeholderString
@@ -220,6 +224,7 @@ public final class SearchBarPlaceholderContentView: UIView {
                 iconX = floor((params.constrainedSize.width - totalWidth) / 2.0)
             }
             transition.updateFrame(node: self.iconNode, frame: CGRect(origin: CGPoint(x: iconX, y: floorToScreenPixels((height - iconSize.height) / 2.0)), size: iconSize))
+            transition.updateFrame(node: self.plainIconNode, frame: CGRect(origin: CGPoint(x: iconX, y: floorToScreenPixels((height - iconSize.height) / 2.0)), size: iconSize))
         } else {
             iconX = 12.0
         }
@@ -230,6 +235,7 @@ public final class SearchBarPlaceholderContentView: UIView {
         let labelX: CGFloat = iconX + iconSize.width + spacing
         let labelFrame = CGRect(origin: CGPoint(x: labelX, y: floorToScreenPixels((height - labelLayoutResult.size.height) / 2.0) + textOffset), size: labelLayoutResult.size)
         transition.updateFrame(node: self.labelNode, frame: labelFrame)
+        transition.updateFrame(node: self.plainLabelNode, frame: labelFrame)
    
         var innerAlpha = max(0.0, params.expansionProgress - 0.77) / 0.23
         if innerAlpha > 0.9999 {
@@ -241,27 +247,36 @@ public final class SearchBarPlaceholderContentView: UIView {
             if !transition.isAnimated {
                 self.labelNode.layer.removeAnimation(forKey: "opacity")
                 self.iconNode.layer.removeAnimation(forKey: "opacity")
+                self.plainLabelNode.layer.removeAnimation(forKey: "opacity")
+                self.plainIconNode.layer.removeAnimation(forKey: "opacity")
             }
             
             transition.updateAlpha(node: self.labelNode, alpha: innerAlpha)
             transition.updateAlpha(node: self.iconNode, alpha: innerAlpha)
+            
+            transition.updateAlpha(node: self.plainLabelNode, alpha: innerAlpha)
+            transition.updateAlpha(node: self.plainIconNode, alpha: innerAlpha)
         }
         
         let outerAlpha = min(0.3, params.expansionProgress) / 0.3
-        let cornerRadius = min(self.fieldStyle.cornerDiameter / 2.0, height / 2.0)
+        let cornerRadius = height * 0.5
         
-        if let backgroundNode = self.backgroundNode, backgroundNode.cornerRadius != cornerRadius {
+        if self.plainBackgroundView.layer.cornerRadius != cornerRadius {
             if !transition.isAnimated {
-                backgroundNode.layer.removeAnimation(forKey: "cornerRadius")
+                self.plainBackgroundView.layer.removeAnimation(forKey: "cornerRadius")
             }
-            transition.updateCornerRadius(node: backgroundNode, cornerRadius: cornerRadius)
+            transition.updateCornerRadius(layer: self.plainBackgroundView.layer, cornerRadius: cornerRadius)
         }
         
-        if let backgroundNode = self.backgroundNode, backgroundNode.alpha != outerAlpha {
+        var plainBackgroundAlpha = outerAlpha
+        if params.isActive {
+            plainBackgroundAlpha = 0.0
+        }
+        if self.plainBackgroundView.alpha != plainBackgroundAlpha {
             if !transition.isAnimated {
-                backgroundNode.layer.removeAnimation(forKey: "opacity")
+                self.plainBackgroundView.layer.removeAnimation(forKey: "opacity")
             }
-            transition.updateAlpha(node: backgroundNode, alpha: outerAlpha)
+            transition.updateAlpha(layer: self.plainBackgroundView.layer, alpha: plainBackgroundAlpha)
         }
         
         var backgroundFrame = CGRect(origin: CGPoint(), size: CGSize(width: params.constrainedSize.width, height: height))
@@ -269,12 +284,12 @@ public final class SearchBarPlaceholderContentView: UIView {
             backgroundFrame.size.width -= 44.0 + 8.0
         }
         
-        if let backgroundNode = self.backgroundNode, backgroundNode.frame != backgroundFrame {
+        if self.plainBackgroundView.frame != backgroundFrame {
             if !transition.isAnimated {
-                backgroundNode.layer.removeAnimation(forKey: "position")
-                backgroundNode.layer.removeAnimation(forKey: "bounds")
+                self.plainBackgroundView.layer.removeAnimation(forKey: "position")
+                self.plainBackgroundView.layer.removeAnimation(forKey: "bounds")
             }
-            transition.updateFrame(node: backgroundNode, frame: CGRect(origin: CGPoint(), size: CGSize(width: params.constrainedSize.width, height: height)))
+            transition.updateFrame(view: self.plainBackgroundView, frame: CGRect(origin: CGPoint(), size: CGSize(width: params.constrainedSize.width, height: height)))
         }
         
         if let glassBackgroundView = self.glassBackgroundView {
@@ -283,6 +298,9 @@ public final class SearchBarPlaceholderContentView: UIView {
             var backgroundAlpha: CGFloat = 1.0
             if backgroundFrame.height < 16.0 {
                 backgroundAlpha = max(0.0, min(1.0, backgroundFrame.height / 16.0))
+            }
+            if !params.isActive {
+                backgroundAlpha = 0.0
             }
             ComponentTransition(transition).setAlpha(view: glassBackgroundView, alpha: backgroundAlpha)
             let isDark = params.backgroundColor.hsb.b < 0.5
@@ -372,10 +390,12 @@ public final class SearchBarPlaceholderContentView: UIView {
     
     public func updatePlaceholderVisibility(isVisible: Bool) {
         self.labelNode.isHidden = !isVisible
+        self.plainLabelNode.isHidden = !isVisible
     }
     
     public func updateSearchIconVisibility(isVisible: Bool) {
         self.iconNode.isHidden = !isVisible
+        self.plainIconNode.isHidden = !isVisible
     }
 }
 
@@ -408,12 +428,10 @@ public class SearchBarPlaceholderNode: ASDisplayNode {
     private let contentView: SearchBarPlaceholderContentView
     
     public var backgroundView: UIView {
-        if let backgroundNode = self.contentView.backgroundNode {
-            return backgroundNode.view
-        } else if let glassBackgroundView = self.contentView.glassBackgroundView {
+        if let glassBackgroundView = self.contentView.glassBackgroundView {
             return glassBackgroundView
         } else {
-            preconditionFailure()
+            return self.contentView.plainBackgroundView
         }
     }
     

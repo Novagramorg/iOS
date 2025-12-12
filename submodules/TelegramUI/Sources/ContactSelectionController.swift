@@ -573,7 +573,7 @@ final class ContactsSearchNavigationContentNode: NavigationBarContentNode {
     init(presentationData: PresentationData, dismissSearch: @escaping () -> Void, updateSearchQuery: @escaping (String) -> Void) {
         self.presentationData = presentationData
         
-        self.searchBar = SearchBarNode(theme: SearchBarNodeTheme(theme: presentationData.theme, hasSeparator: false), strings: presentationData.strings, fieldStyle: .modern)
+        self.searchBar = SearchBarNode(theme: SearchBarNodeTheme(theme: presentationData.theme, hasSeparator: false), presentationTheme: presentationData.theme, strings: presentationData.strings, fieldStyle: .modern)
         self.searchBar.placeholderString = NSAttributedString(string: presentationData.strings.Common_Search, font: searchBarFont, textColor: presentationData.theme.rootController.navigationSearchBar.inputPlaceholderTextColor)
         
         super.init()
@@ -617,7 +617,7 @@ final class ContactsSearchNavigationContentNode: NavigationBarContentNode {
     
     func updatePresentationData(_ presentationData: PresentationData) {
         self.presentationData = presentationData
-        self.searchBar.updateThemeAndStrings(theme: SearchBarNodeTheme(theme: presentationData.theme, hasSeparator: false), strings: presentationData.strings)
+        self.searchBar.updateThemeAndStrings(theme: SearchBarNodeTheme(theme: presentationData.theme, hasSeparator: false), presentationTheme: presentationData.theme, strings: presentationData.strings)
     }
 }
 

@@ -25,7 +25,7 @@ final class ChatRecentActionsSearchNavigationContentNode: NavigationBarContentNo
         
         self.cancel = cancel
         
-        self.searchBar = SearchBarNode(theme: SearchBarNodeTheme(theme: theme, hasSeparator: false), strings: strings, fieldStyle: .modern, displayBackground: false)
+        self.searchBar = SearchBarNode(theme: SearchBarNodeTheme(theme: theme, hasSeparator: false), presentationTheme: theme, strings: strings, fieldStyle: .modern, displayBackground: false)
         let placeholderText = strings.Common_Search
         self.searchBar.placeholderString = NSAttributedString(string: placeholderText, font: searchBarFont, textColor: theme.rootController.navigationSearchBar.inputPlaceholderTextColor)
         

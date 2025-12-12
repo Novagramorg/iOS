@@ -3251,8 +3251,10 @@ public final class ChatListNode: ListView {
                                 if entryCount - 1 - i < 0 {
                                     continue
                                 }
-                                if case .PeerEntry = transition.chatListView.filteredEntries[entryCount - 1 - i] {
-                                } else {
+                                switch transition.chatListView.filteredEntries[entryCount - 1 - i] {
+                                case .PeerEntry, .GroupReferenceEntry:
+                                    break
+                                default:
                                     continue
                                 }
                                 if case let .index(index) = transition.chatListView.filteredEntries[entryCount - 1 - i].sortIndex, case let .chatList(chatListIndex) = index, chatListIndex.pinningIndex != nil {

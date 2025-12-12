@@ -151,7 +151,7 @@ private final class ItemComponent: Component {
                 if case let .item(item) = component.content, case .done = item.style {
                     titleFont = Font.bold(17.0)
                 } else {
-                    titleFont = Font.regular(17.0)
+                    titleFont = Font.medium(17.0)
                 }
                 
                 let title: ComponentView<Empty>
@@ -204,7 +204,7 @@ private final class NavigationButtonItemNode: ImmediateTextNode {
     private let isGlass: Bool
     
     private func fontForCurrentState() -> UIFont {
-        return self.bold ? UIFont.boldSystemFont(ofSize: 17.0) : UIFont.systemFont(ofSize: 17.0)
+        return self.bold ? Font.semibold(17.0) : Font.medium(17.0)
     }
     
     private func attributesForCurrentState() -> [NSAttributedString.Key: AnyObject] {
@@ -711,7 +711,7 @@ public final class NavigationButtonNodeImpl: ContextControllerSourceNode, Naviga
             var nodeInset: CGFloat = 0.0
             if self.isGlass {
                 if node.image == nil && node.node == nil {
-                    nodeInset += 10.0
+                    nodeInset += 12.0
                 }
                 if nodeSize.width + nodeInset * 2.0 < 44.0 {
                     nodeInset = floorToScreenPixels((44.0 - nodeSize.width) * 0.5)

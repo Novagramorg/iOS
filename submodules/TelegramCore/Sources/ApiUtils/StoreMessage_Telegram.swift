@@ -988,7 +988,7 @@ extension StoreMessage {
                     }
                 }
                 
-                if (flags & (1 << 17)) != 0 {
+                if (flags & (1 << 19)) != 0 {
                     attributes.append(ContentRequiresValidationMessageAttribute())
                 }
             
@@ -1174,7 +1174,7 @@ extension StoreMessage {
                     threadId = 1
                 }
                 
-                if (flags & (1 << 17)) != 0 {
+                if (flags & (1 << 19)) != 0 {
                     attributes.append(ContentRequiresValidationMessageAttribute())
                 }
             

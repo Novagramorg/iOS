@@ -1010,13 +1010,7 @@ public final class ChatTitleComponent: Component {
             let containerSize = CGSize(width: contentSize.width + containerSideInset * 2.0, height: 44.0)
             let containerFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((availableSize.width - containerSize.width) * 0.5), y: floorToScreenPixels((availableSize.height - containerSize.height) * 0.5)), size: containerSize)
             
-            var titleFrame = CGRect(origin: CGPoint(x: floor((containerFrame.width - titleSize.width) * 0.5), y: floor((containerFrame.height - contentSize.height) * 0.5)), size: titleSize)
-            if titleFrame.origin.x + titleFrame.width + titleRightIconsWidth > containerFrame.width - containerSideInset {
-                titleFrame.origin.x = containerFrame.width - containerSideInset - titleFrame.width - titleRightIconsWidth
-            }
-            if titleFrame.origin.x - titleLeftIconsWidth < containerSideInset {
-                titleFrame.origin.x = containerSideInset + titleLeftIconsWidth
-            }
+            let titleFrame = CGRect(origin: CGPoint(x: titleLeftIconsWidth + floor((containerFrame.width - titleSize.width - titleLeftIconsWidth - titleRightIconsWidth) * 0.5), y: floor((containerFrame.height - contentSize.height) * 0.5)), size: titleSize)
             if let titleView = self.title.view {
                 if titleView.superview == nil {
                     titleView.isUserInteractionEnabled = false
@@ -1130,6 +1124,8 @@ public final class ChatTitleComponent: Component {
                 if let backgroundView = self.backgroundView {
                     self.backgroundView = nil
                     backgroundView.removeFromSuperview()
+                }
+                if self.contentContainer.superview !== self {
                     self.addSubview(self.contentContainer)
                 }
                 transition.setFrame(view: self.contentContainer, frame: containerFrame)

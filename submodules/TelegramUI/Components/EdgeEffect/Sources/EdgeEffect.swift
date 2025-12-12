@@ -77,33 +77,33 @@ public class EdgeEffectView: UIView {
         }
         
         if blur {
-            let gradientMaskLayer = SimpleGradientLayer()
-            let baseGradientAlpha: CGFloat = 1.0
-            let numSteps = 8
-            let firstStep = 1
-            let firstLocation = 0.8
-            gradientMaskLayer.colors = (0 ..< numSteps).map { i in
-                if i < firstStep {
-                    return UIColor(white: 1.0, alpha: 1.0).cgColor
-                } else {
-                    let step: CGFloat = CGFloat(i - firstStep) / CGFloat(numSteps - firstStep - 1)
-                    let value: CGFloat = 1.0 - bezierPoint(0.42, 0.0, 0.58, 1.0, step)
-                    return UIColor(white: 1.0, alpha: baseGradientAlpha * value).cgColor
-                }
-            }
-            gradientMaskLayer.locations = (0 ..< numSteps).map { i -> NSNumber in
-                if i < firstStep {
-                    return 0.0 as NSNumber
-                } else {
-                    let step: CGFloat = CGFloat(i - firstStep) / CGFloat(numSteps - firstStep - 1)
-                    return (firstLocation + (1.0 - firstLocation) * step) as NSNumber
-                }
-            }
-            
             let blurView: VariableBlurView
             if let current = self.blurView {
                 blurView = current
             } else {
+                let gradientMaskLayer = SimpleGradientLayer()
+                let baseGradientAlpha: CGFloat = 1.0
+                let numSteps = 8
+                let firstStep = 1
+                let firstLocation = 0.8
+                gradientMaskLayer.colors = (0 ..< numSteps).map { i in
+                    if i < firstStep {
+                        return UIColor(white: 1.0, alpha: 1.0).cgColor
+                    } else {
+                        let step: CGFloat = CGFloat(i - firstStep) / CGFloat(numSteps - firstStep - 1)
+                        let value: CGFloat = 1.0 - bezierPoint(0.42, 0.0, 0.58, 1.0, step)
+                        return UIColor(white: 1.0, alpha: baseGradientAlpha * value).cgColor
+                    }
+                }
+                gradientMaskLayer.locations = (0 ..< numSteps).map { i -> NSNumber in
+                    if i < firstStep {
+                        return 0.0 as NSNumber
+                    } else {
+                        let step: CGFloat = CGFloat(i - firstStep) / CGFloat(numSteps - firstStep - 1)
+                        return (firstLocation + (1.0 - firstLocation) * step) as NSNumber
+                    }
+                }
+                
                 blurView = VariableBlurView(gradientMask: self.contentMaskView.image ?? UIImage(), maxBlurRadius: 8.0)
                 blurView.layer.mask = gradientMaskLayer
                 self.insertSubview(blurView, at: 0)

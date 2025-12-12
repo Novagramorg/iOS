@@ -116,7 +116,7 @@ public final class NavigationButtonComponent: Component {
             
             switch component.content {
             case let .text(title, isBold):
-                textString = NSAttributedString(string: title, font: isBold ? Font.bold(17.0) : Font.regular(17.0), textColor: theme.chat.inputPanel.panelControlColor)
+                textString = NSAttributedString(string: title, font: isBold ? Font.bold(17.0) : Font.medium(17.0), textColor: theme.chat.inputPanel.panelControlColor)
             case .more:
                 isMore = true
             case let .icon(imageNameValue):
@@ -140,7 +140,7 @@ public final class NavigationButtonComponent: Component {
                 
                 textView.attributedText = textString
                 let textSize = textView.updateLayout(availableSize)
-                let textInset: CGFloat = 10.0
+                let textInset: CGFloat = 12.0
                 size.width = max(44.0, textSize.width + textInset * 2.0)
                 
                 textView.frame = CGRect(origin: CGPoint(x: floor((size.width - textSize.width) / 2.0), y: floor((availableSize.height - textSize.height) / 2.0)), size: textSize)
