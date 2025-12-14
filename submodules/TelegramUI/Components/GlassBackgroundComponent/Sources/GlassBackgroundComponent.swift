@@ -844,7 +844,7 @@ public extension GlassBackgroundView {
                 let lineWidth: CGFloat = isDark ? 0.8 : 0.8
                 let strokeColor: UIColor
                 let blendMode: CGBlendMode
-                let baseAlpha: CGFloat = isDark ? 0.3 : 0.7
+                let baseAlpha: CGFloat = isDark ? 0.3 : 0.6
                 
                 if s == 0.0 && abs(a - 0.7) < 0.1 && !isDark {
                     blendMode = .normal

@@ -946,7 +946,7 @@ public func makeDefaultDayPresentationTheme(extendingThemeReference: Presentatio
         panelControlColor: UIColor(rgb: 0x000000, alpha: 1.0),
         panelControlDisabledColor: UIColor(rgb: 0x727b87, alpha: 0.5),
         panelControlDestructiveColor: UIColor(rgb: 0xff3b30),
-        inputBackgroundColor: UIColor(white: 1.0, alpha: 0.6),
+        inputBackgroundColor: UIColor(white: 1.0, alpha: 0.8),
         inputStrokeColor: UIColor(rgb: 0x000000, alpha: 0.1),
         inputPlaceholderColor: UIColor(rgb: 0x000000, alpha: 0.4),
         inputTextColor: UIColor(rgb: 0x000000),
