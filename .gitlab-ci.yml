@@ -50,6 +50,11 @@ internal_testflight:
     - python3 -u build-system/Make/Make.py remote-deploy-testflight --darwinContainers="$DARWIN_CONTAINERS" --darwinContainersHost="$DARWIN_CONTAINERS_HOST" --ipa="build/artifacts/Telegram.ipa" --dsyms="build/artifacts/Telegram.DSYMs.zip"
   environment:
     name: testflight_llc
+  artifacts:
+    when: always
+    paths:
+      - build/artifacts
+    expire_in: 1 week
 
 appstore_development:
   tags:
