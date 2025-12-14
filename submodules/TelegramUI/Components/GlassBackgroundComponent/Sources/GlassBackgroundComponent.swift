@@ -303,7 +303,7 @@ public class GlassBackgroundView: UIView {
         }
     }
     
-    private let backgroundNode: NavigationBackgroundNode?
+    private let legacyView: LegacyGlassView?
     
     private let nativeView: UIVisualEffectView?
     private let nativeViewClippingContext: ClippingShapeContext?
@@ -332,7 +332,7 @@ public class GlassBackgroundView: UIView {
     
     public override init(frame: CGRect) {
         if #available(iOS 26.0, *), !GlassBackgroundView.useCustomGlassImpl {
-            self.backgroundNode = nil
+            self.legacyView = nil
             
             let glassEffect = UIGlassEffect(style: .regular)
             glassEffect.isInteractive = false
@@ -348,8 +348,7 @@ public class GlassBackgroundView: UIView {
             self.foregroundView = nil
             self.shadowView = nil
         } else {
-            let backgroundNode = NavigationBackgroundNode(color: .black, enableBlur: true, customBlurRadius: 8.0)
-            self.backgroundNode = backgroundNode
+            self.legacyView = LegacyGlassView(frame: CGRect())
             self.nativeView = nil
             self.nativeViewClippingContext = nil
             self.nativeParamsView = nil
@@ -377,8 +376,8 @@ public class GlassBackgroundView: UIView {
         if let nativeParamsView = self.nativeParamsView {
             self.addSubview(nativeParamsView)
         }
-        if let backgroundNode = self.backgroundNode {
-            self.addSubview(backgroundNode.view)
+        if let legacyView = self.legacyView {
+            self.addSubview(legacyView)
         }
         if let foregroundView = self.foregroundView {
             self.addSubview(foregroundView)
@@ -420,14 +419,12 @@ public class GlassBackgroundView: UIView {
             }
             nativeView.overrideUserInterfaceStyle = isDark ? .dark : .light
         }
-        if let backgroundNode = self.backgroundNode {
-            backgroundNode.updateColor(color: .clear, forceKeepBlur: tintColor.color.alpha != 1.0, transition: transition.containedViewLayoutTransition)
-            
+        if let legacyView = self.legacyView {
             switch shape {
             case let .roundedRect(cornerRadius):
-                backgroundNode.update(size: size, cornerRadius: cornerRadius, transition: transition.containedViewLayoutTransition)
+                legacyView.update(size: size, cornerRadius: cornerRadius, transition: transition)
             }
-            transition.setFrame(view: backgroundNode.view, frame: CGRect(origin: CGPoint(), size: size))
+            transition.setFrame(view: legacyView, frame: CGRect(origin: CGPoint(), size: size))
         }
         
         let shadowInset: CGFloat = 32.0
@@ -773,8 +770,8 @@ public extension GlassBackgroundView {
                 }
             }
             
-            addShadow(context, true, CGPoint(), 10.0, 0.0, UIColor(white: 0.0, alpha: 0.06), .normal)
-            addShadow(context, true, CGPoint(), 20.0, 0.0, UIColor(white: 0.0, alpha: 0.06), .normal)
+            addShadow(context, true, CGPoint(), 30.0, 0.0, UIColor(white: 0.0, alpha: 0.075), .normal)
+            addShadow(context, true, CGPoint(), 20.0, 0.0, UIColor(white: 0.0, alpha: 0.01), .normal)
             
             var a: CGFloat = 0.0
             var b: CGFloat = 0.0
@@ -782,7 +779,7 @@ public extension GlassBackgroundView {
             fillColor.getHue(nil, saturation: &s, brightness: &b, alpha: &a)
             
             let innerImage: UIImage
-            if size == CGSize(width: 40.0 + inset * 2.0, height: 40.0 + inset * 2.0), b >= 0.2 {
+            /*if size == CGSize(width: 40.0 + inset * 2.0, height: 40.0 + inset * 2.0), b >= 0.2 {
                 innerImage = UIGraphicsImageRenderer(size: size).image { ctx in
                     let context = ctx.cgContext
                     
@@ -835,10 +832,78 @@ public extension GlassBackgroundView {
                         addShadow(context, false, CGPoint(x: 0.64, y: 0.64), 1.2, 0.0, UIColor(white: 1.0, alpha: edgeAlpha), .normal)
                     }
                 }
-            }
+            }*/
             
-            context.addEllipse(in: CGRect(origin: CGPoint(x: inset, y: inset), size: innerSize))
-            context.clip()
+            innerImage = UIGraphicsImageRenderer(size: size).image { ctx in
+                let context = ctx.cgContext
+                
+                context.setFillColor(fillColor.cgColor)
+                var ellipseRect = CGRect(origin: CGPoint(), size: size).insetBy(dx: inset, dy: inset)
+                context.fillEllipse(in: ellipseRect)
+                
+                let lineWidth: CGFloat = isDark ? 0.8 : 0.8
+                let strokeColor: UIColor
+                let blendMode: CGBlendMode
+                let baseAlpha: CGFloat = isDark ? 0.3 : 0.7
+                
+                if s == 0.0 && abs(a - 0.7) < 0.1 && !isDark {
+                    blendMode = .normal
+                    strokeColor = UIColor(white: 1.0, alpha: baseAlpha)
+                } else if s <= 0.3 && !isDark {
+                    blendMode = .normal
+                    strokeColor = UIColor(white: 1.0, alpha: 0.7 * baseAlpha)
+                } else if b >= 0.2 {
+                    let maxAlpha: CGFloat = isDark ? 0.7 : 0.8
+                    blendMode = .overlay
+                    strokeColor = UIColor(white: 1.0, alpha: max(0.5, min(1.0, maxAlpha * s)) * baseAlpha)
+                } else {
+                    blendMode = .normal
+                    strokeColor = UIColor(white: 1.0, alpha: 0.5 * baseAlpha)
+                }
+                
+                context.setStrokeColor(strokeColor.cgColor)
+                ellipseRect = CGRect(origin: CGPoint(), size: size).insetBy(dx: inset, dy: inset)
+                context.addEllipse(in: ellipseRect)
+                context.clip()
+                
+                ellipseRect = CGRect(origin: CGPoint(), size: size).insetBy(dx: inset, dy: inset).insetBy(dx: lineWidth * 0.5, dy: lineWidth * 0.5)
+                
+                context.setBlendMode(blendMode)
+                
+                let radius = ellipseRect.height * 0.5
+                let smallerRadius = radius - lineWidth * 1.33
+                context.move(to: CGPoint(x: ellipseRect.minX, y: ellipseRect.minY + radius))
+                // Top-left corner (regular radius)
+                context.addArc(tangent1End: CGPoint(x: ellipseRect.minX, y: ellipseRect.minY), tangent2End: CGPoint(x: ellipseRect.minX + radius, y: ellipseRect.minY), radius: radius)
+                context.addLine(to: CGPoint(x: ellipseRect.maxX - smallerRadius, y: ellipseRect.minY))
+                // Top-right corner (smaller radius)
+                context.addArc(tangent1End: CGPoint(x: ellipseRect.maxX, y: ellipseRect.minY), tangent2End: CGPoint(x: ellipseRect.maxX, y: ellipseRect.minY + smallerRadius), radius: smallerRadius)
+                context.addLine(to: CGPoint(x: ellipseRect.maxX, y: ellipseRect.maxY - radius))
+                // Bottom-right corner (regular radius)
+                context.addArc(tangent1End: CGPoint(x: ellipseRect.maxX, y: ellipseRect.maxY), tangent2End: CGPoint(x: ellipseRect.maxX - radius, y: ellipseRect.maxY), radius: radius)
+                context.addLine(to: CGPoint(x: ellipseRect.minX + smallerRadius, y: ellipseRect.maxY))
+                // Bottom-left corner (smaller radius)
+                context.addArc(tangent1End: CGPoint(x: ellipseRect.minX, y: ellipseRect.maxY), tangent2End: CGPoint(x: ellipseRect.minX, y: ellipseRect.maxY - smallerRadius), radius: smallerRadius)
+                context.closePath()
+                context.strokePath()
+                
+                context.resetClip()
+                context.setBlendMode(.normal)
+                
+                //let image = makeInnerShadowPillImageExact(size: CGSize(width: size.width - inset * 2.0, height: size.height - inset * 2.0), scale: UIScreenScale, glossColor: UIColor(white: 1.0, alpha: 1.0), borderWidth: 1.33)
+                /*let image = generateCircleImage(diameter: size.width - inset * 2.0, lineWidth: 0.5, color: UIColor(white: 1.0, alpha: 1.0))!
+                
+                if s == 0.0 && abs(a - 0.7) < 0.1 && !isDark {
+                    image.draw(in: CGRect(origin: CGPoint(), size: size).insetBy(dx: inset, dy: inset), blendMode: .normal, alpha: 1.0)
+                } else if s <= 0.3 && !isDark {
+                    image.draw(in: CGRect(origin: CGPoint(), size: size).insetBy(dx: inset, dy: inset), blendMode: .normal, alpha: 0.7)
+                } else if b >= 0.2 {
+                    let maxAlpha: CGFloat = isDark ? 0.7 : 0.8
+                    image.draw(in: CGRect(origin: CGPoint(), size: size).insetBy(dx: inset, dy: inset), blendMode: .overlay, alpha: max(0.5, min(1.0, maxAlpha * s)))
+                } else {
+                    image.draw(in: CGRect(origin: CGPoint(), size: size).insetBy(dx: inset, dy: inset), blendMode: .normal, alpha: 0.5)
+                }*/
+            }
             innerImage.draw(in: CGRect(origin: CGPoint(), size: size))
         }.stretchableImage(withLeftCapWidth: Int(size.width * 0.5), topCapHeight: Int(size.height * 0.5))
     }
