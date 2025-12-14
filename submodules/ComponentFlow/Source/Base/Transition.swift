@@ -1412,4 +1412,23 @@ public struct ComponentTransition {
             })
         }
     }
+    
+    public func animateMeshTransform(layer: CALayer, from fromValue: NSObject, to toValue: NSObject, delay: Double = 0.0, removeOnCompletion: Bool = true, completion: ((Bool) -> Void)? = nil) {
+        switch self.animation {
+        case .none:
+            completion?(true)
+        case let .curve(duration, curve):
+            layer.animate(
+                from: fromValue,
+                to: toValue,
+                keyPath: "meshTransform",
+                duration: duration,
+                delay: delay,
+                curve: curve,
+                removeOnCompletion: removeOnCompletion,
+                additive: false,
+                completion: completion
+            )
+        }
+    }
 }
