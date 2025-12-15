@@ -6246,6 +6246,21 @@ public extension Api.functions.messages {
                 }
 }
 public extension Api.functions.messages {
+                static func getEmojiGameInfo() -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.messages.EmojiGameInfo>) {
+                    let buffer = Buffer()
+                    buffer.appendInt32(-75592537)
+                    
+                    return (FunctionDescription(name: "messages.getEmojiGameInfo", parameters: []), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.messages.EmojiGameInfo? in
+                        let reader = BufferReader(buffer)
+                        var result: Api.messages.EmojiGameInfo?
+                        if let signature = reader.readInt32() {
+                            result = Api.parse(reader, signature: signature) as? Api.messages.EmojiGameInfo
+                        }
+                        return result
+                    })
+                }
+}
+public extension Api.functions.messages {
                 static func getEmojiGroups(hash: Int32) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.messages.EmojiGroups>) {
                     let buffer = Buffer()
                     buffer.appendInt32(1955122779)

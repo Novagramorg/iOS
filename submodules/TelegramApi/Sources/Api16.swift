@@ -709,7 +709,7 @@ public extension Api {
 public extension Api {
     indirect enum MessageMedia: TypeConstructorDescription {
         case messageMediaContact(phoneNumber: String, firstName: String, lastName: String, vcard: String, userId: Int64)
-        case messageMediaDice(value: Int32, emoticon: String)
+        case messageMediaDice(flags: Int32, value: Int32, emoticon: String, gameOutcome: Api.messages.EmojiGameOutcome?)
         case messageMediaDocument(flags: Int32, document: Api.Document?, altDocuments: [Api.Document]?, videoCover: Api.Photo?, videoTimestamp: Int32?, ttlSeconds: Int32?)
         case messageMediaEmpty
         case messageMediaGame(game: Api.Game)
@@ -740,12 +740,14 @@ public extension Api {
                     serializeString(vcard, buffer: buffer, boxed: false)
                     serializeInt64(userId, buffer: buffer, boxed: false)
                     break
-                case .messageMediaDice(let value, let emoticon):
+                case .messageMediaDice(let flags, let value, let emoticon, let gameOutcome):
                     if boxed {
-                        buffer.appendInt32(1065280907)
+                        buffer.appendInt32(147581959)
                     }
+                    serializeInt32(flags, buffer: buffer, boxed: false)
                     serializeInt32(value, buffer: buffer, boxed: false)
                     serializeString(emoticon, buffer: buffer, boxed: false)
+                    if Int(flags) & Int(1 << 0) != 0 {gameOutcome!.serialize(buffer, true)}
                     break
                 case .messageMediaDocument(let flags, let document, let altDocuments, let videoCover, let videoTimestamp, let ttlSeconds):
                     if boxed {
@@ -930,8 +932,8 @@ public extension Api {
         switch self {
                 case .messageMediaContact(let phoneNumber, let firstName, let lastName, let vcard, let userId):
                 return ("messageMediaContact", [("phoneNumber", phoneNumber as Any), ("firstName", firstName as Any), ("lastName", lastName as Any), ("vcard", vcard as Any), ("userId", userId as Any)])
-                case .messageMediaDice(let value, let emoticon):
-                return ("messageMediaDice", [("value", value as Any), ("emoticon", emoticon as Any)])
+                case .messageMediaDice(let flags, let value, let emoticon, let gameOutcome):
+                return ("messageMediaDice", [("flags", flags as Any), ("value", value as Any), ("emoticon", emoticon as Any), ("gameOutcome", gameOutcome as Any)])
                 case .messageMediaDocument(let flags, let document, let altDocuments, let videoCover, let videoTimestamp, let ttlSeconds):
                 return ("messageMediaDocument", [("flags", flags as Any), ("document", document as Any), ("altDocuments", altDocuments as Any), ("videoCover", videoCover as Any), ("videoTimestamp", videoTimestamp as Any), ("ttlSeconds", ttlSeconds as Any)])
                 case .messageMediaEmpty:
@@ -995,12 +997,20 @@ public extension Api {
         public static func parse_messageMediaDice(_ reader: BufferReader) -> MessageMedia? {
             var _1: Int32?
             _1 = reader.readInt32()
-            var _2: String?
-            _2 = parseString(reader)
+            var _2: Int32?
+            _2 = reader.readInt32()
+            var _3: String?
+            _3 = parseString(reader)
+            var _4: Api.messages.EmojiGameOutcome?
+            if Int(_1!) & Int(1 << 0) != 0 {if let signature = reader.readInt32() {
+                _4 = Api.parse(reader, signature: signature) as? Api.messages.EmojiGameOutcome
+            } }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if _c1 && _c2 {
-                return Api.MessageMedia.messageMediaDice(value: _1!, emoticon: _2!)
+            let _c3 = _3 != nil
+            let _c4 = (Int(_1!) & Int(1 << 0) == 0) || _4 != nil
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.MessageMedia.messageMediaDice(flags: _1!, value: _2!, emoticon: _3!, gameOutcome: _4)
             }
             else {
                 return nil
