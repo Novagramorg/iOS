@@ -1247,6 +1247,7 @@ public extension Api {
         case updateDraftMessage(flags: Int32, peer: Api.Peer, topMsgId: Int32?, savedPeerId: Api.Peer?, draft: Api.DraftMessage)
         case updateEditChannelMessage(message: Api.Message, pts: Int32, ptsCount: Int32)
         case updateEditMessage(message: Api.Message, pts: Int32, ptsCount: Int32)
+        case updateEmojiGameInfo(info: Api.messages.EmojiGameInfo)
         case updateEncryptedChatTyping(chatId: Int32)
         case updateEncryptedMessagesRead(chatId: Int32, maxDate: Int32, date: Int32)
         case updateEncryption(chat: Api.EncryptedChat, date: Int32)
@@ -1886,6 +1887,12 @@ public extension Api {
                     message.serialize(buffer, true)
                     serializeInt32(pts, buffer: buffer, boxed: false)
                     serializeInt32(ptsCount, buffer: buffer, boxed: false)
+                    break
+                case .updateEmojiGameInfo(let info):
+                    if boxed {
+                        buffer.appendInt32(-73640838)
+                    }
+                    info.serialize(buffer, true)
                     break
                 case .updateEncryptedChatTyping(let chatId):
                     if boxed {
@@ -2774,6 +2781,8 @@ public extension Api {
                 return ("updateEditChannelMessage", [("message", message as Any), ("pts", pts as Any), ("ptsCount", ptsCount as Any)])
                 case .updateEditMessage(let message, let pts, let ptsCount):
                 return ("updateEditMessage", [("message", message as Any), ("pts", pts as Any), ("ptsCount", ptsCount as Any)])
+                case .updateEmojiGameInfo(let info):
+                return ("updateEmojiGameInfo", [("info", info as Any)])
                 case .updateEncryptedChatTyping(let chatId):
                 return ("updateEncryptedChatTyping", [("chatId", chatId as Any)])
                 case .updateEncryptedMessagesRead(let chatId, let maxDate, let date):
@@ -4121,6 +4130,19 @@ public extension Api {
             let _c3 = _3 != nil
             if _c1 && _c2 && _c3 {
                 return Api.Update.updateEditMessage(message: _1!, pts: _2!, ptsCount: _3!)
+            }
+            else {
+                return nil
+            }
+        }
+        public static func parse_updateEmojiGameInfo(_ reader: BufferReader) -> Update? {
+            var _1: Api.messages.EmojiGameInfo?
+            if let signature = reader.readInt32() {
+                _1 = Api.parse(reader, signature: signature) as? Api.messages.EmojiGameInfo
+            }
+            let _c1 = _1 != nil
+            if _c1 {
+                return Api.Update.updateEmojiGameInfo(info: _1!)
             }
             else {
                 return nil
