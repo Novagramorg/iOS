@@ -55,17 +55,17 @@ final class UserAppearanceScreenComponent: Component {
     }
     
     let context: AccountContext
+    let overNavigationContainer: UIView
 
     init(
-        context: AccountContext
+        context: AccountContext,
+        overNavigationContainer: UIView
     ) {
         self.context = context
+        self.overNavigationContainer = overNavigationContainer
     }
 
     static func ==(lhs: UserAppearanceScreenComponent, rhs: UserAppearanceScreenComponent) -> Bool {
-        if lhs.context !== rhs.context {
-            return false
-        }
         return true
     }
     
@@ -166,8 +166,6 @@ final class UserAppearanceScreenComponent: Component {
         private let actionButton = ComponentView<Empty>()
         private let edgeEffectView: EdgeEffectView
         
-        private let backButton = PeerInfoHeaderNavigationButton()
-        
         private let tabSelector = ComponentView<Empty>()
         enum Section: Int32 {
             case profile
@@ -263,12 +261,6 @@ final class UserAppearanceScreenComponent: Component {
             self.containerView.addSubview(self.previewShadowView)
             
             self.addSubview(self.edgeEffectView)
-                        
-            self.backButton.action = { [weak self] _, _ in
-                if let self, let controller = self.environment?.controller() as? UserAppearanceScreen {
-                    controller.backPressed()
-                }
-            }
         }
         
         required init?(coder: NSCoder) {
@@ -963,6 +955,8 @@ final class UserAppearanceScreenComponent: Component {
             self.component = component
             self.state = state
             
+            transition.setFrame(view: component.overNavigationContainer, frame: CGRect(origin: CGPoint(), size: CGSize(width: availableSize.width, height: environment.navigationHeight)))
+            
             let theme = environment.theme
             
             var animateTabChange = false
@@ -1072,16 +1066,6 @@ final class UserAppearanceScreenComponent: Component {
                     .withUpdatedProfileBackgroundEmojiId(resolvedState.backgroundFileId)
                 )
             }
-                                                
-            let backSize = self.backButton.update(key: .back, presentationData: component.context.sharedContext.currentPresentationData.with { $0 }, height: 44.0)
-
-            self.backButton.updateContentsColor(backgroundColor: .clear, contentsColor: environment.theme.rootController.navigationBar.accentTextColor, canBeExpanded: true, transition: .animated(duration: 0.2, curve: .easeInOut))
-            self.backButton.frame = CGRect(origin: CGPoint(x: environment.safeInsets.left + 16.0, y: environment.navigationHeight - 44.0), size: backSize)
-            if self.backButton.view.superview == nil {
-                if let controller = self.environment?.controller(), let navigationBar = controller.navigationBar {
-                    navigationBar.view.addSubview(self.backButton.view)
-                }
-            }
             
             var previewTransition = transition
             let transitionScale = (availableSize.height - 3.0) / availableSize.height
@@ -1148,10 +1132,10 @@ final class UserAppearanceScreenComponent: Component {
                 environment: {},
                 containerSize: CGSize(width: availableSize.width, height: 44.0)
             )
-            let tabSelectorFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((availableSize.width - tabSelectorSize.width) / 2.0), y: environment.statusBarHeight + floorToScreenPixels((environment.navigationHeight - environment.statusBarHeight - tabSelectorSize.height) / 2.0)), size: tabSelectorSize)
+            let tabSelectorFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((availableSize.width - tabSelectorSize.width) / 2.0), y: environment.statusBarHeight + 2.0 + floorToScreenPixels((environment.navigationHeight - environment.statusBarHeight - tabSelectorSize.height) / 2.0)), size: tabSelectorSize)
             if let tabSelectorView = self.tabSelector.view {
                 if tabSelectorView.superview == nil {
-                    self.addSubview(tabSelectorView)
+                    component.overNavigationContainer.addSubview(tabSelectorView)
                 }
                 transition.setFrame(view: tabSelectorView, frame: tabSelectorFrame)
             }
@@ -1932,6 +1916,8 @@ final class UserAppearanceScreenComponent: Component {
 public class UserAppearanceScreen: ViewControllerComponentContainer {
     private let context: AccountContext
     
+    private let overNavigationContainer: UIView
+    
     private var didSetReady: Bool = false
     
     public init(
@@ -1940,8 +1926,11 @@ public class UserAppearanceScreen: ViewControllerComponentContainer {
     ) {
         self.context = context
         
+        self.overNavigationContainer = SparseContainerView()
+        
         super.init(context: context, component: UserAppearanceScreenComponent(
-            context: context
+            context: context,
+            overNavigationContainer: self.overNavigationContainer
         ), navigationBarAppearance: .default, theme: .default, updatedPresentationData: updatedPresentationData)
         
         self.automaticallyControlPresentationContextLayout = false
@@ -1951,7 +1940,6 @@ public class UserAppearanceScreen: ViewControllerComponentContainer {
         let presentationData = context.sharedContext.currentPresentationData.with { $0 }
         self.title = ""
         self.navigationItem.backBarButtonItem = UIBarButtonItem(title: presentationData.strings.Common_Back, style: .plain, target: nil, action: nil)
-        self.navigationItem.leftBarButtonItem = UIBarButtonItem(customView: UIView())
         
         self.ready.set(.never())
         
@@ -1968,6 +1956,10 @@ public class UserAppearanceScreen: ViewControllerComponentContainer {
             }
             
             return componentView.attemptNavigation(complete: complete)
+        }
+        
+        if let navigationBar = self.navigationBar {
+            navigationBar.view.insertSubview(self.overNavigationContainer, aboveSubview: navigationBar.backgroundView)
         }
     }
     

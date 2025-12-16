@@ -420,7 +420,7 @@ public final class TabBarComponent: Component {
         
         public override init(frame: CGRect) {
             self.backgroundContainer = GlassBackgroundContainerView()
-            self.liquidLensView = LiquidLensView(useBackgroundContainer: false)
+            self.liquidLensView = LiquidLensView(kind: .externalContainer)
             
             self.contextGestureContainerView = ContextControllerSourceView()
             self.contextGestureContainerView.isGestureEnabled = true

@@ -88,21 +88,37 @@ public final class ChatListTabsComponent: Component {
         }
     }
     
-    public final class View: UIView {
+    private struct LayoutData {
+        var size: CGSize
+        var selectedItemFrame: CGRect
+        
+        init(size: CGSize, selectedItemFrame: CGRect) {
+            self.size = size
+            self.selectedItemFrame = selectedItemFrame
+        }
+    }
+    
+    public final class View: UIView, UIScrollViewDelegate {
+        private let lensView: LiquidLensView
         private let scrollView: ScrollView
         private let selectionView: UIImageView
         private var itemViews: [Tab.Id: ComponentView<Empty>] = [:]
         
+        private var ignoreScrolling: Bool = false
         private var tabSwitchFraction: CGFloat = 0.0
+        private var temporaryLiftTimer: Foundation.Timer?
+        
+        private var layoutData: LayoutData?
         
         private var component: ChatListTabsComponent?
         private weak var state: EmptyComponentState?
         
         override init(frame: CGRect) {
+            self.lensView = LiquidLensView(kind: .noContainer)
             self.scrollView = ScrollView()
             
             self.selectionView = UIImageView()
-            self.scrollView.addSubview(self.selectionView)
+            //self.scrollView.addSubview(self.selectionView)
             
             super.init(frame: frame)
             
@@ -116,11 +132,19 @@ public final class ChatListTabsComponent: Component {
             self.scrollView.alwaysBounceVertical = false
             self.scrollView.scrollsToTop = false
             self.scrollView.clipsToBounds = false
-            self.addSubview(self.scrollView)
+            self.scrollView.delegate = self
+            
+            self.addSubview(self.lensView)
+            
+            self.lensView.contentView.addSubview(self.scrollView)
         }
         
         required public init?(coder: NSCoder) {
             fatalError("init(coder:) has not been implemented")
+        }
+        
+        override public func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+            return self.scrollView.hitTest(self.convert(point, to: self.scrollView), with: event)
         }
         
         public func updateTabSwitchFraction(fraction: CGFloat, transition: ComponentTransition) {
@@ -128,9 +152,38 @@ public final class ChatListTabsComponent: Component {
             self.state?.updated(transition: transition, isLocal: true)
         }
         
+        public func scrollViewDidScroll(_ scrollView: UIScrollView) {
+            if self.ignoreScrolling {
+                return
+            }
+            self.updateScrolling(transition: .immediate)
+        }
+        
+        private func updateScrolling(transition: ComponentTransition) {
+            guard let component = self.component, let layoutData = self.layoutData else {
+                return
+            }
+            self.lensView.update(size: layoutData.size, selectionX: -self.scrollView.contentOffset.x + layoutData.selectedItemFrame.minX, selectionWidth: layoutData.selectedItemFrame.width, isDark: component.theme.overallDarkAppearance, isLifted: self.temporaryLiftTimer != nil, transition: transition)
+        }
+        
         func update(component: ChatListTabsComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
             if self.component?.selectedTab != component.selectedTab {
                 self.tabSwitchFraction = 0.0
+                
+                self.temporaryLiftTimer?.invalidate()
+                self.temporaryLiftTimer = nil
+                
+                if !transition.animation.isImmediate {
+                    self.temporaryLiftTimer = Foundation.Timer.scheduledTimer(withTimeInterval: 0.25, repeats: false, block: { [weak self] timer in
+                        guard let self else {
+                            return
+                        }
+                        if self.temporaryLiftTimer === timer {
+                            self.temporaryLiftTimer = nil
+                            self.state?.updated(transition: .spring(duration: 0.5))
+                        }
+                    })
+                }
             }
             
             self.component = component
@@ -252,11 +305,22 @@ public final class ChatListTabsComponent: Component {
                 self.selectionView.isHidden = true
             }
             
+            self.layoutData = LayoutData(
+                size: size,
+                selectedItemFrame: selectedItemFrame ?? CGRect()
+            )
+            
+            self.ignoreScrolling = true
             let contentSize = CGSize(width: contentWidth, height: size.height)
             transition.setFrame(view: self.scrollView, frame: CGRect(origin: CGPoint(), size: size))
             if self.scrollView.contentSize != contentSize {
                 self.scrollView.contentSize = contentSize
             }
+            
+            transition.setFrame(view: self.lensView, frame: CGRect(origin: CGPoint(), size: size))
+            self.ignoreScrolling = false
+            
+            self.updateScrolling(transition: transition)
             
             return size
         }

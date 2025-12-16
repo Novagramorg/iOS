@@ -10,6 +10,14 @@ private let transformClass: NSObject? = {
     return nil
 }()
 
+private let immutableTransformClass: NSObject? = {
+    let name = ("CA" as NSString).appendingFormat("MeshTransform")
+    if let cls = NSClassFromString(name as String) as AnyObject as? NSObject {
+        return cls
+    }
+    return nil
+}()
+
 @inline(__always)
 private func getMethod<T>(object: NSObject, selector: String) -> T? {
     guard let method = object.method(for: NSSelectorFromString(selector)) else {
@@ -80,33 +88,55 @@ private func invokeTransformSetSubdivisionStepsMethod(object: NSObject, value: I
 }
 
 public final class MeshTransform {
+    public typealias Value = NSObject
+    
     public typealias Point3D = MeshTransformPoint3D
     public typealias Vertex = MeshTransformMeshVertex
     public typealias Face = MeshTransformMeshFace
     
-    public let value: NSObject?
+    private var vertices: ContiguousArray<Vertex> = []
+    private var faces: ContiguousArray<Face> = []
     
     public var subdivisionSteps: Int = -1 {
         didSet {
-            if self.subdivisionSteps != oldValue, let value {
+            /*if self.subdivisionSteps != oldValue, let value {
                 invokeTransformSetSubdivisionStepsMethod(object: value, value: self.subdivisionSteps)
-            }
+            }*/
         }
     }
     
     public init() {
-        self.value = invokeTransformCreateMethod()
     }
     
     public func add(_ vertex: Vertex) {
-        if let value = self.value {
+        /*if let value = self.value {
             invokeTransformAddVertexMethod(object: value, vertex: vertex)
-        }
+        }*/
+        self.vertices.append(vertex)
     }
     
     public func add(_ face: Face) {
-        if let value = self.value {
+        /*if let value = self.value {
             invokeTransformAddFaceMethod(object: value, face: face)
+        }*/
+        self.faces.append(face)
+    }
+    
+    public consuming func makeValue() -> Value? {
+        guard let transformClass else {
+            return nil
         }
+        let value = unsafeBitCast(transformClass, to: MeshTransformClass.self)
+        let result = self.vertices.withUnsafeMutableBufferPointer { vertices -> NSObject? in
+            return self.faces.withUnsafeMutableBufferPointer { faces -> NSObject? in
+                let result = value.meshTransform(withVertexCount: UInt(vertices.count), vertices: vertices.baseAddress!, faceCount: UInt(faces.count), faces: faces.baseAddress!, depthNormalization: kCADepthNormalizationNone)
+                return result as? NSObject
+            }
+        }
+        if let result {
+            invokeTransformSetSubdivisionStepsMethod(object: result, value: self.subdivisionSteps)
+        }
+        
+        return result
     }
 }

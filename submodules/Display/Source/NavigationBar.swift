@@ -145,6 +145,7 @@ public protocol NavigationBar: ASDisplayNode {
     var clippingNode: SparseNode { get }
     
     var backgroundView: UIView { get }
+    var customOverBackgroundContentSubview: UIView? { get set }
     var contentNode: NavigationBarContentNode? { get }
     var secondaryContentNode: ASDisplayNode? { get }
     var secondaryContentNodeDisplayFraction: CGFloat { get set }

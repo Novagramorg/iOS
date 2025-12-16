@@ -64,8 +64,6 @@ public final class HeaderPanelContainerComponent: Component {
         
         override init(frame: CGRect) {
             super.init(frame: frame)
-            
-            self.clipsToBounds = true
         }
         
         required init?(coder: NSCoder) {
@@ -102,7 +100,6 @@ public final class HeaderPanelContainerComponent: Component {
             self.backgroundContainer.contentView.addSubview(self.backgroundView)
             self.addSubview(self.backgroundContainer)
             
-            self.contentContainer.clipsToBounds = true
             self.backgroundView.contentView.addSubview(self.contentContainer)
         }
         
@@ -188,6 +185,7 @@ public final class HeaderPanelContainerComponent: Component {
                         panelView.addSubview(panelComponentView)
                         transition.animateAlpha(view: panelView, from: 0.0, to: 1.0)
                         panelView.separator.opacity = 0.0
+                        panelView.clipsToBounds = true
                         if isAnimatingReplacement {
                             panelView.frame = panelFrame
                         } else {
@@ -197,7 +195,12 @@ public final class HeaderPanelContainerComponent: Component {
                     
                     panelView.separator.backgroundColor = component.theme.list.itemPlainSeparatorColor.cgColor
                     
-                    transition.setFrame(view: panelView, frame: panelFrame)
+                    let isFrameUpdated = panelComponentView.frame != panelFrame
+                    transition.setFrame(view: panelView, frame: panelFrame, completion: { [weak panelView] completed in
+                        if let panelView, completed, isFrameUpdated {
+                            panelView.clipsToBounds = false
+                        }
+                    })
                     panelTransition.setFrame(view: panelComponentView, frame: CGRect(origin: CGPoint(), size: panelFrame.size))
                     panelTransition.setFrame(layer: panelView.separator, frame: CGRect(origin: panelFrame.origin, size: CGSize(width: panelFrame.width, height: UIScreenPixel)))
                     
@@ -219,6 +222,7 @@ public final class HeaderPanelContainerComponent: Component {
                         separator?.removeFromSuperlayer()
                     })
                     if !isAnimatingReplacement {
+                        panelView.clipsToBounds = true
                         transition.setFrame(view: panelView, frame: CGRect(origin: panelView.frame.origin, size: CGSize(width: panelView.bounds.width, height: 0.0)))
                     }
                 }

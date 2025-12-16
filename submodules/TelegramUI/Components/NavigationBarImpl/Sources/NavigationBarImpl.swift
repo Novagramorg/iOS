@@ -548,6 +548,8 @@ public final class NavigationBarImpl: ASDisplayNode, NavigationBar {
         }
     }
     
+    public var customOverBackgroundContentSubview: UIView?
+    
     public init(presentationData: NavigationBarPresentationData) {
         self.presentationData = presentationData
         self.stripeNode = ASDisplayNode()
