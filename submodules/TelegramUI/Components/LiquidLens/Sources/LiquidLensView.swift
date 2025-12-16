@@ -58,6 +58,12 @@ private final class RestingBackgroundView: UIVisualEffectView {
 }
 
 public final class LiquidLensView: UIView {
+    public enum Kind {
+        case externalContainer
+        case builtinContainer
+        case noContainer
+    }
+    
     private struct Params: Equatable {
         var size: CGSize
         var selectionX: CGFloat
@@ -89,7 +95,7 @@ public final class LiquidLensView: UIView {
     private let containerView: UIView
     private let backgroundContainer: GlassBackgroundContainerView?
     private let genericBackgroundContainer: UIView?
-    private let backgroundView: GlassBackgroundView
+    private let backgroundView: GlassBackgroundView?
     private var lensView: UIView?
     private let liftedContainerView: UIView
     public let contentView: UIView
@@ -119,18 +125,23 @@ public final class LiquidLensView: UIView {
         return self.params?.selectionWidth
     }
 
-    public init(useBackgroundContainer: Bool = true) {
+    public init(kind: Kind) {
         self.containerView = UIView()
         
-        if useBackgroundContainer {
+        switch kind {
+        case .builtinContainer:
             self.backgroundContainer = GlassBackgroundContainerView()
             self.genericBackgroundContainer = nil
-        } else {
+        case .externalContainer, .noContainer:
             self.backgroundContainer = nil
             self.genericBackgroundContainer = UIView()
         }
         
-        self.backgroundView = GlassBackgroundView()
+        if case .noContainer = kind {
+            self.backgroundView = nil
+        } else {
+            self.backgroundView = GlassBackgroundView()
+        }
         
         self.contentView = UIView()
         self.liftedContainerView = UIView()
@@ -141,13 +152,19 @@ public final class LiquidLensView: UIView {
         
         if let backgroundContainer = self.backgroundContainer {
             self.addSubview(backgroundContainer)
-            backgroundContainer.contentView.addSubview(self.backgroundView)
+            if let backgroundView = self.backgroundView {
+                backgroundContainer.contentView.addSubview(backgroundView)
+                backgroundView.contentView.addSubview(self.containerView)
+            }
         } else if let genericBackgroundContainer = self.genericBackgroundContainer {
             self.addSubview(genericBackgroundContainer)
-            genericBackgroundContainer.addSubview(self.backgroundView)
+            if let backgroundView = self.backgroundView {
+                genericBackgroundContainer.addSubview(backgroundView)
+                backgroundView.contentView.addSubview(self.containerView)
+            } else {
+                genericBackgroundContainer.addSubview(self.containerView)
+            }
         }
-        
-        self.backgroundView.contentView.addSubview(self.containerView)
         self.containerView.isUserInteractionEnabled = false
         
         if #available(iOS 26.0, *) {
@@ -168,7 +185,10 @@ public final class LiquidLensView: UIView {
             }
             lensView.layer.zPosition = 10.0
             
-            self.liftedContainerView.addSubview(self.restingBackgroundView)
+            if case .noContainer = kind {
+            } else {
+                self.liftedContainerView.addSubview(self.restingBackgroundView)
+            }
             
             self.containerView.addSubview(self.liftedContainerView)
             self.containerView.addSubview(lensView)
@@ -179,8 +199,11 @@ public final class LiquidLensView: UIView {
             } else if let genericBackgroundContainer = self.genericBackgroundContainer {
                 lensView.perform(NSSelectorFromString("setLiftedContainerView:"), with: genericBackgroundContainer)
             }
-            lensView.perform(NSSelectorFromString("setLiftedContentView:"), with: self.liftedContainerView)
-            lensView.perform(NSSelectorFromString("setOverridePunchoutView:"), with: self.contentView)
+            if case .noContainer = kind {
+            } else {
+                lensView.perform(NSSelectorFromString("setLiftedContentView:"), with: self.liftedContainerView)
+                lensView.perform(NSSelectorFromString("setOverridePunchoutView:"), with: self.contentView)
+            }
             
             do {
                 let selector = NSSelectorFromString("setLiftedContentMode:")
@@ -211,9 +234,16 @@ public final class LiquidLensView: UIView {
             
             lensView.setValue(UIColor(white: 0.0, alpha: 0.1), forKey: "restingBackgroundColor")
         } else {
-            let legacySelectionView = GlassBackgroundView.ContentImageView()
-            self.legacySelectionView = legacySelectionView
-            self.backgroundView.contentView.insertSubview(legacySelectionView, at: 0)
+            if case .noContainer = kind {
+            } else {
+                let legacySelectionView = GlassBackgroundView.ContentImageView()
+                self.legacySelectionView = legacySelectionView
+                if let backgroundView = self.backgroundView {
+                    backgroundView.contentView.insertSubview(legacySelectionView, at: 0)
+                } else {
+                    self.containerView.insertSubview(legacySelectionView, at: 0)
+                }
+            }
             
             let legacyContentMaskView = UIView()
             legacyContentMaskView.backgroundColor = .white
@@ -346,8 +376,10 @@ public final class LiquidLensView: UIView {
             transition.setFrame(view: genericBackgroundContainer, frame: CGRect(origin: CGPoint(), size: params.size))
         }
         
-        transition.setFrame(view: self.backgroundView, frame: CGRect(origin: CGPoint(), size: params.size))
-        self.backgroundView.update(size: params.size, cornerRadius: params.size.height * 0.5, isDark: params.isDark, tintColor: GlassBackgroundView.TintColor.init(kind: .panel, color: UIColor(white: params.isDark ? 0.0 : 1.0, alpha: 0.6)), isInteractive: true, transition: transition)
+        if let backgroundView = self.backgroundView {
+            transition.setFrame(view: backgroundView, frame: CGRect(origin: CGPoint(), size: params.size))
+            backgroundView.update(size: params.size, cornerRadius: params.size.height * 0.5, isDark: params.isDark, tintColor: GlassBackgroundView.TintColor.init(kind: .panel, color: UIColor(white: params.isDark ? 0.0 : 1.0, alpha: 0.6)), isInteractive: true, transition: transition)
+        }
         
         if self.contentView.bounds.size != params.size {
             self.contentView.clipsToBounds = true
@@ -369,7 +401,7 @@ public final class LiquidLensView: UIView {
             transition.setCornerRadius(layer: self.liftedContainerView.layer, cornerRadius: params.size.height * 0.5)
         }
 
-        let baseLensFrame = CGRect(origin: CGPoint(x: max(0.0, min(params.selectionX, params.size.width - params.selectionWidth)), y: 0.0), size: CGSize(width: params.selectionWidth, height: params.size.height))
+        let baseLensFrame = CGRect(origin: CGPoint(x: params.selectionX, y: 0.0), size: CGSize(width: params.selectionWidth, height: params.size.height))
         self.updateLens(params: LensParams(baseFrame: baseLensFrame, isLifted: params.isLifted), animated: !transition.animation.isImmediate)
         
         if let legacyContentMaskView = self.legacyContentMaskView {
