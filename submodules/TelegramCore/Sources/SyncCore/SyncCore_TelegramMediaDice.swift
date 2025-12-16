@@ -4,7 +4,7 @@ import Postbox
 public final class TelegramMediaDice: Media, Equatable {
     public struct GameOutcome: Equatable {
         let seed: Data
-        let tonAmount: Int64
+        public let tonAmount: Int64
     }
     
     public let emoji: String

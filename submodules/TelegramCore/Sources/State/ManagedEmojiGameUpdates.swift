@@ -11,11 +11,11 @@ public enum EmojiGameInfo: Codable, Equatable {
     }
     
     public struct Info: Codable, Equatable {
-        let gameHash: String
-        let previousStake: Int64
-        let currentStreak: Int32
-        let parameters: [Int32]
-        let playsLeft: Int32?
+        public let gameHash: String
+        public let previousStake: Int64
+        public let currentStreak: Int32
+        public let parameters: [Int32]
+        public let playsLeft: Int32?
     }
     
     case available(Info)
