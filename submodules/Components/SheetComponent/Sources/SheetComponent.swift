@@ -38,7 +38,6 @@ public final class SheetComponentEnvironment: Equatable {
     }
 }
 
-public let sheetComponentTag = GenericComponentViewTag()
 public final class SheetComponent<ChildEnvironmentType: Sendable & Equatable>: Component {
     public typealias EnvironmentType = (ChildEnvironmentType, SheetComponentEnvironment)
     
