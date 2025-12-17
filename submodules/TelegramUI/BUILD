@@ -509,6 +509,7 @@ swift_library(
         "//submodules/TelegramUI/Components/Settings/PasskeysScreen",
         "//submodules/TelegramUI/Components/Gifts/GiftDemoScreen",
         "//submodules/TelegramUI/Components/EmojiGameStakeScreen",
+        "//submodules/TelegramUI/Components/AlertComponent",
     ] + select({
         "@build_bazel_rules_apple//apple:ios_arm64": appcenter_targets,
         "//build-system:ios_sim_arm64": [],

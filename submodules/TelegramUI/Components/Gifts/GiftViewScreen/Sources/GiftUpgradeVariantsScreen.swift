@@ -24,24 +24,30 @@ import SegmentControlComponent
 import GiftAnimationComponent
 import GlassBackgroundComponent
 
-private final class GiftUpgradePreviewScreenComponent: Component {
+private final class GiftUpgradeVariantsScreenComponent: Component {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
     
     let context: AccountContext
     let gift: StarGift
     let attributes: [StarGift.UniqueGift.Attribute]
+    let selectedAttributes: [StarGift.UniqueGift.Attribute]?
+    let focusedAttribute: StarGift.UniqueGift.Attribute?
     
     init(
         context: AccountContext,
         gift: StarGift,
-        attributes: [StarGift.UniqueGift.Attribute]
+        attributes: [StarGift.UniqueGift.Attribute],
+        selectedAttributes: [StarGift.UniqueGift.Attribute]?,
+        focusedAttribute: StarGift.UniqueGift.Attribute?
     ) {
         self.context = context
         self.gift = gift
         self.attributes = attributes
+        self.selectedAttributes = selectedAttributes
+        self.focusedAttribute = focusedAttribute
     }
     
-    static func ==(lhs: GiftUpgradePreviewScreenComponent, rhs: GiftUpgradePreviewScreenComponent) -> Bool {
+    static func ==(lhs: GiftUpgradeVariantsScreenComponent, rhs: GiftUpgradeVariantsScreenComponent) -> Bool {
         return true
     }
     
@@ -127,7 +133,7 @@ private final class GiftUpgradePreviewScreenComponent: Component {
         
         private var ignoreScrolling: Bool = false
                 
-        private var component: GiftUpgradePreviewScreenComponent?
+        private var component: GiftUpgradeVariantsScreenComponent?
         private weak var state: EmptyComponentState?
         private var isUpdating: Bool = false
         private var environment: ViewControllerComponentContainer.Environment?
@@ -426,7 +432,11 @@ private final class GiftUpgradePreviewScreenComponent: Component {
                             rarity = rarityValue
                             modelAttribute = attribute
                             
-                            isSelected = self.selectedModel == attribute
+                            if case let .model(_, selectedFile, _) = self.selectedModel {
+                                isSelected = file.fileId == selectedFile.fileId
+                            } else {
+                                isSelected = false
+                            }
                         }
                     case let .backdrop(name, id, _, _, _, _, rarityValue):
                         itemId += "\(id)"
@@ -435,7 +445,11 @@ private final class GiftUpgradePreviewScreenComponent: Component {
                             rarity = rarityValue
                             backdropAttribute = attribute
                             
-                            isSelected = self.selectedBackdrop == attribute
+                            if case let .backdrop(_, selectedId, _, _, _, _, _) = self.selectedBackdrop {
+                                isSelected = id == selectedId
+                            } else {
+                                isSelected = false
+                            }
                         }
                     case let .pattern(name, file, rarityValue):
                         itemId += "\(file.fileId.id)"
@@ -444,7 +458,11 @@ private final class GiftUpgradePreviewScreenComponent: Component {
                             rarity = rarityValue
                             symbolAttribute = attribute
                             
-                            isSelected = self.selectedSymbol == attribute
+                            if case let .pattern(_, selectedFile, _) = self.selectedSymbol {
+                                isSelected = file.fileId == selectedFile.fileId
+                            } else {
+                                isSelected = false
+                            }
                         }
                     default:
                         break
@@ -557,7 +575,7 @@ private final class GiftUpgradePreviewScreenComponent: Component {
             }
         }
       
-        func update(component: GiftUpgradePreviewScreenComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<ViewControllerComponentContainer.Environment>, transition: ComponentTransition) -> CGSize {
+        func update(component: GiftUpgradeVariantsScreenComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<ViewControllerComponentContainer.Environment>, transition: ComponentTransition) -> CGSize {
             self.isUpdating = true
             defer {
                 self.isUpdating = false
@@ -625,6 +643,34 @@ private final class GiftUpgradePreviewScreenComponent: Component {
                     }
                 }).shuffled().prefix(15))
                 self.previewSymbols = randomSymbols
+                
+                if let selectedAttributes = component.selectedAttributes {
+                    self.isPlaying = false
+                    for attribute in selectedAttributes {
+                        switch attribute {
+                        case .model:
+                            self.selectedModel = attribute
+                        case .pattern:
+                            self.selectedSymbol = attribute
+                        case .backdrop:
+                            self.selectedBackdrop = attribute
+                        default:
+                            break
+                        }
+                    }
+                }
+                if let focusedAttribute = component.focusedAttribute {
+                    switch focusedAttribute {
+                    case .model:
+                        self.selectedSection = .models
+                    case .pattern:
+                        self.selectedSection = .symbols
+                    case .backdrop:
+                        self.selectedSection = .backdrops
+                    default:
+                        break
+                    }
+                }
                 
                 self.updateEffectiveGifts(attributes: component.attributes)
             }
@@ -826,6 +872,16 @@ private final class GiftUpgradePreviewScreenComponent: Component {
             
             contentHeight += 16.0
             
+            let selectedId: AnyHashable
+            switch self.selectedSection {
+            case .models:
+                selectedId = AnyHashable(SelectedSection.models)
+            case .backdrops:
+                selectedId = AnyHashable(SelectedSection.backdrops)
+            case .symbols:
+                selectedId = AnyHashable(SelectedSection.symbols)
+            }
+            
             let segmentedSize = self.segmentControl.update(
                 transition: transition,
                 component: AnyComponent(SegmentControlComponent(
@@ -835,7 +891,7 @@ private final class GiftUpgradePreviewScreenComponent: Component {
                         SegmentControlComponent.Item(id: AnyHashable(SelectedSection.backdrops), title: environment.strings.Gift_Variants_Backdrops),
                         SegmentControlComponent.Item(id: AnyHashable(SelectedSection.symbols), title: environment.strings.Gift_Variants_Symbols)
                     ],
-                    selectedId: "models",
+                    selectedId: selectedId,
                     action: { [weak self] id in
                         guard let self, let component = self.component, let id = id.base as? SelectedSection else {
                             return
@@ -1074,7 +1130,7 @@ private final class GiftUpgradePreviewScreenComponent: Component {
     }
 }
 
-public class GiftUpgradePreviewScreen: ViewControllerComponentContainer {
+public class GiftUpgradeVariantsScreen: ViewControllerComponentContainer {
     private let context: AccountContext
     
     private var didPlayAppearAnimation: Bool = false
@@ -1083,14 +1139,18 @@ public class GiftUpgradePreviewScreen: ViewControllerComponentContainer {
     public init(
         context: AccountContext,
         gift: StarGift,
-        attributes: [StarGift.UniqueGift.Attribute]
+        attributes: [StarGift.UniqueGift.Attribute],
+        selectedAttributes: [StarGift.UniqueGift.Attribute]?,
+        focusedAttribute: StarGift.UniqueGift.Attribute?
     ) {
         self.context = context
         
-        super.init(context: context, component: GiftUpgradePreviewScreenComponent(
+        super.init(context: context, component: GiftUpgradeVariantsScreenComponent(
             context: context,
             gift: gift,
-            attributes: attributes
+            attributes: attributes,
+            selectedAttributes: selectedAttributes,
+            focusedAttribute: focusedAttribute
         ), navigationBarAppearance: .none, theme: .default)
         
         self.statusBar.statusBarStyle = .Ignore
@@ -1114,7 +1174,7 @@ public class GiftUpgradePreviewScreen: ViewControllerComponentContainer {
         if !self.didPlayAppearAnimation {
             self.didPlayAppearAnimation = true
             
-            if let componentView = self.node.hostView.componentView as? GiftUpgradePreviewScreenComponent.View {
+            if let componentView = self.node.hostView.componentView as? GiftUpgradeVariantsScreenComponent.View {
                 componentView.animateIn()
             }
         }
@@ -1124,7 +1184,7 @@ public class GiftUpgradePreviewScreen: ViewControllerComponentContainer {
         if !self.isDismissed {
             self.isDismissed = true
             
-            if let componentView = self.node.hostView.componentView as? GiftUpgradePreviewScreenComponent.View {
+            if let componentView = self.node.hostView.componentView as? GiftUpgradeVariantsScreenComponent.View {
                 componentView.animateOut(completion: { [weak self] in
                     completion?()
                     self?.dismiss(animated: false)

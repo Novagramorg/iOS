@@ -54,6 +54,7 @@ import ChatSendStarsScreen
 import AnimatedTextComponent
 import ChatSendAsContextMenu
 import ShareWithPeersScreen
+import AlertComponent
 
 private var ObjCKey_DeinitWatcher: Int?
 
@@ -636,17 +637,16 @@ final class StoryItemSetContainerSendMessage: @unchecked(Sendable) {
                 let theme = component.theme
                 let updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>) = (component.context.sharedContext.currentPresentationData.with({ $0 }).withUpdated(theme: theme), component.context.sharedContext.presentationData |> map { $0.withUpdated(theme: theme) })
                 
-                let alertController = textAlertController(
-                    context: component.context,
-                    updatedPresentationData: updatedPresentationData,
+                let alertController = AlertScreen(
                     title: component.strings.Story_AlertStealthModeActiveTitle,
                     text: component.strings.Story_AlertStealthModeActiveText,
                     actions: [
-                        TextAlertAction(type: .defaultAction, title: component.strings.Common_Cancel, action: {}),
-                        TextAlertAction(type: .genericAction, title: component.strings.Story_AlertStealthModeActiveAction, action: {
+                        .init(title: component.strings.Common_Cancel, type: .default),
+                        .init(title: component.strings.Story_AlertStealthModeActiveAction, type: .generic, action: {
                             action()
                         })
-                    ]
+                    ],
+                    updatedPresentationData: updatedPresentationData
                 )
                 alertController.dismissed = { [weak self, weak view] _ in
                     guard let self, let view else {

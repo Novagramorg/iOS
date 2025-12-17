@@ -16,6 +16,7 @@ import AccountUtils
 import PremiumUI
 import PasswordSetupUI
 import StorageUsageScreen
+import AlertComponent
 
 private struct DeleteAccountOptionsArguments {
     let changePhoneNumber: () -> Void
@@ -362,32 +363,36 @@ public func deleteAccountOptionsController(context: AccountContext, navigationCo
                 }, dismissInput: {}, contentContext: nil, progress: nil, completion: nil)
             })
         }
-
-        let alertController = textAlertController(context: context, title: nil, text: presentationData.strings.Settings_FAQ_Intro, actions: [
-            TextAlertAction(type: .genericAction, title: presentationData.strings.Settings_FAQ_Button, action: {
-                openFaq(resolvedUrlPromise)
-                dismissImpl?()
-            }),
-            TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {
-                supportPeerDisposable.set((supportPeer.get()
-                |> take(1)
-                |> deliverOnMainQueue).start(next: { peerId in
-                    guard let peerId = peerId else {
-                        return
-                    }
-                    let _ = (context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: peerId))
-                    |> deliverOnMainQueue).start(next: { peer in
-                        guard let peer = peer else {
+        let alertController = AlertScreen(
+            context: context,
+            title: nil,
+            text: presentationData.strings.Settings_FAQ_Intro,
+            actions: [
+                .init(title: presentationData.strings.Settings_FAQ_Button, action: {
+                    openFaq(resolvedUrlPromise)
+                    dismissImpl?()
+                }),
+                .init(title: presentationData.strings.Common_OK, type: .default, action: {
+                    supportPeerDisposable.set((supportPeer.get()
+                    |> take(1)
+                    |> deliverOnMainQueue).start(next: { peerId in
+                        guard let peerId else {
                             return
                         }
-                        if let navigationController = navigationController {
-                            dismissImpl?()
-                            context.sharedContext.navigateToChatController(NavigateToChatControllerParams(navigationController: navigationController, context: context, chatLocation: .peer(peer)))
-                        }
-                    })
-                }))
-            })
-        ])
+                        let _ = (context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: peerId))
+                        |> deliverOnMainQueue).start(next: { peer in
+                            guard let peer else {
+                                return
+                            }
+                            if let navigationController = navigationController {
+                                dismissImpl?()
+                                context.sharedContext.navigateToChatController(NavigateToChatControllerParams(navigationController: navigationController, context: context, chatLocation: .peer(peer)))
+                            }
+                        })
+                    }))
+                })
+            ]
+        )
         alertController.dismissed = { _ in
             addAppLogEvent(postbox: context.account.postbox, type: "deactivate.options_support_cancel")
         }

@@ -2424,6 +2424,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                         }
                         let controller = self.context.sharedContext.makeGiftOfferScreen(
                             context: self.context,
+                            updatedPresentationData: self.updatedPresentationData,
                             gift: gift,
                             peer: peer,
                             amount: amount,
