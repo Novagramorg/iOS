@@ -158,10 +158,7 @@ final class EntityKeyboardBottomPanelComponent: Component {
         
         private var tabSelectionRecognizer: TabSelectionRecognizer?
         private var selectionGestureState: (startX: CGFloat, currentX: CGFloat, itemId: AnyHashable)?
-        
-        private var highlightedIconBackgroundView: UIView
-        private var highlightedTintIconBackgroundView: UIView
-        
+                
         let tintContentMask: UIView
         
         private var component: EntityKeyboardBottomPanelComponent?
@@ -183,18 +180,7 @@ final class EntityKeyboardBottomPanelComponent: Component {
             
             self.backgroundContainer = GlassBackgroundContainerView()
             self.liquidLensView = LiquidLensView(useBackgroundContainer: false)
-            
-            self.highlightedIconBackgroundView = UIView()
-            self.highlightedIconBackgroundView.isUserInteractionEnabled = false
-            self.highlightedIconBackgroundView.layer.cornerRadius = 10.0
-            self.highlightedIconBackgroundView.clipsToBounds = true
-            
-            self.highlightedTintIconBackgroundView = UIView()
-            self.highlightedTintIconBackgroundView.isUserInteractionEnabled = false
-            self.highlightedTintIconBackgroundView.layer.cornerRadius = 10.0
-            self.highlightedTintIconBackgroundView.clipsToBounds = true
-            self.highlightedTintIconBackgroundView.backgroundColor = UIColor(white: 0.0, alpha: 0.1)
-                        
+                                    
             super.init(frame: frame)
             
             self.addSubview(self.edgeEffectView)
@@ -272,10 +258,7 @@ final class EntityKeyboardBottomPanelComponent: Component {
                 self.separatorView.backgroundColor = component.theme.list.itemPlainSeparatorColor.withMultipliedAlpha(0.5)
                 
                 self.backgroundView.updateColor(color: component.theme.chat.inputPanel.panelBackgroundColor.withMultipliedAlpha(1.0), transition: .immediate)
-//                self.highlightedIconBackgroundView.backgroundColor = component.theme.chat.inputMediaPanel.panelHighlightedIconBackgroundColor
             }
-            
-            
             
             let intrinsicHeight: CGFloat = 34.0
             let height = intrinsicHeight + component.containerInsets.bottom + 20.0
@@ -442,11 +425,6 @@ final class EntityKeyboardBottomPanelComponent: Component {
             
             let navigateToContentId = panelEnvironment.navigateToContentId
             
-            
-            
-            //TODO:correctSize
-            let tabsSize = CGSize(width: 176.0, height: 40.0)
-            
             var lensSelection: (x: CGFloat, width: CGFloat) = (0.0, 0.0)
             
             if panelEnvironment.contentIcons.count > 1 {
@@ -508,7 +486,8 @@ final class EntityKeyboardBottomPanelComponent: Component {
                     iconTotalSize.height = max(iconTotalSize.height, iconSize.height)
                 }
             }
-                        
+             
+            let tabsSize = CGSize(width: iconTotalSize.width, height: 40.0)
             var nextIconOrigin = CGPoint(x: floor((tabsSize.width - iconTotalSize.width) / 2.0), y: floor((tabsSize.height - iconTotalSize.height) / 2.0))
         
             transition.setFrame(view: self.backgroundContainer, frame: CGRect(origin: .zero, size: availableSize))
@@ -524,23 +503,6 @@ final class EntityKeyboardBottomPanelComponent: Component {
                     iconInfo.transition.setFrame(view: iconView, frame: iconFrame, completion: nil)
                     iconInfo.transition.setFrame(view: selectedIconView, frame: iconFrame, completion: nil)
                     
-//                    if let iconView = iconView.componentView as? BottomPanelIconComponent.View {
-//                        if iconView.tintMaskContainer.superview == nil {
-//                            self.tintContentMask.addSubview(iconView.tintMaskContainer)
-//                        }
-//                        iconInfo.transition.setFrame(view: iconView.tintMaskContainer, frame: iconFrame, completion: nil)
-//                    }
-                    
-//                    if let activeContentId = activeContentId, activeContentId == icon.id {
-//                        self.highlightedIconBackgroundView.isHidden = false
-//                        self.highlightedTintIconBackgroundView.isHidden = false
-//                        transition.setFrame(view: self.highlightedIconBackgroundView, frame: iconFrame)
-//                        transition.setFrame(view: self.highlightedTintIconBackgroundView, frame: iconFrame)
-//                        
-//                        let cornerRadius: CGFloat = min(iconFrame.width, iconFrame.height) / 2.0
-//                        transition.setCornerRadius(layer: self.highlightedIconBackgroundView.layer, cornerRadius: cornerRadius)
-//                        transition.setCornerRadius(layer: self.highlightedTintIconBackgroundView.layer, cornerRadius: cornerRadius)
-//                    }
                     if let activeContentId = activeContentId, activeContentId == icon.id {
                         lensSelection = (iconFrame.origin.x, iconFrame.width)
                     }
@@ -553,11 +515,7 @@ final class EntityKeyboardBottomPanelComponent: Component {
             }
             
             transition.setFrame(view: self.liquidLensView, frame: CGRect(origin: CGPoint(x: floor((availableSize.width - tabsSize.width) / 2.0), y: 0.0), size: tabsSize))
-            self.liquidLensView.update(size: tabsSize, selectionOrigin: CGPoint(x: lensSelection.x, y: 0.0), selectionSize: CGSize(width: lensSelection.width, height: tabsSize.height), isDark: component.theme.overallDarkAppearance, isLifted: self.selectionGestureState != nil, isCollapsed: false, transition: transition)
-            
-            if activeContentId == nil {
-                self.highlightedIconBackgroundView.isHidden = true
-            }
+            self.liquidLensView.update(size: tabsSize, selectionOrigin: CGPoint(x: lensSelection.x, y: 0.0), selectionSize: CGSize(width: lensSelection.width, height: tabsSize.height), isDark: component.theme.overallDarkAppearance, isLifted: self.selectionGestureState != nil, isCollapsed: activeContentId == nil, transition: transition)
             
             var removedIconViewIds: [AnyHashable] = []
             for (id, iconView) in self.itemViews {
@@ -577,11 +535,10 @@ final class EntityKeyboardBottomPanelComponent: Component {
             transition.setFrame(view: self.backgroundView, frame: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: availableSize.width, height: height)))
             //self.backgroundView.update(size: CGSize(width: availableSize.width, height: height), transition: transition.containedViewLayoutTransition)
                         
-            
             let edgeEffectHeight: CGFloat = 80.0
             let edgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: height - edgeEffectHeight), size: CGSize(width: availableSize.width, height: edgeEffectHeight))
             transition.setFrame(view: self.edgeEffectView, frame: edgeEffectFrame)
-            self.edgeEffectView.update(content: component.theme.chat.inputPanel.panelBackgroundColor.withMultipliedAlpha(1.0), rect: edgeEffectFrame, edge: .bottom, edgeSize: min(edgeEffectHeight, 50.0), transition: transition)
+            self.edgeEffectView.update(content: component.theme.chat.inputMediaPanel.backgroundColor.withMultipliedAlpha(0.8), rect: edgeEffectFrame, edge: .bottom, edgeSize: min(edgeEffectHeight, 50.0), transition: transition)
             
             return CGSize(width: availableSize.width, height: height)
         }
