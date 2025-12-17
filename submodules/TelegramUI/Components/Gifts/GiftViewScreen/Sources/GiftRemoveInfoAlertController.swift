@@ -15,6 +15,7 @@ import ActivityIndicator
 import MultilineTextWithEntitiesComponent
 import TelegramStringFormatting
 import TextFormat
+import AlertComponent
 
 private final class GiftRemoveInfoAlertContentNode: AlertContentNode {
     private let context: AccountContext

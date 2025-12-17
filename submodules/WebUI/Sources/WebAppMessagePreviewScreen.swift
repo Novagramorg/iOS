@@ -23,6 +23,7 @@ import ListItemComponentAdaptor
 import TelegramStringFormatting
 import UndoUI
 import ChatMessagePaymentAlertController
+import GlassBarButtonComponent
 
 private final class SheetContent: CombinedComponent {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
@@ -55,7 +56,7 @@ private final class SheetContent: CombinedComponent {
     }
     
     static var body: Body {
-        let closeButton = Child(Button.self)
+        let closeButton = Child(GlassBarButtonComponent.self)
         let title = Child(Text.self)
         let amountSection = Child(ListSectionComponent.self)
         let button = Child(ButtonComponent.self)
@@ -71,22 +72,31 @@ private final class SheetContent: CombinedComponent {
             let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
             
             let sideInset: CGFloat = 16.0
-            var contentSize = CGSize(width: context.availableSize.width, height: 18.0)
+            var contentSize = CGSize(width: context.availableSize.width, height: 36.0)
             
             let constrainedTitleWidth = context.availableSize.width - 16.0 * 2.0
             
             let closeButton = closeButton.update(
-                component: Button(
-                    content: AnyComponent(Text(text: environment.strings.Common_Cancel, font: Font.regular(17.0), color: theme.actionSheet.controlAccentColor)),
-                    action: {
+                component: GlassBarButtonComponent(
+                    size: CGSize(width: 40.0, height: 40.0),
+                    backgroundColor: theme.rootController.navigationBar.glassBarButtonBackgroundColor,
+                    isDark: theme.overallDarkAppearance,
+                    state: .generic,
+                    component: AnyComponentWithIdentity(id: "close", component: AnyComponent(
+                        BundleIconComponent(
+                            name: "Navigation/Close",
+                            tintColor: theme.rootController.navigationBar.glassBarButtonForegroundColor
+                        )
+                    )),
+                    action: { _ in
                         component.dismiss()
                     }
                 ),
-                availableSize: CGSize(width: 120.0, height: 30.0),
+                availableSize: CGSize(width: 40.0, height: 40.0),
                 transition: .immediate
             )
             context.add(closeButton
-                .position(CGPoint(x: closeButton.size.width / 2.0 + sideInset, y: 28.0))
+                .position(CGPoint(x: 16.0 + closeButton.size.width / 2.0, y: 16.0 + closeButton.size.height / 2.0))
             )
                     
             let title = title.update(
@@ -95,7 +105,7 @@ private final class SheetContent: CombinedComponent {
                 transition: .immediate
             )
             context.add(title
-                .position(CGPoint(x: context.availableSize.width / 2.0, y: contentSize.height + title.size.height / 2.0))
+                .position(CGPoint(x: context.availableSize.width / 2.0, y: contentSize.height))
             )
             contentSize.height += title.size.height
             contentSize.height += 40.0
@@ -344,6 +354,7 @@ private final class WebAppMessagePreviewSheetComponent: CombinedComponent {
                             })
                         }
                     )),
+                    style: .glass,
                     backgroundColor: .color(environment.theme.list.blocksBackgroundColor),
                     followContentSizeChanges: false,
                     clipsContent: true,

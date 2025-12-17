@@ -25,6 +25,7 @@ import GiftAnimationComponent
 import ContextUI
 import GiftItemComponent
 import GlassBarButtonComponent
+import TableComponent
 
 private final class GiftValueSheetContent: CombinedComponent {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment

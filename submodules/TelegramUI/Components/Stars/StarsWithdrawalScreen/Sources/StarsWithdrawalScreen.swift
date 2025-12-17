@@ -167,7 +167,11 @@ private final class SheetContent: CombinedComponent {
                     maxAmount = StarsAmount(value: resaleConfiguration.starGiftResaleMaxStarsAmount, nanos: 0)
                 case .ton:
                     amountTitle = environment.strings.Stars_SellGift_TonAmountTitle
+                    #if DEBUG
+                    minAmount = StarsAmount(value: 48000000000, nanos: 0)
+                    #else
                     minAmount = StarsAmount(value: resaleConfiguration.starGiftResaleMinTonAmount, nanos: 0)
+                    #endif
                     maxAmount = StarsAmount(value: resaleConfiguration.starGiftResaleMaxTonAmount, nanos: 0)
                 }
             case let .paidMessages(_, minAmountValue, _, _, _):
@@ -617,7 +621,16 @@ private final class SheetContent: CombinedComponent {
                                         return
                                     }
                                     if state.currency == .stars {
-                                        if let amount = state.amount, let tonUsdRate = withdrawConfiguration.tonUsdRate, let usdWithdrawRate = withdrawConfiguration.usdWithdrawRate {
+                                        if case .starGiftResell = component.mode, let amount = state.amount, amount.value < 5000 {
+                                            #if DEBUG
+                                            state.amount = StarsAmount(value: 48000000000, nanos: 0)
+                                            #else
+                                            state.amount = StarsAmount(value: resaleConfiguration.starGiftResaleMinTonAmount, nanos: 0)
+                                            #endif
+                                            if let controller = controller() as? StarsWithdrawScreen {
+                                                controller.presentMinAmountTooltip(state.amount!.value, currency: .ton)
+                                            }
+                                        } else if let amount = state.amount, let tonUsdRate = withdrawConfiguration.tonUsdRate, let usdWithdrawRate = withdrawConfiguration.usdWithdrawRate {
                                             state.amount = StarsAmount(value: max(min(convertStarsToTon(amount, tonUsdRate: tonUsdRate, starsUsdRate: usdWithdrawRate), resaleConfiguration.starGiftResaleMaxTonAmount), resaleConfiguration.starGiftResaleMinTonAmount), nanos: 0)
                                         } else {
                                             state.amount = StarsAmount(value: 0, nanos: 0)
@@ -1255,6 +1268,8 @@ private final class StarsWithdrawSheetComponent: CombinedComponent {
         let sheet = Child(SheetComponent<(EnvironmentType)>.self)
         let animateOut = StoredActionSlot(Action<Void>.self)
         
+        let sheetExternalState = SheetComponent<EnvironmentType>.ExternalState()
+        
         return { context in
             let environment = context.environment[EnvironmentType.self]
             
@@ -1281,6 +1296,7 @@ private final class StarsWithdrawSheetComponent: CombinedComponent {
                     followContentSizeChanges: false,
                     clipsContent: true,
                     isScrollEnabled: false,
+                    externalState: sheetExternalState,
                     animateOut: animateOut
                 ),
                 environment: {
@@ -1312,6 +1328,29 @@ private final class StarsWithdrawSheetComponent: CombinedComponent {
             context.add(sheet
                 .position(CGPoint(x: context.availableSize.width / 2.0, y: context.availableSize.height / 2.0))
             )
+            
+            if let controller = controller(), !controller.automaticallyControlPresentationContextLayout {
+                var sideInset: CGFloat = 0.0
+                var bottomInset: CGFloat = max(environment.safeInsets.bottom, sheetExternalState.contentHeight)
+                if case .regular = environment.metrics.widthClass {
+                    sideInset = floor((context.availableSize.width - 430.0) / 2.0) - 12.0
+                    bottomInset = (context.availableSize.height - sheetExternalState.contentHeight) / 2.0 + sheetExternalState.contentHeight
+                }
+                
+                let layout = ContainerViewLayout(
+                    size: context.availableSize,
+                    metrics: environment.metrics,
+                    deviceMetrics: environment.deviceMetrics,
+                    intrinsicInsets: UIEdgeInsets(top: 0.0, left: 0.0, bottom: bottomInset, right: 0.0),
+                    safeInsets: UIEdgeInsets(top: 0.0, left: max(sideInset, environment.safeInsets.left), bottom: 0.0, right: max(sideInset, environment.safeInsets.right)),
+                    additionalInsets: .zero,
+                    statusBarHeight: environment.statusBarHeight,
+                    inputHeight: nil,
+                    inputHeightIsInteractivellyChanging: false,
+                    inVoiceOver: false
+                )
+                controller.presentationContext.containerLayoutUpdated(layout, transition: context.transition.containedViewLayoutTransition)
+            }
             
             return context.availableSize
         }
@@ -1357,6 +1396,7 @@ public final class StarsWithdrawScreen: ViewControllerComponentContainer {
         )
         
         self.navigationPresentation = .flatModal
+        self.automaticallyControlPresentationContextLayout = false
     }
         
     required public init(coder aDecoder: NSCoder) {
@@ -1422,10 +1462,8 @@ public final class StarsWithdrawScreen: ViewControllerComponentContainer {
                 round: false,
                 undoText: nil
             ),
-            elevatedLayout: false,
-            position: .top,
             action: { _ in return true})
-        self.present(resultController, in: .window(.root))
+        self.present(resultController, in: .current)
         
         if let view = self.node.hostView.findTaggedView(tag: amountTag) as? AmountFieldComponent.View {
             view.animateError()

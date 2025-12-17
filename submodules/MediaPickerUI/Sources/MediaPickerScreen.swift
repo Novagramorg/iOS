@@ -33,6 +33,7 @@ import ComponentFlow
 import BundleIconComponent
 import LottieComponent
 import GlassBarButtonComponent
+import AlertComponent
 
 final class MediaPickerInteraction {
     let downloadManager: AssetDownloadManager
@@ -2717,16 +2718,22 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
             } else {
                 text = self.presentationData.strings.Attachment_CancelSelectionAlertText
             }
-            
-            let controller = textAlertController(context: self.context, title: nil, text: text, actions: [TextAlertAction(type: .genericAction, title: self.presentationData.strings.Attachment_CancelSelectionAlertNo, action: {
-            }), TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Attachment_CancelSelectionAlertYes, action: { [weak self] in
-                self?.dismissAllTooltips()
-                completion()
-            })])
-            controller.dismissed = { [weak self] _ in
+            let alertController = AlertScreen(
+                context: self.context,
+                title: nil,
+                text: text,
+                actions: [
+                    .init(title: self.presentationData.strings.Attachment_CancelSelectionAlertNo),
+                    .init(title: self.presentationData.strings.Attachment_CancelSelectionAlertYes, type: .default, action: { [weak self] in
+                        self?.dismissAllTooltips()
+                        completion()
+                    }),
+                ]
+            )
+            alertController.dismissed = { [weak self] _ in
                 self?.isDismissing = false
             }
-            self.present(controller, in: .window(.root))
+            self.present(alertController, in: .window(.root))
         } else {
             completion()
         }
