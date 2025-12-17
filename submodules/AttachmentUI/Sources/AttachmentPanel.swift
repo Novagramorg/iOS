@@ -1489,6 +1489,8 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate {
     }
     
     private func item(at point: CGPoint) -> AnyHashable? {
+        let contentOffset = self.scrollNode.view.contentOffset.x
+        let point = point.offsetBy(dx: contentOffset, dy: 0.0)
         var closestItem: (AnyHashable, CGFloat)?
         for (id, itemView) in self.itemViews {
             if itemView.frame.contains(point) {
@@ -2037,7 +2039,8 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate {
         
         var selectionFrame = CGRect()
         if self.selectedIndex >= 0 && self.selectedIndex < self.buttons.count, let itemView = self.itemViews[self.buttons[self.selectedIndex].key], let itemSize = self.itemSizes[self.buttons[self.selectedIndex].key] {
-            selectionFrame = CGRect(origin: CGPoint(x: itemView.center.x - itemSize.width / 2.0, y: itemView.frame.minY), size: itemSize).insetBy(dx: -3.0, dy: 0.0)
+            let contentOffset = self.scrollNode.view.contentOffset.x
+            selectionFrame = CGRect(origin: CGPoint(x: itemView.center.x - itemSize.width / 2.0 - contentOffset, y: itemView.frame.minY), size: itemSize).insetBy(dx: -3.0, dy: 0.0)
         }
         
         let lensSelection: (x: CGFloat, width: CGFloat)
