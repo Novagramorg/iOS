@@ -4010,7 +4010,7 @@ public final class PremiumIntroScreen: ViewControllerComponentContainer {
             shareLink: { link in
                 shareLinkImpl?(link)
             }
-        ), navigationBarAppearance: .transparent, presentationMode: modal ? .modal : .default, theme: forceDark ? .dark : .default, updatedPresentationData: screenContext.updatedPresentationData)
+        ), navigationBarAppearance: .default, presentationMode: modal ? .modal : .default, theme: forceDark ? .dark : .default, updatedPresentationData: screenContext.updatedPresentationData)
                 
         if modal {
             let cancelItem = UIBarButtonItem(title: presentationData.strings.Common_Close, style: .plain, target: self, action: #selector(self.cancelPressed))

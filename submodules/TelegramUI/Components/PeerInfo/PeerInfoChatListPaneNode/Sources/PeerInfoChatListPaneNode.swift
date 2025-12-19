@@ -60,7 +60,7 @@ private final class SearchNavigationContentNode: ASDisplayNode, PeerInfoPanelNod
         
         let size = CGSize(width: width, height: defaultHeight)
         transition.updateFrame(node: self.contentNode, frame: CGRect(origin: CGPoint(x: 0.0, y: 10.0), size: size))
-        self.contentNode.updateLayout(size: size, leftInset: insets.left, rightInset: insets.right, transition: transition)
+        let _ = self.contentNode.updateLayout(size: size, leftInset: insets.left, rightInset: insets.right, transition: transition)
         
         var contentHeight: CGFloat = size.height + 10.0
         

@@ -5,6 +5,10 @@ import ComponentFlow
 import TelegramPresentationData
 import GlassBackgroundComponent
 
+public protocol HeaderPanelContainerChildView: UIView {
+    func setOverlayContainerView(overlayContainerView: UIView)
+}
+
 public final class HeaderPanelContainerComponent: Component {
     public final class Panel: Equatable {
         public let key: AnyHashable
@@ -94,6 +98,7 @@ public final class HeaderPanelContainerComponent: Component {
             self.backgroundContainer = GlassBackgroundContainerView()
             self.backgroundView = GlassBackgroundView()
             self.contentContainer = UIView()
+            self.contentContainer.clipsToBounds = true
             
             super.init(frame: frame)
             
@@ -142,6 +147,9 @@ public final class HeaderPanelContainerComponent: Component {
                 if let tabsComponentView = tabsView.view {
                     if tabsComponentView.superview == nil {
                         self.contentContainer.addSubview(tabsComponentView)
+                        if let tabsComponentView = tabsComponentView as? HeaderPanelContainerChildView {
+                            tabsComponentView.setOverlayContainerView(overlayContainerView: self.backgroundContainer.contentView)
+                        }
                         transition.animateAlpha(view: tabsComponentView, from: 0.0, to: 1.0)
                     }
                     tabsTransition.setFrame(view: tabsComponentView, frame: tabsFrame)

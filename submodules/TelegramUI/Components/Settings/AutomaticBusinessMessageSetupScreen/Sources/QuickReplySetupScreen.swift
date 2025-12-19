@@ -1022,7 +1022,7 @@ final class QuickReplySetupScreenComponent: Component {
                         theme: searchBarTheme,
                         presentationTheme: environment.theme,
                         strings: environment.strings,
-                        fieldStyle: .modern,
+                        fieldStyle: .glass,
                         displayBackground: false
                     )
                     searchBarNode.placeholderString = NSAttributedString(string: environment.strings.Common_Search, font: Font.regular(17.0), textColor: searchBarTheme.placeholder)

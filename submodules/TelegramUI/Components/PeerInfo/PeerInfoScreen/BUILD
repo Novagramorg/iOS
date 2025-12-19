@@ -169,6 +169,7 @@ swift_library(
         "//submodules/TelegramUI/Components/TextFieldComponent",
         "//submodules/TelegramUI/Components/EdgeEffect",
         "//submodules/TelegramUI/Components/GlassBackgroundComponent",
+        "//submodules/TelegramUI/Components/HorizontalTabsComponent",
     ],
     visibility = [
         "//visibility:public",

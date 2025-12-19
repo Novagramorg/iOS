@@ -1959,7 +1959,7 @@ public class UserAppearanceScreen: ViewControllerComponentContainer {
         }
         
         if let navigationBar = self.navigationBar {
-            navigationBar.view.insertSubview(self.overNavigationContainer, aboveSubview: navigationBar.backgroundView)
+            navigationBar.customOverBackgroundContentView.insertSubview(self.overNavigationContainer, at: 0)
         }
     }
     

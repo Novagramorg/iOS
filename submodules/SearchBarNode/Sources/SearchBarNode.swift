@@ -1205,6 +1205,7 @@ public class SearchBarNode: ASDisplayNode, UITextFieldDelegate {
         
         if case .glass = self.fieldStyle, self.takenSearchPlaceholderContentView == nil {
             transition.updateFrame(node: self.inlineSearchPlaceholder, frame: searchPlaceholderFrame)
+            var isFirstTime = false
             if let theme = self.theme {
                 let _ = self.inlineSearchPlaceholder.updateLayout(
                     placeholderString: self.placeholderString,
@@ -1218,6 +1219,7 @@ public class SearchBarNode: ASDisplayNode, UITextFieldDelegate {
                     transition: transition
                 )
                 if self.inlineSearchPlaceholderContentsView == nil {
+                    isFirstTime = true
                     let inlineSearchPlaceholderContentsView = self.inlineSearchPlaceholder.takeContents()
                     inlineSearchPlaceholderContentsView.onCancel = { [weak self] in
                         guard let self else {
@@ -1232,6 +1234,11 @@ public class SearchBarNode: ASDisplayNode, UITextFieldDelegate {
             if let inlineSearchPlaceholderContentsView = self.inlineSearchPlaceholderContentsView {
                 inlineSearchPlaceholderContentsView.update(size: searchPlaceholderFrame.size, isActive: true, transition: transition)
                 transition.updateFrame(view: inlineSearchPlaceholderContentsView, frame: searchPlaceholderFrame)
+                
+                if isFirstTime {
+                    self.updateIsEmpty(animated: false)
+                    inlineSearchPlaceholderContentsView.updateSearchIconVisibility(isVisible: !self.activity)
+                }
             }
         }
         

@@ -4840,6 +4840,15 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
             }
         }
         
+        self.headerNode.updateUnderHeaderContentsAlpha = { [weak self] alpha, transition in
+            guard let self else {
+                return
+            }
+            for (_, section) in self.regularSections {
+                transition.updateAlpha(node: section, alpha: alpha)
+            }
+        }
+        
         let screenData: Signal<PeerInfoScreenData, NoError>
         if self.isSettings {
             self.notificationExceptions.set(.single(NotificationExceptionsList(peers: [:], settings: [:]))

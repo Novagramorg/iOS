@@ -2548,7 +2548,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
         let useGlassButtons = (isBack || !self.controllerNode.scrolledToTop) && !self.controllerNode.isSwitchingAssetGroup
         
         let barButtonSideInset: CGFloat = 16.0
-        let barButtonSize = CGSize(width: 40.0, height: 40.0)
+        let barButtonSize = CGSize(width: 44.0, height: 44.0)
         
         var buttonTransition = ComponentTransition.easeInOut(duration: 0.25)
         if case let .animated(duration, _) = transition, duration > 0.25 {
@@ -2580,9 +2580,9 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
                 transition: buttonTransition,
                 component: AnyComponent(GlassBarButtonComponent(
                     size: barButtonSize,
-                    backgroundColor: self.presentationData.theme.rootController.navigationBar.glassBarButtonBackgroundColor,
+                    backgroundColor: nil,
                     isDark: self.presentationData.theme.overallDarkAppearance,
-                    state: useGlassButtons ? .glass : .generic,
+                    state: .glass,
                     component: AnyComponentWithIdentity(id: isBack ? "back" : "close", component: AnyComponent(
                         BundleIconComponent(
                             name: isBack ? "Navigation/Back" : "Navigation/Close",
@@ -2611,9 +2611,9 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
                 transition: buttonTransition,
                 component: AnyComponent(GlassBarButtonComponent(
                     size: barButtonSize,
-                    backgroundColor: self.presentationData.theme.rootController.navigationBar.glassBarButtonBackgroundColor,
+                    backgroundColor: nil,
                     isDark: self.presentationData.theme.overallDarkAppearance,
-                    state: useGlassButtons ? .glass : .generic,
+                    state: .glass,
                     component: AnyComponentWithIdentity(id: "more", component: AnyComponent(
                         LottieComponent(
                             content: LottieComponent.AppBundleContent(

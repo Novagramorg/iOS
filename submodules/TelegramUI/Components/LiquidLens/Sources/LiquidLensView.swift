@@ -68,14 +68,16 @@ public final class LiquidLensView: UIView {
         var size: CGSize
         var selectionX: CGFloat
         var selectionWidth: CGFloat
+        var inset: CGFloat
         var isDark: Bool
         var isLifted: Bool
         var isCollapsed: Bool
 
-        init(size: CGSize, selectionX: CGFloat, selectionWidth: CGFloat, isDark: Bool, isLifted: Bool, isCollapsed: Bool) {
+        init(size: CGSize, selectionX: CGFloat, selectionWidth: CGFloat, inset: CGFloat, isDark: Bool, isLifted: Bool, isCollapsed: Bool) {
             self.size = size
             self.selectionX = selectionX
             self.selectionWidth = selectionWidth
+            self.inset = inset
             self.isLifted = isLifted
             self.isDark = isDark
             self.isCollapsed = isCollapsed
@@ -84,10 +86,12 @@ public final class LiquidLensView: UIView {
 
     private struct LensParams: Equatable {
         var baseFrame: CGRect
+        var inset: CGFloat
         var isLifted: Bool
 
-        init(baseFrame: CGRect, isLifted: Bool) {
+        init(baseFrame: CGRect, inset: CGFloat, isLifted: Bool) {
             self.baseFrame = baseFrame
+            self.inset = inset
             self.isLifted = isLifted
         }
     }
@@ -124,6 +128,15 @@ public final class LiquidLensView: UIView {
     public var selectionWidth: CGFloat? {
         return self.params?.selectionWidth
     }
+    
+    public private(set) var isAnimating: Bool = false {
+        didSet {
+            if self.isAnimating != oldValue {
+                self.onUpdatedIsAnimating?(self.isAnimating)
+            }
+        }
+    }
+    public var onUpdatedIsAnimating: ((Bool) -> Void)?
 
     public init(kind: Kind) {
         self.containerView = UIView()
@@ -185,10 +198,7 @@ public final class LiquidLensView: UIView {
             }
             lensView.layer.zPosition = 10.0
             
-            if case .noContainer = kind {
-            } else {
-                self.liftedContainerView.addSubview(self.restingBackgroundView)
-            }
+            self.liftedContainerView.addSubview(self.restingBackgroundView)
             
             self.containerView.addSubview(self.liftedContainerView)
             self.containerView.addSubview(lensView)
@@ -199,11 +209,8 @@ public final class LiquidLensView: UIView {
             } else if let genericBackgroundContainer = self.genericBackgroundContainer {
                 lensView.perform(NSSelectorFromString("setLiftedContainerView:"), with: genericBackgroundContainer)
             }
-            if case .noContainer = kind {
-            } else {
-                lensView.perform(NSSelectorFromString("setLiftedContentView:"), with: self.liftedContainerView)
-                lensView.perform(NSSelectorFromString("setOverridePunchoutView:"), with: self.contentView)
-            }
+            lensView.perform(NSSelectorFromString("setLiftedContentView:"), with: self.liftedContainerView)
+            lensView.perform(NSSelectorFromString("setOverridePunchoutView:"), with: self.contentView)
             
             do {
                 let selector = NSSelectorFromString("setLiftedContentMode:")
@@ -271,9 +278,16 @@ public final class LiquidLensView: UIView {
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
+    
+    public func setLiftedContainer(view: UIView) {
+        guard let lensView = self.lensView else {
+            return
+        }
+        lensView.perform(NSSelectorFromString("setLiftedContainerView:"), with: view)
+    }
 
-    public func update(size: CGSize, selectionX: CGFloat, selectionWidth: CGFloat, isDark: Bool, isLifted: Bool, isCollapsed: Bool = false, transition: ComponentTransition) {
-        let params = Params(size: size, selectionX: selectionX, selectionWidth: selectionWidth, isDark: isDark, isLifted: isLifted, isCollapsed: isCollapsed)
+    public func update(size: CGSize, selectionX: CGFloat, selectionWidth: CGFloat, inset: CGFloat, isDark: Bool, isLifted: Bool, isCollapsed: Bool = false, transition: ComponentTransition) {
+        let params = Params(size: size, selectionX: selectionX, selectionWidth: selectionWidth, inset: inset, isDark: isDark, isLifted: isLifted, isCollapsed: isCollapsed)
         if self.params == params {
             return
         }
@@ -287,7 +301,7 @@ public final class LiquidLensView: UIView {
         self.update(params: params, transition: transition)
     }
 
-    private func updateLens(params: LensParams, animated: Bool) {
+    private func updateLens(params: LensParams, transition: ComponentTransition) {
         guard let lensView = self.lensView else {
             return
         }
@@ -298,22 +312,23 @@ public final class LiquidLensView: UIView {
         }
         self.isApplyingLensParams = true
         let previousParams = self.appliedLensParams
-
-        let transition: ComponentTransition = animated ? .easeInOut(duration: 0.3) : .immediate
+        self.appliedLensParams = params
 
         if previousParams?.isLifted != params.isLifted {
+            self.isAnimating = true
+            
             let selector = NSSelectorFromString("setLifted:animated:alongsideAnimations:completion:")
             var shouldScheduleUpdate = false
             var didProcessUpdate = false
             self.pendingLensParams = params
             if let lensView = self.lensView, let method = lensView.method(for: selector) {
-                typealias ObjCMethod = @convention(c) (AnyObject, Selector, Bool, Bool, @escaping () -> Void, AnyObject?) -> Void
+                typealias ObjCMethod = @convention(c) (AnyObject, Selector, Bool, Bool, @escaping () -> Void, (() -> Void)?) -> Void
                 let function = unsafeBitCast(method, to: ObjCMethod.self)
                 function(lensView, selector, params.isLifted, !transition.animation.isImmediate, { [weak self] in
                     guard let self else {
                         return
                     }
-                    let liftedInset: CGFloat = params.isLifted ? 4.0 : -4.0
+                    let liftedInset: CGFloat = params.isLifted ? 4.0 : -params.inset
                     lensView.bounds = CGRect(origin: CGPoint(), size: CGSize(width: params.baseFrame.width + liftedInset * 2.0, height: params.baseFrame.height + liftedInset * 2.0))
                     didProcessUpdate = true
                     if shouldScheduleUpdate {
@@ -323,10 +338,17 @@ public final class LiquidLensView: UIView {
                             }
                             self.isApplyingLensParams = false
                             self.pendingLensParams = nil
-                            self.updateLens(params: pendingLensParams, animated: !transition.animation.isImmediate)
+                            self.updateLens(params: pendingLensParams, transition: transition)
                         }
                     }
-                }, nil)
+                }, { [weak self] in
+                    guard let self else {
+                        return
+                    }
+                    if !self.isApplyingLensParams {
+                        self.isAnimating = false
+                    }
+                })
             }
             if didProcessUpdate {
                 transition.animateView {
@@ -338,11 +360,32 @@ public final class LiquidLensView: UIView {
                 shouldScheduleUpdate = true
             }
         } else {
+            let liftedInset: CGFloat = params.isLifted ? 4.0 : -params.inset
+            let lensBounds = CGRect(origin: CGPoint(), size: CGSize(width: params.baseFrame.width + liftedInset * 2.0, height: params.baseFrame.height + liftedInset * 2.0))
+            let lensCenter = CGPoint(x: params.baseFrame.midX, y: params.baseFrame.midY)
+            
+            let previousBounds: CGRect = lensView.bounds
             transition.animateView {
-                let liftedInset: CGFloat = params.isLifted ? 4.0 : -4.0
-                lensView.bounds = CGRect(origin: CGPoint(), size: CGSize(width: params.baseFrame.width + liftedInset * 2.0, height: params.baseFrame.height + liftedInset * 2.0))
-                lensView.center = CGPoint(x: params.baseFrame.midX, y: params.baseFrame.midY)
+                lensView.bounds = lensBounds
             }
+            
+            lensView.layer.removeAllAnimations()
+            lensView.bounds = lensBounds
+            
+            if !transition.animation.isImmediate {
+                self.isAnimating = true
+            }
+            transition.setPosition(view: lensView, position: lensCenter, completion: { [weak self] flag in
+                guard let self, flag else {
+                    return
+                }
+                if !self.isApplyingLensParams {
+                    self.isAnimating = false
+                }
+            })
+            // No idea why
+            transition.animatePosition(layer: lensView.layer, from: CGPoint(x: (lensBounds.width - previousBounds.width) * 0.5, y: 0.0), to: CGPoint(), additive: true)
+            
             self.isApplyingLensParams = false
         }
     }
@@ -402,13 +445,13 @@ public final class LiquidLensView: UIView {
         }
 
         let baseLensFrame = CGRect(origin: CGPoint(x: params.selectionX, y: 0.0), size: CGSize(width: params.selectionWidth, height: params.size.height))
-        self.updateLens(params: LensParams(baseFrame: baseLensFrame, isLifted: params.isLifted), animated: !transition.animation.isImmediate)
+        self.updateLens(params: LensParams(baseFrame: baseLensFrame, inset: params.inset, isLifted: params.isLifted), transition: transition)
         
         if let legacyContentMaskView = self.legacyContentMaskView {
             transition.setFrame(view: legacyContentMaskView, frame: CGRect(origin: CGPoint(), size: params.size))
         }
         if let legacyContentMaskBlobView = self.legacyContentMaskBlobView, let legacyLiftedContentBlobMaskView = self.legacyLiftedContentBlobMaskView, let legacySelectionView = self.legacySelectionView {
-            let lensFrame = baseLensFrame.insetBy(dx: 4.0, dy: 4.0)
+            let lensFrame = baseLensFrame.insetBy(dx: params.inset, dy: params.inset)
             let effectiveLensFrame = lensFrame.insetBy(dx: params.isLifted ? -2.0 : 0.0, dy: params.isLifted ? -2.0 : 0.0)
             
             if legacyContentMaskBlobView.image?.size.height != lensFrame.height {

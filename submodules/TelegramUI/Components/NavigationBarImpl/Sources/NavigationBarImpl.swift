@@ -20,7 +20,7 @@ public final class NavigationBarImpl: ASDisplayNode, NavigationBar {
     
     private var validLayout: (size: CGSize, defaultHeight: CGFloat, additionalTopHeight: CGFloat, additionalContentHeight: CGFloat, additionalBackgroundHeight: CGFloat, additionalCutout: CGSize?, leftInset: CGFloat, rightInset: CGFloat, appearsHidden: Bool, isLandscape: Bool)?
     private var requestedLayout: Bool = false
-    public var requestContainerLayout: (ContainedViewLayoutTransition) -> Void = { _ in }
+    public var requestContainerLayout: ((ContainedViewLayoutTransition) -> Void)?
     
     public var backPressed: () -> () = { }
     
@@ -102,10 +102,45 @@ public final class NavigationBarImpl: ASDisplayNode, NavigationBar {
                     }
                 }
                 
-                self.titleView = item.titleView
-                self.itemTitleViewListenerKey = item.addSetTitleViewListener { [weak self] titleView in
-                    if let strongSelf = self {
-                        strongSelf.titleView = titleView
+                let itemTitleView = item.titleView
+                if self.titleView !== itemTitleView {
+                    if let oldTitleView = self.titleView as? NavigationBarTitleView {
+                        oldTitleView.requestUpdate = nil
+                    }
+                    self.titleView = itemTitleView
+                    if let titleView = self.titleView as? NavigationBarTitleView {
+                        titleView.requestUpdate = { [weak self, weak titleView] transition in
+                            guard let self, let titleView, self.titleView === titleView else {
+                                return
+                            }
+                            if let requestContainerLayout = self.requestContainerLayout {
+                                requestContainerLayout(transition)
+                            } else {
+                                self.requestLayout()
+                            }
+                        }
+                    }
+                }
+                self.itemTitleViewListenerKey = item.addSetTitleViewListener { [weak self] itemTitleView in
+                    guard let self else {
+                        return
+                    }
+                    
+                    if let oldTitleView = self.titleView as? NavigationBarTitleView {
+                        oldTitleView.requestUpdate = nil
+                    }
+                    self.titleView = itemTitleView
+                    if let titleView = self.titleView as? NavigationBarTitleView {
+                        titleView.requestUpdate = { [weak self, weak titleView] transition in
+                            guard let self, let titleView, self.titleView === titleView else {
+                                return
+                            }
+                            if let requestContainerLayout = self.requestContainerLayout {
+                                requestContainerLayout(transition)
+                            } else {
+                                self.requestLayout()
+                            }
+                        }
                     }
                 }
                 
@@ -470,8 +505,12 @@ public final class NavigationBarImpl: ASDisplayNode, NavigationBar {
             self.rightButtonNodeUpdated = true
             
             if !items.isEmpty {
-                self.rightButtonNodeImpl.updateItems([], animated: animated)
-                self.rightButtonNodeImpl.updateItems(items, animated: animated)
+                if self.rightButtonNodeImpl.isEmpty {
+                    self.rightButtonNodeImpl.updateItems(items, animated: false)
+                } else {
+                    self.rightButtonNodeImpl.updateItems([], animated: animated)
+                    self.rightButtonNodeImpl.updateItems(items, animated: animated)
+                }
                 if self.rightButtonNodeImpl.view.superview == nil {
                     if let rightButtonsBackgroundView = self.rightButtonsBackgroundView {
                         rightButtonsBackgroundView.contentView.addSubview(self.rightButtonNodeImpl.view)
@@ -490,6 +529,7 @@ public final class NavigationBarImpl: ASDisplayNode, NavigationBar {
                     }
                 }
                 self.rightButtonNodeImpl.view.removeFromSuperview()
+                self.rightButtonNodeImpl.updateItems([], animated: false)
             }
         } else {
             if animated, self.rightButtonNodeImpl.view.superview != nil {
@@ -502,6 +542,7 @@ public final class NavigationBarImpl: ASDisplayNode, NavigationBar {
                 }
             }
             self.rightButtonNodeImpl.view.removeFromSuperview()
+            self.rightButtonNodeImpl.updateItems([], animated: false)
         }
         
         self.updateAccessibilityElements()
@@ -548,7 +589,7 @@ public final class NavigationBarImpl: ASDisplayNode, NavigationBar {
         }
     }
     
-    public var customOverBackgroundContentSubview: UIView?
+    public let customOverBackgroundContentView: UIView
     
     public init(presentationData: NavigationBarPresentationData) {
         self.presentationData = presentationData
@@ -605,6 +646,8 @@ public final class NavigationBarImpl: ASDisplayNode, NavigationBar {
         
         self.secondaryContentHeight = NavigationBarImpl.defaultSecondaryContentHeight
         
+        self.customOverBackgroundContentView = SparseContainerView()
+        
         super.init()
         
         if case .glass = presentationData.theme.style {
@@ -616,6 +659,8 @@ public final class NavigationBarImpl: ASDisplayNode, NavigationBar {
             self.backgroundContainer = backgroundContainer
             self.view.addSubview(backgroundContainer)
             
+            backgroundContainer.contentView.addSubview(self.customOverBackgroundContentView)
+            
             let leftButtonsBackgroundView = GlassBackgroundView()
             self.leftButtonsBackgroundView = leftButtonsBackgroundView
             backgroundContainer.contentView.addSubview(leftButtonsBackgroundView)
@@ -625,6 +670,7 @@ public final class NavigationBarImpl: ASDisplayNode, NavigationBar {
             backgroundContainer.contentView.addSubview(rightButtonsBackgroundView)
         } else {
             self.addSubnode(self.backgroundNode)
+            self.view.addSubview(self.customOverBackgroundContentView)
         }
         self.addSubnode(self.buttonsContainerNode)
         self.addSubnode(self.clippingNode)
@@ -786,10 +832,13 @@ public final class NavigationBarImpl: ASDisplayNode, NavigationBar {
             case .replacement:
                 expansionHeight = contentNode.height - defaultHeight
                 if case .glass = self.presentationData.theme.style {
-                    contentNodeFrame = CGRect(origin: CGPoint(x: 0.0, y: contentVerticalOrigin), size: CGSize(width: size.width, height: defaultHeight))
+                    contentNodeFrame = CGRect(origin: CGPoint(x: 0.0, y: contentVerticalOrigin), size: CGSize(width: size.width, height: contentNode.nominalHeight))
                 } else {
                     contentNodeFrame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: size.width, height: size.height - additionalContentHeight))
                 }
+                
+                transition.updateFrame(node: contentNode, frame: contentNodeFrame)
+                let _ = contentNode.updateLayout(size: contentNodeFrame.size, leftInset: leftInset, rightInset: rightInset, transition: transition)
             case .expansion:
                 expansionHeight = contentNode.height
                 
@@ -803,22 +852,23 @@ public final class NavigationBarImpl: ASDisplayNode, NavigationBar {
                         contentNodeFrame.origin.y += self.secondaryContentHeight * self.secondaryContentNodeDisplayFraction
                     }
                 }
+                
+                transition.updateFrame(node: contentNode, frame: contentNodeFrame)
+                let _ = contentNode.updateLayout(size: contentNodeFrame.size, leftInset: leftInset, rightInset: rightInset, transition: transition)
             }
-            transition.updateFrame(node: contentNode, frame: contentNodeFrame)
-            contentNode.updateLayout(size: contentNodeFrame.size, leftInset: leftInset, rightInset: rightInset, transition: transition)
         }
         
         transition.updateFrame(node: self.stripeNode, frame: CGRect(x: (additionalCutout?.width ?? 0.0), y: size.height + additionalBackgroundHeight, width: size.width - (additionalCutout?.width ?? 0.0), height: UIScreenPixel))
         
         let nominalHeight: CGFloat = 60.0
         
-        var leftTitleInset: CGFloat = leftInset + 1.0
-        var rightTitleInset: CGFloat = rightInset + 1.0
+        var leftTitleInset: CGFloat = leftInset
+        var rightTitleInset: CGFloat = rightInset
         
         var leftButtonsWidth: CGFloat = 0.0
         if self.backButtonNodeImpl.view.superview != nil {
             let backButtonSize = self.backButtonNodeImpl.updateLayout(constrainedSize: CGSize(width: size.width, height: 44.0), isLandscape: isLandscape, isLeftAligned: true)
-            leftTitleInset = backButtonSize.width + backButtonInset + 1.0
+            leftTitleInset = backButtonSize.width + backButtonInset
             
             if case .glass = self.presentationData.theme.style {
             } else {
@@ -892,7 +942,7 @@ public final class NavigationBarImpl: ASDisplayNode, NavigationBar {
             if case .glass = self.presentationData.theme.style {
                 transition.updateFrame(node: self.rightButtonNodeImpl, frame: CGRect(origin: CGPoint(x: 0.0, y: floor((44.0 - rightButtonSize.height) / 2.0)), size: rightButtonSize))
             } else {
-                rightTitleInset = rightButtonSize.width + leftButtonInset + 1.0
+                rightTitleInset = rightButtonSize.width + leftButtonInset + 4.0
                 transition.updateFrame(node: self.rightButtonNodeImpl, frame: CGRect(origin: CGPoint(x: size.width - leftButtonInset - rightButtonSize.width, y: contentVerticalOrigin + floor((nominalHeight - rightButtonSize.height) / 2.0)), size: rightButtonSize))
             }
         }
@@ -900,7 +950,7 @@ public final class NavigationBarImpl: ASDisplayNode, NavigationBar {
         
         if let leftButtonsBackgroundView = self.leftButtonsBackgroundView {
             if leftButtonsWidth != 0.0 {
-                leftTitleInset = leftInset + 16.0 + leftButtonsWidth + 4.0
+                leftTitleInset = leftInset + 16.0 + leftButtonsWidth + 10.0
             }
             
             if self.backButtonNodeImpl.view.superview != nil {
@@ -921,7 +971,7 @@ public final class NavigationBarImpl: ASDisplayNode, NavigationBar {
         
         if let rightButtonsBackgroundView = self.rightButtonsBackgroundView {
             if rightButtonsWidth != 0.0 {
-                rightTitleInset = rightInset + 16.0 + rightButtonsWidth + 4.0
+                rightTitleInset = rightInset + 16.0 + rightButtonsWidth + 10.0
                 
                 let rightButtonsBackgroundFrame = CGRect(origin: CGPoint(x: size.width - rightInset - 16.0 - rightButtonsWidth, y: contentVerticalOrigin + floor((nominalHeight - 44.0) * 0.5)), size: CGSize(width: rightButtonsWidth, height: 44.0))
                 var rightButtonsBackgroundTransition = ComponentTransition(transition)
@@ -935,11 +985,6 @@ public final class NavigationBarImpl: ASDisplayNode, NavigationBar {
             } else {
                 rightButtonsBackgroundView.isHidden = true
             }
-        }
-        
-        leftTitleInset = floor(leftTitleInset)
-        if Int(leftTitleInset) % 2 != 0 {
-            leftTitleInset -= 1.0
         }
         
         if self.titleNode.view.superview != nil {
@@ -958,31 +1003,30 @@ public final class NavigationBarImpl: ASDisplayNode, NavigationBar {
         }
         
         if let titleView = self.titleView {
-            let titleSize = CGSize(width: max(1.0, size.width - max(leftTitleInset, rightTitleInset) * 2.0), height: nominalHeight)
-            let titleFrame = CGRect(origin: CGPoint(x: floor((size.width - titleSize.width) / 2.0), y: contentVerticalOrigin + floorToScreenPixels((nominalHeight - titleSize.height) / 2.0)), size: titleSize)
-            var titleViewTransition = transition
-            if titleView.frame.isEmpty {
-                titleViewTransition = .immediate
-                titleView.frame = titleFrame
-            }
-
-            titleViewTransition.updateFrame(view: titleView, frame: titleFrame)
-            
             if let titleView = titleView as? NavigationBarTitleView {
-                let titleWidth = size.width - (leftTitleInset > 0.0 ? leftTitleInset : rightTitleInset) - (rightTitleInset > 0.0 ? rightTitleInset : leftTitleInset)
-                
-                titleView.updateLayout(size: titleFrame.size, clearBounds: CGRect(origin: CGPoint(x: leftTitleInset - titleFrame.minX, y: 0.0), size: CGSize(width: titleWidth, height: titleFrame.height)), transition: titleViewTransition)
-            }
-            
-            do {
-                if self.hintAnimateTitleNodeOnNextLayout {
-                    self.hintAnimateTitleNodeOnNextLayout = false
-                    if let titleView = titleView as? NavigationBarTitleView {
-                        titleView.animateLayoutTransition()
-                    }
+                var titleViewTransition = transition
+                if titleView.frame.isEmpty {
+                    titleViewTransition = .immediate
                 }
-                titleView.alpha = 1.0
-                transition.updateFrame(view: titleView, frame: titleFrame)
+                
+                let titleSize = titleView.updateLayout(availableSize: CGSize(width: size.width - leftTitleInset - rightTitleInset, height: nominalHeight), transition: titleViewTransition)
+                
+                var titleFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((size.width - titleSize.width) * 0.5), y: contentVerticalOrigin + floorToScreenPixels((nominalHeight - titleSize.height) / 2.0)), size: titleSize)
+                if titleFrame.origin.x < leftTitleInset {
+                    titleFrame.origin.x = leftTitleInset + floorToScreenPixels((size.width - leftTitleInset - rightTitleInset - titleFrame.width) * 0.5)
+                }
+                
+                titleViewTransition.updateFrame(view: titleView, frame: titleFrame)
+            } else {
+                let titleSize = CGSize(width: max(1.0, size.width - max(leftTitleInset, rightTitleInset) * 2.0), height: nominalHeight)
+                let titleFrame = CGRect(origin: CGPoint(x: floor((size.width - titleSize.width) / 2.0), y: contentVerticalOrigin + floorToScreenPixels((nominalHeight - titleSize.height) / 2.0)), size: titleSize)
+                var titleViewTransition = transition
+                if titleView.frame.isEmpty {
+                    titleViewTransition = .immediate
+                    titleView.frame = titleFrame
+                }
+
+                titleViewTransition.updateFrame(view: titleView, frame: titleFrame)
             }
         }
     }
@@ -1038,7 +1082,10 @@ public final class NavigationBarImpl: ASDisplayNode, NavigationBar {
             }
             self.contentNode = contentNode
             self.contentNode?.requestContainerLayout = { [weak self] transition in
-                self?.requestContainerLayout(transition)
+                guard let self else {
+                    return
+                }
+                self.requestContainerLayout?(transition)
             }
             if let contentNode {
                 contentNode.layer.removeAnimation(forKey: "opacity")
@@ -1144,6 +1191,13 @@ public final class NavigationBarImpl: ASDisplayNode, NavigationBar {
         }
 
         guard let result = super.hitTest(point, with: event) else {
+            if !self.bounds.contains(point) {
+                if let result = self.customOverBackgroundContentView.hitTest(self.view.convert(point, to: self.customOverBackgroundContentView), with: event) {
+                    if result !== self.backgroundContainer?.contentView {
+                        return result
+                    }
+                }
+            }
             return nil
         }
         
