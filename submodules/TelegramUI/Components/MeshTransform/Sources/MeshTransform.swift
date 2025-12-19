@@ -129,7 +129,7 @@ public final class MeshTransform {
         let value = unsafeBitCast(transformClass, to: MeshTransformClass.self)
         let result = self.vertices.withUnsafeMutableBufferPointer { vertices -> NSObject? in
             return self.faces.withUnsafeMutableBufferPointer { faces -> NSObject? in
-                let result = value.meshTransform(withVertexCount: UInt(vertices.count), vertices: vertices.baseAddress!, faceCount: UInt(faces.count), faces: faces.baseAddress!, depthNormalization: kCADepthNormalizationNone)
+                let result = value.meshTransform(withVertexCount: UInt(vertices.count), vertices: vertices.baseAddress!, faceCount: UInt(faces.count), faces: faces.baseAddress!, depthNormalization: "none")
                 return result as? NSObject
             }
         }
