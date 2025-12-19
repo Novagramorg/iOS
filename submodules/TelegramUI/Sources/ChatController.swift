@@ -2424,6 +2424,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                         }
                         let controller = self.context.sharedContext.makeGiftOfferScreen(
                             context: self.context,
+                            updatedPresentationData: self.updatedPresentationData,
                             gift: gift,
                             peer: peer,
                             amount: amount,
@@ -8054,64 +8055,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             self.presentEmojiList(references: [stickerPackReference], previewIconFile: previewIconFile)
         }
     }
-    
-    func displayDiceTooltip(dice: TelegramMediaDice) {
-        guard let _ = dice.value else {
-            return
-        }
-        self.window?.forEachController({ controller in
-            if let controller = controller as? UndoOverlayController {
-                controller.dismissWithCommitAction()
-            }
-        })
-        self.forEachController({ controller in
-            if let controller = controller as? UndoOverlayController {
-                controller.dismissWithCommitAction()
-            }
-            return true
-        })
         
-        let value: String?
-        let emoji = dice.emoji.strippedEmoji
-        switch emoji {
-            case "🎲":
-                value = self.presentationData.strings.Conversation_Dice_u1F3B2
-            case "🎯":
-                value = self.presentationData.strings.Conversation_Dice_u1F3AF
-            case "🏀":
-                value = self.presentationData.strings.Conversation_Dice_u1F3C0
-            case "⚽":
-                value = self.presentationData.strings.Conversation_Dice_u26BD
-            case "🎰":
-                value = self.presentationData.strings.Conversation_Dice_u1F3B0
-            case "🎳":
-                value = self.presentationData.strings.Conversation_Dice_u1F3B3
-            default:
-                let emojiHex = emoji.unicodeScalars.map({ String(format:"%02x", $0.value) }).joined().uppercased()
-                let key = "Conversation.Dice.u\(emojiHex)"
-                if let string = self.presentationData.strings.primaryComponent.dict[key] {
-                    value = string
-                } else if let string = self.presentationData.strings.secondaryComponent?.dict[key] {
-                    value = string
-                } else {
-                    value = nil
-                }
-        }
-        if let value = value {
-            self.present(UndoOverlayController(presentationData: self.presentationData, content: .dice(dice: dice, context: self.context, text: value, action: canSendMessagesToChat(self.presentationInterfaceState) ? self.presentationData.strings.Conversation_SendDice : nil), elevatedLayout: false, action: { [weak self] action in
-                if let self, canSendMessagesToChat(self.presentationInterfaceState), action == .undo {
-                    self.presentPaidMessageAlertIfNeeded(completion: { [weak self] postpone in
-                        guard let self else {
-                            return
-                        }
-                        self.sendMessages([.message(text: "", attributes: [], inlineStickers: [:], mediaReference: AnyMediaReference.standalone(media: TelegramMediaDice(emoji: dice.emoji)), threadId: self.chatLocation.threadId, replyToMessageId: nil, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: [])], postpone: postpone)
-                    })
-                }
-                return false
-            }), in: .current)
-        }
-    }
-    
     func transformEnqueueMessages(_ messages: [EnqueueMessage], silentPosting: Bool, scheduleTime: Int32? = nil, repeatPeriod: Int32? = nil, postpone: Bool = false) -> [EnqueueMessage] {
         var defaultThreadId: Int64?
         var defaultReplyMessageSubject: EngineMessageReplySubject?

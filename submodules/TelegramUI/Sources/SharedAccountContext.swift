@@ -3317,7 +3317,7 @@ public final class SharedAccountContextImpl: SharedAccountContext {
             controller.present(alertController, in: .current)
             
             dismissAlertImpl = { [weak alertController] in
-                alertController?.dismissAnimated()
+                alertController?.dismiss()
             }
         }
         
@@ -3865,12 +3865,12 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         return GiftAuctionActiveBidsScreen(context: context)
     }
     
-    public func makeGiftOfferScreen(context: AccountContext, gift: StarGift.UniqueGift, peer: EnginePeer, amount: CurrencyAmount, commit: @escaping () -> Void) -> ViewController {
-        return giftOfferAlertController(context: context, gift: gift, peer: peer, amount: amount, commit: commit)
+    public func makeGiftOfferScreen(context: AccountContext, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)?, gift: StarGift.UniqueGift, peer: EnginePeer, amount: CurrencyAmount, commit: @escaping () -> Void) -> ViewController {
+        return giftOfferAlertController(context: context, updatedPresentationData: updatedPresentationData, gift: gift, peer: peer, amount: amount, commit: commit)
     }
     
-    public func makeGiftUpgradeVariantsPreviewScreen(context: AccountContext, gift: StarGift, attributes: [StarGift.UniqueGift.Attribute]) -> ViewController {
-        return GiftUpgradePreviewScreen(context: context, gift: gift, attributes: attributes)
+    public func makeGiftUpgradeVariantsScreen(context: AccountContext, gift: StarGift, attributes: [StarGift.UniqueGift.Attribute], selectedAttributes: [StarGift.UniqueGift.Attribute]?, focusedAttribute: StarGift.UniqueGift.Attribute?) -> ViewController {
+        return GiftUpgradeVariantsScreen(context: context, gift: gift, attributes: attributes, selectedAttributes: selectedAttributes, focusedAttribute: focusedAttribute)
     }
     
     public func makeGiftAuctionWearPreviewScreen(context: AccountContext, auctionContext: GiftAuctionContext, acquiredGifts: Signal<[GiftAuctionAcquiredGift], NoError>?, attributes: [StarGift.UniqueGift.Attribute], completion: @escaping () -> Void) -> ViewController {

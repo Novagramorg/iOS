@@ -38,6 +38,7 @@ import TextFormat
 import BrowserUI
 import MediaEditorScreen
 import GiftSetupScreen
+import AlertComponent
 
 private func defaultNavigationForPeerId(_ peerId: PeerId?, navigation: ChatControllerInteractionNavigateToPeer) -> ChatControllerInteractionNavigateToPeer {
     if case .default = navigation {
@@ -1340,15 +1341,21 @@ func openResolvedUrlImpl(
                     storyProgressPauseContext.update(controller)
                 }
             } else {
-                let controller = textAlertController(context: context, updatedPresentationData: updatedPresentationData, title: nil, text: presentationData.strings.Chat_ErrorCantBoost, actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})])
-                present(controller, nil)
-                
-                controller.dismissed = { _ in
+                let alertController = AlertScreen(
+                    context: context,
+                    title: nil,
+                    text: presentationData.strings.Chat_ErrorCantBoost,
+                    actions: [
+                        .init(title: presentationData.strings.Common_OK, type: .default)
+                    ]
+                )
+                alertController.dismissed = { _ in
                     dismissedImpl?()
                 }
+                present(alertController, nil)
                 
                 if let storyProgressPauseContext = contentContext as? StoryProgressPauseContext {
-                    storyProgressPauseContext.update(controller)
+                    storyProgressPauseContext.update(alertController)
                 }
             }
         case let .premiumGiftCode(slug):

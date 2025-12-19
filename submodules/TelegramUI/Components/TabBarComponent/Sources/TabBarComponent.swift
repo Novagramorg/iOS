@@ -13,62 +13,7 @@ import TextBadgeComponent
 import LiquidLens
 import AppBundle
 import SearchBarNode
-
-private final class TabSelectionRecognizer: UIGestureRecognizer {
-    private var initialLocation: CGPoint?
-    private var currentLocation: CGPoint?
-    
-    override init(target: Any?, action: Selector?) {
-        super.init(target: target, action: action)
-        
-        self.delaysTouchesBegan = false
-        self.delaysTouchesEnded = false
-    }
-    
-    override func reset() {
-        super.reset()
-        
-        self.initialLocation = nil
-    }
-    
-    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
-        super.touchesBegan(touches, with: event)
-        
-        if self.initialLocation == nil {
-            self.initialLocation = touches.first?.location(in: self.view)
-        }
-        self.currentLocation = self.initialLocation
-        
-        self.state = .began
-    }
-    
-    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent) {
-        super.touchesEnded(touches, with: event)
-        
-        self.state = .ended
-    }
-    
-    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent) {
-        super.touchesCancelled(touches, with: event)
-        
-        self.state = .cancelled
-    }
-    
-    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent) {
-        super.touchesMoved(touches, with: event)
-        
-        self.currentLocation = touches.first?.location(in: self.view)
-        
-        self.state = .changed
-    }
-    
-    func translation(in: UIView?) -> CGPoint {
-        if let initialLocation = self.initialLocation, let currentLocation = self.currentLocation {
-            return CGPoint(x: currentLocation.x - initialLocation.x, y: currentLocation.y - initialLocation.y)
-        }
-        return CGPoint()
-    }
-}
+import TabSelectionRecognizer
 
 public final class NavigationSearchView: UIView {
     private struct Params: Equatable {
@@ -774,7 +719,7 @@ public final class TabBarComponent: Component {
             
             lensSelection.x = max(0.0, min(lensSelection.x, lensSize.width - lensSelection.width))
             
-            self.liquidLensView.update(size: lensSize, selectionX: lensSelection.x, selectionWidth: lensSelection.width, inset: 4.0, isDark: component.theme.overallDarkAppearance, isLifted: self.selectionGestureState != nil, isCollapsed: isLensCollapsed, transition: transition)
+            self.liquidLensView.update(size: lensSize, selectionOrigin: CGPoint(x: lensSelection.x, y: 0.0), selectionSize: CGSize(width: lensSelection.width, height: lensSize.height), inset: 4.0, isDark: component.theme.overallDarkAppearance, isLifted: self.selectionGestureState != nil, isCollapsed: isLensCollapsed, transition: transition)
 
             var size = tabsSize
 

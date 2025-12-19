@@ -5,6 +5,8 @@ import ComponentFlow
 import MultilineTextComponent
 import TelegramPresentationData
 import GlassBackgroundComponent
+import LiquidLens
+import TabSelectionRecognizer
 
 extension CameraMode {
     func title(strings: PresentationStrings) -> String {
@@ -70,26 +72,15 @@ final class ModeComponent: Component {
     
     final class View: UIView, ComponentTaggedView {
         private var component: ModeComponent?
+        private var state: EmptyComponentState?
         
         final class ItemView: HighlightTrackingButton {
-            var pressed: () -> Void = {
-                
-            }
-            
             init() {
                 super.init(frame: .zero)
-                
-                self.isExclusiveTouch = true
-                
-                self.addTarget(self, action: #selector(self.buttonPressed), for: .touchUpInside)
             }
             
             required init(coder: NSCoder) {
                 preconditionFailure()
-            }
-            
-            @objc func buttonPressed() {
-                self.pressed()
             }
             
             func update(isTablet: Bool, value: String, selected: Bool, tintColor: UIColor) -> CGSize {
@@ -113,9 +104,15 @@ final class ModeComponent: Component {
         }
         
         private var backgroundView = UIView()
-        private var glassContainerView = GlassBackgroundContainerView()
-        private var selectionView = GlassBackgroundView()
-        private var itemViews: [Int32: ItemView] = [:]
+        private var backgroundContainer = GlassBackgroundContainerView()
+        
+        private let liquidLensView: LiquidLensView
+                
+        private var itemViews: [AnyHashable: ItemView] = [:]
+        private var selectedItemViews: [AnyHashable: ItemView] = [:]
+        
+        private var tabSelectionRecognizer: TabSelectionRecognizer?
+        private var selectionGestureState: (startX: CGFloat, currentX: CGFloat, itemId: AnyHashable)?
         
         public func matches(tag: Any) -> Bool {
             if let component = self.component, let componentTag = component.tag {
@@ -128,16 +125,23 @@ final class ModeComponent: Component {
         }
         
         init() {
+            self.liquidLensView = LiquidLensView(useBackgroundContainer: false)
+            
             super.init(frame: CGRect())
             
             self.backgroundView.backgroundColor = UIColor(rgb: 0xffffff, alpha: 0.11)
             self.backgroundView.layer.cornerRadius = 24.0
-            
+                        
             self.layer.allowsGroupOpacity = true
             
             self.addSubview(self.backgroundView)
-            self.backgroundView.addSubview(self.glassContainerView)
-            self.glassContainerView.contentView.addSubview(self.selectionView)
+            self.backgroundView.addSubview(self.backgroundContainer)
+            
+            self.backgroundContainer.contentView.addSubview(self.liquidLensView)
+            
+            let tabSelectionRecognizer = TabSelectionRecognizer(target: self, action: #selector(self.onTabSelectionGesture(_:)))
+            self.tabSelectionRecognizer = tabSelectionRecognizer
+            self.liquidLensView.addGestureRecognizer(tabSelectionRecognizer)
         }
 
         required init?(coder aDecoder: NSCoder) {
@@ -162,14 +166,69 @@ final class ModeComponent: Component {
         override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
             return self.backgroundView.frame.contains(point)
         }
-                
-        func update(component: ModeComponent, availableSize: CGSize, transition: ComponentTransition) -> CGSize {
-            self.component = component
         
-            let isTablet = component.isTablet
-            let updatedMode = component.updatedMode
+        private func item(at point: CGPoint) -> AnyHashable? {
+            var closestItem: (AnyHashable, CGFloat)?
+            for (id, itemView) in self.itemViews {
+                if itemView.frame.contains(point) {
+                    return id
+                } else {
+                    let distance = abs(point.x - itemView.center.x)
+                    if let closestItemValue = closestItem {
+                        if closestItemValue.1 > distance {
+                            closestItem = (id, distance)
+                        }
+                    } else {
+                        closestItem = (id, distance)
+                    }
+                }
+            }
+            return closestItem?.0
+        }
+        
+        @objc private func onTabSelectionGesture(_ recognizer: TabSelectionRecognizer) {
+            guard let component = self.component else {
+                return
+            }
+            let location = recognizer.location(in: self.liquidLensView.contentView)
+            switch recognizer.state {
+            case .began:
+                if let itemId = self.item(at: location), let itemView = self.itemViews[itemId] {
+                    let startX = itemView.frame.minX - 4.0
+                    self.selectionGestureState = (startX, startX, itemId)
+                    self.state?.updated(transition: .spring(duration: 0.4), isLocal: true)
+                }
+            case .changed:
+                if var selectionGestureState = self.selectionGestureState {
+                    selectionGestureState.currentX = selectionGestureState.startX + recognizer.translation(in: self).x
+                    if let itemId = self.item(at: location) {
+                        selectionGestureState.itemId = itemId
+                    }
+                    self.selectionGestureState = selectionGestureState
+                    self.state?.updated(transition: .immediate, isLocal: true)
+                }
+            case .ended, .cancelled:
+                if let selectionGestureState = self.selectionGestureState {
+                    self.selectionGestureState = nil
+                    if case .ended = recognizer.state {
+                        guard let item = component.availableModes.first(where: { AnyHashable($0.rawValue) == selectionGestureState.itemId }) else {
+                            return
+                        }
+                        component.updatedMode(item)
+                    }
+                    self.state?.updated(transition: .spring(duration: 0.4), isLocal: true)
+                }
+            default:
+                break
+            }
+        }
+                
+        func update(component: ModeComponent, availableSize: CGSize, state: EmptyComponentState, transition: ComponentTransition) -> CGSize {
+            self.component = component
+            self.state = state
             
-            self.glassContainerView.isHidden = component.isTablet
+            let isTablet = component.isTablet
+            
             self.backgroundView.backgroundColor = component.isTablet ? .clear : UIColor(rgb: 0xffffff, alpha: 0.11)
         
             let inset: CGFloat = 23.0
@@ -180,25 +239,34 @@ final class ModeComponent: Component {
             var selectedCenter = itemFrame.minX
             var selectedFrame = itemFrame
             
-            var validKeys: Set<Int32> = Set()
+            var validKeys: Set<AnyHashable> = Set()
             for mode in component.availableModes.reversed() {
                 let id = mode.rawValue
                 validKeys.insert(id)
                 
                 let itemView: ItemView
-                if let current = self.itemViews[id] {
+                let selectedItemView: ItemView
+                if let current = self.itemViews[id], let currentSelected = self.selectedItemViews[id] {
                     itemView = current
+                    selectedItemView = currentSelected
                 } else {
                     itemView = ItemView()
-                    self.backgroundView.addSubview(itemView)
+                    itemView.isUserInteractionEnabled = false
                     self.itemViews[id] = itemView
-                }
-                itemView.pressed = {
-                    updatedMode(mode)
+                    self.liquidLensView.contentView.addSubview(itemView)
+                    
+                    selectedItemView = ItemView()
+                    selectedItemView.isUserInteractionEnabled = false
+                    self.selectedItemViews[id] = selectedItemView
+                    self.liquidLensView.selectedContentView.addSubview(selectedItemView)
                 }
                
-                let itemSize = itemView.update(isTablet: component.isTablet, value: mode.title(strings: component.strings), selected: mode == component.currentMode, tintColor: component.tintColor)
+                let itemSize = itemView.update(isTablet: component.isTablet, value: mode.title(strings: component.strings), selected: false, tintColor: component.tintColor)
                 itemView.bounds = CGRect(origin: .zero, size: itemSize)
+                
+                let _ = selectedItemView.update(isTablet: component.isTablet, value: mode.title(strings: component.strings), selected: true, tintColor: component.tintColor)
+                selectedItemView.bounds = CGRect(origin: .zero, size: itemSize)
+                
                 itemFrame = CGRect(origin: itemFrame.origin, size: itemSize)
                 
                 if mode == component.currentMode {
@@ -207,12 +275,14 @@ final class ModeComponent: Component {
                 
                 if isTablet {
                     itemView.center = CGPoint(x: availableSize.width / 2.0, y: itemFrame.midY)
+                    selectedItemView.center = itemView.center
                     if mode == component.currentMode {
                         selectedCenter = itemFrame.midY
                     }
                     itemFrame = itemFrame.offsetBy(dx: 0.0, dy: tabletButtonSize.height + spacing)
                 } else {
                     itemView.center = CGPoint(x: itemFrame.midX, y: itemFrame.midY)
+                    selectedItemView.center = itemView.center
                     if mode == component.currentMode {
                         selectedCenter = itemFrame.midX
                     }
@@ -221,7 +291,7 @@ final class ModeComponent: Component {
                 i += 1
             }
             
-            var removeKeys: [Int32] = []
+            var removeKeys: [AnyHashable] = []
             for (id, itemView) in self.itemViews {
                 if !validKeys.contains(id) {
                     removeKeys.append(id)
@@ -248,12 +318,19 @@ final class ModeComponent: Component {
             }
             
             let containerFrame = CGRect(origin: .zero, size: self.backgroundView.frame.size)
-            transition.setFrame(view: self.glassContainerView, frame: containerFrame)
+            transition.setFrame(view: self.backgroundContainer, frame: containerFrame)
             
-            let selectionFrame = selectedFrame.insetBy(dx: -20.0, dy: 3.0)
-            self.glassContainerView.update(size: containerFrame.size, isDark: true, transition: .immediate)
-            self.selectionView.update(size: selectionFrame.size, cornerRadius: selectionFrame.height * 0.5, isDark: true, tintColor: .init(kind: .custom, color: UIColor(rgb: 0xffffff, alpha: 0.16)), transition: transition)
-            transition.setFrame(view: self.selectionView, frame: selectionFrame)
+            let selectionFrame = selectedFrame.insetBy(dx: -23.0, dy: 3.0)
+            let lensSelection: (x: CGFloat, width: CGFloat)
+            if let selectionGestureState = self.selectionGestureState {
+                lensSelection = (selectionGestureState.currentX, selectionFrame.width)
+            } else {
+                lensSelection = (selectionFrame.minX, selectionFrame.width)
+            }
+            
+            transition.setFrame(view: self.liquidLensView, frame: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: containerFrame.size))
+            self.liquidLensView.update(size: containerFrame.size, selectionOrigin: CGPoint(x: lensSelection.x, y: 0.0), selectionSize: CGSize(width: lensSelection.width, height: selectionFrame.height), isDark: true, isLifted: self.selectionGestureState != nil, isCollapsed: false, transition: transition)
+            self.backgroundContainer.update(size: containerFrame.size, isDark: true, transition: .immediate)
             
             return size
         }
@@ -264,7 +341,7 @@ final class ModeComponent: Component {
     }
 
     func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
-        return view.update(component: self, availableSize: availableSize, transition: transition)
+        return view.update(component: self, availableSize: availableSize, state: state, transition: transition)
     }
 }
 

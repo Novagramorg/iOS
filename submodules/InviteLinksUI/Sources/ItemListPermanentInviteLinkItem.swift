@@ -403,8 +403,8 @@ public class ItemListPermanentInviteLinkItemNode: ListViewItemNode, ItemListItem
             }
             
             let fieldHeight: CGFloat = 52.0
-            let fieldSpacing: CGFloat = 16.0
-            let buttonHeight: CGFloat = 50.0
+            let fieldSpacing: CGFloat = 10.0
+            let buttonHeight: CGFloat = 52.0
             let justCreatedCallSeparatorSpacing: CGFloat = 16.0
             let justCreatedCallTextSpacing: CGFloat = 45.0
             

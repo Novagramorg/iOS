@@ -1679,34 +1679,7 @@ private final class PremiumIntroScreenContentComponent: CombinedComponent {
                         }
                     }
                 })
-                
-                self.newPerksDisposable = combineLatest(
-                    queue: Queue.mainQueue(),
-                    ApplicationSpecificNotice.dismissedBusinessBadge(accountManager: context.sharedContext.accountManager),
-                    ApplicationSpecificNotice.dismissedBusinessLinksBadge(accountManager: context.sharedContext.accountManager),
-                    ApplicationSpecificNotice.dismissedBusinessIntroBadge(accountManager: context.sharedContext.accountManager),
-                    ApplicationSpecificNotice.dismissedBusinessChatbotsBadge(accountManager: context.sharedContext.accountManager)
-                ).startStrict(next: { [weak self] dismissedBusinessBadge, dismissedBusinessLinksBadge, dismissedBusinessIntroBadge, dismissedBusinessChatbotsBadge in
-                    guard let self else {
-                        return
-                    }
-                    var newPerks: [String] = []
-                    if !dismissedBusinessBadge {
-                        newPerks.append(PremiumPerk.business.identifier)
-                    }
-                    if !dismissedBusinessLinksBadge {
-                        newPerks.append(PremiumPerk.businessLinks.identifier)
-                    }
-                    if !dismissedBusinessIntroBadge {
-                        newPerks.append(PremiumPerk.businessIntro.identifier)
-                    }
-                    if !dismissedBusinessChatbotsBadge {
-                        newPerks.append(PremiumPerk.businessChatBots.identifier)
-                    }
-                    self.newPerks = newPerks
-                    self.updated()
-                })
-                
+                                
                 self.adsEnabledDisposable = (context.engine.data.subscribe(TelegramEngine.EngineData.Item.Peer.AdsEnabled(id: context.account.peerId))
                 |> deliverOnMainQueue).start(next: { [weak self] adsEnabled in
                     guard let self else {
@@ -2219,7 +2192,6 @@ private final class PremiumIntroScreenContentComponent: CombinedComponent {
                                 demoSubject = .todo
                             case .business:
                                 demoSubject = .business
-                                let _ = ApplicationSpecificNotice.setDismissedBusinessBadge(accountManager: accountContext.sharedContext.accountManager).startStandalone()
                             default:
                                 demoSubject = .doubleLimits
                             }
@@ -2418,7 +2390,6 @@ private final class PremiumIntroScreenContentComponent: CombinedComponent {
                                         }
                                         push(accountContext.sharedContext.makeChatbotSetupScreen(context: accountContext, initialData: initialData))
                                     })
-                                    let _ = ApplicationSpecificNotice.setDismissedBusinessChatbotsBadge(accountManager: accountContext.sharedContext.accountManager).startStandalone()
                                 case .businessIntro:
                                     let _ = (accountContext.sharedContext.makeBusinessIntroSetupScreenInitialData(context: accountContext)
                                     |> take(1)
@@ -2428,7 +2399,6 @@ private final class PremiumIntroScreenContentComponent: CombinedComponent {
                                         }
                                         push(accountContext.sharedContext.makeBusinessIntroSetupScreen(context: accountContext, initialData: initialData))
                                     })
-                                    let _ = ApplicationSpecificNotice.setDismissedBusinessIntroBadge(accountManager: accountContext.sharedContext.accountManager).startStandalone()
                                 case .businessLinks:
                                     let _ = (accountContext.sharedContext.makeBusinessLinksSetupScreenInitialData(context: accountContext)
                                     |> take(1)
@@ -2438,7 +2408,6 @@ private final class PremiumIntroScreenContentComponent: CombinedComponent {
                                         }
                                         push(accountContext.sharedContext.makeBusinessLinksSetupScreen(context: accountContext, initialData: initialData))
                                     })
-                                    let _ = ApplicationSpecificNotice.setDismissedBusinessLinksBadge(accountManager: accountContext.sharedContext.accountManager).startStandalone()
                                 default:
                                     fatalError()
                                 }
@@ -2457,13 +2426,10 @@ private final class PremiumIntroScreenContentComponent: CombinedComponent {
                                     demoSubject = .businessAwayMessage
                                 case .businessChatBots:
                                     demoSubject = .businessChatBots
-                                    let _ = ApplicationSpecificNotice.setDismissedBusinessChatbotsBadge(accountManager: accountContext.sharedContext.accountManager).startStandalone()
                                 case .businessIntro:
                                     demoSubject = .businessIntro
-                                    let _ = ApplicationSpecificNotice.setDismissedBusinessIntroBadge(accountManager: accountContext.sharedContext.accountManager).startStandalone()
                                 case .businessLinks:
                                     demoSubject = .businessLinks
-                                    let _ = ApplicationSpecificNotice.setDismissedBusinessLinksBadge(accountManager: accountContext.sharedContext.accountManager).startStandalone()
                                 default:
                                     fatalError()
                                 }
