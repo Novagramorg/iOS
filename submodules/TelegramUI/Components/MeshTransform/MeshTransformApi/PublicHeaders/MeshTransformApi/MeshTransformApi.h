@@ -30,6 +30,4 @@ typedef struct MeshTransformMeshVertex {
 
 @end
 
-extern NSString * const kCADepthNormalizationNone;
-
 #endif
