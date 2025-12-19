@@ -34,6 +34,7 @@ final class GiftOptionsScreenComponent: Component {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
     
     let context: AccountContext
+    let overNavigationContainer: UIView
     let starsContext: StarsContext
     let peerId: EnginePeer.Id
     let premiumOptions: [CachedPremiumGiftOption]
@@ -42,6 +43,7 @@ final class GiftOptionsScreenComponent: Component {
     
     init(
         context: AccountContext,
+        overNavigationContainer: UIView,
         starsContext: StarsContext,
         peerId: EnginePeer.Id,
         premiumOptions: [CachedPremiumGiftOption],
@@ -49,6 +51,7 @@ final class GiftOptionsScreenComponent: Component {
         completion: (() -> Void)?
     ) {
         self.context = context
+        self.overNavigationContainer = overNavigationContainer
         self.starsContext = starsContext
         self.peerId = peerId
         self.premiumOptions = premiumOptions
@@ -1144,14 +1147,14 @@ final class GiftOptionsScreenComponent: Component {
             }
             
             if isGlass {
-                let barButtonSize = CGSize(width: 40.0, height: 40.0)
+                let barButtonSize = CGSize(width: 44.0, height: 44.0)
                 let cancelButtonSize = self.cancelButton.update(
                     transition: transition,
                     component: AnyComponent(GlassBarButtonComponent(
                         size: barButtonSize,
-                        backgroundColor: theme.rootController.navigationBar.glassBarButtonBackgroundColor,
+                        backgroundColor: nil,
                         isDark: theme.overallDarkAppearance,
-                        state: .generic,
+                        state: .glass,
                         component: AnyComponentWithIdentity(id: "close", component: AnyComponent(
                             BundleIconComponent(
                                 name: "Navigation/Close",
@@ -1922,6 +1925,8 @@ final class GiftOptionsScreenComponent: Component {
 open class GiftOptionsScreen: ViewControllerComponentContainer, GiftOptionsScreenProtocol {
     private let context: AccountContext
     
+    private let overNavigationContainer: UIView
+    
     public var parentController: () -> ViewController? = {
         return nil
     }
@@ -1936,8 +1941,11 @@ open class GiftOptionsScreen: ViewControllerComponentContainer, GiftOptionsScree
     ) {
         self.context = context
         
+        self.overNavigationContainer = SparseContainerView()
+        
         super.init(context: context, component: GiftOptionsScreenComponent(
             context: context,
+            overNavigationContainer: self.overNavigationContainer,
             starsContext: starsContext,
             peerId: peerId,
             premiumOptions: premiumOptions,
@@ -1953,6 +1961,10 @@ open class GiftOptionsScreen: ViewControllerComponentContainer, GiftOptionsScree
                 return
             }
             componentView.scrollToTop()
+        }
+        
+        if let navigationBar = self.navigationBar {
+            navigationBar.customOverBackgroundContentView.insertSubview(self.overNavigationContainer, at: 0)
         }
     }
     

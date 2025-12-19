@@ -1252,7 +1252,7 @@ public final class StarsTransactionsScreen: ViewControllerComponentContainer {
             gift: {
                 giftImpl?()
             }
-        ), navigationBarAppearance: .transparent)
+        ), navigationBarAppearance: .default)
         
         self.navigationPresentation = .modalInLargeLayout
         

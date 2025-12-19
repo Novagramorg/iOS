@@ -771,7 +771,10 @@ public final class TabBarComponent: Component {
                 lensSize = CGSize(width: 48.0, height: 48.0)
                 lensSelection = (0.0, 48.0)
             }
-            self.liquidLensView.update(size: lensSize, selectionX: lensSelection.x, selectionWidth: lensSelection.width, isDark: component.theme.overallDarkAppearance, isLifted: self.selectionGestureState != nil, isCollapsed: isLensCollapsed, transition: transition)
+            
+            lensSelection.x = max(0.0, min(lensSelection.x, lensSize.width - lensSelection.width))
+            
+            self.liquidLensView.update(size: lensSize, selectionX: lensSelection.x, selectionWidth: lensSelection.width, inset: 4.0, isDark: component.theme.overallDarkAppearance, isLifted: self.selectionGestureState != nil, isCollapsed: isLensCollapsed, transition: transition)
 
             var size = tabsSize
 

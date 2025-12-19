@@ -64,13 +64,16 @@ final class AffiliateProgramSetupScreenComponent: Component {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
     
     let context: AccountContext
+    let overNavigationContainer: UIView
     let initialContent: AffiliateProgramSetupScreen.Content
 
     init(
         context: AccountContext,
+        overNavigationContainer: UIView,
         initialContent: AffiliateProgramSetupScreen.Content
     ) {
         self.context = context
+        self.overNavigationContainer = overNavigationContainer
         self.initialContent = initialContent
     }
 
@@ -93,6 +96,7 @@ final class AffiliateProgramSetupScreenComponent: Component {
         
         private let coinIcon = ComponentView<Empty>()
         private let title = ComponentView<Empty>()
+        private let titleContainer: UIView
         private let titleTransformContainer: UIView
         private var titleNeutralScale: CGFloat = 1.0
         private let subtitle = ComponentView<Empty>()
@@ -156,6 +160,8 @@ final class AffiliateProgramSetupScreenComponent: Component {
             self.scrollView.canCancelContentTouches = true
             self.scrollView.contentInsetAdjustmentBehavior = .never
             self.scrollView.alwaysBounceVertical = true
+            
+            self.titleContainer = SparseContainerView()
             
             self.titleTransformContainer = UIView()
             self.titleTransformContainer.isUserInteractionEnabled = false
@@ -336,6 +342,8 @@ final class AffiliateProgramSetupScreenComponent: Component {
             let titleY: CGFloat = max(titleCenterY, self.titleTransformContainer.center.y - self.scrollView.contentOffset.y)
             
             transition.setSublayerTransform(view: self.titleTransformContainer, transform: CATransform3DMakeTranslation(0.0, titleY - self.titleTransformContainer.center.y, 0.0))
+            
+            transition.setSublayerTransform(view: self.titleContainer, transform: CATransform3DMakeTranslation(0.0, -self.scrollView.contentOffset.y, 0.0))
             
             let titleYDistance: CGFloat = titleY - titleCenterY
             let titleTransformFraction: CGFloat = 1.0 - max(0.0, min(1.0, titleYDistance / titleTransformDistance))
@@ -625,6 +633,10 @@ final class AffiliateProgramSetupScreenComponent: Component {
             self.component = component
             self.state = state
             
+            if self.titleContainer.superview == nil {
+                component.overNavigationContainer.addSubview(self.titleContainer)
+            }
+            
             let topInset: CGFloat = environment.navigationHeight + 90.0
             let bottomInset: CGFloat = 8.0
             let sideInset: CGFloat = 16.0 + environment.safeInsets.left
@@ -648,7 +660,7 @@ final class AffiliateProgramSetupScreenComponent: Component {
             let coinIconFrame = CGRect(origin: CGPoint(x: floor((availableSize.width - coinIconSize.width) * 0.5), y: contentHeight - coinIconSize.height + 30.0), size: coinIconSize)
             if let coinIconView = self.coinIcon.view {
                 if coinIconView.superview == nil {
-                    self.scrollView.addSubview(coinIconView)
+                    self.titleContainer.addSubview(coinIconView)
                 }
                 transition.setFrame(view: coinIconView, frame: coinIconFrame)
             }
@@ -1620,16 +1632,21 @@ public class AffiliateProgramSetupScreen: ViewControllerComponentContainer {
     private let context: AccountContext
     private var isDismissed: Bool = false
     
+    private let overNavigationContainer: UIView
+    
     public init(
         context: AccountContext,
         initialContent: AffiliateProgramSetupScreenInitialData
     ) {
         self.context = context
         
+        self.overNavigationContainer = SparseContainerView()
+        
         let initialContent = initialContent as! AffiliateProgramSetupScreen.Content
         
         super.init(context: context, component: AffiliateProgramSetupScreenComponent(
             context: context,
+            overNavigationContainer: self.overNavigationContainer,
             initialContent: initialContent
         ), navigationBarAppearance: .default, theme: .default)
         
@@ -1646,6 +1663,10 @@ public class AffiliateProgramSetupScreen: ViewControllerComponentContainer {
             }
             
             return componentView.attemptNavigation(complete: complete)
+        }
+        
+        if let navigationBar = self.navigationBar {
+            navigationBar.customOverBackgroundContentView.insertSubview(self.overNavigationContainer, at: 0)
         }
     }
     

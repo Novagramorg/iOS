@@ -153,7 +153,6 @@ final class PeerInfoHeaderNode: ASDisplayNode {
     let usernameNode: MultiScaleTextNode
     var actionButtonNodes: [PeerInfoHeaderButtonKey: PeerInfoHeaderActionButtonNode] = [:]
     var buttonNodes: [PeerInfoHeaderButtonKey: PeerInfoHeaderButtonNode] = [:]
-    let panelsExpansionBackgroundView: UIView
     let headerEdgeEffectView: EdgeEffectView
     var navigationTitle: String?
     let navigationButtonContainer: PeerInfoHeaderNavigationButtonContainerNode
@@ -170,6 +169,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
     var cancelUpload: (() -> Void)?
     var requestUpdateLayout: ((Bool) -> Void)?
     var animateOverlaysFadeIn: (() -> Void)?
+    var updateUnderHeaderContentsAlpha: ((CGFloat, ContainedViewLayoutTransition) -> Void)?
     
     var displayAvatarContextMenu: ((ASDisplayNode, ContextGesture?) -> Void)?
     var displayCopyContextMenu: ((ASDisplayNode, Bool, Bool) -> Void)?
@@ -289,7 +289,6 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         self.searchBarContainer = SparseNode()
         self.searchContainer = ASDisplayNode()
         
-        self.panelsExpansionBackgroundView = UIView()
         self.headerEdgeEffectView = EdgeEffectView()
         self.headerEdgeEffectView.isUserInteractionEnabled = false
         
@@ -305,7 +304,6 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             self?.requestUpdateLayout?(false)
         }
         
-        self.view.addSubview(self.panelsExpansionBackgroundView)
         self.addSubnode(self.searchContainer)
         self.view.addSubview(self.headerEdgeEffectView)
         self.view.addSubview(self.backgroundBannerView)
@@ -2507,20 +2505,14 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         let edgeEffectHeight: CGFloat = 40.0
         let edgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: backgroundFrame.width, height: navigationHeight + 18.0))
         
-        let panelsExpansionBackgroundFrame = CGRect(origin: CGPoint(x: 0.0, y: -2000.0 + paneContainerY - contentOffset), size: CGSize(width: width, height: 2000.0))
-        
         if additive {
             transition.updateFrameAdditive(layer: self.headerEdgeEffectView.layer, frame: edgeEffectFrame)
-            transition.updateFrameAdditive(view: self.panelsExpansionBackgroundView, frame: panelsExpansionBackgroundFrame)
         } else {
             transition.updateFrame(view: self.headerEdgeEffectView, frame: edgeEffectFrame)
-            transition.updateFrame(view: self.panelsExpansionBackgroundView, frame: panelsExpansionBackgroundFrame)
         }
         
-        self.panelsExpansionBackgroundView.backgroundColor = presentationData.theme.rootController.navigationBar.opaqueBackgroundColor
-        transition.updateAlpha(layer: self.panelsExpansionBackgroundView.layer, alpha: realAreaExpansionFraction)
-        if isSettings {
-            self.panelsExpansionBackgroundView.isHidden = true
+        if !isSettings {
+            self.updateUnderHeaderContentsAlpha?(1.0 - realAreaExpansionFraction, transition)
         }
         
         self.headerEdgeEffectView.update(content: presentationData.theme.rootController.navigationBar.opaqueBackgroundColor, blur: true, rect: edgeEffectFrame, edge: .top, edgeSize: edgeEffectHeight, transition: ComponentTransition(transition))

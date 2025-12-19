@@ -136,7 +136,7 @@ private final class ChannelDiscussionSearchNavigationContentNode: NavigationBarC
         didSet {
             if self.activity != oldValue {
                 if let params = self.params {
-                    self.updateLayout(size: params.size, leftInset: params.leftInset, rightInset: params.rightInset, transition: .immediate)
+                    let _ = self.updateLayout(size: params.size, leftInset: params.leftInset, rightInset: params.rightInset, transition: .immediate)
                 }
             }
         }
@@ -213,7 +213,7 @@ private final class ChannelDiscussionSearchNavigationContentNode: NavigationBarC
     func updateTheme(_ theme: PresentationTheme) {
         self.theme = theme
         if let params = self.params {
-            self.updateLayout(size: params.size, leftInset: params.leftInset, rightInset: params.rightInset, transition: .immediate)
+            let _ = self.updateLayout(size: params.size, leftInset: params.leftInset, rightInset: params.rightInset, transition: .immediate)
         }
         self.updatePlaceholder()
     }
@@ -228,7 +228,7 @@ private final class ChannelDiscussionSearchNavigationContentNode: NavigationBarC
         return 60.0
     }
     
-    override func updateLayout(size: CGSize, leftInset: CGFloat, rightInset: CGFloat, transition: ContainedViewLayoutTransition) {
+    override func updateLayout(size: CGSize, leftInset: CGFloat, rightInset: CGFloat, transition: ContainedViewLayoutTransition) -> CGSize {
         self.params = Params(size: size, leftInset: leftInset, rightInset: rightInset)
         
         let transition = ComponentTransition(transition)
@@ -304,6 +304,8 @@ private final class ChannelDiscussionSearchNavigationContentNode: NavigationBarC
         
         transition.setFrame(view: self.close.background, frame: closeFrame)
         self.close.background.update(size: closeFrame.size, cornerRadius: closeFrame.height * 0.5, isDark: self.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: UIColor(white: self.theme.overallDarkAppearance ? 0.0 : 1.0, alpha: 0.6)), isInteractive: true, transition: transition)
+        
+        return size
     }
     
     func activate() {

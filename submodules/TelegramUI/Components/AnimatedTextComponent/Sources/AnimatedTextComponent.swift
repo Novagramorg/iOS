@@ -108,6 +108,8 @@ public final class AnimatedTextComponent: Component {
     public final class View: UIView {
         private var characters: [CharacterKey: ComponentView<Empty>] = [:]
         
+        private var spaceSize: CGSize?
+        
         private var component: AnimatedTextComponent?
         private weak var state: EmptyComponentState?
         
@@ -120,6 +122,15 @@ public final class AnimatedTextComponent: Component {
         }
 
         func update(component: AnimatedTextComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
+            let spaceSize: CGSize
+            if let current = self.spaceSize, self.component?.font == component.font {
+                spaceSize = current
+            } else {
+                let spaceSizeValue = NSAttributedString(string: " ", font: component.font, textColor: .black).boundingRect(with: CGSize(width: 100.0, height: 100.0), options: .usesLineFragmentOrigin, context: nil).size
+                spaceSize = CGSize(width: ceil(spaceSizeValue.width), height: ceil(spaceSizeValue.height))
+                self.spaceSize = spaceSize
+            }
+            
             self.component = component
             self.state = state
             
@@ -243,15 +254,23 @@ public final class AnimatedTextComponent: Component {
                     
                     let characterComponent: AnyComponent<Empty>
                     var characterOffset: CGPoint = .zero
+                    var addTrailingSpace = false
                     switch character {
                     case let .text(text):
                         if text == " " {
-                            let spaceSize = NSAttributedString(string: " ", font: component.font, textColor: .black).boundingRect(with: CGSize(width: 100.0, height: 100.0), options: .usesLineFragmentOrigin, context: nil).size
                             size.height = max(size.height, ceil(spaceSize.height))
                             size.width += max(0.0, ceil(spaceSize.width))
                             
                             continue characterLoop
                         } else {
+                            if text.hasPrefix(" ") {
+                                size.height = max(size.height, ceil(spaceSize.height))
+                                size.width += max(0.0, ceil(spaceSize.width))
+                            }
+                            if text.hasSuffix(" ") {
+                                addTrailingSpace = true
+                            }
+                            
                             characterComponent = AnyComponent(MultilineTextComponent(
                                 text: .plain(NSAttributedString(string: text, font: component.font, textColor: component.color))
                             ))
@@ -327,6 +346,11 @@ public final class AnimatedTextComponent: Component {
                     
                     size.height = max(size.height, characterSize.height)
                     size.width += max(0.0, characterSize.width - UIScreenPixel)
+                    
+                    if addTrailingSpace {
+                        size.height = max(size.height, ceil(spaceSize.height))
+                        size.width += max(0.0, ceil(spaceSize.width))
+                    }
                 }
             }
             

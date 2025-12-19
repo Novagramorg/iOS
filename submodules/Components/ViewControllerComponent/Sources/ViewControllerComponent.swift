@@ -286,6 +286,8 @@ open class ViewControllerComponentContainer: ViewController {
         }
         super.init(navigationBarPresentationData: navigationBarPresentationData)
         
+        self._hasGlassStyle = true
+        
         self.setupPresentationData(effectiveUpdatedPresentationData, navigationBarAppearance: navigationBarAppearance, statusBarStyle: statusBarStyle, presentationMode: presentationMode)
     }
     
