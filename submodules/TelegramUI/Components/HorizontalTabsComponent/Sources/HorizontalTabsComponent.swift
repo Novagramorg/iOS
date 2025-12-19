@@ -554,7 +554,7 @@ public final class HorizontalTabsComponent: Component {
             guard let component = self.component, let layoutData = self.layoutData else {
                 return
             }
-            self.lensView.update(size: CGSize(width: layoutData.size.width - 3.0 * 2.0, height: layoutData.size.height - 3.0 * 2.0), selectionX: -self.scrollView.contentOffset.x + layoutData.selectedItemFrame.minX, selectionWidth: layoutData.selectedItemFrame.width + 6.0, inset: 0.0, isDark: component.theme.overallDarkAppearance, isLifted: self.temporaryLiftTimer != nil, transition: transition)
+            self.lensView.update(size: CGSize(width: layoutData.size.width - 3.0 * 2.0, height: layoutData.size.height - 3.0 * 2.0), selectionOrigin: CGPoint(x:  -self.scrollView.contentOffset.x + layoutData.selectedItemFrame.minX, y: 0.0), selectionSize: CGSize(width: layoutData.selectedItemFrame.width + 6.0, height: layoutData.size.height - 3.0 * 2.0), inset: 0.0, isDark: component.theme.overallDarkAppearance, isLifted: self.temporaryLiftTimer != nil, transition: transition)
             
             transition.setPosition(view: self.selectedScrollView, position: CGRect(origin: CGPoint(x: 3.0, y: 0.0), size: CGSize(width: layoutData.size.width - 3.0 * 2.0, height: layoutData.size.height - 3.0 * 2.0)).center)
             transition.setBounds(view: self.selectedScrollView, bounds: CGRect(origin: CGPoint(x: self.scrollView.contentOffset.x, y: 0.0), size: CGSize(width: layoutData.size.width - 3.0 * 2.0, height: layoutData.size.height - 3.0 * 2.0)))
