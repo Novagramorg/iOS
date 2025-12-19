@@ -179,7 +179,7 @@ final class EntityKeyboardBottomPanelComponent: Component {
             self.tintSeparatorView.backgroundColor = UIColor(white: 0.0, alpha: 0.7)
             
             self.backgroundContainer = GlassBackgroundContainerView()
-            self.liquidLensView = LiquidLensView(useBackgroundContainer: false)
+            self.liquidLensView = LiquidLensView(kind: .externalContainer)
                                     
             super.init(frame: frame)
             
@@ -515,7 +515,7 @@ final class EntityKeyboardBottomPanelComponent: Component {
             }
             
             transition.setFrame(view: self.liquidLensView, frame: CGRect(origin: CGPoint(x: floor((availableSize.width - tabsSize.width) / 2.0), y: 0.0), size: tabsSize))
-            self.liquidLensView.update(size: tabsSize, selectionOrigin: CGPoint(x: lensSelection.x, y: 0.0), selectionSize: CGSize(width: lensSelection.width, height: tabsSize.height), isDark: component.theme.overallDarkAppearance, isLifted: self.selectionGestureState != nil, isCollapsed: activeContentId == nil, transition: transition)
+            self.liquidLensView.update(size: tabsSize, selectionOrigin: CGPoint(x: lensSelection.x, y: 0.0), selectionSize: CGSize(width: lensSelection.width, height: tabsSize.height), inset: 0.0, isDark: component.theme.overallDarkAppearance, isLifted: self.selectionGestureState != nil, isCollapsed: activeContentId == nil, transition: transition)
             
             var removedIconViewIds: [AnyHashable] = []
             for (id, iconView) in self.itemViews {

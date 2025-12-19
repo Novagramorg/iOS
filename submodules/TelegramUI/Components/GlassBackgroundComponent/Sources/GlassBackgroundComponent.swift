@@ -505,7 +505,7 @@ public class GlassBackgroundView: UIView {
                             switch tintColor.kind {
                             case .panel:
                                 if isDark {
-                                    glassEffectValue.tintColor = UIColor(white: 1.0, alpha: 0.1)
+                                    glassEffectValue.tintColor = UIColor(white: 1.0, alpha: 0.025)
                                 } else {
                                     glassEffectValue.tintColor = UIColor(white: 1.0, alpha: 0.1)
                                 }
