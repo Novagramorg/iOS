@@ -4535,7 +4535,7 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
                     )
                     interaction.present(alertController, nil)
                     dismissImpl = { [weak alertController] in
-                        alertController?.dismissAnimated()
+                        alertController?.dismiss()
                     }
                 },
                 isChannelsTabExpanded: recentItems.isChannelsTabExpanded,

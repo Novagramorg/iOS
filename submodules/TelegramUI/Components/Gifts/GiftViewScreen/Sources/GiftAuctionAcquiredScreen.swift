@@ -19,6 +19,8 @@ import TelegramStringFormatting
 import GlassBarButtonComponent
 import GiftItemComponent
 import EdgeEffect
+import TableComponent
+import PeerTableCellComponent
 
 private final class GiftAuctionAcquiredScreenComponent: Component {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
@@ -373,7 +375,7 @@ private final class GiftAuctionAcquiredScreenComponent: Component {
                     title: environment.strings.Gift_Acquired_Recipient,
                     component: AnyComponent(Button(
                         content: AnyComponent(
-                            PeerCellComponent(
+                            PeerTableCellComponent(
                                 context: component.context,
                                 theme: environment.theme,
                                 strings: environment.strings,

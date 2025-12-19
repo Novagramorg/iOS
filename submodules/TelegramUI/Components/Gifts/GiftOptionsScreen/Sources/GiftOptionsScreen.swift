@@ -991,7 +991,7 @@ final class GiftOptionsScreenComponent: Component {
             controller.present(alertController, in: .current)
             
             dismissAlertImpl = { [weak alertController] in
-                alertController?.dismissAnimated()
+                alertController?.dismiss()
             }
         }
         

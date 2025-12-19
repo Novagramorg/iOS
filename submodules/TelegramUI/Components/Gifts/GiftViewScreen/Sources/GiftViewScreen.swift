@@ -41,6 +41,8 @@ import ProfileLevelRatingBarComponent
 import AnimatedTextComponent
 import InfoParagraphComponent
 import ChatMessagePaymentAlertController
+import TableComponent
+import PeerTableCellComponent
 
 private final class GiftViewSheetContent: CombinedComponent {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
@@ -120,6 +122,8 @@ private final class GiftViewSheetContent: CombinedComponent {
         
         let levelsDisposable = MetaDisposable()
         var nextGiftToUpgrade: ProfileGiftsContext.State.StarGift?
+        
+        var giftVariantsDisposable = MetaDisposable()
         
         var buyForm: BotPaymentForm?
         var buyFormDisposable: Disposable?
@@ -375,6 +379,7 @@ private final class GiftViewSheetContent: CombinedComponent {
             self.buyDisposable?.dispose()
             self.levelsDisposable.dispose()
             self.starsTopUpOptionsDisposable?.dispose()
+            self.giftVariantsDisposable.dispose()
         }
 
         func openPeer(_ peer: EnginePeer, gifts: Bool = false, dismiss: Bool = true) {
@@ -1349,6 +1354,33 @@ private final class GiftViewSheetContent: CombinedComponent {
                     action()
                 }
             })
+        }
+        
+        
+        func openUpgradeVariants(attribute: StarGift.UniqueGift.Attribute? = nil) {
+            guard let controller = self.getController() as? GiftViewScreen, let arguments = self.subject.arguments else {
+                return
+            }
+            var selectedAttributes: [StarGift.UniqueGift.Attribute]?
+            if case let .unique(uniqueGift) = arguments.gift {
+                selectedAttributes = uniqueGift.attributes
+            }
+            
+            self.giftVariantsDisposable.set((self.context.engine.payments.getStarGiftUpgradeAttributes(giftId: arguments.gift.giftId)
+            |> take(1)
+            |> deliverOnMainQueue).start(next: { [weak self] attributes in
+                guard let self, let attributes else {
+                    return
+                }
+                let variantsController = self.context.sharedContext.makeGiftUpgradeVariantsScreen(
+                    context: self.context,
+                    gift: arguments.gift,
+                    attributes: attributes,
+                    selectedAttributes: selectedAttributes,
+                    focusedAttribute: attribute
+                )
+                controller.push(variantsController)
+            }))
         }
         
         func showAttributeInfo(tag: Any, text: String) {
@@ -2514,7 +2546,7 @@ private final class GiftViewSheetContent: CombinedComponent {
         let upgradeNextButton = Child(PlainButtonComponent.self)
         
         let upgradeTitle = Child(MultilineTextComponent.self)
-        let upgradeDescription = Child(BalancedTextComponent.self)
+        let upgradeDescription = Child(PlainButtonComponent.self)
         let upgradePerks = Child(List<Empty>.self)
         let upgradeKeepName = Child(PlainButtonComponent.self)
         let upgradePriceButton = Child(PlainButtonComponent.self)
@@ -2721,10 +2753,10 @@ private final class GiftViewSheetContent: CombinedComponent {
                 }
                 headerSubject = .unique(state.justUpgraded ? state.upgradePreview?.attributes : nil, uniqueGift)
             } else if state.inUpgradePreview, let attributes = state.upgradePreview?.attributes {
-                headerHeight = 258.0
+                headerHeight = 246.0
                 headerSubject = .preview(attributes)
             } else if case let .upgradePreview(attributes, _) = component.subject {
-                headerHeight = 258.0
+                headerHeight = 246.0
                 headerSubject = .preview(attributes)
             } else if case let .wearPreview(_, attributes) = component.subject, let attributes {
                 headerHeight = 200.0
@@ -2978,9 +3010,9 @@ private final class GiftViewSheetContent: CombinedComponent {
                 originY += 16.0
             } else if showUpgradePreview {
                 let title: String
-                let description: String
+                //let description: String
                 let uniqueText: String
-                let transferableText: String
+                //let transferableText: String
                 let tradableText: String
                 if !incoming, case let .profileGift(peerId, _) = subject, let peer = state.peerMap[peerId] {
                     var peerName = peer.compactDisplayTitle
@@ -2988,9 +3020,9 @@ private final class GiftViewSheetContent: CombinedComponent {
                         peerName = "\(peerName.prefix(22))…"
                     }
                     title = environment.strings.Gift_Upgrade_GiftTitle
-                    description = environment.strings.Gift_Upgrade_GiftDescription(peerName).string
+                //    description = environment.strings.Gift_Upgrade_GiftDescription(peerName).string
                     uniqueText = strings.Gift_Upgrade_Unique_GiftDescription(peerName).string
-                    transferableText = strings.Gift_Upgrade_Transferable_GiftDescription(peerName).string
+            //        transferableText = strings.Gift_Upgrade_Transferable_GiftDescription(peerName).string
                     tradableText = strings.Gift_Upgrade_Tradable_GiftDescription(peerName).string
                 } else if case let .upgradePreview(_, peerName) = component.subject {
                     var peerName = peerName
@@ -2998,15 +3030,15 @@ private final class GiftViewSheetContent: CombinedComponent {
                         peerName = "\(peerName.prefix(22))…"
                     }
                     title = environment.strings.Gift_Upgrade_IncludeTitle
-                    description = environment.strings.Gift_Upgrade_IncludeDescription(peerName).string
+              //      description = environment.strings.Gift_Upgrade_IncludeDescription(peerName).string
                     uniqueText = strings.Gift_Upgrade_Unique_IncludeDescription
-                    transferableText = strings.Gift_Upgrade_Transferable_IncludeDescription
+       //             transferableText = strings.Gift_Upgrade_Transferable_IncludeDescription
                     tradableText = strings.Gift_Upgrade_Tradable_IncludeDescription
                 } else {
                     title = environment.strings.Gift_Upgrade_Title
-                    description = environment.strings.Gift_Upgrade_Description
+              //      description = environment.strings.Gift_Upgrade_Description
                     uniqueText = strings.Gift_Upgrade_Unique_Description
-                    transferableText = strings.Gift_Upgrade_Transferable_Description
+                  //  transferableText = strings.Gift_Upgrade_Transferable_Description
                     tradableText = strings.Gift_Upgrade_Tradable_Description
                 }
                 
@@ -3024,39 +3056,109 @@ private final class GiftViewSheetContent: CombinedComponent {
                     availableSize: CGSize(width: context.availableSize.width - sideInset * 2.0 - 60.0, height: CGFloat.greatestFiniteMagnitude),
                     transition: .immediate
                 )
-                let upgradeDescription = upgradeDescription.update(
-                    component: BalancedTextComponent(
-                        text: .plain(NSAttributedString(
-                            string: description,
-                            font: Font.regular(13.0),
-                            textColor: .white,
-                            paragraphAlignment: .center
-                        )),
-                        horizontalAlignment: .center,
-                        maximumNumberOfLines: 5,
-                        lineSpacing: 0.2,
-                        tintColor: vibrantColor
-                    ),
-                    availableSize: CGSize(width: context.availableSize.width - sideInset * 2.0 - 50.0, height: CGFloat.greatestFiniteMagnitude),
-                    transition: context.transition
-                )
                 
-                let spacing: CGFloat = 6.0
-                let totalHeight: CGFloat = upgradeTitle.size.height + spacing + upgradeDescription.size.height
-                
-                headerComponents.append({
-                    context.add(upgradeTitle
-                        .position(CGPoint(x: context.availableSize.width / 2.0, y: floor(212.0 - totalHeight / 2.0 + upgradeTitle.size.height / 2.0)))
-                        .appear(.default(alpha: true))
-                        .disappear(.default(alpha: true))
+                if case let .generic(gift) = component.subject.arguments?.gift, let upgradePreview = state.upgradePreview {
+                    var variant1: GiftItemComponent.Subject = .starGift(gift: gift, price: "")
+                    var variant2: GiftItemComponent.Subject = .starGift(gift: gift, price: "")
+                    var variant3: GiftItemComponent.Subject = .starGift(gift: gift, price: "")
+
+                    var i = 0
+                    for attribute in upgradePreview.attributes {
+                        if case .model = attribute {
+                            switch i {
+                            case 0:
+                                variant1 = .preview(attributes: [attribute], rarity: 0)
+                            case 1:
+                                variant2 = .preview(attributes: [attribute], rarity: 0)
+                            case 2:
+                                variant3 = .preview(attributes: [attribute], rarity: 0)
+                            default:
+                                break
+                            }
+                            i += 1
+                        }
+                    }
+                    //TODO:localize
+                    var buttonColor: UIColor = UIColor.white.withAlphaComponent(0.16)
+                    if let previewPatternColor = giftCompositionExternalState.previewPatternColor {
+                        buttonColor = previewPatternColor
+                    }
+                    let upgradeDescription = upgradeDescription.update(
+                        component: PlainButtonComponent(
+                            content: AnyComponent(
+                                ZStack([
+                                    AnyComponentWithIdentity(id: "background", component: AnyComponent(
+                                        FilledRoundedRectangleComponent(color: buttonColor, cornerRadius: .minEdge, smoothCorners: false)
+                                    )),
+                                    AnyComponentWithIdentity(id: "label", component: AnyComponent(HStack([
+                                        AnyComponentWithIdentity(id: "icon1", component: AnyComponent(
+                                            GiftItemComponent(
+                                                context: component.context,
+                                                theme: theme,
+                                                strings: strings,
+                                                peer: nil,
+                                                subject: variant1,
+                                                isPlaceholder: false,
+                                                mode: .tableIcon
+                                            )
+                                        )),
+                                        AnyComponentWithIdentity(id: "icon2", component: AnyComponent(
+                                            GiftItemComponent(
+                                                context: component.context,
+                                                theme: theme,
+                                                strings: strings,
+                                                peer: nil,
+                                                subject: variant2,
+                                                isPlaceholder: false,
+                                                mode: .tableIcon
+                                            )
+                                        )),
+                                        AnyComponentWithIdentity(id: "icon3", component: AnyComponent(
+                                            GiftItemComponent(
+                                                context: component.context,
+                                                theme: theme,
+                                                strings: strings,
+                                                peer: nil,
+                                                subject: variant3,
+                                                isPlaceholder: false,
+                                                mode: .tableIcon
+                                            )
+                                        )),
+                                        AnyComponentWithIdentity(id: "text", component: AnyComponent(
+                                            MultilineTextComponent(text: .plain(NSAttributedString(string: "View all variants", font: Font.semibold(13.0), textColor: .white)))
+                                        )),
+                                        AnyComponentWithIdentity(id: "arrow", component: AnyComponent(
+                                            BundleIconComponent(name: "Item List/InlineTextRightArrow", tintColor: .white)
+                                        ))
+                                    ], spacing: 3.0)))
+                                ])
+                            ),
+                            action: { [weak state] in
+                                state?.openUpgradeVariants()
+                            },
+                            animateScale: false
+                        ),
+                        availableSize: CGSize(width: 190.0, height: 24.0),
+                        transition: context.transition
                     )
+                  
+                    let spacing: CGFloat = 6.0
+                    let totalHeight: CGFloat = upgradeTitle.size.height + spacing + upgradeDescription.size.height
                     
-                    context.add(upgradeDescription
-                        .position(CGPoint(x: context.availableSize.width / 2.0, y: floor(212.0 + totalHeight / 2.0 - upgradeDescription.size.height / 2.0)))
-                        .appear(.default(alpha: true))
-                        .disappear(.default(alpha: true))
-                    )
-                })
+                    headerComponents.append({
+                        context.add(upgradeTitle
+                            .position(CGPoint(x: context.availableSize.width / 2.0, y: floor(194.0 - totalHeight / 2.0 + upgradeTitle.size.height / 2.0)))
+                            .appear(.default(alpha: true))
+                            .disappear(.default(alpha: true))
+                        )
+                        
+                        context.add(upgradeDescription
+                            .position(CGPoint(x: context.availableSize.width / 2.0, y: floor(198.0 + totalHeight / 2.0 - upgradeDescription.size.height / 2.0)))
+                            .appear(.default(alpha: true))
+                            .disappear(.default(alpha: true))
+                        )
+                    })
+                }
                 originY += 24.0
                 
                 let textColor = theme.actionSheet.primaryTextColor
@@ -3078,20 +3180,20 @@ private final class GiftViewSheetContent: CombinedComponent {
                         ))
                     )
                 )
-                items.append(
-                    AnyComponentWithIdentity(
-                        id: "transferable",
-                        component: AnyComponent(InfoParagraphComponent(
-                            title: strings.Gift_Upgrade_Transferable_Title,
-                            titleColor: textColor,
-                            text: transferableText,
-                            textColor: secondaryTextColor,
-                            accentColor: linkColor,
-                            iconName: "Premium/Collectible/Transferable",
-                            iconColor: linkColor
-                        ))
-                    )
-                )
+//                items.append(
+//                    AnyComponentWithIdentity(
+//                        id: "transferable",
+//                        component: AnyComponent(InfoParagraphComponent(
+//                            title: strings.Gift_Upgrade_Transferable_Title,
+//                            titleColor: textColor,
+//                            text: transferableText,
+//                            textColor: secondaryTextColor,
+//                            accentColor: linkColor,
+//                            iconName: "Premium/Collectible/Transferable",
+//                            iconColor: linkColor
+//                        ))
+//                    )
+//                )
                 items.append(
                     AnyComponentWithIdentity(
                         id: "tradable",
@@ -3102,6 +3204,21 @@ private final class GiftViewSheetContent: CombinedComponent {
                             textColor: secondaryTextColor,
                             accentColor: linkColor,
                             iconName: "Premium/Collectible/Tradable",
+                            iconColor: linkColor
+                        ))
+                    )
+                )
+                //TODO:localize
+                items.append(
+                    AnyComponentWithIdentity(
+                        id: "wearable",
+                        component: AnyComponent(InfoParagraphComponent(
+                            title: "Wearable",
+                            titleColor: textColor,
+                            text: "Display gifts on your page and set them as profile covers or statuses.",
+                            textColor: secondaryTextColor,
+                            accentColor: linkColor,
+                            iconName: "Premium/Collectible/Transferable",
                             iconColor: linkColor
                         ))
                     )
@@ -3598,7 +3715,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                                                 id: AnyHashable(0),
                                                 component: AnyComponent(Button(
                                                     content: AnyComponent(
-                                                        PeerCellComponent(
+                                                        PeerTableCellComponent(
                                                             context: component.context,
                                                             theme: theme,
                                                             strings: strings,
@@ -3631,7 +3748,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                                 } else {
                                     ownerComponent = AnyComponent(Button(
                                         content: AnyComponent(
-                                            PeerCellComponent(
+                                            PeerTableCellComponent(
                                                 context: component.context,
                                                 theme: theme,
                                                 strings: strings,
@@ -3682,7 +3799,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                                 title: strings.Gift_Unique_Telegram,
                                 component: AnyComponent(Button(
                                     content: AnyComponent(
-                                        PeerCellComponent(
+                                        PeerTableCellComponent(
                                             context: component.context,
                                             theme: theme,
                                             strings: strings,
@@ -3712,7 +3829,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                                         id: AnyHashable(0),
                                         component: AnyComponent(Button(
                                             content: AnyComponent(
-                                                PeerCellComponent(
+                                                PeerTableCellComponent(
                                                     context: component.context,
                                                     theme: theme,
                                                     strings: strings,
@@ -3742,7 +3859,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                         } else {
                             fromComponent = AnyComponent(Button(
                                 content: AnyComponent(
-                                    PeerCellComponent(
+                                    PeerTableCellComponent(
                                         context: component.context,
                                         theme: theme,
                                         strings: strings,
@@ -3767,7 +3884,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                                 id: "from_anon",
                                 title: strings.Gift_View_From,
                                 component: AnyComponent(
-                                    PeerCellComponent(
+                                    PeerTableCellComponent(
                                         context: component.context,
                                         theme: theme,
                                         strings: strings,
@@ -4151,7 +4268,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                                             color: theme.list.itemAccentColor
                                         )),
                                         action: { [weak state] in
-                                            state?.showAttributeInfo(tag: tag, text: strings.Gift_Unique_AttributeDescription(formatPercentage(percentage)).string)
+                                            state?.openUpgradeVariants(attribute: attribute)
                                         }
                                     ).tagged(tag))
                                 ))
@@ -5784,115 +5901,6 @@ func formatPercentage(_ value: Float) -> String {
     return String(format: "%0.1f", value).replacingOccurrences(of: ".0", with: "").replacingOccurrences(of: ",0", with: "") + "%"
 }
 
-final class PeerCellComponent: Component {
-    let context: AccountContext
-    let theme: PresentationTheme
-    let strings: PresentationStrings
-    let peer: EnginePeer?
-
-    init(context: AccountContext, theme: PresentationTheme, strings: PresentationStrings, peer: EnginePeer?) {
-        self.context = context
-        self.theme = theme
-        self.strings = strings
-        self.peer = peer
-    }
-
-    static func ==(lhs: PeerCellComponent, rhs: PeerCellComponent) -> Bool {
-        if lhs.context !== rhs.context {
-            return false
-        }
-        if lhs.theme !== rhs.theme {
-            return false
-        }
-        if lhs.strings !== rhs.strings {
-            return false
-        }
-        if lhs.peer != rhs.peer {
-            return false
-        }
-        return true
-    }
-
-    final class View: UIView {
-        private let avatarNode: AvatarNode
-        private let text = ComponentView<Empty>()
-                
-        private var component: PeerCellComponent?
-        private weak var state: EmptyComponentState?
-        
-        override init(frame: CGRect) {
-            self.avatarNode = AvatarNode(font: avatarPlaceholderFont(size: 8.0))
-                                         
-            super.init(frame: frame)
-            
-            self.addSubnode(self.avatarNode)
-        }
-        
-        required init?(coder: NSCoder) {
-            fatalError("init(coder:) has not been implemented")
-        }
-        
-        func update(component: PeerCellComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
-            self.component = component
-            self.state = state
-                                    
-            let avatarSize = CGSize(width: 22.0, height: 22.0)
-            let spacing: CGFloat = 6.0
-            
-            var peerName: String
-            let avatarOverride: AvatarNodeImageOverride?
-            if let peerValue = component.peer {
-                peerName = peerValue.compactDisplayTitle
-                if peerName.count > 40 {
-                    peerName = "\(peerName.prefix(40))…"
-                }
-                avatarOverride = nil
-            } else {
-                peerName = component.strings.Gift_View_HiddenName
-                avatarOverride = .anonymousSavedMessagesIcon(isColored: true)
-            }
-            
-            let avatarNaturalSize = CGSize(width: 40.0, height: 40.0)
-            self.avatarNode.setPeer(context: component.context, theme: component.theme, peer: component.peer, overrideImage: avatarOverride)
-            self.avatarNode.bounds = CGRect(origin: .zero, size: avatarNaturalSize)
-            
-            let textSize = self.text.update(
-                transition: .immediate,
-                component: AnyComponent(
-                    MultilineTextComponent(
-                        text: .plain(NSAttributedString(string: peerName, font: Font.regular(15.0), textColor: component.peer != nil ? component.theme.list.itemAccentColor : component.theme.list.itemPrimaryTextColor, paragraphAlignment: .left))
-                    )
-                ),
-                environment: {},
-                containerSize: CGSize(width: availableSize.width - avatarSize.width - spacing, height: availableSize.height)
-            )
-            
-            let size = CGSize(width: avatarSize.width + textSize.width + spacing, height: textSize.height)
-            
-            let avatarFrame = CGRect(origin: CGPoint(x: 0.0, y: floorToScreenPixels((size.height - avatarSize.height) / 2.0)), size: avatarSize)
-            self.avatarNode.frame = avatarFrame
-            
-            if let view = self.text.view {
-                if view.superview == nil {
-                    self.addSubview(view)
-                }
-                let textFrame = CGRect(origin: CGPoint(x: avatarSize.width + spacing, y: floorToScreenPixels((size.height - textSize.height) / 2.0)), size: textSize)
-                transition.setFrame(view: view, frame: textFrame)
-            }
-            
-            return size
-        }
-    }
-
-    func makeView() -> View {
-        return View(frame: CGRect())
-    }
-
-    func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
-        return view.update(component: self, availableSize: availableSize, state: state, environment: environment, transition: transition)
-    }
-}
-
 final class HeaderContentComponent: Component {
     let attributedText: NSAttributedString
     
@@ -6250,6 +6258,10 @@ final class AvatarComponent: Component {
         }
         
         func update(component: AvatarComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
+            if self.component == nil {
+                self.avatarNode.font = avatarPlaceholderFont(size: 42.0 * floor(availableSize.width / 100.0))
+            }
+            
             self.component = component
             self.state = state
             

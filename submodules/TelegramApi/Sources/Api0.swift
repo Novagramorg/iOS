@@ -417,6 +417,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[-1279654347] = { return Api.InputMedia.parse_inputMediaPhoto($0) }
     dict[-440664550] = { return Api.InputMedia.parse_inputMediaPhotoExternal($0) }
     dict[261416433] = { return Api.InputMedia.parse_inputMediaPoll($0) }
+    dict[-207018934] = { return Api.InputMedia.parse_inputMediaStakeDice($0) }
     dict[-1979852936] = { return Api.InputMedia.parse_inputMediaStory($0) }
     dict[-1614454818] = { return Api.InputMedia.parse_inputMediaTodo($0) }
     dict[58495792] = { return Api.InputMedia.parse_inputMediaUploadedDocument($0) }
@@ -660,7 +661,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[-1386050360] = { return Api.MessageExtendedMedia.parse_messageExtendedMediaPreview($0) }
     dict[1313731771] = { return Api.MessageFwdHeader.parse_messageFwdHeader($0) }
     dict[1882335561] = { return Api.MessageMedia.parse_messageMediaContact($0) }
-    dict[1065280907] = { return Api.MessageMedia.parse_messageMediaDice($0) }
+    dict[147581959] = { return Api.MessageMedia.parse_messageMediaDice($0) }
     dict[1389939929] = { return Api.MessageMedia.parse_messageMediaDocument($0) }
     dict[1038967584] = { return Api.MessageMedia.parse_messageMediaEmpty($0) }
     dict[-38694904] = { return Api.MessageMedia.parse_messageMediaGame($0) }
@@ -1127,6 +1128,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[-302247650] = { return Api.Update.parse_updateDraftMessage($0) }
     dict[457133559] = { return Api.Update.parse_updateEditChannelMessage($0) }
     dict[-469536605] = { return Api.Update.parse_updateEditMessage($0) }
+    dict[-73640838] = { return Api.Update.parse_updateEmojiGameInfo($0) }
     dict[386986326] = { return Api.Update.parse_updateEncryptedChatTyping($0) }
     dict[956179895] = { return Api.Update.parse_updateEncryptedMessagesRead($0) }
     dict[-1264392051] = { return Api.Update.parse_updateEncryption($0) }
@@ -1417,6 +1419,9 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[-253500010] = { return Api.messages.Dialogs.parse_dialogsNotModified($0) }
     dict[1910543603] = { return Api.messages.Dialogs.parse_dialogsSlice($0) }
     dict[-1506535550] = { return Api.messages.DiscussionMessage.parse_discussionMessage($0) }
+    dict[1155883043] = { return Api.messages.EmojiGameInfo.parse_emojiGameDiceInfo($0) }
+    dict[1508266805] = { return Api.messages.EmojiGameInfo.parse_emojiGameUnavailable($0) }
+    dict[-1585592191] = { return Api.messages.EmojiGameOutcome.parse_emojiGameOutcome($0) }
     dict[-2011186869] = { return Api.messages.EmojiGroups.parse_emojiGroups($0) }
     dict[1874111879] = { return Api.messages.EmojiGroups.parse_emojiGroupsNotModified($0) }
     dict[410107472] = { return Api.messages.ExportedChatInvite.parse_exportedChatInvite($0) }
@@ -2572,6 +2577,10 @@ public extension Api {
             case let _1 as Api.messages.Dialogs:
                 _1.serialize(buffer, boxed)
             case let _1 as Api.messages.DiscussionMessage:
+                _1.serialize(buffer, boxed)
+            case let _1 as Api.messages.EmojiGameInfo:
+                _1.serialize(buffer, boxed)
+            case let _1 as Api.messages.EmojiGameOutcome:
                 _1.serialize(buffer, boxed)
             case let _1 as Api.messages.EmojiGroups:
                 _1.serialize(buffer, boxed)

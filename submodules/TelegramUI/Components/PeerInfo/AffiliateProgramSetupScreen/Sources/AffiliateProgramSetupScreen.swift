@@ -1170,6 +1170,7 @@ final class AffiliateProgramSetupScreenComponent: Component {
                     transition: transition,
                     component: AnyComponent(ButtonComponent(
                         background: ButtonComponent.Background(
+                            style: .glass,
                             color: environment.theme.list.itemCheckColors.fillColor,
                             foreground: environment.theme.list.itemCheckColors.foregroundColor,
                             pressedColor: environment.theme.list.itemCheckColors.fillColor.withMultipliedAlpha(0.8)
@@ -1186,7 +1187,7 @@ final class AffiliateProgramSetupScreenComponent: Component {
                         }
                     )),
                     environment: {},
-                    containerSize: CGSize(width: availableSize.width - bottomPanelButtonInsets.left - bottomPanelButtonInsets.right, height: 50.0)
+                    containerSize: CGSize(width: availableSize.width - bottomPanelButtonInsets.left - bottomPanelButtonInsets.right, height: 52.0)
                 )
                 
                 let bottomPanelHeight: CGFloat = bottomPanelButtonInsets.top + bottomPanelButtonSize.height + bottomPanelButtonInsets.bottom + bottomPanelTextSize.height + 8.0 + environment.safeInsets.bottom

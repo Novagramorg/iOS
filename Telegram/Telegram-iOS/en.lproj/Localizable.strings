@@ -15459,6 +15459,8 @@ Error: %8$@";
 "Notification.StarsGiftOffer.Expired" = "%1$@ didn't respond to your offer for %2$@ within %3$@ – your %4$@ have been refunded";
 "Notification.StarsGiftOffer.Expired.Stars_1" = "%@ Star";
 "Notification.StarsGiftOffer.Expired.Stars_any" = "%@ Stars";
+"Notification.StarsGiftOffer.Expired.Hours_1" = "%@ hours";
+"Notification.StarsGiftOffer.Expired.Hours_any" = "%@ hours";
 "Notification.StarsGiftOffer.ExpiredYou" = "The offer from %1$@ to buy your %2$@ for %3$@ has expired";
 "Notification.StarsGiftOffer.ExpiredYou.Stars_1" = "%@ Star";
 "Notification.StarsGiftOffer.ExpiredYou.Stars_any" = "%@ Stars";
@@ -15623,3 +15625,6 @@ Error: %8$@";
 "Chat.GiftPurchaseOffer.AcceptConfirmation.BadValue" = "The value of this gift is **%@** higher than the offer.";
 "Chat.GiftPurchaseOffer.AcceptConfirmation.Confirm" = "Confirm Sale";
 
+
+"Notification.PremiumGift.DaysTitle_1" = "%@ Day Premium";
+"Notification.PremiumGift.DaysTitle_any" = "%@ Days Premium";

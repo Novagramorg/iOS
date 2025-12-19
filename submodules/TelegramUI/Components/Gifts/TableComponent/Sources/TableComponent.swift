@@ -5,9 +5,9 @@ import Display
 import TelegramPresentationData
 import MultilineTextComponent
 
-final class TableComponent: CombinedComponent {
-    class Item: Equatable {
-        enum TitleFont {
+public final class TableComponent: CombinedComponent {
+    public class Item: Equatable {
+        public enum TitleFont {
             case regular
             case bold
         }
@@ -19,7 +19,14 @@ final class TableComponent: CombinedComponent {
         public let component: AnyComponent<Empty>
         public let insets: UIEdgeInsets?
 
-        public init<IdType: Hashable>(id: IdType, title: String?, titleFont: TitleFont = .regular, hasBackground: Bool = false, component: AnyComponent<Empty>, insets: UIEdgeInsets? = nil) {
+        public init<IdType: Hashable>(
+            id: IdType,
+            title: String?,
+            titleFont: TitleFont = .regular,
+            hasBackground: Bool = false,
+            component: AnyComponent<Empty>,
+            insets: UIEdgeInsets? = nil
+        ) {
             self.id = AnyHashable(id)
             self.title = title
             self.titleFont = titleFont
@@ -74,13 +81,13 @@ final class TableComponent: CombinedComponent {
         return true
     }
     
-    final class State: ComponentState {
+    public final class State: ComponentState {
         var cachedLastBackgroundImage: (UIImage, PresentationTheme)?
         var cachedLeftColumnImage: (UIImage, PresentationTheme)?
         var cachedBorderImage: (UIImage, PresentationTheme)?
     }
     
-    func makeState() -> State {
+    public func makeState() -> State {
         return State()
     }
 
@@ -98,11 +105,15 @@ final class TableComponent: CombinedComponent {
             let horizontalPadding: CGFloat = 12.0
             let borderWidth: CGFloat = 1.0
             
-            let backgroundColor = context.component.theme.actionSheet.opaqueItemBackgroundColor
-            let borderColor = backgroundColor.mixedWith(context.component.theme.list.itemBlocksSeparatorColor, alpha: 0.6)
-            var secondaryBackgroundColor = context.component.theme.overallDarkAppearance ? context.component.theme.list.itemModalBlocksBackgroundColor : context.component.theme.list.itemInputField.backgroundColor
+            let borderColor: UIColor
+            let secondaryBackgroundColor: UIColor
             if context.component.semiTransparent {
-                secondaryBackgroundColor = borderColor.withMultipliedAlpha(0.5)
+                borderColor = context.component.theme.actionSheet.primaryTextColor.withMultipliedAlpha(0.1)
+                secondaryBackgroundColor = context.component.theme.actionSheet.primaryTextColor.withMultipliedAlpha(0.05)
+            } else {
+                let backgroundColor = context.component.theme.actionSheet.opaqueItemBackgroundColor
+                borderColor = backgroundColor.mixedWith(context.component.theme.list.itemBlocksSeparatorColor, alpha: 0.6)
+                secondaryBackgroundColor = context.component.theme.overallDarkAppearance ? context.component.theme.list.itemModalBlocksBackgroundColor : context.component.theme.list.itemInputField.backgroundColor
             }
             
             var leftColumnWidth: CGFloat = 0.0
