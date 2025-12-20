@@ -623,6 +623,5 @@ public func generateGlassMeshFromDisplacementMap(
         endAngle: .pi / 2
     )
 
-    transform.subdivisionSteps = 0
     return (mesh: transform, wireframe: wireframe)
 }
