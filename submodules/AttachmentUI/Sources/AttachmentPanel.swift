@@ -2057,7 +2057,7 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate {
             if let current = self.liquidLensView {
                 liquidLensView = current
             } else {
-                liquidLensView = LiquidLensView(useBackgroundContainer: false)
+                liquidLensView = LiquidLensView(kind: .externalContainer)
                 self.containerNode.view.addSubview(liquidLensView)
                 //self.containerNode.view.addSubview(self.scrollNode.view)
                 self.liquidLensView = liquidLensView
@@ -2077,7 +2077,7 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate {
             let panelSize = CGSize(width: isSelecting ? textPanelWidth : layout.size.width - layout.safeInsets.left - layout.safeInsets.right - panelSideInset * 2.0, height: isSelecting ? textPanelHeight - 11.0 : glassPanelHeight)
             
             let backgroundOriginX: CGFloat = isSelecting ? panelSideInset : floorToScreenPixels((layout.size.width - panelSize.width) / 2.0)
-            liquidLensView.update(size: panelSize, selectionOrigin: CGPoint(x: lensSelection.x, y: 0.0), selectionSize: CGSize(width: lensSelection.width, height: panelSize.height), isDark: self.presentationData.theme.overallDarkAppearance, isLifted: self.selectionGestureState != nil, isCollapsed: isSelecting, transition: ComponentTransition(transition))
+            liquidLensView.update(size: panelSize, selectionOrigin: CGPoint(x: lensSelection.x, y: 0.0), selectionSize: CGSize(width: lensSelection.width, height: panelSize.height), inset: 0.0, isDark: self.presentationData.theme.overallDarkAppearance, isLifted: self.selectionGestureState != nil, isCollapsed: isSelecting, transition: ComponentTransition(transition))
             
             transition.updatePosition(layer: liquidLensView.layer, position: CGPoint(x: backgroundOriginX + panelSize.width * 0.5, y: panelSize.height * 0.5))
             transition.updateBounds(layer: liquidLensView.layer, bounds: CGRect(origin: .zero, size: panelSize))

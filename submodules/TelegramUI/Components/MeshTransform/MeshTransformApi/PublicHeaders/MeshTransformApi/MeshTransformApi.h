@@ -20,5 +20,14 @@ typedef struct MeshTransformMeshVertex {
     MeshTransformPoint3D to;
 } MeshTransformMeshVertex;
 
+@protocol MeshTransformClass <NSObject>
+
+- (id)meshTransformWithVertexCount:(NSUInteger)vertexCount
+                                    vertices:(MeshTransformMeshVertex *)vertices
+                                   faceCount:(NSUInteger)faceCount
+                                       faces:(MeshTransformMeshFace *)faces
+                          depthNormalization:(NSString *)depthNormalization;
+
+@end
 
 #endif

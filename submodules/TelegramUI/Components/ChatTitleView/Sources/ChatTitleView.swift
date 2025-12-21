@@ -193,7 +193,9 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
     public var disableAnimations: Bool = false
     
     var manualLayout: Bool = false
-    private var validLayout: (CGSize, CGRect)?
+    private var validLayout: CGSize?
+    
+    public var requestUpdate: ((ContainedViewLayoutTransition) -> Void)?
     
     private var titleLeftIcon: ChatTitleIcon = .none
     private var titleRightIcon: ChatTitleIcon = .none
@@ -462,8 +464,8 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
                 
                 if !self.updateStatus(enableAnimation: enableAnimation) {
                     if updated {
-                        if !self.manualLayout, let (size, clearBounds) = self.validLayout {
-                            let _ = self.updateLayout(size: size, clearBounds: clearBounds, transition: (self.disableAnimations || !enableAnimation) ? .immediate : .animated(duration: 0.2, curve: .easeInOut))
+                        if !self.manualLayout, let size = self.validLayout {
+                            let _ = self.updateLayout(availableSize: size, transition: (self.disableAnimations || !enableAnimation) ? .immediate : .animated(duration: 0.2, curve: .easeInOut))
                         }
                     }
                 }
@@ -720,8 +722,8 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
         }
         
         if self.activityNode.transitionToState(state, animation: enableAnimation ? .slide : .none) {
-            if !self.manualLayout, let (size, clearBounds) = self.validLayout {
-                let _ = self.updateLayout(size: size, clearBounds: clearBounds, transition: enableAnimation ? .animated(duration: 0.3, curve: .spring) : .immediate)
+            if !self.manualLayout, let size = self.validLayout {
+                let _ = self.updateLayout(availableSize: size, transition: enableAnimation ? .animated(duration: 0.3, curve: .spring) : .immediate)
             }
             return true
         } else {
@@ -817,8 +819,8 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
     override public func layoutSubviews() {
         super.layoutSubviews()
         
-        if !self.manualLayout, let (size, clearBounds) = self.validLayout {
-            let _ = self.updateLayout(size: size, clearBounds: clearBounds, transition: .immediate)
+        if !self.manualLayout, let size = self.validLayout {
+            let _ = self.updateLayout(availableSize: size, transition: .immediate)
         }
     }
     
@@ -833,17 +835,19 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
             self.titleContent = titleContent
             let _ = self.updateStatus()
             
-            if !self.manualLayout, let (size, clearBounds) = self.validLayout {
-                let _ = self.updateLayout(size: size, clearBounds: clearBounds, transition: .immediate)
+            if !self.manualLayout, let size = self.validLayout {
+                let _ = self.updateLayout(availableSize: size, transition: .immediate)
             }
         }
     }
     
-    public func updateLayout(size: CGSize, clearBounds: CGRect, transition: ContainedViewLayoutTransition) {
-        self.validLayout = (size, clearBounds)
+    public func updateLayout(availableSize: CGSize, transition: ContainedViewLayoutTransition) -> CGSize {
+        let size = availableSize
         
-        self.button.frame = clearBounds
-        self.contentContainer.frame = clearBounds
+        self.validLayout = size
+        
+        self.button.frame = CGRect(origin: CGPoint(), size: size)
+        self.contentContainer.frame = CGRect(origin: CGPoint(), size: size)
         
         var leftIconWidth: CGFloat = 0.0
         var rightIconWidth: CGFloat = 0.0
@@ -997,7 +1001,7 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
             titleInsets.left = verifiedIconWidth
         }
         
-        var titleSize = self.titleTextNode.updateLayout(size: CGSize(width: clearBounds.width - leftIconWidth - credibilityIconWidth - verifiedIconWidth - statusIconWidth - rightIconWidth - titleSideInset * 2.0, height: size.height), insets: titleInsets, animated: titleTransition.isAnimated)
+        var titleSize = self.titleTextNode.updateLayout(size: CGSize(width: size.width - leftIconWidth - credibilityIconWidth - verifiedIconWidth - statusIconWidth - rightIconWidth - titleSideInset * 2.0, height: size.height), insets: titleInsets, animated: titleTransition.isAnimated)
         titleSize.width += credibilityIconWidth
         titleSize.width += verifiedIconWidth
         if statusIconWidth > 0.0 {
@@ -1007,15 +1011,15 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
             }
         }
         
-        let activitySize = self.activityNode.updateLayout(CGSize(width: clearBounds.size.width - titleSideInset * 2.0, height: clearBounds.size.height), alignment: .center)
+        let activitySize = self.activityNode.updateLayout(CGSize(width: size.width - titleSideInset * 2.0, height: size.height), alignment: .center)
         let titleInfoSpacing: CGFloat = 0.0
         
         var activityFrame = CGRect()
         
         if activitySize.height.isZero {
-            titleFrame = CGRect(origin: CGPoint(x: floor((clearBounds.width - titleSize.width) / 2.0), y: floor((size.height - titleSize.height) / 2.0)), size: titleSize)
+            titleFrame = CGRect(origin: CGPoint(x: floor((size.width - titleSize.width) / 2.0), y: floor((size.height - titleSize.height) / 2.0)), size: titleSize)
             if titleFrame.size.width < size.width {
-                titleFrame.origin.x = -clearBounds.minX + floor((size.width - titleFrame.width) / 2.0)
+                titleFrame.origin.x = floor((size.width - titleFrame.width) / 2.0)
             }
             titleTransition.updateFrameAdditive(view: self.titleContainerView, frame: titleFrame)
             titleTransition.updateFrameAdditive(node: self.titleTextNode, frame: CGRect(origin: CGPoint(), size: titleFrame.size))
@@ -1023,12 +1027,12 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
             let combinedHeight = titleSize.height + activitySize.height + titleInfoSpacing
             
             let contentWidth = max(titleSize.width + rightIconWidth, activitySize.width)
-            var contentX = floor((clearBounds.width - contentWidth) / 2.0)
-            contentX = max(contentX, clearBounds.minX + 20.0)
+            var contentX = floor((size.width - contentWidth) / 2.0)
+            contentX = max(contentX, 20.0)
             
             titleFrame = CGRect(origin: CGPoint(x: contentX + floor((contentWidth - titleSize.width) / 2.0), y: floor((size.height - combinedHeight) / 2.0)), size: titleSize)
             
-            titleFrame.origin.x = max(titleFrame.origin.x, clearBounds.minX + leftIconWidth)
+            titleFrame.origin.x = max(titleFrame.origin.x, leftIconWidth)
             titleTransition.updateFrameAdditive(view: self.titleContainerView, frame: titleFrame)
             titleTransition.updateFrameAdditive(node: self.titleTextNode, frame: CGRect(origin: CGPoint(), size: titleFrame.size))
             
@@ -1068,6 +1072,8 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
         let componentTransition = ComponentTransition(transition)
         componentTransition.setFrame(view: self.backgroundView, frame: backgroundFrame)
         self.backgroundView.update(size: backgroundFrame.size, cornerRadius: backgroundFrame.height * 0.5, isDark: self.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: UIColor(white: self.theme.overallDarkAppearance ? 0.0 : 1.0, alpha: 0.6)), isInteractive: false, transition: componentTransition)
+        
+        return availableSize
     }
     
     @objc private func buttonPressed() {

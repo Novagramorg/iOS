@@ -419,7 +419,7 @@ public func SuggestedPostApproveAlert(
     allowInputInset: Bool = true,
     parseMarkdown: Bool = false,
     dismissOnOutsideTap: Bool = true,
-    linkAction: (([NSAttributedString.Key: Any], Int) -> Void)? = nil,
+    linkAction : (([NSAttributedString.Key: Any], Int) -> Void)? = nil,
     toastText: String?
 ) -> AlertController {
     let theme = AlertControllerTheme(presentationData: presentationData)

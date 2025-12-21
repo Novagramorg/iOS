@@ -63,8 +63,8 @@ public final class CollectionTabItemComponent: Component {
                         
             let iconSpacing: CGFloat = 3.0
             
-            let normalColor = component.theme.list.itemSecondaryTextColor
-            let selectedColor = component.theme.list.freeTextColor
+            let normalColor = component.theme.list.itemPrimaryTextColor
+            let selectedColor = component.theme.list.itemPrimaryTextColor
             let effectiveColor = normalColor.mixedWith(selectedColor, alpha: environment.selectionFraction)
             
             let titleSize = self.title.update(
@@ -109,7 +109,7 @@ public final class CollectionTabItemComponent: Component {
                         transition: .immediate,
                         component: AnyComponent(BundleIconComponent(
                             name: "Chat/Input/Media/PanelBadgeAdd",
-                            tintColor: component.theme.list.itemSecondaryTextColor
+                            tintColor: component.theme.list.itemPrimaryTextColor
                         )),
                         environment: {},
                         containerSize: CGSize(width: 100.0, height: 100.0)

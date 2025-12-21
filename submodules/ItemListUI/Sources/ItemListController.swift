@@ -690,7 +690,8 @@ private final class ItemListTextWithSubtitleTitleView: UIView, NavigationBarTitl
     private let titleNode: ImmediateTextNode
     private let subtitleNode: ImmediateTextNode
     
-    private var validLayout: (CGSize, CGRect)?
+    private var validLayout: CGSize?
+    var requestUpdate: ((ContainedViewLayoutTransition) -> Void)?
     
     init(theme: PresentationTheme, title: String, subtitle: String) {
         self.titleNode = ImmediateTextNode()
@@ -720,21 +721,23 @@ private final class ItemListTextWithSubtitleTitleView: UIView, NavigationBarTitl
     func updateTheme(theme: PresentationTheme) {
         self.titleNode.attributedText = NSAttributedString(string: self.titleNode.attributedText?.string ?? "", font: Font.medium(17.0), textColor: theme.rootController.navigationBar.primaryTextColor)
         self.subtitleNode.attributedText = NSAttributedString(string: self.subtitleNode.attributedText?.string ?? "", font: Font.regular(13.0), textColor: theme.rootController.navigationBar.secondaryTextColor)
-        if let (size, clearBounds) = self.validLayout {
-            let _ = self.updateLayout(size: size, clearBounds: clearBounds, transition: .immediate)
+        if let size = self.validLayout {
+            let _ = self.updateLayout(availableSize: size, transition: .immediate)
         }
     }
     
     override func layoutSubviews() {
         super.layoutSubviews()
         
-        if let (size, clearBounds) = self.validLayout {
-            let _ = self.updateLayout(size: size, clearBounds: clearBounds, transition: .immediate)
+        if let size = self.validLayout {
+            let _ = self.updateLayout(availableSize: size, transition: .immediate)
         }
     }
     
-    func updateLayout(size: CGSize, clearBounds: CGRect, transition: ContainedViewLayoutTransition) {
-        self.validLayout = (size, clearBounds)
+    func updateLayout(availableSize: CGSize, transition: ContainedViewLayoutTransition) -> CGSize {
+        let size = availableSize
+        
+        self.validLayout = size
         
         let titleSize = self.titleNode.updateLayout(size)
         let subtitleSize = self.subtitleNode.updateLayout(size)
@@ -745,6 +748,8 @@ private final class ItemListTextWithSubtitleTitleView: UIView, NavigationBarTitl
             
         self.titleNode.frame = titleFrame
         self.subtitleNode.frame = subtitleFrame
+        
+        return availableSize
     }
     
     func animateLayoutTransition() {

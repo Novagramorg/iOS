@@ -139,7 +139,7 @@ public class NavigationBarSearchContentNode: NavigationBarContentNode {
             fillColor = fillColor.withMultipliedBrightnessBy(0.8)
         }
         
-        let backgroundColor = self.theme?.rootController.navigationBar.opaqueBackgroundColor ?? .clear
+        let backgroundColor = self.theme?.chatList.regularSearchBarColor ?? .clear
         let controlColor = self.theme?.chat.inputPanel.panelControlColor ?? .black
         
         let placeholderString = NSAttributedString(string: self.placeholder, font: searchBarFont, textColor: textColor)
@@ -158,10 +158,12 @@ public class NavigationBarSearchContentNode: NavigationBarContentNode {
         }
     }
     
-    override public func updateLayout(size: CGSize, leftInset: CGFloat, rightInset: CGFloat, transition: ContainedViewLayoutTransition) {
+    override public func updateLayout(size: CGSize, leftInset: CGFloat, rightInset: CGFloat, transition: ContainedViewLayoutTransition) -> CGSize {
         self.validLayout = (size, leftInset, rightInset)
         
         self.updatePlaceholder(self.expansionProgress, size: size, leftInset: leftInset, rightInset: rightInset, transition: transition)
+        
+        return size
     }
     
     override public var height: CGFloat {

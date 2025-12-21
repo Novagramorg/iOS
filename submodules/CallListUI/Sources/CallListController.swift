@@ -43,7 +43,7 @@ private final class DeleteAllButtonNode: ASDisplayNode {
         self.buttonNode.addSubnode(self.titleNode)
         self.contentNode.contentNode.addSubnode(self.buttonNode)
         
-        self.titleNode.attributedText = NSAttributedString(string: presentationData.strings.CallList_DeleteAll, font: Font.regular(17.0), textColor: presentationData.theme.rootController.navigationBar.accentTextColor)
+        self.titleNode.attributedText = NSAttributedString(string: presentationData.strings.CallList_DeleteAll, font: Font.medium(17.0), textColor: presentationData.theme.chat.inputPanel.panelControlColor)
         
         //self.buttonNode.addTarget(self, action: #selector(self.buttonPressed), forControlEvents: .touchUpInside)
     }
@@ -54,9 +54,10 @@ private final class DeleteAllButtonNode: ASDisplayNode {
     
     override public func calculateSizeThatFits(_ constrainedSize: CGSize) -> CGSize {
         let titleSize = self.titleNode.updateLayout(constrainedSize)
-        self.titleNode.frame = CGRect(origin: CGPoint(), size: titleSize)
-        self.buttonNode.frame = CGRect(origin: CGPoint(), size: titleSize)
-        return titleSize
+        let size = CGSize(width: 10.0 * 2.0 + titleSize.width, height: 44.0)
+        self.titleNode.frame = CGRect(origin: CGPoint(x: 10.0, y: floorToScreenPixels((size.height - titleSize.height) * 0.5)), size: titleSize)
+        self.buttonNode.frame = CGRect(origin: CGPoint(), size: size)
+        return size
     }
     
     override public func layout() {
