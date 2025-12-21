@@ -23,6 +23,7 @@ swift_library(
         "//submodules/Markdown",
         "//submodules/ActivityIndicator",
         "//submodules/TelegramUI/Components/PeerManagement/OldChannelsController",
+        "//submodules/TelegramUI/Components/AlertComponent",
     ],
     visibility = [
         "//visibility:public",

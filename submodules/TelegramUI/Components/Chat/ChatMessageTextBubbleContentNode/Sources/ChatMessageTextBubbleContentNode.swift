@@ -441,8 +441,13 @@ public class ChatMessageTextBubbleContentNode: ChatMessageBubbleContentNode {
                         messageEntities = updatingMedia.entities?.entities ?? []
                     }
                     
+                    var translateToLanguage = item.associatedData.translateToLanguage
+                    if item.controllerInteraction.summarizedMessageIds.contains(item.message.id) {
+                        translateToLanguage = "sum"
+                    }
+                    
                     if let subject = item.associatedData.subject, case .messageOptions = subject {
-                    } else if let translateToLanguage = item.associatedData.translateToLanguage, !item.message.text.isEmpty && incoming {
+                    } else if let translateToLanguage, !item.message.text.isEmpty && incoming {
                         isTranslating = true
                         for attribute in item.message.attributes {
                             if let attribute = attribute as? TranslationMessageAttribute, !attribute.text.isEmpty, attribute.toLang == translateToLanguage {

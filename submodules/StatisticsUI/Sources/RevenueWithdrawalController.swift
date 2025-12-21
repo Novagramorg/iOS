@@ -8,6 +8,7 @@ import AccountContext
 import PasswordSetupUI
 import Markdown
 import OwnershipTransferController
+import AlertComponent
 
 func confirmRevenueWithdrawalController(context: AccountContext, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)? = nil, peerId: EnginePeer.Id, present: @escaping (ViewController, Any?) -> Void, completion: @escaping (String) -> Void) -> ViewController {
     let presentationData = updatedPresentationData?.initial ?? context.sharedContext.currentPresentationData.with { $0 }
@@ -75,38 +76,41 @@ func confirmRevenueWithdrawalController(context: AccountContext, updatedPresenta
 
 public func revenueWithdrawalController(context: AccountContext, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)? = nil, peerId: EnginePeer.Id, initialError: RequestStarsRevenueWithdrawalError, present: @escaping (ViewController, Any?) -> Void, completion: @escaping (String) -> Void) -> ViewController {
     let presentationData = updatedPresentationData?.initial ?? context.sharedContext.currentPresentationData.with { $0 }
-    let theme = AlertControllerTheme(presentationData: presentationData)
+    let strings = presentationData.strings
     
-    var title: NSAttributedString? = NSAttributedString(string: presentationData.strings.OwnershipTransfer_SecurityCheck, font: Font.semibold(presentationData.listsFontSize.itemListBaseFontSize), textColor: theme.primaryColor, paragraphAlignment: .center)
+    var title: String? = strings.OwnershipTransfer_SecurityCheck
+    var text = strings.Monetization_Withdraw_SecurityRequirements
     
-    var text = presentationData.strings.Monetization_Withdraw_SecurityRequirements
-    let textFontSize = presentationData.listsFontSize.baseDisplaySize * 13.0 / 17.0
-    
-    var actions: [TextAlertAction] = []
+    var actions: [AlertScreen.Action] = [
+        .init(title: strings.Common_OK, type: .default)
+    ]
     switch initialError {
-        case .requestPassword:
-            return confirmRevenueWithdrawalController(context: context, updatedPresentationData: updatedPresentationData, peerId: peerId, present: present, completion: completion)
-        case .twoStepAuthTooFresh, .authSessionTooFresh:
-            text = text + presentationData.strings.Monetization_Withdraw_ComeBackLater
-            actions = [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]
-        case .twoStepAuthMissing:
-            actions = [TextAlertAction(type: .genericAction, title: presentationData.strings.OwnershipTransfer_SetupTwoStepAuth, action: {
+    case .requestPassword:
+        return confirmRevenueWithdrawalController(context: context, updatedPresentationData: updatedPresentationData, peerId: peerId, present: present, completion: completion)
+    case .twoStepAuthTooFresh, .authSessionTooFresh:
+        text = text + strings.Monetization_Withdraw_ComeBackLater
+    case .twoStepAuthMissing:
+        actions = [
+            .init(title: strings.OwnershipTransfer_SetupTwoStepAuth, type: .default, action: {
                 let controller = SetupTwoStepVerificationController(context: context, initialState: .automatic, stateUpdated: { update, shouldDismiss, controller in
                     if shouldDismiss {
                         controller.dismiss()
                     }
                 })
                 present(controller, ViewControllerPresentationArguments(presentationAnimation: .modalSheet))
-            }), TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_Cancel, action: {})]
-        default:
-            title = nil
-            text = presentationData.strings.Login_UnknownError
-            actions = [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]
+            }),
+            .init(title: strings.Common_Cancel)
+        ]
+    default:
+        title = nil
+        text = strings.Login_UnknownError
     }
     
-    let body = MarkdownAttributeSet(font: Font.regular(textFontSize), textColor: theme.primaryColor)
-    let bold = MarkdownAttributeSet(font: Font.semibold(textFontSize), textColor: theme.primaryColor)
-    let attributedText = parseMarkdownIntoAttributedString(text, attributes: MarkdownAttributes(body: body, bold: bold, link: body, linkAttribute: { _ in return nil }), textAlignment: .center)
-    
-    return richTextAlertController(context: context, title: title, text: attributedText, actions: actions)
+    return AlertScreen(
+        context: context,
+        configuration: AlertScreen.Configuration(actionAlignment: .vertical),
+        title: title,
+        text: text,
+        actions: actions
+    )
 }

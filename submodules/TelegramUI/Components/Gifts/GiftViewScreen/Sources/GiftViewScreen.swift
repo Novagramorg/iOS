@@ -43,6 +43,7 @@ import InfoParagraphComponent
 import ChatMessagePaymentAlertController
 import TableComponent
 import PeerTableCellComponent
+import AvatarComponent
 
 private final class GiftViewSheetContent: CombinedComponent {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
@@ -6212,77 +6213,6 @@ private final class HeaderButtonComponent: CombinedComponent {
             
             return context.availableSize
         }
-    }
-}
-
-final class AvatarComponent: Component {
-    let context: AccountContext
-    let theme: PresentationTheme
-    let peer: EnginePeer
-
-    init(context: AccountContext, theme: PresentationTheme, peer: EnginePeer) {
-        self.context = context
-        self.theme = theme
-        self.peer = peer
-    }
-
-    static func ==(lhs: AvatarComponent, rhs: AvatarComponent) -> Bool {
-        if lhs.context !== rhs.context {
-            return false
-        }
-        if lhs.theme !== rhs.theme {
-            return false
-        }
-        if lhs.peer != rhs.peer {
-            return false
-        }
-        return true
-    }
-
-    final class View: UIView {
-        private let avatarNode: AvatarNode
-        
-        private var component: AvatarComponent?
-        private weak var state: EmptyComponentState?
-        
-        override init(frame: CGRect) {
-            self.avatarNode = AvatarNode(font: avatarPlaceholderFont(size: 42.0))
-            
-            super.init(frame: frame)
-            
-            self.addSubnode(self.avatarNode)
-        }
-        
-        required init?(coder: NSCoder) {
-            fatalError("init(coder:) has not been implemented")
-        }
-        
-        func update(component: AvatarComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
-            if self.component == nil {
-                self.avatarNode.font = avatarPlaceholderFont(size: 42.0 * floor(availableSize.width / 100.0))
-            }
-            
-            self.component = component
-            self.state = state
-            
-            self.avatarNode.frame = CGRect(origin: .zero, size: availableSize)
-            self.avatarNode.setPeer(
-                context: component.context,
-                theme: component.theme,
-                peer: component.peer,
-                synchronousLoad: true
-            )
-            
-            return availableSize
-        }
-    }
-
-    func makeView() -> View {
-        return View(frame: CGRect())
-    }
-
-    func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
-        return view.update(component: self, availableSize: availableSize, state: state, environment: environment, transition: transition)
     }
 }
 

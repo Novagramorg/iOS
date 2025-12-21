@@ -298,21 +298,28 @@ final class UserAppearanceScreenComponent: Component {
             
             if !resolvedState.changes.isEmpty {
                 let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
-                self.environment?.controller()?.present(standardTextAlertController(theme: AlertControllerTheme(presentationData: presentationData), title: presentationData.strings.Channel_Appearance_UnsavedChangesAlertTitle, text: presentationData.strings.Channel_Appearance_UnsavedChangesAlertText, actions: [
-                    TextAlertAction(type: .genericAction, title: presentationData.strings.Channel_Appearance_UnsavedChangesAlertDiscard, action: { [weak self] in
-                        guard let self else {
-                            return
-                        }
-                        self.environment?.controller()?.dismiss()
-                    }),
-                    TextAlertAction(type: .defaultAction, title: presentationData.strings.Channel_Appearance_UnsavedChangesAlertApply, action: { [weak self] in
-                        guard let self else {
-                            return
-                        }
-                        self.applySettings()
-                    })
-                ]), in: .window(.root))
                 
+                let alertController = textAlertController(
+                    context: component.context,
+                    title: presentationData.strings.Channel_Appearance_UnsavedChangesAlertTitle,
+                    text: presentationData.strings.Channel_Appearance_UnsavedChangesAlertText,
+                    actions: [
+                        TextAlertAction(type: .genericAction, title: presentationData.strings.Channel_Appearance_UnsavedChangesAlertDiscard, action: { [weak self] in
+                            guard let self else {
+                                return
+                            }
+                            self.environment?.controller()?.dismiss()
+                        }),
+                        TextAlertAction(type: .defaultAction, title: presentationData.strings.Channel_Appearance_UnsavedChangesAlertApply, action: { [weak self] in
+                            guard let self else {
+                                return
+                            }
+                            self.applySettings()
+                        })
+                    ]
+                )
+                self.environment?.controller()?.present(alertController, in: .window(.root))
+
                 return false
             }
             
@@ -800,7 +807,16 @@ final class UserAppearanceScreenComponent: Component {
                 }
                 
                 let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
-                self.environment?.controller()?.present(standardTextAlertController(theme: AlertControllerTheme(presentationData: presentationData), title: nil, text: presentationData.strings.Login_UnknownError, actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+                
+                let alertController = textAlertController(
+                    context: component.context,
+                    title: nil,
+                    text: presentationData.strings.Login_UnknownError,
+                    actions: [
+                        TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})
+                    ]
+                )
+                self.environment?.controller()?.present(alertController, in: .window(.root))
                 
                 self.isApplyingSettings = false
                 self.state?.updated(transition: .immediate)

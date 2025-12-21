@@ -13,6 +13,7 @@ import PresentationDataUtils
 import PasswordSetupUI
 import Markdown
 import OldChannelsController
+import AlertComponent
 
 private final class ChannelOwnershipTransferPasswordFieldNode: ASDisplayNode, UITextFieldDelegate {
     private var theme: PresentationTheme
@@ -534,7 +535,6 @@ private func commitChannelOwnershipTransferController(context: AccountContext, u
 
 private func confirmChannelOwnershipTransferController(context: AccountContext, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)? = nil, peer: EnginePeer, member: TelegramUser, present: @escaping (ViewController, Any?) -> Void, completion: @escaping (EnginePeer.Id?) -> Void) -> ViewController {
     let presentationData = updatedPresentationData?.initial ?? context.sharedContext.currentPresentationData.with { $0 }
-    let theme = AlertControllerTheme(presentationData: presentationData)
     
     var isGroup = true
     if case let .channel(channel) = peer, case .broadcast = channel.info {
@@ -551,69 +551,73 @@ private func confirmChannelOwnershipTransferController(context: AccountContext, 
         text = presentationData.strings.Channel_OwnershipTransfer_DescriptionInfo(peer.displayTitle(strings: presentationData.strings, displayOrder: presentationData.nameDisplayOrder), EnginePeer.user(member).displayTitle(strings: presentationData.strings, displayOrder: presentationData.nameDisplayOrder)).string
     }
     
-    let attributedTitle = NSAttributedString(string: title, font: Font.semibold(presentationData.listsFontSize.baseDisplaySize), textColor: theme.primaryColor, paragraphAlignment: .center)
-    let body = MarkdownAttributeSet(font: Font.regular(presentationData.listsFontSize.baseDisplaySize * 13.0 / 17.0), textColor: theme.primaryColor)
-    let bold = MarkdownAttributeSet(font: Font.semibold(presentationData.listsFontSize.baseDisplaySize * 13.0 / 17.0), textColor: theme.primaryColor)
-    let attributedText = parseMarkdownIntoAttributedString(text, attributes: MarkdownAttributes(body: body, bold: bold, link: body, linkAttribute: { _ in return nil }), textAlignment: .center)
-    
-    let controller = richTextAlertController(context: context, title: attributedTitle, text: attributedText, actions: [TextAlertAction(type: .genericAction, title: presentationData.strings.Channel_OwnershipTransfer_ChangeOwner, action: {
-        present(commitChannelOwnershipTransferController(context: context, peer: peer, member: member, present: present, completion: completion), nil)
-    }), TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_Cancel, action: {
-    })], actionLayout: .vertical)
+    let controller = textAlertController(
+        context: context,
+        updatedPresentationData: updatedPresentationData,
+        title: title,
+        text: text,
+        actions: [
+            TextAlertAction(type: .genericAction, title: presentationData.strings.Channel_OwnershipTransfer_ChangeOwner, action: {
+                present(commitChannelOwnershipTransferController(context: context, peer: peer, member: member, present: present, completion: completion), nil)
+            }),
+            TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_Cancel, action: {})
+        ],
+        actionLayout: .vertical
+    )
     return controller
 }
 
 public func channelOwnershipTransferController(context: AccountContext, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)? = nil, peer: EnginePeer, member: TelegramUser, initialError: ChannelOwnershipTransferError, present: @escaping (ViewController, Any?) -> Void, completion: @escaping (EnginePeer.Id?) -> Void) -> ViewController {
     let presentationData = updatedPresentationData?.initial ?? context.sharedContext.currentPresentationData.with { $0 }
-    let theme = AlertControllerTheme(presentationData: presentationData)
+    let strings = presentationData.strings
     
-    var title: NSAttributedString? = NSAttributedString(string: presentationData.strings.OwnershipTransfer_SecurityCheck, font: Font.semibold(presentationData.listsFontSize.itemListBaseFontSize), textColor: theme.primaryColor, paragraphAlignment: .center)
-    
-    var text = presentationData.strings.OwnershipTransfer_SecurityRequirements
-    let textFontSize = presentationData.listsFontSize.baseDisplaySize * 13.0 / 17.0
+    var title: String? = strings.OwnershipTransfer_SecurityCheck
+    var text = strings.OwnershipTransfer_SecurityRequirements
     
     var isGroup = true
     if case let .channel(channel) = peer, case .broadcast = channel.info {
         isGroup = false
     }
     
-    var actions: [TextAlertAction] = []
+    var actions: [AlertScreen.Action] = [
+        .init(title: strings.Common_OK, type: .default)
+    ]
     switch initialError {
         case .requestPassword:
             return confirmChannelOwnershipTransferController(context: context, updatedPresentationData: updatedPresentationData, peer: peer, member: member, present: present, completion: completion)
         case .twoStepAuthTooFresh, .authSessionTooFresh:
-            text = text + presentationData.strings.OwnershipTransfer_ComeBackLater
-            actions = [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]
+            text = text + strings.OwnershipTransfer_ComeBackLater
         case .twoStepAuthMissing:
-            actions = [TextAlertAction(type: .genericAction, title: presentationData.strings.OwnershipTransfer_SetupTwoStepAuth, action: {
-                let controller = SetupTwoStepVerificationController(context: context, initialState: .automatic, stateUpdated: { update, shouldDismiss, controller in
-                    if shouldDismiss {
-                        controller.dismiss()
-                    }
-                })
-                present(controller, ViewControllerPresentationArguments(presentationAnimation: .modalSheet))
-            }), TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_Cancel, action: {})]
+            actions = [
+                .init(title: strings.OwnershipTransfer_SetupTwoStepAuth, type: .default, action: {
+                    let controller = SetupTwoStepVerificationController(context: context, initialState: .automatic, stateUpdated: { update, shouldDismiss, controller in
+                        if shouldDismiss {
+                            controller.dismiss()
+                        }
+                    })
+                    present(controller, ViewControllerPresentationArguments(presentationAnimation: .modalSheet))
+                }),
+                .init(title: strings.Common_Cancel)
+            ]
         case .adminsTooMuch:
             title = nil
-            text = isGroup ? presentationData.strings.Group_OwnershipTransfer_ErrorAdminsTooMuch :  presentationData.strings.Channel_OwnershipTransfer_ErrorAdminsTooMuch
-            actions = [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]
+            text = isGroup ? strings.Group_OwnershipTransfer_ErrorAdminsTooMuch : strings.Channel_OwnershipTransfer_ErrorAdminsTooMuch
         case .userPublicChannelsTooMuch:
             title = nil
-            text = presentationData.strings.Channel_OwnershipTransfer_ErrorPublicChannelsTooMuch
-            actions = [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]
+            text = strings.Channel_OwnershipTransfer_ErrorPublicChannelsTooMuch
         case .userBlocked, .restricted:
             title = nil
-            text = isGroup ? presentationData.strings.Group_OwnershipTransfer_ErrorPrivacyRestricted :  presentationData.strings.Channel_OwnershipTransfer_ErrorPrivacyRestricted
-            actions = [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]
+            text = isGroup ? strings.Group_OwnershipTransfer_ErrorPrivacyRestricted : strings.Channel_OwnershipTransfer_ErrorPrivacyRestricted
         default:
             title = nil
-            text = presentationData.strings.Login_UnknownError
-            actions = [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]
+            text = strings.Login_UnknownError
     }
     
-    let body = MarkdownAttributeSet(font: Font.regular(textFontSize), textColor: theme.primaryColor)
-    let bold = MarkdownAttributeSet(font: Font.semibold(textFontSize), textColor: theme.primaryColor)
-    let attributedText = parseMarkdownIntoAttributedString(text, attributes: MarkdownAttributes(body: body, bold: bold, link: body, linkAttribute: { _ in return nil }), textAlignment: .center)
-    
-    return richTextAlertController(context: context, title: title, text: attributedText, actions: actions)
+    return AlertScreen(
+        context: context,
+        configuration: AlertScreen.Configuration(actionAlignment: .vertical),
+        title: title,
+        text: text,
+        actions: actions
+    )
 }

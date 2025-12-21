@@ -13,13 +13,21 @@ import GlassBackgroundComponent
 
 public final class AlertComponentEnvironment: Equatable {
     public let theme: PresentationTheme
+    public let strings: PresentationStrings
     
-    public init(theme: PresentationTheme) {
+    public init(
+        theme: PresentationTheme,
+        strings: PresentationStrings
+    ) {
         self.theme = theme
+        self.strings = strings
     }
     
     public static func ==(lhs: AlertComponentEnvironment, rhs: AlertComponentEnvironment) -> Bool {
         if lhs.theme !== rhs.theme {
+            return false
+        }
+        if lhs.strings !== rhs.strings {
             return false
         }
         return true
@@ -297,10 +305,6 @@ private final class AlertScreenComponent: Component {
             let environment = environment[ViewControllerComponentContainer.Environment.self].value
             self.environment = environment
             self.state = state
-            
-            if self.component == nil {
-                
-            }
             self.component = component
             
             var alertHeight: CGFloat = 0.0
@@ -314,7 +318,7 @@ private final class AlertScreenComponent: Component {
             let fullWidthActionSize = CGSize(width: alertWidth - actionSideInset * 2.0, height: AlertActionComponent.actionHeight)
             let halfWidthActionSize = CGSize(width: (alertWidth - actionSideInset * 2.0 - actionSpacing) / 2.0, height: AlertActionComponent.actionHeight)
     
-            let alertEnvironment = AlertComponentEnvironment(theme: environment.theme)
+            let alertEnvironment = AlertComponentEnvironment(theme: environment.theme, strings: environment.strings)
             
             var contentOriginY: CGFloat = 0.0
             var validContentIds: Set<AnyHashable> = Set()
@@ -348,6 +352,7 @@ private final class AlertScreenComponent: Component {
                 if let itemView = item.view {
                     if itemView.superview == nil {
                         self.backgroundView.contentView.addSubview(itemView)
+                        item.parentState = state
                     }
                     transition.setFrame(view: itemView, frame: itemFrame)
                 }
@@ -387,6 +392,8 @@ private final class AlertScreenComponent: Component {
             var effectiveActionLayout: ActionLayout = .horizontal
             if case .vertical = component.configuration.actionAlignment {
                 effectiveActionLayout = .vertical
+            } else if component.actions.count == 1 {
+                effectiveActionLayout = .vertical
             }
             var validActionIds: Set<AnyHashable> = Set()
             for action in component.actions {
@@ -421,7 +428,8 @@ private final class AlertScreenComponent: Component {
                         theme: actionTheme,
                         title: action.title,
                         isHighlighted: AnyHashable(action.id) == self.highlightedAction,
-                        progress: action.progressPromise.get()
+                        isEnabled: action.isEnabled,
+                        progress: action.progress
                     )),
                     environment: { alertEnvironment },
                     containerSize: fullWidthActionSize
@@ -504,7 +512,12 @@ private final class AlertScreenComponent: Component {
             transition.setFrame(view: self.containerView, frame: bounds)
             self.containerView.update(size: availableSize, isDark: environment.theme.overallDarkAppearance, transition: transition)
             
-            transition.setFrame(view: self.backgroundView, frame: CGRect(origin: CGPoint(x: floorToScreenPixels((availableSize.width - alertSize.width) / 2.0), y: floorToScreenPixels((availableSize.height - alertSize.height) / 2.0)), size: alertSize))
+            var availableHeight = availableSize.height
+            if component.configuration.allowInputInset, environment.inputHeight > 0.0 {
+                availableHeight -= environment.inputHeight
+            }
+                        
+            transition.setFrame(view: self.backgroundView, frame: CGRect(origin: CGPoint(x: floorToScreenPixels((availableSize.width - alertSize.width) / 2.0), y: floorToScreenPixels((availableHeight - alertSize.height) / 2.0)), size: alertSize))
             self.backgroundView.update(size: alertSize, shape: .roundedRect(cornerRadius: 35.0), isDark: environment.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: .white), isInteractive: true, transition: transition)
             
             return availableSize
@@ -520,7 +533,7 @@ private final class AlertScreenComponent: Component {
     }
 }
 
-public class AlertScreen: ViewControllerComponentContainer, KeyShortcutResponder {
+open class AlertScreen: ViewControllerComponentContainer, KeyShortcutResponder {
     public enum ActionAligmnent: Equatable {
         case `default`
         case vertical
@@ -532,21 +545,13 @@ public class AlertScreen: ViewControllerComponentContainer, KeyShortcutResponder
         let allowInputInset: Bool
         
         public init(
-            actionAlignment: ActionAligmnent,
-            dismissOnOutsideTap: Bool,
-            allowInputInset: Bool
+            actionAlignment: ActionAligmnent = .default,
+            dismissOnOutsideTap: Bool = true,
+            allowInputInset: Bool = false
         ) {
             self.actionAlignment = actionAlignment
             self.dismissOnOutsideTap = dismissOnOutsideTap
             self.allowInputInset = allowInputInset
-        }
-        
-        public static var defaultValue: Configuration {
-            return Configuration(
-                actionAlignment: .default,
-                dismissOnOutsideTap: true,
-                allowInputInset: false
-            )
         }
     }
     
@@ -561,20 +566,23 @@ public class AlertScreen: ViewControllerComponentContainer, KeyShortcutResponder
         public let type: ActionType
         public let action: () -> Void
         public let autoDismiss: Bool
-        public let progressPromise: ValuePromise<Bool>
+        public let isEnabled: Signal<Bool, NoError>
+        public let progress: Signal<Bool, NoError>
         
         public init(
             title: String,
             type: ActionType = .generic,
             action: @escaping () -> Void = {},
             autoDismiss: Bool = true,
-            progressPromise: ValuePromise<Bool> = ValuePromise(false)
+            isEnabled: Signal<Bool, NoError> = .single(true),
+            progress: Signal<Bool, NoError> = .single(false)
         ) {
             self.type = type
             self.title = title
             self.action = action
             self.autoDismiss = autoDismiss
-            self.progressPromise = progressPromise
+            self.isEnabled = isEnabled
+            self.progress = progress
         }
         
         public static func ==(lhs: Action, rhs: Action) -> Bool {
@@ -604,7 +612,7 @@ public class AlertScreen: ViewControllerComponentContainer, KeyShortcutResponder
     public var dismissed: ((Bool) -> Void)?
     
     public init(
-        configuration: Configuration = .defaultValue,
+        configuration: Configuration = Configuration(),
         content: [AnyComponentWithIdentity<AlertComponentEnvironment>],
         actions: [Action],
         updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)
@@ -630,12 +638,26 @@ public class AlertScreen: ViewControllerComponentContainer, KeyShortcutResponder
     
     public convenience init(
         context: AccountContext,
-        configuration: Configuration = .defaultValue,
+        configuration: Configuration = Configuration(),
         content: [AnyComponentWithIdentity<AlertComponentEnvironment>],
         actions: [Action]
     ) {
-        let presentationData = context.sharedContext.currentPresentationData.with { $0 }
-        let updatedPresentationDataSignal = context.sharedContext.presentationData
+        self.init(
+            sharedContext: context.sharedContext,
+            configuration: configuration,
+            content: content,
+            actions: actions,
+        )
+    }
+    
+    public convenience init(
+        sharedContext: SharedAccountContext,
+        configuration: Configuration = Configuration(),
+        content: [AnyComponentWithIdentity<AlertComponentEnvironment>],
+        actions: [Action]
+    ) {
+        let presentationData = sharedContext.currentPresentationData.with { $0 }
+        let updatedPresentationDataSignal = sharedContext.presentationData
         self.init(
             configuration: configuration,
             content: content,
@@ -645,7 +667,7 @@ public class AlertScreen: ViewControllerComponentContainer, KeyShortcutResponder
     }
     
     public convenience init(
-        configuration: Configuration = .defaultValue,
+        configuration: Configuration = Configuration(),
         title: String? = nil,
         text: String,
         actions: [Action],
@@ -660,12 +682,14 @@ public class AlertScreen: ViewControllerComponentContainer, KeyShortcutResponder
                 )
             ))
         }
-        content.append(AnyComponentWithIdentity(
-            id: "text",
-            component: AnyComponent(
-                AlertTextComponent(content: .plain(text))
-            )
-        ))
+        if !text.isEmpty {
+            content.append(AnyComponentWithIdentity(
+                id: "text",
+                component: AnyComponent(
+                    AlertTextComponent(content: .plain(text))
+                )
+            ))
+        }
         
         self.init(
             configuration: configuration,
@@ -677,7 +701,7 @@ public class AlertScreen: ViewControllerComponentContainer, KeyShortcutResponder
     
     public convenience init(
         context: AccountContext,
-        configuration: Configuration = .defaultValue,
+        configuration: Configuration = Configuration(),
         title: String? = nil,
         text: String,
         actions: [Action]
@@ -700,10 +724,6 @@ public class AlertScreen: ViewControllerComponentContainer, KeyShortcutResponder
     deinit {
     }
     
-    override public func containerLayoutUpdated(_ layout: ContainerViewLayout, transition: ContainedViewLayoutTransition) {
-        super.containerLayoutUpdated(layout, transition: transition)
-    }
-    
     override public func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         
@@ -719,7 +739,7 @@ public class AlertScreen: ViewControllerComponentContainer, KeyShortcutResponder
         super.dismiss()
     }
     
-    override public func dismiss(completion: (() -> Void)? = nil) {
+    override open func dismiss(completion: (() -> Void)? = nil) {
         if !self.processedDidDisappear {
             self.processedDidDisappear = true
             

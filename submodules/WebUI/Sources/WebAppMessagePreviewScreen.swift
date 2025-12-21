@@ -256,13 +256,14 @@ private final class SheetContent: CombinedComponent {
             let buttonString: String = environment.strings.WebApp_ShareMessage_Share
             let buttonAttributedString = NSMutableAttributedString(string: buttonString, font: Font.semibold(17.0), textColor: theme.list.itemCheckColors.foregroundColor, paragraphAlignment: .center)
             
+            let buttonInsets = ContainerViewLayout.concentricInsets(bottomInset: environment.safeInsets.bottom, innerDiameter: 52.0, sideInset: 30.0)
             let button = button.update(
                 component: ButtonComponent(
                     background: ButtonComponent.Background(
+                        style: .glass,
                         color: theme.list.itemCheckColors.fillColor,
                         foreground: theme.list.itemCheckColors.foregroundColor,
                         pressedColor: theme.list.itemCheckColors.fillColor.withMultipliedAlpha(0.9),
-                        cornerRadius: 10.0
                     ),
                     content: AnyComponentWithIdentity(
                         id: AnyHashable(0),
@@ -276,7 +277,7 @@ private final class SheetContent: CombinedComponent {
                         }
                     }
                 ),
-                availableSize: CGSize(width: context.availableSize.width - sideInset * 2.0, height: 50),
+                availableSize: CGSize(width: context.availableSize.width - buttonInsets.left - buttonInsets.right, height: 52.0),
                 transition: .immediate
             )
             context.add(button
@@ -285,10 +286,8 @@ private final class SheetContent: CombinedComponent {
                 .position(CGPoint(x: context.availableSize.width / 2.0, y: contentSize.height + button.size.height / 2.0))
             )
             contentSize.height += button.size.height
-            contentSize.height += 15.0
+            contentSize.height += buttonInsets.bottom
             
-            contentSize.height += max(environment.inputHeight, environment.safeInsets.bottom)
-
             return contentSize
         }
     }
@@ -338,6 +337,7 @@ private final class WebAppMessagePreviewSheetComponent: CombinedComponent {
             
             let controller = environment.controller
             
+            let theme = environment.theme.withModalBlocksBackground()
             let sheet = sheet.update(
                 component: SheetComponent<EnvironmentType>(
                     content: AnyComponent<EnvironmentType>(SheetContent(
@@ -355,7 +355,7 @@ private final class WebAppMessagePreviewSheetComponent: CombinedComponent {
                         }
                     )),
                     style: .glass,
-                    backgroundColor: .color(environment.theme.list.blocksBackgroundColor),
+                    backgroundColor: .color(theme.list.blocksBackgroundColor),
                     followContentSizeChanges: false,
                     clipsContent: true,
                     isScrollEnabled: false,

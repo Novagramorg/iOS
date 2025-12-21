@@ -92,6 +92,7 @@ import AttachmentFileController
 import NewContactScreen
 import PasskeysScreen
 import GiftDemoScreen
+import ChatTextLinkEditUI
 
 private final class AccountUserInterfaceInUseContext {
     let subscribers = Bag<(Bool) -> Void>()
@@ -4021,6 +4022,10 @@ public final class SharedAccountContextImpl: SharedAccountContext {
 
     public func makeSendInviteLinkScreen(context: AccountContext, subject: SendInviteLinkScreenSubject, peers: [TelegramForbiddenInvitePeer], theme: PresentationTheme?) -> ViewController {
         return SendInviteLinkScreen(context: context, subject: subject, peers: peers, theme: theme)
+    }
+    
+    public func makeLinkEditController(context: AccountContext, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)?, text: String, link: String?, apply: @escaping (String?) -> Void) -> ViewController {
+        return chatTextLinkEditController(context: context, updatedPresentationData: updatedPresentationData, text: text, link: link, apply: apply)
     }
     
     @available(iOS 13.0, *)

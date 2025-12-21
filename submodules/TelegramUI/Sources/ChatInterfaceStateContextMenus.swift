@@ -1178,8 +1178,8 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                     c?.dismiss(completion: {
                         let presentationData = context.sharedContext.currentPresentationData.with { $0 }
                         
-                        controllerInteraction.presentController(standardTextAlertController(
-                            theme: AlertControllerTheme(presentationData: presentationData),
+                        controllerInteraction.presentController(textAlertController(
+                            context: context,
                             title: presentationData.strings.Chat_ScheduledForceSendProcessingVideo_Title,
                             text: presentationData.strings.Chat_ScheduledForceSendProcessingVideo_Text,
                             actions: [

@@ -67,6 +67,9 @@ swift_library(
         "//submodules/TelegramUI/Components/Gifts/TableComponent",
         "//submodules/TelegramUI/Components/Gifts/PeerTableCellComponent",
         "//submodules/TelegramUI/Components/AlertComponent",
+        "//submodules/TelegramUI/Components/AvatarComponent",
+        "//submodules/TelegramUI/Components/AlertComponent/AlertTransferHeaderComponent",
+        "//submodules/TelegramUI/Components/AlertComponent/AlertTableComponent",
     ],
     visibility = [
         "//visibility:public",

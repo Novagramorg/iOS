@@ -26,6 +26,9 @@ import ContextUI
 import BalancedTextComponent
 import AlertComponent
 import PremiumCoinComponent
+import AlertComponent
+import AlertTableComponent
+import TableComponent
 
 private func textForTimeout(value: Int32) -> String {
     if value < 3600 {
@@ -208,30 +211,50 @@ final class AffiliateProgramSetupScreenComponent: Component {
             } else {
                 durationTitle = environment.strings.AffiliateProgram_DurationLifetime
             }
+                        
+            var content: [AnyComponentWithIdentity<AlertComponentEnvironment>] = []
+            content.append(AnyComponentWithIdentity(
+                id: "title",
+                component: AnyComponent(
+                    AlertTitleComponent(title: environment.strings.AffiliateSetup_AlertApply_Title)
+                )
+            ))
+            content.append(AnyComponentWithIdentity(
+                id: "text",
+                component: AnyComponent(
+                    AlertTextComponent(content: .plain(environment.strings.AffiliateSetup_AlertApply_Text))
+                )
+            ))
             
-            let presentationData = component.context.sharedContext.currentPresentationData.with({ $0 })
-            self.environment?.controller()?.present(tableAlert(
-                theme: presentationData.theme,
-                title: environment.strings.AffiliateSetup_AlertApply_Title,
-                text: environment.strings.AffiliateSetup_AlertApply_Text,
-                table: TableComponent(theme: environment.theme, items: [
-                    TableComponent.Item(id: 0, title: environment.strings.AffiliateSetup_AlertApply_SectionCommission, component: AnyComponent(MultilineTextComponent(
-                        text: .plain(NSAttributedString(string: commissionTitle, font: Font.regular(17.0), textColor: environment.theme.actionSheet.primaryTextColor))
-                    ))),
-                    TableComponent.Item(id: 1, title: environment.strings.AffiliateSetup_AlertApply_SectionDuration, component: AnyComponent(MultilineTextComponent(
-                        text: .plain(NSAttributedString(string: durationTitle, font: Font.regular(17.0), textColor: environment.theme.actionSheet.primaryTextColor))
-                    )))
-                ]),
+            let tableItems: [TableComponent.Item] = [
+                TableComponent.Item(id: 0, title: environment.strings.AffiliateSetup_AlertApply_SectionCommission, component: AnyComponent(MultilineTextComponent(
+                    text: .plain(NSAttributedString(string: commissionTitle, font: Font.regular(15.0), textColor: environment.theme.actionSheet.primaryTextColor))
+                ))),
+                TableComponent.Item(id: 1, title: environment.strings.AffiliateSetup_AlertApply_SectionDuration, component: AnyComponent(MultilineTextComponent(
+                    text: .plain(NSAttributedString(string: durationTitle, font: Font.regular(15.0), textColor: environment.theme.actionSheet.primaryTextColor))
+                )))
+            ]
+            content.append(AnyComponentWithIdentity(
+                id: "table",
+                component: AnyComponent(
+                    AlertTableComponent(items: tableItems)
+                )
+            ))
+            
+            let alertController = AlertScreen(
+                context: component.context,
+                content: content,
                 actions: [
-                    ComponentAlertAction(type: .genericAction, title: environment.strings.Common_Cancel, action: {}),
-                    ComponentAlertAction(type: .defaultAction, title: environment.strings.AffiliateSetup_AlertApply_Action, action: { [weak self] in
+                    .init(title: environment.strings.Common_Cancel),
+                    .init(title: environment.strings.AffiliateSetup_AlertApply_Action, type: .default, action: { [weak self] in
                         guard let self else {
                             return
                         }
                         self.applyProgram()
                     })
                 ]
-            ), in: .window(.root))
+            )
+            self.environment?.controller()?.present(alertController, in: .window(.root))
         }
         
         private func requestApplyEndProgram() {

@@ -470,16 +470,20 @@ public func giftPurchaseAlertController(
     
     contentNode = GiftPurchaseAlertContentNode(context: context, theme: AlertControllerTheme(presentationData: presentationData), presentationTheme: presentationData.theme, strings: strings, gift: gift, peer: peer, actions: actions)
     
-    let controller = ChatMessagePaymentAlertController(
-        context: context,
-        presentationData: presentationData,
-        contentNode: contentNode!,
-        navigationController: navigationController,
-        chatPeerId: context.account.peerId,
-        showBalance: true,
-        currency: gift.resellForTonOnly ? .ton : .stars,
-        animateBalanceOverlay: animateBalanceOverlay
-    )
+//    let controller = ChatMessagePaymentAlertController(
+//        context: context,
+//        presentationData: presentationData,
+//        contentNode: contentNode!,
+//        navigationController: navigationController,
+//        chatPeerId: context.account.peerId,
+//        showBalance: true,
+//        currency: gift.resellForTonOnly ? .ton : .stars,
+//        animateBalanceOverlay: animateBalanceOverlay
+//    )
+    
+    
+    let controller = AlertController(theme: AlertControllerTheme(presentationData: presentationData), contentNode: contentNode!)
+    
     controller.dismissed = { _ in
         dismissed()
     }
@@ -497,7 +501,8 @@ public func giftPurchaseAlertController(
     }
     
     contentNode?.updatedCurrency = { [weak controller] currency in
-        controller?.currency = currency
+        let _ = controller
+        //controller?.currency = currency
     }
     
     if !gift.resellForTonOnly {

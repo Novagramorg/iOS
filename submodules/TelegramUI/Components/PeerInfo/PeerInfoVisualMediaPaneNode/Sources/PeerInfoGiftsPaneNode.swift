@@ -233,7 +233,7 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
             return
         }
         
-        let promptController = promptController(sharedContext: self.context.sharedContext, updatedPresentationData: nil, text: params.presentationData.strings.PeerInfo_Gifts_CreateCollection_Title, titleFont: .bold, subtitle: params.presentationData.strings.PeerInfo_Gifts_CreateCollection_Text, value: "", placeholder: params.presentationData.strings.PeerInfo_Gifts_CreateCollection_Placeholder, characterLimit: 12, displayCharacterLimit: true, apply: { [weak self] value in
+        let promptController = promptController(context: self.context, updatedPresentationData: nil, text: params.presentationData.strings.PeerInfo_Gifts_CreateCollection_Title, titleFont: .bold, subtitle: params.presentationData.strings.PeerInfo_Gifts_CreateCollection_Text, value: "", placeholder: params.presentationData.strings.PeerInfo_Gifts_CreateCollection_Placeholder, characterLimit: 12, displayCharacterLimit: true, apply: { [weak self] value in
             guard let self, let value else {
                 return
             }
@@ -304,7 +304,7 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
             return
         }
         
-        let promptController = promptController(sharedContext: self.context.sharedContext, updatedPresentationData: nil, text: params.presentationData.strings.PeerInfo_Gifts_RenameCollection_Title, titleFont: .bold, value: collection.title, placeholder: params.presentationData.strings.PeerInfo_Gifts_CreateCollection_Placeholder, characterLimit: 12, displayCharacterLimit: true, apply: { [weak self] value in
+        let promptController = promptController(context: self.context, updatedPresentationData: nil, text: params.presentationData.strings.PeerInfo_Gifts_RenameCollection_Title, titleFont: .bold, value: collection.title, placeholder: params.presentationData.strings.PeerInfo_Gifts_CreateCollection_Placeholder, characterLimit: 12, displayCharacterLimit: true, apply: { [weak self] value in
             guard let self, let value else {
                 return
             }
