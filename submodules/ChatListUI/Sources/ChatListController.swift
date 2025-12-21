@@ -58,7 +58,7 @@ import AdsReportScreen
 import SearchBarNode
 import ChatListFilterTabContainerNode
 import HeaderPanelContainerComponent
-import ChatListTabsComponent
+import HorizontalTabsComponent
 import GlobalControlPanelsContext
 
 private final class ContextControllerContentSourceImpl: ContextControllerContentSource {
@@ -749,8 +749,8 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                 }
                 strongSelf.tabContainerNode.update(size: CGSize(width: layout.size.width, height: 46.0), sideInset: layout.safeInsets.left, filters: tabContainerData.0, selectedFilter: filter, isReordering: strongSelf.chatListDisplayNode.isReorderingFilters || (strongSelf.chatListDisplayNode.mainContainerNode.currentItemNode.currentState.editing && !strongSelf.chatListDisplayNode.didBeginSelectingChatsWhileEditing), isEditing: strongSelf.chatListDisplayNode.mainContainerNode.currentItemNode.currentState.editing, canReorderAllChats: strongSelf.isPremium, filtersLimit: tabContainerData.2, transitionFraction: fraction, presentationData: strongSelf.presentationData, transition: transition)
                 
-                if let navigationBarView = strongSelf.chatListDisplayNode.navigationBarView.view as? ChatListNavigationBar.View, let headerPanelsView = navigationBarView.headerPanels as? HeaderPanelContainerComponent.View, let tabsView = headerPanelsView.tabs as? ChatListTabsComponent.View {
-                    tabsView.updateTabSwitchFraction(fraction: fraction, transition: ComponentTransition(transition))
+                if let navigationBarView = strongSelf.chatListDisplayNode.navigationBarView.view as? ChatListNavigationBar.View, let headerPanelsView = navigationBarView.headerPanels as? HeaderPanelContainerComponent.View, let tabsView = headerPanelsView.tabs as? HorizontalTabsComponent.View {
+                    tabsView.updateTabSwitchFraction(fraction: fraction, isDragging: strongSelf.chatListDisplayNode.mainContainerNode.isSwitchingCurrentItemFilterByDragging, transition: ComponentTransition(transition))
                 }
             }
             self.reloadFilters()
@@ -963,6 +963,356 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
         }
         
         self.requestLayout(transition: .immediate)
+    }
+    
+    func tabContextGesture(id: Int32?, sourceNode: ContextExtractedContentContainingNode?, sourceView: ContextExtractedContentContainingView?, gesture: ContextGesture?, keepInPlace: Bool, isDisabled: Bool) {
+        let context = self.context
+        let filterPeersAreMuted: Signal<(areMuted: Bool, peerIds: [EnginePeer.Id])?, NoError> = self.context.engine.peers.currentChatListFilters()
+        |> take(1)
+        |> mapToSignal { filters -> Signal<(areMuted: Bool, peerIds: [EnginePeer.Id])?, NoError> in
+            guard let filter = filters.first(where: { $0.id == id }) else {
+                return .single(nil)
+            }
+            guard case let .filter(_, _, _, data) = filter else {
+                return .single(nil)
+            }
+            
+            let filterPredicate: ChatListFilterPredicate = chatListFilterPredicate(filter: data, accountPeerId: context.account.peerId)
+            return context.engine.peers.getChatListPeers(filterPredicate: filterPredicate)
+            |> mapToSignal { peers -> Signal<(areMuted: Bool, peerIds: [EnginePeer.Id])?, NoError> in
+                let peerIds = peers.map(\.id)
+                return context.engine.data.get(
+                    EngineDataMap(peerIds.map(TelegramEngine.EngineData.Item.Peer.NotificationSettings.init(id:))),
+                    TelegramEngine.EngineData.Item.NotificationSettings.Global()
+                )
+                |> map { list, globalSettings -> (areMuted: Bool, peerIds: [EnginePeer.Id])? in
+                    for peer in peers {
+                        switch list[peer.id]?.muteState {
+                        case .unmuted:
+                            return (false, peerIds)
+                        case .default:
+                            let globalValue: EngineGlobalNotificationSettings.CategorySettings
+                            switch peer {
+                            case .user, .secretChat:
+                                globalValue = globalSettings.privateChats
+                            case .legacyGroup:
+                                globalValue = globalSettings.groupChats
+                            case let .channel(channel):
+                                if case .broadcast = channel.info {
+                                    globalValue = globalSettings.channels
+                                } else {
+                                    globalValue = globalSettings.groupChats
+                                }
+                            }
+                            if globalValue.enabled {
+                                return (false, peerIds)
+                            }
+                        default:
+                            break
+                        }
+                    }
+                    return (true, peerIds)
+                }
+            }
+        }
+        
+        let _ = combineLatest(
+            queue: Queue.mainQueue(),
+            self.context.engine.peers.currentChatListFilters(),
+            self.context.engine.data.get(
+                TelegramEngine.EngineData.Item.Configuration.UserLimits(isPremium: true)
+            ),
+            filterPeersAreMuted
+        ).startStandalone(next: { [weak self] filters, premiumLimits, filterPeersAreMuted in
+            guard let self else {
+                return
+            }
+            var items: [ContextMenuItem] = []
+            if let id = id {
+                items.append(.action(ContextMenuActionItem(text: self.presentationData.strings.ChatList_EditFolder, icon: { theme in
+                    return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Edit"), color: theme.contextMenu.primaryColor)
+                }, action: { c, f in
+                    c?.dismiss(completion: { [weak self] in
+                        guard let self else {
+                            return
+                        }
+                        if isDisabled {
+                            let context = self.context
+                            var replaceImpl: ((ViewController) -> Void)?
+                            let controller = PremiumLimitScreen(context: context, subject: .folders, count: self.tabContainerNode.filtersCount, action: {
+                                let controller = PremiumIntroScreen(context: context, source: .folders)
+                                replaceImpl?(controller)
+                                return true
+                            })
+                            replaceImpl = { [weak controller] c in
+                                controller?.replace(with: c)
+                            }
+                            self.push(controller)
+                        } else {
+                            let _ = (self.context.engine.peers.currentChatListFilters()
+                            |> deliverOnMainQueue).startStandalone(next: { [weak self] presetList in
+                                guard let self else {
+                                    return
+                                }
+                                var found = false
+                                for filter in presetList {
+                                    if filter.id == id {
+                                        self.push(chatListFilterPresetController(context: self.context, currentPreset: filter, updated: { _ in }))
+                                        f(.dismissWithoutContent)
+                                        found = true
+                                        break
+                                    }
+                                }
+                                if !found {
+                                    f(.default)
+                                }
+                            })
+                        }
+                    })
+                })))
+                
+                if let _ = filters.first(where: { $0.id == id }) {
+                    items.append(.action(ContextMenuActionItem(text: self.presentationData.strings.ChatList_AddChatsToFolder, icon: { theme in
+                        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Add"), color: theme.contextMenu.primaryColor)
+                    }, action: { [weak self] c, f in
+                        c?.dismiss(completion: {
+                            guard let self else {
+                                return
+                            }
+                            
+                            if isDisabled {
+                                let context = self.context
+                                var replaceImpl: ((ViewController) -> Void)?
+                                let controller = PremiumLimitScreen(context: context, subject: .folders, count: self.tabContainerNode.filtersCount, action: {
+                                    let controller = PremiumIntroScreen(context: context, source: .folders)
+                                    replaceImpl?(controller)
+                                    return true
+                                })
+                                replaceImpl = { [weak controller] c in
+                                    controller?.replace(with: c)
+                                }
+                                self.push(controller)
+                            } else {
+                                let _ = combineLatest(
+                                    queue: Queue.mainQueue(),
+                                    self.context.engine.data.get(
+                                        TelegramEngine.EngineData.Item.Peer.Peer(id: self.context.account.peerId),
+                                        TelegramEngine.EngineData.Item.Configuration.UserLimits(isPremium: false),
+                                        TelegramEngine.EngineData.Item.Configuration.UserLimits(isPremium: true)
+                                    ),
+                                    self.context.engine.peers.currentChatListFilters()
+                                ).startStandalone(next: { [weak self] result, presetList in
+                                    guard let self else {
+                                        return
+                                    }
+                                    var found = false
+                                    for filter in presetList {
+                                        if filter.id == id, case let .filter(_, _, _, data) = filter {
+                                            let (accountPeer, limits, premiumLimits) = result
+                                            let isPremium = accountPeer?.isPremium ?? false
+                                            
+                                            let limit = limits.maxFolderChatsCount
+                                            let premiumLimit = premiumLimits.maxFolderChatsCount
+                                            
+                                            if data.includePeers.peers.count >= premiumLimit {
+                                                let controller = PremiumLimitScreen(context: self.context, subject: .chatsPerFolder, count: Int32(data.includePeers.peers.count), action: {
+                                                    return true
+                                                })
+                                                self.push(controller)
+                                                f(.dismissWithoutContent)
+                                                return
+                                            } else if data.includePeers.peers.count >= limit && !isPremium {
+                                                var replaceImpl: ((ViewController) -> Void)?
+                                                let controller = PremiumLimitScreen(context: self.context, subject: .chatsPerFolder, count: Int32(data.includePeers.peers.count), action: {
+                                                    let controller = PremiumIntroScreen(context: self.context, source: .chatsPerFolder)
+                                                    replaceImpl?(controller)
+                                                    return true
+                                                })
+                                                replaceImpl = { [weak controller] c in
+                                                    controller?.replace(with: c)
+                                                }
+                                                self.push(controller)
+                                                f(.dismissWithoutContent)
+                                                return
+                                            }
+                                            
+                                            let _ = (self.context.engine.peers.currentChatListFilters()
+                                            |> deliverOnMainQueue).startStandalone(next: { [weak self] filters in
+                                                guard let self else {
+                                                    return
+                                                }
+                                                self.push(chatListFilterAddChatsController(context: self.context, filter: filter, allFilters: filters, limit: limits.maxFolderChatsCount, premiumLimit: premiumLimits.maxFolderChatsCount, isPremium: isPremium, presentUndo: { [weak self] content in
+                                                    guard let self else {
+                                                        return
+                                                    }
+                                                    self.present(UndoOverlayController(presentationData: self.presentationData, content: content, elevatedLayout: true, animateInAsReplacement: false, action: { _ in return false }), in: .window(.root))
+                                                }))
+                                                f(.dismissWithoutContent)
+                                            })
+                                            found = true
+                                            break
+                                        }
+                                    }
+                                    if !found {
+                                        f(.default)
+                                    }
+                                })
+                            }
+                        })
+                    })))
+                    
+                    if let filterEntries = self.tabContainerData?.0 {
+                        for filter in filterEntries {
+                            if case let .filter(filterId, _, unread) = filter, filterId == id {
+                                if unread.value > 0 {
+                                    items.append(.action(ContextMenuActionItem(text: self.presentationData.strings.ChatList_ReadAll, textColor: .primary, icon: { theme in
+                                        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/ReadAll"), color: theme.contextMenu.primaryColor)
+                                    }, action: { [weak self] c, f in
+                                        c?.dismiss(completion: {
+                                            guard let self else {
+                                                return
+                                            }
+                                            self.readAllInFilter(id: id)
+                                        })
+                                    })))
+                                }
+                                
+                                for filter in filters {
+                                    if filter.id == filterId, case let .filter(_, title, _, data) = filter {
+                                        if let filterPeersAreMuted, filterPeersAreMuted.peerIds.count <= 200 {
+                                            items.append(.action(ContextMenuActionItem(text: filterPeersAreMuted.areMuted ? self.presentationData.strings.ChatList_ContextUnmuteAll : self.presentationData.strings.ChatList_ContextMuteAll, textColor: .primary, badge: nil, icon: { theme in
+                                                return generateTintedImage(image: UIImage(bundleImageName: filterPeersAreMuted.areMuted ? "Chat/Context Menu/Unmute" : "Chat/Context Menu/Muted"), color: theme.contextMenu.primaryColor)
+                                            }, action: { [weak self] c, f in
+                                                c?.dismiss(completion: {
+                                                })
+                                                
+                                                guard let self else {
+                                                    return
+                                                }
+                                                
+                                                let _ = (self.context.engine.peers.updateMultiplePeerMuteSettings(peerIds: filterPeersAreMuted.peerIds, muted: !filterPeersAreMuted.areMuted)
+                                                |> deliverOnMainQueue).startStandalone(completed: { [weak self] in
+                                                    guard let self else {
+                                                        return
+                                                    }
+                                                    
+                                                    let iconColor: UIColor = .white
+                                                    let overlayController: UndoOverlayController
+                                                    if !filterPeersAreMuted.areMuted {
+                                                        let text = NSMutableAttributedString(string: self.presentationData.strings.ChatList_ToastFolderMutedV2)
+                                                        let folderNameRange = (text.string as NSString).range(of: "{folder}")
+                                                        if folderNameRange.location != NSNotFound {
+                                                            text.replaceCharacters(in: folderNameRange, with: "")
+                                                            text.insert(title.attributedString(attributes: [
+                                                                ChatTextInputAttributes.bold: true
+                                                            ]), at: folderNameRange.location)
+                                                        }
+                                                        
+                                                        overlayController = UndoOverlayController(presentationData: self.presentationData, content: .universalWithEntities(context: self.context, animation: "anim_profilemute", scale: 0.075, colors: [
+                                                            "Middle.Group 1.Fill 1": iconColor,
+                                                            "Top.Group 1.Fill 1": iconColor,
+                                                            "Bottom.Group 1.Fill 1": iconColor,
+                                                            "EXAMPLE.Group 1.Fill 1": iconColor,
+                                                            "Line.Group 1.Stroke 1": iconColor
+                                                        ], title: nil, text: text, animateEntities: title.enableAnimations, customUndoText: nil, timeout: nil), elevatedLayout: false, animateInAsReplacement: true, action: { _ in return false })
+                                                    } else {
+                                                        let text = NSMutableAttributedString(string: self.presentationData.strings.ChatList_ToastFolderUnmutedV2)
+                                                        let folderNameRange = (text.string as NSString).range(of: "{folder}")
+                                                        if folderNameRange.location != NSNotFound {
+                                                            text.replaceCharacters(in: folderNameRange, with: "")
+                                                            text.insert(title.attributedString(attributes: [
+                                                                ChatTextInputAttributes.bold: true
+                                                            ]), at: folderNameRange.location)
+                                                        }
+                                                        
+                                                        overlayController = UndoOverlayController(presentationData: self.presentationData, content: .universalWithEntities(context: self.context, animation: "anim_profileunmute", scale: 0.075, colors: [
+                                                            "Middle.Group 1.Fill 1": iconColor,
+                                                            "Top.Group 1.Fill 1": iconColor,
+                                                            "Bottom.Group 1.Fill 1": iconColor,
+                                                            "EXAMPLE.Group 1.Fill 1": iconColor,
+                                                            "Line.Group 1.Stroke 1": iconColor
+                                                        ], title: nil, text: text, animateEntities: title.enableAnimations, customUndoText: nil, timeout: nil), elevatedLayout: false, animateInAsReplacement: true, action: { _ in return false })
+                                                    }
+                                                    self.present(overlayController, in: .current)
+                                                })
+                                            })))
+                                        }
+                                        
+                                        if !data.includePeers.peers.isEmpty && data.categories.isEmpty && !data.excludeRead && !data.excludeMuted && !data.excludeArchived && data.excludePeers.isEmpty {
+                                            items.append(.action(ContextMenuActionItem(text: self.presentationData.strings.ChatList_ContextMenuShare, textColor: .primary, badge: data.hasSharedLinks ? nil : ContextMenuActionBadge(value: self.presentationData.strings.ChatList_ContextMenuBadgeNew, color: .accent, style: .label), icon: { theme in
+                                                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Link"), color: theme.contextMenu.primaryColor)
+                                            }, action: { [weak self] c, f in
+                                                c?.dismiss(completion: {
+                                                    guard let self else {
+                                                        return
+                                                    }
+                                                    self.shareFolder(filterId: filterId, data: data, title: title)
+                                                })
+                                            })))
+                                        }
+                                        
+                                        break
+                                    }
+                                }
+                                
+                                break
+                            }
+                        }
+                    }
+                    
+                    items.append(.action(ContextMenuActionItem(text: self.presentationData.strings.ChatList_RemoveFolder, textColor: .destructive, icon: { theme in
+                        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Delete"), color: theme.contextMenu.destructiveColor)
+                    }, action: { [weak self] c, f in
+                        c?.dismiss(completion: {
+                            guard let self else {
+                                return
+                            }
+                            self.askForFilterRemoval(id: id)
+                        })
+                    })))
+                }
+            } else {
+                items.append(.action(ContextMenuActionItem(text: self.presentationData.strings.ChatList_EditFolders, icon: { theme in
+                    return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Edit"), color: theme.contextMenu.primaryColor)
+                }, action: { [weak self] c, f in
+                    c?.dismiss(completion: {
+                        guard let self else {
+                            return
+                        }
+                        self.openFilterSettings()
+                    })
+                })))
+            }
+            
+            if filters.count > 1 {
+                items.append(.separator)
+                items.append(.action(ContextMenuActionItem(text: self.presentationData.strings.ChatList_ReorderTabs, icon: { theme in
+                    return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/ReorderItems"), color: theme.contextMenu.primaryColor)
+                }, action: { [weak self] c, f in
+                    c?.dismiss(completion: {
+                        guard let self else {
+                            return
+                        }
+                        
+                        self.chatListDisplayNode.isReorderingFilters = true
+                        self.isReorderingTabsValue.set(true)
+                        
+                        (self.parent as? TabBarController)?.updateIsTabBarEnabled(false, transition: .animated(duration: 0.2, curve: .easeInOut))
+                        if let layout = self.validLayout {
+                            self.updateLayout(layout: layout, transition: .animated(duration: 0.2, curve: .easeInOut))
+                        }
+                    })
+                })))
+            }
+            
+            if let sourceNode {
+                let controller = ContextController(presentationData: self.presentationData, source: .extracted(ChatListHeaderBarContextExtractedContentSource(controller: self, sourceNode: sourceNode, sourceView: sourceView, keepInPlace: keepInPlace)), items: .single(ContextController.Items(content: .list(items))), recognizer: nil, gesture: gesture)
+                self.context.sharedContext.mainWindow?.presentInGlobalOverlay(controller)
+            } else if let sourceView {
+                let controller = ContextController(presentationData: self.presentationData, source: .reference(ChatListHeaderBarContextReferenceContentSource(controller: self, sourceView: sourceView)), items: .single(ContextController.Items(content: .list(items))), recognizer: nil, gesture: gesture)
+                self.context.sharedContext.mainWindow?.presentInGlobalOverlay(controller)
+            }
+        })
     }
     
     override public func loadDisplayNode() {
@@ -1671,7 +2021,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
             } else {
                 let contextContentSource: ContextContentSource
                 if peer.id.namespace == Namespaces.Peer.SecretChat, let node = node.subnodes?.first as? ContextExtractedContentContainingNode {
-                    contextContentSource = .extracted(ChatListHeaderBarContextExtractedContentSource(controller: strongSelf, sourceNode: node, keepInPlace: false))
+                    contextContentSource = .extracted(ChatListHeaderBarContextExtractedContentSource(controller: strongSelf, sourceNode: node, sourceView: nil, keepInPlace: false))
                 } else {
                     var subject: ChatControllerSubject?
                     if case let .search(messageId) = source, let id = messageId {
@@ -1732,359 +2082,8 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
             }
         }
         
-        let tabContextGesture: (Int32?, ContextExtractedContentContainingNode, ContextGesture, Bool, Bool) -> Void = { [weak self] id, sourceNode, gesture, keepInPlace, isDisabled in
-            guard let strongSelf = self else {
-                return
-            }
-            
-            let context = strongSelf.context
-            let filterPeersAreMuted: Signal<(areMuted: Bool, peerIds: [EnginePeer.Id])?, NoError> = strongSelf.context.engine.peers.currentChatListFilters()
-            |> take(1)
-            |> mapToSignal { filters -> Signal<(areMuted: Bool, peerIds: [EnginePeer.Id])?, NoError> in
-                guard let filter = filters.first(where: { $0.id == id }) else {
-                    return .single(nil)
-                }
-                guard case let .filter(_, _, _, data) = filter else {
-                    return .single(nil)
-                }
-                
-                let filterPredicate: ChatListFilterPredicate = chatListFilterPredicate(filter: data, accountPeerId: context.account.peerId)
-                return context.engine.peers.getChatListPeers(filterPredicate: filterPredicate)
-                |> mapToSignal { peers -> Signal<(areMuted: Bool, peerIds: [EnginePeer.Id])?, NoError> in
-                    let peerIds = peers.map(\.id)
-                    return context.engine.data.get(
-                        EngineDataMap(peerIds.map(TelegramEngine.EngineData.Item.Peer.NotificationSettings.init(id:))),
-                        TelegramEngine.EngineData.Item.NotificationSettings.Global()
-                    )
-                    |> map { list, globalSettings -> (areMuted: Bool, peerIds: [EnginePeer.Id])? in
-                        for peer in peers {
-                            switch list[peer.id]?.muteState {
-                            case .unmuted:
-                                return (false, peerIds)
-                            case .default:
-                                let globalValue: EngineGlobalNotificationSettings.CategorySettings
-                                switch peer {
-                                case .user, .secretChat:
-                                    globalValue = globalSettings.privateChats
-                                case .legacyGroup:
-                                    globalValue = globalSettings.groupChats
-                                case let .channel(channel):
-                                    if case .broadcast = channel.info {
-                                        globalValue = globalSettings.channels
-                                    } else {
-                                        globalValue = globalSettings.groupChats
-                                    }
-                                }
-                                if globalValue.enabled {
-                                    return (false, peerIds)
-                                }
-                            default:
-                                break
-                            }
-                        }
-                        return (true, peerIds)
-                    }
-                }
-            }
-            
-            let _ = combineLatest(
-                queue: Queue.mainQueue(),
-                strongSelf.context.engine.peers.currentChatListFilters(),
-                strongSelf.context.engine.data.get(
-                    TelegramEngine.EngineData.Item.Configuration.UserLimits(isPremium: true)
-                ),
-                filterPeersAreMuted
-            ).startStandalone(next: { [weak self] filters, premiumLimits, filterPeersAreMuted in
-                guard let strongSelf = self else {
-                    return
-                }
-                var items: [ContextMenuItem] = []
-                if let id = id {
-                    items.append(.action(ContextMenuActionItem(text: strongSelf.presentationData.strings.ChatList_EditFolder, icon: { theme in
-                        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Edit"), color: theme.contextMenu.primaryColor)
-                    }, action: { c, f in
-                        c?.dismiss(completion: {
-                            guard let strongSelf = self else {
-                                return
-                            }
-                            if isDisabled {
-                                let context = strongSelf.context
-                                var replaceImpl: ((ViewController) -> Void)?
-                                let controller = PremiumLimitScreen(context: context, subject: .folders, count: strongSelf.tabContainerNode.filtersCount, action: {
-                                    let controller = PremiumIntroScreen(context: context, source: .folders)
-                                    replaceImpl?(controller)
-                                    return true
-                                })
-                                replaceImpl = { [weak controller] c in
-                                    controller?.replace(with: c)
-                                }
-                                strongSelf.push(controller)
-                            } else {
-                                let _ = (strongSelf.context.engine.peers.currentChatListFilters()
-                                |> deliverOnMainQueue).startStandalone(next: { presetList in
-                                    guard let strongSelf = self else {
-                                        return
-                                    }
-                                    var found = false
-                                    for filter in presetList {
-                                        if filter.id == id {
-                                            strongSelf.push(chatListFilterPresetController(context: strongSelf.context, currentPreset: filter, updated: { _ in }))
-                                            f(.dismissWithoutContent)
-                                            found = true
-                                            break
-                                        }
-                                    }
-                                    if !found {
-                                        f(.default)
-                                    }
-                                })
-                            }
-                        })
-                    })))
-                    
-                    if let _ = filters.first(where: { $0.id == id }) {
-                        items.append(.action(ContextMenuActionItem(text: strongSelf.presentationData.strings.ChatList_AddChatsToFolder, icon: { theme in
-                            return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Add"), color: theme.contextMenu.primaryColor)
-                        }, action: { c, f in
-                            c?.dismiss(completion: {
-                                guard let strongSelf = self else {
-                                    return
-                                }
-                                
-                                if isDisabled {
-                                    let context = strongSelf.context
-                                    var replaceImpl: ((ViewController) -> Void)?
-                                    let controller = PremiumLimitScreen(context: context, subject: .folders, count: strongSelf.tabContainerNode.filtersCount, action: {
-                                        let controller = PremiumIntroScreen(context: context, source: .folders)
-                                        replaceImpl?(controller)
-                                        return true
-                                    })
-                                    replaceImpl = { [weak controller] c in
-                                        controller?.replace(with: c)
-                                    }
-                                    strongSelf.push(controller)
-                                } else {
-                                    let _ = combineLatest(
-                                        queue: Queue.mainQueue(),
-                                        strongSelf.context.engine.data.get(
-                                            TelegramEngine.EngineData.Item.Peer.Peer(id: strongSelf.context.account.peerId),
-                                            TelegramEngine.EngineData.Item.Configuration.UserLimits(isPremium: false),
-                                            TelegramEngine.EngineData.Item.Configuration.UserLimits(isPremium: true)
-                                        ),
-                                        strongSelf.context.engine.peers.currentChatListFilters()
-                                    ).startStandalone(next: { result, presetList in
-                                        guard let strongSelf = self else {
-                                            return
-                                        }
-                                        var found = false
-                                        for filter in presetList {
-                                            if filter.id == id, case let .filter(_, _, _, data) = filter {
-                                                let (accountPeer, limits, premiumLimits) = result
-                                                let isPremium = accountPeer?.isPremium ?? false
-                                                
-                                                let limit = limits.maxFolderChatsCount
-                                                let premiumLimit = premiumLimits.maxFolderChatsCount
-                                                
-                                                if data.includePeers.peers.count >= premiumLimit {
-                                                    let controller = PremiumLimitScreen(context: strongSelf.context, subject: .chatsPerFolder, count: Int32(data.includePeers.peers.count), action: {
-                                                        return true
-                                                    })
-                                                    strongSelf.push(controller)
-                                                    f(.dismissWithoutContent)
-                                                    return
-                                                } else if data.includePeers.peers.count >= limit && !isPremium {
-                                                    var replaceImpl: ((ViewController) -> Void)?
-                                                    let controller = PremiumLimitScreen(context: strongSelf.context, subject: .chatsPerFolder, count: Int32(data.includePeers.peers.count), action: {
-                                                        let controller = PremiumIntroScreen(context: strongSelf.context, source: .chatsPerFolder)
-                                                        replaceImpl?(controller)
-                                                        return true
-                                                    })
-                                                    replaceImpl = { [weak controller] c in
-                                                        controller?.replace(with: c)
-                                                    }
-                                                    strongSelf.push(controller)
-                                                    f(.dismissWithoutContent)
-                                                    return
-                                                }
-                                                
-                                                let _ = (strongSelf.context.engine.peers.currentChatListFilters()
-                                                |> deliverOnMainQueue).startStandalone(next: { filters in
-                                                    guard let strongSelf = self else {
-                                                        return
-                                                    }
-                                                    strongSelf.push(chatListFilterAddChatsController(context: strongSelf.context, filter: filter, allFilters: filters, limit: limits.maxFolderChatsCount, premiumLimit: premiumLimits.maxFolderChatsCount, isPremium: isPremium, presentUndo: { content in
-                                                        guard let strongSelf = self else {
-                                                            return
-                                                        }
-                                                        strongSelf.present(UndoOverlayController(presentationData: strongSelf.presentationData, content: content, elevatedLayout: true, animateInAsReplacement: false, action: { _ in return false }), in: .window(.root))
-                                                    }))
-                                                    f(.dismissWithoutContent)
-                                                })
-                                                found = true
-                                                break
-                                            }
-                                        }
-                                        if !found {
-                                            f(.default)
-                                        }
-                                    })
-                                }
-                            })
-                        })))
-                        
-                        if let filterEntries = strongSelf.tabContainerData?.0 {
-                            for filter in filterEntries {
-                                if case let .filter(filterId, _, unread) = filter, filterId == id {
-                                    if unread.value > 0 {
-                                        items.append(.action(ContextMenuActionItem(text: strongSelf.presentationData.strings.ChatList_ReadAll, textColor: .primary, icon: { theme in
-                                            return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/ReadAll"), color: theme.contextMenu.primaryColor)
-                                        }, action: { c, f in
-                                            c?.dismiss(completion: {
-                                                guard let strongSelf = self else {
-                                                    return
-                                                }
-                                                strongSelf.readAllInFilter(id: id)
-                                            })
-                                        })))
-                                    }
-                                    
-                                    for filter in filters {
-                                        if filter.id == filterId, case let .filter(_, title, _, data) = filter {
-                                            if let filterPeersAreMuted, filterPeersAreMuted.peerIds.count <= 200 {
-                                                items.append(.action(ContextMenuActionItem(text: filterPeersAreMuted.areMuted ? strongSelf.presentationData.strings.ChatList_ContextUnmuteAll : strongSelf.presentationData.strings.ChatList_ContextMuteAll, textColor: .primary, badge: nil, icon: { theme in
-                                                    return generateTintedImage(image: UIImage(bundleImageName: filterPeersAreMuted.areMuted ? "Chat/Context Menu/Unmute" : "Chat/Context Menu/Muted"), color: theme.contextMenu.primaryColor)
-                                                }, action: { c, f in
-                                                    c?.dismiss(completion: {
-                                                    })
-                                                    
-                                                    guard let strongSelf = self else {
-                                                        return
-                                                    }
-                                                    
-                                                    let _ = (strongSelf.context.engine.peers.updateMultiplePeerMuteSettings(peerIds: filterPeersAreMuted.peerIds, muted: !filterPeersAreMuted.areMuted)
-                                                    |> deliverOnMainQueue).startStandalone(completed: {
-                                                        guard let strongSelf = self else {
-                                                            return
-                                                        }
-                                                        
-                                                        let iconColor: UIColor = .white
-                                                        let overlayController: UndoOverlayController
-                                                        if !filterPeersAreMuted.areMuted {
-                                                            let text = NSMutableAttributedString(string: strongSelf.presentationData.strings.ChatList_ToastFolderMutedV2)
-                                                            let folderNameRange = (text.string as NSString).range(of: "{folder}")
-                                                            if folderNameRange.location != NSNotFound {
-                                                                text.replaceCharacters(in: folderNameRange, with: "")
-                                                                text.insert(title.attributedString(attributes: [
-                                                                    ChatTextInputAttributes.bold: true
-                                                                ]), at: folderNameRange.location)
-                                                            }
-                                                            
-                                                            overlayController = UndoOverlayController(presentationData: strongSelf.presentationData, content: .universalWithEntities(context: strongSelf.context, animation: "anim_profilemute", scale: 0.075, colors: [
-                                                                "Middle.Group 1.Fill 1": iconColor,
-                                                                "Top.Group 1.Fill 1": iconColor,
-                                                                "Bottom.Group 1.Fill 1": iconColor,
-                                                                "EXAMPLE.Group 1.Fill 1": iconColor,
-                                                                "Line.Group 1.Stroke 1": iconColor
-                                                            ], title: nil, text: text, animateEntities: title.enableAnimations, customUndoText: nil, timeout: nil), elevatedLayout: false, animateInAsReplacement: true, action: { _ in return false })
-                                                        } else {
-                                                            let text = NSMutableAttributedString(string: strongSelf.presentationData.strings.ChatList_ToastFolderUnmutedV2)
-                                                            let folderNameRange = (text.string as NSString).range(of: "{folder}")
-                                                            if folderNameRange.location != NSNotFound {
-                                                                text.replaceCharacters(in: folderNameRange, with: "")
-                                                                text.insert(title.attributedString(attributes: [
-                                                                    ChatTextInputAttributes.bold: true
-                                                                ]), at: folderNameRange.location)
-                                                            }
-                                                            
-                                                            overlayController = UndoOverlayController(presentationData: strongSelf.presentationData, content: .universalWithEntities(context: strongSelf.context, animation: "anim_profileunmute", scale: 0.075, colors: [
-                                                                "Middle.Group 1.Fill 1": iconColor,
-                                                                "Top.Group 1.Fill 1": iconColor,
-                                                                "Bottom.Group 1.Fill 1": iconColor,
-                                                                "EXAMPLE.Group 1.Fill 1": iconColor,
-                                                                "Line.Group 1.Stroke 1": iconColor
-                                                            ], title: nil, text: text, animateEntities: title.enableAnimations, customUndoText: nil, timeout: nil), elevatedLayout: false, animateInAsReplacement: true, action: { _ in return false })
-                                                        }
-                                                        strongSelf.present(overlayController, in: .current)
-                                                    })
-                                                })))
-                                            }
-                                            
-                                            if !data.includePeers.peers.isEmpty && data.categories.isEmpty && !data.excludeRead && !data.excludeMuted && !data.excludeArchived && data.excludePeers.isEmpty {
-                                                items.append(.action(ContextMenuActionItem(text: strongSelf.presentationData.strings.ChatList_ContextMenuShare, textColor: .primary, badge: data.hasSharedLinks ? nil : ContextMenuActionBadge(value: strongSelf.presentationData.strings.ChatList_ContextMenuBadgeNew, color: .accent, style: .label), icon: { theme in
-                                                    return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Link"), color: theme.contextMenu.primaryColor)
-                                                }, action: { c, f in
-                                                    c?.dismiss(completion: {
-                                                        guard let strongSelf = self else {
-                                                            return
-                                                        }
-                                                        strongSelf.shareFolder(filterId: filterId, data: data, title: title)
-                                                    })
-                                                })))
-                                            }
-                                            
-                                            break
-                                        }
-                                    }
-                                    
-                                    break
-                                }
-                            }
-                        }
-                        
-                        items.append(.action(ContextMenuActionItem(text: strongSelf.presentationData.strings.ChatList_RemoveFolder, textColor: .destructive, icon: { theme in
-                            return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Delete"), color: theme.contextMenu.destructiveColor)
-                        }, action: { c, f in
-                            c?.dismiss(completion: {
-                                guard let strongSelf = self else {
-                                    return
-                                }
-                                strongSelf.askForFilterRemoval(id: id)
-                            })
-                        })))
-                    }
-                } else {
-                    items.append(.action(ContextMenuActionItem(text: strongSelf.presentationData.strings.ChatList_EditFolders, icon: { theme in
-                        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Edit"), color: theme.contextMenu.primaryColor)
-                    }, action: { c, f in
-                        c?.dismiss(completion: {
-                            guard let strongSelf = self else {
-                                return
-                            }
-                            strongSelf.openFilterSettings()
-                        })
-                    })))
-                }
-                
-                if filters.count > 1 {
-                    items.append(.separator)
-                    items.append(.action(ContextMenuActionItem(text: strongSelf.presentationData.strings.ChatList_ReorderTabs, icon: { theme in
-                        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/ReorderItems"), color: theme.contextMenu.primaryColor)
-                    }, action: { c, f in
-                        c?.dismiss(completion: {
-                            guard let strongSelf = self else {
-                                return
-                            }
-                            
-                            strongSelf.chatListDisplayNode.isReorderingFilters = true
-                            strongSelf.isReorderingTabsValue.set(true)
-                            
-                            //TODO:update search enabled
-                            //strongSelf.searchContentNode?.setIsEnabled(false, animated: true)
-                            
-                            (strongSelf.parent as? TabBarController)?.updateIsTabBarEnabled(false, transition: .animated(duration: 0.2, curve: .easeInOut))
-                            if let layout = strongSelf.validLayout {
-                                strongSelf.updateLayout(layout: layout, transition: .animated(duration: 0.2, curve: .easeInOut))
-                            }
-                        })
-                    })))
-                }
-                
-                let controller = ContextController(presentationData: strongSelf.presentationData, source: .extracted(ChatListHeaderBarContextExtractedContentSource(controller: strongSelf, sourceNode: sourceNode, keepInPlace: keepInPlace)), items: .single(ContextController.Items(content: .list(items))), recognizer: nil, gesture: gesture)
-                strongSelf.context.sharedContext.mainWindow?.presentInGlobalOverlay(controller)
-            })
-        }
         self.tabContainerNode.contextGesture = { id, sourceNode, gesture, isDisabled in
-            tabContextGesture(id, sourceNode, gesture, false, isDisabled)
+            self.tabContextGesture(id: id, sourceNode: sourceNode, sourceView: nil, gesture: gesture, keepInPlace: false, isDisabled: isDisabled)
         }
         
         if case .chatList(.root) = self.location {
@@ -3492,7 +3491,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                         })))
                     }
                     
-                    let controller = ContextController(presentationData: self.presentationData, source: .extracted(ChatListHeaderBarContextExtractedContentSource(controller: self, sourceNode: sourceNode, keepInPlace: false)), items: .single(ContextController.Items(content: .list(items))), recognizer: nil, gesture: gesture)
+                    let controller = ContextController(presentationData: self.presentationData, source: .extracted(ChatListHeaderBarContextExtractedContentSource(controller: self, sourceNode: sourceNode, sourceView: nil, keepInPlace: false)), items: .single(ContextController.Items(content: .list(items))), recognizer: nil, gesture: gesture)
                     self.context.sharedContext.mainWindow?.presentInGlobalOverlay(controller)
                 })
             }
@@ -4528,7 +4527,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
         })
     }
     
-    private func askForFilterRemoval(id: Int32) {
+    func askForFilterRemoval(id: Int32) {
         let apply: () -> Void = { [weak self] in
             guard let strongSelf = self else {
                 return
@@ -6552,22 +6551,49 @@ private final class ChatListTabBarContextReferenceContentSource: ContextReferenc
     }
 }
 
+private final class ChatListHeaderBarContextReferenceContentSource: ContextReferenceContentSource {
+    let keepInPlace: Bool = true
+    let actionsHorizontalAlignment: ContextActionsHorizontalAlignment = .center
+    
+    private let controller: ChatListController
+    private let sourceView: ContextExtractedContentContainingView
+    
+    init(controller: ChatListController, sourceView: ContextExtractedContentContainingView) {
+        self.controller = controller
+        self.sourceView = sourceView
+    }
+    
+    func transitionInfo() -> ContextControllerReferenceViewInfo? {
+        return ContextControllerReferenceViewInfo(
+            referenceView: self.sourceView.contentView,
+            contentAreaInScreenSpace: UIScreen.main.bounds,
+            actionsPosition: .bottom
+        )
+    }
+}
+
 private final class ChatListHeaderBarContextExtractedContentSource: ContextExtractedContentSource {
     let keepInPlace: Bool
     let ignoreContentTouches: Bool = true
     let blurBackground: Bool = true
     
     private let controller: ChatListController
-    private let sourceNode: ContextExtractedContentContainingNode
+    private let sourceNode: ContextExtractedContentContainingNode?
+    private let sourceView: ContextExtractedContentContainingView?
     
-    init(controller: ChatListController, sourceNode: ContextExtractedContentContainingNode, keepInPlace: Bool) {
+    init(controller: ChatListController, sourceNode: ContextExtractedContentContainingNode?, sourceView: ContextExtractedContentContainingView?, keepInPlace: Bool) {
         self.controller = controller
         self.sourceNode = sourceNode
+        self.sourceView = sourceView
         self.keepInPlace = keepInPlace
     }
     
     func takeView() -> ContextControllerTakeViewInfo? {
-        return ContextControllerTakeViewInfo(containingItem: .node(self.sourceNode), contentAreaInScreenSpace: UIScreen.main.bounds)
+        if let sourceNode = self.sourceNode {
+            return ContextControllerTakeViewInfo(containingItem: .node(sourceNode), contentAreaInScreenSpace: UIScreen.main.bounds)
+        } else {
+            return ContextControllerTakeViewInfo(containingItem: .view(self.sourceView!), contentAreaInScreenSpace: UIScreen.main.bounds)
+        }
     }
     
     func putBack() -> ContextControllerPutBackViewInfo? {

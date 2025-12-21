@@ -11,6 +11,14 @@ import TelegramCore
 import StoryPeerListComponent
 import EdgeEffect
 
+private func searchScrollHeightValue() -> CGFloat {
+    return 54.0
+}
+
+private func storiesHeightValue() -> CGFloat {
+    return 96.0
+}
+
 public final class ChatListNavigationBar: Component {
     public final class AnimationHint {
         let disableStoriesAnimations: Bool
@@ -172,10 +180,8 @@ public final class ChatListNavigationBar: Component {
         }
     }
     
-    public static let searchScrollHeight: CGFloat = 52.0
-    public static let storiesScrollHeight: CGFloat = {
-        return 83.0
-    }()
+    public static let searchScrollHeight: CGFloat = searchScrollHeightValue()
+    public static let storiesScrollHeight: CGFloat = storiesHeightValue()
 
     public final class View: UIView {
         private let edgeEffectView: EdgeEffectView
@@ -340,7 +346,7 @@ public final class ChatListNavigationBar: Component {
                 }
                 
                 let searchSize = CGSize(width: currentLayout.size.width, height: navigationBarSearchContentHeight)
-                var searchFrame = CGRect(origin: CGPoint(x: 0.0, y: visibleSize.height - searchSize.height - self.bottomContentsContainer.bounds.height), size: searchSize)
+                var searchFrame = CGRect(origin: CGPoint(x: 0.0, y: visibleSize.height - searchSize.height - self.bottomContentsContainer.bounds.height - 2.0), size: searchSize)
                 if let activeSearch = component.activeSearch, !activeSearch.isExternal {
                     searchFrame.origin.y = component.statusBarHeight + 8.0
                 }
@@ -366,7 +372,7 @@ public final class ChatListNavigationBar: Component {
                 searchFrameValue = searchFrame
                 transition.setFrameWithAdditivePosition(view: searchContentNode.view, frame: searchFrame)
                 
-                searchContentNode.updateLayout(size: searchSize, leftInset: component.sideInset, rightInset: component.sideInset, transition: transition.containedViewLayoutTransition)
+                let _ = searchContentNode.updateLayout(size: searchSize, leftInset: component.sideInset, rightInset: component.sideInset, transition: transition.containedViewLayoutTransition)
                 
                 var searchAlpha: CGFloat = search.isEnabled ? 1.0 : 0.5
                 if let activeSearch = component.activeSearch, activeSearch.isExternal {
@@ -686,10 +692,10 @@ public final class ChatListNavigationBar: Component {
                 }
             } else {
                 contentHeight += 44.0
-                contentHeight += 7.0
+                contentHeight += 9.0
                 
                 if component.search != nil {
-                    contentHeight += navigationBarSearchContentHeight
+                    contentHeight += navigationBarSearchContentHeight + 2.0
                 }
             }
             

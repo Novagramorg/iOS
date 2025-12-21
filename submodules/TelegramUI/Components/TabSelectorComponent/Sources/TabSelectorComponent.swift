@@ -632,7 +632,7 @@ public final class TabSelectorComponent: Component {
                 if case .component = item.content {
                     useSelectionFraction = true
                 }
-                if let _ = component.colors.normal {
+                if let normal = component.colors.normal, normal != component.colors.foreground {
                     useSelectionFraction = true
                 }
                 

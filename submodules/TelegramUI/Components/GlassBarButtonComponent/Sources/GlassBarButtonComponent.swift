@@ -60,8 +60,8 @@ public final class GlassBarButtonComponent: Component {
         return true
     }
 
-    public final class View: HighlightTrackingButton {
-        private let containerView: UIView
+    public final class View: UIView {
+        private let containerView: HighlightTrackingButton
         private let genericContainerView: UIView
         private let genericBackgroundView: SimpleGlassView
         private let glassContainerView: UIView
@@ -71,25 +71,23 @@ public final class GlassBarButtonComponent: Component {
         private var component: GlassBarButtonComponent?
         
         public override init(frame: CGRect) {
-            self.containerView = UIView()
+            self.containerView = HighlightTrackingButton()
             self.genericContainerView = UIView()
             self.genericBackgroundView = SimpleGlassView()
             self.glassContainerView = UIView()
             
             super.init(frame: frame)
             
-            self.containerView.isUserInteractionEnabled = false
             self.containerView.layer.rasterizationScale = UIScreenScale
             
-            self.addSubview(self.containerView)
-            self.containerView.addSubview(self.genericContainerView)
-            self.containerView.addSubview(self.glassContainerView)
+            self.addSubview(self.genericContainerView)
+            self.addSubview(self.glassContainerView)
             
             self.genericContainerView.addSubview(self.genericBackgroundView)
                         
-            self.addTarget(self, action: #selector(self.pressed), for: .touchUpInside)
+            self.containerView.addTarget(self, action: #selector(self.pressed), for: .touchUpInside)
             
-            self.highligthedChanged = { [weak self] highlighted in
+            self.containerView.highligthedChanged = { [weak self] highlighted in
                 guard let self else {
                     return
                 }
@@ -112,11 +110,27 @@ public final class GlassBarButtonComponent: Component {
             action(self)
         }
         
+        @objc private func onTapGesture(_ recognizer: UITapGestureRecognizer) {
+            if case .ended = recognizer.state {
+                guard let component = self.component, let action = component.action else {
+                    return
+                }
+                action(self)
+            }
+        }
+        
+        override public func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+            guard let result = super.hitTest(point, with: event) else {
+                return nil
+            }
+            return result
+        }
+        
         func update(component: GlassBarButtonComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
             let previousComponent = self.component
             self.component = component
             
-            self.isEnabled = component.isEnabled
+            self.containerView.isEnabled = component.isEnabled
             
             var componentView: ComponentView<Empty>
             var animateAppearance = false
@@ -159,6 +173,7 @@ public final class GlassBarButtonComponent: Component {
             let componentFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((containerSize.width - componentSize.width) / 2.0), y: floorToScreenPixels((containerSize.height - componentSize.height) / 2.0)), size: componentSize)
             if let view = componentView.view {
                 if view.superview == nil {
+                    view.isUserInteractionEnabled = false
                     self.containerView.addSubview(view)
                     if animateAppearance {
                         transition.animateScale(view: view, from: 0.01, to: 1.0)
@@ -213,15 +228,44 @@ public final class GlassBarButtonComponent: Component {
                     self.glassContainerView.addSubview(glassBackgroundView)
                     self.glassBackgroundView = glassBackgroundView
                     
+                    glassBackgroundView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(self.onTapGesture(_:))))
+                    
                     transition.animateAlpha(view: glassBackgroundView, from: 0.0, to: 1.0)
                 }
-                glassBackgroundView.update(size: containerSize, cornerRadius: cornerRadius, isDark: component.isDark, tintColor: .init(kind: effectiveState == .tintedGlass ? .custom : .panel , color: backgroundColor.withMultipliedAlpha(effectiveState == .tintedGlass ? 1.0 : 0.7)), transition: glassBackgroundTransition)
+                glassBackgroundView.update(size: containerSize, cornerRadius: cornerRadius, isDark: component.isDark, tintColor: .init(kind: effectiveState == .tintedGlass ? .custom : .panel , color: backgroundColor.withMultipliedAlpha(effectiveState == .tintedGlass ? 1.0 : 0.7)), isInteractive: true, transition: glassBackgroundTransition)
+                glassBackgroundTransition.setFrame(view: glassBackgroundView, frame: bounds)
+            } else if case .glass = component.state {
+                let glassBackgroundView: GlassBackgroundView
+                var glassBackgroundTransition = transition
+                if let current = self.glassBackgroundView {
+                    glassBackgroundView = current
+                } else {
+                    glassBackgroundTransition = .immediate
+                    glassBackgroundView = GlassBackgroundView()
+                    glassBackgroundView.isUserInteractionEnabled = false
+                    self.glassContainerView.addSubview(glassBackgroundView)
+                    self.glassBackgroundView = glassBackgroundView
+                    
+                    glassBackgroundView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(self.onTapGesture(_:))))
+                    
+                    transition.animateAlpha(view: glassBackgroundView, from: 0.0, to: 1.0)
+                }
+                glassBackgroundView.update(size: containerSize, cornerRadius: cornerRadius, isDark: component.isDark, tintColor: .init(kind: .panel, color: UIColor(white: component.isDark ? 0.0 : 1.0, alpha: 0.6)), isInteractive: true, transition: glassBackgroundTransition)
                 glassBackgroundTransition.setFrame(view: glassBackgroundView, frame: bounds)
             } else if let glassBackgroundView = self.glassBackgroundView {
                 self.glassBackgroundView = nil
                 transition.setAlpha(view: glassBackgroundView, alpha: 0.0, completion: { _ in
                     glassBackgroundView.removeFromSuperview()
                 })
+            }
+            
+            if let glassBackgroundView = self.glassBackgroundView {
+                self.containerView.isUserInteractionEnabled = false
+                if self.containerView.superview !== glassBackgroundView.contentView {
+                    glassBackgroundView.contentView.addSubview(self.containerView)
+                }
+            } else if self.containerView.superview !== self {
+                self.addSubview(self.containerView)
             }
             
             return containerSize

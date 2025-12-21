@@ -987,7 +987,7 @@ public final class ChatListSearchContainerNode: SearchDisplayControllerContentNo
         
         bottomInset += 44.0
         
-        let edgeEffectHeight: CGFloat = bottomInset
+        let edgeEffectHeight: CGFloat = bottomInset + 8.0
         let edgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: layout.size.height - edgeEffectHeight), size: CGSize(width: layout.size.width, height: edgeEffectHeight))
         transition.updateFrame(view: self.edgeEffectView, frame: edgeEffectFrame)
         self.edgeEffectView.update(content: self.presentationData.theme.list.plainBackgroundColor, rect: edgeEffectFrame, edge: .bottom, edgeSize: min(edgeEffectHeight, 50.0), transition: ComponentTransition(transition))

@@ -1824,6 +1824,8 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
         self.maxStoriesPerFolder = maxStoriesPerFolder
         
         super.init()
+        
+        self.clipsToBounds = true
 
         if case .peer = self.scope {
             let _ = (ApplicationSpecificNotice.getSharedMediaScrollingTooltip(accountManager: context.sharedContext.accountManager)
@@ -2112,7 +2114,7 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
             }
 
             if case .botPreview = scope {
-                let backgroundColor = presentationData.theme.list.plainBackgroundColor
+                let backgroundColor = presentationData.theme.list.blocksBackgroundColor
                 let foregroundColor = presentationData.theme.list.itemBlocksBackgroundColor.withAlphaComponent(0.6)
                 
                 return SparseItemGrid.ShimmerColors(background: backgroundColor.argb, foreground: foregroundColor.argb)
@@ -4024,12 +4026,14 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
             transition: folderTabTransition,
             component: AnyComponent(TabSelectorComponent(
                 colors: TabSelectorComponent.Colors(
-                    foreground: self.presentationData.theme.list.itemPrimaryTextColor.withMultipliedAlpha(0.8),
-                    selection: self.presentationData.theme.list.itemPrimaryTextColor.withMultipliedAlpha(0.05)
+                    foreground: self.presentationData.theme.list.itemPrimaryTextColor,
+                    selection: self.presentationData.theme.list.itemPrimaryTextColor.withMultipliedAlpha(0.05),
+                    normal: self.presentationData.theme.list.itemPrimaryTextColor,
+                    simple: true
                 ),
                 theme: self.presentationData.theme,
                 customLayout: TabSelectorComponent.CustomLayout(
-                    font: Font.medium(14.0),
+                    font: Font.medium(15.0),
                     spacing: 9.0,
                     verticalInset: 11.0
                 ),
@@ -4092,7 +4096,7 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
             environment: {},
             containerSize: CGSize(width: size.width, height: 44.0)
         )
-        var folderTabFrame = CGRect(origin: CGPoint(x: floor((size.width - folderTabSize.width) * 0.5), y: topInset - 11.0), size: folderTabSize)
+        var folderTabFrame = CGRect(origin: CGPoint(x: floor((size.width - folderTabSize.width) * 0.5), y: topInset - 19.0), size: folderTabSize)
         
         let effectiveScrollingOffset: CGFloat
         effectiveScrollingOffset = self.itemGrid.scrollingOffset
@@ -4236,7 +4240,7 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
         }
         
         var hasBarBackground = false
-        if self.isProfileEmbedded {
+        if self.isProfileEmbedded && !"".isEmpty {
             if case .botPreview = self.scope {
                 hasBarBackground = true
             } else if case let .peer(_, _, isArchived) = self.scope, ((self.canManageStories && !isArchived) || !self.currentStoryFolders.isEmpty) {
@@ -4278,9 +4282,9 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
             if case .botPreview = self.scope {
                 updateBotPreviewFooter(size: size, bottomInset: 0.0, transition: transition)
                 if let botPreviewFooterView = self.botPreviewFooter?.view {
-                listBottomInset += 18.0 + botPreviewFooterView.bounds.height
+                    listBottomInset += 18.0 + botPreviewFooterView.bounds.height
+                }
             }
-        }
         }
         
         if self.isProfileEmbedded, let selectedIds = self.itemInteraction.selectedIds, self.canManageStories, case let .peer(peerId, _, isArchived) = self.scope {
@@ -4848,7 +4852,7 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
                 } else if self.isProfileEmbedded, case let .peer(_, _, isArchived) = self.scope, ((self.canManageStories && !isArchived) || !self.currentStoryFolders.isEmpty), self.isProfileEmbedded {
                     subTransition.setBackgroundColor(view: self.view, color: presentationData.theme.list.blocksBackgroundColor)
                 } else if self.isProfileEmbedded {
-                    subTransition.setBackgroundColor(view: self.view, color: presentationData.theme.list.plainBackgroundColor)
+                    subTransition.setBackgroundColor(view: self.view, color: presentationData.theme.list.blocksBackgroundColor)
                 } else {
                     subTransition.setBackgroundColor(view: self.view, color: presentationData.theme.list.blocksBackgroundColor)
                 }

@@ -371,7 +371,7 @@ public func makeDefaultDarkPresentationTheme(extendingThemeReference: Presentati
     let navigationSearchBar = PresentationThemeNavigationSearchBar(
         backgroundColor: UIColor(rgb: 0x1c1c1d),
         accentColor: UIColor(rgb: 0xffffff),
-        inputFillColor: UIColor(rgb: 0x0f0f0f),
+        inputFillColor: UIColor(white: 1.0, alpha: 0.1),
         inputTextColor: UIColor(rgb: 0xffffff),
         inputPlaceholderTextColor: UIColor(rgb: 0x8f8f8f),
         inputIconColor: UIColor(rgb: 0x8f8f8f),

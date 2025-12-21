@@ -145,6 +145,7 @@ public protocol NavigationBar: ASDisplayNode {
     var clippingNode: SparseNode { get }
     
     var backgroundView: UIView { get }
+    var customOverBackgroundContentView: UIView { get }
     var contentNode: NavigationBarContentNode? { get }
     var secondaryContentNode: ASDisplayNode? { get }
     var secondaryContentNodeDisplayFraction: CGFloat { get set }
@@ -186,7 +187,7 @@ public protocol NavigationBar: ASDisplayNode {
     func executeBack() -> Bool
     func setHidden(_ hidden: Bool, animated: Bool)
     
-    var requestContainerLayout: (ContainedViewLayoutTransition) -> Void { get set }
+    var requestContainerLayout: ((ContainedViewLayoutTransition) -> Void)? { get set }
     
     func updateLayout(size: CGSize, defaultHeight: CGFloat, additionalTopHeight: CGFloat, additionalContentHeight: CGFloat, additionalBackgroundHeight: CGFloat, additionalCutout: CGSize?, leftInset: CGFloat, rightInset: CGFloat, appearsHidden: Bool, isLandscape: Bool, transition: ContainedViewLayoutTransition)
 }

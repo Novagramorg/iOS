@@ -670,7 +670,7 @@ public final class ChatListHeaderComponent: Component {
                 chatListTitleView.theme = theme
                 chatListTitleView.strings = strings
                 chatListTitleView.setTitle(chatListTitle, animated: false)
-                let titleContentRect = chatListTitleView.updateLayoutInternal(size: chatListTitleContentSize, clearBounds: CGRect(origin: CGPoint(), size: chatListTitleContentSize), transition: transition.containedViewLayoutTransition)
+                let titleContentRect = chatListTitleView.updateLayoutInternal(size: chatListTitleContentSize, transition: transition.containedViewLayoutTransition)
                 centerContentWidth = floor((chatListTitleContentSize.width * 0.5 - titleContentRect.minX) * 2.0)
                 
                 let centerOffset = sideContentWidth * 0.5

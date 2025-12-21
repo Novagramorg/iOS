@@ -16,16 +16,6 @@ import EmojiStatusComponent
 import GlassBackgroundComponent
 
 public final class ChatNavigationBarTitleView: UIView, NavigationBarTitleView {
-    private struct Params: Equatable {
-        let size: CGSize
-        let clearBounds: CGRect
-        
-        init(size: CGSize, clearBounds: CGRect) {
-            self.size = size
-            self.clearBounds = clearBounds
-        }
-    }
-    
     private final class ContentData {
         let context: AccountContext
         let theme: PresentationTheme
@@ -44,13 +34,14 @@ public final class ChatNavigationBarTitleView: UIView, NavigationBarTitleView {
         }
     }
     
+    private let parentTitleState = ComponentState()
     private let title = ComponentView<Empty>()
     
     private var contentData: ContentData?
-    private var params: Params?
     private var activities: ChatTitleComponent.Activities?
     private var networkState: AccountNetworkState?
     
+    public var requestUpdate: ((ContainedViewLayoutTransition) -> Void)?
     public var tapAction: (() -> Void)?
     public var longTapAction: (() -> Void)?
     
@@ -113,56 +104,57 @@ public final class ChatNavigationBarTitleView: UIView, NavigationBarTitleView {
     }
     
     private func update(transition: ComponentTransition) {
-        guard let contentData, let params else {
-            return
-        }
-        self.update(params: params, contentData: contentData, transition: transition)
+        self.requestUpdate?(transition.containedViewLayoutTransition)
     }
     
-    private func update(params: Params, contentData: ContentData, transition: ComponentTransition) {
-        let _ = self.title.update(
-            transition: transition,
-            component: AnyComponent(ChatTitleComponent(
-                context: contentData.context,
-                theme: contentData.theme,
-                strings: contentData.strings,
-                dateTimeFormat: contentData.dateTimeFormat,
-                nameDisplayOrder: contentData.nameDisplayOrder,
-                displayBackground: true,
-                content: contentData.content,
-                activities: self.activities,
-                networkState: self.networkState,
-                tapped: { [weak self] in
-                    guard let self else {
-                        return
+    public func updateLayout(availableSize: CGSize, transition: ContainedViewLayoutTransition) -> CGSize {
+        let transition = ComponentTransition(transition)
+        
+        if let contentData = self.contentData {
+            let titleSize = self.title.update(
+                transition: transition,
+                component: AnyComponent(ChatTitleComponent(
+                    context: contentData.context,
+                    theme: contentData.theme,
+                    strings: contentData.strings,
+                    dateTimeFormat: contentData.dateTimeFormat,
+                    nameDisplayOrder: contentData.nameDisplayOrder,
+                    displayBackground: true,
+                    content: contentData.content,
+                    activities: self.activities,
+                    networkState: self.networkState,
+                    tapped: { [weak self] in
+                        guard let self else {
+                            return
+                        }
+                        self.tapAction?()
+                    },
+                    longTapped: { [weak self] in
+                        guard let self else {
+                            return
+                        }
+                        self.longTapAction?()
                     }
-                    self.tapAction?()
-                },
-                longTapped: { [weak self] in
-                    guard let self else {
-                        return
+                )),
+                environment: {},
+                containerSize: availableSize
+            )
+            if let titleView = self.title.view {
+                if titleView.superview == nil {
+                    self.title.parentState = self.parentTitleState
+                    self.parentTitleState._updated = { [weak self] transition, _ in
+                        guard let self else {
+                            return
+                        }
+                        self.requestUpdate?(transition.containedViewLayoutTransition)
                     }
-                    self.longTapAction?()
+                    self.addSubview(titleView)
                 }
-            )),
-            environment: {},
-            containerSize: params.size
-        )
-        if let titleView = self.title.view {
-            if titleView.superview == nil {
-                self.addSubview(titleView)
+                transition.setFrame(view: titleView, frame: CGRect(origin: CGPoint(), size: titleSize))
             }
-            transition.setFrame(view: titleView, frame: CGRect(origin: CGPoint(), size: params.size))
-        }
-    }
-    
-    public func updateLayout(size: CGSize, clearBounds: CGRect, transition: ContainedViewLayoutTransition) {
-        let params = Params(size: size, clearBounds: clearBounds)
-        if self.params != params {
-            self.params = params
-            if let contentData {
-                self.update(params: params, contentData: contentData, transition: ComponentTransition(transition))
-            }
+            return titleSize
+        } else {
+            return availableSize
         }
     }
 }
@@ -1008,7 +1000,7 @@ public final class ChatTitleComponent: Component {
             contentSize.height += subtitleSize.height
             
             let containerSize = CGSize(width: contentSize.width + containerSideInset * 2.0, height: 44.0)
-            let containerFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((availableSize.width - containerSize.width) * 0.5), y: floorToScreenPixels((availableSize.height - containerSize.height) * 0.5)), size: containerSize)
+            let containerFrame = CGRect(origin: CGPoint(x: 0.0, y: floorToScreenPixels((availableSize.height - containerSize.height) * 0.5)), size: containerSize)
             
             let titleFrame = CGRect(origin: CGPoint(x: titleLeftIconsWidth + floor((containerFrame.width - titleSize.width - titleLeftIconsWidth - titleRightIconsWidth) * 0.5), y: floor((containerFrame.height - contentSize.height) * 0.5)), size: titleSize)
             if let titleView = self.title.view {
@@ -1132,7 +1124,7 @@ public final class ChatTitleComponent: Component {
                 self.contentContainer.layer.cornerRadius = 0.0
             }
             
-            return availableSize
+            return CGSize(width: containerSize.width, height: availableSize.height)
         }
     }
     

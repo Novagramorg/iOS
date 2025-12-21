@@ -126,7 +126,7 @@ public final class ChatSearchNavigationContentNode: NavigationBarContentNode {
                 if self.hasActivity != value {
                     self.hasActivity = value
                     if let params = self.params {
-                        self.updateLayout(size: params.size, leftInset: params.leftInset, rightInset: params.rightInset, transition: .immediate)
+                        let _ = self.updateLayout(size: params.size, leftInset: params.leftInset, rightInset: params.rightInset, transition: .immediate)
                     }
                 }
             })
@@ -147,7 +147,7 @@ public final class ChatSearchNavigationContentNode: NavigationBarContentNode {
         }
     }
     
-    override public func updateLayout(size: CGSize, leftInset: CGFloat, rightInset: CGFloat, transition: ContainedViewLayoutTransition) {
+    override public func updateLayout(size: CGSize, leftInset: CGFloat, rightInset: CGFloat, transition: ContainedViewLayoutTransition) -> CGSize {
         self.params = (size, leftInset, rightInset)
         
         let transition = ComponentTransition(transition)
@@ -223,6 +223,8 @@ public final class ChatSearchNavigationContentNode: NavigationBarContentNode {
         
         transition.setFrame(view: self.close.background, frame: closeFrame)
         self.close.background.update(size: closeFrame.size, cornerRadius: closeFrame.height * 0.5, isDark: self.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: UIColor(white: self.theme.overallDarkAppearance ? 0.0 : 1.0, alpha: 0.6)), isInteractive: true, transition: transition)
+        
+        return size
     }
     
     public func activate() {
@@ -290,7 +292,7 @@ public final class ChatSearchNavigationContentNode: NavigationBarContentNode {
         if presentationInterfaceState.theme != self.theme {
             self.theme = presentationInterfaceState.theme
             if let params = self.params {
-                self.updateLayout(size: params.size, leftInset: params.leftInset, rightInset: params.rightInset, transition: .immediate)
+                let _ = self.updateLayout(size: params.size, leftInset: params.leftInset, rightInset: params.rightInset, transition: .immediate)
             }
         }
     }

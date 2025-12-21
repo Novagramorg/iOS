@@ -10,6 +10,14 @@ private let transformClass: NSObject? = {
     return nil
 }()
 
+private let immutableTransformClass: NSObject? = {
+    let name = ("CA" as NSString).appendingFormat("MeshTransform")
+    if let cls = NSClassFromString(name as String) as AnyObject as? NSObject {
+        return cls
+    }
+    return nil
+}()
+
 @inline(__always)
 private func getMethod<T>(object: NSObject, selector: String) -> T? {
     guard let method = object.method(for: NSSelectorFromString(selector)) else {
@@ -31,6 +39,27 @@ private func invokeTransformCreateMethod() -> NSObject? {
             let selector = NSSelectorFromString("meshTransform")
             cachedTransformCreateMethod = (method, selector)
             return method(transformClass, selector)
+        } else {
+            return nil
+        }
+    }
+}
+
+private var cachedTransformCreateCustomMethod: (@convention(c) (AnyObject, Selector, _ vertexCount: UInt, _ vertices: UnsafeMutablePointer<MeshTransformMeshVertex>, _ faceCount: UInt, _ faces: UnsafeMutablePointer<MeshTransformMeshFace>, _ depthNormalization: NSString) -> NSObject?, Selector)?
+private func invokeTransformCreateCustomMethod(vertexCount: UInt, vertices: UnsafeMutablePointer<MeshTransformMeshVertex>, faceCount: UInt, faces: UnsafeMutablePointer<MeshTransformMeshFace>, depthNormalization: String) -> NSObject? {
+    guard let transformClass = transformClass else {
+        return nil
+    }
+    if let cachedTransformCreateCustomMethod {
+        return cachedTransformCreateCustomMethod.0(transformClass, cachedTransformCreateCustomMethod.1, vertexCount, vertices, faceCount, faces, depthNormalization as NSString)
+    } else {
+        let selectorName = ("meshTransf" as NSString).appending("ormWithVertexCount:vertices:faceCount:faces:depthNormalization:")
+        
+        let method: (@convention(c) (AnyObject, Selector, _ vertexCount: UInt, _ vertices: UnsafeMutablePointer<MeshTransformMeshVertex>, _ faceCount: UInt, _ faces: UnsafeMutablePointer<MeshTransformMeshFace>, _ depthNormalization: NSString) -> NSObject?)? = getMethod(object: transformClass, selector: selectorName)
+        if let method {
+            let selector = NSSelectorFromString(selectorName)
+            cachedTransformCreateCustomMethod = (method, selector)
+            return method(transformClass, selector, vertexCount, vertices, faceCount, faces, depthNormalization as NSString)
         } else {
             return nil
         }
@@ -80,33 +109,42 @@ private func invokeTransformSetSubdivisionStepsMethod(object: NSObject, value: I
 }
 
 public final class MeshTransform {
+    public typealias Value = NSObject
+    
     public typealias Point3D = MeshTransformPoint3D
     public typealias Vertex = MeshTransformMeshVertex
     public typealias Face = MeshTransformMeshFace
     
-    public let value: NSObject?
-    
-    public var subdivisionSteps: Int = -1 {
-        didSet {
-            if self.subdivisionSteps != oldValue, let value {
-                invokeTransformSetSubdivisionStepsMethod(object: value, value: self.subdivisionSteps)
-            }
-        }
-    }
+    private var vertices: ContiguousArray<Vertex> = []
+    private var faces: ContiguousArray<Face> = []
     
     public init() {
-        self.value = invokeTransformCreateMethod()
     }
     
     public func add(_ vertex: Vertex) {
-        if let value = self.value {
-            invokeTransformAddVertexMethod(object: value, vertex: vertex)
-        }
+        self.vertices.append(vertex)
     }
     
     public func add(_ face: Face) {
-        if let value = self.value {
-            invokeTransformAddFaceMethod(object: value, face: face)
+        self.faces.append(face)
+    }
+    
+    public consuming func makeValue() -> Value? {
+        let result = self.vertices.withUnsafeMutableBufferPointer { vertices -> NSObject? in
+            return self.faces.withUnsafeMutableBufferPointer { faces -> NSObject? in
+                return invokeTransformCreateCustomMethod(
+                    vertexCount: UInt(vertices.count),
+                    vertices: vertices.baseAddress!,
+                    faceCount: UInt(faces.count),
+                    faces: faces.baseAddress!,
+                    depthNormalization: "none"
+                )
+            }
         }
+        if let result {
+            invokeTransformSetSubdivisionStepsMethod(object: result, value: 0)
+        }
+        
+        return result
     }
 }

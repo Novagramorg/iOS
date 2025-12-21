@@ -365,7 +365,7 @@ public final class TabBarComponent: Component {
         
         public override init(frame: CGRect) {
             self.backgroundContainer = GlassBackgroundContainerView()
-            self.liquidLensView = LiquidLensView(useBackgroundContainer: false)
+            self.liquidLensView = LiquidLensView(kind: .externalContainer)
             
             self.contextGestureContainerView = ContextControllerSourceView()
             self.contextGestureContainerView.isGestureEnabled = true
@@ -716,7 +716,10 @@ public final class TabBarComponent: Component {
                 lensSize = CGSize(width: 48.0, height: 48.0)
                 lensSelection = (0.0, 48.0)
             }
-            self.liquidLensView.update(size: lensSize, selectionOrigin: CGPoint(x: lensSelection.x, y: 0.0), selectionSize: CGSize(width: lensSelection.width, height: lensSize.height), isDark: component.theme.overallDarkAppearance, isLifted: self.selectionGestureState != nil, isCollapsed: isLensCollapsed, transition: transition)
+            
+            lensSelection.x = max(0.0, min(lensSelection.x, lensSize.width - lensSelection.width))
+            
+            self.liquidLensView.update(size: lensSize, selectionOrigin: CGPoint(x: lensSelection.x, y: 0.0), selectionSize: CGSize(width: lensSelection.width, height: lensSize.height), inset: 4.0, isDark: component.theme.overallDarkAppearance, isLifted: self.selectionGestureState != nil, isCollapsed: isLensCollapsed, transition: transition)
 
             var size = tabsSize
 

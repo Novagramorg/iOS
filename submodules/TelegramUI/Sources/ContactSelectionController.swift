@@ -238,12 +238,12 @@ class ContactSelectionControllerImpl: ViewController, ContactSelectionController
         guard case .glass = self.style else {
             return
         }
-        let barButtonSize = CGSize(width: 40.0, height: 40.0)
+        let barButtonSize = CGSize(width: 44.0, height: 44.0)
         let closeComponent: AnyComponentWithIdentity<Empty> = AnyComponentWithIdentity(
             id: "close",
             component: AnyComponent(GlassBarButtonComponent(
                 size: barButtonSize,
-                backgroundColor: self.presentationData.theme.rootController.navigationBar.glassBarButtonBackgroundColor,
+                backgroundColor: nil,
                 isDark: self.presentationData.theme.overallDarkAppearance,
                 state: .generic,
                 component: AnyComponentWithIdentity(id: "close", component: AnyComponent(
@@ -264,7 +264,7 @@ class ContactSelectionControllerImpl: ViewController, ContactSelectionController
                 id: "search",
                 component: AnyComponent(GlassBarButtonComponent(
                     size: barButtonSize,
-                    backgroundColor: self.presentationData.theme.rootController.navigationBar.glassBarButtonBackgroundColor,
+                    backgroundColor: nil,
                     isDark: self.presentationData.theme.overallDarkAppearance,
                     state: .generic,
                     component: AnyComponentWithIdentity(id: "search", component: AnyComponent(
@@ -291,15 +291,19 @@ class ContactSelectionControllerImpl: ViewController, ContactSelectionController
             self.closeButtonNode = closeButtonNode
             self.navigationItem.leftBarButtonItem = UIBarButtonItem(customDisplayNode: closeButtonNode)
         }
-                
-        let searchButtonNode: BarComponentHostNode
-        if let current = self.searchButtonNode {
-            searchButtonNode = current
-            searchButtonNode.component = searchComponent
+        
+        if searchComponent != nil {
+            let searchButtonNode: BarComponentHostNode
+            if let current = self.searchButtonNode {
+                searchButtonNode = current
+                searchButtonNode.component = searchComponent
+            } else {
+                searchButtonNode = BarComponentHostNode(component: searchComponent, size: barButtonSize)
+                self.searchButtonNode = searchButtonNode
+                self.navigationItem.rightBarButtonItem = UIBarButtonItem(customDisplayNode: searchButtonNode)
+            }
         } else {
-            searchButtonNode = BarComponentHostNode(component: searchComponent, size: barButtonSize)
-            self.searchButtonNode = searchButtonNode
-            self.navigationItem.rightBarButtonItem = UIBarButtonItem(customDisplayNode: searchButtonNode)
+            self.navigationItem.rightBarButtonItem = nil
         }
     }
     
@@ -593,10 +597,12 @@ final class ContactsSearchNavigationContentNode: NavigationBarContentNode {
         return 56.0
     }
     
-    override func updateLayout(size: CGSize, leftInset: CGFloat, rightInset: CGFloat, transition: ContainedViewLayoutTransition) {
+    override func updateLayout(size: CGSize, leftInset: CGFloat, rightInset: CGFloat, transition: ContainedViewLayoutTransition) -> CGSize {
         let searchBarFrame = CGRect(origin: CGPoint(x: 0.0, y: size.height - self.nominalHeight), size: CGSize(width: size.width, height: 56.0))
         self.searchBar.frame = searchBarFrame
         self.searchBar.updateLayout(boundingSize: searchBarFrame.size, leftInset: leftInset, rightInset: rightInset, transition: transition)
+        
+        return size
     }
     
     func activate() {
