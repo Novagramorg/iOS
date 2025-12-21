@@ -146,6 +146,7 @@ import ChatTextInputPanelNode
 import ChatInputAccessoryPanel
 import GlobalControlPanelsContext
 import ChatSearchNavigationContentNode
+import ChatAgeRestrictionAlertController
 
 public final class ChatControllerOverlayPresentationData {
     public let expandData: (ASDisplayNode?, () -> Void)
@@ -776,12 +777,18 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                             textString = strongSelf.presentationData.strings.QuickReply_ChatRemoveAwayMessage_Text
                         }
                         
-                        strongSelf.present(standardTextAlertController(theme: AlertControllerTheme(presentationData: strongSelf.presentationData), title: titleString, text: textString, actions: [
-                            TextAlertAction(type: .genericAction, title: strongSelf.presentationData.strings.Common_Cancel, action: {}),
-                            TextAlertAction(type: .defaultAction, title: strongSelf.presentationData.strings.QuickReply_ChatRemoveGeneric_DeleteAction, action: { [weak strongSelf] in
-                                strongSelf?.dismiss()
-                            })
-                        ]), in: .window(.root))
+                        let alertController = textAlertController(
+                            context: strongSelf.context,
+                            title: titleString,
+                            text: textString,
+                            actions: [
+                                TextAlertAction(type: .genericAction, title: strongSelf.presentationData.strings.Common_Cancel, action: {}),
+                                TextAlertAction(type: .defaultAction, title: strongSelf.presentationData.strings.QuickReply_ChatRemoveGeneric_DeleteAction, action: { [weak strongSelf] in
+                                    strongSelf?.dismiss()
+                                })
+                            ]
+                        )
+                        strongSelf.present(alertController, in: .window(.root))
                         
                         return false
                     }
@@ -793,12 +800,18 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                     let message = inputText.string
                     
                     if message != link.message || entities != link.entities {
-                        strongSelf.present(standardTextAlertController(theme: AlertControllerTheme(presentationData: strongSelf.presentationData), title: nil, text: strongSelf.presentationData.strings.Business_Links_AlertUnsavedText, actions: [
-                            TextAlertAction(type: .genericAction, title: strongSelf.presentationData.strings.Common_Cancel, action: {}),
-                            TextAlertAction(type: .destructiveAction, title: strongSelf.presentationData.strings.Business_Links_AlertUnsavedAction, action: { [weak strongSelf] in
-                                strongSelf?.dismiss()
-                            })
-                        ]), in: .window(.root))
+                        let alertController = textAlertController(
+                            context: strongSelf.context,
+                            title: nil,
+                            text: strongSelf.presentationData.strings.Business_Links_AlertUnsavedText,
+                            actions: [
+                                TextAlertAction(type: .genericAction, title: strongSelf.presentationData.strings.Common_Cancel, action: {}),
+                                TextAlertAction(type: .destructiveAction, title: strongSelf.presentationData.strings.Business_Links_AlertUnsavedAction, action: { [weak strongSelf] in
+                                    strongSelf?.dismiss()
+                                })
+                            ]
+                        )
+                        strongSelf.present(alertController, in: .window(.root))
                         
                         return false
                     }
@@ -1809,9 +1822,15 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                             
                             if case let .known(reactionSettings) = reactionSettings, let starsAllowed = reactionSettings.starsAllowed, !starsAllowed {
                                 if let peer = strongSelf.presentationInterfaceState.renderedPeer?.chatMainPeer {
-                                    strongSelf.present(standardTextAlertController(theme: AlertControllerTheme(presentationData: strongSelf.presentationData), title: nil, text: strongSelf.presentationData.strings.Chat_ToastStarsReactionsDisabled(peer.debugDisplayTitle).string, actions: [
-                                        TextAlertAction(type: .genericAction, title: strongSelf.presentationData.strings.Common_OK, action: {})
-                                    ]), in: .window(.root))
+                                    let alertController = textAlertController(
+                                        context: strongSelf.context,
+                                        title: nil,
+                                        text: strongSelf.presentationData.strings.Chat_ToastStarsReactionsDisabled(peer.debugDisplayTitle).string,
+                                        actions: [
+                                            TextAlertAction(type: .genericAction, title: strongSelf.presentationData.strings.Common_OK, action: {})
+                                        ]
+                                    )
+                                    strongSelf.present(alertController, in: .window(.root))
                                 }
                                 return
                             }
@@ -2454,7 +2473,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                 if message.effectivelyIncoming(strongSelf.context.account.peerId) {
                     switch buttonType {
                     case 0:
-                        let promptController = promptController(sharedContext: strongSelf.context.sharedContext, updatedPresentationData: strongSelf.updatedPresentationData, text: strongSelf.presentationData.strings.Chat_PostSuggestion_Reject_Title, titleFont: .bold, value: "", placeholder: strongSelf.presentationData.strings.Chat_PostSuggestion_Reject_Placeholder, characterLimit: 4096, apply: { value in
+                        let promptController = promptController(context: strongSelf.context, updatedPresentationData: strongSelf.updatedPresentationData, text: strongSelf.presentationData.strings.Chat_PostSuggestion_Reject_Title, titleFont: .bold, value: "", placeholder: strongSelf.presentationData.strings.Chat_PostSuggestion_Reject_Placeholder, characterLimit: 4096, apply: { value in
                             guard let self else {
                                 return
                             }
@@ -2478,13 +2497,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                                 let configuration = StarsSubscriptionConfiguration.with(appConfiguration: strongSelf.context.currentAppConfiguration.with { $0 })
                                 funds = (amount, amount.currency == .stars ? Int(configuration.channelMessageSuggestionStarsCommissionPermille) : Int(configuration.channelMessageSuggestionTonCommissionPermille))
                             }
-                            
-                            #if DEBUG
-                            if "".isEmpty {
-                                funds = nil
-                            }
-                            #endif
-                            
+                                                        
                             var isAdmin = false
                             if let channel = strongSelf.presentationInterfaceState.renderedPeer?.peer as? TelegramChannel, channel.isMonoForum, let linkedMonoforumId = channel.linkedMonoforumId, let mainChannel = strongSelf.presentationInterfaceState.renderedPeer?.peers[linkedMonoforumId] as? TelegramChannel, mainChannel.hasPermission(.manageDirect) {
                                 isAdmin = true
@@ -7160,24 +7173,27 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                         controller.navigationPresentation = .modal
                         controller.setState(.custom(icon: .animation("BroadcastGroup"), title: presentationData.strings.BroadcastGroups_IntroTitle, subtitle: nil, text: presentationData.strings.BroadcastGroups_IntroText, buttonTitle: presentationData.strings.BroadcastGroups_Convert, secondaryButtonTitle: presentationData.strings.BroadcastGroups_Cancel, footerText: nil), animated: false)
                         controller.proceed = { [weak controller] result in
-                            let attributedTitle = NSAttributedString(string: presentationData.strings.BroadcastGroups_ConfirmationAlert_Title, font: Font.semibold(presentationData.listsFontSize.baseDisplaySize), textColor: presentationData.theme.actionSheet.primaryTextColor, paragraphAlignment: .center)
-                            let body = MarkdownAttributeSet(font: Font.regular(presentationData.listsFontSize.baseDisplaySize * 13.0 / 17.0), textColor: presentationData.theme.actionSheet.primaryTextColor)
-                            let bold = MarkdownAttributeSet(font: Font.semibold(presentationData.listsFontSize.baseDisplaySize * 13.0 / 17.0), textColor: presentationData.theme.actionSheet.primaryTextColor)
-                            let attributedText = parseMarkdownIntoAttributedString(presentationData.strings.BroadcastGroups_ConfirmationAlert_Text, attributes: MarkdownAttributes(body: body, bold: bold, link: body, linkAttribute: { _ in return nil }), textAlignment: .center)
-                            
-                            let alertController = richTextAlertController(context: context, title: attributedTitle, text: attributedText, actions: [TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: {
-                                let _ = context.engine.notices.dismissPeerSpecificServerProvidedSuggestion(peerId: peerId, suggestion: .convertToGigagroup).startStandalone()
-                            }), TextAlertAction(type: .defaultAction, title: presentationData.strings.BroadcastGroups_ConfirmationAlert_Convert, action: { [weak controller] in
-                                controller?.dismiss()
-                                
-                                let _ = context.engine.notices.dismissPeerSpecificServerProvidedSuggestion(peerId: peerId, suggestion: .convertToGigagroup).startStandalone()
-                                
-                                let _ = (convertGroupToGigagroup(account: context.account, peerId: peerId)
-                                |> deliverOnMainQueue).startStandalone(completed: {
-                                    let participantsLimit = context.currentLimitsConfiguration.with { $0 }.maxSupergroupMemberCount
-                                    strongSelf.present(UndoOverlayController(presentationData: presentationData, content: .gigagroupConversion(text: presentationData.strings.BroadcastGroups_Success(presentationStringsFormattedNumber(participantsLimit, presentationData.dateTimeFormat.decimalSeparator)).string), elevatedLayout: false, action: { _ in return false }), in: .current)
-                                })
-                            })])
+                            let alertController = textAlertController(
+                                context: context,
+                                title: presentationData.strings.BroadcastGroups_ConfirmationAlert_Title,
+                                text: presentationData.strings.BroadcastGroups_ConfirmationAlert_Text,
+                                actions: [
+                                    TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: {
+                                        let _ = context.engine.notices.dismissPeerSpecificServerProvidedSuggestion(peerId: peerId, suggestion: .convertToGigagroup).startStandalone()
+                                    }),
+                                    TextAlertAction(type: .defaultAction, title: presentationData.strings.BroadcastGroups_ConfirmationAlert_Convert, action: { [weak controller] in
+                                        controller?.dismiss()
+                                        
+                                        let _ = context.engine.notices.dismissPeerSpecificServerProvidedSuggestion(peerId: peerId, suggestion: .convertToGigagroup).startStandalone()
+                                        
+                                        let _ = (convertGroupToGigagroup(account: context.account, peerId: peerId)
+                                        |> deliverOnMainQueue).startStandalone(completed: {
+                                            let participantsLimit = context.currentLimitsConfiguration.with { $0 }.maxSupergroupMemberCount
+                                            strongSelf.present(UndoOverlayController(presentationData: presentationData, content: .gigagroupConversion(text: presentationData.strings.BroadcastGroups_Success(presentationStringsFormattedNumber(participantsLimit, presentationData.dateTimeFormat.decimalSeparator)).string), elevatedLayout: false, action: { _ in return false }), in: .current)
+                                        })
+                                    })
+                                ]
+                            )
                             controller?.present(alertController, in: .window(.root))
                         }
                         strongSelf.push(controller)
@@ -8387,9 +8403,15 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                 
                 if case let .customChatContents(customChatContents) = strongSelf.presentationInterfaceState.subject, let messageLimit = customChatContents.messageLimit {
                     if let originalHistoryView = strongSelf.chatDisplayNode.historyNode.originalHistoryView, originalHistoryView.entries.count + mappedMessages.count > messageLimit {
-                        strongSelf.present(standardTextAlertController(theme: AlertControllerTheme(presentationData: strongSelf.presentationData), title: nil, text: strongSelf.presentationData.strings.Chat_QuickReplyMediaMessageLimitReachedText(Int32(messageLimit)), actions: [
-                            TextAlertAction(type: .genericAction, title: strongSelf.presentationData.strings.Common_OK, action: {})
-                        ]), in: .window(.root))
+                        let alertController = textAlertController(
+                            context: strongSelf.context,
+                            title: nil,
+                            text: strongSelf.presentationData.strings.Chat_QuickReplyMediaMessageLimitReachedText(Int32(messageLimit)),
+                            actions: [
+                                TextAlertAction(type: .genericAction, title: strongSelf.presentationData.strings.Common_OK, action: {})
+                            ]
+                        )
+                        strongSelf.present(alertController, in: .window(.root))
                         return
                     }
                 }

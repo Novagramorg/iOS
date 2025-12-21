@@ -404,8 +404,8 @@ extension ChatControllerImpl {
                         titleString = self.presentationData.strings.Chat_DeletePaidMessageTon_Title
                         textString = self.presentationData.strings.Chat_DeletePaidMessageTon_Text
                     }
-                    self.present(standardTextAlertController(
-                        theme: AlertControllerTheme(presentationData: self.presentationData),
+                    self.present(textAlertController(
+                        context: self.context,
                         title: titleString,
                         text: textString,
                         actions: [
@@ -450,8 +450,8 @@ extension ChatControllerImpl {
                         deleteOneAction = self.presentationData.strings.ScheduledMessages_DeleteRepeatingActionSingle
                         deleteAllAction = self.presentationData.strings.ScheduledMessages_DeleteRepeatingActionMultiple
                     }
-                    self.present(standardTextAlertController(
-                        theme: AlertControllerTheme(presentationData: self.presentationData),
+                    self.present(textAlertController(
+                        context: self.context,
                         title: title,
                         text: text,
                         actions: [

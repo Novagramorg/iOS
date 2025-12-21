@@ -15,6 +15,9 @@ import MultilineTextComponent
 import TelegramStringFormatting
 import AlertComponent
 import TableComponent
+import AvatarComponent
+import AlertTransferHeaderComponent
+import AlertTableComponent
 
 public func giftTransferAlertController(
     context: AccountContext,
@@ -145,7 +148,8 @@ public func giftTransferAlertController(
                         theme: presentationData.theme,
                         peer: peer
                     )
-                ))
+                )),
+                type: .transfer
             )
         )
     ))
@@ -168,8 +172,9 @@ public func giftTransferAlertController(
         )
     ))
     
-    let alertController = AlertScreen(
+    let alertController = ChatMessagePaymentAlertController(
         context: context,
+        presentationData: presentationData,
         configuration: AlertScreen.Configuration(actionAlignment: .vertical, dismissOnOutsideTap: true, allowInputInset: false),
         content: content,
         actions: [
@@ -177,9 +182,12 @@ public func giftTransferAlertController(
                 commit()
             }),
             .init(title: strings.Common_Cancel)
-        ]
+        ],
+        navigationController: navigationController,
+        chatPeerId: context.account.peerId,
+        showBalance: transferStars > 0
     )
-    
+        
     var dismissAllTooltipsImpl: (() -> Void)?
     showAttributeInfoImpl = { [weak alertController] tag, text in
         dismissAllTooltipsImpl?()

@@ -154,7 +154,15 @@ public func ChangePhoneNumberController(context: AccountContext) -> ViewControll
                         
                         controller?.view.window?.rootViewController?.present(composeController, animated: true, completion: nil)
                     } else {
-                        controller?.present(standardTextAlertController(theme: AlertControllerTheme(presentationData: presentationData), title: nil, text: presentationData.strings.Login_EmailNotConfiguredError, actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+                        let alertController = textAlertController(
+                            context: context,
+                            title: nil,
+                            text: presentationData.strings.Login_EmailNotConfiguredError,
+                            actions: [
+                                TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})
+                            ]
+                        )
+                        controller?.present(alertController, in: .window(.root))
                     }
                 }))
             case .generic:

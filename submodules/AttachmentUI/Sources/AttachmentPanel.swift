@@ -1144,7 +1144,7 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate {
                 }
 
                 let presentationData = strongSelf.context.sharedContext.currentPresentationData.with { $0 }
-                let controller = chatTextLinkEditController(sharedContext: strongSelf.context.sharedContext, updatedPresentationData: (presentationData, .never()), account: strongSelf.context.account, text: text?.string ?? "", link: link, apply: { [weak self] link in
+                let controller = chatTextLinkEditController(context: strongSelf.context, updatedPresentationData: (presentationData, .never()), text: text?.string ?? "", link: link, apply: { [weak self] link in
                     if let strongSelf = self, let inputMode = inputMode, let selectionRange = selectionRange {
                         if let link = link {
                             strongSelf.updateChatPresentationInterfaceState(animated: true, { state in

@@ -15625,6 +15625,11 @@ Error: %8$@";
 "Chat.GiftPurchaseOffer.AcceptConfirmation.BadValue" = "The value of this gift is **%@** higher than the offer.";
 "Chat.GiftPurchaseOffer.AcceptConfirmation.Confirm" = "Confirm Sale";
 
-
 "Notification.PremiumGift.DaysTitle_1" = "%@ Day Premium";
 "Notification.PremiumGift.DaysTitle_any" = "%@ Days Premium";
+
+"MediaEditor.Audio.Title" = "Audio";
+"MediaEditor.Audio.SavedMusic" = "SAVED MUSIC";
+"MediaEditor.Audio.ShowMore" = "Show More";
+
+"WebApp.AddToAttachmentTitle" = "Add to Attachment Menu";

@@ -5013,7 +5013,7 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
     
     private func presentAddStoryFolder(addItems: [EngineStoryItem] = []) {
         let promptController = promptController(
-            sharedContext: self.context.sharedContext,
+            context: self.context,
             updatedPresentationData: nil,
             text: self.presentationData.strings.Stories_CreateAlbum_Title,
             titleFont: .bold,
@@ -5046,7 +5046,7 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
     
     private func presentRenameStoryFolder(id: Int64, title: String) {
         let promptController = promptController(
-            sharedContext: self.context.sharedContext,
+            context: self.context,
             updatedPresentationData: nil,
             text: self.presentationData.strings.Stories_EditAlbum_Title,
             titleFont: .bold,

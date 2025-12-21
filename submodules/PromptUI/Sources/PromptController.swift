@@ -8,6 +8,9 @@ import TelegramCore
 import TelegramPresentationData
 import AccountContext
 import TelegramStringFormatting
+import ComponentFlow
+import AlertComponent
+import AlertMultilineInputFieldComponent
 
 private final class PromptInputFieldNode: ASDisplayNode, ASEditableTextNodeDelegate {
     private var theme: PresentationTheme
@@ -472,49 +475,90 @@ public enum PromptControllerTitleFont {
     case bold
 }
 
-public func promptController(sharedContext: SharedAccountContext, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)? = nil, text: String, titleFont: PromptControllerTitleFont = .regular, subtitle: String? = nil, value: String?, placeholder: String? = nil, characterLimit: Int = 1000, displayCharacterLimit: Bool = false, apply: @escaping (String?) -> Void) -> AlertController {
-    let presentationData = updatedPresentationData?.initial ?? sharedContext.currentPresentationData.with { $0 }
+public func promptController(
+    context: AccountContext,
+    updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)? = nil,
+    text: String,
+    titleFont: PromptControllerTitleFont = .regular,
+    subtitle: String? = nil,
+    value: String?,
+    placeholder: String? = nil,
+    characterLimit: Int = 1000,
+    displayCharacterLimit: Bool = false,
+    apply: @escaping (String?) -> Void,
+    dismissed: @escaping () -> Void = {}
+) -> ViewController {
+    let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+    let strings = presentationData.strings
     
-    var dismissImpl: ((Bool) -> Void)?
-    var applyImpl: (() -> Void)?
-    
-    let actions: [TextAlertAction] = [TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: {
-        dismissImpl?(true)
-        apply(nil)
-    }), TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_Done, action: {
-        dismissImpl?(true)
-        applyImpl?()
-    })]
-    
-    let contentNode = PromptAlertContentNode(theme: AlertControllerTheme(presentationData: presentationData), ptheme: presentationData.theme, strings: presentationData.strings, actions: actions, text: text, titleFont: titleFont, subtitle: subtitle, value: value, placeholder: placeholder, characterLimit: characterLimit, displayCharacterLimit: displayCharacterLimit)
-    contentNode.complete = {
-        dismissImpl?(true)
-        applyImpl?()
+    let inputState = AlertMultilineInputFieldComponent.ExternalState()
+            
+    var content: [AnyComponentWithIdentity<AlertComponentEnvironment>] = []
+    if subtitle == nil && titleFont == .regular {
+        content.append(AnyComponentWithIdentity(
+            id: "title",
+            component: AnyComponent(
+                AlertTextComponent(content: .plain(text))
+            )
+        ))
+    } else {
+        content.append(AnyComponentWithIdentity(
+            id: "title",
+            component: AnyComponent(
+                AlertTitleComponent(title: text)
+            )
+        ))
     }
-    applyImpl = { [weak contentNode] in
-        guard let contentNode = contentNode else {
-            return
+    if let subtitle {
+        content.append(AnyComponentWithIdentity(
+            id: "text",
+            component: AnyComponent(
+                AlertTextComponent(content: .plain(subtitle))
+            )
+        ))
+    }
+    content.append(AnyComponentWithIdentity(
+        id: "input",
+        component: AnyComponent(
+            AlertMultilineInputFieldComponent(
+                context: context,
+                initialValue: value.flatMap { NSAttributedString(string: $0) },
+                placeholder: placeholder ?? "",
+                characterLimit: characterLimit,
+                formatMenuAvailability: .none,
+                emptyLineHandling: .notAllowed,
+                isInitiallyFocused: true,
+                externalState: inputState
+            )
+        )
+    ))
+    
+    var effectiveUpdatedPresentationData: (PresentationData, Signal<PresentationData, NoError>)
+    if let updatedPresentationData {
+        effectiveUpdatedPresentationData = updatedPresentationData
+    } else {
+        effectiveUpdatedPresentationData = (presentationData, context.sharedContext.presentationData)
+    }
+    
+    let alertController = AlertScreen(
+        configuration: AlertScreen.Configuration(allowInputInset: true),
+        content: content,
+        actions: [
+            .init(title: strings.Common_Cancel, action: {
+                apply(nil)
+            }),
+            .init(title: strings.Common_Done, type: .default, action: {
+                apply(inputState.value.string)
+            })
+        ],
+        updatedPresentationData: effectiveUpdatedPresentationData
+    )
+    alertController.dismissed = { byOutsideTap in
+        if byOutsideTap {
+            dismissed()
         }
-        apply(contentNode.value)
     }
-    
-    let controller = AlertController(theme: AlertControllerTheme(presentationData: presentationData), contentNode: contentNode)
-    let presentationDataDisposable = (updatedPresentationData?.signal ?? sharedContext.presentationData).start(next: { [weak controller, weak contentNode] presentationData in
-        controller?.theme = AlertControllerTheme(presentationData: presentationData)
-        contentNode?.inputFieldNode.updateTheme(presentationData.theme)
-    })
-    controller.dismissed = { _ in
-        presentationDataDisposable.dispose()
-    }
-    dismissImpl = { [weak controller] animated in
-        contentNode.inputFieldNode.deactivateInput()
-        if animated {
-            controller?.dismissAnimated()
-        } else {
-            controller?.dismiss()
-        }
-    }
-    return controller
+    return alertController
 }
 
 private final class AuthAlertContentNode: AlertContentNode {

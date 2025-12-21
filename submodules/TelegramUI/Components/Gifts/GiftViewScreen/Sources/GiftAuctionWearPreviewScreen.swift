@@ -26,6 +26,7 @@ import GiftAnimationComponent
 import GlassBarButtonComponent
 import GiftRemainingCountComponent
 import AnimatedTextComponent
+import AvatarComponent
 
 private final class GiftAuctionWearPreviewSheetContent: CombinedComponent {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment

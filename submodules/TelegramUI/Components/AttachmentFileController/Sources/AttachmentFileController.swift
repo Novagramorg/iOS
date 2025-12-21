@@ -212,7 +212,7 @@ private func attachmentFileControllerEntries(presentationData: PresentationData,
     
     if case .audio = mode {
         if let savedMusic, savedMusic.count > 0 {
-            entries.append(.savedHeader(presentationData.theme, "SAVED MUSIC".uppercased()))
+            entries.append(.savedHeader(presentationData.theme, presentationData.strings.MediaEditor_Audio_SavedMusic.uppercased()))
             var savedMusic = savedMusic
             var showMore = false
             if savedMusic.count > 4 && !state.savedMusicExpanded {
@@ -225,7 +225,7 @@ private func attachmentFileControllerEntries(presentationData: PresentationData,
                 i += 1
             }
             if showMore {
-                entries.append(.showMore(presentationData.theme, "Show More"))
+                entries.append(.showMore(presentationData.theme, presentationData.strings.MediaEditor_Audio_ShowMore))
             }
         }
     }
@@ -542,8 +542,7 @@ public func makeAttachmentFileControllerImpl(context: AccountContext, updatedPre
         case .recent:
             title = presentationData.strings.Attachment_File
         case .audio:
-            //TODO:localize
-            title = "Audio"
+            title = presentationData.strings.MediaEditor_Audio_Title
         }
         
         let controllerState = ItemListControllerState(
