@@ -1352,7 +1352,7 @@ public final class ChatListSearchContainerNode: SearchDisplayControllerContentNo
                     title = strongSelf.presentationData.strings.DownloadList_RemoveFileAlertTitle(Int32(messages.count))
                     text = strongSelf.presentationData.strings.DownloadList_RemoveFileAlertText(Int32(messages.count))
                     
-                    strongSelf.present?(standardTextAlertController(theme: AlertControllerTheme(presentationData: strongSelf.presentationData), title: title, text: text, actions: [
+                    strongSelf.present?(textAlertController(context: strongSelf.context, title: title, text: text, actions: [
                         TextAlertAction(type: .genericAction, title: strongSelf.presentationData.strings.Common_Cancel, action: {
                         }),
                         TextAlertAction(type: .defaultAction, title: strongSelf.presentationData.strings.DownloadList_RemoveFileAlertRemove, action: {

@@ -48,7 +48,7 @@ public func ChangePhoneNumberController(context: AccountContext) -> ViewControll
             controller?.inProgress = false
             
             var dismissImpl: (() -> Void)?
-            let codeController = AuthorizationSequenceCodeEntryController(presentationData: presentationData, back: {
+            let codeController = AuthorizationSequenceCodeEntryController(sharedContext: context.sharedContext, presentationData: presentationData, back: {
                 dismissImpl?()
             })
             codeController.loginWithCode = { [weak codeController] code in
@@ -109,7 +109,7 @@ public func ChangePhoneNumberController(context: AccountContext) -> ViewControll
                 let mnc = carrier.mobileNetworkCode ?? "none"
                 let _ = context.engine.auth.reportMissingCode(phoneNumber: phoneNumber, phoneCodeHash: next.hash, mnc: mnc).start()
                 
-                AuthorizationSequenceController.presentDidNotGetCodeUI(controller: codeController, presentationData: context.sharedContext.currentPresentationData.with({ $0 }), phoneNumber: phoneNumber, mnc: mnc)
+                AuthorizationSequenceController.presentDidNotGetCodeUI(sharedContext: context.sharedContext, controller: codeController, presentationData: context.sharedContext.currentPresentationData.with({ $0 }), phoneNumber: phoneNumber, mnc: mnc)
             }
             codeController.openFragment = { url in
                 context.sharedContext.applicationBindings.openUrl(url)

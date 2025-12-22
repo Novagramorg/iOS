@@ -268,8 +268,8 @@ final class AffiliateProgramSetupScreenComponent: Component {
                 return
             }
             let presentationData = component.context.sharedContext.currentPresentationData.with({ $0 })
-            self.environment?.controller()?.present(standardTextAlertController(
-                theme: AlertControllerTheme(presentationData: presentationData),
+            self.environment?.controller()?.present(textAlertController(
+                context: component.context,
                 title: environment.strings.AffiliateSetup_AlertTerminate_Title,
                 text: environment.strings.AffiliateSetup_AlertTerminate_Text,
                 actions: [
