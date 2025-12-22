@@ -10265,8 +10265,8 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
             }
             
             strongSelf.view.endEditing(true)
-            
-            strongSelf.controller?.present(standardTextAlertController(theme: AlertControllerTheme(presentationData: strongSelf.presentationData), title: title, text: text, actions: [
+
+            strongSelf.controller?.present(textAlertController(context: strongSelf.context, title: title, text: text, actions: [
                 TextAlertAction(type: .destructiveAction, title: actionText, action: {
                     self?.deletePeerChat(peer: peer._asPeer(), globally: delete)
                 }),

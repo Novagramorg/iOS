@@ -1091,7 +1091,7 @@ public func channelAdminController(context: AccountContext, updatedPresentationD
                 text = presentationData.strings.Channel_EditAdmin_CannotEdit
             }
             
-            presentControllerImpl?(standardTextAlertController(theme: AlertControllerTheme(presentationData: presentationData), title: nil, text: text, actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]), nil)
+            presentControllerImpl?(textAlertController(context: context, title: nil, text: text, actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]), nil)
         })
     }, transferOwnership: {
         let _ = (context.engine.data.get(
