@@ -75,22 +75,19 @@ extension ChatControllerImpl {
             var completion: ((String?) -> Void)?
             let alertController = businessLinkNameAlertController(
                 context: self.context,
-                text: self.presentationData.strings.Business_Links_LinkNameTitle,
-                subtext: self.presentationData.strings.Business_Links_LinkNameText,
                 value: currentValue,
-                characterLimit: 32,
                 apply: { value in
                     completion?(value)
                 }
             )
             completion = { [weak self, weak alertController] value in
                 guard let self else {
-                    alertController?.dismissAnimated()
+                    alertController?.dismiss(completion: nil)
                     return
                 }
                 if let value {
                     if value == currentValue {
-                        alertController?.dismissAnimated()
+                        alertController?.dismiss(completion: nil)
                         return
                     }
                     
@@ -116,7 +113,7 @@ extension ChatControllerImpl {
                     }
                     
                     alertController?.view.endEditing(true)
-                    alertController?.dismissAnimated()
+                    alertController?.dismiss(completion: nil)
                 }
             }
             self.present(alertController, in: .window(.root))

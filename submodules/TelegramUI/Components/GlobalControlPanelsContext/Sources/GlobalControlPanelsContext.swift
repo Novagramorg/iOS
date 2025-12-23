@@ -504,4 +504,21 @@ public final class GlobalControlPanelsContext {
             impl.dismissChatListNotice(parentController: parentController, notice: notice)
         }
     }
+    
+    public var tempVoicePlaylistEnded: (() -> Void)? {
+        didSet {
+            let tempVoicePlaylistEnded = self.tempVoicePlaylistEnded
+            self.impl.with { impl in
+                impl.tempVoicePlaylistEnded = tempVoicePlaylistEnded
+            }
+        }
+    }
+    public var tempVoicePlaylistItemChanged: ((SharedMediaPlaylistItem?, SharedMediaPlaylistItem?) -> Void)? {
+        didSet {
+            let tempVoicePlaylistItemChanged = self.tempVoicePlaylistItemChanged
+            self.impl.with { impl in
+                impl.tempVoicePlaylistItemChanged = tempVoicePlaylistItemChanged
+            }
+        }
+    }
 }

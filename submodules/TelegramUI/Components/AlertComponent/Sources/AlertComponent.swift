@@ -373,7 +373,7 @@ private final class AlertScreenComponent: Component {
             let defaultActionTheme = AlertActionComponent.Theme(
                 background: environment.theme.actionSheet.controlAccentColor,
                 foreground: environment.theme.list.itemCheckColors.foregroundColor,
-                secondary: environment.theme.actionSheet.secondaryTextColor,
+                secondary: environment.theme.list.itemCheckColors.foregroundColor.withMultipliedAlpha(0.85),
                 font: .bold
             )
             let destructiveActionTheme = AlertActionComponent.Theme(

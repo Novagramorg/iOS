@@ -18,6 +18,7 @@ public final class AlertMultilineInputFieldComponent: Component {
     public class ExternalState {
         public fileprivate(set) var value: NSAttributedString = NSAttributedString()
         public fileprivate(set) var animateError: () -> Void = {}
+        public fileprivate(set) var activateInput: () -> Void = {}
         fileprivate let valuePromise = ValuePromise<NSAttributedString>(NSAttributedString())
         public var valueSignal: Signal<NSAttributedString, NoError> {
             return self.valuePromise.get()
@@ -115,6 +116,7 @@ public final class AlertMultilineInputFieldComponent: Component {
     let placeholder: String
     let prefix: NSAttributedString?
     let characterLimit: Int?
+    let returnKeyType: UIReturnKeyType
     let keyboardType: UIKeyboardType
     let autocapitalizationType: UITextAutocapitalizationType
     let autocorrectionType: UITextAutocorrectionType
@@ -131,6 +133,7 @@ public final class AlertMultilineInputFieldComponent: Component {
         placeholder: String,
         prefix: NSAttributedString? = nil,
         characterLimit: Int? = nil,
+        returnKeyType: UIReturnKeyType = .default,
         keyboardType: UIKeyboardType = .default,
         autocapitalizationType: UITextAutocapitalizationType = .sentences,
         autocorrectionType: UITextAutocorrectionType = .default,
@@ -146,6 +149,7 @@ public final class AlertMultilineInputFieldComponent: Component {
         self.placeholder = placeholder
         self.prefix = prefix
         self.characterLimit = characterLimit
+        self.returnKeyType = returnKeyType
         self.keyboardType = keyboardType
         self.autocapitalizationType = autocapitalizationType
         self.autocorrectionType = autocorrectionType
@@ -168,6 +172,9 @@ public final class AlertMultilineInputFieldComponent: Component {
             return false
         }
         if lhs.prefix != rhs.prefix {
+            return false
+        }
+        if lhs.returnKeyType != rhs.returnKeyType {
             return false
         }
         if lhs.characterLimit != rhs.characterLimit {
@@ -203,6 +210,12 @@ public final class AlertMultilineInputFieldComponent: Component {
         private var component: AlertMultilineInputFieldComponent?
         private weak var state: EmptyComponentState?
         
+        func activateInput() {
+            if let textFieldView = self.textField.view as? TextFieldComponent.View {
+                textFieldView.activateInput()
+            }
+        }
+        
         func animateError() {
             if let textFieldView = self.textField.view {
                 textFieldView.layer.addShakeAnimation()
@@ -217,6 +230,9 @@ public final class AlertMultilineInputFieldComponent: Component {
                 component.externalState.animateError = { [weak self] in
                     self?.animateError()
                 }
+                component.externalState.activateInput = { [weak self] in
+                    self?.activateInput()
+                }
             }
             
             let isFirstTime = self.component == nil
@@ -228,6 +244,7 @@ public final class AlertMultilineInputFieldComponent: Component {
             
             let topInset: CGFloat = 15.0
             let horizontalInset: CGFloat = 4.0
+            let verticalInset: CGFloat = 11.0 - UIScreenPixel
             
             let textFieldSize = self.textField.update(
                 transition: transition,
@@ -247,7 +264,7 @@ public final class AlertMultilineInputFieldComponent: Component {
                     characterLimit: component.characterLimit,
                     emptyLineHandling: component.emptyLineHandling.textFieldValue,
                     formatMenuAvailability: component.formatMenuAvailability.textFieldValue,
-                    returnKeyType: .done,
+                    returnKeyType: component.returnKeyType,
                     keyboardType: component.keyboardType,
                     autocapitalizationType: component.autocapitalizationType,
                     autocorrectionType: component.autocorrectionType,
@@ -277,7 +294,7 @@ public final class AlertMultilineInputFieldComponent: Component {
             component.externalState.valuePromise.set(component.externalState.value)
             
             let backgroundPadding: CGFloat = 14.0
-            let size = CGSize(width: availableSize.width, height: max(50.0, textFieldSize.height + 22.0))
+            let size = CGSize(width: availableSize.width, height: max(50.0, floor(textFieldSize.height + verticalInset * 2.0)))
             
             let backgroundSize = self.background.update(
                 transition: transition,
@@ -327,9 +344,7 @@ public final class AlertMultilineInputFieldComponent: Component {
             }
             
             if isFirstTime && component.isInitiallyFocused {
-                if let textFieldView = self.textField.view as? TextFieldComponent.View {
-                    textFieldView.activateInput()
-                }
+                self.activateInput()
             }
             
             return CGSize(width: availableSize.width, height: size.height + topInset)

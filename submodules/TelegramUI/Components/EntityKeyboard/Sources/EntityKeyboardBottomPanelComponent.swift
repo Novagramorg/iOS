@@ -514,8 +514,8 @@ final class EntityKeyboardBottomPanelComponent: Component {
                 lensSelection = (selectionGestureState.currentX, lensSelection.width)
             }
             
-            transition.setFrame(view: self.liquidLensView, frame: CGRect(origin: CGPoint(x: floor((availableSize.width - tabsSize.width) / 2.0), y: 0.0), size: tabsSize))
-            self.liquidLensView.update(size: tabsSize, selectionOrigin: CGPoint(x: lensSelection.x, y: 0.0), selectionSize: CGSize(width: lensSelection.width, height: tabsSize.height), inset: 0.0, isDark: component.theme.overallDarkAppearance, isLifted: self.selectionGestureState != nil, isCollapsed: activeContentId == nil, transition: transition)
+            transition.setFrame(view: self.liquidLensView, frame: CGRect(origin: CGPoint(x: floor((availableSize.width - tabsSize.width) / 2.0), y: 3.0), size: tabsSize))
+            self.liquidLensView.update(size: CGSize(width: tabsSize.width, height: tabsSize.height), selectionOrigin: CGPoint(x: max(0.0, min(tabsSize.width - lensSelection.width, lensSelection.x)), y: 0.0), selectionSize: CGSize(width: lensSelection.width, height: tabsSize.height), inset: 3.0, isDark: component.theme.overallDarkAppearance, isLifted: self.selectionGestureState != nil, isCollapsed: activeContentId == nil, transition: transition)
             
             var removedIconViewIds: [AnyHashable] = []
             for (id, iconView) in self.itemViews {
