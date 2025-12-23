@@ -15648,3 +15648,5 @@ Error: %8$@";
 "CocoonInfo.ForEveryone.Text" = "Any developer can use Cocoon for AI features. Learn more at [@cocoon](telegram) or [cocoon.org](web).";
 "CocoonInfo.IntergrateInfo" = "Want to integrate Cocoon into your projects?\nReach out at [t.me/cocoon?direct]()";
 "CocoonInfo.Understood" = "Understood";
+
+"Conversation.Translation.CocoonInfo" = "Translations are powered by\n**#Cocoon**. [How does it work?]()";
