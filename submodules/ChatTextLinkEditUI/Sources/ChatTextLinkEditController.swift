@@ -36,6 +36,8 @@ public func chatTextLinkEditController(
             AlertTextComponent(content: .plain(strings.TextFormat_AddLinkText(text).string))
         )
     ))
+    
+    var applyImpl: (() -> Void)?
     content.append(AnyComponentWithIdentity(
         id: "input",
         component: AnyComponent(
@@ -43,11 +45,15 @@ public func chatTextLinkEditController(
                 context: context,
                 initialValue: link.flatMap { NSAttributedString(string: $0) },
                 placeholder: strings.TextFormat_AddLinkPlaceholder,
+                returnKeyType: .done,
                 keyboardType: .URL,
                 autocapitalizationType: .none,
                 autocorrectionType: .no,
                 isInitiallyFocused: true,
-                externalState: inputState
+                externalState: inputState,
+                returnKeyAction: {
+                    applyImpl?()
+                }
             )
         )
     ))
@@ -66,20 +72,23 @@ public func chatTextLinkEditController(
         actions: [
             .init(title: strings.Common_Cancel),
             .init(title: strings.Common_Done, type: .default, action: {
-                let updatedLink = explicitUrl(inputState.value.string)
-                if !updatedLink.isEmpty && isValidUrl(updatedLink, validSchemes: ["http": true, "https": true, "tg": false, "ton": false, "tonsite": true]) {
-                    dismissImpl?()
-                    apply(updatedLink)
-                } else if inputState.value.string.isEmpty {
-                    dismissImpl?()
-                    apply("")
-                } else {
-                    inputState.animateError()
-                }
+                applyImpl?()
             }, autoDismiss: false)
         ],
         updatedPresentationData: effectiveUpdatedPresentationData
     )
+    applyImpl = {
+        let updatedLink = explicitUrl(inputState.value.string)
+        if !updatedLink.isEmpty && isValidUrl(updatedLink, validSchemes: ["http": true, "https": true, "tg": false, "ton": false, "tonsite": true]) {
+            dismissImpl?()
+            apply(updatedLink)
+        } else if inputState.value.string.isEmpty {
+            dismissImpl?()
+            apply("")
+        } else {
+            inputState.animateError()
+        }
+    }
     dismissImpl = { [weak alertController] in
         alertController?.dismiss(completion: nil)
     }

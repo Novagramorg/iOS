@@ -93,6 +93,7 @@ import NewContactScreen
 import PasskeysScreen
 import GiftDemoScreen
 import ChatTextLinkEditUI
+import CocoonInfoScreen
 
 private final class AccountUserInterfaceInUseContext {
     let subscribers = Bag<(Bool) -> Void>()
@@ -4022,6 +4023,10 @@ public final class SharedAccountContextImpl: SharedAccountContext {
 
     public func makeSendInviteLinkScreen(context: AccountContext, subject: SendInviteLinkScreenSubject, peers: [TelegramForbiddenInvitePeer], theme: PresentationTheme?) -> ViewController {
         return SendInviteLinkScreen(context: context, subject: subject, peers: peers, theme: theme)
+    }
+    
+    public func makeCocoonInfoScreen(context: AccountContext) -> ViewController {
+        return CocoonInfoScreen(context: context)
     }
     
     public func makeLinkEditController(context: AccountContext, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)?, text: String, link: String?, apply: @escaping (String?) -> Void) -> ViewController {

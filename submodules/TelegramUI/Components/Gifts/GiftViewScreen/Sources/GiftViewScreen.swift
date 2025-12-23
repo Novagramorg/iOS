@@ -3011,9 +3011,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                 originY += 16.0
             } else if showUpgradePreview {
                 let title: String
-                //let description: String
                 let uniqueText: String
-                //let transferableText: String
                 let tradableText: String
                 if !incoming, case let .profileGift(peerId, _) = subject, let peer = state.peerMap[peerId] {
                     var peerName = peer.compactDisplayTitle
@@ -3021,9 +3019,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                         peerName = "\(peerName.prefix(22))…"
                     }
                     title = environment.strings.Gift_Upgrade_GiftTitle
-                //    description = environment.strings.Gift_Upgrade_GiftDescription(peerName).string
                     uniqueText = strings.Gift_Upgrade_Unique_GiftDescription(peerName).string
-            //        transferableText = strings.Gift_Upgrade_Transferable_GiftDescription(peerName).string
                     tradableText = strings.Gift_Upgrade_Tradable_GiftDescription(peerName).string
                 } else if case let .upgradePreview(_, peerName) = component.subject {
                     var peerName = peerName
@@ -3031,15 +3027,11 @@ private final class GiftViewSheetContent: CombinedComponent {
                         peerName = "\(peerName.prefix(22))…"
                     }
                     title = environment.strings.Gift_Upgrade_IncludeTitle
-              //      description = environment.strings.Gift_Upgrade_IncludeDescription(peerName).string
                     uniqueText = strings.Gift_Upgrade_Unique_IncludeDescription
-       //             transferableText = strings.Gift_Upgrade_Transferable_IncludeDescription
                     tradableText = strings.Gift_Upgrade_Tradable_IncludeDescription
                 } else {
                     title = environment.strings.Gift_Upgrade_Title
-              //      description = environment.strings.Gift_Upgrade_Description
                     uniqueText = strings.Gift_Upgrade_Unique_Description
-                  //  transferableText = strings.Gift_Upgrade_Transferable_Description
                     tradableText = strings.Gift_Upgrade_Tradable_Description
                 }
                 
@@ -3126,7 +3118,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                                             )
                                         )),
                                         AnyComponentWithIdentity(id: "text", component: AnyComponent(
-                                            MultilineTextComponent(text: .plain(NSAttributedString(string: "View all variants", font: Font.semibold(13.0), textColor: .white)))
+                                            MultilineTextComponent(text: .plain(NSAttributedString(string: strings.Gift_Upgrade_ViewAllVariants, font: Font.semibold(13.0), textColor: .white)))
                                         )),
                                         AnyComponentWithIdentity(id: "arrow", component: AnyComponent(
                                             BundleIconComponent(name: "Item List/InlineTextRightArrow", tintColor: .white)
@@ -3181,20 +3173,6 @@ private final class GiftViewSheetContent: CombinedComponent {
                         ))
                     )
                 )
-//                items.append(
-//                    AnyComponentWithIdentity(
-//                        id: "transferable",
-//                        component: AnyComponent(InfoParagraphComponent(
-//                            title: strings.Gift_Upgrade_Transferable_Title,
-//                            titleColor: textColor,
-//                            text: transferableText,
-//                            textColor: secondaryTextColor,
-//                            accentColor: linkColor,
-//                            iconName: "Premium/Collectible/Transferable",
-//                            iconColor: linkColor
-//                        ))
-//                    )
-//                )
                 items.append(
                     AnyComponentWithIdentity(
                         id: "tradable",
@@ -3209,17 +3187,16 @@ private final class GiftViewSheetContent: CombinedComponent {
                         ))
                     )
                 )
-                //TODO:localize
                 items.append(
                     AnyComponentWithIdentity(
                         id: "wearable",
                         component: AnyComponent(InfoParagraphComponent(
-                            title: "Wearable",
+                            title: strings.Gift_Upgrade_Wearable_Title,
                             titleColor: textColor,
-                            text: "Display gifts on your page and set them as profile covers or statuses.",
+                            text: strings.Gift_Upgrade_Wearable_Text,
                             textColor: secondaryTextColor,
                             accentColor: linkColor,
-                            iconName: "Premium/Collectible/Transferable",
+                            iconName: "Premium/Collectible/Wearable",
                             iconColor: linkColor
                         ))
                     )

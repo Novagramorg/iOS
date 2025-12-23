@@ -1646,7 +1646,7 @@ private final class StarsTransactionSheetContent: CombinedComponent {
                             style: .glass,
                             color: theme.list.itemCheckColors.fillColor.withMultipliedAlpha(0.1),
                             foreground: theme.list.itemCheckColors.fillColor,
-                            pressedColor: theme.list.itemCheckColors.fillColor.withMultipliedAlpha(0.8),
+                            pressedColor: theme.list.itemCheckColors.fillColor.withMultipliedAlpha(0.8)
                         ),
                         content: AnyComponentWithIdentity(
                             id: AnyHashable(0),

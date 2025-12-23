@@ -161,17 +161,14 @@ final class AlertActionComponent: Component {
                     activity = ComponentView()
                     self.activity = activity
                 }
-                let activitySize = activity.update(
+                let activitySize = CGSize(width: 18.0, height: 18.0)
+                let _ = activity.update(
                     transition: transition,
                     component: AnyComponent(ActivityIndicatorComponent(color: component.theme.secondary)),
                     environment: {},
-                    containerSize: availableSize
+                    containerSize: activitySize
                 )
                 if let activityView = activity.view {
-                    if activityView.superview == nil {
-                        self.addSubview(activityView)
-                        transition.animateAlpha(view: activityView, from: 0.0, to: 1.0)
-                    }
                     activityView.bounds = CGRect(origin: .zero, size: activitySize)
                 }
             } else if let activity = self.activity {
@@ -207,9 +204,16 @@ final class AlertActionComponent: Component {
             }
             
             if let activityView = self.activity?.view {
+                var activityTransition = transition
+                if activityView.superview == nil {
+                    self.addSubview(activityView)
+                    transition.animateAlpha(view: activityView, from: 0.0, to: 1.0)
+                    activityTransition = .immediate
+                }
                 let activitySize = activityView.bounds.size
                 let activityFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((size.width - activitySize.width) / 2.0), y: floorToScreenPixels((size.height - activitySize.height) / 2.0)), size: activitySize)
-                transition.setFrame(view: activityView, frame: activityFrame)
+                activityTransition.setPosition(view: activityView, position: activityFrame.center)
+                activityView.transform = CGAffineTransformMakeScale(0.7, 0.7)
             }
         }
     }
