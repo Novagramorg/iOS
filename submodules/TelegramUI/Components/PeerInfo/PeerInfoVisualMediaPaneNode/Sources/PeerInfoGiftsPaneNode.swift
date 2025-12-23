@@ -767,7 +767,7 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
                 self.panelButton = panelButton
             }
             
-            let buttonInsets = ContainerViewLayout.concentricInsets(bottomInset: params.bottomInset, innerDiameter: 52.0 * 0.5, sideInset: sideInset + 16.0)
+            let buttonInsets = ContainerViewLayout.concentricInsets(bottomInset: params.bottomInset, innerDiameter: 52.0 * 0.5, sideInset: sideInset + 30.0)
             
             let buttonTitle: String
             var buttonIconName: String?
