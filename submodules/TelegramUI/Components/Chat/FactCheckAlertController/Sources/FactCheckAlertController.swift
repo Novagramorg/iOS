@@ -73,23 +73,45 @@ public func factCheckAlertController(
         )
     ))
     
+    let doneIsRemove: Signal<Bool, NoError>
+    if !value.isEmpty {
+        doneIsRemove = inputState.valueSignal
+        |> map { value in
+            return value.string.isEmpty
+        }
+        |> distinctUntilChanged
+    } else {
+        doneIsRemove = .single(false)
+    }
+    
+    let actionsSignal: Signal<[AlertScreen.Action], NoError> = doneIsRemove
+    |> map { doneIsRemove in
+        var actions: [AlertScreen.Action] = []
+        actions.append(.init(title: strings.Common_Cancel))
+        
+        let doneTitle: String = doneIsRemove ? strings.FactCheck_Remove : strings.Common_Done
+        let doneType: AlertScreen.Action.ActionType = doneIsRemove ? .defaultDestructive : .default
+        actions.append(
+            .init(id: "done", title: doneTitle, type: doneType, action: {
+                let (text, entities) = inputState.textAndEntities
+                apply(text, entities)
+            }, isEnabled: doneIsEnabled)
+        )
+        
+        return actions
+    }
+    
     var effectiveUpdatedPresentationData: (PresentationData, Signal<PresentationData, NoError>)
     if let updatedPresentationData {
         effectiveUpdatedPresentationData = updatedPresentationData
     } else {
         effectiveUpdatedPresentationData = (presentationData, context.sharedContext.presentationData)
     }
-    //FactCheck_Remove
+
     let alertController = AlertScreen(
         configuration: AlertScreen.Configuration(allowInputInset: true),
-        content: content,
-        actions: [
-            .init(title: strings.Common_Cancel),
-            .init(title: strings.Common_Done, type: .default, action: {
-                let (text, entities) = inputState.textAndEntities
-                apply(text, entities)
-            }, isEnabled: doneIsEnabled)
-        ],
+        contentSignal: .single(content),
+        actionsSignal: actionsSignal,
         updatedPresentationData: effectiveUpdatedPresentationData
     )
     presentImpl = { [weak alertController] c in

@@ -621,17 +621,15 @@ private final class SheetContent: CombinedComponent {
                                         return
                                     }
                                     if state.currency == .stars {
-                                        if case .starGiftResell = component.mode, let amount = state.amount, amount.value < 5000 {
-                                            #if DEBUG
-                                            state.amount = StarsAmount(value: 48000000000, nanos: 0)
-                                            #else
-                                            state.amount = StarsAmount(value: resaleConfiguration.starGiftResaleMinTonAmount, nanos: 0)
-                                            #endif
-                                            if let controller = controller() as? StarsWithdrawScreen {
-                                                controller.presentMinAmountTooltip(state.amount!.value, currency: .ton)
+                                        if let amount = state.amount, let tonUsdRate = withdrawConfiguration.tonUsdRate, let usdWithdrawRate = withdrawConfiguration.usdWithdrawRate {
+                                            var convertedValue = min(convertStarsToTon(amount, tonUsdRate: tonUsdRate, starsUsdRate: usdWithdrawRate), resaleConfiguration.starGiftResaleMaxTonAmount)
+                                            if convertedValue < resaleConfiguration.starGiftResaleMinTonAmount {
+                                                convertedValue = resaleConfiguration.starGiftResaleMinTonAmount
+                                                if case .starGiftResell = component.mode, let controller = controller() as? StarsWithdrawScreen {
+                                                    controller.presentMinAmountTooltip(convertedValue, currency: .ton)
+                                                }
                                             }
-                                        } else if let amount = state.amount, let tonUsdRate = withdrawConfiguration.tonUsdRate, let usdWithdrawRate = withdrawConfiguration.usdWithdrawRate {
-                                            state.amount = StarsAmount(value: max(min(convertStarsToTon(amount, tonUsdRate: tonUsdRate, starsUsdRate: usdWithdrawRate), resaleConfiguration.starGiftResaleMaxTonAmount), resaleConfiguration.starGiftResaleMinTonAmount), nanos: 0)
+                                            state.amount = StarsAmount(value: convertedValue, nanos: 0)
                                         } else {
                                             state.amount = StarsAmount(value: 0, nanos: 0)
                                         }

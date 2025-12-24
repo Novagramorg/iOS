@@ -135,7 +135,7 @@ final class AlertActionComponent: Component {
                   
             let titlePadding: CGFloat = 16.0
             let titleSize = self.title.update(
-                transition: transition,
+                transition: .immediate,
                 component: AnyComponent(MultilineTextComponent(
                     text: .plain(attributedString),
                     horizontalAlignment: .center,

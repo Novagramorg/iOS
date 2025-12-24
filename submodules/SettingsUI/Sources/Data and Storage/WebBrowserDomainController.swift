@@ -22,8 +22,7 @@ public func webBrowserDomainController(context: AccountContext, updatedPresentat
         return !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
     
-    let doneInProgressValuePromise = ValuePromise<Bool>(false)
-    let doneInProgress = doneInProgressValuePromise.get()
+    let doneInProgressPromise = ValuePromise<Bool>(false)
                 
     var content: [AnyComponentWithIdentity<AlertComponentEnvironment>] = []
     content.append(AnyComponentWithIdentity(
@@ -89,14 +88,14 @@ public func webBrowserDomainController(context: AccountContext, updatedPresentat
             .init(title: strings.Common_Cancel),
             .init(title: strings.Common_Done, type: .default, action: {
                 applyImpl?()
-            }, autoDismiss: false, isEnabled: doneIsEnabled, progress: doneInProgress)
+            }, autoDismiss: false, isEnabled: doneIsEnabled, progress: doneInProgressPromise.get())
         ],
         updatedPresentationData: effectiveUpdatedPresentationData
     )
     applyImpl = {
         let updatedLink = explicitUrl(inputState.value)
         if !updatedLink.isEmpty && isValidUrl(updatedLink, validSchemes: ["http": true, "https": true]) {
-            doneInProgressValuePromise.set(true)
+            doneInProgressPromise.set(true)
             apply(updatedLink)
         } else {
             inputState.animateError()

@@ -3071,7 +3071,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                             i += 1
                         }
                     }
-                    //TODO:localize
+
                     var buttonColor: UIColor = UIColor.white.withAlphaComponent(0.16)
                     if let previewPatternColor = giftCompositionExternalState.previewPatternColor {
                         buttonColor = previewPatternColor

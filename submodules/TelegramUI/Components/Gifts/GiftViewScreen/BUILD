@@ -46,7 +46,6 @@ swift_library(
         "//submodules/MoreButtonNode",
         "//submodules/TelegramUI/Components/EmojiStatusComponent",
         "//submodules/PasswordSetupUI",
-        "//submodules/TelegramUI/Components/PeerManagement/OwnershipTransferController",
         "//submodules/TelegramUI/Components/PremiumLockButtonSubtitleComponent",
         "//submodules/TelegramUI/Components/Stars/StarsBalanceOverlayComponent",
         "//submodules/TelegramUI/Components/Stars/StarsWithdrawalScreen",
@@ -70,6 +69,7 @@ swift_library(
         "//submodules/TelegramUI/Components/AvatarComponent",
         "//submodules/TelegramUI/Components/AlertComponent/AlertTransferHeaderComponent",
         "//submodules/TelegramUI/Components/AlertComponent/AlertTableComponent",
+        "//submodules/TelegramUI/Components/AlertComponent/AlertInputFieldComponent",
     ],
     visibility = [
         "//visibility:public",

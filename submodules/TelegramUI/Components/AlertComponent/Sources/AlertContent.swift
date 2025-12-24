@@ -165,6 +165,7 @@ public final class AlertTextComponent: Component {
     let alignment: Alignment
     let color: Color
     let style: Style
+    let insets: UIEdgeInsets
     let action: ([NSAttributedString.Key: Any]) -> Void
     
     public init(
@@ -172,12 +173,14 @@ public final class AlertTextComponent: Component {
         alignment: Alignment = .default,
         color: Color = .primary,
         style: Style = .plain(.default),
+        insets: UIEdgeInsets = .zero,
         action: @escaping ([NSAttributedString.Key: Any]) -> Void = { _ in }
     ) {
         self.content = content
         self.alignment = alignment
         self.color = color
         self.style = style
+        self.insets = insets
         self.action = action
     }
     
@@ -188,10 +191,13 @@ public final class AlertTextComponent: Component {
         if lhs.alignment != rhs.alignment {
             return false
         }
+        if lhs.color != rhs.color {
+            return false
+        }
         if lhs.style != rhs.style {
             return false
         }
-        if lhs.color != rhs.color {
+        if lhs.insets != rhs.insets {
             return false
         }
         return true
@@ -215,7 +221,7 @@ public final class AlertTextComponent: Component {
             case .primary:
                 textColor = environment.theme.actionSheet.primaryTextColor
             case .secondary:
-                textColor = environment.theme.actionSheet.secondaryTextColor
+                textColor = environment.theme.actionSheet.primaryTextColor.withMultipliedAlpha(0.35)
             case .destructive:
                 textColor = environment.theme.actionSheet.destructiveActionTextColor
             }
@@ -330,7 +336,7 @@ public final class AlertTextComponent: Component {
                     environment: {},
                     containerSize: backgroundSize
                 )
-                let backgroundFrame = CGRect(origin: CGPoint(x: -10.0, y: 0.0), size: backgroundSize)
+                let backgroundFrame = CGRect(origin: CGPoint(x: -10.0, y: component.insets.top), size: backgroundSize)
                 if let backgroundView = self.background.view {
                     if backgroundView.superview == nil {
                         self.addSubview(backgroundView)
@@ -339,14 +345,14 @@ public final class AlertTextComponent: Component {
                 }
             }
             
-            let textFrame = CGRect(origin: textOffset, size: textSize)
+            let textFrame = CGRect(origin: textOffset.offsetBy(dx: 0.0, dy: component.insets.top), size: textSize)
             if let textView = self.text.view {
                 if textView.superview == nil {
                     self.addSubview(textView)
                 }
                 transition.setFrame(view: textView, frame: textFrame)
             }
-            return size
+            return CGSize(width: size.width, height: size.height + component.insets.top + component.insets.bottom)
         }
     }
     
