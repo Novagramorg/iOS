@@ -28,20 +28,66 @@ public class ChatMessagePaymentAlertController: AlertScreen {
     private let animateBalanceOverlay: Bool
     
     private var didUpdateCurrency = false
-    public var currency: CurrencyAmount.Currency {
-        didSet {
-            self.didUpdateCurrency = true
-            if let layout = self.validLayout {
-                self.containerLayoutUpdated(layout, transition: .animated(duration: 0.25, curve: .easeInOut))
-            }
-        }
-    }
-       
+    
+    private var initialCurrency: CurrencyAmount.Currency?
+    public var currency: CurrencyAmount.Currency?
+    private var currencyDisposable: Disposable?
+    
     private let balance = ComponentView<Empty>()
     
     private var didAppear = false
         
     public init(
+        context: AccountContext?,
+        presentationData: PresentationData,
+        updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)? = nil,
+        configuration: Configuration = AlertScreen.Configuration(),
+        contentSignal: Signal<[AnyComponentWithIdentity<AlertComponentEnvironment>], NoError>,
+        actionsSignal: Signal<[AlertScreen.Action], NoError>,
+        navigationController: NavigationController?,
+        chatPeerId: EnginePeer.Id,
+        showBalance: Bool = true,
+        currencySignal: Signal<CurrencyAmount.Currency, NoError> = .single(.stars),
+        animateBalanceOverlay: Bool = true
+    ) {
+        self.context = context
+        self.presentationData = presentationData
+        self.parentNavigationController = navigationController
+        self.chatPeerId = chatPeerId
+        self.showBalance = showBalance
+        self.animateBalanceOverlay = animateBalanceOverlay
+        
+        var effectiveUpdatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)
+        if let updatedPresentationData {
+            effectiveUpdatedPresentationData = updatedPresentationData
+        } else {
+            effectiveUpdatedPresentationData = (initial: presentationData, signal: .single(presentationData))
+        }
+            
+        super.init(
+            configuration: configuration,
+            contentSignal: contentSignal,
+            actionsSignal: actionsSignal,
+            updatedPresentationData: effectiveUpdatedPresentationData
+        )
+        
+        self.currencyDisposable = (currencySignal
+        |> distinctUntilChanged
+        |> deliverOnMainQueue).start(next: { [weak self] currency in
+            guard let self else {
+                return
+            }
+            if self.currency == nil {
+                self.initialCurrency = currency
+            }
+            self.currency = currency
+            if let layout = self.validLayout {
+                self.containerLayoutUpdated(layout, transition: .animated(duration: 0.25, curve: .easeInOut))
+            }
+        })
+    }
+    
+    public convenience init(
         context: AccountContext?,
         presentationData: PresentationData,
         updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)? = nil,
@@ -54,26 +100,18 @@ public class ChatMessagePaymentAlertController: AlertScreen {
         currency: CurrencyAmount.Currency = .stars,
         animateBalanceOverlay: Bool = true
     ) {
-        self.context = context
-        self.presentationData = presentationData
-        self.parentNavigationController = navigationController
-        self.chatPeerId = chatPeerId
-        self.showBalance = showBalance
-        self.currency = currency
-        self.animateBalanceOverlay = animateBalanceOverlay
-        
-        var effectiveUpdatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)
-        if let updatedPresentationData {
-            effectiveUpdatedPresentationData = updatedPresentationData
-        } else {
-            effectiveUpdatedPresentationData = (initial: presentationData, signal: .single(presentationData))
-        }
-            
-        super.init(
+        self.init(
+            context: context,
+            presentationData: presentationData,
+            updatedPresentationData: updatedPresentationData,
             configuration: configuration,
-            content: content,
-            actions: actions,
-            updatedPresentationData: effectiveUpdatedPresentationData
+            contentSignal: .single(content),
+            actionsSignal: .single(actions),
+            navigationController: navigationController,
+            chatPeerId: chatPeerId,
+            showBalance: showBalance,
+            currencySignal: .single(currency),
+            animateBalanceOverlay: animateBalanceOverlay
         )
     }
         
@@ -89,8 +127,11 @@ public class ChatMessagePaymentAlertController: AlertScreen {
     
     private func animateOut() {
         if !self.animateBalanceOverlay {
-            if self.currency == .ton && self.didUpdateCurrency {
+            if case .ton = self.currency, let initialCurrency, initialCurrency != self.currency {
                 self.currency = .stars
+                if let layout = self.validLayout {
+                    self.containerLayoutUpdated(layout, transition: .animated(duration: 0.25, curve: .easeInOut))
+                }
             }
         } else {
             if let view = self.balance.view {
@@ -112,7 +153,7 @@ public class ChatMessagePaymentAlertController: AlertScreen {
             }
         }
         
-        if let context = self.context, let _ = self.parentNavigationController, self.showBalance {
+        if let context = self.context, let _ = self.parentNavigationController, self.showBalance, let currency = self.currency {
             let insets = layout.insets(options: .statusBar)
             var balanceTransition = ComponentTransition(transition)
             if self.balance.view == nil {
@@ -126,12 +167,12 @@ public class ChatMessagePaymentAlertController: AlertScreen {
                         context: context,
                         peerId: self.chatPeerId.namespace == Namespaces.Peer.CloudChannel ? self.chatPeerId : context.account.peerId,
                         theme: self.presentationData.theme,
-                        currency: self.currency,
+                        currency: currency,
                         action: { [weak self] in
-                            guard let self, let starsContext = context.starsContext, let navigationController = self.parentNavigationController else {
+                            guard let self, let starsContext = context.starsContext, let navigationController = self.parentNavigationController, let currency = self.currency else {
                                 return
                             }
-                            switch self.currency {
+                            switch currency {
                             case .stars:
                                 let _ = (context.engine.payments.starsTopUpOptions()
                                 |> take(1)

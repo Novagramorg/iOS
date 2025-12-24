@@ -140,11 +140,16 @@ public final class AlertInputFieldComponent: Component {
             return self.textField.text ?? ""
         }
         
+        private var clearOnce: Bool = false
+        
         func activateInput() {
             self.textField.becomeFirstResponder()
         }
         
         func animateError() {
+            if let component = self.component, component.isInitiallyFocused {
+                self.clearOnce = true
+            }
             self.textField.layer.addShakeAnimation()
         
             HapticFeedback().error()
@@ -169,6 +174,26 @@ public final class AlertInputFieldComponent: Component {
             self.clearButton.view?.isHidden = true
         }
         
+        public func textField(_ textField: UITextField, shouldChangeCharactersIn range: NSRange, replacementString string: String) -> Bool {
+            guard let component = self.component else {
+                return true
+            }
+            
+            if self.clearOnce {
+                self.clearOnce = false
+                if range.length > string.count {
+                    textField.text = ""
+                    return false
+                }
+            }
+            
+            let updatedText = ((textField.text ?? "") as NSString).replacingCharacters(in: range, with: string)
+            if let shouldChangeText = component.shouldChangeText {
+                return shouldChangeText(updatedText)
+            }
+            return true
+        }
+    
         public func setText(text: String) {
             self.textField.text = text
             if !self.isUpdating {
