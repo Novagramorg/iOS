@@ -638,9 +638,25 @@ public final class GlassBackgroundContainerView: UIView {
     }
     
     override public func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        if self.alpha.isZero {
+            return nil
+        }
+        if self.isHidden {
+            return nil
+        }
+        if !self.isUserInteractionEnabled {
+            return nil
+        }
+        for view in self.contentView.subviews.reversed() {
+            if let result = view.hitTest(self.convert(point, to: view), with: event), result.isUserInteractionEnabled {
+                return result
+            }
+        }
+        
         guard let result = self.contentView.hitTest(point, with: event) else {
             return nil
         }
+        
         return result
     }
     
