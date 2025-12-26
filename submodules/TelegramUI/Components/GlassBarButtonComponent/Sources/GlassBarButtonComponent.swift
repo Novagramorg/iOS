@@ -230,7 +230,6 @@ public final class GlassBarButtonComponent: Component {
                 } else {
                     glassBackgroundTransition = .immediate
                     glassBackgroundView = GlassBackgroundView()
-                    glassBackgroundView.isUserInteractionEnabled = false
                     self.glassContainerView.addSubview(glassBackgroundView)
                     self.glassBackgroundView = glassBackgroundView
                     
@@ -248,7 +247,6 @@ public final class GlassBarButtonComponent: Component {
                 } else {
                     glassBackgroundTransition = .immediate
                     glassBackgroundView = GlassBackgroundView()
-                    glassBackgroundView.isUserInteractionEnabled = false
                     self.glassContainerView.addSubview(glassBackgroundView)
                     self.glassBackgroundView = glassBackgroundView
                     

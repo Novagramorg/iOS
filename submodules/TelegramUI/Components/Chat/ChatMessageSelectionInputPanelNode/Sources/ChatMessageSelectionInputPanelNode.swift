@@ -121,7 +121,6 @@ private final class GlassButtonView: UIView {
     
     override init(frame: CGRect) {
         self.backgroundView = GlassBackgroundView()
-        self.backgroundView.isUserInteractionEnabled = false
         
         self.iconView = GlassBackgroundView.ContentImageView()
         self.backgroundView.contentView.addSubview(self.iconView)
