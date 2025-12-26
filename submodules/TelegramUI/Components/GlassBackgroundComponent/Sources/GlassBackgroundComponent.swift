@@ -391,6 +391,15 @@ public class GlassBackgroundView: UIView {
     }
     
     override public func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        if !self.isUserInteractionEnabled {
+            return nil
+        }
+        if self.isHidden {
+            return nil
+        }
+        if self.alpha == 0.0 {
+            return nil
+        }
         if let nativeView = self.nativeView {
             if let result = nativeView.hitTest(self.convert(point, to: nativeView), with: event) {
                 return result
