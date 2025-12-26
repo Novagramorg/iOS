@@ -4647,18 +4647,6 @@ extension ChatControllerImpl {
             groupCalls: groupCallPanelSource,
             chatListNotices: false
         )
-        globalControlPanelsContext.tempVoicePlaylistEnded = { [weak self] in
-            guard let self else {
-                return
-            }
-            self.tempVoicePlaylistEnded?()
-        }
-        globalControlPanelsContext.tempVoicePlaylistItemChanged = { [weak self] previousItem, currentItem in
-            guard let self else {
-                return
-            }
-            self.tempVoicePlaylistItemChanged?(previousItem, currentItem)
-        }
         self.globalControlPanelsContext = globalControlPanelsContext
         self.globalControlPanelsContextStateDisposable = (globalControlPanelsContext.state
         |> deliverOnMainQueue).startStrict(next: { [weak self] state in
