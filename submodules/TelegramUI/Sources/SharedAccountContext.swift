@@ -10,6 +10,7 @@ import TelegramCallsUI
 import TelegramUIPreferences
 import AccountContext
 import DeviceLocationManager
+import ItemListUI
 import LegacyUI
 import ChatListUI
 import PeersNearbyUI
@@ -2244,6 +2245,7 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         return ChatHistoryListNodeImpl(
             context: context,
             updatedPresentationData: updatedPresentationData,
+            systemStyle: .glass,
             chatLocation: chatLocation,
             chatLocationContextHolder: chatLocationContextHolder,
             adMessagesContext: nil,
