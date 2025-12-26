@@ -22,6 +22,15 @@ build --spawn_strategy=standalone
 build --strategy=SwiftCompile=standalone
 build --define RULES_SWIFT_BUILD_DUMMY_WORKER=1
 
+build:swift_profile --jobs=1
+build:swift_profile --local_cpu_resources=1
+build:swift_profile --features=-swift.enable_batch_mode
+build:swift_profile --experimental_ui_max_stdouterr_bytes=104857600
+build:swift_profile --@build_bazel_rules_swift//swift:copt=-Xfrontend
+build:swift_profile --@build_bazel_rules_swift//swift:copt=-debug-time-function-bodies
+build:swift_profile --@build_bazel_rules_swift//swift:copt=-Xfrontend
+build:swift_profile --@build_bazel_rules_swift//swift:copt=-debug-time-expression-type-checking
+
 common:index_build --experimental_convenience_symlinks=ignore
 common:index_build --bes_backend= --bes_results_url=
 common:index_build --nolegacy_important_outputs

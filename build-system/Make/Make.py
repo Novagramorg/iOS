@@ -46,6 +46,7 @@ class BazelCommandLine:
         self.show_actions = False
         self.enable_sandbox = False
         self.disable_provisioning_profiles = False
+        self.profile_swift = False
 
         self.common_args = [
             # https://docs.bazel.build/versions/master/command-line-reference.html
@@ -142,6 +143,9 @@ class BazelCommandLine:
 
     def set_disable_provisioning_profiles(self):
         self.disable_provisioning_profiles = True
+
+    def set_profile_swift(self, value):
+        self.profile_swift = value
 
     def set_configuration(self, configuration):
         if configuration == 'debug_arm64':
@@ -300,6 +304,8 @@ class BazelCommandLine:
             ]
 
         combined_arguments += self.configuration_args
+        if self.profile_swift:
+            combined_arguments += ['--config=swift_profile']
 
         print('TelegramBuild: running')
         print(subprocess.list2cmdline(combined_arguments))
@@ -620,6 +626,7 @@ def build(bazel, arguments):
     bazel_command_line.set_continue_on_error(arguments.continueOnError)
     bazel_command_line.set_show_actions(arguments.showActions)
     bazel_command_line.set_enable_sandbox(arguments.sandbox)
+    bazel_command_line.set_profile_swift(arguments.profileSwift)
 
     bazel_command_line.set_split_swiftmodules(arguments.enableParallelSwiftmoduleGeneration)
 
@@ -973,6 +980,12 @@ if __name__ == '__main__':
              'systems. '
     )
     buildParser.add_argument(
+        '--profileSwift',
+        action='store_true',
+        default=False,
+        help='Enable single-core Swift compile profiling flags.'
+    )
+    buildParser.add_argument(
         '--target',
         type=str,
         help='A custom bazel target name to build.',
@@ -1062,6 +1075,13 @@ if __name__ == '__main__':
         required=True,
         type=str,
         help='Path to the destination directory.'
+    )
+    generate_profiles_build_parser.add_argument(
+        '--certsPath',
+        required=False,
+        type=str,
+        default='build-system/fake-codesigning/certs',
+        help='Path to the directory containing SelfSigned.p12 certificate.'
     )
 
     remote_upload_testflight_parser = subparsers.add_parser('remote-deploy-testflight', help='Build the app using a remote environment.')
@@ -1304,7 +1324,7 @@ if __name__ == '__main__':
                 additional_codesigning_output_path=remote_input_path
             )
 
-            GenerateProfiles.generate_provisioning_profiles(source_path=remote_input_path + '/profiles', destination_path=args.destination)
+            GenerateProfiles.generate_provisioning_profiles(source_path=remote_input_path + '/profiles', destination_path=args.destination, certs_path=args.certsPath)
         elif args.commandName == 'remote-deploy-testflight':
             env = os.environ
             if 'APPSTORE_CONNECT_USERNAME' not in env:
