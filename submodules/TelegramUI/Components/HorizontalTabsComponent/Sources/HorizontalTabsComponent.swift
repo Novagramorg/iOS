@@ -710,12 +710,13 @@ public final class HorizontalTabsComponent: Component {
             } else {
                 var contentWidth: CGFloat = sideInset
                 for item in items {
-                    var itemFrame = CGRect(origin: CGPoint(x: contentWidth, y: 0.0), size: item.size)
+                    var itemFrame = CGRect(origin: CGPoint(x: contentWidth - 3.0, y: 0.0), size: item.size)
                     if item.tabId == self.reorderingItem, let (initial, offset) = self.reorderingItemPosition {
                         itemFrame.origin = CGPoint(x: initial + offset, y: 3.0 + itemFrame.minY)
                     }
                     item.itemView.frame = itemFrame
                     item.itemView.selectionFrame = itemFrame
+                    item.itemView.selectionFrame.size.width += 3.0
                     contentWidth += item.size.width
                 }
                 contentWidth += sideInset
