@@ -168,7 +168,7 @@ public final class ListSectionHeaderNode: ASDisplayNode {
                 context.fillEllipse(in: CGRect(origin: CGPoint(x: labelBackgroundInset - labelBackgroundInnerInset, y: labelBackgroundInset - labelBackgroundInnerInset), size: CGSize(width: labelBackgroundSize + labelBackgroundInnerInset * 2.0, height: labelBackgroundSize + labelBackgroundInnerInset * 2.0)))
             })!, radius: 19, iterations: 3)?.stretchableImage(withLeftCapWidth: Int(labelBackgroundInset + labelBackgroundSize * 0.5), topCapHeight: Int(labelBackgroundInset + labelBackgroundSize * 0.5)).withRenderingMode(.alwaysTemplate)
         }
-        self.labelBackgroundView.tintColor = self.theme.list.plainBackgroundColor.withAlphaComponent(0.5)
+        self.labelBackgroundView.tintColor = self.theme.list.plainBackgroundColor.withAlphaComponent(self.theme.overallDarkAppearance ? 0.5 : 0.85)
         //self.labelBackgroundView.tintColor = UIColor.blue.withMultipliedAlpha(0.8)
         
         self.labelBackgroundView.frame = labelFrame.insetBy(dx: -labelBackgroundInset - 4.0, dy: -labelBackgroundInset)
