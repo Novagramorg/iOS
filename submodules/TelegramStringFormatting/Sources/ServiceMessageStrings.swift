@@ -1765,10 +1765,19 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
             }
             attributedString = addAttributesToStringWithRanges(resultTitleString._tuple, body: bodyAttributes, argumentAttributes: [0: boldAttributes])
         } else if let dice = media as? TelegramMediaDice, let gameOutcome = dice.gameOutcome {
-            if let value = dice.value, value > 1 {
+            if let value = dice.value {
                 //TODO:localize
-                let value = formatTonAmountText(gameOutcome.tonAmount, dateTimeFormat: dateTimeFormat)
-                let attributedText = NSMutableAttributedString(string: "You won $\(value)", font: titleFont, textColor: primaryTextColor)
+                
+                let rawString: String
+                if value == 1, let tonAmount = dice.tonAmount {
+                    let value = formatTonAmountText(tonAmount, dateTimeFormat: dateTimeFormat)
+                    rawString = "You lost $\(value)"
+                } else {
+                    let value = formatTonAmountText(gameOutcome.tonAmount, dateTimeFormat: dateTimeFormat)
+                    rawString = "You won $\(value)"
+                }
+                
+                let attributedText = NSMutableAttributedString(string: rawString, font: titleFont, textColor: primaryTextColor)
                 if let range = attributedText.string.range(of: "$") {
                     attributedText.addAttribute(ChatTextInputAttributes.customEmoji, value: ChatTextInputTextCustomEmojiAttribute(interactivelySelectedFromPackId: nil, fileId: 0, file: nil, custom: .ton(tinted: true)), range: NSRange(range, in: attributedText.string))
                     attributedText.addAttribute(.baselineOffset, value: 1.5, range: NSRange(range, in: attributedText.string))

@@ -488,6 +488,8 @@ public class ChatMessageAnimatedStickerItemNode: ChatMessageItemView {
                     Queue.mainQueue().after(3.0, {
                         self.labelNode.textNode.alpha = 1.0
                         self.labelBackgroundNode?.alpha = 1.0
+                        self.labelNode.textNode.layer.animateScale(from: 0.01, to: 1.0, duration: 0.25)
+                        self.labelBackgroundNode?.layer.animateScale(from: 0.01, to: 1.0, duration: 0.25)
                         self.labelNode.textNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.25)
                         self.labelBackgroundNode?.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.25)
                     })
@@ -1127,6 +1129,7 @@ public class ChatMessageAnimatedStickerItemNode: ChatMessageItemView {
             var viewCount: Int? = nil
             var dateReplies = 0
             var starsCount: Int64?
+            var tonAmount: Int64?
             var dateReactionsAndPeers = mergedMessageReactionsAndPeers(accountPeerId: item.context.account.peerId, accountPeer: item.associatedData.accountPeer, message: item.message)
             if item.message.isRestricted(platform: "ios", contentSettings: item.context.currentContentSettings.with { $0 }) {
                 dateReactionsAndPeers = ([], [])
@@ -1143,6 +1146,10 @@ public class ChatMessageAnimatedStickerItemNode: ChatMessageItemView {
                 } else if let attribute = attribute as? PaidStarsMessageAttribute, item.message.id.peerId.namespace == Namespaces.Peer.CloudChannel {
                     starsCount = attribute.stars.value
                 }
+            }
+            
+            if let stakeTonAmount = telegramDice?.tonAmount {
+                tonAmount = stakeTonAmount
             }
             
             let dateText = stringForMessageTimestampStatus(accountPeerId: item.context.account.peerId, message: item.message, dateTimeFormat: item.presentationData.dateTimeFormat, nameDisplayOrder: item.presentationData.nameDisplayOrder, strings: item.presentationData.strings, format: .regular, associatedData: item.associatedData)
@@ -1173,6 +1180,7 @@ public class ChatMessageAnimatedStickerItemNode: ChatMessageItemView {
                 messageEffect: messageEffect,
                 replyCount: dateReplies,
                 starsCount: starsCount,
+                tonAmount: tonAmount,
                 isPinned: item.message.tags.contains(.pinned) && !item.associatedData.isInPinnedListMode && !isReplyThread,
                 hasAutoremove: item.message.isSelfExpiring,
                 canViewReactionList: canViewMessageReactionList(message: item.message),
@@ -1277,6 +1285,7 @@ public class ChatMessageAnimatedStickerItemNode: ChatMessageItemView {
                     quote: replyQuote,
                     todoItemId: replyTodoItemId,
                     story: replyStory,
+                    isSummarized: false,
                     parentMessage: item.message,
                     constrainedSize: CGSize(width: availableContentWidth, height: CGFloat.greatestFiniteMagnitude),
                     animationCache: item.controllerInteraction.presentationContext.animationCache,
@@ -1559,6 +1568,30 @@ public class ChatMessageAnimatedStickerItemNode: ChatMessageItemView {
                         }
                     }
                     
+                    var updatedImageFrame: CGRect
+                    var contextContentFrame: CGRect
+                    if let _ = emojiString {
+                        updatedImageFrame = imageFrame
+                        contextContentFrame = updatedImageFrame.inset(by: UIEdgeInsets(top: 0.0, left: 0.0, bottom: -imageBottomPadding, right: 0.0))
+                    } else {
+                        updatedImageFrame = imageFrame.offsetBy(dx: 0.0, dy: floor((contentHeight - imageSize.height) / 2.0))
+                        contextContentFrame = updatedImageFrame
+                        
+                        if let telegramDice, let _ = telegramDice.tonAmount {
+                            updatedImageFrame = updatedImageFrame.offsetBy(dx: 0.0, dy: -30.0)
+                        }
+                    }
+                    var updatedContentFrame = updatedImageFrame
+                    if isEmoji && emojiString == nil {
+                        updatedContentFrame = updatedContentFrame.insetBy(dx: -imageInset, dy: -imageInset)
+                        contextContentFrame = updatedContentFrame
+                    }
+                    
+                    let labelFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((params.width - labelLayout.size.width) / 2.0), y: updatedImageFrame.maxY + 6.0), size: labelLayout.size)
+                    strongSelf.labelNode.textNode.frame = labelFrame
+                    if strongSelf.labelNode.textNode.supernode == nil, labelLayout.size.height > 0.0 {
+                        strongSelf.addSubnode(strongSelf.labelNode.textNode)
+                    }
                     
                     let _ = labelApply(TextNodeWithEntities.Arguments(
                         context: item.context,
@@ -1567,11 +1600,6 @@ public class ChatMessageAnimatedStickerItemNode: ChatMessageItemView {
                         placeholderColor: item.presentationData.theme.theme.chat.message.freeform.withWallpaper.reactionInactiveBackground,
                         attemptSynchronous: synchronousLoads
                     ))
-                    let labelFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((params.width - labelLayout.size.width) / 2.0), y: 2.0), size: labelLayout.size)
-                    strongSelf.labelNode.textNode.frame = labelFrame
-                    if strongSelf.labelNode.textNode.supernode == nil, labelLayout.size.height > 0.0 {
-                        strongSelf.addSubnode(strongSelf.labelNode.textNode)
-                    }
                     
                     let baseBackgroundFrame = labelFrame.offsetBy(dx: 0.0, dy: -11.0)
                     if let (offset, image) = backgroundMaskImage {
@@ -1602,21 +1630,6 @@ public class ChatMessageAnimatedStickerItemNode: ChatMessageItemView {
                         strongSelf.labelBackgroundMaskNode.frame = CGRect(origin: CGPoint(), size: image.size)
 
                         strongSelf.cachedMaskLabelBackgroundImage = (offset, image, labelRects)
-                    }
-                    
-                    var updatedImageFrame: CGRect
-                    var contextContentFrame: CGRect
-                    if let _ = emojiString {
-                        updatedImageFrame = imageFrame
-                        contextContentFrame = updatedImageFrame.inset(by: UIEdgeInsets(top: 0.0, left: 0.0, bottom: -imageBottomPadding, right: 0.0))
-                    } else {
-                        updatedImageFrame = imageFrame.offsetBy(dx: 0.0, dy: floor((contentHeight - imageSize.height) / 2.0))
-                        contextContentFrame = updatedImageFrame
-                    }
-                    var updatedContentFrame = updatedImageFrame
-                    if isEmoji && emojiString == nil {
-                        updatedContentFrame = updatedContentFrame.insetBy(dx: -imageInset, dy: -imageInset)
-                        contextContentFrame = updatedContentFrame
                     }
                     
                     if let (_, textApply) = textLayoutAndApply {

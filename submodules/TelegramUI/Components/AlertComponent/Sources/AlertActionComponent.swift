@@ -33,17 +33,20 @@ final class AlertActionComponent: Component {
     let theme: Theme
     let title: String
     let isHighlighted: Bool
+    let isEnabled: Signal<Bool, NoError>
     let progress: Signal<Bool, NoError>
     
     init(
         theme: Theme,
         title: String,
         isHighlighted: Bool,
+        isEnabled: Signal<Bool, NoError>,
         progress: Signal<Bool, NoError>
     ) {
         self.theme = theme
         self.title = title
         self.isHighlighted = isHighlighted
+        self.isEnabled = isEnabled
         self.progress = progress
     }
     
@@ -68,6 +71,9 @@ final class AlertActionComponent: Component {
         private var component: AlertActionComponent?
         private weak var state: EmptyComponentState?
         
+        private var isEnabledDisposable: Disposable?
+        private var isEnabled = true
+        
         private var progressDisposable: Disposable?
         private var hasProgress = false
         
@@ -84,12 +90,28 @@ final class AlertActionComponent: Component {
             preconditionFailure()
         }
         
+        deinit {
+            self.isEnabledDisposable?.dispose()
+            self.progressDisposable?.dispose()
+        }
+        
         func update(component: AlertActionComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<AlertComponentEnvironment>, transition: ComponentTransition) -> CGSize {
             self.isUpdating = true
             defer {
                 self.isUpdating = false
             }
             if self.component == nil {
+                self.isEnabledDisposable = (component.isEnabled
+                |> deliverOnMainQueue).start(next: { [weak self] isEnabled in
+                    guard let self else {
+                        return
+                    }
+                    self.isEnabled = isEnabled
+                    if !self.isUpdating {
+                        self.state?.updated(transition: .easeInOut(duration: 0.25))
+                    }
+                })
+                
                 self.progressDisposable = (component.progress
                 |> deliverOnMainQueue).start(next: { [weak self] hasProgress in
                     guard let self else {
@@ -113,7 +135,7 @@ final class AlertActionComponent: Component {
                   
             let titlePadding: CGFloat = 16.0
             let titleSize = self.title.update(
-                transition: transition,
+                transition: .immediate,
                 component: AnyComponent(MultilineTextComponent(
                     text: .plain(attributedString),
                     horizontalAlignment: .center,
@@ -139,17 +161,14 @@ final class AlertActionComponent: Component {
                     activity = ComponentView()
                     self.activity = activity
                 }
-                let activitySize = activity.update(
+                let activitySize = CGSize(width: 18.0, height: 18.0)
+                let _ = activity.update(
                     transition: transition,
                     component: AnyComponent(ActivityIndicatorComponent(color: component.theme.secondary)),
                     environment: {},
-                    containerSize: availableSize
+                    containerSize: activitySize
                 )
                 if let activityView = activity.view {
-                    if activityView.superview == nil {
-                        self.addSubview(activityView)
-                        transition.animateAlpha(view: activityView, from: 0.0, to: 1.0)
-                    }
                     activityView.bounds = CGRect(origin: .zero, size: activitySize)
                 }
             } else if let activity = self.activity {
@@ -161,8 +180,15 @@ final class AlertActionComponent: Component {
                 }
             }
             
+            let buttonAlpha: CGFloat
+            if self.isEnabled {
+                buttonAlpha = component.isHighlighted ? 0.35 : 1.0
+            } else {
+                buttonAlpha = 0.2
+            }
+            
             transition.setBackgroundColor(view: self.backgroundView, color: component.theme.background)
-            transition.setAlpha(view: self.backgroundView, alpha: component.isHighlighted ? 0.35 : 1.0)
+            transition.setAlpha(view: self.backgroundView, alpha: buttonAlpha)
             self.backgroundView.layer.cornerRadius = availableSize.height * 0.5
             
             return CGSize(width: titleSize.width + titlePadding * 2.0, height: availableSize.height)
@@ -178,9 +204,16 @@ final class AlertActionComponent: Component {
             }
             
             if let activityView = self.activity?.view {
+                var activityTransition = transition
+                if activityView.superview == nil {
+                    self.addSubview(activityView)
+                    transition.animateAlpha(view: activityView, from: 0.0, to: 1.0)
+                    activityTransition = .immediate
+                }
                 let activitySize = activityView.bounds.size
                 let activityFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((size.width - activitySize.width) / 2.0), y: floorToScreenPixels((size.height - activitySize.height) / 2.0)), size: activitySize)
-                transition.setFrame(view: activityView, frame: activityFrame)
+                activityTransition.setPosition(view: activityView, position: activityFrame.center)
+                activityView.transform = CGAffineTransformMakeScale(0.7, 0.7)
             }
         }
     }

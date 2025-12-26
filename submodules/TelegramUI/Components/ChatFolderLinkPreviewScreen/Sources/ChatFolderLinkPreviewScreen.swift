@@ -1516,7 +1516,7 @@ private final class ChatFolderLinkPreviewScreenComponent: Component {
                             case .someUserTooManyChannels:
                                 text = presentationData.strings.ChatListFilter_CreateLinkErrorSomeoneHasChannelLimit
                             }
-                            controller.present(standardTextAlertController(theme: AlertControllerTheme(presentationData: presentationData), title: nil, text: text, actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+                            controller.present(textAlertController(context: component.context, title: nil, text: text, actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]), in: .window(.root))
                         })
                     }
                 })

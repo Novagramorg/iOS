@@ -246,6 +246,7 @@ class ContactSelectionControllerImpl: ViewController, ContactSelectionController
                 backgroundColor: nil,
                 isDark: self.presentationData.theme.overallDarkAppearance,
                 state: .generic,
+                animateScale: false,
                 component: AnyComponentWithIdentity(id: "close", component: AnyComponent(
                     BundleIconComponent(
                         name: "Navigation/Close",
@@ -267,6 +268,7 @@ class ContactSelectionControllerImpl: ViewController, ContactSelectionController
                     backgroundColor: nil,
                     isDark: self.presentationData.theme.overallDarkAppearance,
                     state: .generic,
+                    animateScale: false,
                     component: AnyComponentWithIdentity(id: "search", component: AnyComponent(
                         BundleIconComponent(
                             name: "Navigation/Search",

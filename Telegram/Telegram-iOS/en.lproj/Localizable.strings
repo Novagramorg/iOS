@@ -15622,6 +15622,28 @@ Error: %8$@";
 "Chat.GiftPurchaseOffer.AcceptConfirmation.BadValue" = "The value of this gift is **%@** higher than the offer.";
 "Chat.GiftPurchaseOffer.AcceptConfirmation.Confirm" = "Confirm Sale";
 
-
 "Notification.PremiumGift.DaysTitle_1" = "%@ Day Premium";
 "Notification.PremiumGift.DaysTitle_any" = "%@ Days Premium";
+
+"MediaEditor.Audio.Title" = "Audio";
+"MediaEditor.Audio.SavedMusic" = "SAVED MUSIC";
+"MediaEditor.Audio.ShowMore" = "Show More";
+
+"WebApp.AddToAttachmentTitle" = "Add to Attachment Menu";
+
+"Gift.Upgrade.Wearable.Title" = "Wearable";
+"Gift.Upgrade.Wearable.Text" = "Display gifts on your page and set them as profile covers or statuses.";
+"Gift.Upgrade.ViewAllVariants" = "View all variants";
+
+"CocoonInfo.Title" = "COCOON";
+"CocoonInfo.Description" = "**Cocoon** (**Co**nfidential **Co**mpute **O**pen **N**etwork) handles AI tasks **safely** and **efficiently**.";
+"CocoonInfo.Private.Title" = "Private";
+"CocoonInfo.Private.Text" = "No third party can access any data, such as translations, inside Cocoon.";
+"CocoonInfo.Efficient.Title" = "Efficient";
+"CocoonInfo.Efficient.Text" = "Cocoon has allowed Telegram to reduce translation costs by 6x.";
+"CocoonInfo.ForEveryone.Title" = "For Everyone";
+"CocoonInfo.ForEveryone.Text" = "Any developer can use Cocoon for AI features. Learn more at [@cocoon](telegram) or [cocoon.org](web).";
+"CocoonInfo.IntergrateInfo" = "Want to integrate Cocoon into your projects?\nReach out at [t.me/cocoon?direct]()";
+"CocoonInfo.Understood" = "Understood";
+
+"Conversation.Translation.CocoonInfo" = "Translations are powered by\n**#Cocoon**. [How does it work?]()";

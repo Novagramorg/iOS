@@ -459,13 +459,15 @@ func textMediaAndExpirationTimerFromApiMedia(_ media: Api.MessageMedia?, _ peerI
             }
         case let .messageMediaDice(_, value, emoticon, apiGameOutcome):
             var gameOutcome: TelegramMediaDice.GameOutcome?
+            var tonAmount: Int64?
             switch apiGameOutcome {
-            case let .emojiGameOutcome(seed, tonAmount):
-                gameOutcome = TelegramMediaDice.GameOutcome(seed: seed.makeData(), tonAmount: tonAmount)
+            case let .emojiGameOutcome(seed, stakeTonAmount, outcomeTonAmount):
+                gameOutcome = TelegramMediaDice.GameOutcome(seed: seed.makeData(), tonAmount: outcomeTonAmount)
+                tonAmount = stakeTonAmount
             default:
                 break
             }
-            return (TelegramMediaDice(emoji: emoticon, value: value, gameOutcome: gameOutcome), nil, nil, nil, nil, nil)
+            return (TelegramMediaDice(emoji: emoticon, tonAmount: tonAmount, value: value, gameOutcome: gameOutcome), nil, nil, nil, nil, nil)
         case let .messageMediaStory(flags, peerId, id, _):
             let isMention = (flags & (1 << 1)) != 0
             return (TelegramMediaStory(storyId: StoryId(peerId: peerId.peerId, id: id), isMention: isMention), nil, nil, nil, nil, nil)

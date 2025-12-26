@@ -13,13 +13,21 @@ import GlassBackgroundComponent
 
 public final class AlertComponentEnvironment: Equatable {
     public let theme: PresentationTheme
+    public let strings: PresentationStrings
     
-    public init(theme: PresentationTheme) {
+    public init(
+        theme: PresentationTheme,
+        strings: PresentationStrings
+    ) {
         self.theme = theme
+        self.strings = strings
     }
     
     public static func ==(lhs: AlertComponentEnvironment, rhs: AlertComponentEnvironment) -> Bool {
         if lhs.theme !== rhs.theme {
+            return false
+        }
+        if lhs.strings !== rhs.strings {
             return false
         }
         return true
@@ -30,14 +38,14 @@ private final class AlertScreenComponent: Component {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
     
     let configuration: AlertScreen.Configuration
-    let content: [AnyComponentWithIdentity<AlertComponentEnvironment>]
-    let actions: [AlertScreen.Action]
+    let content: Signal<[AnyComponentWithIdentity<AlertComponentEnvironment>], NoError>
+    let actions: Signal<[AlertScreen.Action], NoError>
     let ready: Promise<Bool>
     
     init(
         configuration: AlertScreen.Configuration,
-        content: [AnyComponentWithIdentity<AlertComponentEnvironment>],
-        actions: [AlertScreen.Action],
+        content: Signal<[AnyComponentWithIdentity<AlertComponentEnvironment>], NoError>,
+        actions: Signal<[AlertScreen.Action], NoError>,
         ready: Promise<Bool>
     ) {
         self.configuration = configuration
@@ -64,8 +72,12 @@ private final class AlertScreenComponent: Component {
         private let containerView = GlassBackgroundContainerView()
         private let backgroundView = GlassBackgroundView()
         
-        private var content: [AnyHashable: ComponentView<AlertComponentEnvironment>] = [:]
-        private var actions: [AnyHashable: ComponentView<AlertComponentEnvironment>] = [:]
+        private var disposable: Disposable?
+        private var content: [AnyComponentWithIdentity<AlertComponentEnvironment>]?
+        private var actions: [AlertScreen.Action]?
+        
+        private var contentItems: [AnyHashable: ComponentView<AlertComponentEnvironment>] = [:]
+        private var actionItems: [AnyHashable: ComponentView<AlertComponentEnvironment>] = [:]
         
         private var highlightedAction: AnyHashable?
         private let hapticFeedback = HapticFeedback()
@@ -114,10 +126,14 @@ private final class AlertScreenComponent: Component {
             preconditionFailure()
         }
         
+        deinit {
+            self.disposable?.dispose()
+        }
+        
         override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
             if gestureRecognizer is ActionSelectionGestureRecognizer {
                 let location = gestureRecognizer.location(in: self.backgroundView)
-                for (_, action) in self.actions {
+                for (_, action) in self.actionItems {
                     if let actionView = action.view, actionView.frame.contains(location) {
                         return true
                     }
@@ -133,7 +149,7 @@ private final class AlertScreenComponent: Component {
             switch gestureRecognizer.state {
             case .began, .changed:
                 var highlightedActionId: AnyHashable?
-                for (actionId, action) in self.actions {
+                for (actionId, action) in self.actionItems {
                     if let actionView = action.view, actionView.frame.contains(location) {
                         highlightedActionId = actionId
                         break
@@ -235,24 +251,24 @@ private final class AlertScreenComponent: Component {
         }
         
         func updateActionHighlight(previous: Bool) {
-            guard let component = self.component else {
+            guard let actions = self.actions else {
                 return
             }
             guard let highlightedAction = self.highlightedAction else {
-                if let action = component.actions.first(where: { $0.type == .default }) {
+                if let action = actions.first(where: { $0.type == .default }) {
                     self.highlightedAction = action.id
-                } else if let action = component.actions.first(where: { $0.type == .defaultDestructive }) {
+                } else if let action = actions.first(where: { $0.type == .defaultDestructive }) {
                     self.highlightedAction = action.id
-                } else if case .verticalReversed = self.effectiveActionLayout, let action = component.actions.last {
+                } else if case .verticalReversed = self.effectiveActionLayout, let action = actions.last {
                     self.highlightedAction = action.id
-                } else if let action = component.actions.first {
+                } else if let action = actions.first {
                     self.highlightedAction = action.id
                 }
                 self.state?.updated(transition: .easeInOut(duration: 0.2))
                 return
             }
             
-            let sequence = previous ? component.actions.reversed() : component.actions
+            let sequence = previous ? actions.reversed() : actions
             var selectNext = false
             var newHighlightedAction: AnyHashable?
             
@@ -273,13 +289,13 @@ private final class AlertScreenComponent: Component {
         }
         
         func performHighlightedAction() {
-            guard let component = self.component else {
+            guard let actions = self.actions else {
                 return
             }
             guard let highlightedAction = self.highlightedAction else {
                 return
             }
-            guard let action = component.actions.first(where: { AnyHashable($0.id) == highlightedAction }) else {
+            guard let action = actions.first(where: { AnyHashable($0.id) == highlightedAction }) else {
                 return
             }
             action.action()
@@ -299,8 +315,23 @@ private final class AlertScreenComponent: Component {
             self.state = state
             
             if self.component == nil {
-                
+                self.disposable = (combineLatest(
+                    queue: Queue.mainQueue(),
+                    component.content,
+                    component.actions
+                ) |> deliverOnMainQueue).start(next: { [weak self] content, actions in
+                    guard let self else {
+                        return
+                    }
+                    self.content = content
+                    self.actions = actions
+                    
+                    if !self.isUpdating {
+                        self.state?.updated(transition: .easeInOut(duration: 0.25))
+                    }
+                })
             }
+            
             self.component = component
             
             var alertHeight: CGFloat = 0.0
@@ -314,44 +345,47 @@ private final class AlertScreenComponent: Component {
             let fullWidthActionSize = CGSize(width: alertWidth - actionSideInset * 2.0, height: AlertActionComponent.actionHeight)
             let halfWidthActionSize = CGSize(width: (alertWidth - actionSideInset * 2.0 - actionSpacing) / 2.0, height: AlertActionComponent.actionHeight)
     
-            let alertEnvironment = AlertComponentEnvironment(theme: environment.theme)
+            let alertEnvironment = AlertComponentEnvironment(theme: environment.theme, strings: environment.strings)
             
             var contentOriginY: CGFloat = 0.0
             var validContentIds: Set<AnyHashable> = Set()
-            for content in component.content {
-                if contentOriginY.isZero {
-                    contentOriginY += contentTopInset
-                } else {
-                    contentOriginY += contentSpacing
-                }
-                validContentIds.insert(content.id)
-                
-                let item: ComponentView<AlertComponentEnvironment>
-                var itemTransition = transition
-                if let current = self.content[content.id] {
-                    item = current
-                } else {
-                    item = ComponentView()
-                    if !transition.animation.isImmediate {
-                        itemTransition = .immediate
+            if let content = self.content {
+                for content in content {
+                    if contentOriginY.isZero {
+                        contentOriginY += contentTopInset
+                    } else {
+                        contentOriginY += contentSpacing
                     }
-                    self.content[content.id] = item
-                }
-                
-                let itemSize = item.update(
-                    transition: itemTransition,
-                    component: content.component,
-                    environment: { alertEnvironment },
-                    containerSize: CGSize(width: alertWidth - contentSideInset * 2.0, height: availableSize.height)
-                )
-                let itemFrame = CGRect(origin: CGPoint(x: contentSideInset, y: contentOriginY), size: itemSize)
-                if let itemView = item.view {
-                    if itemView.superview == nil {
-                        self.backgroundView.contentView.addSubview(itemView)
+                    validContentIds.insert(content.id)
+                    
+                    let item: ComponentView<AlertComponentEnvironment>
+                    var itemTransition = transition
+                    if let current = self.contentItems[content.id] {
+                        item = current
+                    } else {
+                        item = ComponentView()
+                        if !transition.animation.isImmediate {
+                            itemTransition = .immediate
+                        }
+                        self.contentItems[content.id] = item
                     }
-                    transition.setFrame(view: itemView, frame: itemFrame)
+                    
+                    let itemSize = item.update(
+                        transition: itemTransition,
+                        component: content.component,
+                        environment: { alertEnvironment },
+                        containerSize: CGSize(width: alertWidth - contentSideInset * 2.0, height: availableSize.height)
+                    )
+                    let itemFrame = CGRect(origin: CGPoint(x: contentSideInset, y: contentOriginY), size: itemSize)
+                    if let itemView = item.view {
+                        if itemView.superview == nil {
+                            self.backgroundView.contentView.addSubview(itemView)
+                            item.parentState = state
+                        }
+                        transition.setFrame(view: itemView, frame: itemFrame)
+                    }
+                    contentOriginY += itemSize.height
                 }
-                contentOriginY += itemSize.height
             }
             
             if !contentOriginY.isZero {
@@ -359,142 +393,150 @@ private final class AlertScreenComponent: Component {
                 alertHeight += contentBottomInset
             }
             
-            let genericActionTheme = AlertActionComponent.Theme(
-                background: environment.theme.actionSheet.primaryTextColor.withMultipliedAlpha(0.1),
-                foreground: environment.theme.actionSheet.primaryTextColor,
-                secondary: environment.theme.actionSheet.secondaryTextColor,
-                font: .regular
-            )
-            let defaultActionTheme = AlertActionComponent.Theme(
-                background: environment.theme.actionSheet.controlAccentColor,
-                foreground: environment.theme.list.itemCheckColors.foregroundColor,
-                secondary: environment.theme.actionSheet.secondaryTextColor,
-                font: .bold
-            )
-            let destructiveActionTheme = AlertActionComponent.Theme(
-                background: environment.theme.list.itemDestructiveColor,
-                foreground: .white,
-                secondary: .white.withMultipliedAlpha(0.6),
-                font: .regular
-            )
-            let defaultDestructiveActionTheme = AlertActionComponent.Theme(
-                background: environment.theme.list.itemDestructiveColor,
-                foreground: .white,
-                secondary: .white.withMultipliedAlpha(0.6),
-                font: .bold
-            )
-            
-            var effectiveActionLayout: ActionLayout = .horizontal
-            if case .vertical = component.configuration.actionAlignment {
-                effectiveActionLayout = .vertical
-            }
-            var validActionIds: Set<AnyHashable> = Set()
-            for action in component.actions {
-                validActionIds.insert(action.id)
-                
-                let item: ComponentView<AlertComponentEnvironment>
-                var itemTransition = transition
-                if let current = self.actions[action.id] {
-                    item = current
-                } else {
-                    item = ComponentView()
-                    if !transition.animation.isImmediate {
-                        itemTransition = .immediate
-                    }
-                    self.actions[action.id] = item
-                }
-                
-                let actionTheme: AlertActionComponent.Theme
-                switch action.type {
-                case .generic:
-                    actionTheme = genericActionTheme
-                case .default:
-                    actionTheme = defaultActionTheme
-                case .destructive:
-                    actionTheme = destructiveActionTheme
-                case .defaultDestructive:
-                    actionTheme = defaultDestructiveActionTheme
-                }
-                let itemSize = item.update(
-                    transition: itemTransition,
-                    component: AnyComponent(AlertActionComponent(
-                        theme: actionTheme,
-                        title: action.title,
-                        isHighlighted: AnyHashable(action.id) == self.highlightedAction,
-                        progress: action.progressPromise.get()
-                    )),
-                    environment: { alertEnvironment },
-                    containerSize: fullWidthActionSize
+            if let actions = self.actions {
+                let genericActionTheme = AlertActionComponent.Theme(
+                    background: environment.theme.actionSheet.primaryTextColor.withMultipliedAlpha(0.1),
+                    foreground: environment.theme.actionSheet.primaryTextColor,
+                    secondary: environment.theme.actionSheet.secondaryTextColor,
+                    font: .regular
                 )
-                if let itemView = item.view {
-                    if itemView.superview == nil {
-                        self.backgroundView.contentView.addSubview(itemView)
+                let defaultActionTheme = AlertActionComponent.Theme(
+                    background: environment.theme.actionSheet.controlAccentColor,
+                    foreground: environment.theme.list.itemCheckColors.foregroundColor,
+                    secondary: environment.theme.list.itemCheckColors.foregroundColor.withMultipliedAlpha(0.85),
+                    font: .bold
+                )
+                let destructiveActionTheme = AlertActionComponent.Theme(
+                    background: environment.theme.list.itemDestructiveColor,
+                    foreground: .white,
+                    secondary: .white.withMultipliedAlpha(0.6),
+                    font: .regular
+                )
+                let defaultDestructiveActionTheme = AlertActionComponent.Theme(
+                    background: environment.theme.list.itemDestructiveColor,
+                    foreground: .white,
+                    secondary: .white.withMultipliedAlpha(0.6),
+                    font: .bold
+                )
+                
+                var effectiveActionLayout: ActionLayout = .horizontal
+                if case .vertical = component.configuration.actionAlignment {
+                    effectiveActionLayout = .vertical
+                } else if actions.count == 1 {
+                    effectiveActionLayout = .vertical
+                }
+                var actionTransitions: [AnyHashable: ComponentTransition] = [:]
+                var validActionIds: Set<AnyHashable> = Set()
+                for action in actions {
+                    validActionIds.insert(action.id)
+                    
+                    let item: ComponentView<AlertComponentEnvironment>
+                    var itemTransition = transition
+                    if let current = self.actionItems[action.id] {
+                        item = current
+                    } else {
+                        item = ComponentView()
+                        if !transition.animation.isImmediate {
+                            itemTransition = .immediate
+                        }
+                        self.actionItems[action.id] = item
+                    }
+                    actionTransitions[action.id] = itemTransition
+                    
+                    let actionTheme: AlertActionComponent.Theme
+                    switch action.type {
+                    case .generic:
+                        actionTheme = genericActionTheme
+                    case .default:
+                        actionTheme = defaultActionTheme
+                    case .destructive:
+                        actionTheme = destructiveActionTheme
+                    case .defaultDestructive:
+                        actionTheme = defaultDestructiveActionTheme
+                    }
+                    let itemSize = item.update(
+                        transition: itemTransition,
+                        component: AnyComponent(AlertActionComponent(
+                            theme: actionTheme,
+                            title: action.title,
+                            isHighlighted: AnyHashable(action.id) == self.highlightedAction,
+                            isEnabled: action.isEnabled,
+                            progress: action.progress
+                        )),
+                        environment: { alertEnvironment },
+                        containerSize: fullWidthActionSize
+                    )
+                    if let itemView = item.view {
+                        if itemView.superview == nil {
+                            self.backgroundView.contentView.addSubview(itemView)
+                        }
+                    }
+                    
+                    if case .horizontal = effectiveActionLayout, itemSize.width > halfWidthActionSize.width {
+                        effectiveActionLayout = .verticalReversed
                     }
                 }
+                self.effectiveActionLayout = effectiveActionLayout
                 
-                if case .horizontal = effectiveActionLayout, itemSize.width > halfWidthActionSize.width {
-                    effectiveActionLayout = .verticalReversed
+                if !actions.isEmpty {
+                    let actionsHeight: CGFloat
+                    if self.effectiveActionLayout.isVertical {
+                        actionsHeight = fullWidthActionSize.height * CGFloat(actions.count) + actionSpacing * CGFloat(actions.count - 1)
+                    } else {
+                        actionsHeight = fullWidthActionSize.height
+                    }
+                    alertHeight += actionsHeight
+                    alertHeight += actionSideInset
                 }
-            }
-            self.effectiveActionLayout = effectiveActionLayout
-            
-            if !component.actions.isEmpty {
-                let actionsHeight: CGFloat
-                if self.effectiveActionLayout.isVertical {
-                    actionsHeight = fullWidthActionSize.height * CGFloat(component.actions.count) + actionSpacing * CGFloat(component.actions.count - 1)
-                } else {
-                    actionsHeight = fullWidthActionSize.height
-                }
-                alertHeight += actionsHeight
-                alertHeight += actionSideInset
-            }
-            
-            var actionOriginX: CGFloat = actionSideInset
-            var actionOriginY: CGFloat
-            switch self.effectiveActionLayout {
-            case .horizontal, .verticalReversed:
-                actionOriginY = alertHeight - actionSideInset - fullWidthActionSize.height
-            case .vertical:
-                actionOriginY = alertHeight - actionSideInset - fullWidthActionSize.height * CGFloat(component.actions.count) - actionSpacing * CGFloat(component.actions.count - 1)
-            }
-            for action in component.actions {
-                guard let item = self.actions[action.id], let itemView = item.view as? AlertActionComponent.View else {
-                    continue
-                }
-                let itemFrame: CGRect
+                
+                var actionOriginX: CGFloat = actionSideInset
+                var actionOriginY: CGFloat
                 switch self.effectiveActionLayout {
-                case .horizontal:
-                    itemFrame = CGRect(origin: CGPoint(x: actionOriginX, y: actionOriginY), size: halfWidthActionSize)
-                    actionOriginX += halfWidthActionSize.width + actionSpacing
+                case .horizontal, .verticalReversed:
+                    actionOriginY = alertHeight - actionSideInset - fullWidthActionSize.height
                 case .vertical:
-                    itemFrame = CGRect(origin: CGPoint(x: actionOriginX, y: actionOriginY), size: fullWidthActionSize)
-                    actionOriginY += fullWidthActionSize.height + actionSpacing
-                case .verticalReversed:
-                    itemFrame = CGRect(origin: CGPoint(x: actionOriginX, y: actionOriginY), size: fullWidthActionSize)
-                    actionOriginY -= fullWidthActionSize.height + actionSpacing
+                    actionOriginY = alertHeight - actionSideInset - fullWidthActionSize.height * CGFloat( actions.count) - actionSpacing * CGFloat(actions.count - 1)
                 }
-                itemView.applySize(size: itemFrame.size, transition: transition)
-                transition.setFrame(view: itemView, frame: itemFrame)
-            }
-            
-            var removeActionIds: [AnyHashable] = []
-            for (id, item) in self.actions {
-                if !validActionIds.contains(id) {
-                    removeActionIds.append(id)
-                    if let itemView = item.view {
-                        if !transition.animation.isImmediate {
-                            itemView.layer.animateScale(from: 1.0, to: 0.01, duration: 0.25, removeOnCompletion: false)
-                            itemView.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.25, removeOnCompletion: false, completion: { _ in
+                for action in actions {
+                    guard let item = self.actionItems[action.id], let itemView = item.view as? AlertActionComponent.View else {
+                        continue
+                    }
+                    let itemTransition = actionTransitions[action.id] ?? transition
+                    let itemFrame: CGRect
+                    switch self.effectiveActionLayout {
+                    case .horizontal:
+                        itemFrame = CGRect(origin: CGPoint(x: actionOriginX, y: actionOriginY), size: halfWidthActionSize)
+                        actionOriginX += halfWidthActionSize.width + actionSpacing
+                    case .vertical:
+                        itemFrame = CGRect(origin: CGPoint(x: actionOriginX, y: actionOriginY), size: fullWidthActionSize)
+                        actionOriginY += fullWidthActionSize.height + actionSpacing
+                    case .verticalReversed:
+                        itemFrame = CGRect(origin: CGPoint(x: actionOriginX, y: actionOriginY), size: fullWidthActionSize)
+                        actionOriginY -= fullWidthActionSize.height + actionSpacing
+                    }
+                    itemView.applySize(size: itemFrame.size, transition: itemTransition)
+                    itemTransition.setFrame(view: itemView, frame: itemFrame)
+                }
+                
+                var removeActionIds: [AnyHashable] = []
+                for (id, item) in self.actionItems {
+                    if !validActionIds.contains(id) {
+                        removeActionIds.append(id)
+                        if let itemView = item.view {
+                            if !transition.animation.isImmediate {
+                                itemView.layer.animateScale(from: 1.0, to: 0.01, duration: 0.25, removeOnCompletion: false)
+                                itemView.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.25, removeOnCompletion: false, completion: { _ in
+                                    itemView.removeFromSuperview()
+                                })
+                            } else {
                                 itemView.removeFromSuperview()
-                            })
-                        } else {
-                            itemView.removeFromSuperview()
+                            }
                         }
                     }
                 }
-            }
-            for id in removeActionIds {
-                self.actions.removeValue(forKey: id)
+                for id in removeActionIds {
+                    self.actionItems.removeValue(forKey: id)
+                }
             }
             
             let alertSize = CGSize(width: alertWidth, height: alertHeight)
@@ -504,7 +546,12 @@ private final class AlertScreenComponent: Component {
             transition.setFrame(view: self.containerView, frame: bounds)
             self.containerView.update(size: availableSize, isDark: environment.theme.overallDarkAppearance, transition: transition)
             
-            transition.setFrame(view: self.backgroundView, frame: CGRect(origin: CGPoint(x: floorToScreenPixels((availableSize.width - alertSize.width) / 2.0), y: floorToScreenPixels((availableSize.height - alertSize.height) / 2.0)), size: alertSize))
+            var availableHeight = availableSize.height
+            if component.configuration.allowInputInset, environment.inputHeight > 0.0 {
+                availableHeight -= environment.inputHeight
+            }
+                        
+            transition.setFrame(view: self.backgroundView, frame: CGRect(origin: CGPoint(x: floorToScreenPixels((availableSize.width - alertSize.width) / 2.0), y: floorToScreenPixels((availableHeight - alertSize.height) / 2.0)), size: alertSize))
             self.backgroundView.update(size: alertSize, shape: .roundedRect(cornerRadius: 35.0), isDark: environment.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: .white), isInteractive: true, transition: transition)
             
             return availableSize
@@ -520,7 +567,7 @@ private final class AlertScreenComponent: Component {
     }
 }
 
-public class AlertScreen: ViewControllerComponentContainer, KeyShortcutResponder {
+open class AlertScreen: ViewControllerComponentContainer, KeyShortcutResponder {
     public enum ActionAligmnent: Equatable {
         case `default`
         case vertical
@@ -532,21 +579,13 @@ public class AlertScreen: ViewControllerComponentContainer, KeyShortcutResponder
         let allowInputInset: Bool
         
         public init(
-            actionAlignment: ActionAligmnent,
-            dismissOnOutsideTap: Bool,
-            allowInputInset: Bool
+            actionAlignment: ActionAligmnent = .default,
+            dismissOnOutsideTap: Bool = true,
+            allowInputInset: Bool = false
         ) {
             self.actionAlignment = actionAlignment
             self.dismissOnOutsideTap = dismissOnOutsideTap
             self.allowInputInset = allowInputInset
-        }
-        
-        public static var defaultValue: Configuration {
-            return Configuration(
-                actionAlignment: .default,
-                dismissOnOutsideTap: true,
-                allowInputInset: false
-            )
         }
     }
     
@@ -561,20 +600,30 @@ public class AlertScreen: ViewControllerComponentContainer, KeyShortcutResponder
         public let type: ActionType
         public let action: () -> Void
         public let autoDismiss: Bool
-        public let progressPromise: ValuePromise<Bool>
+        public let isEnabled: Signal<Bool, NoError>
+        public let progress: Signal<Bool, NoError>
         
         public init(
+            id: AnyHashable? = nil,
             title: String,
             type: ActionType = .generic,
             action: @escaping () -> Void = {},
             autoDismiss: Bool = true,
-            progressPromise: ValuePromise<Bool> = ValuePromise(false)
+            isEnabled: Signal<Bool, NoError> = .single(true),
+            progress: Signal<Bool, NoError> = .single(false)
         ) {
             self.type = type
             self.title = title
             self.action = action
             self.autoDismiss = autoDismiss
-            self.progressPromise = progressPromise
+            self.isEnabled = isEnabled
+            self.progress = progress
+            
+            if let id {
+                self.id = id
+            } else {
+                self.id = title
+            }
         }
         
         public static func ==(lhs: Action, rhs: Action) -> Bool {
@@ -590,7 +639,7 @@ public class AlertScreen: ViewControllerComponentContainer, KeyShortcutResponder
             return true
         }
         
-        fileprivate let id: Int64 = Int64.random(in: Int64.min ..< Int64.max)
+        fileprivate let id: AnyHashable
     }
     
     private var processedDidAppear: Bool = false
@@ -604,9 +653,9 @@ public class AlertScreen: ViewControllerComponentContainer, KeyShortcutResponder
     public var dismissed: ((Bool) -> Void)?
     
     public init(
-        configuration: Configuration = .defaultValue,
-        content: [AnyComponentWithIdentity<AlertComponentEnvironment>],
-        actions: [Action],
+        configuration: Configuration = Configuration(),
+        contentSignal: Signal<[AnyComponentWithIdentity<AlertComponentEnvironment>], NoError>,
+        actionsSignal: Signal<[Action], NoError>,
         updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)
     ) {
         let componentReady = Promise<Bool>()
@@ -614,8 +663,8 @@ public class AlertScreen: ViewControllerComponentContainer, KeyShortcutResponder
         super.init(
             component: AlertScreenComponent(
                 configuration: configuration,
-                content: content,
-                actions: actions,
+                content: contentSignal,
+                actions: actionsSignal,
                 ready: componentReady
             ),
             navigationBarAppearance: .none,
@@ -629,13 +678,41 @@ public class AlertScreen: ViewControllerComponentContainer, KeyShortcutResponder
     }
     
     public convenience init(
+        configuration: Configuration = Configuration(),
+        content: [AnyComponentWithIdentity<AlertComponentEnvironment>],
+        actions: [Action],
+        updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)
+    ) {
+        self.init(
+            configuration: configuration,
+            contentSignal: .single(content),
+            actionsSignal: .single(actions),
+            updatedPresentationData: updatedPresentationData
+        )
+    }
+    
+    public convenience init(
         context: AccountContext,
-        configuration: Configuration = .defaultValue,
+        configuration: Configuration = Configuration(),
         content: [AnyComponentWithIdentity<AlertComponentEnvironment>],
         actions: [Action]
     ) {
-        let presentationData = context.sharedContext.currentPresentationData.with { $0 }
-        let updatedPresentationDataSignal = context.sharedContext.presentationData
+        self.init(
+            sharedContext: context.sharedContext,
+            configuration: configuration,
+            content: content,
+            actions: actions,
+        )
+    }
+    
+    public convenience init(
+        sharedContext: SharedAccountContext,
+        configuration: Configuration = Configuration(),
+        content: [AnyComponentWithIdentity<AlertComponentEnvironment>],
+        actions: [Action]
+    ) {
+        let presentationData = sharedContext.currentPresentationData.with { $0 }
+        let updatedPresentationDataSignal = sharedContext.presentationData
         self.init(
             configuration: configuration,
             content: content,
@@ -645,7 +722,7 @@ public class AlertScreen: ViewControllerComponentContainer, KeyShortcutResponder
     }
     
     public convenience init(
-        configuration: Configuration = .defaultValue,
+        configuration: Configuration = Configuration(),
         title: String? = nil,
         text: String,
         actions: [Action],
@@ -660,12 +737,14 @@ public class AlertScreen: ViewControllerComponentContainer, KeyShortcutResponder
                 )
             ))
         }
-        content.append(AnyComponentWithIdentity(
-            id: "text",
-            component: AnyComponent(
-                AlertTextComponent(content: .plain(text))
-            )
-        ))
+        if !text.isEmpty {
+            content.append(AnyComponentWithIdentity(
+                id: "text",
+                component: AnyComponent(
+                    AlertTextComponent(content: .plain(text))
+                )
+            ))
+        }
         
         self.init(
             configuration: configuration,
@@ -677,7 +756,7 @@ public class AlertScreen: ViewControllerComponentContainer, KeyShortcutResponder
     
     public convenience init(
         context: AccountContext,
-        configuration: Configuration = .defaultValue,
+        configuration: Configuration = Configuration(),
         title: String? = nil,
         text: String,
         actions: [Action]
@@ -700,10 +779,6 @@ public class AlertScreen: ViewControllerComponentContainer, KeyShortcutResponder
     deinit {
     }
     
-    override public func containerLayoutUpdated(_ layout: ContainerViewLayout, transition: ContainedViewLayoutTransition) {
-        super.containerLayoutUpdated(layout, transition: transition)
-    }
-    
     override public func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         
@@ -719,7 +794,7 @@ public class AlertScreen: ViewControllerComponentContainer, KeyShortcutResponder
         super.dismiss()
     }
     
-    override public func dismiss(completion: (() -> Void)? = nil) {
+    override open func dismiss(completion: (() -> Void)? = nil) {
         if !self.processedDidDisappear {
             self.processedDidDisappear = true
             

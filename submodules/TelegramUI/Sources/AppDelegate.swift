@@ -2422,15 +2422,25 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
                 if let proxyData = parseProxyUrl(sharedContext: sharedContext, url: url) {
                     authContext.rootController.view.endEditing(true)
                     let presentationData = authContext.sharedContext.currentPresentationData.with { $0 }
-                    let controller = ProxyServerActionSheetController(presentationData: presentationData, accountManager: authContext.sharedContext.accountManager, postbox: authContext.account.postbox, network: authContext.account.network, server: proxyData, updatedPresentationData: nil)
+                    let controller = ProxyServerActionSheetController(sharedContext: authContext.sharedContext, presentationData: presentationData, accountManager: authContext.sharedContext.accountManager, postbox: authContext.account.postbox, network: authContext.account.network, server: proxyData, updatedPresentationData: nil)
                     authContext.rootController.currentWindow?.present(controller, on: PresentationSurfaceLevel.root, blockInteraction: false, completion: {})
                 } else if let secureIdData = parseSecureIdUrl(url) {
                     let presentationData = authContext.sharedContext.currentPresentationData.with { $0 }
-                    authContext.rootController.currentWindow?.present(standardTextAlertController(theme: AlertControllerTheme(presentationData: presentationData), title: nil, text: presentationData.strings.Passport_NotLoggedInMessage, actions: [TextAlertAction(type: .genericAction, title: presentationData.strings.Calls_NotNow, action: {
-                        if let callbackUrl = URL(string: secureIdCallbackUrl(with: secureIdData.callbackUrl, peerId: secureIdData.peerId, result: .cancel, parameters: [:])) {
-                            UIApplication.shared.open(callbackUrl, options: [:], completionHandler: nil)
-                        }
-                    }), TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]), on: .root, blockInteraction: false, completion: {})
+                    
+                    let alertController = textAlertController(
+                        sharedContext: authContext.sharedContext,
+                        title: nil,
+                        text: presentationData.strings.Passport_NotLoggedInMessage,
+                        actions: [
+                            TextAlertAction(type: .genericAction, title: presentationData.strings.Calls_NotNow, action: {
+                                if let callbackUrl = URL(string: secureIdCallbackUrl(with: secureIdData.callbackUrl, peerId: secureIdData.peerId, result: .cancel, parameters: [:])) {
+                                    UIApplication.shared.open(callbackUrl, options: [:], completionHandler: nil)
+                                }
+                            }),
+                            TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})
+                        ]
+                    )
+                    authContext.rootController.currentWindow?.present(alertController, on: .root, blockInteraction: false, completion: {})
                 }
             }
         })
@@ -2965,12 +2975,18 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
                     }
                     if currentVersion < version {
                         let presentationData = sharedContext.sharedContext.currentPresentationData.with { $0 }
-                        sharedContext.sharedContext.mainWindow?.present(standardTextAlertController(theme: AlertControllerTheme(presentationData: presentationData), title: nil, text: "A new build is available", actions: [
-                            TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: {}),
-                            TextAlertAction(type: .defaultAction, title: "Show", action: {
-                                sharedContext.sharedContext.applicationBindings.openUrl(releaseNotesUrl)
-                            })
-                        ]), on: .root, blockInteraction: false, completion: {})
+                        let alertController = textAlertController(
+                            sharedContext: sharedContext.sharedContext,
+                            title: "A new build is available",
+                            text: "",
+                            actions: [
+                                TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: {}),
+                                TextAlertAction(type: .defaultAction, title: "Show", action: {
+                                    sharedContext.sharedContext.applicationBindings.openUrl(releaseNotesUrl)
+                                })
+                            ]
+                        )
+                        sharedContext.sharedContext.mainWindow?.present(alertController, on: .root, blockInteraction: false, completion: {})
                     }
                 }))
             })

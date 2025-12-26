@@ -1437,7 +1437,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
             }
             
             if asFile && hasHeic {
-                controller.present(standardTextAlertController(theme: AlertControllerTheme(presentationData: self.presentationData), title: nil, text: self.presentationData.strings.MediaPicker_JpegConversionText, actions: [TextAlertAction(type: .defaultAction, title: self.presentationData.strings.MediaPicker_KeepHeic, action: {
+                controller.present(textAlertController(context: controller.context, updatedPresentationData: self.controller?.updatedPresentationData, title: nil, text: self.presentationData.strings.MediaPicker_JpegConversionText, actions: [TextAlertAction(type: .defaultAction, title: self.presentationData.strings.MediaPicker_KeepHeic, action: {
                     proceed(false)
                 }), TextAlertAction(type: .genericAction, title: self.presentationData.strings.MediaPicker_ConvertToJpeg, action: {
                     proceed(true)
@@ -2043,26 +2043,26 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
             
             if let _ = item as? TGMediaPickerGalleryPhotoItem {
                 if self.bannedSendPhotos != nil {
-                    self.present(standardTextAlertController(theme: AlertControllerTheme(presentationData: self.presentationData), title: nil, text: self.presentationData.strings.Chat_SendNotAllowedPhoto, actions: [TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+                    self.present(textAlertController(context: self.context, updatedPresentationData: self.updatedPresentationData, title: nil, text: self.presentationData.strings.Chat_SendNotAllowedPhoto, actions: [TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
                     
                     return false
                 }
             } else if let _ = item as? TGMediaPickerGalleryVideoItem {
                 if self.bannedSendVideos != nil {
-                    self.present(standardTextAlertController(theme: AlertControllerTheme(presentationData: self.presentationData), title: nil, text: self.presentationData.strings.Chat_SendNotAllowedVideo, actions: [TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+                    self.present(textAlertController(context: self.context, updatedPresentationData: self.updatedPresentationData, title: nil, text: self.presentationData.strings.Chat_SendNotAllowedVideo, actions: [TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
                     
                     return false
                 }
             } else if let asset = item as? TGMediaAsset {
                 if asset.isVideo {
                     if self.bannedSendVideos != nil {
-                        self.present(standardTextAlertController(theme: AlertControllerTheme(presentationData: self.presentationData), title: nil, text: self.presentationData.strings.Chat_SendNotAllowedVideo, actions: [TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+                        self.present(textAlertController(context: self.context, updatedPresentationData: self.updatedPresentationData, title: nil, text: self.presentationData.strings.Chat_SendNotAllowedVideo, actions: [TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
                         
                         return false
                     }
                 } else {
                     if self.bannedSendPhotos != nil {
-                        self.present(standardTextAlertController(theme: AlertControllerTheme(presentationData: self.presentationData), title: nil, text: self.presentationData.strings.Chat_SendNotAllowedPhoto, actions: [TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+                        self.present(textAlertController(context: self.context, updatedPresentationData: self.updatedPresentationData, title: nil, text: self.presentationData.strings.Chat_SendNotAllowedPhoto, actions: [TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
                         
                         return false
                     }
@@ -2221,26 +2221,26 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
             if let self = self, let selectionState = self.interaction?.selectionState {
                 if let _ = item as? TGMediaPickerGalleryPhotoItem {
                     if self.bannedSendPhotos != nil {
-                        self.present(standardTextAlertController(theme: AlertControllerTheme(presentationData: self.presentationData), title: nil, text: self.presentationData.strings.Chat_SendNotAllowedPhoto, actions: [TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+                        self.present(textAlertController(context: self.context, updatedPresentationData: self.updatedPresentationData, title: nil, text: self.presentationData.strings.Chat_SendNotAllowedPhoto, actions: [TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
                         
                         return false
                     }
                 } else if let _ = item as? TGMediaPickerGalleryVideoItem {
                     if self.bannedSendVideos != nil {
-                        self.present(standardTextAlertController(theme: AlertControllerTheme(presentationData: self.presentationData), title: nil, text: self.presentationData.strings.Chat_SendNotAllowedVideo, actions: [TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+                        self.present(textAlertController(context: self.context, updatedPresentationData: self.updatedPresentationData, title: nil, text: self.presentationData.strings.Chat_SendNotAllowedVideo, actions: [TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
                         
                         return false
                     }
                 } else if let asset = item as? TGMediaAsset {
                     if asset.isVideo {
                         if self.bannedSendVideos != nil {
-                            self.present(standardTextAlertController(theme: AlertControllerTheme(presentationData: self.presentationData), title: nil, text: self.presentationData.strings.Chat_SendNotAllowedVideo, actions: [TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+                            self.present(textAlertController(context: self.context, updatedPresentationData: self.updatedPresentationData, title: nil, text: self.presentationData.strings.Chat_SendNotAllowedVideo, actions: [TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
                             
                             return false
                         }
                     } else {
                         if self.bannedSendPhotos != nil {
-                            self.present(standardTextAlertController(theme: AlertControllerTheme(presentationData: self.presentationData), title: nil, text: self.presentationData.strings.Chat_SendNotAllowedPhoto, actions: [TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+                            self.present(textAlertController(context: self.context, updatedPresentationData: self.updatedPresentationData, title: nil, text: self.presentationData.strings.Chat_SendNotAllowedPhoto, actions: [TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
                             
                             return false
                         }

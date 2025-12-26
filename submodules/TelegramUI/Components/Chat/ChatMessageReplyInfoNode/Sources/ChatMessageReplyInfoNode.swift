@@ -85,6 +85,7 @@ public class ChatMessageReplyInfoNode: ASDisplayNode {
         public let quote: (quote: EngineMessageReplyQuote, isQuote: Bool)?
         public let todoItemId: Int32?
         public let story: StoryId?
+        public let isSummarized: Bool
         public let parentMessage: Message
         public let constrainedSize: CGSize
         public let animationCache: AnimationCache?
@@ -101,6 +102,7 @@ public class ChatMessageReplyInfoNode: ASDisplayNode {
             quote: (quote: EngineMessageReplyQuote, isQuote: Bool)?,
             todoItemId: Int32?,
             story: StoryId?,
+            isSummarized: Bool,
             parentMessage: Message,
             constrainedSize: CGSize,
             animationCache: AnimationCache?,
@@ -116,6 +118,7 @@ public class ChatMessageReplyInfoNode: ASDisplayNode {
             self.quote = quote
             self.todoItemId = todoItemId
             self.story = story
+            self.isSummarized = isSummarized
             self.parentMessage = parentMessage
             self.constrainedSize = constrainedSize
             self.animationCache = animationCache
@@ -437,7 +440,7 @@ public class ChatMessageReplyInfoNode: ASDisplayNode {
             }
             
             var textLeftInset: CGFloat = 0.0
-            let messageText: NSAttributedString
+            var messageText: NSAttributedString
             var todoItemCompleted: Bool?
             if let todoItemId = arguments.todoItemId, let todo = arguments.message?.media.first(where: { $0 is TelegramMediaTodo }) as? TelegramMediaTodo, let todoItem = todo.items.first(where: { $0.id == todoItemId }) {
                 messageText = stringWithAppliedEntities(todoItem.text, entities: todoItem.entities, baseColor: textColor, linkColor: textColor, baseFont: textFont, linkFont: textFont, boldFont: textFont, italicFont: textFont, boldItalicFont: textFont, fixedFont: textFont, blockQuoteFont: textFont, underlineLinks: false, message: nil)
@@ -606,6 +609,12 @@ public class ChatMessageReplyInfoNode: ASDisplayNode {
                 additionalTitleWidth += 16.0
             }
             adjustedConstrainedTextSize.width -= textLeftInset
+            
+            if arguments.isSummarized {
+                //TODO:localize
+                titleString = NSAttributedString(string: "AI Summary", font: titleFont, textColor: titleColor)
+                messageText = NSAttributedString(string: "Tap to see original text", font: textFont, textColor: titleColor)
+            }
             
             let (titleLayout, titleApply) = titleNodeLayout(TextNodeLayoutArguments(attributedString: titleString, backgroundColor: nil, maximumNumberOfLines: maxTitleNumberOfLines, truncationType: .end, constrainedSize: CGSize(width: contrainedTextSize.width - additionalTitleWidth, height: contrainedTextSize.height), alignment: .natural, cutout: nil, insets: textInsets))
             if isExpiredStory || isStory {

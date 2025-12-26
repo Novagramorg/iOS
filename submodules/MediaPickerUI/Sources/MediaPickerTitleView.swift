@@ -260,7 +260,7 @@ final class MediaPickerTitleView: UIView {
             totalHeight += subtitleSize.height
         }
         
-        let verticalOffset: CGFloat = self.glass ? 3.0 : 0.0
+        let verticalOffset: CGFloat = self.glass ? -1.0 : 0.0
         let arrowOffset: CGFloat = self.glass ? 1.0 : 5.0
         
         var totalWidth = titleSize.width

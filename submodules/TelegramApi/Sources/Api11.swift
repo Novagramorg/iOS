@@ -898,10 +898,17 @@ public extension Api {
 }
 public extension Api {
     enum InputPasskeyCredential: TypeConstructorDescription {
+        case inputPasskeyCredentialFirebasePNV(pnvToken: String)
         case inputPasskeyCredentialPublicKey(id: String, rawId: String, response: Api.InputPasskeyResponse)
     
     public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
     switch self {
+                case .inputPasskeyCredentialFirebasePNV(let pnvToken):
+                    if boxed {
+                        buffer.appendInt32(1528613672)
+                    }
+                    serializeString(pnvToken, buffer: buffer, boxed: false)
+                    break
                 case .inputPasskeyCredentialPublicKey(let id, let rawId, let response):
                     if boxed {
                         buffer.appendInt32(1009235855)
@@ -915,11 +922,24 @@ public extension Api {
     
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
+                case .inputPasskeyCredentialFirebasePNV(let pnvToken):
+                return ("inputPasskeyCredentialFirebasePNV", [("pnvToken", pnvToken as Any)])
                 case .inputPasskeyCredentialPublicKey(let id, let rawId, let response):
                 return ("inputPasskeyCredentialPublicKey", [("id", id as Any), ("rawId", rawId as Any), ("response", response as Any)])
     }
     }
     
+        public static func parse_inputPasskeyCredentialFirebasePNV(_ reader: BufferReader) -> InputPasskeyCredential? {
+            var _1: String?
+            _1 = parseString(reader)
+            let _c1 = _1 != nil
+            if _c1 {
+                return Api.InputPasskeyCredential.inputPasskeyCredentialFirebasePNV(pnvToken: _1!)
+            }
+            else {
+                return nil
+            }
+        }
         public static func parse_inputPasskeyCredentialPublicKey(_ reader: BufferReader) -> InputPasskeyCredential? {
             var _1: String?
             _1 = parseString(reader)

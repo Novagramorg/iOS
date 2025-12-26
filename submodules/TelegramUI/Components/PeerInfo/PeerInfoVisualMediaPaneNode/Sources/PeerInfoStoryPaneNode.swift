@@ -6,6 +6,7 @@ import TelegramCore
 import SwiftSignalKit
 import Postbox
 import TelegramPresentationData
+import PresentationDataUtils
 import AccountContext
 import ContextUI
 import PhotoResources
@@ -5017,7 +5018,7 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
     
     private func presentAddStoryFolder(addItems: [EngineStoryItem] = []) {
         let promptController = promptController(
-            sharedContext: self.context.sharedContext,
+            context: self.context,
             updatedPresentationData: nil,
             text: self.presentationData.strings.Stories_CreateAlbum_Title,
             titleFont: .bold,
@@ -5050,7 +5051,7 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
     
     private func presentRenameStoryFolder(id: Int64, title: String) {
         let promptController = promptController(
-            sharedContext: self.context.sharedContext,
+            context: self.context,
             updatedPresentationData: nil,
             text: self.presentationData.strings.Stories_EditAlbum_Title,
             titleFont: .bold,
@@ -5177,14 +5178,14 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
     }
     
     public func presentUnableToAddMorePreviewsAlert() {
-        self.parentController?.present(standardTextAlertController(theme: AlertControllerTheme(presentationData: self.presentationData), title: nil, text: self.presentationData.strings.BotPreviews_AlertTooManyPreviews(Int32(self.maxBotPreviewCount)), actions: [
+        self.parentController?.present(textAlertController(context: self.context, title: nil, text: self.presentationData.strings.BotPreviews_AlertTooManyPreviews(Int32(self.maxBotPreviewCount)), actions: [
             TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Common_OK, action: {
             })
         ], parseMarkdown: true), in: .window(.root))
     }
     
     public func presentDeleteBotPreviewLanguage() {
-        self.parentController?.present(standardTextAlertController(theme: AlertControllerTheme(presentationData: self.presentationData), title: self.presentationData.strings.BotPreviews_DeleteTranslationAlert_Title, text: self.presentationData.strings.BotPreviews_DeleteTranslationAlert_Text, actions: [
+        self.parentController?.present(textAlertController(context: self.context, title: self.presentationData.strings.BotPreviews_DeleteTranslationAlert_Title, text: self.presentationData.strings.BotPreviews_DeleteTranslationAlert_Text, actions: [
             TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Common_Cancel, action: {
             }),
             TextAlertAction(type: .destructiveAction, title: self.presentationData.strings.Common_OK, action: { [weak self] in
