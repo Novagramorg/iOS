@@ -1269,7 +1269,10 @@ private final class ChatFolderLinkPreviewScreenComponent: Component {
             
             if let controller = environment.controller() {
                 let subLayout = ContainerViewLayout(
-                    size: availableSize, metrics: environment.metrics, deviceMetrics: environment.deviceMetrics, intrinsicInsets: UIEdgeInsets(top: 0.0, left: sideInset - 12.0, bottom: bottomPanelHeight, right: sideInset),
+                    size: availableSize,
+                    metrics: environment.metrics,
+                    deviceMetrics: environment.deviceMetrics,
+                    intrinsicInsets: UIEdgeInsets(top: 0.0, left: sideInset - 12.0, bottom: bottomPanelHeight, right: sideInset),
                     safeInsets: UIEdgeInsets(),
                     additionalInsets: UIEdgeInsets(),
                     statusBarHeight: nil,

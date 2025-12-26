@@ -49,7 +49,7 @@ public final class ChatRecentActionsController: TelegramBaseController {
         
         self.titleView = CounterControllerTitleView(theme: self.presentationData.theme)
         
-        super.init(context: context, navigationBarPresentationData: NavigationBarPresentationData(presentationData: self.presentationData), mediaAccessoryPanelVisibility: .specific(size: .compact), locationBroadcastPanelSource: .none, groupCallPanelSource: .none)
+        super.init(context: context, navigationBarPresentationData: NavigationBarPresentationData(presentationData: self.presentationData))
         
         self.automaticallyControlPresentationContextLayout = false
         

@@ -304,7 +304,9 @@ public final class SearchBarPlaceholderContentView: UIView {
             }
             ComponentTransition(transition).setAlpha(view: glassBackgroundView, alpha: backgroundAlpha)
             let isDark = params.backgroundColor.hsb.b < 0.5
-            glassBackgroundView.update(size: backgroundFrame.size, cornerRadius: backgroundFrame.height * 0.5, isDark: isDark, tintColor: .init(kind: .panel, color: UIColor(white: isDark ? 0.0 : 1.0, alpha: 0.6)), isInteractive: true, transition: ComponentTransition(transition))
+            if params.isActive {
+                glassBackgroundView.update(size: backgroundFrame.size, cornerRadius: backgroundFrame.height * 0.5, isDark: isDark, tintColor: .init(kind: .panel, color: UIColor(white: isDark ? 0.0 : 1.0, alpha: 0.6)), isInteractive: true, transition: ComponentTransition(transition))
+            }
             
             if params.isActive {
                 let transition = ComponentTransition(transition)

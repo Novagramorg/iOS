@@ -10,6 +10,7 @@ import AccountContext
 import TelegramCore
 import StoryPeerListComponent
 import EdgeEffect
+import GlassBackgroundComponent
 
 private func searchScrollHeightValue() -> CGFloat {
     return 54.0
@@ -186,6 +187,7 @@ public final class ChatListNavigationBar: Component {
     public final class View: UIView {
         private let edgeEffectView: EdgeEffectView
         
+        private let headerBackgroundContainer: GlassBackgroundContainerView
         public let headerContent = ComponentView<Empty>()
         
         public private(set) var searchContentNode: NavigationBarSearchContentNode?
@@ -225,6 +227,9 @@ public final class ChatListNavigationBar: Component {
         
         override public init(frame: CGRect) {
             self.edgeEffectView = EdgeEffectView()
+            
+            self.headerBackgroundContainer = GlassBackgroundContainerView()
+            self.headerBackgroundContainer.layer.anchorPoint = CGPoint()
             
             self.bottomContentsContainer = UIView()
             self.bottomContentsContainer.layer.anchorPoint = CGPoint()
@@ -495,9 +500,12 @@ public final class ChatListNavigationBar: Component {
             if let headerContentView = self.headerContent.view {
                 if headerContentView.superview == nil {
                     headerContentView.layer.anchorPoint = CGPoint()
-                    self.addSubview(headerContentView)
+                    self.addSubview(self.headerBackgroundContainer)
+                    self.headerBackgroundContainer.contentView.addSubview(headerContentView)
                 }
-                transition.setFrameWithAdditivePosition(view: headerContentView, frame: headerContentFrame)
+                transition.setFrameWithAdditivePosition(view: self.headerBackgroundContainer, frame: headerContentFrame)
+                self.headerBackgroundContainer.update(size: headerContentFrame.size, isDark: component.theme.overallDarkAppearance, transition: transition)
+                transition.setFrameWithAdditivePosition(view: headerContentView, frame: CGRect(origin: CGPoint(), size: headerContentFrame.size))
                 
                 if (component.activeSearch != nil) != (headerContentView.alpha == 0.0) {
                     headerContentView.alpha = component.activeSearch != nil ? 0.0 : 1.0

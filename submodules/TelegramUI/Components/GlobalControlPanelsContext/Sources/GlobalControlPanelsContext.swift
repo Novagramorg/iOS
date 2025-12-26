@@ -82,20 +82,76 @@ public final class GlobalControlPanelsContext {
         case accountFreeze
         case link(id: String, url: String, title: ServerSuggestionInfo.Item.Text, subtitle: ServerSuggestionInfo.Item.Text)
     }
+    
+    public final class GroupCall: Equatable {
+        public let peerId: EnginePeer.Id
+        public let isChannel: Bool
+        public let info: GroupCallInfo
+        public let topParticipants: [GroupCallParticipantsContext.Participant]
+        public let participantCount: Int
+        public let activeSpeakers: Set<EnginePeer.Id>
+        public let groupCall: PresentationGroupCall?
+        
+        public init(
+            peerId: EnginePeer.Id,
+            isChannel: Bool,
+            info: GroupCallInfo,
+            topParticipants: [GroupCallParticipantsContext.Participant],
+            participantCount: Int,
+            activeSpeakers: Set<EnginePeer.Id>,
+            groupCall: PresentationGroupCall?
+        ) {
+            self.peerId = peerId
+            self.isChannel = isChannel
+            self.info = info
+            self.topParticipants = topParticipants
+            self.participantCount = participantCount
+            self.activeSpeakers = activeSpeakers
+            self.groupCall = groupCall
+        }
+        
+        public static func ==(lhs: GroupCall, rhs: GroupCall) -> Bool {
+            if lhs.peerId != rhs.peerId {
+                return false
+            }
+            if lhs.isChannel != rhs.isChannel {
+                return false
+            }
+            if lhs.info != rhs.info {
+                return false
+            }
+            if lhs.topParticipants != rhs.topParticipants {
+                return false
+            }
+            if lhs.participantCount != rhs.participantCount {
+                return false
+            }
+            if lhs.activeSpeakers != rhs.activeSpeakers {
+                return false
+            }
+            if lhs.groupCall !== rhs.groupCall {
+                return false
+            }
+            return true
+        }
+    }
 
     public final class State {
         public let mediaPlayback: MediaPlayback?
         public let liveLocation: LiveLocation?
         public let chatListNotice: ChatListNotice?
+        public let groupCall: GroupCall?
 
         public init(
             mediaPlayback: MediaPlayback?,
             liveLocation: LiveLocation?,
-            chatListNotice: ChatListNotice?
+            chatListNotice: ChatListNotice?,
+            groupCall: GroupCall?
         ) {
             self.mediaPlayback = mediaPlayback
             self.liveLocation = liveLocation
             self.chatListNotice = chatListNotice
+            self.groupCall = groupCall
         }
     }
 
@@ -120,12 +176,15 @@ public final class GlobalControlPanelsContext {
         
         var chatListNotice: ChatListNotice?
         var suggestedChatListNoticeDisposable: Disposable?
+        
+        var groupCall: GroupCall?
+        var currentGroupCallDisposable: Disposable?
 
-        init(queue: Queue, context: AccountContext, mediaPlayback: Bool, liveLocationMode: LiveLocationMode?, groupCalls: GroupCallPanelSource?, chatListNotices: Bool) {
+        init(queue: Queue, context: AccountContext, mediaPlayback: Bool, liveLocationMode: LiveLocationMode?, groupCalls: EnginePeer.Id?, chatListNotices: Bool) {
             self.queue = queue
             self.context = context
             
-            self.stateValue = State(mediaPlayback: nil, liveLocation: nil, chatListNotice: nil)
+            self.stateValue = State(mediaPlayback: nil, liveLocation: nil, chatListNotice: nil, groupCall: nil)
 
             if mediaPlayback {
                 self.mediaStatusDisposable = (context.sharedContext.mediaManager.globalMediaPlayerState
@@ -417,12 +476,119 @@ public final class GlobalControlPanelsContext {
                     }
                 })
             }
+            
+            if let callManager = context.sharedContext.callManager, let peerId = groupCalls {
+                let currentGroupCall: Signal<PresentationGroupCall?, NoError> = callManager.currentGroupCallSignal
+                |> distinctUntilChanged(isEqual: { lhs, rhs in
+                    return lhs == rhs
+                })
+                |> map { call -> PresentationGroupCall? in
+                    guard case let .group(call) = call else {
+                        return nil
+                    }
+                    guard call.peerId == peerId && call.account.peerId == context.account.peerId else {
+                        return nil
+                    }
+                    return call
+                }
+                
+                let availableGroupCall: Signal<AccountGroupCallContextImpl.GroupCallPanelData?, NoError>
+                if let peerId = groupCalls {
+                    availableGroupCall = context.account.viewTracker.peerView(peerId)
+                    |> map { peerView -> (CachedChannelData.ActiveCall?, EnginePeer?) in
+                        let peer = peerView.peers[peerId].flatMap(EnginePeer.init)
+                        if let cachedData = peerView.cachedData as? CachedChannelData {
+                            return (cachedData.activeCall, peer)
+                        } else if let cachedData = peerView.cachedData as? CachedGroupData {
+                            return (cachedData.activeCall, peer)
+                        } else {
+                            return (nil, peer)
+                        }
+                    }
+                    |> distinctUntilChanged(isEqual: { lhs, rhs in
+                        return lhs.0 == rhs.0
+                    })
+                    |> mapToSignal { activeCall, peer -> Signal<AccountGroupCallContextImpl.GroupCallPanelData?, NoError> in
+                        guard let activeCall = activeCall else {
+                            return .single(nil)
+                        }
+
+                        var isChannel = false
+                        if let peer = peer, case let .channel(channel) = peer, case .broadcast = channel.info {
+                            isChannel = true
+                        }
+                        
+                        return Signal { [weak context] subscriber in
+                            guard let context = context, let callContextCache = context.cachedGroupCallContexts as? AccountGroupCallContextCacheImpl else {
+                                return EmptyDisposable
+                            }
+                            
+                            let disposable = MetaDisposable()
+                            
+                            callContextCache.impl.syncWith { impl in
+                                let callContext = impl.get(account: context.account, engine: context.engine, peerId: peerId, isChannel: isChannel, call: EngineGroupCallDescription(activeCall))
+                                disposable.set((callContext.context.panelData
+                                |> deliverOnMainQueue).start(next: { panelData in
+                                    callContext.keep()
+                                    var updatedPanelData = panelData
+                                    if let panelData {
+                                        var updatedInfo = panelData.info
+                                        updatedInfo.subscribedToScheduled = activeCall.subscribedToScheduled
+                                        updatedPanelData = panelData.withInfo(updatedInfo)
+                                    }
+                                    subscriber.putNext(updatedPanelData)
+                                }))
+                            }
+                            
+                            return ActionDisposable {
+                                disposable.dispose()
+                            }
+                        }
+                        |> runOn(.mainQueue())
+                    }
+                } else {
+                    availableGroupCall = .single(nil)
+                }
+                
+                let previousCurrentGroupCall = Atomic<PresentationGroupCall?>(value: nil)
+                self.currentGroupCallDisposable = combineLatest(queue: .mainQueue(), availableGroupCall, currentGroupCall).start(next: { [weak self] availableState, currentGroupCall in
+                    guard let self else {
+                        return
+                    }
+                    
+                    let previousCurrentGroupCall = previousCurrentGroupCall.swap(currentGroupCall)
+                    
+                    let panelData: AccountGroupCallContextImpl.GroupCallPanelData?
+                    if previousCurrentGroupCall != nil && currentGroupCall == nil && availableState?.participantCount == 1 {
+                        panelData = nil
+                    } else {
+                        panelData = currentGroupCall != nil || (availableState?.participantCount == 0 && availableState?.info.scheduleTimestamp == nil && availableState?.info.isStream == false) ? nil : availableState
+                    }
+                    
+                    let groupCall = panelData.flatMap { panelData in
+                        return GroupCall(
+                            peerId: panelData.peerId,
+                            isChannel: panelData.isChannel,
+                            info: panelData.info,
+                            topParticipants: panelData.topParticipants,
+                            participantCount: panelData.participantCount,
+                            activeSpeakers: panelData.activeSpeakers,
+                            groupCall: panelData.groupCall
+                        )
+                    }
+                    if self.groupCall != groupCall {
+                        self.groupCall = groupCall
+                        self.notifyStateUpdated()
+                    }
+                })
+            }
         }
 
         deinit {
             self.mediaStatusDisposable?.dispose()
             self.liveLocationDisposable?.dispose()
             self.suggestedChatListNoticeDisposable?.dispose()
+            self.currentGroupCallDisposable?.dispose()
         }
         
         private func notifyStateUpdated() {
@@ -448,7 +614,8 @@ public final class GlobalControlPanelsContext {
                         version: liveLocationState.version
                     )
                 },
-                chatListNotice: self.chatListNotice
+                chatListNotice: self.chatListNotice,
+                groupCall: self.groupCall
             )
             self.statePipe.putNext(self.stateValue)
         }
@@ -493,7 +660,7 @@ public final class GlobalControlPanelsContext {
         }
     }
 
-    public init(context: AccountContext, mediaPlayback: Bool, liveLocationMode: LiveLocationMode?, groupCalls: GroupCallPanelSource?, chatListNotices: Bool) {
+    public init(context: AccountContext, mediaPlayback: Bool, liveLocationMode: LiveLocationMode?, groupCalls: EnginePeer.Id?, chatListNotices: Bool) {
         self.impl = QueueLocalObject(queue: .mainQueue(), generate: {
             return Impl(queue: .mainQueue(), context: context, mediaPlayback: mediaPlayback, liveLocationMode: liveLocationMode, groupCalls: groupCalls, chatListNotices: chatListNotices)
         })
@@ -502,6 +669,30 @@ public final class GlobalControlPanelsContext {
     public func dismissChatListNotice(parentController: ViewController, notice: ChatListNotice) {
         self.impl.with { impl in
             impl.dismissChatListNotice(parentController: parentController, notice: notice)
+        }
+    }
+    
+    public func setTempVoicePlaylistEnded(_ f: (() -> Void)?) {
+        self.impl.with { impl in
+            return impl.tempVoicePlaylistEnded = f
+        }
+    }
+    
+    public func setTempVoicePlaylistItemChanged(_ f: ((SharedMediaPlaylistItem?, SharedMediaPlaylistItem?) -> Void)?) {
+        self.impl.with { impl in
+            return impl.tempVoicePlaylistItemChanged = f
+        }
+    }
+    
+    public var tempVoicePlaylistCurrentItem: SharedMediaPlaylistItem? {
+        return self.impl.syncWith { impl in
+            return impl.tempVoicePlaylistCurrentItem
+        }
+    }
+    
+    public var playlistStateAndType: (SharedMediaPlaylistItem, SharedMediaPlaylistItem?, SharedMediaPlaylistItem?, MusicPlaybackSettingsOrder, MediaManagerPlayerType, Account, SharedMediaPlaylistLocation, Int)? {
+        return self.impl.syncWith { impl in
+            return impl.playlistStateAndType
         }
     }
 }

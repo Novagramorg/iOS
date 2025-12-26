@@ -28,6 +28,7 @@ import ContextUI
 import LottieComponent
 import GiftLoadingShimmerView
 import EdgeEffect
+import GlassBackgroundComponent
 
 private let minimumCountToDisplayFilters = 18
 
@@ -84,7 +85,8 @@ final class GiftStoreScreenComponent: Component {
         private let edgeEffectView: EdgeEffectView
         private let cancelButton = ComponentView<Empty>()
         private let sortButton = ComponentView<Empty>()
-                
+        
+        private let balanceBackgroundView: GlassBackgroundView
         private let balanceTitle = ComponentView<Empty>()
         private let balanceValue = ComponentView<Empty>()
         private let balanceIcon = ComponentView<Empty>()
@@ -109,6 +111,8 @@ final class GiftStoreScreenComponent: Component {
         private var environment: EnvironmentType?
         
         override init(frame: CGRect) {
+            self.balanceBackgroundView = GlassBackgroundView()
+            
             self.scrollView = ScrollView()
             self.scrollView.showsVerticalScrollIndicator = true
             self.scrollView.showsHorizontalScrollIndicator = false
@@ -177,7 +181,7 @@ final class GiftStoreScreenComponent: Component {
             let availableWidth = self.scrollView.bounds.width
             let availableHeight = self.scrollView.bounds.height
             
-            var topInset = environment.navigationHeight + 39.0
+            var topInset = environment.navigationHeight + 53.0
             if let initialCount = self.initialCount, initialCount < minimumCountToDisplayFilters {
                 topInset = environment.navigationHeight
             }
@@ -889,13 +893,12 @@ final class GiftStoreScreenComponent: Component {
             var contentHeight: CGFloat = 0.0
             contentHeight += environment.navigationHeight
             
-            var topPanelHeight = environment.navigationHeight + 39.0
+            var topPanelHeight = environment.navigationHeight + 53.0
             if let initialCount = self.initialCount, initialCount < minimumCountToDisplayFilters {
                 topPanelHeight = environment.navigationHeight
             }
             
-            
-            let edgeEffectHeight: CGFloat = environment.navigationHeight + 56.0
+            let edgeEffectHeight: CGFloat = topPanelHeight + 8.0
             let edgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: availableSize.width, height: edgeEffectHeight))
             transition.setFrame(view: self.edgeEffectView, frame: edgeEffectFrame)
             self.edgeEffectView.update(content: environment.theme.list.blocksBackgroundColor, blur: true, rect: edgeEffectFrame, edge: .top, edgeSize: min(30, edgeEffectFrame.height), transition: transition)
@@ -935,26 +938,41 @@ final class GiftStoreScreenComponent: Component {
                 containerSize: availableSize
             )
             
-            if let balanceTitleView = self.balanceTitle.view, let balanceValueView = self.balanceValue.view, let balanceIconView = self.balanceIcon.view {
-                if balanceTitleView.superview == nil {
-                    component.overNavigationContainer.addSubview(balanceTitleView)
-                    component.overNavigationContainer.addSubview(balanceValueView)
-                    component.overNavigationContainer.addSubview(balanceIconView)
-                }
-                let navigationHeight = environment.navigationHeight - environment.statusBarHeight
-                let topBalanceOriginY = environment.statusBarHeight + (navigationHeight - balanceTitleSize.height - balanceValueSize.height) / 2.0 + 3.0
-                balanceTitleView.center = CGPoint(x: availableSize.width - 16.0 - environment.safeInsets.right - balanceTitleSize.width / 2.0, y: topBalanceOriginY + balanceTitleSize.height / 2.0)
-                balanceTitleView.bounds = CGRect(origin: .zero, size: balanceTitleSize)
-                balanceValueView.center = CGPoint(x: availableSize.width - 16.0 - environment.safeInsets.right - balanceValueSize.width / 2.0, y: topBalanceOriginY + balanceTitleSize.height + balanceValueSize.height / 2.0)
-                balanceValueView.bounds = CGRect(origin: .zero, size: balanceValueSize)
-                balanceIconView.center = CGPoint(x: availableSize.width - 16.0 - environment.safeInsets.right - balanceValueSize.width - balanceIconSize.width / 2.0 - 2.0, y: topBalanceOriginY + balanceTitleSize.height + balanceValueSize.height / 2.0 - UIScreenPixel)
-                balanceIconView.bounds = CGRect(origin: .zero, size: balanceIconSize)
+            if self.balanceBackgroundView.superview == nil {
+                component.overNavigationContainer.addSubview(self.balanceBackgroundView)
             }
             
             var topInset: CGFloat = 0.0
             if environment.statusBarHeight > 0.0 {
                 topInset = environment.statusBarHeight - 6.0
             }
+            
+            if let balanceTitleView = self.balanceTitle.view, let balanceValueView = self.balanceValue.view, let balanceIconView = self.balanceIcon.view {
+                if balanceTitleView.superview == nil {
+                    self.balanceBackgroundView.contentView.addSubview(balanceTitleView)
+                    self.balanceBackgroundView.contentView.addSubview(balanceValueView)
+                    self.balanceBackgroundView.contentView.addSubview(balanceIconView)
+                }
+                
+                let topBalanceOriginY = (44.0 - balanceTitleSize.height - balanceValueSize.height) / 2.0
+                
+                let balanceSideInset: CGFloat = 12.0
+                var balanceBackgroundSize = CGSize(width: balanceTitleSize.width + balanceSideInset * 2.0, height: 44.0)
+                balanceBackgroundSize.width = max(balanceBackgroundSize.width, balanceValueSize.width + balanceIconSize.width + 2.0 + 6.0 * 2.0)
+                
+                let balanceBackgroundFrame = CGRect(origin: CGPoint(x: availableSize.width - environment.safeInsets.right - 16.0 - balanceBackgroundSize.width, y: environment.navigationHeight - 60.0 + 2.0 + floor((60.0 - 44.0) * 0.5)), size: balanceBackgroundSize)
+                
+                transition.setFrame(view: self.balanceBackgroundView, frame: balanceBackgroundFrame)
+                self.balanceBackgroundView.update(size: balanceBackgroundFrame.size, cornerRadius: balanceBackgroundFrame.height * 0.5, isDark: environment.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: UIColor(white: environment.theme.overallDarkAppearance ? 0.0 : 1.0, alpha: 0.6)), transition: transition)
+                
+                balanceTitleView.center = CGPoint(x: balanceBackgroundFrame.width - balanceSideInset - balanceTitleSize.width / 2.0, y: topBalanceOriginY + balanceTitleSize.height / 2.0)
+                balanceTitleView.bounds = CGRect(origin: .zero, size: balanceTitleSize)
+                balanceValueView.center = CGPoint(x: balanceBackgroundFrame.width - balanceSideInset - balanceValueSize.width / 2.0, y: topBalanceOriginY + balanceTitleSize.height + balanceValueSize.height / 2.0)
+                balanceValueView.bounds = CGRect(origin: .zero, size: balanceValueSize)
+                balanceIconView.center = CGPoint(x: balanceBackgroundFrame.width - balanceSideInset - balanceValueSize.width - balanceIconSize.width / 2.0 - 2.0, y: topBalanceOriginY + balanceTitleSize.height + balanceValueSize.height / 2.0 - UIScreenPixel)
+                balanceIconView.bounds = CGRect(origin: .zero, size: balanceIconSize)
+            }
+            
             let titleSize = self.title.update(
                 transition: transition,
                 component: AnyComponent(MultilineTextComponent(
@@ -1119,10 +1137,7 @@ final class GiftStoreScreenComponent: Component {
                 transition: transition,
                 component: AnyComponent(FilterSelectorComponent(
                     context: component.context,
-                    colors: FilterSelectorComponent.Colors(
-                        foreground: theme.list.itemPrimaryTextColor.withMultipliedAlpha(0.65),
-                        background: theme.list.itemSecondaryTextColor.withMultipliedAlpha(0.15)
-                    ),
+                    theme: theme,
                     items: filterItems,
                     selectedItemId: self.selectedFilterId
                 )),
@@ -1134,7 +1149,7 @@ final class GiftStoreScreenComponent: Component {
                     filterSelectorView.alpha = 0.0
                     component.overNavigationContainer.addSubview(filterSelectorView)
                 }
-                transition.setFrame(view: filterSelectorView, frame: CGRect(origin: CGPoint(x: floor((availableSize.width - filterSize.width) / 2.0), y: topInset + 60.0 + 12.0), size: filterSize))
+                transition.setFrame(view: filterSelectorView, frame: CGRect(origin: CGPoint(x: floor((availableSize.width - filterSize.width) / 2.0), y: topInset + 60.0 + 18.0), size: filterSize))
                 
                 if let initialCount = self.initialCount, initialCount >= minimumCountToDisplayFilters {
                     loadingTransition.setAlpha(view: filterSelectorView, alpha: 1.0)

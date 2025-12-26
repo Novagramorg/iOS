@@ -93,9 +93,26 @@ public enum ChatTitleContent: Equatable {
         case replies
     }
     
+    public struct TitleTextItem: Equatable {
+        public enum Content: Equatable {
+            case text(String)
+            case number(Int, minDigits: Int)
+        }
+        
+        public var id: AnyHashable
+        public var isUnbreakable: Bool
+        public var content: Content
+        
+        public init(id: AnyHashable, isUnbreakable: Bool = true, content: Content) {
+            self.id = id
+            self.isUnbreakable = isUnbreakable
+            self.content = content
+        }
+    }
+    
     case peer(peerView: PeerData, customTitle: String?, customSubtitle: String?, onlineMemberCount: (total: Int32?, recent: Int32?), isScheduledMessages: Bool, isMuted: Bool?, customMessageCount: Int?, isEnabled: Bool)
     case replyThread(type: ReplyThreadType, count: Int)
-    case custom(String, String?, Bool)
+    case custom(title: [TitleTextItem], subtitle: String?, isEnabled: Bool)
     
     public static func ==(lhs: ChatTitleContent, rhs: ChatTitleContent) -> Bool {
         switch lhs {
@@ -397,8 +414,17 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
                         }
                         
                         isEnabled = false
-                    case let .custom(text, _, enabled):
-                        segments = [.text(0, NSAttributedString(string: text, font: titleFont, textColor: titleTheme.rootController.navigationBar.primaryTextColor))]
+                    case let .custom(textItems, _, enabled):
+                        var nextId = -1
+                        segments = textItems.map { item -> AnimatedCountLabelNode.Segment in
+                            nextId += 1
+                            switch item.content {
+                            case let .number(value, _):
+                                return .number(nextId, NSAttributedString(string: "\(value)", font: titleFont, textColor: titleTheme.rootController.navigationBar.primaryTextColor))
+                            case let .text(text):
+                                return .text(nextId, NSAttributedString(string: text, font: titleFont, textColor: titleTheme.rootController.navigationBar.primaryTextColor))
+                            }
+                        }
                         isEnabled = enabled
                 }
                 

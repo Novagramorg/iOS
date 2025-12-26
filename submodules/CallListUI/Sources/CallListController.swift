@@ -103,7 +103,7 @@ public final class CallListController: TelegramBaseController {
         
         self.segmentedTitleView = ItemListControllerSegmentedTitleView(theme: self.presentationData.theme, segments: [self.presentationData.strings.Calls_All, self.presentationData.strings.Calls_Missed], selectedIndex: 0)
         
-        super.init(context: context, navigationBarPresentationData: NavigationBarPresentationData(presentationData: self.presentationData, style: .glass), mediaAccessoryPanelVisibility: .none, locationBroadcastPanelSource: .none, groupCallPanelSource: .none)
+        super.init(context: context, navigationBarPresentationData: NavigationBarPresentationData(presentationData: self.presentationData, style: .glass))
         
         self.tabBarItemContextActionType = .always
         
@@ -423,10 +423,15 @@ public final class CallListController: TelegramBaseController {
         self.displayNodeDidLoad()
     }
     
+    override public var navigationEdgeEffectExtension: CGFloat {
+        return self.controllerNode.navigationEdgeEffectExtension
+    }
+    
     override public func containerLayoutUpdated(_ layout: ContainerViewLayout, transition: ContainedViewLayoutTransition) {
         super.containerLayoutUpdated(layout, transition: transition)
         
-        self.controllerNode.containerLayoutUpdated(layout, navigationBarHeight: self.navigationLayout(layout: layout).navigationFrame.maxY, transition: transition)
+        let navigationLayout = self.navigationLayout(layout: layout)
+        self.controllerNode.containerLayoutUpdated(layout, navigationBarHeight: navigationLayout.navigationFrame.maxY, transition: transition)
     }
     
     @objc func callPressed() {

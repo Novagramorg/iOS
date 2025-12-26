@@ -447,31 +447,33 @@ public final class PeerInfoCoverComponent: Component {
             
             let gradientWidth: CGFloat
             let gradientHeight: CGFloat = component.defaultHeight
+            let gradientInset: CGFloat = 100.0
+            let gradientRelativeInset: CGFloat = gradientInset / gradientHeight
             if case .custom = component.subject {
                 gradientWidth = gradientHeight
                 self.backgroundView.backgroundColor = backgroundColor
-                self.backgroundGradientLayer.startPoint = CGPoint(x: 0.5, y: component.avatarCenter.y / gradientHeight)
-                self.backgroundGradientLayer.endPoint = CGPoint(x: 1.0, y: 1.0)
+                self.backgroundGradientLayer.startPoint = CGPoint(x: 0.5, y: component.avatarCenter.y / gradientHeight + gradientRelativeInset)
+                self.backgroundGradientLayer.endPoint = CGPoint(x: 1.0, y: 1.0 - gradientRelativeInset)
                 self.backgroundGradientLayer.type = .radial
                 self.backgroundGradientLayer.colors = [secondaryBackgroundColor.cgColor, backgroundColor.cgColor]
             } else if case .status = component.subject {
                 gradientWidth = availableSize.width
                 self.backgroundView.backgroundColor = secondaryBackgroundColor
                 self.backgroundGradientLayer.startPoint = component.gradientCenter
-                self.backgroundGradientLayer.endPoint = CGPoint(x: 1.0, y: 1.0)
+                self.backgroundGradientLayer.endPoint = CGPoint(x: 1.0, y: 1.0 - gradientRelativeInset)
                 self.backgroundGradientLayer.type = .radial
                 self.backgroundGradientLayer.colors = [backgroundColor.cgColor, secondaryBackgroundColor.cgColor]
             } else {
                 gradientWidth = availableSize.width
                 self.backgroundView.backgroundColor = secondaryBackgroundColor
-                self.backgroundGradientLayer.startPoint = CGPoint(x: 0.5, y: 1.0)
+                self.backgroundGradientLayer.startPoint = CGPoint(x: 0.5, y: 1.0 - gradientRelativeInset)
                 self.backgroundGradientLayer.endPoint = CGPoint(x: 0.5, y: 0.0)
                 self.backgroundGradientLayer.type = .axial
                 self.backgroundGradientLayer.colors = [backgroundColor.cgColor, secondaryBackgroundColor.cgColor]
             }
             self.backgroundGradientLayer.anchorPoint = CGPoint(x: 0.0, y: 1.0)
             
-            let backgroundGradientFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((availableSize.width - gradientWidth) / 2.0), y: component.gradientOnTop ? 0.0 : availableSize.height - gradientHeight), size: CGSize(width: gradientWidth, height: gradientHeight))
+            let backgroundGradientFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((availableSize.width - gradientWidth) / 2.0), y: component.gradientOnTop ? 0.0 : availableSize.height - gradientHeight), size: CGSize(width: gradientWidth, height: gradientHeight)).insetBy(dx: 0.0, dy: -gradientInset)
             if !transition.animation.isImmediate {
                 let previousPosition = self.backgroundGradientLayer.position
                 let updatedPosition = CGPoint(x: backgroundGradientFrame.minX, y: backgroundGradientFrame.maxY)

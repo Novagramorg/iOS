@@ -1019,7 +1019,7 @@ private final class ItemComponent: Component {
                         font: Font.regular(13.0),
                         background: component.theme.rootController.tabBar.badgeBackgroundColor,
                         foreground: component.theme.rootController.tabBar.badgeTextColor,
-                        insets: UIEdgeInsets(top: 0.0, left: 6.0, bottom: 1.0, right: 6.0)
+                        insets: UIEdgeInsets(top: 0.0, left: 5.0, bottom: 1.0, right: 5.0)
                     )),
                     environment: {},
                     containerSize: CGSize(width: 100.0, height: 100.0)

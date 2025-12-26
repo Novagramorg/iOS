@@ -69,15 +69,17 @@ public final class LiquidLensView: UIView {
         var selectionOrigin: CGPoint
         var selectionSize: CGSize
         var inset: CGFloat
+        var liftedInset: CGFloat
         var isDark: Bool
         var isLifted: Bool
         var isCollapsed: Bool
 
-        init(size: CGSize, selectionOrigin: CGPoint, selectionSize: CGSize, inset: CGFloat, isDark: Bool, isLifted: Bool, isCollapsed: Bool) {
+        init(size: CGSize, selectionOrigin: CGPoint, selectionSize: CGSize, inset: CGFloat, liftedInset: CGFloat, isDark: Bool, isLifted: Bool, isCollapsed: Bool) {
             self.size = size
             self.selectionOrigin = selectionOrigin
             self.selectionSize = selectionSize
             self.inset = inset
+            self.liftedInset = liftedInset
             self.isLifted = isLifted
             self.isDark = isDark
             self.isCollapsed = isCollapsed
@@ -87,11 +89,13 @@ public final class LiquidLensView: UIView {
     private struct LensParams: Equatable {
         var baseFrame: CGRect
         var inset: CGFloat
+        var liftedInset: CGFloat
         var isLifted: Bool
 
-        init(baseFrame: CGRect, inset: CGFloat, isLifted: Bool) {
+        init(baseFrame: CGRect, inset: CGFloat, liftedInset: CGFloat, isLifted: Bool) {
             self.baseFrame = baseFrame
             self.inset = inset
+            self.liftedInset = liftedInset
             self.isLifted = isLifted
         }
     }
@@ -137,6 +141,7 @@ public final class LiquidLensView: UIView {
         }
     }
     public var onUpdatedIsAnimating: ((Bool) -> Void)?
+    public var isLiftedAnimationCompleted: (() -> Void)?
 
     public init(kind: Kind) {
         self.containerView = UIView()
@@ -286,8 +291,8 @@ public final class LiquidLensView: UIView {
         lensView.perform(NSSelectorFromString("setLiftedContainerView:"), with: view)
     }
 
-    public func update(size: CGSize, selectionOrigin: CGPoint, selectionSize: CGSize, inset: CGFloat, isDark: Bool, isLifted: Bool, isCollapsed: Bool = false, transition: ComponentTransition) {
-        let params = Params(size: size, selectionOrigin: selectionOrigin, selectionSize: selectionSize, inset: inset, isDark: isDark, isLifted: isLifted, isCollapsed: isCollapsed)
+    public func update(size: CGSize, selectionOrigin: CGPoint, selectionSize: CGSize, inset: CGFloat, liftedInset: CGFloat = 4.0, isDark: Bool, isLifted: Bool, isCollapsed: Bool = false, transition: ComponentTransition) {
+        let params = Params(size: size, selectionOrigin: selectionOrigin, selectionSize: selectionSize, inset: inset, liftedInset: liftedInset, isDark: isDark, isLifted: isLifted, isCollapsed: isCollapsed)
         if self.params == params {
             return
         }
@@ -328,7 +333,7 @@ public final class LiquidLensView: UIView {
                     guard let self else {
                         return
                     }
-                    let liftedInset: CGFloat = params.isLifted ? 4.0 : -params.inset
+                    let liftedInset: CGFloat = params.isLifted ? params.liftedInset : (-params.inset)
                     lensView.bounds = CGRect(origin: CGPoint(), size: CGSize(width: params.baseFrame.width + liftedInset * 2.0, height: params.baseFrame.height + liftedInset * 2.0))
                     didProcessUpdate = true
                     if shouldScheduleUpdate {
@@ -348,6 +353,7 @@ public final class LiquidLensView: UIView {
                     if !self.isApplyingLensParams {
                         self.isAnimating = false
                     }
+                    self.isLiftedAnimationCompleted?()
                 })
             }
             if didProcessUpdate {
@@ -360,7 +366,7 @@ public final class LiquidLensView: UIView {
                 shouldScheduleUpdate = true
             }
         } else {
-            let liftedInset: CGFloat = params.isLifted ? 4.0 : -params.inset
+            let liftedInset: CGFloat = params.isLifted ? params.liftedInset : (-params.inset)
             let lensBounds = CGRect(origin: CGPoint(), size: CGSize(width: params.baseFrame.width + liftedInset * 2.0, height: params.baseFrame.height + liftedInset * 2.0))
             let lensCenter = CGPoint(x: params.baseFrame.midX, y: params.baseFrame.midY)
             
@@ -445,7 +451,7 @@ public final class LiquidLensView: UIView {
         }
 
         let baseLensFrame = CGRect(origin: CGPoint(x: params.selectionOrigin.x, y: 0.0), size: CGSize(width: params.selectionSize.width, height: params.size.height))
-        self.updateLens(params: LensParams(baseFrame: baseLensFrame, inset: params.inset, isLifted: params.isLifted), transition: transition)
+        self.updateLens(params: LensParams(baseFrame: baseLensFrame, inset: params.inset, liftedInset: params.liftedInset, isLifted: params.isLifted), transition: transition)
         
         if let legacyContentMaskView = self.legacyContentMaskView {
             transition.setFrame(view: legacyContentMaskView, frame: CGRect(origin: CGPoint(), size: params.size))

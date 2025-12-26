@@ -29,6 +29,12 @@ public class EdgeEffectView: UIView {
     }
     
     public func update(content: UIColor, blur: Bool = false, alpha: CGFloat = 0.75, rect: CGRect, edge: Edge, edgeSize: CGFloat, transition: ComponentTransition) {
+        #if DEBUG && false
+        let content: UIColor = .blue
+        let blur: Bool = !"".isEmpty
+        self.backgroundColor = .blue
+        #endif
+        
         transition.setBackgroundColor(view: self.contentView, color: content)
         
         switch edge {

@@ -12,6 +12,8 @@ import AppBundle
 import SwiftSignalKit
 import AnimatedAvatarSetNode
 import AudioBlob
+import TelegramCallsUI
+import GlobalControlPanelsContext
 
 func textForTimeout(value: Int32) -> String {
     if value < 3600 {
@@ -31,52 +33,6 @@ func textForTimeout(value: Int32) -> String {
 
 private let titleFont = Font.semibold(15.0)
 private let subtitleFont = Font.regular(13.0)
-
-public enum GroupCallPanelSource {
-    case none
-    case all
-    case peer(PeerId)
-}
-
-public final class GroupCallPanelData {
-    public let peerId: PeerId
-    public let isChannel: Bool
-    public let info: GroupCallInfo
-    public let topParticipants: [GroupCallParticipantsContext.Participant]
-    public let participantCount: Int
-    public let activeSpeakers: Set<PeerId>
-    public let groupCall: PresentationGroupCall?
-    
-    public init(
-        peerId: PeerId,
-        isChannel: Bool,
-        info: GroupCallInfo,
-        topParticipants: [GroupCallParticipantsContext.Participant],
-        participantCount: Int,
-        activeSpeakers: Set<PeerId>,
-        groupCall: PresentationGroupCall?
-    ) {
-        self.peerId = peerId
-        self.isChannel = isChannel
-        self.info = info
-        self.topParticipants = topParticipants
-        self.participantCount = participantCount
-        self.activeSpeakers = activeSpeakers
-        self.groupCall = groupCall
-    }
-    
-    public func withInfo(_ info: GroupCallInfo) -> GroupCallPanelData {
-        return GroupCallPanelData(
-            peerId: self.peerId,
-            isChannel: self.isChannel,
-            info: info,
-            topParticipants: self.topParticipants,
-            participantCount: self.participantCount,
-            activeSpeakers: self.activeSpeakers,
-            groupCall: self.groupCall
-        )
-    }
-}
 
 private final class FakeAudioLevelGenerator {
     private var isFirstTime: Bool = true
@@ -106,7 +62,7 @@ private final class FakeAudioLevelGenerator {
     }
 }
 
-public final class GroupCallNavigationAccessoryPanel: ASDisplayNode {
+final class GroupCallNavigationAccessoryPanel: ASDisplayNode {
     private let context: AccountContext
     private var theme: PresentationTheme
     private var strings: PresentationStrings
@@ -161,7 +117,7 @@ public final class GroupCallNavigationAccessoryPanel: ASDisplayNode {
     
     private let hapticFeedback = HapticFeedback()
     
-    private var currentData: GroupCallPanelData?
+    private var currentData: GlobalControlPanelsContext.GroupCall?
     private var validLayout: (CGSize, CGFloat, CGFloat, Bool)?
     
     public init(context: AccountContext, presentationData: PresentationData, tapAction: @escaping () -> Void, notifyScheduledTapAction: @escaping () -> Void) {
@@ -375,7 +331,7 @@ public final class GroupCallNavigationAccessoryPanel: ASDisplayNode {
         }
     }
     
-    public func update(data: GroupCallPanelData) {
+    public func update(data: GlobalControlPanelsContext.GroupCall) {
         let previousData = self.currentData
         self.currentData = data
         
@@ -635,8 +591,13 @@ public final class GroupCallNavigationAccessoryPanel: ASDisplayNode {
         self.tapButton.frame = CGRect(origin: CGPoint(), size: CGSize(width: size.width - 7.0 - 36.0 - 7.0, height: panelHeight))
         
         if let avatarsContent = self.avatarsContent {
-            let avatarsSize = self.avatarsNode.update(context: self.context, content: avatarsContent, itemSize: CGSize(width: 32.0, height: 32.0), animated: true, synchronousLoad: true)
-            transition.updateFrame(node: self.avatarsNode, frame: CGRect(origin: CGPoint(x: floorToScreenPixels((size.width - avatarsSize.width) / 2.0), y: floor((size.height - avatarsSize.height) / 2.0)), size: avatarsSize))
+            var avatarsTransition = transition
+            if self.avatarsNode.bounds.isEmpty {
+                avatarsTransition = .immediate
+            }
+            
+            let avatarsSize = self.avatarsNode.update(context: self.context, content: avatarsContent, itemSize: CGSize(width: 32.0, height: 32.0), animated: avatarsTransition.isAnimated, synchronousLoad: true)
+            avatarsTransition.updateFrame(node: self.avatarsNode, frame: CGRect(origin: CGPoint(x: floorToScreenPixels((size.width - avatarsSize.width) / 2.0), y: floor((size.height - avatarsSize.height) / 2.0)), size: avatarsSize))
         }
         
         var joinText = self.strings.VoiceChat_PanelJoin

@@ -263,10 +263,6 @@ public final class AnimatedTextComponent: Component {
                             
                             continue characterLoop
                         } else {
-                            if text.hasPrefix(" ") {
-                                size.height = max(size.height, ceil(spaceSize.height))
-                                size.width += max(0.0, ceil(spaceSize.width))
-                            }
                             if text.hasSuffix(" ") {
                                 addTrailingSpace = true
                             }
@@ -295,6 +291,7 @@ public final class AnimatedTextComponent: Component {
                         if characterComponentView.superview == nil {
                             characterComponentView.layer.rasterizationScale = UIScreenScale
                             self.addSubview(characterComponentView)
+                            characterComponentView.layer.anchorPoint = CGPoint()
                             animateIn = true
                         }
                         
@@ -314,8 +311,9 @@ public final class AnimatedTextComponent: Component {
                                 }
                                 
                                 characterComponentView.bounds = CGRect(origin: CGPoint(), size: characterFrame.size)
-                                let deltaPosition = CGPoint(x: characterFrame.midX - characterComponentView.frame.midX, y: characterFrame.midY - characterComponentView.frame.midY)
-                                characterComponentView.center = characterFrame.center
+                                
+                                let deltaPosition = CGPoint(x: characterFrame.minX - characterComponentView.frame.minX, y: characterFrame.minY - characterComponentView.frame.minY)
+                                characterComponentView.center = characterFrame.origin
                                 characterComponentView.layer.animatePosition(from: CGPoint(x: -deltaPosition.x, y: -deltaPosition.y), to: CGPoint(), duration: 0.4, delay: delayNorm * delayWidth, timingFunction: kCAMediaTimingFunctionSpring, additive: true)
                             }
                         }

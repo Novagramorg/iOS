@@ -60,6 +60,7 @@ import ChatListFilterTabContainerNode
 import HeaderPanelContainerComponent
 import HorizontalTabsComponent
 import GlobalControlPanelsContext
+import ChatListFilterTabContainerNode
 
 private final class ContextControllerContentSourceImpl: ContextControllerContentSource {
     let controller: ViewController
@@ -248,18 +249,17 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
         self.animationCache = context.animationCache
         self.animationRenderer = context.animationRenderer
         
-        let groupCallPanelSource: GroupCallPanelSource
+        var groupCallPanelSource: EnginePeer.Id?
         var chatListNotices = false
         switch self.location {
         case let .chatList(groupId):
-            groupCallPanelSource = .all
             if case .root = groupId {
                 chatListNotices = true
             }
         case let .forum(peerId):
-            groupCallPanelSource = .peer(peerId)
+            groupCallPanelSource = peerId
         case .savedMessagesChats:
-            groupCallPanelSource = .none
+            break
         }
         
         self.tabsNode = SparseNode()
@@ -274,7 +274,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
             chatListNotices: chatListNotices
         )
                 
-        super.init(context: context, navigationBarPresentationData: nil, mediaAccessoryPanelVisibility: .none, locationBroadcastPanelSource: .none, groupCallPanelSource: .none)
+        super.init(context: context, navigationBarPresentationData: nil)
         
         self.accessoryPanelContainer = ASDisplayNode()
         
@@ -3660,10 +3660,35 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                 return id
             }
         }
+        let _ = defaultFilterIds
         
         var reorderedFilterIdsValue: [Int32]?
-        if let reorderedFilterIds = self.tabContainerNode.reorderedFilterIds, reorderedFilterIds != defaultFilterIds {
-            reorderedFilterIdsValue = reorderedFilterIds
+        if let navigationBarView = self.chatListDisplayNode.navigationBarView.view as? ChatListNavigationBar.View, let headerPanelsView = navigationBarView.headerPanels as? HeaderPanelContainerComponent.View, let tabsView = headerPanelsView.tabs as? HorizontalTabsComponent.View, let reorderedItemIds = tabsView.reorderedItemIds {
+            reorderedFilterIdsValue = reorderedItemIds.compactMap { item -> Int32? in
+                guard let value = item.base as? Int32 else {
+                    return nil
+                }
+                if value == Int32.min {
+                    return 0
+                }
+                return value
+            }
+        }
+        
+        if let reorderedFilterIdsValue, let tabContainerData = self.tabContainerData {
+            var entries: [ChatListFilterTabEntry] = []
+            for id in reorderedFilterIdsValue {
+                let mappedId: ChatListFilterTabEntryId
+                if id == 0 {
+                    mappedId = .all
+                } else {
+                    mappedId = .filter(id)
+                }
+                if let entry = tabContainerData.0.first(where: { $0.id == mappedId }) {
+                    entries.append(entry)
+                }
+            }
+            self.tabContainerData?.0 = entries
         }
         
         let completion = { [weak self] in
@@ -7259,7 +7284,7 @@ private final class ChatListLocationContext {
                 dateTimeFormat: presentationData.dateTimeFormat,
                 nameDisplayOrder: presentationData.nameDisplayOrder,
                 displayBackground: false,
-                content: .custom(presentationData.strings.ChatList_SelectedTopics(Int32(stateAndFilterId.state.selectedThreadIds.count)), nil, false),
+                content: .custom(title: [ChatTitleContent.TitleTextItem(id: AnyHashable(0), content: .text(presentationData.strings.ChatList_SelectedTopics(Int32(stateAndFilterId.state.selectedThreadIds.count))))], subtitle: nil, isEnabled: false),
                 activities: nil,
                 networkState: nil,
                 tapped: {

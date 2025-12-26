@@ -160,7 +160,7 @@ public final class ItemListPeerActionItemNode: ListViewItemNode {
         
         self.activateArea = AccessibilityAreaNode()
         
-        super.init(layerBacked: false, dynamicBounce: false)
+        super.init(layerBacked: false)
         
         self.addSubnode(self.iconNode)
         self.addSubnode(self.titleNode)
@@ -262,7 +262,9 @@ public final class ItemListPeerActionItemNode: ListViewItemNode {
                         case .plain:
                             strongSelf.topStripeNode.backgroundColor = item.presentationData.theme.list.itemPlainSeparatorColor
                             strongSelf.bottomStripeNode.backgroundColor = item.presentationData.theme.list.itemPlainSeparatorColor
-                            strongSelf.backgroundNode.backgroundColor = item.presentationData.theme.list.plainBackgroundColor
+                            if !item.alwaysPlain {
+                                strongSelf.backgroundNode.backgroundColor = item.presentationData.theme.list.plainBackgroundColor
+                            }
                             strongSelf.highlightedBackgroundNode.backgroundColor = item.presentationData.theme.list.itemHighlightedBackgroundColor
                         }
                     }

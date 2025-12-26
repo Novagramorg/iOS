@@ -906,7 +906,6 @@ public final class ChatHistoryListNodeImpl: ListView, ChatHistoryNode, ChatHisto
             }
         }
         
-        self.dynamicBounceEnabled = !self.currentPresentationData.disableAnimations
         self.experimentalSnapScrollToItem = false
         
         //self.debugInfo = true
@@ -2434,7 +2433,6 @@ public final class ChatHistoryListNodeImpl: ListView, ChatHistoryNode, ChatHisto
                     let chatPresentationData = ChatPresentationData(theme: themeData, fontSize: presentationData.chatFontSize, strings: presentationData.strings, dateTimeFormat: presentationData.dateTimeFormat, nameDisplayOrder: presentationData.nameDisplayOrder, disableAnimations: true, largeEmoji: presentationData.largeEmoji, chatBubbleCorners: presentationData.chatBubbleCorners, animatedEmojiScale: animatedEmojiConfig.scale)
                     
                     strongSelf.currentPresentationData = chatPresentationData
-                    strongSelf.dynamicBounceEnabled = false
                     
                     strongSelf.forEachItemHeaderNode { itemHeaderNode in
                         if let dateNode = itemHeaderNode as? ChatMessageDateHeaderNodeImpl {

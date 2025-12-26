@@ -235,6 +235,10 @@ final class CallListControllerNode: ASDisplayNode {
     
     private let openGroupCallDisposable = MetaDisposable()
     
+    var navigationEdgeEffectExtension: CGFloat {
+        return max(0.0, self.listNode.edgeEffectExtension)
+    }
+    
     private var previousContentOffset: ListViewVisibleContentOffset?
     
     init(controller: CallListController, context: AccountContext, mode: CallListControllerMode, presentationData: PresentationData, call: @escaping (EngineMessage) -> Void, joinGroupCall: @escaping (EnginePeer.Id, EngineGroupCallDescription) -> Void, openInfo: @escaping (EnginePeer.Id, [EngineMessage]) -> Void, emptyStateUpdated: @escaping (Bool) -> Void, openNewCall: @escaping () -> Void) {
@@ -682,6 +686,13 @@ final class CallListControllerNode: ASDisplayNode {
                 }
             }
         }
+        
+        self.listNode.onEdgeEffectExtensionUpdated = { [weak self] transition in
+            guard let self else {
+                return
+            }
+            self.controller?.updateNavigationEdgeEffectExtension(transition: transition)
+        }
     }
     
     deinit {
@@ -959,5 +970,7 @@ final class CallListControllerNode: ASDisplayNode {
         let edgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: layout.size.height - edgeEffectHeight), size: CGSize(width: layout.size.width, height: edgeEffectHeight))
         transition.updateFrame(view: self.edgeEffectView, frame: edgeEffectFrame)
         self.edgeEffectView.update(content: self.presentationData.theme.list.plainBackgroundColor, rect: edgeEffectFrame, edge: .bottom, edgeSize: edgeEffectFrame.height, transition: ComponentTransition(transition))
+        
+        self.controller?.updateNavigationEdgeEffectExtension(transition: transition)
     }
 }

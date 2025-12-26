@@ -157,6 +157,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
     var navigationTitle: String?
     let navigationButtonContainer: PeerInfoHeaderNavigationButtonContainerNode
     let searchContainer: ASDisplayNode
+    var searchEdgeEffectView: EdgeEffectView?
     let searchBarContainer: SparseNode
     let editingEdgeEffectView: EdgeEffectView
     
@@ -304,7 +305,6 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             self?.requestUpdateLayout?(false)
         }
         
-        self.addSubnode(self.searchContainer)
         self.view.addSubview(self.headerEdgeEffectView)
         self.view.addSubview(self.backgroundBannerView)
         self.titleNodeContainer.addSubnode(self.titleNode)
@@ -332,6 +332,8 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         self.addSubnode(self.avatarOverlayNode)
         self.view.addSubview(self.editingEdgeEffectView)
         self.addSubnode(self.navigationButtonContainer)
+        
+        self.addSubnode(self.searchContainer)
         self.addSubnode(self.searchBarContainer)
         
         self.avatarListNode.avatarContainerNode.tapped = { [weak self] in
@@ -736,6 +738,40 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         }
         ComponentTransition(transition).setAlpha(view: self.editingEdgeEffectView, alpha: editingBackgroundAlpha)
         
+        if isSearching {
+            let searchNavigationHeight: CGFloat
+            if isSettings {
+                searchNavigationHeight = statusBarHeight + 10.0
+            } else {
+                searchNavigationHeight = navigationHeight + 10.0
+            }
+            
+            let searchEdgeEffectHeight: CGFloat = 40.0
+            let searchEdgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: width, height: searchNavigationHeight))
+            
+            let searchEdgeEffectView: EdgeEffectView
+            var searchEdgeEffectTransition = ComponentTransition(transition)
+            if let current = self.searchEdgeEffectView {
+                searchEdgeEffectView = current
+            } else {
+                searchEdgeEffectTransition = .immediate
+                searchEdgeEffectView = EdgeEffectView()
+                self.searchEdgeEffectView = searchEdgeEffectView
+                self.searchContainer.view.superview?.insertSubview(searchEdgeEffectView, aboveSubview: self.searchContainer.view)
+                if transition.isAnimated {
+                    searchEdgeEffectView.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
+                }
+            }
+            
+            transition.updateFrame(view: searchEdgeEffectView, frame: searchEdgeEffectFrame)
+            searchEdgeEffectView.update(content: presentationData.theme.list.blocksBackgroundColor, blur: true, rect: searchEdgeEffectFrame, edge: .top, edgeSize: searchEdgeEffectHeight, transition: searchEdgeEffectTransition)
+        } else if let searchEdgeEffectView = self.searchEdgeEffectView {
+            self.searchEdgeEffectView = nil
+            transition.updateAlpha(layer: searchEdgeEffectView.layer, alpha: 0.0, completion: { [weak searchEdgeEffectView] _ in
+                searchEdgeEffectView?.removeFromSuperview()
+            })
+        }
+        
         let backgroundBannerAlpha: CGFloat
         
         do {
@@ -1120,7 +1156,11 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         
         var titleBrightness: CGFloat = 0.0
         navigationContentsPrimaryColor.getHue(nil, saturation: nil, brightness: &titleBrightness, alpha: nil)
-        self.controller?.setStatusBarStyle(titleBrightness > 0.5 ? .White : .Black, animated: !isFirstTime && animateHeader)
+        if isSearching {
+            self.controller?.setStatusBarStyle(presentationData.theme.overallDarkAppearance ? .White : .Black, animated: !isFirstTime && animateHeader)
+        } else {
+            self.controller?.setStatusBarStyle(titleBrightness > 0.5 ? .White : .Black, animated: !isFirstTime && animateHeader)
+        }
         
         self.avatarListNode.avatarContainerNode.updateTransitionFraction(transitionFraction, transition: transition)
         self.avatarListNode.listContainerNode.currentItemNode?.updateTransitionFraction(transitionFraction, transition: transition)

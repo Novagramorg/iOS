@@ -59,6 +59,7 @@ import AdPanelHeaderPanelComponent
 import MessageFeeHeaderPanelComponent
 import LegacyChatHeaderPanelComponent
 import ChatSearchNavigationContentNode
+import GroupCallHeaderPanelComponent
 
 final class VideoNavigationControllerDropContentItem: NavigationControllerDropContentItem {
     let itemNode: OverlayMediaItemNode
@@ -1360,6 +1361,61 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                 )))
             )
         }
+        if let groupCall = self.controller?.globalControlPanelsContextState?.groupCall {
+            headerPanels.append(HeaderPanelContainerComponent.Panel(
+                key: "groupCall",
+                orderIndex: 2,
+                component: AnyComponent(GroupCallHeaderPanelComponent(
+                    context: self.context,
+                    theme: self.chatPresentationInterfaceState.theme,
+                    strings: self.chatPresentationInterfaceState.strings,
+                    data: groupCall,
+                    onTapAction: { [weak self] in
+                        guard let self, let groupCall = self.controller?.globalControlPanelsContextState?.groupCall else {
+                            return
+                        }
+                        self.controller?.joinGroupCall(
+                            peerId: groupCall.peerId,
+                            invite: nil,
+                            activeCall: EngineGroupCallDescription(
+                                id: groupCall.info.id,
+                                accessHash: groupCall.info.accessHash,
+                                title: groupCall.info.title,
+                                scheduleTimestamp: groupCall.info.scheduleTimestamp,
+                                subscribedToScheduled: groupCall.info.subscribedToScheduled,
+                                isStream: groupCall.info.isStream
+                            )
+                        )
+                    },
+                    onNotifyScheduledTapAction: { [weak self] in
+                        guard let self, let controller = self.controller, let groupCall = self.controller?.globalControlPanelsContextState?.groupCall else {
+                            return
+                        }
+                        if groupCall.info.scheduleTimestamp != nil && !groupCall.info.subscribedToScheduled {
+                            let _ = self.context.engine.calls.toggleScheduledGroupCallSubscription(peerId: groupCall.peerId, reference: .id(id: groupCall.info.id, accessHash: groupCall.info.accessHash), subscribe: true).startStandalone()
+                            
+                            controller.controllerInteraction?.displayUndo(
+                                .universal(
+                                    animation: "anim_set_notification",
+                                    scale: 0.06,
+                                    colors: [
+                                        "Middle.Group 1.Fill 1": UIColor.white,
+                                        "Top.Group 1.Fill 1": UIColor.white,
+                                        "Bottom.Group 1.Fill 1": UIColor.white,
+                                        "EXAMPLE.Group 1.Fill 1": UIColor.white,
+                                        "Line.Group 1.Stroke 1": UIColor.white
+                                    ],
+                                    title: nil,
+                                    text: controller.presentationData.strings.Chat_ToastSubscribedToScheduledLiveStream_Text,
+                                    customUndoText: nil,
+                                    timeout: nil
+                                )
+                            )
+                        }
+                    }
+                )))
+            )
+        }
         
         var hasTranslationPanel = false
         if let _ = self.chatPresentationInterfaceState.translationState, self.emptyType == nil {
@@ -1561,9 +1617,9 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             
             switch floatingTopicsPanelComponent.location {
             case .side:
-                floatingTopicsPanelInsets.left += 72.0 + 8.0 + 8.0
+                floatingTopicsPanelInsets.left += 72.0 + 10.0 + 10.0
             case .top:
-                floatingTopicsPanelInsets.top += 40.0 + 8.0
+                floatingTopicsPanelInsets.top += 40.0 + 10.0
             }
         } else if let floatingTopicsPanel = self.floatingTopicsPanel {
             self.floatingTopicsPanel = nil
@@ -1857,7 +1913,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
 
         updateExtraNavigationBarBackgroundHeight(0.0, 0.0, nil, transition)
         
-        var sidePanelTopInset: CGFloat = insets.top
+        var sidePanelTopInset: CGFloat = insets.top + 4.0
         
         let contentBounds = CGRect(x: 0.0, y: 0.0, width: layout.size.width - wrappingInsets.left - wrappingInsets.right, height: layout.size.height - wrappingInsets.top - wrappingInsets.bottom)
         
@@ -2126,7 +2182,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         }
         
         if self.secondaryInputPanelNode != nil {
-            secondaryInputPanelFrame = CGRect(origin: CGPoint(x: 0.0, y: layout.size.height - insets.bottom - bottomOverflowOffset - inputPanelsHeight - secondaryInputPanelSize!.height - 8.0), size: CGSize(width: layout.size.width, height: secondaryInputPanelSize!.height))
+            secondaryInputPanelFrame = CGRect(origin: CGPoint(x: 0.0, y: layout.size.height - insets.bottom - bottomOverflowOffset - inputPanelsHeight - 8.0 - secondaryInputPanelSize!.height - 8.0), size: CGSize(width: layout.size.width, height: secondaryInputPanelSize!.height))
             if self.dismissedAsOverlay {
                 secondaryInputPanelFrame!.origin.y = layout.size.height
             }
@@ -2458,7 +2514,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                 self.floatingTopicsPanelContainer.view.addSubview(headerPanelsComponentView)
             }
             headerPanelsTransition.setFrame(view: headerPanelsComponentView, frame: headerPanelsFrame)
-            sidePanelTopInset += headerPanelsSize.height
+            sidePanelTopInset += headerPanelsSize.height + 2.0
         }
         
         let floatingTopicsPanelContainerFrame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: 0.0, height: layout.size.height))
@@ -2560,10 +2616,8 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                 inputContextPanelNode.updateLayout(size: panelFrame.size, leftInset: layout.safeInsets.left, rightInset: layout.safeInsets.right, bottomInset: insets.bottom + inputPanelsHeight + 8.0, transition: .immediate, interfaceState: self.chatPresentationInterfaceState)
             }
             
-            if !inputContextPanelNode.frame.equalTo(panelFrame) || inputContextPanelNode.theme !== self.chatPresentationInterfaceState.theme {
-                transition.updateFrame(node: inputContextPanelNode, frame: panelFrame)
-                inputContextPanelNode.updateLayout(size: panelFrame.size, leftInset: layout.safeInsets.left, rightInset: layout.safeInsets.right, bottomInset: 0.0, transition: transition, interfaceState: self.chatPresentationInterfaceState)
-            }
+            transition.updateFrame(node: inputContextPanelNode, frame: panelFrame)
+            inputContextPanelNode.updateLayout(size: panelFrame.size, leftInset: layout.safeInsets.left, rightInset: layout.safeInsets.right, bottomInset: insets.bottom + inputPanelsHeight + 8.0, transition: transition, interfaceState: self.chatPresentationInterfaceState)
         }
         
         if let overlayContextPanelNode = self.overlayContextPanelNode {
