@@ -561,9 +561,7 @@ func openExternalUrlImpl(context: AccountContext, urlContext: OpenURLContext, ur
                             }
                         }
                         if isToken {
-                            context.sharedContext.presentGlobalController(standardTextAlertController(theme: AlertControllerTheme(presentationData: presentationData), title: nil, text: presentationData.strings.AuthSessions_AddDevice_UrlLoginHint, actions: [
-                                TextAlertAction(type: .genericAction, title: presentationData.strings.Common_OK, action: {
-                                }),
+                            context.sharedContext.presentGlobalController(textAlertController(context: context, title: nil, text: presentationData.strings.AuthSessions_AddDevice_UrlLoginHint, actions: [TextAlertAction(type: .genericAction, title: presentationData.strings.Common_OK, action: {}),
                             ], parseMarkdown: true), nil)
                             return
                         }

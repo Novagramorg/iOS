@@ -1144,7 +1144,7 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate {
                 }
 
                 let presentationData = strongSelf.context.sharedContext.currentPresentationData.with { $0 }
-                let controller = chatTextLinkEditController(sharedContext: strongSelf.context.sharedContext, updatedPresentationData: (presentationData, .never()), account: strongSelf.context.account, text: text?.string ?? "", link: link, apply: { [weak self] link in
+                let controller = chatTextLinkEditController(context: strongSelf.context, updatedPresentationData: (presentationData, .never()), text: text?.string ?? "", link: link, apply: { [weak self] link in
                     if let strongSelf = self, let inputMode = inputMode, let selectionRange = selectionRange {
                         if let link = link {
                             strongSelf.updateChatPresentationInterfaceState(animated: true, { state in
@@ -1517,7 +1517,7 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate {
         switch recognizer.state {
         case .began:
             if let itemId = self.item(at: location), let itemView = self.itemViews[itemId] {
-                let startX = itemView.frame.minX - 4.0
+                let startX = itemView.frame.minX
                 self.selectionGestureState = (startX, startX, itemId)
                 
                 self.requestLayout(transition: .animated(duration: 0.4, curve: .spring))
@@ -2076,8 +2076,9 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate {
             }
             let panelSize = CGSize(width: isSelecting ? textPanelWidth : layout.size.width - layout.safeInsets.left - layout.safeInsets.right - panelSideInset * 2.0, height: isSelecting ? textPanelHeight - 11.0 : glassPanelHeight)
             
+            let cornerRadius: CGFloat = isSelecting ? min(20.0, panelSize.height * 0.5) : panelSize.height * 0.5
             let backgroundOriginX: CGFloat = isSelecting ? panelSideInset : floorToScreenPixels((layout.size.width - panelSize.width) / 2.0)
-            liquidLensView.update(size: panelSize, selectionOrigin: CGPoint(x: lensSelection.x, y: 0.0), selectionSize: CGSize(width: lensSelection.width, height: panelSize.height), inset: 0.0, isDark: self.presentationData.theme.overallDarkAppearance, isLifted: self.selectionGestureState != nil, isCollapsed: isSelecting, transition: ComponentTransition(transition))
+            liquidLensView.update(size: CGSize(width: panelSize.width, height: panelSize.height), cornerRadius: cornerRadius, selectionOrigin: CGPoint(x: max(0.0, min(panelSize.width - lensSelection.width, lensSelection.x)), y: 0.0), selectionSize: CGSize(width: lensSelection.width, height: panelSize.height), inset: 3.0, isDark: self.presentationData.theme.overallDarkAppearance, isLifted: self.selectionGestureState != nil, isCollapsed: isSelecting, transition: ComponentTransition(transition))
             
             transition.updatePosition(layer: liquidLensView.layer, position: CGPoint(x: backgroundOriginX + panelSize.width * 0.5, y: panelSize.height * 0.5))
             transition.updateBounds(layer: liquidLensView.layer, bounds: CGRect(origin: .zero, size: panelSize))

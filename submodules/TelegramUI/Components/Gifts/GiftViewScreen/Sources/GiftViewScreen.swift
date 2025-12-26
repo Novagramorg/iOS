@@ -43,6 +43,7 @@ import InfoParagraphComponent
 import ChatMessagePaymentAlertController
 import TableComponent
 import PeerTableCellComponent
+import AvatarComponent
 
 private final class GiftViewSheetContent: CombinedComponent {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
@@ -3010,9 +3011,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                 originY += 16.0
             } else if showUpgradePreview {
                 let title: String
-                //let description: String
                 let uniqueText: String
-                //let transferableText: String
                 let tradableText: String
                 if !incoming, case let .profileGift(peerId, _) = subject, let peer = state.peerMap[peerId] {
                     var peerName = peer.compactDisplayTitle
@@ -3020,9 +3019,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                         peerName = "\(peerName.prefix(22))…"
                     }
                     title = environment.strings.Gift_Upgrade_GiftTitle
-                //    description = environment.strings.Gift_Upgrade_GiftDescription(peerName).string
                     uniqueText = strings.Gift_Upgrade_Unique_GiftDescription(peerName).string
-            //        transferableText = strings.Gift_Upgrade_Transferable_GiftDescription(peerName).string
                     tradableText = strings.Gift_Upgrade_Tradable_GiftDescription(peerName).string
                 } else if case let .upgradePreview(_, peerName) = component.subject {
                     var peerName = peerName
@@ -3030,15 +3027,11 @@ private final class GiftViewSheetContent: CombinedComponent {
                         peerName = "\(peerName.prefix(22))…"
                     }
                     title = environment.strings.Gift_Upgrade_IncludeTitle
-              //      description = environment.strings.Gift_Upgrade_IncludeDescription(peerName).string
                     uniqueText = strings.Gift_Upgrade_Unique_IncludeDescription
-       //             transferableText = strings.Gift_Upgrade_Transferable_IncludeDescription
                     tradableText = strings.Gift_Upgrade_Tradable_IncludeDescription
                 } else {
                     title = environment.strings.Gift_Upgrade_Title
-              //      description = environment.strings.Gift_Upgrade_Description
                     uniqueText = strings.Gift_Upgrade_Unique_Description
-                  //  transferableText = strings.Gift_Upgrade_Transferable_Description
                     tradableText = strings.Gift_Upgrade_Tradable_Description
                 }
                 
@@ -3078,7 +3071,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                             i += 1
                         }
                     }
-                    //TODO:localize
+
                     var buttonColor: UIColor = UIColor.white.withAlphaComponent(0.16)
                     if let previewPatternColor = giftCompositionExternalState.previewPatternColor {
                         buttonColor = previewPatternColor
@@ -3125,7 +3118,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                                             )
                                         )),
                                         AnyComponentWithIdentity(id: "text", component: AnyComponent(
-                                            MultilineTextComponent(text: .plain(NSAttributedString(string: "View all variants", font: Font.semibold(13.0), textColor: .white)))
+                                            MultilineTextComponent(text: .plain(NSAttributedString(string: strings.Gift_Upgrade_ViewAllVariants, font: Font.semibold(13.0), textColor: .white)))
                                         )),
                                         AnyComponentWithIdentity(id: "arrow", component: AnyComponent(
                                             BundleIconComponent(name: "Item List/InlineTextRightArrow", tintColor: .white)
@@ -3180,20 +3173,6 @@ private final class GiftViewSheetContent: CombinedComponent {
                         ))
                     )
                 )
-//                items.append(
-//                    AnyComponentWithIdentity(
-//                        id: "transferable",
-//                        component: AnyComponent(InfoParagraphComponent(
-//                            title: strings.Gift_Upgrade_Transferable_Title,
-//                            titleColor: textColor,
-//                            text: transferableText,
-//                            textColor: secondaryTextColor,
-//                            accentColor: linkColor,
-//                            iconName: "Premium/Collectible/Transferable",
-//                            iconColor: linkColor
-//                        ))
-//                    )
-//                )
                 items.append(
                     AnyComponentWithIdentity(
                         id: "tradable",
@@ -3208,17 +3187,16 @@ private final class GiftViewSheetContent: CombinedComponent {
                         ))
                     )
                 )
-                //TODO:localize
                 items.append(
                     AnyComponentWithIdentity(
                         id: "wearable",
                         component: AnyComponent(InfoParagraphComponent(
-                            title: "Wearable",
+                            title: strings.Gift_Upgrade_Wearable_Title,
                             titleColor: textColor,
-                            text: "Display gifts on your page and set them as profile covers or statuses.",
+                            text: strings.Gift_Upgrade_Wearable_Text,
                             textColor: secondaryTextColor,
                             accentColor: linkColor,
-                            iconName: "Premium/Collectible/Transferable",
+                            iconName: "Premium/Collectible/Wearable",
                             iconColor: linkColor
                         ))
                     )
@@ -6212,77 +6190,6 @@ private final class HeaderButtonComponent: CombinedComponent {
             
             return context.availableSize
         }
-    }
-}
-
-final class AvatarComponent: Component {
-    let context: AccountContext
-    let theme: PresentationTheme
-    let peer: EnginePeer
-
-    init(context: AccountContext, theme: PresentationTheme, peer: EnginePeer) {
-        self.context = context
-        self.theme = theme
-        self.peer = peer
-    }
-
-    static func ==(lhs: AvatarComponent, rhs: AvatarComponent) -> Bool {
-        if lhs.context !== rhs.context {
-            return false
-        }
-        if lhs.theme !== rhs.theme {
-            return false
-        }
-        if lhs.peer != rhs.peer {
-            return false
-        }
-        return true
-    }
-
-    final class View: UIView {
-        private let avatarNode: AvatarNode
-        
-        private var component: AvatarComponent?
-        private weak var state: EmptyComponentState?
-        
-        override init(frame: CGRect) {
-            self.avatarNode = AvatarNode(font: avatarPlaceholderFont(size: 42.0))
-            
-            super.init(frame: frame)
-            
-            self.addSubnode(self.avatarNode)
-        }
-        
-        required init?(coder: NSCoder) {
-            fatalError("init(coder:) has not been implemented")
-        }
-        
-        func update(component: AvatarComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
-            if self.component == nil {
-                self.avatarNode.font = avatarPlaceholderFont(size: 42.0 * floor(availableSize.width / 100.0))
-            }
-            
-            self.component = component
-            self.state = state
-            
-            self.avatarNode.frame = CGRect(origin: .zero, size: availableSize)
-            self.avatarNode.setPeer(
-                context: component.context,
-                theme: component.theme,
-                peer: component.peer,
-                synchronousLoad: true
-            )
-            
-            return availableSize
-        }
-    }
-
-    func makeView() -> View {
-        return View(frame: CGRect())
-    }
-
-    func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
-        return view.update(component: self, availableSize: availableSize, state: state, environment: environment, transition: transition)
     }
 }
 

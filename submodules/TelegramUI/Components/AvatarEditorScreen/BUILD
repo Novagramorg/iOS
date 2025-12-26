@@ -42,6 +42,7 @@ swift_library(
         "//submodules/TelegramUI/Components/AvatarBackground",
         "//submodules/TelegramUI/Components/LottieComponent",
         "//submodules/TelegramUI/Components/Premium/PremiumStarComponent",
+        "//submodules/TelegramUI/Components/AlertComponent",
     ],
     visibility = [
         "//visibility:public",

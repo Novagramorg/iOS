@@ -18,7 +18,6 @@ import RoundedRectWithTailPath
 import AvatarNode
 import BundleIconComponent
 import TextFormat
-import CheckComponent
 import ContextUI
 import StarsBalanceOverlayComponent
 import StoryLiveChatMessageComponent

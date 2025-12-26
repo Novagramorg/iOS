@@ -256,14 +256,7 @@ private final class SheetContent: CombinedComponent {
                     AmountPresetsListItemComponent(
                         context: component.context,
                         theme: theme,
-                        values: [
-                            100000000,
-                            1000000000,
-                            2000000000,
-                            5000000000,
-                            10000000000,
-                            20000000000
-                        ],
+                        values: configuration.suggestedAmounts,
                         valueSelected: { [weak state] value in
                             guard let state else {
                                 return
@@ -326,8 +319,6 @@ private final class SheetContent: CombinedComponent {
                         id: AnyHashable(0),
                         component: AnyComponent(HStack(buttonItems, spacing: 7.0))
                     ),
-                    isEnabled: true,
-                    displaysProgress: false,
                     action: { [weak state] in
                         if let state, let amount = state.amount, let controller = controller() as? EmojiGameStakeScreen {
                             controller.complete(amount: amount)
@@ -1595,13 +1586,36 @@ private final class AmountPresetComponent: Component {
 
 private struct EmojiGameStakeConfiguration {
     static var defaultValue: EmojiGameStakeConfiguration {
-        return EmojiGameStakeConfiguration(tonUsdRate: nil)
+        return EmojiGameStakeConfiguration(
+            tonUsdRate: nil,
+            minStakeAmount: nil,
+            maxStakeAmount: nil,
+            suggestedAmounts: [
+                100000000,
+                1000000000,
+                2000000000,
+                5000000000,
+                10000000000,
+                20000000000
+            ]
+        )
     }
     
     let tonUsdRate: Double?
-    
-    fileprivate init(tonUsdRate: Double?) {
+    let minStakeAmount: Int64?
+    let maxStakeAmount: Int64?
+    let suggestedAmounts: [Int64]
+        
+    fileprivate init(
+        tonUsdRate: Double?,
+        minStakeAmount: Int64?,
+        maxStakeAmount: Int64?,
+        suggestedAmounts: [Int64]
+    ) {
         self.tonUsdRate = tonUsdRate
+        self.minStakeAmount = minStakeAmount
+        self.maxStakeAmount = maxStakeAmount
+        self.suggestedAmounts = suggestedAmounts
     }
     
     static func with(appConfiguration: AppConfiguration) -> EmojiGameStakeConfiguration {
@@ -1611,7 +1625,29 @@ private struct EmojiGameStakeConfiguration {
                 tonUsdRate = value
             }
             
-            return EmojiGameStakeConfiguration(tonUsdRate: tonUsdRate)
+            var minStakeAmount: Int64?
+            if let value = data["ton_stakedice_stake_amount_min"] as? Double {
+                minStakeAmount = Int64(value)
+            }
+            
+            var maxStakeAmount: Int64?
+            if let value = data["ton_stakedice_stake_amount_max"] as? Double {
+                maxStakeAmount = Int64(value)
+            }
+            
+            var suggestedAmounts: [Int64] = []
+            if let value = data["ton_stakedice_stake_suggested_amounts"] as? [Double] {
+                suggestedAmounts = value.map { Int64($0) }
+            } else {
+                suggestedAmounts = EmojiGameStakeConfiguration.defaultValue.suggestedAmounts
+            }
+            
+            return EmojiGameStakeConfiguration(
+                tonUsdRate: tonUsdRate,
+                minStakeAmount: minStakeAmount,
+                maxStakeAmount: maxStakeAmount,
+                suggestedAmounts: suggestedAmounts
+            )
         } else {
             return .defaultValue
         }

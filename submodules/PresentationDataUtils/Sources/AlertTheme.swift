@@ -81,18 +81,6 @@ public func textAlertController(
     return controller
 }
 
-public func textAlertController(
-    sharedContext: SharedAccountContext,
-    title: String?,
-    text: String,
-    actions: [TextAlertAction],
-    actionLayout: TextAlertContentActionLayout = .horizontal,
-    allowInputInset: Bool = true,
-    dismissOnOutsideTap: Bool = true
-) -> AlertController {
-    return textAlertController(alertContext: AlertControllerContext(theme: AlertControllerTheme(presentationData: sharedContext.currentPresentationData.with { $0 }), themeSignal: sharedContext.presentationData |> map { presentationData in AlertControllerTheme(presentationData: presentationData) }), title: title, text: text, actions: actions, actionLayout: actionLayout, allowInputInset: allowInputInset, dismissOnOutsideTap: dismissOnOutsideTap)
-}
-
 public func richTextAlertController(
     context: AccountContext,
     title: NSAttributedString?,

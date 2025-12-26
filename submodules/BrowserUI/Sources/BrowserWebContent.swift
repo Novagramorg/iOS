@@ -1320,24 +1320,28 @@ final class BrowserWebContent: UIView, BrowserContent, WKNavigationDelegate, WKU
 
     func webView(_ webView: WKWebView, runJavaScriptTextInputPanelWithPrompt prompt: String, defaultText: String?, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (String?) -> Void) {
         var completed = false
-        let promptController = promptController(sharedContext: self.context.sharedContext, updatedPresentationData: nil, text: prompt, value: defaultText, apply: { value in
-            if !completed {
-                completed = true
-                if let value = value {
-                    completionHandler(value)
-                } else {
-                    completionHandler(nil)
+        let promptController = promptController(
+            context: self.context,
+            updatedPresentationData: nil,
+            text: prompt,
+            value: defaultText,
+            apply: { value in
+                if !completed {
+                    completed = true
+                    if let value = value {
+                        completionHandler(value)
+                    } else {
+                        completionHandler(nil)
+                    }
                 }
-            }
-        })
-        promptController.dismissed = { byOutsideTap in
-            if byOutsideTap {
+            },
+            dismissed: {
                 if !completed {
                     completed = true
                     completionHandler(nil)
                 }
             }
-        }
+        )
         self.present(promptController, nil)
     }
     

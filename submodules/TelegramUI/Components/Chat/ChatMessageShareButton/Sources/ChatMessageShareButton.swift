@@ -30,6 +30,7 @@ public class ChatMessageShareButton: ASDisplayNode {
     private var theme: PresentationTheme?
     private var isReplies: Bool = false
     private var hasMore: Bool = false
+    private var isExpand: Bool = false
     
     private var textNode: ImmediateTextNode?
     
@@ -103,7 +104,7 @@ public class ChatMessageShareButton: ASDisplayNode {
         self.morePressed?()
     }
     
-    public func update(presentationData: ChatPresentationData, controllerInteraction: ChatControllerInteraction, chatLocation: ChatLocation, subject: ChatControllerSubject?, message: Message, account: Account, disableComments: Bool = false) -> CGSize {
+    public func update(presentationData: ChatPresentationData, controllerInteraction: ChatControllerInteraction, chatLocation: ChatLocation, subject: ChatControllerSubject?, message: Message, account: Account, disableComments: Bool = false, isSummarize: Bool = false) -> CGSize {
         var isReplies = false
         var isNavigate = false
         var replyCount = 0
@@ -134,15 +135,27 @@ public class ChatMessageShareButton: ASDisplayNode {
             hasMore = true
         }
         
-        if self.theme !== presentationData.theme.theme || self.isReplies != isReplies || self.hasMore != hasMore {
+        var isExpand = false
+        if controllerInteraction.summarizedMessageIds.contains(message.id) {
+            isExpand = true
+        }
+        
+        if self.theme !== presentationData.theme.theme || self.isReplies != isReplies || self.hasMore != hasMore || self.isExpand != isExpand {
             self.theme = presentationData.theme.theme
             self.isReplies = isReplies
             self.hasMore = hasMore
+            self.isExpand = isExpand
 
             var updatedIconImage: UIImage?
             var updatedBottomIconImage: UIImage?
             var updatedIconOffset = CGPoint()
-            if let _ = message.adAttribute {
+            if isSummarize {
+                if isExpand {
+                    updatedIconImage = PresentationResourcesChat.chatFreeExpandButtonIcon(presentationData.theme.theme, wallpaper: presentationData.theme.wallpaper)
+                } else {
+                    updatedIconImage = PresentationResourcesChat.chatFreeCollapseButtonIcon(presentationData.theme.theme, wallpaper: presentationData.theme.wallpaper)
+                }
+            } else if let _ = message.adAttribute {
                 updatedIconImage = PresentationResourcesChat.chatFreeCloseButtonIcon(presentationData.theme.theme, wallpaper: presentationData.theme.wallpaper)
                 updatedIconOffset = CGPoint(x: UIScreenPixel, y: UIScreenPixel)
                 

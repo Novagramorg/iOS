@@ -1136,15 +1136,16 @@ public extension Api.messages {
 }
 public extension Api.messages {
     enum EmojiGameOutcome: TypeConstructorDescription {
-        case emojiGameOutcome(seed: Buffer, tonAmount: Int64)
+        case emojiGameOutcome(seed: Buffer, stakeTonAmount: Int64, tonAmount: Int64)
     
     public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
     switch self {
-                case .emojiGameOutcome(let seed, let tonAmount):
+                case .emojiGameOutcome(let seed, let stakeTonAmount, let tonAmount):
                     if boxed {
-                        buffer.appendInt32(-1585592191)
+                        buffer.appendInt32(-634726841)
                     }
                     serializeBytes(seed, buffer: buffer, boxed: false)
+                    serializeInt64(stakeTonAmount, buffer: buffer, boxed: false)
                     serializeInt64(tonAmount, buffer: buffer, boxed: false)
                     break
     }
@@ -1152,8 +1153,8 @@ public extension Api.messages {
     
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
-                case .emojiGameOutcome(let seed, let tonAmount):
-                return ("emojiGameOutcome", [("seed", seed as Any), ("tonAmount", tonAmount as Any)])
+                case .emojiGameOutcome(let seed, let stakeTonAmount, let tonAmount):
+                return ("emojiGameOutcome", [("seed", seed as Any), ("stakeTonAmount", stakeTonAmount as Any), ("tonAmount", tonAmount as Any)])
     }
     }
     
@@ -1162,10 +1163,13 @@ public extension Api.messages {
             _1 = parseBytes(reader)
             var _2: Int64?
             _2 = reader.readInt64()
+            var _3: Int64?
+            _3 = reader.readInt64()
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if _c1 && _c2 {
-                return Api.messages.EmojiGameOutcome.emojiGameOutcome(seed: _1!, tonAmount: _2!)
+            let _c3 = _3 != nil
+            if _c1 && _c2 && _c3 {
+                return Api.messages.EmojiGameOutcome.emojiGameOutcome(seed: _1!, stakeTonAmount: _2!, tonAmount: _3!)
             }
             else {
                 return nil

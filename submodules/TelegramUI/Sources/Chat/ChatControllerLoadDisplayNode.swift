@@ -1003,7 +1003,15 @@ extension ChatControllerImpl {
                     }
                     
                     if let errorText = errorText {
-                        strongSelf.present(standardTextAlertController(theme: AlertControllerTheme(presentationData: strongSelf.presentationData), title: nil, text: errorText, actions: [TextAlertAction(type: .defaultAction, title: strongSelf.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+                        let alertController = textAlertController(
+                            context: strongSelf.context,
+                            title: nil,
+                            text: errorText,
+                            actions: [
+                                TextAlertAction(type: .defaultAction, title: strongSelf.presentationData.strings.Common_OK, action: {})
+                            ]
+                        )
+                        strongSelf.present(alertController, in: .window(.root))
                         return
                     }
                 }
@@ -1107,10 +1115,15 @@ extension ChatControllerImpl {
                     strongSelf.chatDisplayNode.historyNode.scrollToEndOfHistory()
                 case let .businessLinkSetup(link):
                     if messages.count > 1 {
-                        strongSelf.present(standardTextAlertController(theme: AlertControllerTheme(presentationData: strongSelf.presentationData), title: nil, text: strongSelf.presentationData.strings.BusinessLink_AlertTextLimitText, actions: [
-                            TextAlertAction(type: .defaultAction, title: strongSelf.presentationData.strings.Common_OK, action: {})
-                        ]), in: .window(.root))
-                        
+                        let alertController = textAlertController(
+                            context: strongSelf.context,
+                            title: nil,
+                            text: strongSelf.presentationData.strings.BusinessLink_AlertTextLimitText,
+                            actions: [
+                                TextAlertAction(type: .defaultAction, title: strongSelf.presentationData.strings.Common_OK, action: {})
+                            ]
+                        )
+                        strongSelf.present(alertController, in: .window(.root))
                         return
                     }
                     
@@ -1886,8 +1899,9 @@ extension ChatControllerImpl {
                             titleString = self.presentationData.strings.Chat_DeletePaidMessageTon_Title
                             textString = self.presentationData.strings.Chat_DeletePaidMessageTon_Text
                         }
-                        self.present(standardTextAlertController(
-                            theme: AlertControllerTheme(presentationData: self.presentationData),
+                        
+                        let alertController = textAlertController(
+                            context: self.context,
                             title: titleString,
                             text: textString,
                             actions: [
@@ -1899,9 +1913,9 @@ extension ChatControllerImpl {
                                 }),
                                 TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Common_Cancel, action: {})
                             ],
-                            actionLayout: .vertical,
-                            parseMarkdown: true
-                        ), in: .window(.root))
+                            actionLayout: .vertical
+                        )
+                        self.present(alertController, in: .window(.root))
                     }
                     if let contextController {
                         contextController.dismiss(completion: commit)
@@ -3653,7 +3667,7 @@ extension ChatControllerImpl {
                     }
                 }
                 
-                let controller = chatTextLinkEditController(sharedContext: strongSelf.context.sharedContext, updatedPresentationData: strongSelf.updatedPresentationData, account: strongSelf.context.account, text: text?.string ?? "", link: link, allowEmpty: true, apply: { [weak self] link in
+                let controller = chatTextLinkEditController(context: strongSelf.context, updatedPresentationData: strongSelf.updatedPresentationData, text: text?.string ?? "", link: link, apply: { [weak self] link in
                     if let strongSelf = self, let inputMode = inputMode, let selectionRange = selectionRange {
                         if let link {
                             if !link.isEmpty {
@@ -4633,6 +4647,18 @@ extension ChatControllerImpl {
             groupCalls: groupCallPanelSource,
             chatListNotices: false
         )
+        globalControlPanelsContext.tempVoicePlaylistEnded = { [weak self] in
+            guard let self else {
+                return
+            }
+            self.tempVoicePlaylistEnded?()
+        }
+        globalControlPanelsContext.tempVoicePlaylistItemChanged = { [weak self] previousItem, currentItem in
+            guard let self else {
+                return
+            }
+            self.tempVoicePlaylistItemChanged?(previousItem, currentItem)
+        }
         self.globalControlPanelsContext = globalControlPanelsContext
         self.globalControlPanelsContextStateDisposable = (globalControlPanelsContext.state
         |> deliverOnMainQueue).startStrict(next: { [weak self] state in

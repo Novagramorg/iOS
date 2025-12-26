@@ -19,6 +19,8 @@ import TelegramNotices
 import PremiumUI
 import ComponentFlow
 import ComponentDisplayAdapters
+import LocalMediaResources
+import AppBundle
 
 final class ChatTranslationPanelNode: ASDisplayNode {
     private let context: AccountContext
@@ -387,11 +389,40 @@ final class ChatTranslationPanelNode: ASDisplayNode {
                 self?.close()
             })))
             
+            items.append(.separator)
+            
+            let cocoonPath = getAppBundle().url(forResource: "Cocoon", withExtension: "tgs")?.path ?? ""
+            let cocoonFile = TelegramMediaFile(
+                fileId: MediaId(namespace: Namespaces.Media.CloudFile, id: -123456789),
+                partialReference: nil,
+                resource: BundleResource(name: "Cocoon", path: cocoonPath),
+                previewRepresentations: [],
+                videoThumbnails: [],
+                immediateThumbnailData: nil,
+                mimeType: "application/x-tgsticker",
+                size: nil,
+                attributes: [
+                    .FileName(fileName: "sticker.tgs"),
+                    .CustomEmoji(isPremium: false, isSingleColor: true, alt: "", packReference: .animatedEmojiAnimations)
+                ],
+                alternativeRepresentations: []
+            )
+
+            let (cocoonText, entities) = parseCocoonMenuTextEntities(presentationData.strings.Conversation_Translation_CocoonInfo, emojiFileId: cocoonFile.fileId.id)
+            items.append(.action(ContextMenuActionItem(text: cocoonText, entities: entities, entityFiles: [cocoonFile.fileId.id: cocoonFile], enableEntityAnimations: true, textLayout: .multiline, textFont: .small, icon: { _ in return nil }, action: { [weak self] c, _ in
+                c?.dismiss(completion: nil)
+                
+                if let controller = self?.controller() {
+                    let infoController = context.sharedContext.makeCocoonInfoScreen(context: context)
+                    controller.push(infoController)
+                }
+            })))
+            
             return ContextController.Items(content: .list(items))
         }
             
         if let controller = self.controller() {
-            let contextController = ContextController(presentationData: presentationData, source: .reference(TranslationContextReferenceContentSource(controller: controller, sourceNode: node)), items: items, gesture: gesture)
+            let contextController = ContextController(context: context, presentationData: presentationData, source: .reference(TranslationContextReferenceContentSource(controller: controller, sourceNode: node)), items: items, gesture: gesture)
             controller.presentInGlobalOverlay(contextController)
         }
     }
@@ -965,4 +996,117 @@ private final class TranslationLanguagesContextMenuContent: ContextControllerIte
             selectLanguage: self.selectLanguage
         )
     }
+}
+
+private func parseCocoonMenuTextEntities(_ input: String, emojiFileId: Int64) -> (String, [MessageTextEntity]) {
+    var output = ""
+
+    var entities: [MessageTextEntity] = []
+
+    var i = input.startIndex
+    var outputCount = 0
+
+    func utf16Len(_ s: String) -> Int {
+        s.utf16.count
+    }
+
+    func peek(_ offset: Int) -> Character? {
+        var idx = i
+        for _ in 0..<offset {
+            if idx == input.endIndex { return nil }
+            idx = input.index(after: idx)
+        }
+        return idx < input.endIndex ? input[idx] : nil
+    }
+
+    var boldStartOut: Int? = nil
+    while i < input.endIndex {
+        let c = input[i]
+        if c == "*", peek(1) == "*" {
+            if let start = boldStartOut {
+                let end = outputCount
+                if end > start {
+                    entities.append(MessageTextEntity(range: start..<end, type: .Bold))
+                }
+                boldStartOut = nil
+            } else {
+                boldStartOut = outputCount
+            }
+            i = input.index(i, offsetBy: 2)
+            continue
+        }
+
+        if c == "[" {
+            let labelStart = input.index(after: i)
+            guard let closeBracket = input[labelStart...].firstIndex(of: "]") else {
+                let s = String(c)
+                output += s
+                outputCount += utf16Len(s)
+                i = input.index(after: i)
+                continue
+            }
+
+            let afterBracket = input.index(after: closeBracket)
+            guard afterBracket < input.endIndex, input[afterBracket] == "(" else {
+                let s = String(c)
+                output += s
+                outputCount += utf16Len(s)
+                i = input.index(after: i)
+                continue
+            }
+
+            let urlStart = input.index(after: afterBracket)
+            guard let closeParen = input[urlStart...].firstIndex(of: ")") else {
+                let s = String(c)
+                output += s
+                outputCount += utf16Len(s)
+                i = input.index(after: i)
+                continue
+            }
+
+            let label = String(input[labelStart..<closeBracket])
+        
+            let labelOutStart = outputCount
+            output += label
+            let labelLen = utf16Len(label)
+            outputCount += labelLen
+
+            if !label.isEmpty {
+                entities.append(MessageTextEntity(
+                    range: labelOutStart ..< (labelOutStart + labelLen),
+                    type: .Url
+                ))
+            }
+            i = input.index(after: closeParen)
+            continue
+        }
+
+        if c == "#" {
+            let s = "#"
+            output += s
+            let len = utf16Len(s)
+            entities.append(MessageTextEntity(
+                range: outputCount ..< (outputCount + len),
+                type: .CustomEmoji(stickerPack: nil, fileId: emojiFileId)
+            ))
+
+            outputCount += len
+            i = input.index(after: i)
+            continue
+        }
+
+        let s = String(c)
+        output += s
+        outputCount += utf16Len(s)
+        i = input.index(after: i)
+    }
+
+    if let start = boldStartOut {
+        let end = outputCount
+        if end > start {
+            entities.append(MessageTextEntity(range: start..<end, type: .Bold))
+        }
+    }
+
+    return (output, entities)
 }
