@@ -17,6 +17,7 @@ swift_library(
         "//submodules/TelegramUI/Components/EdgeEffect",
         "//submodules/Components/ComponentDisplayAdapters",
         "//submodules/Components/MultilineTextComponent",
+        "//submodules/AppBundle",
     ],
     visibility = [
         "//visibility:public",

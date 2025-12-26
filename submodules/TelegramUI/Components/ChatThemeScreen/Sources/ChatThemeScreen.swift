@@ -308,7 +308,7 @@ private final class ThemeSettingsThemeItemIconNode : ListViewItemNode {
         
         self.placeholderNode = StickerShimmerEffectNode()
 
-        super.init(layerBacked: false, dynamicBounce: false, rotated: false, seeThrough: false)
+        super.init(layerBacked: false, rotated: false, seeThrough: false)
         
         self.addSubnode(self.containerNode)
         self.containerNode.addSubnode(self.imageNode)

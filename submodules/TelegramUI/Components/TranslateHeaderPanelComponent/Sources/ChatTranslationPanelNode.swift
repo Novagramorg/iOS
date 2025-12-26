@@ -17,6 +17,8 @@ import TranslateUI
 import TelegramUIPreferences
 import TelegramNotices
 import PremiumUI
+import ComponentFlow
+import ComponentDisplayAdapters
 
 final class ChatTranslationPanelNode: ASDisplayNode {
     private let context: AccountContext
@@ -123,6 +125,7 @@ final class ChatTranslationPanelNode: ASDisplayNode {
             }), for: [])
         }
 
+        var textUpdated = false
         if themeUpdated || previousInfo?.isActive != info.isActive {
             var languageCode = strings.baseLanguageCode
             let rawSuffix = "-raw"
@@ -142,12 +145,31 @@ final class ChatTranslationPanelNode: ASDisplayNode {
             }
             
             let buttonText = info.isActive ? strings.Conversation_Translation_ShowOriginal : translateTitle
+            if self.buttonTextNode.attributedText?.string != buttonText {
+                textUpdated = true
+            }
             self.buttonTextNode.attributedText = NSAttributedString(string: buttonText, font: Font.regular(17.0), textColor: theme.chat.inputPanel.panelControlColor)
         }
 
         let panelHeight: CGFloat = 40.0
         
         let contentRightInset: CGFloat = 11.0 + rightInset
+        
+        var copyTextView: UIView?
+        if textUpdated, transition.isAnimated {
+            if let copyView = self.buttonTextNode.layer.snapshotContentTreeAsView(unhide: false) {
+                copyTextView = copyView
+                self.buttonTextNode.view.superview?.insertSubview(copyView, belowSubview: self.buttonTextNode.view)
+                transition.updateAlpha(layer: copyView.layer, alpha: 0.0, completion: { [weak copyView] _ in
+                    copyView?.removeFromSuperview()
+                })
+                ComponentTransition(transition).setBlur(layer: copyView.layer, radius: 8.0)
+                
+                ComponentTransition(transition).animateBlur(layer: self.buttonTextNode.layer, fromRadius: 8.0, toRadius: 0.0)
+                self.buttonTextNode.alpha = 0.0
+                transition.updateAlpha(layer: self.buttonTextNode.layer, alpha: 1.0)
+            }
+        }
                   
         let moreButtonSize = self.moreButton.measure(CGSize(width: 100.0, height: panelHeight))
         transition.updateFrame(node: self.moreButton, frame: CGRect(origin: CGPoint(x: width - contentRightInset - moreButtonSize.width, y: floorToScreenPixels((panelHeight - moreButtonSize.height) / 2.0) - 1.0), size: moreButtonSize))
@@ -174,6 +196,9 @@ final class ChatTranslationPanelNode: ASDisplayNode {
             
             let buttonTextFrame = CGRect(origin: CGPoint(x: buttonPadding + icon.size.width + buttonSpacing, y: floorToScreenPixels((buttonSize.height - buttonTextSize.height) / 2.0)), size: buttonTextSize)
             transition.updatePosition(node: self.buttonTextNode, position: buttonTextFrame.center)
+            if let copyTextView {
+                transition.updatePosition(layer: copyTextView.layer, position: buttonTextFrame.center)
+            }
             self.buttonTextNode.bounds = CGRect(origin: CGPoint(), size: buttonTextFrame.size)
         }
         

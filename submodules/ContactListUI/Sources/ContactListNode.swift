@@ -1234,7 +1234,6 @@ public final class ContactListNode: ASDisplayNode {
         self.presentationData = presentationData
         
         self.listNode = ListView()
-        self.listNode.dynamicBounceEnabled = false
         self.listNode.accessibilityPageScrolledString = { row, count in
             return presentationData.strings.VoiceOver_ScrollStatus(row, count).string
         }
@@ -2097,8 +2096,6 @@ public final class ContactListNode: ASDisplayNode {
                     }, filterHitTest: true)
                     strongSelf.authorizationNode.isHidden = authorizationPreviousHidden
                     strongSelf.addSubnode(strongSelf.authorizationNode)
-                    
-                    strongSelf.listNode.dynamicBounceEnabled = false
                     
                     strongSelf.listNode.forEachAccessoryItemNode({ accessoryItemNode in
                         if let accessoryItemNode = accessoryItemNode as? ContactsSectionHeaderAccessoryItemNode {

@@ -4,6 +4,9 @@ import AsyncDisplayKit
 import Display
 import TelegramPresentationData
 import ListSectionHeaderNode
+import EdgeEffect
+import ComponentFlow
+import ComponentDisplayAdapters
 
 public enum ChatListSearchItemHeaderType {
     case localPeers
@@ -250,6 +253,7 @@ public final class ChatListSearchItemHeaderNode: ListViewItemHeaderNode {
     
     private var validLayout: (size: CGSize, leftInset: CGFloat, rightInset: CGFloat)?
     
+    private var edgeEffectView: EdgeEffectView?
     private let sectionHeaderNode: ListSectionHeaderNode
     
     public init(type: ChatListSearchItemHeaderType, theme: PresentationTheme, strings: PresentationStrings, actionTitle: String?, action: ((ASDisplayNode) -> Void)?) {
@@ -262,6 +266,8 @@ public final class ChatListSearchItemHeaderNode: ListViewItemHeaderNode {
         self.sectionHeaderNode = ListSectionHeaderNode(theme: theme)
         
         super.init()
+        
+        //self.contributesToEdgeEffect = true
         
         self.sectionHeaderNode.title = type.title(strings: strings).uppercased()
         self.sectionHeaderNode.action = actionTitle

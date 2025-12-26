@@ -720,7 +720,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         self.moreBarButton = MoreHeaderButton(color: self.presentationData.theme.chat.inputPanel.panelControlColor)
         self.moreBarButton.isUserInteractionEnabled = true
         
-        super.init(context: context, navigationBarPresentationData: navigationBarPresentationData, mediaAccessoryPanelVisibility: .none, locationBroadcastPanelSource: .none, groupCallPanelSource: .none)
+        super.init(context: context, navigationBarPresentationData: navigationBarPresentationData)
         
         self.automaticallyControlPresentationContextLayout = false
         self.blocksBackgroundWhenInOverlay = true
@@ -6820,7 +6820,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         
         if case .standard(.default) = self.presentationInterfaceState.mode, self.raiseToListen == nil {
             self.raiseToListen = RaiseToListenManager(shouldActivate: { [weak self] in
-                if let strongSelf = self, strongSelf.isNodeLoaded && strongSelf.canReadHistoryValue, strongSelf.presentationInterfaceState.interfaceState.editMessage == nil, strongSelf.playlistStateAndType == nil {
+                if let strongSelf = self, strongSelf.isNodeLoaded && strongSelf.canReadHistoryValue, strongSelf.presentationInterfaceState.interfaceState.editMessage == nil, strongSelf.globalControlPanelsContext?.playlistStateAndType == nil {
                     if !strongSelf.context.sharedContext.currentMediaInputSettings.with({ $0.enableRaiseToSpeak }) {
                         return false
                     }
@@ -6861,7 +6861,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                 self?.deactivateRaiseGesture()
             })
             self.raiseToListen?.enabled = self.canReadHistoryValue
-            self.tempVoicePlaylistEnded = { [weak self] in
+            self.globalControlPanelsContext?.setTempVoicePlaylistEnded({ [weak self] in
                 guard let strongSelf = self else {
                     return
                 }
@@ -6878,14 +6878,14 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                     strongSelf.returnInputViewFocus = false
                     strongSelf.chatDisplayNode.ensureInputViewFocused()
                 }
-            }
-            self.tempVoicePlaylistItemChanged = { [weak self] previousItem, currentItem in
+            })
+            self.globalControlPanelsContext?.setTempVoicePlaylistItemChanged({ [weak self] previousItem, currentItem in
                 guard let strongSelf = self else {
                     return
                 }
                 
                 strongSelf.chatDisplayNode.historyNode.voicePlaylistItemChanged(previousItem, currentItem)
-            }
+            })
         }
         
         if let arguments = self.presentationArguments as? ChatControllerOverlayPresentationData {

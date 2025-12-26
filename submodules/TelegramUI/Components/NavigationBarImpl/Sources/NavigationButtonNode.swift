@@ -3,6 +3,7 @@ import AsyncDisplayKit
 import Display
 import ComponentFlow
 import MultilineTextComponent
+import AppBundle
 
 let glassBackArrowImage: UIImage? = {
     let imageSize = CGSize(width: 44.0, height: 44.0)
@@ -19,6 +20,10 @@ let glassBackArrowImage: UIImage? = {
         context.addLine(to: CGPoint(x: topRightPoint.x, y: size.height - topRightPoint.y))
         context.strokePath()
     })?.withRenderingMode(.alwaysTemplate)
+}()
+
+let glassCloseImage: UIImage? = {
+    return generateTintedImage(image: UIImage(bundleImageName: "Navigation/Close"), color: .white)?.withRenderingMode(.alwaysTemplate)
 }()
 
 private final class ItemComponent: Component {
@@ -120,7 +125,11 @@ private final class ItemComponent: Component {
                 if item.image != nil {
                     iconImage = item.image
                 } else if let title = item.title {
-                    titleString = title
+                    if title == "___close" {
+                        iconImage = glassCloseImage
+                    } else {
+                        titleString = title
+                    }
                 }
             }
             
@@ -271,6 +280,11 @@ private final class NavigationButtonItemNode: ImmediateTextNode {
                     self.addSubnode(imageNode)
                 }
                 self.imageNode?.image = image
+                if self.imageNode?.image?.renderingMode == .alwaysTemplate {
+                    self.imageNode?.tintColor = self.color
+                } else {
+                    self.imageNode?.tintColor = nil
+                }
             } else if let imageNode = self.imageNode {
                 imageNode.removeFromSupernode()
                 self.imageNode = nil
@@ -297,6 +311,9 @@ private final class NavigationButtonItemNode: ImmediateTextNode {
     
     public var color: UIColor = UIColor(rgb: 0x0088ff) {
         didSet {
+            if self.imageNode?.image?.renderingMode == .alwaysTemplate {
+                self.imageNode?.tintColor = self.color
+            }
             if let text = self._text {
                 self.attributedText = NSAttributedString(string: text, attributes: self.attributesForCurrentState())
             }
@@ -658,8 +675,13 @@ public final class NavigationButtonNodeImpl: ContextControllerSourceNode, Naviga
             }
             node.alpha = self.manualAlpha
             node.item = items[i]
-            node.image = items[i].image
-            node.text = items[i].title ?? ""
+            if items[i].title == "___close" {
+                //node.image = glassCloseImage
+                node.image = generateTintedImage(image: UIImage(bundleImageName: "Navigation/Close"), color: self.color)
+            } else {
+                node.image = items[i].image
+                node.text = items[i].title ?? ""
+            }
             node.bold = items[i].style == .done
             node.isEnabled = items[i].isEnabled
             node.node = items[i].customDisplayNode
@@ -732,11 +754,11 @@ public final class NavigationButtonNodeImpl: ContextControllerSourceNode, Naviga
             }
         }
         
-        if !isLeftAligned {
+        /*if !isLeftAligned {
             for disappearingNode in self.disappearingNodes {
                 disappearingNode.node.frame = disappearingNode.frame.offsetBy(dx: nodeOrigin.x - disappearingNode.size.width, dy: (totalHeight - disappearingNode.size.height) * 0.5)
             }
-        }
+        }*/
         
         return CGSize(width: nodeOrigin.x, height: totalHeight)
     }

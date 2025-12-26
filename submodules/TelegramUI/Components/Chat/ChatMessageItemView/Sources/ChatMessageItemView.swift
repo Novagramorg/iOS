@@ -664,7 +664,7 @@ open class ChatMessageItemView: ListViewItemNode, ChatMessageItemNodeProtocol {
     public var effectAnimationNodes: [ChatMessageTransitionNode.DecorationItemNode] = []
     
     public required init(rotated: Bool) {
-        super.init(layerBacked: false, dynamicBounce: true, rotated: rotated)
+        super.init(layerBacked: false, rotated: rotated)
         if rotated {
             self.transform = CATransform3DMakeRotation(CGFloat.pi, 0.0, 0.0, 1.0)
         }

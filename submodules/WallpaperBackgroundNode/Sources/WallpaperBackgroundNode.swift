@@ -981,6 +981,9 @@ public final class WallpaperBackgroundNodeImpl: ASDisplayNode, WallpaperBackgrou
     }
     private static var cachedSharedPattern: (PatternKey, UIImage)?
     
+    public private(set) var isDark: Bool?
+    public var isDarkUpdated: (() -> Void)?
+    
     private let _isReady = ValuePromise<Bool>(false, ignoreRepeated: true)
     public var isReady: Signal<Bool, NoError> {
         return self._isReady.get()

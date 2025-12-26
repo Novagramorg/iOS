@@ -280,6 +280,8 @@ public final class HorizontalTabsComponent: Component {
     }
     
     private final class ItemView {
+        var frame: CGRect = CGRect()
+        var selectionFrame: CGRect = CGRect()
         let regularView = ComponentView<Empty>()
         let selectedView = ComponentView<Empty>()
         
@@ -305,12 +307,13 @@ public final class HorizontalTabsComponent: Component {
         private var reorderingItemPosition: (initial: CGFloat, offset: CGFloat)?
         private var reorderingAutoScrollAnimator: ConstantDisplayLinkAnimator?
         private var initialReorderedItemIds: [AnyHashable]?
-        private var reorderedItemIds: [AnyHashable]?
+        public private(set) var reorderedItemIds: [AnyHashable]?
         
         private var layoutData: LayoutData?
         
         private var component: HorizontalTabsComponent?
         private weak var state: EmptyComponentState?
+        private var isUpdating: Bool = false
         
         override init(frame: CGRect) {
             self.lensView = LiquidLensView(kind: .noContainer)
@@ -349,6 +352,19 @@ public final class HorizontalTabsComponent: Component {
                     return
                 }
                 self.alpha = self.lensView.isAnimating ? 1.0 : 0.7
+            }*/
+            /*self.lensView.isLiftedAnimationCompleted = { [weak self] in
+                guard let self else {
+                    return
+                }
+                if let temporaryLiftTimer = self.temporaryLiftTimer {
+                    let _ = temporaryLiftTimer
+                    /*self.temporaryLiftTimer = nil
+                    temporaryLiftTimer.invalidate()
+                    if !self.isUpdating {
+                        self.state?.updated(transition: .spring(duration: 0.5))
+                    }*/
+                }
             }*/
             
             let tapRecognizer = UITapGestureRecognizer(target: self, action: #selector(self.onTapGesture(_:)))
@@ -507,10 +523,7 @@ public final class HorizontalTabsComponent: Component {
             if case .ended = recognizer.state {
                 let point = recognizer.location(in: self)
                 for (id, itemView) in self.itemViews {
-                    guard let itemView = itemView.regularView.view else {
-                        continue
-                    }
-                    if itemView.convert(itemView.bounds, to: self).contains(point) {
+                    if self.scrollView.convert(itemView.selectionFrame, to: self).contains(point) {
                         if let tab = component.tabs.first(where: { $0.id == id }) {
                             tab.action()
                         }
@@ -554,13 +567,18 @@ public final class HorizontalTabsComponent: Component {
             guard let component = self.component, let layoutData = self.layoutData else {
                 return
             }
-            self.lensView.update(size: CGSize(width: layoutData.size.width - 3.0 * 2.0, height: layoutData.size.height - 3.0 * 2.0), selectionOrigin: CGPoint(x:  -self.scrollView.contentOffset.x + layoutData.selectedItemFrame.minX, y: 0.0), selectionSize: CGSize(width: layoutData.selectedItemFrame.width + 6.0, height: layoutData.size.height - 3.0 * 2.0), inset: 0.0, isDark: component.theme.overallDarkAppearance, isLifted: self.temporaryLiftTimer != nil, transition: transition)
+            self.lensView.update(size: CGSize(width: layoutData.size.width - 3.0 * 2.0, height: layoutData.size.height - 3.0 * 2.0), selectionOrigin: CGPoint(x:  -self.scrollView.contentOffset.x + layoutData.selectedItemFrame.minX, y: 0.0), selectionSize: CGSize(width: layoutData.selectedItemFrame.width, height: layoutData.size.height - 3.0 * 2.0), inset: 0.0, liftedInset: 6.0, isDark: component.theme.overallDarkAppearance, isLifted: self.temporaryLiftTimer != nil, transition: transition)
             
             transition.setPosition(view: self.selectedScrollView, position: CGRect(origin: CGPoint(x: 3.0, y: 0.0), size: CGSize(width: layoutData.size.width - 3.0 * 2.0, height: layoutData.size.height - 3.0 * 2.0)).center)
             transition.setBounds(view: self.selectedScrollView, bounds: CGRect(origin: CGPoint(x: self.scrollView.contentOffset.x, y: 0.0), size: CGSize(width: layoutData.size.width - 3.0 * 2.0, height: layoutData.size.height - 3.0 * 2.0)))
         }
         
         func update(component: HorizontalTabsComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
+            self.isUpdating = true
+            defer {
+                self.isUpdating = false
+            }
+            
             var shouldFocusOnSelectedTab = self.isDraggingTabs
             
             if component.isEditing {
@@ -578,13 +596,13 @@ public final class HorizontalTabsComponent: Component {
                     self.temporaryLiftTimer = nil
                     
                     if !transition.animation.isImmediate {
-                        self.temporaryLiftTimer = Foundation.Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false, block: { [weak self] timer in
+                        self.temporaryLiftTimer = Foundation.Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false, block: { [weak self] _ in
                             guard let self else {
                                 return
                             }
-                            if self.temporaryLiftTimer === timer {
-                                self.temporaryLiftTimer = nil
-                                self.state?.updated(transition: .spring(duration: 0.5))
+                            self.temporaryLiftTimer = nil
+                            if !self.isUpdating {
+                                self.state?.updated(transition: .easeInOut(duration: 0.2), isLocal: true)
                             }
                         })
                     }
@@ -600,8 +618,6 @@ public final class HorizontalTabsComponent: Component {
             let sizeHeight: CGFloat = 40.0
             
             let sideInset: CGFloat = 0.0
-            
-            var contentWidth: CGFloat = sideInset
             
             var validIds: [Tab.Id] = []
             
@@ -619,6 +635,8 @@ public final class HorizontalTabsComponent: Component {
                     }
                 }
             }
+            
+            var items: [(tabId: AnyHashable, itemView: ItemView, size: CGSize, itemTransition: ComponentTransition)] = []
             
             for tab in orderedTabs {
                 let tabId = tab.id
@@ -664,10 +682,48 @@ public final class HorizontalTabsComponent: Component {
                     containerSize: CGSize(width: 1000.0, height: sizeHeight - 3.0 * 2.0)
                 )
                 
-                var itemFrame = CGRect(origin: CGPoint(x: contentWidth, y: 0.0), size: itemSize)
-                if tabId == self.reorderingItem, let (initial, offset) = self.reorderingItemPosition {
-                    itemFrame.origin = CGPoint(x: initial + offset, y: 3.0 + itemFrame.minY)
+                items.append((tabId, itemView, itemSize, itemTransition))
+            }
+            
+            var totalContentWidth: CGFloat = sideInset
+            for item in items {
+                totalContentWidth += item.size.width
+            }
+            totalContentWidth += sideInset
+            
+            let scrollContentWidth: CGFloat
+            if case .fill = component.layout, totalContentWidth < availableSize.width {
+                let regularItemWidth = floor((availableSize.width - 3.0 * 2.0 - sideInset * 2.0) / CGFloat(items.count))
+                let lastItemWidth = (availableSize.width - 3.0 * 2.0 - sideInset * 2.0) - regularItemWidth * CGFloat(items.count - 1)
+                for i in 0 ..< items.count {
+                    let item = items[i]
+                    let itemWidth = (i == items.count - 1) ? lastItemWidth : regularItemWidth
+                    var itemFrame = CGRect(origin: CGPoint(x: sideInset + regularItemWidth * CGFloat(i) + floor((itemWidth - item.size.width) * 0.5), y: 0.0), size: item.size)
+                    if item.tabId == self.reorderingItem, let (initial, offset) = self.reorderingItemPosition {
+                        itemFrame.origin = CGPoint(x: initial + offset, y: 3.0 + itemFrame.minY)
+                    }
+                    item.itemView.frame = itemFrame
+                    item.itemView.selectionFrame = CGRect(origin: CGPoint(x: sideInset + regularItemWidth * CGFloat(i), y: 0.0), size: CGSize(width: itemWidth, height: item.size.height))
                 }
+                
+                scrollContentWidth = availableSize.width - 3.0 * 2.0
+            } else {
+                var contentWidth: CGFloat = sideInset
+                for item in items {
+                    var itemFrame = CGRect(origin: CGPoint(x: contentWidth, y: 0.0), size: item.size)
+                    if item.tabId == self.reorderingItem, let (initial, offset) = self.reorderingItemPosition {
+                        itemFrame.origin = CGPoint(x: initial + offset, y: 3.0 + itemFrame.minY)
+                    }
+                    item.itemView.frame = itemFrame
+                    item.itemView.selectionFrame = itemFrame
+                    contentWidth += item.size.width
+                }
+                contentWidth += sideInset
+                scrollContentWidth = contentWidth
+            }
+            
+            for (tabId, itemView, _, itemTransition) in items {
+                let itemFrame = itemView.frame
                 
                 if let itemRegularView = itemView.regularView.view, let itemSelectedView = itemView.selectedView.view {
                     if itemRegularView.superview == nil {
@@ -695,10 +751,7 @@ public final class HorizontalTabsComponent: Component {
                         itemTransition.setAlpha(view: itemSelectedView, alpha: 1.0)
                     }
                 }
-                    
-                contentWidth += itemSize.width
             }
-            contentWidth += sideInset
             
             var removedIds: [Tab.Id] = []
             for (id, itemView) in self.itemViews {
@@ -724,21 +777,21 @@ public final class HorizontalTabsComponent: Component {
             if let selectedTab = component.selectedTab {
                 for i in 0 ..< component.tabs.count {
                     if component.tabs[i].id == selectedTab {
-                        if let itemView = self.itemViews[component.tabs[i].id]?.regularView.view {
-                            var selectedItemFrameValue = itemView.frame
-                            if selectedTab == self.reorderingItem {
-                                selectedItemFrameValue = itemView.convert(itemView.bounds, to: self.scrollView)
+                        if let itemView = self.itemViews[component.tabs[i].id] {
+                            var selectedItemFrameValue = itemView.selectionFrame
+                            if selectedTab == self.reorderingItem, let itemSuperview = itemView.regularView.view?.superview {
+                                selectedItemFrameValue = itemSuperview.convert(itemView.selectionFrame, to: self.scrollView)
                             }
                             
                             var pendingItemFrame: CGRect?
                             if self.tabSwitchFraction != 0.0 {
                                 if self.tabSwitchFraction > 0.0 && i != component.tabs.count - 1 {
-                                    if let nextItemView = self.itemViews[component.tabs[i + 1].id]?.regularView.view {
-                                        pendingItemFrame = nextItemView.frame
+                                    if let nextItemView = self.itemViews[component.tabs[i + 1].id] {
+                                        pendingItemFrame = nextItemView.selectionFrame
                                     }
                                 } else if self.tabSwitchFraction < 0.0 && i != 0 {
-                                    if let previousItemView = self.itemViews[component.tabs[i - 1].id]?.regularView.view {
-                                        pendingItemFrame = previousItemView.frame
+                                    if let previousItemView = self.itemViews[component.tabs[i - 1].id] {
+                                        pendingItemFrame = previousItemView.selectionFrame
                                     }
                                 }
                             }
@@ -755,14 +808,14 @@ public final class HorizontalTabsComponent: Component {
                 }
             }
             
-            let contentSize = CGSize(width: contentWidth, height: sizeHeight - 3.0 * 2.0)
+            let contentSize = CGSize(width: scrollContentWidth, height: sizeHeight - 3.0 * 2.0)
             
             let sizeWidth: CGFloat
             switch component.layout {
             case .fill:
                 sizeWidth = availableSize.width
             case .fit:
-                sizeWidth = min(availableSize.width, contentWidth + 3.0 * 2.0)
+                sizeWidth = min(availableSize.width, scrollContentWidth + 3.0 * 2.0)
             }
             
             let size = CGSize(width: sizeWidth, height: sizeHeight)
@@ -782,14 +835,22 @@ public final class HorizontalTabsComponent: Component {
             var scrollViewBounds = CGRect(origin: self.scrollView.bounds.origin, size: scrollViewFrame.size)
             if shouldFocusOnSelectedTab || self.scrollView.bounds.size != scrollViewBounds.size {
                 if shouldFocusOnSelectedTab, let selectedItemFrame {
-                    if scrollViewBounds.minX + scrollViewBounds.width < selectedItemFrame.maxX {
-                        scrollViewBounds.origin.x = selectedItemFrame.maxX - scrollViewBounds.width
+                    let scrollLookahead: CGFloat = 100.0
+                    
+                    if scrollViewBounds.minX + scrollViewBounds.width - scrollLookahead < selectedItemFrame.maxX {
+                        scrollViewBounds.origin.x = selectedItemFrame.maxX - scrollViewBounds.width + scrollLookahead
                     }
-                    if scrollViewBounds.minX > selectedItemFrame.minX {
-                        scrollViewBounds.origin.x = selectedItemFrame.minX
+                    if scrollViewBounds.minX > selectedItemFrame.minX - scrollLookahead {
+                        scrollViewBounds.origin.x = selectedItemFrame.minX - scrollLookahead
                     }
-                    transition.setBounds(view: self.scrollView, bounds: scrollViewBounds)
+                    if scrollViewBounds.origin.x + scrollViewBounds.width > contentSize.width {
+                        scrollViewBounds.origin.x = contentSize.width - scrollViewBounds.width
+                    }
+                    if scrollViewBounds.origin.x < 0.0 {
+                        scrollViewBounds.origin.x = 0.0
+                    }
                 }
+                transition.setBounds(view: self.scrollView, bounds: scrollViewBounds)
             }
             
             self.scrollView.layer.cornerRadius = (size.height - 3.0 * 2.0) * 0.5

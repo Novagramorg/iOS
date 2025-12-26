@@ -703,7 +703,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         self.sendActionButtons.micButtonBackgroundView.alpha = 0.0
         self.sendActionButtons.micButton.alpha = 0.0
         self.sendActionButtons.micButtonTintMaskView.alpha = 0.0
-        self.sendActionButtons.expandMediaInputButton.alpha = 0.0
+        self.sendActionButtons.expandMediaInputButtonBackgroundView.alpha = 0.0
         
         self.mediaActionButtons = ChatTextInputActionButtonsNode(context: context, presentationInterfaceState: presentationInterfaceState, presentationContext: presentationContext, presentController: presentController)
         self.mediaActionButtons.sendContainerNode.alpha = 0.0
@@ -901,7 +901,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         self.mediaActionButtons.updateAccessibility()
         
         self.mediaActionButtons.expandMediaInputButton.addTarget(self, action: #selector(self.expandButtonPressed), for: .touchUpInside)
-        self.mediaActionButtons.expandMediaInputButton.alpha = 0.0
+        self.mediaActionButtons.expandMediaInputButtonBackgroundView.alpha = 0.0
         
         self.searchLayoutClearButton.highligthedChanged = { [weak self] highlighted in
             guard let self else {
@@ -4466,15 +4466,15 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         }
         
         if mediaInputIsActive && !hideExpandMediaInput {
-            if self.mediaActionButtons.expandMediaInputButton.alpha.isZero {
-                self.mediaActionButtons.expandMediaInputButton.alpha = 1.0
+            if self.mediaActionButtons.expandMediaInputButtonBackgroundView.alpha.isZero {
+                self.mediaActionButtons.expandMediaInputButtonBackgroundView.alpha = 1.0
                 if alphaTransition.isAnimated {
-                    self.mediaActionButtons.expandMediaInputButton.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
+                    self.mediaActionButtons.expandMediaInputButtonBackgroundView.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
                 }
             }
         } else {
-            if !self.mediaActionButtons.expandMediaInputButton.alpha.isZero {
-                alphaTransition.updateAlpha(layer: self.mediaActionButtons.expandMediaInputButton.layer, alpha: 0.0)
+            if !self.mediaActionButtons.expandMediaInputButtonBackgroundView.alpha.isZero {
+                alphaTransition.updateAlpha(layer: self.mediaActionButtons.expandMediaInputButtonBackgroundView.layer, alpha: 0.0)
             }
         }
         

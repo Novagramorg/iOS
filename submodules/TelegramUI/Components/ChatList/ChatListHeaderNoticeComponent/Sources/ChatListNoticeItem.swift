@@ -130,7 +130,7 @@ final class ChatListNoticeItemNode: ItemListRevealOptionsItemNode {
         self.arrowNode = ASImageNode()
         self.separatorNode = ASDisplayNode()
         
-        super.init(layerBacked: false, dynamicBounce: false, rotated: false, seeThrough: false)
+        super.init(layerBacked: false, rotated: false, seeThrough: false)
         
         self.contentContainer.clipsToBounds = true
         self.clipsToBounds = true

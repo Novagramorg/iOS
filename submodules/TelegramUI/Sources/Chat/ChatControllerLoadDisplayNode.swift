@@ -692,7 +692,7 @@ extension ChatControllerImpl {
         
         self.displayNode = ChatControllerNode(context: self.context, chatLocation: self.chatLocation, chatLocationContextHolder: self.chatLocationContextHolder, subject: self.subject, controllerInteraction: self.controllerInteraction!, chatPresentationInterfaceState: self.presentationInterfaceState, automaticMediaDownloadSettings: self.automaticMediaDownloadSettings, navigationBar: self.navigationBar, statusBar: self.statusBar, backgroundNode: self.chatBackgroundNode, controller: self)
         
-        if let currentItem = self.tempVoicePlaylistCurrentItem {
+        if let currentItem = self.globalControlPanelsContext?.tempVoicePlaylistCurrentItem {
             self.chatDisplayNode.historyNode.voicePlaylistItemChanged(nil, currentItem)
         }
         
@@ -4613,12 +4613,12 @@ extension ChatControllerImpl {
             liveLocationMode = self.chatLocation.peerId.flatMap(GlobalControlPanelsContext.LiveLocationMode.peer)
         }
         
-        var groupCallPanelSource: GroupCallPanelSource?
+        var groupCallPanelSource: EnginePeer.Id?
         switch self.chatLocation {
         case let .peer(peerId):
             switch self.subject {
             case .message, .none:
-                groupCallPanelSource = .peer(peerId)
+                groupCallPanelSource = peerId
             default:
                 break
             }

@@ -249,6 +249,16 @@ public protocol CustomViewControllerNavigationDataSummary: AnyObject {
     open var interactiveNavivationGestureEdgeWidth: InteractiveTransitionGestureRecognizerEdgeWidth? {
         return nil
     }
+    
+    open var navigationEdgeEffectExtension: CGFloat {
+        return 0.0
+    }
+    
+    public func updateNavigationEdgeEffectExtension(transition: ContainedViewLayoutTransition) {
+        if let navigationBar = self.navigationBar {
+            navigationBar.updateEdgeEffectExtension(value: max(0.0, self.navigationEdgeEffectExtension - navigationBar.frame.maxY), transition: transition)
+        }
+    }
 
     open func navigationLayout(layout: ContainerViewLayout) -> NavigationLayout {
         let statusBarHeight: CGFloat = layout.statusBarHeight ?? 0.0

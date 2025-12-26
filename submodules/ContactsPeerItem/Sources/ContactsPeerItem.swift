@@ -584,7 +584,7 @@ public class ContactsPeerItemNode: ItemListRevealOptionsItemNode {
         self.titleNode = TextNode()
         self.statusNode = TextNodeWithEntities()
         
-        super.init(layerBacked: false, dynamicBounce: false, rotated: false, seeThrough: false)
+        super.init(layerBacked: false, rotated: false, seeThrough: false)
         
         self.isAccessibilityElement = true
         

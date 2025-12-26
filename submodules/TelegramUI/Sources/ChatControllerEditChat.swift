@@ -9,6 +9,7 @@ import TelegramPresentationData
 import PresentationDataUtils
 import QuickReplyNameAlertController
 import BusinessLinkNameAlertController
+import ChatTitleView
 
 extension ChatControllerImpl {
     func editChat() {
@@ -54,7 +55,7 @@ extension ChatControllerImpl {
                                 strings: self.presentationData.strings,
                                 dateTimeFormat: self.presentationData.dateTimeFormat,
                                 nameDisplayOrder: self.presentationData.nameDisplayOrder,
-                                content: .custom("\(value)", nil, false),
+                                content: .custom(title: [ChatTitleContent.TitleTextItem(id: AnyHashable(0), content: .text("\(value)"))], subtitle: nil, isEnabled: false),
                                 transition: .immediate
                             )
                             
@@ -108,7 +109,7 @@ extension ChatControllerImpl {
                         strings: self.presentationData.strings,
                         dateTimeFormat: self.presentationData.dateTimeFormat,
                         nameDisplayOrder: self.presentationData.nameDisplayOrder,
-                        content: .custom(value.isEmpty ? self.presentationData.strings.Business_Links_EditLinkTitle : value, linkUrl, false),
+                        content: .custom(title: [ChatTitleContent.TitleTextItem(id: AnyHashable(0), content: .text(value.isEmpty ? self.presentationData.strings.Business_Links_EditLinkTitle : value))], subtitle: linkUrl, isEnabled: false),
                         transition: .immediate
                     )
                     if case let .customChatContents(customChatContents) = self.subject {

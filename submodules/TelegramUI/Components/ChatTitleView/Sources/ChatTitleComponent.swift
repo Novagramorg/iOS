@@ -522,12 +522,21 @@ public final class ChatTitleComponent: Component {
                 }
                 
                 isEnabled = false
-            case let .custom(text, _, enabled):
-                titleSegments = [AnimatedTextComponent.Item(
-                    id: AnyHashable(0),
-                    isUnbreakable: true,
-                    content: .text(text)
-                )]
+            case let .custom(textItems, _, enabled):
+                titleSegments = textItems.map { item -> AnimatedTextComponent.Item in
+                    let mappedContent: AnimatedTextComponent.Item.Content
+                    switch item.content {
+                    case let .number(value, minDigits):
+                        mappedContent = .number(value, minDigits: minDigits)
+                    case let .text(text):
+                        mappedContent = .text(text)
+                    }
+                    return AnimatedTextComponent.Item(
+                        id: item.id,
+                        isUnbreakable: item.isUnbreakable,
+                        content: mappedContent
+                    )
+                }
                 isEnabled = enabled
             }
             
@@ -982,9 +991,9 @@ public final class ChatTitleComponent: Component {
                     font: Font.semibold(17.0),
                     color: component.theme.chat.inputPanel.panelControlColor,
                     items: titleSegments,
-                    noDelay: true,
-                    animateScale: false,
-                    animateSlide: false,
+                    noDelay: false,
+                    animateScale: true,
+                    animateSlide: true,
                     blur: true
                 )),
                 environment: {},
