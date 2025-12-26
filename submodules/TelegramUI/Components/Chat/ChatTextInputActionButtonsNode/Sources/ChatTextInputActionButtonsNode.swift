@@ -201,7 +201,6 @@ public final class ChatTextInputActionButtonsNode: ASDisplayNode, ChatSendMessag
         
         self.expandMediaInputButton = HighlightTrackingButton()
         self.expandMediaInputButtonBackgroundView = GlassBackgroundView()
-        self.expandMediaInputButtonBackgroundView.isUserInteractionEnabled = false
         self.expandMediaInputButtonIcon = GlassBackgroundView.ContentImageView()
         self.expandMediaInputButtonBackgroundView.contentView.addSubview(self.expandMediaInputButtonIcon)
         self.expandMediaInputButtonBackgroundView.contentView.addSubview(self.expandMediaInputButton)
