@@ -319,8 +319,6 @@ private final class SheetContent: CombinedComponent {
                         id: AnyHashable(0),
                         component: AnyComponent(HStack(buttonItems, spacing: 7.0))
                     ),
-                    isEnabled: true,
-                    displaysProgress: false,
                     action: { [weak state] in
                         if let state, let amount = state.amount, let controller = controller() as? EmojiGameStakeScreen {
                             controller.complete(amount: amount)

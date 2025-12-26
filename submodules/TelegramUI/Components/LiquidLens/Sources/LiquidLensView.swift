@@ -66,6 +66,7 @@ public final class LiquidLensView: UIView {
     
     private struct Params: Equatable {
         var size: CGSize
+        var cornerRadius: CGFloat?
         var selectionOrigin: CGPoint
         var selectionSize: CGSize
         var inset: CGFloat
@@ -73,8 +74,9 @@ public final class LiquidLensView: UIView {
         var isLifted: Bool
         var isCollapsed: Bool
 
-        init(size: CGSize, selectionOrigin: CGPoint, selectionSize: CGSize, inset: CGFloat, isDark: Bool, isLifted: Bool, isCollapsed: Bool) {
+        init(size: CGSize, cornerRadius: CGFloat?, selectionOrigin: CGPoint, selectionSize: CGSize,  inset: CGFloat, isDark: Bool, isLifted: Bool, isCollapsed: Bool) {
             self.size = size
+            self.cornerRadius = cornerRadius
             self.selectionOrigin = selectionOrigin
             self.selectionSize = selectionSize
             self.inset = inset
@@ -286,8 +288,8 @@ public final class LiquidLensView: UIView {
         lensView.perform(NSSelectorFromString("setLiftedContainerView:"), with: view)
     }
 
-    public func update(size: CGSize, selectionOrigin: CGPoint, selectionSize: CGSize, inset: CGFloat, isDark: Bool, isLifted: Bool, isCollapsed: Bool = false, transition: ComponentTransition) {
-        let params = Params(size: size, selectionOrigin: selectionOrigin, selectionSize: selectionSize, inset: inset, isDark: isDark, isLifted: isLifted, isCollapsed: isCollapsed)
+    public func update(size: CGSize, cornerRadius: CGFloat? = nil, selectionOrigin: CGPoint, selectionSize: CGSize, inset: CGFloat, isDark: Bool, isLifted: Bool, isCollapsed: Bool = false, transition: ComponentTransition) {
+        let params = Params(size: size, cornerRadius: cornerRadius, selectionOrigin: selectionOrigin, selectionSize: selectionSize, inset: inset, isDark: isDark, isLifted: isLifted, isCollapsed: isCollapsed)
         if self.params == params {
             return
         }
@@ -421,7 +423,7 @@ public final class LiquidLensView: UIView {
         
         if let backgroundView = self.backgroundView {
             transition.setFrame(view: backgroundView, frame: CGRect(origin: CGPoint(), size: params.size))
-            backgroundView.update(size: params.size, cornerRadius: params.size.height * 0.5, isDark: params.isDark, tintColor: GlassBackgroundView.TintColor.init(kind: .panel, color: UIColor(white: params.isDark ? 0.0 : 1.0, alpha: 0.6)), isInteractive: true, transition: transition)
+            backgroundView.update(size: params.size, cornerRadius: params.cornerRadius ?? (params.size.height * 0.5), isDark: params.isDark, tintColor: GlassBackgroundView.TintColor.init(kind: .panel, color: UIColor(white: params.isDark ? 0.0 : 1.0, alpha: 0.6)), isInteractive: true, transition: transition)
         }
         
         if self.contentView.bounds.size != params.size {
@@ -432,7 +434,7 @@ public final class LiquidLensView: UIView {
                 }
                 self.contentView.clipsToBounds = false
             })
-            transition.setCornerRadius(layer: self.contentView.layer, cornerRadius: params.size.height * 0.5)
+            transition.setCornerRadius(layer: self.contentView.layer, cornerRadius: params.cornerRadius ?? (params.size.height * 0.5))
 
             self.liftedContainerView.clipsToBounds = true
             transition.setFrame(view: self.liftedContainerView, frame: CGRect(origin: CGPoint(), size: params.size), completion: { [weak self] completed in
@@ -441,7 +443,7 @@ public final class LiquidLensView: UIView {
                 }
                 self.liftedContainerView.clipsToBounds = false
             })
-            transition.setCornerRadius(layer: self.liftedContainerView.layer, cornerRadius: params.size.height * 0.5)
+            transition.setCornerRadius(layer: self.liftedContainerView.layer, cornerRadius: params.cornerRadius ?? (params.size.height * 0.5))
         }
 
         let baseLensFrame = CGRect(origin: CGPoint(x: params.selectionOrigin.x, y: 0.0), size: CGSize(width: params.selectionSize.width, height: params.size.height))

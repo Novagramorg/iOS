@@ -17,6 +17,7 @@ public final class GlassBarButtonComponent: Component {
     public let isDark: Bool
     public let state: DisplayState?
     public let isEnabled: Bool
+    public let animateScale: Bool
     public let component: AnyComponentWithIdentity<Empty>
     public let action: ((UIView) -> Void)?
 
@@ -26,6 +27,7 @@ public final class GlassBarButtonComponent: Component {
         isDark: Bool,
         state: DisplayState? = nil,
         isEnabled: Bool = true,
+        animateScale: Bool = true,
         component: AnyComponentWithIdentity<Empty>,
         action: ((UIView) -> Void)?
     ) {
@@ -34,6 +36,7 @@ public final class GlassBarButtonComponent: Component {
         self.isDark = isDark
         self.state = state
         self.isEnabled = isEnabled
+        self.animateScale = animateScale
         self.component = component
         self.action = action
     }
@@ -52,6 +55,9 @@ public final class GlassBarButtonComponent: Component {
             return false
         }
         if lhs.isEnabled != rhs.isEnabled {
+            return false
+        }
+        if lhs.animateScale != rhs.animateScale {
             return false
         }
         if lhs.component != rhs.component {
@@ -88,7 +94,7 @@ public final class GlassBarButtonComponent: Component {
             self.containerView.addTarget(self, action: #selector(self.pressed), for: .touchUpInside)
             
             self.containerView.highligthedChanged = { [weak self] highlighted in
-                guard let self else {
+                guard let self, let component = self.component, component.animateScale else {
                     return
                 }
                 if highlighted {

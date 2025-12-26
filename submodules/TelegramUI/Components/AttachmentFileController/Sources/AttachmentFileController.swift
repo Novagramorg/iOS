@@ -465,6 +465,7 @@ public func makeAttachmentFileControllerImpl(context: AccountContext, updatedPre
             backgroundColor: nil,
             isDark: presentationData.theme.overallDarkAppearance,
             state: .generic,
+            animateScale: false,
             component: AnyComponentWithIdentity(id: "close", component: AnyComponent(
                 BundleIconComponent(
                     name: "Navigation/Close",
@@ -492,6 +493,7 @@ public func makeAttachmentFileControllerImpl(context: AccountContext, updatedPre
             backgroundColor: nil,
             isDark: presentationData.theme.overallDarkAppearance,
             state: .generic,
+            animateScale: false,
             component: AnyComponentWithIdentity(id: "search", component: AnyComponent(
                 BundleIconComponent(
                     name: "Navigation/Search",
