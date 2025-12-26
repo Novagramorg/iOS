@@ -77,3 +77,4 @@ spm-files
 xcode-files
 .bsp/**
 /.claude/
+/buildbox/*
