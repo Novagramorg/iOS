@@ -764,7 +764,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             }
             
             transition.updateFrame(view: searchEdgeEffectView, frame: searchEdgeEffectFrame)
-            searchEdgeEffectView.update(content: presentationData.theme.list.blocksBackgroundColor, blur: true, rect: searchEdgeEffectFrame, edge: .top, edgeSize: searchEdgeEffectHeight, transition: searchEdgeEffectTransition)
+            searchEdgeEffectView.update(content: presentationData.theme.list.plainBackgroundColor, blur: true, rect: searchEdgeEffectFrame, edge: .top, edgeSize: searchEdgeEffectHeight, transition: searchEdgeEffectTransition)
         } else if let searchEdgeEffectView = self.searchEdgeEffectView {
             self.searchEdgeEffectView = nil
             transition.updateAlpha(layer: searchEdgeEffectView.layer, alpha: 0.0, completion: { [weak searchEdgeEffectView] _ in
@@ -2555,7 +2555,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             self.updateUnderHeaderContentsAlpha?(1.0 - realAreaExpansionFraction, transition)
         }
         
-        self.headerEdgeEffectView.update(content: presentationData.theme.rootController.navigationBar.opaqueBackgroundColor, blur: true, rect: edgeEffectFrame, edge: .top, edgeSize: edgeEffectHeight, transition: ComponentTransition(transition))
+        self.headerEdgeEffectView.update(content: presentationData.theme.list.plainBackgroundColor, blur: true, rect: edgeEffectFrame, edge: .top, edgeSize: edgeEffectHeight, transition: ComponentTransition(transition))
         
         navigationTransition.updateAlpha(layer: self.headerEdgeEffectView.layer, alpha: state.isEditing ? 0.0 : 1.0)
         

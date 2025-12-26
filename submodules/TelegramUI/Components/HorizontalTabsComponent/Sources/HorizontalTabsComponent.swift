@@ -567,7 +567,11 @@ public final class HorizontalTabsComponent: Component {
             guard let component = self.component, let layoutData = self.layoutData else {
                 return
             }
-            self.lensView.update(size: CGSize(width: layoutData.size.width - 3.0 * 2.0, height: layoutData.size.height - 3.0 * 2.0), selectionOrigin: CGPoint(x:  -self.scrollView.contentOffset.x + layoutData.selectedItemFrame.minX, y: 0.0), selectionSize: CGSize(width: layoutData.selectedItemFrame.width, height: layoutData.size.height - 3.0 * 2.0), inset: 0.0, liftedInset: 6.0, isDark: component.theme.overallDarkAppearance, isLifted: self.temporaryLiftTimer != nil, transition: transition)
+            var isLifted = self.temporaryLiftTimer != nil
+            if component.theme.overallDarkAppearance {
+                isLifted = false
+            }
+            self.lensView.update(size: CGSize(width: layoutData.size.width - 3.0 * 2.0, height: layoutData.size.height - 3.0 * 2.0), selectionOrigin: CGPoint(x:  -self.scrollView.contentOffset.x + layoutData.selectedItemFrame.minX, y: 0.0), selectionSize: CGSize(width: layoutData.selectedItemFrame.width, height: layoutData.size.height - 3.0 * 2.0), inset: 0.0, liftedInset: 6.0, isDark: component.theme.overallDarkAppearance, isLifted: isLifted, transition: transition)
             
             transition.setPosition(view: self.selectedScrollView, position: CGRect(origin: CGPoint(x: 3.0, y: 0.0), size: CGSize(width: layoutData.size.width - 3.0 * 2.0, height: layoutData.size.height - 3.0 * 2.0)).center)
             transition.setBounds(view: self.selectedScrollView, bounds: CGRect(origin: CGPoint(x: self.scrollView.contentOffset.x, y: 0.0), size: CGSize(width: layoutData.size.width - 3.0 * 2.0, height: layoutData.size.height - 3.0 * 2.0)))

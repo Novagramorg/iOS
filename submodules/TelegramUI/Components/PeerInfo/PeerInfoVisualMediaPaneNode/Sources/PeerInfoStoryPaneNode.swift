@@ -4594,12 +4594,13 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
                 } else {
                     backgroundColor = presentationData.theme.list.blocksBackgroundColor
                 }
+                let _ = backgroundColor
                 
-                if self.didUpdateItemsOnce {
+                /*if self.didUpdateItemsOnce {
                     ComponentTransition(animation: .curve(duration: 0.2, curve: .easeInOut)).setBackgroundColor(view: self.view, color: backgroundColor)
                 } else {
                     self.view.backgroundColor = backgroundColor
-                }
+                }*/
             } else {
                 let emptyStateView: ComponentView<Empty>
                 var emptyStateTransition = ComponentTransition(transition)
@@ -4661,12 +4662,13 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
                 } else {
                     backgroundColor = presentationData.theme.list.blocksBackgroundColor
                 }
+                let _ = backgroundColor
                 
-                if self.didUpdateItemsOnce {
+                /*if self.didUpdateItemsOnce {
                     ComponentTransition(animation: .curve(duration: 0.2, curve: .easeInOut)).setBackgroundColor(view: self.view, color: backgroundColor)
                 } else {
                     self.view.backgroundColor = backgroundColor
-                }
+                }*/
             }
         } else if case .botPreview = self.scope, let items = self.items, items.items.isEmpty, items.count == 0 {
             let emptyStateView: ComponentView<Empty>
@@ -4827,12 +4829,13 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
             } else {
                 backgroundColor = presentationData.theme.list.blocksBackgroundColor
             }
+            let _ = backgroundColor
             
-            if self.didUpdateItemsOnce {
+            /*if self.didUpdateItemsOnce {
                 ComponentTransition(animation: .curve(duration: 0.2, curve: .easeInOut)).setBackgroundColor(view: self.view, color: backgroundColor)
             } else {
                 self.view.backgroundColor = backgroundColor
-            }
+            }*/
         } else {
             if let emptyStateView = self.emptyStateView {
                 let subTransition = ComponentTransition(animation: .curve(duration: 0.2, curve: .easeInOut))
@@ -4858,7 +4861,7 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
                     subTransition.setBackgroundColor(view: self.view, color: presentationData.theme.list.blocksBackgroundColor)
                 }
             } else {
-                if self.isProfileEmbedded, case .botPreview = self.scope {
+                /*if self.isProfileEmbedded, case .botPreview = self.scope {
                     self.view.backgroundColor = presentationData.theme.list.blocksBackgroundColor
                 } else if self.isProfileEmbedded, case let .peer(_, _, isArchived) = self.scope, self.canManageStories, self.isProfileEmbedded, !isArchived {
                     self.view.backgroundColor = presentationData.theme.list.blocksBackgroundColor
@@ -4868,7 +4871,7 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
                     } else {
                         self.view.backgroundColor = .clear
                     }
-                }
+                }*/
             }
         }
 
