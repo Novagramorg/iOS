@@ -12,6 +12,7 @@ public protocol ListViewItemHeader: AnyObject {
     var id: ListViewItemNode.HeaderId { get }
     var stackingId: ListViewItemNode.HeaderId? { get }
     var stickDirection: ListViewItemHeaderStickDirection { get }
+    var isSticky: Bool { get }
     var height: CGFloat { get }
     var stickOverInsets: Bool { get }
 
@@ -19,6 +20,12 @@ public protocol ListViewItemHeader: AnyObject {
     
     func node(synchronousLoad: Bool) -> ListViewItemHeaderNode
     func updateNode(_ node: ListViewItemHeaderNode, previous: ListViewItemHeader?, next: ListViewItemHeader?)
+}
+
+public extension ListViewItemHeader {
+    var isSticky: Bool {
+        return true
+    }
 }
 
 open class ListViewItemHeaderNode: ASDisplayNode {

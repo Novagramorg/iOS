@@ -97,7 +97,7 @@ public final class ListSectionHeaderNode: ASDisplayNode {
         
         self.layer.addSublayer(self.backgroundLayer)
         
-        self.view.addSubview(self.labelBackgroundView)
+        //self.view.addSubview(self.labelBackgroundView)
         self.addSubnode(self.label)
         
         //self.backgroundLayer.backgroundColor = theme.chatList.sectionHeaderFillColor.cgColor
@@ -159,17 +159,16 @@ public final class ListSectionHeaderNode: ASDisplayNode {
         self.label.frame = labelFrame
         
         let labelBackgroundSize: CGFloat = labelSize.height
-        let labelBackgroundInnerInset: CGFloat = 6.0
+        let labelBackgroundInnerInset: CGFloat = 2.0
         let labelBackgroundInset: CGFloat = 10.0 + labelBackgroundInnerInset
         if self.labelBackgroundView.image?.size.width != labelBackgroundSize + labelBackgroundInset * 2.0 {
             self.labelBackgroundView.image = blurredImage(generateImage(CGSize(width: labelBackgroundSize + labelBackgroundInset * 2.0, height: labelBackgroundSize + labelBackgroundInset * 2.0), rotatedContext: { size, context in
                 context.clear(CGRect(origin: CGPoint(), size: size))
                 context.setFillColor(UIColor.white.cgColor)
                 context.fillEllipse(in: CGRect(origin: CGPoint(x: labelBackgroundInset - labelBackgroundInnerInset, y: labelBackgroundInset - labelBackgroundInnerInset), size: CGSize(width: labelBackgroundSize + labelBackgroundInnerInset * 2.0, height: labelBackgroundSize + labelBackgroundInnerInset * 2.0)))
-            })!, radius: 19, iterations: 3)?.stretchableImage(withLeftCapWidth: Int(labelBackgroundInset + labelBackgroundSize * 0.5), topCapHeight: Int(labelBackgroundInset + labelBackgroundSize * 0.5)).withRenderingMode(.alwaysTemplate)
+            })!, radius: 17, iterations: 3)?.stretchableImage(withLeftCapWidth: Int(labelBackgroundInset + labelBackgroundSize * 0.5), topCapHeight: Int(labelBackgroundInset + labelBackgroundSize * 0.5)).withRenderingMode(.alwaysTemplate)
         }
-        self.labelBackgroundView.tintColor = self.theme.list.plainBackgroundColor.withAlphaComponent(self.theme.overallDarkAppearance ? 0.5 : 0.85)
-        //self.labelBackgroundView.tintColor = UIColor.blue.withMultipliedAlpha(0.8)
+        self.labelBackgroundView.tintColor = self.theme.list.plainBackgroundColor.withAlphaComponent(self.theme.overallDarkAppearance ? 0.5 : 0.7)
         
         self.labelBackgroundView.frame = labelFrame.insetBy(dx: -labelBackgroundInset - 4.0, dy: -labelBackgroundInset)
         

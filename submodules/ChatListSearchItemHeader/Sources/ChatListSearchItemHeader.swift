@@ -217,6 +217,7 @@ public final class ChatListSearchItemHeader: ListViewItemHeader {
     public let action: ((ASDisplayNode) -> Void)?
     
     public let height: CGFloat = 28.0
+    public let isSticky: Bool = false
     
     public init(type: ChatListSearchItemHeaderType, theme: PresentationTheme, strings: PresentationStrings, actionTitle: String? = nil, action: ((ASDisplayNode) -> Void)? = nil) {
         self.type = type
