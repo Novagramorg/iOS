@@ -1766,15 +1766,24 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
             attributedString = addAttributesToStringWithRanges(resultTitleString._tuple, body: bodyAttributes, argumentAttributes: [0: boldAttributes])
         } else if let dice = media as? TelegramMediaDice, let gameOutcome = dice.gameOutcome {
             if let value = dice.value {
-                //TODO:localize
-                
                 let rawString: String
-                if value == 1, let tonAmount = dice.tonAmount {
-                    let value = formatTonAmountText(tonAmount, dateTimeFormat: dateTimeFormat)
-                    rawString = "You lost $\(value)"
+                if message.author?.id == accountPeerId {
+                    if value == 1, let tonAmount = dice.tonAmount {
+                        let value = formatTonAmountText(tonAmount, dateTimeFormat: dateTimeFormat)
+                        rawString = strings.Conversation_EmojiStake_LostYou(value).string
+                    } else {
+                        let value = formatTonAmountText(gameOutcome.tonAmount, dateTimeFormat: dateTimeFormat)
+                        rawString = strings.Conversation_EmojiStake_WonYou(value).string
+                    }
                 } else {
-                    let value = formatTonAmountText(gameOutcome.tonAmount, dateTimeFormat: dateTimeFormat)
-                    rawString = "You won $\(value)"
+                    let compactPeerName = message.peers[message.id.peerId].flatMap(EnginePeer.init)?.compactDisplayTitle ?? ""
+                    if value == 1, let tonAmount = dice.tonAmount {
+                        let value = formatTonAmountText(tonAmount, dateTimeFormat: dateTimeFormat)
+                        rawString = strings.Conversation_EmojiStake_Lost(compactPeerName, value).string
+                    } else {
+                        let value = formatTonAmountText(gameOutcome.tonAmount, dateTimeFormat: dateTimeFormat)
+                        rawString = strings.Conversation_EmojiStake_Won(compactPeerName, value).string
+                    }
                 }
                 
                 let attributedText = NSMutableAttributedString(string: rawString, font: titleFont, textColor: primaryTextColor)
