@@ -799,6 +799,9 @@ public final class ChatListSearchContainerNode: SearchDisplayControllerContentNo
             }
             filtersInsets.bottom = max(8.0, filtersInsets.bottom)
         }
+        if self.stateValue.selectedMessageIds != nil {
+            filtersInsets.bottom += 48.0
+        }
         
         transition.updateFrame(node: self.filterContainerNode, frame: CGRect(origin: CGPoint(x: layout.safeInsets.left + filtersInsets.left, y: layout.size.height - filtersInsets.bottom - 40.0), size: CGSize(width: layout.size.width - (layout.safeInsets.left + filtersInsets.left) * 2.0, height: 40.0)))
         self.updateFilterContainerNode(layout: layout, transition: transition)
@@ -809,13 +812,13 @@ public final class ChatListSearchContainerNode: SearchDisplayControllerContentNo
         }
         
         var bottomIntrinsicInset = layout.intrinsicInsets.bottom
-        if case .chatList(.root) = self.location {
+        /*if case .chatList(.root) = self.location {
             if layout.safeInsets.left > 20.0 {
                 bottomIntrinsicInset -= 34.0
             } else {
                 bottomIntrinsicInset -= 49.0
             }
-        }
+        }*/
         
         if let selectedMessageIds = self.stateValue.selectedMessageIds {
             var wasAdded = false
@@ -969,10 +972,8 @@ public final class ChatListSearchContainerNode: SearchDisplayControllerContentNo
             bottomInset = inputHeight
         } else if let _ = self.selectionPanelNode {
             bottomInset = bottomIntrinsicInset
-        } else if case .chatList(.root) = self.location {
-            bottomInset -= bottomIntrinsicInset
         }
-        bottomInset += 40.0 - 10.0
+        bottomInset += 10.0
         
         let availablePanes: [ChatListSearchPaneKey]
         var isForum = false
