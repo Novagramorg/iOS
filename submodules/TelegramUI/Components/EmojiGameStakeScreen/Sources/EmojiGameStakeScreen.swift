@@ -76,7 +76,7 @@ private final class SheetContent: CombinedComponent {
             let controller = environment.controller
             
             let theme = environment.theme.withModalBlocksBackground()
-            //let strings = environment.strings
+            let strings = environment.strings
             let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
             
             let sideInset: CGFloat = 16.0 + environment.safeInsets.left
@@ -91,10 +91,9 @@ private final class SheetContent: CombinedComponent {
                 return (TelegramTextAttributes.URL, contents)
             })
            
-            //TODO:localize
             let description = description.update(
                 component: BalancedTextComponent(
-                    text: .markdown(text: "An experimental feature for Telegram Premium users.", attributes: markdownAttributes),
+                    text: .markdown(text: strings.EmojiStake_Description, attributes: markdownAttributes),
                     horizontalAlignment: .center,
                     maximumNumberOfLines: 0,
                     lineSpacing: 0.2
@@ -110,7 +109,7 @@ private final class SheetContent: CombinedComponent {
                
             let resultsTitle = resultsTitle.update(
                 component: MultilineTextComponent(text: .plain(NSAttributedString(
-                    string: "RESULTS AND RETURNS".uppercased(),
+                    string: strings.EmojiStake_ResultsTitle.uppercased(),
                     font: Font.regular(presentationData.listsFontSize.itemListBaseHeaderFontSize),
                     textColor: theme.list.freeTextColor
                 ))),
@@ -186,14 +185,14 @@ private final class SheetContent: CombinedComponent {
             contentSize.height += 7.0
             
             let resultsFooterAttributedText = NSMutableAttributedString(
-                string: "A streak resets after 3 # or a stake change.",
+                string: strings.EmojiStake_StreakInfo,
                 font: Font.regular(13.0),
                 textColor: theme.list.freeTextColor
             )
             if let emojiFile = state.emojiFiles?[6] {
                 let range = (resultsFooterAttributedText.string as NSString).range(of: "#")
                 if range.location != NSNotFound {
-                    resultsFooterAttributedText.addAttribute(ChatTextInputAttributes.customEmoji, value: ChatTextInputTextCustomEmojiAttribute(interactivelySelectedFromPackId: nil, fileId: emojiFile.fileId.id, file: emojiFile), range: range)
+                    resultsFooterAttributedText.addAttribute(ChatTextInputAttributes.customEmoji, value: ChatTextInputTextCustomEmojiAttribute(interactivelySelectedFromPackId: nil, fileId: 0, file: emojiFile, custom: .dice, enableAnimation: false), range: range)
                 }
             }
             
@@ -240,7 +239,7 @@ private final class SheetContent: CombinedComponent {
                             forceMinValue: false,
                             allowZero: true,
                             maxValue: nil,
-                            placeholderText: "Amount",
+                            placeholderText: strings.EmojiStake_StakePlaceholder,
                             labelText: amountLabel,
                             currency: .ton,
                             dateTimeFormat: presentationData.dateTimeFormat,
@@ -272,14 +271,13 @@ private final class SheetContent: CombinedComponent {
                 ))
             ]
             
-            //TODO:localize
             let amountSection = amountSection.update(
                 component: ListSectionComponent(
                     theme: theme,
                     style: .glass,
                     header: AnyComponent(MultilineTextComponent(
                         text: .plain(NSAttributedString(
-                            string: "STAKE".uppercased(),
+                            string: strings.EmojiStake_StakeTitle.uppercased(),
                             font: Font.regular(presentationData.listsFontSize.itemListBaseHeaderFontSize),
                             textColor: theme.list.freeTextColor
                         )),
@@ -301,10 +299,9 @@ private final class SheetContent: CombinedComponent {
             contentSize.height += 24.0
            
     
-            //TODO:localize
             var buttonItems: [AnyComponentWithIdentity<Empty>] = []
             buttonItems.append(AnyComponentWithIdentity(id: "icon", component: AnyComponent(BundleIconComponent(name: "Premium/Dice", tintColor: theme.list.itemCheckColors.foregroundColor))))
-            buttonItems.append(AnyComponentWithIdentity(id: "label", component: AnyComponent(Text(text: "Save and Roll", font: Font.semibold(17.0), color: theme.list.itemCheckColors.foregroundColor))))
+            buttonItems.append(AnyComponentWithIdentity(id: "label", component: AnyComponent(Text(text: environment.strings.EmojiStake_Roll, font: Font.semibold(17.0), color: theme.list.itemCheckColors.foregroundColor))))
            
             let buttonInsets = ContainerViewLayout.concentricInsets(bottomInset: environment.safeInsets.bottom, innerDiameter: 52.0, sideInset: 30.0)
             let button = button.update(
@@ -449,7 +446,7 @@ private final class EmojiGameStakeSheetComponent: CombinedComponent {
             
             var buttonItems: [AnyComponentWithIdentity<Empty>] = []
             buttonItems.append(AnyComponentWithIdentity(id: "icon", component: AnyComponent(Image(image: PresentationResourcesItemList.itemListRoundTopupIcon(environment.theme), tintColor: theme.list.itemCheckColors.foregroundColor, size: CGSize(width: 16.0, height: 18.0)))))
-            buttonItems.append(AnyComponentWithIdentity(id: "label", component: AnyComponent(Text(text: "Save and Roll", font: Font.semibold(17.0), color: theme.list.itemCheckColors.foregroundColor))))
+            buttonItems.append(AnyComponentWithIdentity(id: "label", component: AnyComponent(Text(text: environment.strings.EmojiStake_Roll, font: Font.semibold(17.0), color: theme.list.itemCheckColors.foregroundColor))))
             
             let sheet = sheet.update(
                 component: ResizableSheetComponent<EnvironmentType>(
@@ -464,7 +461,7 @@ private final class EmojiGameStakeSheetComponent: CombinedComponent {
                         }
                     )),
                     titleItem: AnyComponent(
-                        Text(text: "Emoji Stake", font: Font.bold(17.0), color: theme.list.itemPrimaryTextColor)
+                        Text(text: environment.strings.EmojiStake_Title, font: Font.bold(17.0), color: theme.list.itemPrimaryTextColor)
                     ),
                     leftItem: AnyComponent(
                         GlassBarButtonComponent(
