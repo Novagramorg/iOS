@@ -12755,6 +12755,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
             restoreContentOffset = self.scrollNode.view.contentOffset
         }
         
+        contentHeight -= 18.0
         let paneContainerFrame = CGRect(origin: CGPoint(x: 0.0, y: contentHeight), size: paneContainerSize)
         if self.state.isEditing || (self.data?.availablePanes ?? []).isEmpty {
             transition.updateAlpha(node: self.paneContainerNode, alpha: 0.0)
