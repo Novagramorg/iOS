@@ -6,12 +6,7 @@ import TelegramPresentationData
 import ComponentFlow
 import ComponentDisplayAdapters
 import TabBarComponent
-
-private extension ToolbarTheme {
-    convenience init(theme: PresentationTheme) {
-        self.init(barBackgroundColor: theme.rootController.tabBar.backgroundColor, barSeparatorColor: .clear, barTextColor: theme.rootController.tabBar.textColor, barSelectedTextColor: theme.rootController.tabBar.selectedTextColor)
-    }
-}
+import GlassControls
 
 final class TabBarControllerNode: ASDisplayNode {
     private struct Params: Equatable {
@@ -61,7 +56,7 @@ final class TabBarControllerNode: ASDisplayNode {
     private let tabBarView = ComponentView<Empty>()
     
     private let disabledOverlayNode: ASDisplayNode
-    private var toolbarNode: ToolbarNode?
+    private var toolbar: ComponentView<Empty>?
     private let toolbarActionSelected: (ToolbarActionOption) -> Void
     private let disabledPressed: () -> Void
     private let activateSearch: () -> Void
@@ -162,7 +157,6 @@ final class TabBarControllerNode: ASDisplayNode {
         self.backgroundColor = theme.list.plainBackgroundColor
         
         self.disabledOverlayNode.backgroundColor = theme.rootController.tabBar.backgroundColor.withAlphaComponent(0.5)
-        self.toolbarNode?.updateTheme(ToolbarTheme(theme: theme))
         self.requestUpdate()
     }
     
@@ -291,34 +285,90 @@ final class TabBarControllerNode: ASDisplayNode {
         
         transition.updateFrame(node: self.disabledOverlayNode, frame: tabBarFrame)
         
-        let toolbarHeight = 50.0 + panelsBottomInset
-        let toolbarFrame = CGRect(origin: CGPoint(x: 0.0, y: params.layout.size.height - toolbarHeight), size: CGSize(width: params.layout.size.width, height: toolbarHeight))
+        let toolbarHeight = 44.0
+        let toolbarFrame = CGRect(origin: CGPoint(x: sideInset, y: params.layout.size.height - panelsBottomInset - toolbarHeight), size: CGSize(width: params.layout.size.width - sideInset * 2.0, height: toolbarHeight))
         
-        if let toolbar = params.toolbar {
-            if let toolbarNode = self.toolbarNode {
-                transition.updateFrame(node: toolbarNode, frame: toolbarFrame)
-                toolbarNode.updateLayout(size: toolbarFrame.size, leftInset: params.layout.safeInsets.left, rightInset: params.layout.safeInsets.right, additionalSideInsets: params.layout.additionalInsets, bottomInset: panelsBottomInset, toolbar: toolbar, transition: transition)
+        if let toolbarData = params.toolbar {
+            let toolbar: ComponentView<Empty>
+            var toolbarTransition = ComponentTransition(transition)
+            if let current = self.toolbar {
+                toolbar = current
             } else {
-                let toolbarNode = ToolbarNode(theme: ToolbarTheme(theme: self.theme), displaySeparator: true, left: { [weak self] in
-                    self?.toolbarActionSelected(.left)
-                }, right: { [weak self] in
-                    self?.toolbarActionSelected(.right)
-                }, middle: { [weak self] in
-                    self?.toolbarActionSelected(.middle)
-                })
-                toolbarNode.frame = toolbarFrame
-                toolbarNode.updateLayout(size: toolbarFrame.size, leftInset: params.layout.safeInsets.left, rightInset: params.layout.safeInsets.right, additionalSideInsets: params.layout.additionalInsets, bottomInset: panelsBottomInset, toolbar: toolbar, transition: .immediate)
-                self.addSubnode(toolbarNode)
-                self.toolbarNode = toolbarNode
-                if transition.isAnimated {
-                    toolbarNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
-                }
+                toolbar = ComponentView()
+                self.toolbar = toolbar
+                toolbarTransition = .immediate
             }
-        } else if let toolbarNode = self.toolbarNode {
-            self.toolbarNode = nil
-            transition.updateAlpha(node: toolbarNode, alpha: 0.0, completion: { [weak toolbarNode] _ in
-                toolbarNode?.removeFromSupernode()
-            })
+            
+            let _ = toolbar.update(
+                transition: toolbarTransition,
+                component: AnyComponent(GlassControlPanelComponent(
+                    theme: self.theme,
+                    leftItem: toolbarData.leftAction.flatMap { value in
+                        return GlassControlPanelComponent.Item(
+                            items: [GlassControlGroupComponent.Item(
+                                id: "left_" + value.title,
+                                content: .text(value.title),
+                                action: value.isEnabled ? { [weak self] in
+                                    guard let self else {
+                                        return
+                                    }
+                                    self.toolbarActionSelected(.left)
+                                } : nil
+                            )],
+                            background: .panel
+                        )
+                    },
+                    centralItem: toolbarData.middleAction.flatMap { value in
+                        return GlassControlPanelComponent.Item(
+                            items: [GlassControlGroupComponent.Item(
+                                id: "right_" + value.title,
+                                content: .text(value.title),
+                                action: value.isEnabled ? { [weak self] in
+                                    guard let self else {
+                                        return
+                                    }
+                                    self.toolbarActionSelected(.middle)
+                                } : nil
+                            )],
+                            background: .panel
+                        )
+                    },
+                    rightItem: toolbarData.rightAction.flatMap { value in
+                        return GlassControlPanelComponent.Item(
+                            items: [GlassControlGroupComponent.Item(
+                                id: "right_" + value.title,
+                                content: .text(value.title),
+                                action: value.isEnabled ? { [weak self] in
+                                    guard let self else {
+                                        return
+                                    }
+                                    self.toolbarActionSelected(.right)
+                                } : nil
+                            )],
+                            background: .panel
+                        )
+                    },
+                    centerAlignmentIfPossible: true
+                )),
+                environment: {},
+                containerSize: toolbarFrame.size
+            )
+            
+            if let toolbarView = toolbar.view {
+                if toolbarView.superview == nil {
+                    self.view.addSubview(toolbarView)
+                    toolbarView.alpha = 0.0
+                }
+                toolbarTransition.setFrame(view: toolbarView, frame: toolbarFrame)
+                ComponentTransition(transition).setAlpha(view: toolbarView, alpha: 1.0)
+            }
+        } else if let toolbar = self.toolbar {
+            self.toolbar = nil
+            if let toolbarView = toolbar.view {
+                ComponentTransition(transition).setAlpha(view: toolbarView, alpha: 0.0, completion: { [weak toolbarView] _ in
+                    toolbarView?.removeFromSuperview()
+                })
+            }
         }
         
         return params.layout.size.height - tabBarFrame.minY - 6.0

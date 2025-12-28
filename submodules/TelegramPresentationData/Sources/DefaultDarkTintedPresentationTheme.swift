@@ -145,7 +145,7 @@ public func customizeDefaultDarkTintedPresentationTheme(theme: PresentationTheme
             navigationSearchBar: rootController.navigationSearchBar.withUpdated(
                 backgroundColor: mainBackgroundColor,
                 accentColor: accentColor,
-                inputFillColor: mainInputColor,
+                inputFillColor: UIColor(white: 1.0, alpha: 0.1),
                 inputPlaceholderTextColor: mainSecondaryColor,
                 inputIconColor: mainSecondaryColor,
                 inputClearButtonColor: mainSecondaryColor,
@@ -581,7 +581,7 @@ public func makeDefaultDarkTintedPresentationTheme(extendingThemeReference: Pres
     let navigationSearchBar = PresentationThemeNavigationSearchBar(
         backgroundColor: mainBackgroundColor,
         accentColor: accentColor,
-        inputFillColor: mainInputColor,
+        inputFillColor: UIColor(white: 1.0, alpha: 0.1),
         inputTextColor: UIColor(rgb: 0xffffff),
         inputPlaceholderTextColor: mainSecondaryColor,
         inputIconColor: mainSecondaryColor,

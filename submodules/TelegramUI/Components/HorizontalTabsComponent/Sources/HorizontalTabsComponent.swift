@@ -619,7 +619,7 @@ public final class HorizontalTabsComponent: Component {
             
             self.reorderingGesture?.isEnabled = component.isEditing
             
-            let sizeHeight: CGFloat = 40.0
+            let sizeHeight: CGFloat = availableSize.height
             
             let sideInset: CGFloat = 0.0
             

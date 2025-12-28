@@ -141,7 +141,7 @@ public final class HeaderPanelContainerComponent: Component {
                     transition: tabsTransition,
                     component: tabs,
                     environment: {},
-                    containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 10000.0)
+                    containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 40.0)
                 )
                 let tabsFrame = CGRect(origin: CGPoint(x: 0.0, y: size.height), size: tabsSize)
                 if let tabsComponentView = tabsView.view {

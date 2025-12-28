@@ -322,6 +322,7 @@ enum ChatListNodeEntry: Comparable, Identifiable {
         var unreadCount: Int
         var revealed: Bool
         var hiddenByDefault: Bool
+        var appearsPinned: Bool
         var storyState: ChatListNodeState.StoryState?
         
         init(
@@ -334,6 +335,7 @@ enum ChatListNodeEntry: Comparable, Identifiable {
             unreadCount: Int,
             revealed: Bool,
             hiddenByDefault: Bool,
+            appearsPinned: Bool,
             storyState: ChatListNodeState.StoryState?
         ) {
             self.index = index
@@ -345,6 +347,7 @@ enum ChatListNodeEntry: Comparable, Identifiable {
             self.unreadCount = unreadCount
             self.revealed = revealed
             self.hiddenByDefault = hiddenByDefault
+            self.appearsPinned = appearsPinned
             self.storyState = storyState
         }
         
@@ -374,6 +377,9 @@ enum ChatListNodeEntry: Comparable, Identifiable {
                 return false
             }
             if lhs.hiddenByDefault != rhs.hiddenByDefault {
+                return false
+            }
+            if lhs.appearsPinned != rhs.appearsPinned {
                 return false
             }
             if lhs.storyState != rhs.storyState {
@@ -622,6 +628,8 @@ func chatListNodeEntriesForView(view: EngineChatList, state: ChatListNodeState, 
     
     var hiddenGeneralThread: ChatListNodeEntry?
     
+    var hasPinned = false
+    
     loop: for entry in view.items {
         var peerId: EnginePeer.Id?
         var threadId: Int64?
@@ -672,6 +680,17 @@ func chatListNodeEntriesForView(view: EngineChatList, state: ChatListNodeState, 
         var threadInfo: ChatListItemContent.ThreadInfo?
         if let threadData = entry.threadData, let threadId {
             threadInfo = ChatListItemContent.ThreadInfo(id: threadId, info: threadData.info, isOwnedByMe: threadData.isOwnedByMe, isClosed: threadData.isClosed, isHidden: threadData.isHidden, threadPeer: nil)
+        }
+        
+        switch entry.index {
+        case let .chatList(chatList):
+            if chatList.pinningIndex != nil {
+                hasPinned = true
+            }
+        case let .forum(pinnedIndex, _, _, _, _):
+            if case .index = pinnedIndex {
+                hasPinned = true
+            }
         }
 
         let entry: ChatListNodeEntry = .PeerEntry(ChatListNodeEntry.PeerEntryData(
@@ -762,6 +781,7 @@ func chatListNodeEntriesForView(view: EngineChatList, state: ChatListNodeState, 
                     )))
                     if foundPinningIndex != 0 {
                         foundPinningIndex -= 1
+                        hasPinned = true
                     }
                 }
             }
@@ -852,6 +872,7 @@ func chatListNodeEntriesForView(view: EngineChatList, state: ChatListNodeState, 
                     )))
                     if pinningIndex != 0 {
                         pinningIndex -= 1
+                        hasPinned = true
                     }
                 }
             }
@@ -874,10 +895,12 @@ func chatListNodeEntriesForView(view: EngineChatList, state: ChatListNodeState, 
                     unreadCount: groupReference.unreadCount,
                     revealed: state.hiddenItemShouldBeTemporaryRevealed,
                     hiddenByDefault: hideArchivedFolderByDefault,
+                    appearsPinned: hasPinned,
                     storyState: mappedStoryState
                 )))
                 if pinningIndex != 0 {
                     pinningIndex -= 1
+                    hasPinned = true
                 }
             }
             

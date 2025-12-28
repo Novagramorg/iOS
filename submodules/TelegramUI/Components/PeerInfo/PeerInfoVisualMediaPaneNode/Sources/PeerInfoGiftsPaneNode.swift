@@ -665,7 +665,8 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
                         theme: params.presentationData.theme,
                         customLayout: TabSelectorComponent.CustomLayout(
                             font: Font.medium(15.0),
-                            spacing: 2.0
+                            spacing: 2.0,
+                            height: 44.0 - 5.0 * 2.0
                         ),
                         items: tabSelectorItems,
                         selectedId: AnyHashable(self.currentCollection.rawValue),
@@ -702,7 +703,7 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
                         }
                     )),
                     environment: {},
-                    containerSize: CGSize(width: params.size.width - 10.0 * 2.0, height: 50.0)
+                    containerSize: CGSize(width: params.size.width - 10.0 * 2.0, height: 44.0)
                 )
                 if let tabSelectorView = self.tabSelector.view {
                     if tabSelectorView.superview == nil {
@@ -713,7 +714,7 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
                             tabSelectorView.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.25)
                         }
                     }
-                    transition.setFrame(view: tabSelectorView, frame: CGRect(origin: CGPoint(x: floor((params.size.width - tabSelectorSize.width) / 2.0), y: 67.0), size: tabSelectorSize))
+                    transition.setFrame(view: tabSelectorView, frame: CGRect(origin: CGPoint(x: floor((params.size.width - tabSelectorSize.width) / 2.0), y: 66.0), size: tabSelectorSize))
                     
                     topInset += tabSelectorSize.height + 28.0
                 }
