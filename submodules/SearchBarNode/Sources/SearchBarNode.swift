@@ -510,6 +510,12 @@ private class SearchBarTextField: UITextField, UIScrollViewDelegate {
     }
     
     fileprivate var tokensWidth: CGFloat = 0.0
+    var tokensInsetWidth: CGFloat {
+        if self.tokensWidth == 0.0 {
+            return 0.0
+        }
+        return self.tokensWidth + 8.0
+    }
     
     private let measurePrefixLabel: ImmediateTextNode
     let prefixLabel: ImmediateTextNode
@@ -1201,7 +1207,9 @@ public class SearchBarNode: ASDisplayNode, UITextFieldDelegate {
         
         self.textField.frame = textFrame
         
-        let searchPlaceholderFrame = CGRect(origin: CGPoint(x: 16.0, y: 0.0), size: CGSize(width: max(0.0, boundingSize.width - 16.0 * 2.0), height: 44.0))
+        let additionalPlaceholderInset = self.textField.tokensInsetWidth
+        
+        let searchPlaceholderFrame = CGRect(origin: CGPoint(x: leftInset + 16.0, y: 0.0), size: CGSize(width: max(0.0, boundingSize.width - 16.0 * 2.0 - leftInset - rightInset), height: 44.0))
         
         if case .glass = self.fieldStyle, self.takenSearchPlaceholderContentView == nil {
             transition.updateFrame(node: self.inlineSearchPlaceholder, frame: searchPlaceholderFrame)
@@ -1232,7 +1240,7 @@ public class SearchBarNode: ASDisplayNode, UITextFieldDelegate {
                 }
             }
             if let inlineSearchPlaceholderContentsView = self.inlineSearchPlaceholderContentsView {
-                inlineSearchPlaceholderContentsView.update(size: searchPlaceholderFrame.size, isActive: true, transition: transition)
+                inlineSearchPlaceholderContentsView.update(size: searchPlaceholderFrame.size, isActive: true, additionalPlaceholderInset: additionalPlaceholderInset, transition: transition)
                 transition.updateFrame(view: inlineSearchPlaceholderContentsView, frame: searchPlaceholderFrame)
                 
                 if isFirstTime {
@@ -1244,7 +1252,7 @@ public class SearchBarNode: ASDisplayNode, UITextFieldDelegate {
         
         if !self.isAnimatingOut, let takenSearchPlaceholderContentView = self.takenSearchPlaceholderContentView {
             transition.updateFrame(view: takenSearchPlaceholderContentView, frame: searchPlaceholderFrame)
-            takenSearchPlaceholderContentView.update(size: searchPlaceholderFrame.size, isActive: true, transition: transition)
+            takenSearchPlaceholderContentView.update(size: searchPlaceholderFrame.size, isActive: true, additionalPlaceholderInset: additionalPlaceholderInset, transition: transition)
         }
     }
     
@@ -1263,6 +1271,10 @@ public class SearchBarNode: ASDisplayNode, UITextFieldDelegate {
     }
     
     public func animateIn(from node: SearchBarPlaceholderNode, duration: Double, timingFunction: String) {
+        guard let (boundingSize, leftInset, rightInset) = self.validLayout else {
+            return
+        }
+        
         self.inlineSearchPlaceholder.isHidden = true
         
         let takenSearchPlaceholderContentView = node.takeContents()
@@ -1279,11 +1291,11 @@ public class SearchBarNode: ASDisplayNode, UITextFieldDelegate {
         }
         
         let sourceFrame = node.view.convert(node.bounds, to: self.view)
-        let targetFrame = CGRect(origin: CGPoint(x: 16.0, y: 0.0), size: CGSize(width: max(0.0, self.bounds.width - 16.0 * 2.0), height: 44.0))
+        let targetFrame = CGRect(origin: CGPoint(x: leftInset + 16.0, y: 0.0), size: CGSize(width: max(0.0, boundingSize.width - 16.0 * 2.0 - leftInset - rightInset), height: 44.0))
         let transition: ContainedViewLayoutTransition = .animated(duration: duration, curve: timingFunction == kCAMediaTimingFunctionSpring ? .spring : .easeInOut)
         takenSearchPlaceholderContentView.frame = sourceFrame
         transition.updateFrame(view: takenSearchPlaceholderContentView, frame: targetFrame)
-        takenSearchPlaceholderContentView.update(size: targetFrame.size, isActive: true, transition: transition)
+        takenSearchPlaceholderContentView.update(size: targetFrame.size, isActive: true, additionalPlaceholderInset: self.textField.tokensInsetWidth, transition: transition)
         
         /*let initialTextBackgroundFrame = node.view.convert(node.backgroundView.frame, to: self.view)
         
@@ -1487,7 +1499,7 @@ public class SearchBarNode: ASDisplayNode, UITextFieldDelegate {
             let alphaTransition: ComponentTransition = transition.animation.isImmediate ? .immediate : .easeInOut(duration: 0.2)
             
             let sourceFrame = node.view.convert(node.bounds, to: self.view)
-            takenSearchPlaceholderContentView.update(size: sourceFrame.size, isActive: false, transition: transition.containedViewLayoutTransition)
+            takenSearchPlaceholderContentView.update(size: sourceFrame.size, isActive: false, additionalPlaceholderInset: 0.0, transition: transition.containedViewLayoutTransition)
             takenSearchPlaceholderContentView.updatePlaceholderVisibility(isVisible: true)
             takenSearchPlaceholderContentView.updateSearchIconVisibility(isVisible: true)
             

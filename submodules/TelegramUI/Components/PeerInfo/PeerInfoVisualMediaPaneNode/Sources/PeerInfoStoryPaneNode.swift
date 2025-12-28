@@ -4096,7 +4096,7 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
                 }
             )),
             environment: {},
-            containerSize: CGSize(width: size.width, height: 44.0)
+            containerSize: CGSize(width: size.width - 6.0 * 2.0, height: 44.0)
         )
         var folderTabFrame = CGRect(origin: CGPoint(x: floor((size.width - folderTabSize.width) * 0.5), y: topInset - 21.0), size: folderTabSize)
         

@@ -181,7 +181,7 @@ final class ItemNode: ASDisplayNode {
         var iconInset: CGFloat = 0.0
         if let image = self.iconNode.image {
             iconInset = 22.0
-            self.iconNode.frame = CGRect(x: 0.0, y: floorToScreenPixels((height - image.size.height) / 2.0), width: image.size.width, height: image.size.height)
+            self.iconNode.frame = CGRect(x: 0.0, y: 4.0 + floorToScreenPixels((height - image.size.height) / 2.0), width: image.size.width, height: image.size.height)
         }
         
         let titleSize = self.titleNode.updateLayout(CGSize(width: 160.0, height: .greatestFiniteMagnitude))
