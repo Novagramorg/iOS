@@ -7016,6 +7016,7 @@ private final class ChatListLocationContext {
             }
             if strongSelf.toolbar != toolbar {
                 strongSelf.toolbar = toolbar
+                transition = .animated(duration: 0.4, curve: .spring)
                 if parentController.effectiveContext === strongSelf {
                     parentController.setToolbar(toolbar, transition: transition)
                 }

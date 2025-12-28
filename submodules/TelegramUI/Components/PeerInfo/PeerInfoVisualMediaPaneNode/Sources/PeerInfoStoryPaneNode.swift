@@ -4036,7 +4036,8 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
                 customLayout: TabSelectorComponent.CustomLayout(
                     font: Font.medium(15.0),
                     spacing: 9.0,
-                    verticalInset: 11.0
+                    verticalInset: 11.0,
+                    height: 44.0 - 5.0 * 2.0
                 ),
                 items: folderItems,
                 selectedId: selectedId,
@@ -4097,7 +4098,7 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
             environment: {},
             containerSize: CGSize(width: size.width, height: 44.0)
         )
-        var folderTabFrame = CGRect(origin: CGPoint(x: floor((size.width - folderTabSize.width) * 0.5), y: topInset - 19.0), size: folderTabSize)
+        var folderTabFrame = CGRect(origin: CGPoint(x: floor((size.width - folderTabSize.width) * 0.5), y: topInset - 21.0), size: folderTabSize)
         
         let effectiveScrollingOffset: CGFloat
         effectiveScrollingOffset = self.itemGrid.scrollingOffset

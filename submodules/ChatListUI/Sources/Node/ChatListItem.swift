@@ -218,6 +218,7 @@ public enum ChatListItemContent {
         public var message: EngineMessage?
         public var unreadCount: Int
         public var hiddenByDefault: Bool
+        public var appearsPinned: Bool
         public var storyState: StoryState?
         
         public init(
@@ -226,6 +227,7 @@ public enum ChatListItemContent {
             message: EngineMessage?,
             unreadCount: Int,
             hiddenByDefault: Bool,
+            appearsPinned: Bool,
             storyState: StoryState?
         ) {
             self.groupId = groupId
@@ -233,6 +235,7 @@ public enum ChatListItemContent {
             self.message = message
             self.unreadCount = unreadCount
             self.hiddenByDefault = hiddenByDefault
+            self.appearsPinned = appearsPinned
             self.storyState = storyState
         }
     }
@@ -5059,8 +5062,8 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                         highlightedBackgroundColor = theme.itemHighlightedBackgroundColor
                     } else if isPinned {
                         if case let .groupReference(groupReferenceData) = item.content, groupReferenceData.hiddenByDefault {
-                            backgroundColor = theme.itemBackgroundColor
-                            highlightedBackgroundColor = theme.itemHighlightedBackgroundColor
+                            backgroundColor = groupReferenceData.appearsPinned ? theme.pinnedItemBackgroundColor : theme.itemBackgroundColor
+                            highlightedBackgroundColor = groupReferenceData.appearsPinned ? theme.pinnedItemHighlightedBackgroundColor : theme.itemHighlightedBackgroundColor
                         } else {
                             backgroundColor = theme.pinnedItemBackgroundColor
                             highlightedBackgroundColor = theme.pinnedItemHighlightedBackgroundColor

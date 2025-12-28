@@ -696,6 +696,7 @@ private func mappedInsertEntries(context: AccountContext, nodeInteraction: ChatL
                         message: groupReferenceEntry.message,
                         unreadCount: groupReferenceEntry.unreadCount,
                         hiddenByDefault: groupReferenceEntry.hiddenByDefault,
+                        appearsPinned: groupReferenceEntry.appearsPinned,
                         storyState: groupReferenceEntry.storyState.flatMap { storyState in
                             return ChatListItemContent.StoryState(
                                 stats: storyState.stats,
@@ -1005,6 +1006,7 @@ private func mappedUpdateEntries(context: AccountContext, nodeInteraction: ChatL
                             message: groupReferenceEntry.message,
                             unreadCount: groupReferenceEntry.unreadCount,
                             hiddenByDefault: groupReferenceEntry.hiddenByDefault,
+                            appearsPinned: groupReferenceEntry.appearsPinned,
                             storyState: groupReferenceEntry.storyState.flatMap { storyState in
                                 return ChatListItemContent.StoryState(
                                     stats: storyState.stats,

@@ -13,6 +13,9 @@ import AccountContext
 import SearchBarNode
 import SearchUI
 import ChatListSearchItemHeader
+import EdgeEffect
+import ComponentFlow
+import ComponentDisplayAdapters
 
 extension SettingsSearchableItemIcon {
     func image() -> UIImage? {
@@ -226,6 +229,8 @@ public final class SettingsSearchContainerNode: SearchDisplayControllerContentNo
     private let listNode: ListView
     private let recentListNode: ListView
     
+    private let edgeEffectView: EdgeEffectView
+    
     private var enqueuedTransitions: [SettingsSearchContainerTransition] = []
     private var enqueuedRecentTransitions: [(SettingsSearchContainerRecentTransition, Bool)] = []
     private var hasValidLayout = false
@@ -258,12 +263,15 @@ public final class SettingsSearchContainerNode: SearchDisplayControllerContentNo
             return presentationData.strings.VoiceOver_ScrollStatus(row, count).string
         }
         
+        self.edgeEffectView = EdgeEffectView()
+        
         super.init()
         
         self.backgroundColor = self.presentationData.theme.chatList.backgroundColor
         
         self.addSubnode(self.recentListNode)
         self.addSubnode(self.listNode)
+        self.view.addSubview(self.edgeEffectView)
         
         let interaction = SettingsSearchInteraction(openItem: { result in
             addRecentSettingsSearchItem(engine: context.engine, item: result.id)
@@ -513,6 +521,12 @@ public final class SettingsSearchContainerNode: SearchDisplayControllerContentNo
                 self.dequeueTransition()
             }
         }
+        
+        let edgeEffectHeight: CGFloat = insets.bottom + 8.0
+        let edgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: layout.size.height - edgeEffectHeight), size: CGSize(width: layout.size.width, height: edgeEffectHeight))
+        transition.updateFrame(view: self.edgeEffectView, frame: edgeEffectFrame)
+        self.edgeEffectView.update(content: self.presentationData.theme.list.plainBackgroundColor, rect: edgeEffectFrame, edge: .bottom, edgeSize: min(edgeEffectHeight, 50.0), transition: ComponentTransition(transition))
+        transition.updateAlpha(layer: self.edgeEffectView.layer, alpha: edgeEffectHeight > 21.0 ? 1.0 : 0.0)
     }
     
     public override func scrollToTop() {

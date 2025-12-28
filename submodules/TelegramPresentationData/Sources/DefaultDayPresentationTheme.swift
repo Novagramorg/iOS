@@ -566,7 +566,7 @@ public func makeDefaultDayPresentationTheme(extendingThemeReference: Presentatio
         pinnedSearchBarColor: UIColor(rgb: 0xe5e5e5),
         regularSearchBarColor: UIColor(rgb: 0xe9e9e9),
         sectionHeaderFillColor: .white,
-        sectionHeaderTextColor: .black,
+        sectionHeaderTextColor: UIColor(rgb: 0x6d6d72),
         verifiedIconFillColor: defaultDayAccentColor,
         verifiedIconForegroundColor: UIColor(rgb: 0xffffff),
         secretIconColor: UIColor(rgb: 0x00b12c),
