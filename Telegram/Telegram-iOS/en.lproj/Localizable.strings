@@ -15647,3 +15647,22 @@ Error: %8$@";
 "CocoonInfo.Understood" = "Understood";
 
 "Conversation.Translation.CocoonInfo" = "Translations are powered by\n**#Cocoon**. [How does it work?]()";
+
+"Conversation.EmojiStake.Won" = "%1$@ won %2$@";
+"Conversation.EmojiStake.WonYou" = "You won %@";
+"Conversation.EmojiStake.Lost" = "%1$@ lost %2$@";
+"Conversation.EmojiStake.LostYou" = "You lost %@";
+
+"Conversation.Dice.Stake" = "Stake:";
+"Conversation.Dice.Change" = "change";
+
+"EmojiStake.Title" = "Emoji Stake";
+"EmojiStake.Description" = "An experimental feature for Telegram Premium users.";
+"EmojiStake.ResultsTitle" = "RESULTS AND RETURNS";
+"EmojiStake.StreakInfo" = "A streak resets after 3 # or a stake change.";
+"EmojiStake.StakeTitle" = "STAKE";
+"EmojiStake.StakePlaceholder" = "Amount";
+"EmojiStake.Roll" = "Save and Roll";
+
+"Conversation.Summary.Title" = "AI Summary";
+"Conversation.Summary.Text" = "Tap to see original text";

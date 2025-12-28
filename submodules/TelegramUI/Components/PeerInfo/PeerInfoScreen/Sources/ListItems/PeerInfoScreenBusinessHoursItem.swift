@@ -632,7 +632,7 @@ private final class PeerInfoScreenBusinessHoursItemNode: PeerInfoScreenItemNode 
             topOffset += dayHeights
         }
         
-        topOffset += 11.0
+        topOffset += 15.0
         
         transition.updateFrame(node: self.labelNode, frame: labelFrame)
         

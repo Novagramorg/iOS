@@ -67,10 +67,9 @@ extension ChatControllerImpl {
             var changeAction: String?
             var tonAmount: Int64?
             if canSendMessages, emoji == "🎲", case let .available(info) = gameInfo {
-                //TODO:localize
                 let currentStake = info.previousStake
-                value = "Stake:  $ \(formatTonAmountText(currentStake, dateTimeFormat: self.presentationData.dateTimeFormat))"
-                changeAction = "change"
+                value = "\(self.presentationData.strings.Conversation_Dice_Stake)  $ \(formatTonAmountText(currentStake, dateTimeFormat: self.presentationData.dateTimeFormat))"
+                changeAction = self.presentationData.strings.Conversation_Dice_Change
                 tonAmount = info.previousStake
             } else {
                 switch emoji {

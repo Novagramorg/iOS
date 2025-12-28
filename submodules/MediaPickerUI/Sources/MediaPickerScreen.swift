@@ -2113,6 +2113,10 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
             }
         }
                 
+        self.selectedButtonNode.action = { [weak self] in
+            self?.selectedPressed()
+        }
+        
         self.navigationItem.titleView = self.titleView
         
         if case let .assets(collection, mode) = self.subject, mode != .default {
@@ -2184,8 +2188,6 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
 //                strongSelf.searchOrMorePressed(node: strongSelf.moreButtonNode.contextSourceNode, gesture: gesture)
 //            }
 //        }
-        
-        self.selectedButtonNode.addTarget(self, action: #selector(self.selectedPressed), forControlEvents: .touchUpInside)
         
         self.scrollToTop = { [weak self] in
             if let strongSelf = self {
@@ -4030,12 +4032,13 @@ public func coverMediaPickerController(
     return controller
 }
 
-private class SelectedButtonNode: HighlightTrackingButtonNode {
+private class SelectedButtonNode: ASDisplayNode {
     private let containerView: UIView
     private let backgroundView: GlassBackgroundView?
     private let background: ASImageNode?
     private let icon = ASImageNode()
     private let label = ImmediateAnimatedCountLabelNode()
+    private let button = HighlightTrackingButton()
     
     private let glass: Bool
     
@@ -4050,6 +4053,8 @@ private class SelectedButtonNode: HighlightTrackingButtonNode {
     }
     
     private var count: Int32 = 0
+    
+    var action: () -> Void = {}
     
     init(theme: PresentationTheme, glass: Bool) {
         self.theme = theme
@@ -4076,6 +4081,9 @@ private class SelectedButtonNode: HighlightTrackingButtonNode {
         
         self.view.addSubview(self.containerView)
         if let backgroundView = self.backgroundView {
+            backgroundView.contentView.addSubnode(self.icon)
+            backgroundView.contentView.addSubnode(self.label)
+            backgroundView.contentView.addSubview(self.button)
             self.containerView.addSubview(backgroundView)
         }
         if let background = self.background {
@@ -4083,35 +4091,19 @@ private class SelectedButtonNode: HighlightTrackingButtonNode {
             self.containerView.addSubnode(background)
         }
         
-        self.containerView.addSubnode(self.icon)
-        self.containerView.addSubnode(self.label)
+   
         
-        self.highligthedChanged = { [weak self] highlighted in
-            if let self {
-                if glass {
-                    let transition = ComponentTransition(animation: .curve(duration: highlighted ? 0.25 : 0.35, curve: .spring))
-                    if highlighted {
-                        transition.setScale(view: self.containerView, scale: 1.2)
-                    } else {
-                        transition.setScale(view: self.containerView, scale: 1.0)
-                    }
-                } else {
-                    if highlighted {
-                        self.containerView.layer.removeAnimation(forKey: "opacity")
-                        self.containerView.alpha = 0.4
-                    } else {
-                        self.containerView.alpha = 1.0
-                        self.containerView.layer.animateAlpha(from: 0.4, to: 1.0, duration: 0.2)
-                    }
-                }
-            }
-        }
+        self.button.addTarget(self, action: #selector(self.tapped), for: .touchUpInside)
+    }
+    
+    @objc private func tapped() {
+        self.action()
     }
     
     func update(count: Int32) -> CGSize {
         self.count = count
         
-        let diameter: CGFloat = self.glass ? 40.0 : 21.0
+        let diameter: CGFloat = self.glass ? 44.0 : 21.0
         let font = self.glass ? Font.with(size: 17.0, weight: .medium, traits: [.monospacedNumbers]) : Font.with(size: 15.0, design: .round, weight: .semibold, traits: [.monospacedNumbers])
         
         let stringValue = "\(max(1, count))"
@@ -4147,11 +4139,13 @@ private class SelectedButtonNode: HighlightTrackingButtonNode {
         self.containerView.frame = backgroundFrame
         if let backgroundView = self.backgroundView {
             backgroundView.frame = backgroundFrame
-            backgroundView.update(size: backgroundFrame.size, cornerRadius: backgroundFrame.size.height * 0.5, isDark: false, tintColor: .init(kind: .custom, color: self.theme.list.itemCheckColors.fillColor), transition: .immediate)
+            backgroundView.update(size: backgroundFrame.size, cornerRadius: backgroundFrame.size.height * 0.5, isDark: false, tintColor: .init(kind: .custom, color: self.theme.list.itemCheckColors.fillColor), isInteractive: true, transition: .immediate)
         }
         if let background = self.background {
             background.frame = backgroundFrame
         }
+        
+        self.button.frame = CGRect(origin: .zero, size: size)
 
         return size
     }
