@@ -1574,7 +1574,8 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
                         )
                     },
                     selectedTab: selectedTab,
-                    isEditing: isEditing
+                    isEditing: isEditing,
+                    liftWhileSwitching: layout.deviceMetrics.type != .tablet
                 ))
             }
                 

@@ -58,11 +58,11 @@ private final class SearchNavigationContentNode: ASDisplayNode, PeerInfoPanelNod
     func update(width: CGFloat, defaultHeight: CGFloat, insets: UIEdgeInsets, transition: ContainedViewLayoutTransition) -> CGFloat {
         self.params = Params(width: width, defaultHeight: defaultHeight, insets: insets)
         
-        let size = CGSize(width: width, height: defaultHeight)
-        transition.updateFrame(node: self.contentNode, frame: CGRect(origin: CGPoint(x: 0.0, y: 10.0), size: size))
+        let size = CGSize(width: width, height: 60.0)
+        transition.updateFrame(node: self.contentNode, frame: CGRect(origin: CGPoint(x: 0.0, y: -6.0), size: size))
         let _ = self.contentNode.updateLayout(size: size, leftInset: insets.left, rightInset: insets.right, transition: transition)
         
-        var contentHeight: CGFloat = size.height + 10.0
+        var contentHeight: CGFloat = size.height
         
         if self.appliedPanelNode !== self.panelNode {
             if let previous = self.appliedPanelNode {
@@ -81,7 +81,8 @@ private final class SearchNavigationContentNode: ASDisplayNode, PeerInfoPanelNod
                 panelNode.alpha = 0.0
                 transition.updateAlpha(node: panelNode, alpha: 1.0)
                 
-                contentHeight += panelHeight - 1.0
+                contentHeight += 80.0
+                contentHeight += panelHeight
             }
         } else if let panelNode = self.panelNode, let chatController = self.chatController {
             let panelLayout = panelNode.updateLayout(width: width, leftInset: insets.left, rightInset: insets.right, transition: transition, chatController: chatController)
@@ -89,7 +90,8 @@ private final class SearchNavigationContentNode: ASDisplayNode, PeerInfoPanelNod
             let panelFrame = CGRect(origin: CGPoint(x: 0.0, y: contentHeight), size: CGSize(width: width, height: panelHeight))
             transition.updateFrame(node: panelNode, frame: panelFrame)
             
-            contentHeight += panelHeight - 1.0
+            contentHeight += 80.0
+            contentHeight += panelHeight
         }
         
         return contentHeight
