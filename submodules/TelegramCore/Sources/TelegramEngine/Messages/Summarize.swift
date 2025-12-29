@@ -47,14 +47,23 @@ func _internal_summarizeMessage(account: Account, messageId: EngineMessage.Id, t
                         let storeForwardInfo = currentMessage.forwardInfo.flatMap(StoreMessageForwardInfo.init)
                         var attributes = currentMessage.attributes
 
-                        var fromLang = ""
-                        if let attribute = attributes.first(where: { $0 is SummarizationMessageAttribute }) as? SummarizationMessageAttribute {
-                            fromLang = attribute.fromLang
+                        let currentAttribute = attributes.first(where: { $0 is SummarizationMessageAttribute }) as? SummarizationMessageAttribute
+                        let updatedAttribute: SummarizationMessageAttribute
+                        if let translateToLang {
+                            var translated = currentAttribute?.translated ?? [:]
+                            translated[translateToLang] = SummarizationMessageAttribute.Summary(text: text, entities: messageTextEntitiesFromApiEntities(entities))
+                            updatedAttribute = SummarizationMessageAttribute(
+                                fromLang: currentAttribute?.fromLang ?? "",
+                                summary: currentAttribute?.summary,
+                                translated: translated
+                            )
+                        } else {
+                            updatedAttribute = SummarizationMessageAttribute(
+                                fromLang: currentAttribute?.fromLang ?? "",
+                                summary: .init(text: text, entities: messageTextEntitiesFromApiEntities(entities)),
+                                translated: currentAttribute?.translated ?? [:]
+                            )
                         }
-                        let updatedAttribute = SummarizationMessageAttribute(
-                            fromLang: fromLang,
-                            summary: .init(text: text, entities: messageTextEntitiesFromApiEntities(entities))
-                        )
                         attributes = attributes.filter { !($0 is SummarizationMessageAttribute) }
                         attributes.append(updatedAttribute)
                         
