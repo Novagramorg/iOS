@@ -59,6 +59,7 @@ final class ChatTagSearchInputPanelNode: ChatInputPanelNode {
         }
     }
 
+    private let backgroundContainerView: GlassBackgroundContainerView
     private let leftControlsBackgroundView: GlassBackgroundView
     private let rightControlsBackgroundView: GlassBackgroundView
     private let calendarButton = ComponentView<Empty>()
@@ -93,13 +94,15 @@ final class ChatTagSearchInputPanelNode: ChatInputPanelNode {
     init(theme: PresentationTheme, alwaysShowTotalMessagesCount: Bool) {
         self.alwaysShowTotalMessagesCount = alwaysShowTotalMessagesCount
         
+        self.backgroundContainerView = GlassBackgroundContainerView()
         self.leftControlsBackgroundView = GlassBackgroundView()
         self.rightControlsBackgroundView = GlassBackgroundView()
         
         super.init()
         
-        self.view.addSubview(self.leftControlsBackgroundView)
-        self.view.addSubview(self.rightControlsBackgroundView)
+        self.view.addSubview(self.backgroundContainerView)
+        self.backgroundContainerView.contentView.addSubview(self.leftControlsBackgroundView)
+        self.backgroundContainerView.contentView.addSubview(self.rightControlsBackgroundView)
     }
     
     deinit {
@@ -582,6 +585,9 @@ final class ChatTagSearchInputPanelNode: ChatInputPanelNode {
         transition.setFrame(view: self.rightControlsBackgroundView, frame: rightControlsBackgroundFrame)
         self.rightControlsBackgroundView.update(size: rightControlsBackgroundFrame.size, cornerRadius: rightControlsBackgroundFrame.height * 0.5, isDark: params.interfaceState.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: params.interfaceState.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7)), transition: transition)
         self.rightControlsBackgroundView.isHidden = rightControlsRect.isEmpty
+        
+        transition.setFrame(view: self.backgroundContainerView, frame: CGRect(origin: CGPoint(), size: CGSize(width: params.width, height: height)))
+        self.backgroundContainerView.update(size: CGSize(width: params.width, height: height), isDark: params.interfaceState.theme.overallDarkAppearance, transition: transition)
 
         return height
     }
