@@ -6,6 +6,9 @@ import TelegramCore
 import TelegramPresentationData
 import TextNodeWithEntities
 import AccountContext
+import GlassBackgroundComponent
+import ComponentFlow
+import ComponentDisplayAdapters
 
 private final class ItemNodeDeleteButtonNode: HighlightableButtonNode {
     private let pressed: () -> Void
@@ -210,7 +213,7 @@ private final class ItemNode: ASDisplayNode {
         if self.theme !== presentationData.theme {
             self.theme = presentationData.theme
             
-            self.badgeBackgroundActiveNode.image = generateStretchableFilledCircleImage(diameter: 18.0, color: presentationData.theme.chat.inputPanel.panelControlColor)
+            self.badgeBackgroundActiveNode.image = generateStretchableFilledCircleImage(diameter: 18.0, color: presentationData.theme.list.itemCheckColors.fillColor)
             self.badgeBackgroundInactiveNode.image = generateStretchableFilledCircleImage(diameter: 18.0, color: presentationData.theme.chatList.unreadBadgeInactiveBackgroundColor)
             
             themeUpdated = true
@@ -298,10 +301,10 @@ private final class ItemNode: ASDisplayNode {
         self.shortTitleActiveNode.visibility = title.enableAnimations
         
         if themeUpdated || titleUpdated {
-            self.titleNode.attributedText = title.attributedString(font: Font.medium(14.0), textColor: presentationData.theme.list.itemSecondaryTextColor)
+            self.titleNode.attributedText = title.attributedString(font: Font.medium(14.0), textColor: presentationData.theme.chat.inputPanel.panelControlColor)
             self.titleActiveNode.attributedText = title.attributedString(font: Font.medium(14.0), textColor: presentationData.theme.chat.inputPanel.panelControlColor)
             
-            self.shortTitleNode.attributedText = shortTitle.attributedString(font: Font.medium(14.0), textColor: presentationData.theme.list.itemSecondaryTextColor)
+            self.shortTitleNode.attributedText = shortTitle.attributedString(font: Font.medium(14.0), textColor: presentationData.theme.chat.inputPanel.panelControlColor)
             self.shortTitleActiveNode.attributedText = shortTitle.attributedString(font: Font.medium(14.0), textColor: presentationData.theme.chat.inputPanel.panelControlColor)
         }
         
@@ -481,6 +484,8 @@ public enum ChatListFilterTabEntry: Equatable {
 
 public final class ChatListFilterTabContainerNode: ASDisplayNode {
     private let context: AccountContext
+    private let backgroundContainerView: GlassBackgroundContainerView
+    private let backgroundView: GlassBackgroundView
     private let scrollNode: ASScrollNode
     private let selectedBackgroundNode: ASImageNode
     private var itemNodes: [ChatListFilterTabEntryId: ItemNode] = [:]
@@ -531,6 +536,11 @@ public final class ChatListFilterTabContainerNode: ASDisplayNode {
     
     public init(context: AccountContext) {
         self.context = context
+        
+        self.backgroundContainerView = GlassBackgroundContainerView()
+        self.backgroundView = GlassBackgroundView()
+        self.backgroundContainerView.contentView.addSubview(self.backgroundView)
+        
         self.scrollNode = ASScrollNode()
         
         self.selectedBackgroundNode = ASImageNode()
@@ -538,6 +548,8 @@ public final class ChatListFilterTabContainerNode: ASDisplayNode {
         self.selectedBackgroundNode.displayWithoutProcessing = true
         
         super.init()
+        
+        self.view.addSubview(self.backgroundContainerView)
         
         self.scrollNode.view.showsHorizontalScrollIndicator = false
         self.scrollNode.view.showsVerticalScrollIndicator = false
@@ -548,7 +560,7 @@ public final class ChatListFilterTabContainerNode: ASDisplayNode {
             self.scrollNode.view.contentInsetAdjustmentBehavior = .never
         }
         
-        self.addSubnode(self.scrollNode)
+        self.backgroundView.contentView.addSubview(self.scrollNode.view)
         self.scrollNode.addSubnode(self.selectedBackgroundNode)
         
         let reorderingGesture = ReorderingGestureRecognizer(shouldBegin: { [weak self] point in
@@ -589,7 +601,7 @@ public final class ChatListFilterTabContainerNode: ASDisplayNode {
                         }
                     })
                     strongSelf.reorderingAutoScrollAnimator?.isPaused = false
-                    strongSelf.addSubnode(itemNode)
+                    strongSelf.backgroundView.contentView.addSubview(itemNode.view)
                     
                     strongSelf.reorderingItemPosition = (itemNode.frame.minX, 0.0)
                     if let (size, sideInset, filters, selectedFilter, isReordering, isEditing, canReorderAllChats, filtersLimit, transitionFraction, presentationData) = strongSelf.currentParams {
@@ -681,9 +693,17 @@ public final class ChatListFilterTabContainerNode: ASDisplayNode {
         self.scrollNode.layer.removeAllAnimations()
     }
     
-    public func update(size: CGSize, sideInset: CGFloat, filters: [ChatListFilterTabEntry], selectedFilter: ChatListFilterTabEntryId?, isReordering: Bool, isEditing: Bool, canReorderAllChats: Bool, filtersLimit: Int32?, transitionFraction: CGFloat, presentationData: PresentationData, transition proposedTransition: ContainedViewLayoutTransition) {
+    public func update(size containerSize: CGSize, sideInset containerSideInset: CGFloat, filters: [ChatListFilterTabEntry], selectedFilter: ChatListFilterTabEntryId?, isReordering: Bool, isEditing: Bool, canReorderAllChats: Bool, filtersLimit: Int32?, transitionFraction: CGFloat, presentationData: PresentationData, transition proposedTransition: ContainedViewLayoutTransition) {
         let isFirstTime = self.currentParams == nil
         let transition: ContainedViewLayoutTransition = isFirstTime ? .immediate : proposedTransition
+        
+        let backgroundSize = CGSize(width: containerSize.width - (16.0 - containerSideInset) * 2.0, height: 44.0)
+        
+        transition.updateFrame(view: self.backgroundContainerView, frame: CGRect(origin: CGPoint(x: containerSideInset + 16.0, y: 0.0), size: backgroundSize))
+        self.backgroundContainerView.update(size: backgroundSize, isDark: presentationData.theme.overallDarkAppearance, transition: ComponentTransition(transition))
+        
+        transition.updateFrame(view: self.backgroundView, frame: CGRect(origin: CGPoint(), size: backgroundSize))
+        self.backgroundView.update(size: backgroundSize, cornerRadius: backgroundSize.height * 0.5, isDark: presentationData.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: UIColor(white: presentationData.theme.overallDarkAppearance ? 0.0 : 1.0, alpha: 0.6)), isInteractive: true, transition: ComponentTransition(transition))
         
         var isEditing = isEditing
         if isReordering {
@@ -719,11 +739,11 @@ public final class ChatListFilterTabContainerNode: ASDisplayNode {
             self.reorderedItemIds = nil
         }
         
-        self.currentParams = (size: size, sideInset: sideInset, filters: filters, selectedFilter: selectedFilter, isReordering, isEditing, canReorderAllChats, filtersLimit, transitionFraction, presentationData: presentationData)
+        self.currentParams = (size: containerSize, sideInset: containerSideInset, filters: filters, selectedFilter: selectedFilter, isReordering, isEditing, canReorderAllChats, filtersLimit, transitionFraction, presentationData: presentationData)
         
         self.reorderingGesture?.isEnabled = isReordering
         
-        transition.updateFrame(node: self.scrollNode, frame: CGRect(origin: CGPoint(), size: size))
+        transition.updateFrame(node: self.scrollNode, frame: CGRect(origin: CGPoint(), size: backgroundSize))
         
         enum BadgeAnimation {
             case `in`
@@ -839,9 +859,9 @@ public final class ChatListFilterTabContainerNode: ASDisplayNode {
                 itemNodeTransition = .immediate
                 self.scrollNode.addSubnode(itemNode)
             }
-            let (paneNodeWidth, paneNodeShortWidth) = itemNode.updateLayout(height: size.height, transition: itemNodeTransition)
-            let paneNodeSize = CGSize(width: paneNodeWidth, height: size.height)
-            let paneNodeShortSize = CGSize(width: paneNodeShortWidth, height: size.height)
+            let (paneNodeWidth, paneNodeShortWidth) = itemNode.updateLayout(height: backgroundSize.height, transition: itemNodeTransition)
+            let paneNodeSize = CGSize(width: paneNodeWidth, height: backgroundSize.height)
+            let paneNodeShortSize = CGSize(width: paneNodeShortWidth, height: backgroundSize.height)
             tabSizes.append((filter.id, paneNodeSize, paneNodeShortSize, itemNode, wasAdded))
             totalRawTabSize += paneNodeSize.width
             
@@ -857,7 +877,7 @@ public final class ChatListFilterTabContainerNode: ASDisplayNode {
         
         let minSpacing: CGFloat = 26.0
         
-        let resolvedSideInset: CGFloat = 25.0 + sideInset
+        let resolvedSideInset: CGFloat = 14.0
         var leftOffset: CGFloat = resolvedSideInset
         
         var longTitlesWidth: CGFloat = resolvedSideInset
@@ -869,7 +889,7 @@ public final class ChatListFilterTabContainerNode: ASDisplayNode {
             }
         }
         longTitlesWidth += resolvedSideInset
-        let useShortTitles = longTitlesWidth > size.width
+        let useShortTitles = longTitlesWidth > backgroundSize.width
         
         for i in 0 ..< tabSizes.count {
             let (itemId, paneNodeLongSize, paneNodeShortSize, paneNode, wasAdded) = tabSizes[i]
@@ -881,7 +901,7 @@ public final class ChatListFilterTabContainerNode: ASDisplayNode {
             let useShortTitle = itemId == .all && useShortTitles
             let paneNodeSize = useShortTitle ? paneNodeShortSize : paneNodeLongSize
             
-            let paneFrame = CGRect(origin: CGPoint(x: leftOffset, y: floor((size.height - paneNodeSize.height) / 2.0)), size: paneNodeSize)
+            let paneFrame = CGRect(origin: CGPoint(x: leftOffset, y: floor((backgroundSize.height - paneNodeSize.height) / 2.0)), size: paneNodeSize)
             
             if itemId == self.reorderingItem, let (initial, offset) = self.reorderingItemPosition {
                 itemNodeTransition.updateSublayerTransformScale(node: paneNode, scale: 1.2)
@@ -908,7 +928,7 @@ public final class ChatListFilterTabContainerNode: ASDisplayNode {
         leftOffset -= minSpacing
         leftOffset += resolvedSideInset
         
-        self.scrollNode.view.contentSize = CGSize(width: leftOffset, height: size.height)
+        self.scrollNode.view.contentSize = CGSize(width: leftOffset, height: backgroundSize.height)
         
         var selectedFrame: CGRect?
         if let selectedFilter = selectedFilter, let currentIndex = reorderedFilters.firstIndex(where: { $0.id == selectedFilter }) {

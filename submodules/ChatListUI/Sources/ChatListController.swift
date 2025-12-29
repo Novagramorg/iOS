@@ -60,7 +60,6 @@ import ChatListFilterTabContainerNode
 import HeaderPanelContainerComponent
 import HorizontalTabsComponent
 import GlobalControlPanelsContext
-import ChatListFilterTabContainerNode
 
 private final class ContextControllerContentSourceImpl: ContextControllerContentSource {
     let controller: ViewController
@@ -156,8 +155,6 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
     
     private let isReorderingTabsValue = ValuePromise<Bool>(false)
     
-    let tabsNode: SparseNode
-    private let tabContainerNode: ChatListFilterTabContainerNode
     private(set) var tabContainerData: ([ChatListFilterTabEntry], Bool, Int32?)?
     var hasTabs: Bool {
         if let tabContainerData = self.tabContainerData {
@@ -261,10 +258,6 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
         case .savedMessagesChats:
             break
         }
-        
-        self.tabsNode = SparseNode()
-        self.tabContainerNode = ChatListFilterTabContainerNode(context: context)
-        self.tabsNode.addSubnode(self.tabContainerNode)
         
         self.globalControlPanelsContext = GlobalControlPanelsContext(
             context: context,
@@ -738,16 +731,6 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                 guard let strongSelf = self else {
                     return
                 }
-                guard let layout = strongSelf.validLayout else {
-                    return
-                }
-                guard let tabContainerData = strongSelf.tabContainerData else {
-                    return
-                }
-                if force {
-                    strongSelf.tabContainerNode.cancelAnimations()
-                }
-                strongSelf.tabContainerNode.update(size: CGSize(width: layout.size.width, height: 46.0), sideInset: layout.safeInsets.left, filters: tabContainerData.0, selectedFilter: filter, isReordering: strongSelf.chatListDisplayNode.isReorderingFilters || (strongSelf.chatListDisplayNode.mainContainerNode.currentItemNode.currentState.editing && !strongSelf.chatListDisplayNode.didBeginSelectingChatsWhileEditing), isEditing: strongSelf.chatListDisplayNode.mainContainerNode.currentItemNode.currentState.editing, canReorderAllChats: strongSelf.isPremium, filtersLimit: tabContainerData.2, transitionFraction: fraction, presentationData: strongSelf.presentationData, transition: transition)
                 
                 if let navigationBarView = strongSelf.chatListDisplayNode.navigationBarView.view as? ChatListNavigationBar.View, let headerPanelsView = navigationBarView.headerPanels as? HeaderPanelContainerComponent.View, let tabsView = headerPanelsView.tabs as? HorizontalTabsComponent.View {
                     tabsView.updateTabSwitchFraction(fraction: fraction, isDragging: strongSelf.chatListDisplayNode.mainContainerNode.isSwitchingCurrentItemFilterByDragging, transition: ComponentTransition(transition))
@@ -954,10 +937,6 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
         self.statusBar.statusBarStyle = self.presentationData.theme.rootController.statusBarStyle.style
         self.navigationBar?.updatePresentationData(NavigationBarPresentationData(presentationData: self.presentationData), transition: .immediate)
         
-        if let layout = self.validLayout {
-            self.tabContainerNode.update(size: CGSize(width: layout.size.width, height: 46.0), sideInset: layout.safeInsets.left, filters: self.tabContainerData?.0 ?? [], selectedFilter: self.chatListDisplayNode.effectiveContainerNode.currentItemFilter, isReordering: self.chatListDisplayNode.isReorderingFilters || (self.chatListDisplayNode.effectiveContainerNode.currentItemNode.currentState.editing && !self.chatListDisplayNode.didBeginSelectingChatsWhileEditing), isEditing: self.chatListDisplayNode.effectiveContainerNode.currentItemNode.currentState.editing, canReorderAllChats: self.isPremium, filtersLimit: self.tabContainerData?.2, transitionFraction: self.chatListDisplayNode.effectiveContainerNode.transitionFraction, presentationData: self.presentationData, transition: .immediate)
-        }
-        
         if self.isNodeLoaded {
             self.chatListDisplayNode.updatePresentationData(self.presentationData)
         }
@@ -1039,7 +1018,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                         if isDisabled {
                             let context = self.context
                             var replaceImpl: ((ViewController) -> Void)?
-                            let controller = PremiumLimitScreen(context: context, subject: .folders, count: self.tabContainerNode.filtersCount, action: {
+                            let controller = PremiumLimitScreen(context: context, subject: .folders, count: Int32(self.tabContainerData?.0.count ?? 0), action: {
                                 let controller = PremiumIntroScreen(context: context, source: .folders)
                                 replaceImpl?(controller)
                                 return true
@@ -1083,7 +1062,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                             if isDisabled {
                                 let context = self.context
                                 var replaceImpl: ((ViewController) -> Void)?
-                                let controller = PremiumLimitScreen(context: context, subject: .folders, count: self.tabContainerNode.filtersCount, action: {
+                                let controller = PremiumLimitScreen(context: context, subject: .folders, count: Int32(self.tabContainerData?.0.count ?? 0), action: {
                                     let controller = PremiumIntroScreen(context: context, source: .folders)
                                     replaceImpl?(controller)
                                     return true
@@ -2037,55 +2016,6 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
             }
         }
         
-        self.tabContainerNode.tabSelected = { [weak self] id, isDisabled in
-            guard let strongSelf = self else {
-                return
-            }
-            if isDisabled {
-                let context = strongSelf.context
-                var replaceImpl: ((ViewController) -> Void)?
-                let controller = PremiumLimitScreen(context: context, subject: .folders, count: strongSelf.tabContainerNode.filtersCount, action: {
-                    let controller = PremiumIntroScreen(context: context, source: .folders)
-                    replaceImpl?(controller)
-                    return true
-                })
-                replaceImpl = { [weak controller] c in
-                    controller?.replace(with: c)
-                }
-                strongSelf.push(controller)
-            } else {
-                strongSelf.selectTab(id: id)
-            }
-        }
-        
-        self.tabContainerNode.tabRequestedDeletion = { [weak self] id in
-            if case let .filter(id) = id {
-                self?.askForFilterRemoval(id: id)
-            }
-        }
-        self.tabContainerNode.presentPremiumTip = { [weak self] in
-            if let strongSelf = self {
-                strongSelf.present(UndoOverlayController(presentationData: strongSelf.presentationData, content: .universal(animation: "anim_reorder", scale: 0.05, colors: [:], title: nil, text: strongSelf.presentationData.strings.ChatListFolderSettings_SubscribeToMoveAll, customUndoText: strongSelf.presentationData.strings.ChatListFolderSettings_SubscribeToMoveAllAction, timeout: nil), elevatedLayout: false, position: .top, animateInAsReplacement: false, action: { action in
-                    if case .undo = action {
-                        let context = strongSelf.context
-                        var replaceImpl: ((ViewController) -> Void)?
-                        let controller = PremiumDemoScreen(context: context, subject: .advancedChatManagement, action: {
-                            let controller = PremiumIntroScreen(context: context, source: .folders)
-                            replaceImpl?(controller)
-                        })
-                        replaceImpl = { [weak controller] c in
-                            controller?.replace(with: c)
-                        }
-                        strongSelf.push(controller)
-                    }
-                    return false }), in: .current)
-            }
-        }
-        
-        self.tabContainerNode.contextGesture = { id, sourceNode, gesture, isDisabled in
-            self.tabContextGesture(id: id, sourceNode: sourceNode, sourceView: nil, gesture: gesture, keepInPlace: false, isDisabled: isDisabled)
-        }
-        
         if case .chatList(.root) = self.location {
             self.ready.set(combineLatest([self.mainReady.get(), self.storiesReady.get()])
             |> map { values -> Bool in
@@ -2450,7 +2380,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
             }
             let context = strongSelf.context
             var replaceImpl: ((ViewController) -> Void)?
-            let controller = PremiumLimitScreen(context: context, subject: .folders, count: strongSelf.tabContainerNode.filtersCount, action: {
+            let controller = PremiumLimitScreen(context: context, subject: .folders, count: Int32(strongSelf.tabContainerData?.0.count ?? 0), action: {
                 let controller = PremiumIntroScreen(context: context, source: .folders)
                 replaceImpl?(controller)
                 return true
@@ -3570,12 +3500,6 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
 
         let navigationBarHeight: CGFloat = 0.0
         
-        transition.updateFrame(node: self.tabContainerNode, frame: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: layout.size.width, height: 46.0)))
-        
-        if !skipTabContainerUpdate {
-            self.tabContainerNode.update(size: CGSize(width: layout.size.width, height: 46.0), sideInset: layout.safeInsets.left, filters: self.tabContainerData?.0 ?? [], selectedFilter: self.chatListDisplayNode.mainContainerNode.currentItemFilter, isReordering: self.chatListDisplayNode.isReorderingFilters || (self.chatListDisplayNode.effectiveContainerNode.currentItemNode.currentState.editing && !self.chatListDisplayNode.didBeginSelectingChatsWhileEditing), isEditing: self.chatListDisplayNode.effectiveContainerNode.currentItemNode.currentState.editing, canReorderAllChats: self.isPremium, filtersLimit: self.tabContainerData?.2, transitionFraction: self.chatListDisplayNode.effectiveContainerNode.transitionFraction, presentationData: self.presentationData, transition: .animated(duration: 0.4, curve: .spring))
-        }
-        
         self.chatListDisplayNode.containerLayoutUpdated(layout, navigationBarHeight: navigationBarHeight, visualNavigationHeight: navigationBarHeight, cleanNavigationBarHeight: navigationBarHeight, storiesInset: 0.0, transition: transition)
     }
     
@@ -4137,11 +4061,8 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
             if let layout = strongSelf.validLayout {
                 if wasEmpty != isEmpty {
                     let transition: ContainedViewLayoutTransition = animated ? .animated(duration: 0.2, curve: .easeInOut) : .immediate
-                    transition.updateAlpha(node: strongSelf.tabContainerNode, alpha: isEmpty ? 0.0 : 1.0)
                     strongSelf.containerLayoutUpdated(layout, transition: transition)
                     (strongSelf.parent as? TabBarController)?.updateLayout(transition: transition)
-                } else {
-                    strongSelf.tabContainerNode.update(size: CGSize(width: layout.size.width, height: 46.0), sideInset: layout.safeInsets.left, filters: resolvedItems, selectedFilter: selectedEntryId, isReordering: strongSelf.chatListDisplayNode.isReorderingFilters || (strongSelf.chatListDisplayNode.mainContainerNode.currentItemNode.currentState.editing && !strongSelf.chatListDisplayNode.didBeginSelectingChatsWhileEditing), isEditing: strongSelf.chatListDisplayNode.mainContainerNode.currentItemNode.currentState.editing, canReorderAllChats: strongSelf.isPremium, filtersLimit: filtersLimit, transitionFraction: strongSelf.chatListDisplayNode.mainContainerNode.transitionFraction, presentationData: strongSelf.presentationData, transition: .animated(duration: 0.4, curve: .spring))
                 }
             }
             
@@ -4823,10 +4744,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
         self.requestLayout(transition: .animated(duration: 0.5, curve: .spring))
         self.chatListDisplayNode.tempAllowAvatarExpansion = false
         
-        //TODO:swap tabs
-        
         let transition: ContainedViewLayoutTransition = animated ? .animated(duration: 0.4, curve: .spring) : .immediate
-        //transition.updateAlpha(node: self.tabContainerNode, alpha: tabsIsEmpty ? 0.0 : 1.0)
         self.setDisplayNavigationBar(true, transition: transition)
         
         completion?()
@@ -6264,7 +6182,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                         if isDisabled {
                             let context = strongSelf.context
                             var replaceImpl: ((ViewController) -> Void)?
-                            let controller = PremiumLimitScreen(context: context, subject: .folders, count: strongSelf.tabContainerNode.filtersCount, action: {
+                            let controller = PremiumLimitScreen(context: context, subject: .folders, count: Int32(strongSelf.tabContainerData?.0.count ?? 0), action: {
                                 let controller = PremiumIntroScreen(context: context, source: .folders)
                                 replaceImpl?(controller)
                                 return true
