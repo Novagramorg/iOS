@@ -2098,18 +2098,22 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate, ASGestureRecog
             
             backgroundView.update(size: panelSize, cornerRadius: cornerRadius, isDark: self.presentationData.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: UIColor(white: self.presentationData.theme.overallDarkAppearance ? 0.0 : 1.0, alpha: 0.6)), isInteractive: true, transition: ComponentTransition(transition))
             
-            self.lensParams = (panelSize, cornerRadius)
+            let lensSideInset: CGFloat = defaultPanelSideInset + layout.safeInsets.left
+            let lensPanelSize = CGSize(width: layout.size.width - layout.safeInsets.left - layout.safeInsets.right - lensSideInset * 2.0, height: glassPanelHeight)
+            self.lensParams = (lensPanelSize, cornerRadius)
             self.updateLiquidLens(transition: ComponentTransition(transition))
             
             transition.updatePosition(layer: liquidLensView.layer, position: CGPoint(x: backgroundOriginX + panelSize.width * 0.5, y: panelSize.height * 0.5))
-            transition.updateBounds(layer: liquidLensView.layer, bounds: CGRect(origin: .zero, size: CGSize(width: panelSize.width - 3.0 * 2.0, height: panelSize.height - 3.0 * 2.0)))
+            transition.updateBounds(layer: liquidLensView.layer, bounds: CGRect(origin: .zero, size: CGSize(width: lensPanelSize.width - 3.0 * 2.0, height: lensPanelSize.height - 3.0 * 2.0)))
             
             transition.updatePosition(layer: backgroundView.layer, position: CGPoint(x: backgroundOriginX + panelSize.width * 0.5, y: panelSize.height * 0.5))
             transition.updateBounds(layer: backgroundView.layer, bounds: CGRect(origin: .zero, size: panelSize))
             
-            let itemsContainerFrame = CGRect(origin: .zero, size: CGSize(width: panelSize.width - 3.0 * 2.0, height: panelSize.height - 3.0 * 2.0))
-            transition.updateFrame(view: self.itemsContainer, frame: itemsContainerFrame)
-            transition.updateFrame(view: self.selectedItemsContainer, frame: itemsContainerFrame)
+            let itemsContainerFrame = CGRect(origin: .zero, size: CGSize(width: lensPanelSize.width - 3.0 * 2.0, height: lensPanelSize.height - 3.0 * 2.0))
+            transition.updateBounds(layer: self.itemsContainer.layer, bounds: CGRect(origin: .zero, size: itemsContainerFrame.size))
+            transition.updateBounds(layer: self.selectedItemsContainer.layer, bounds: CGRect(origin: .zero, size: itemsContainerFrame.size))
+            transition.updatePosition(layer: self.itemsContainer.layer, position: itemsContainerFrame.center)
+            transition.updatePosition(layer: self.selectedItemsContainer.layer, position: itemsContainerFrame.center)
         }
         
         var containerTransition: ContainedViewLayoutTransition
@@ -2172,14 +2176,9 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate, ASGestureRecog
         alphaTransition.updateAlpha(node: self.scrollNode, alpha: isSelecting || isAnyButtonVisible ? 0.0 : 1.0)
         containerTransition.updateTransformScale(node: self.scrollNode, scale: isSelecting || isAnyButtonVisible ? 0.85 : 1.0)
         
-        alphaTransition.updateAlpha(layer: self.itemsContainer.layer, alpha: isSelecting || isAnyButtonVisible ? 0.0 : 1.0)
-        containerTransition.updateTransformScale(layer: self.itemsContainer.layer, scale: isSelecting || isAnyButtonVisible ? 0.85 : 1.0)
-        
-        alphaTransition.updateAlpha(layer: self.selectedItemsContainer.layer, alpha: isSelecting || isAnyButtonVisible ? 0.0 : 1.0)
-        containerTransition.updateTransformScale(layer: self.selectedItemsContainer.layer, scale: isSelecting || isAnyButtonVisible ? 0.85 : 1.0)
-        
         if let liquidLensView = self.liquidLensView {
-            containerTransition.updateTransformScale(layer: liquidLensView.layer, scale: isAnyButtonVisible ? 0.85 : 1.0)
+            alphaTransition.updateAlpha(layer: liquidLensView.layer, alpha: isSelecting || isAnyButtonVisible ? 0.0 : 1.0)
+            containerTransition.updateTransformScale(layer: liquidLensView.layer, scale: isSelecting || isAnyButtonVisible ? 0.85 : 1.0)
         }
         
         if isSelectingUpdated {
@@ -2198,7 +2197,10 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate, ASGestureRecog
                         alphaTransition.updateAlpha(node: textInputPanelNode, alpha: 1.0)
                         
                         let componentTransition = ComponentTransition.easeInOut(duration: 0.25)
-                        componentTransition.animateBlur(layer: self.itemsContainer.layer, fromRadius: 0.0, toRadius: 10.0)
+                        if let liquidLensView = self.liquidLensView {
+                            componentTransition.animateBlur(layer: liquidLensView.layer, fromRadius: 0.0, toRadius: 10.0)
+                            transition.animatePositionAdditive(layer: liquidLensView.layer, offset: .zero, to: CGPoint(x: -27.0, y: 0.0))
+                        }
                         
                         let blurTransition = ComponentTransition.easeInOut(duration: 0.18)
                         transition.animateTransformScale(node: textInputPanelNode.opaqueActionButtons, from: 0.01)
@@ -2206,9 +2208,12 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate, ASGestureRecog
                         textInputPanelNode.opaqueActionButtons.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
                         transition.animatePosition(node: textInputPanelNode.opaqueActionButtons, from: CGPoint(x: textInputPanelNode.opaqueActionButtons.position.x, y: textInputPanelNode.opaqueActionButtons.position.y + heightDelta))
 
+                        blurTransition.animateBlur(layer: textInputPanelNode.inputModeView.layer, fromRadius: 4.0, toRadius: 0.0)
+                        componentTransition.animateAlpha(view: textInputPanelNode.inputModeView, from: 0.0, to: 1.0)
+                        
                         transition.animatePositionAdditive(layer: textInputPanelNode.textPlaceholderNode.layer, offset: CGPoint(x: 6.0, y: heightDelta))
                         transition.animatePositionAdditive(layer: textInputPanelNode.inputModeView.layer, offset: CGPoint(x: 64.0, y: heightDelta))
-                        
+                                                
                         textInputPanelNode.animateIn(transition: transition)
                     } else {
                         textInputPanelNode.alpha = 1.0
@@ -2230,7 +2235,10 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate, ASGestureRecog
                         alphaTransition.updateAlpha(node: textInputPanelNode, alpha: 0.0)
                         
                         let componentTransition = ComponentTransition.easeInOut(duration: 0.25)
-                        componentTransition.animateBlur(layer: self.itemsContainer.layer, fromRadius: 10.0, toRadius: 0.0)
+                        if let liquidLensView = self.liquidLensView {
+                            componentTransition.animateBlur(layer: liquidLensView.layer, fromRadius: 10.0, toRadius: 0.0)
+                            transition.animatePositionAdditive(layer: liquidLensView.layer, offset: CGPoint(x: -27.0, y: 0.0))
+                        }
                         
                         let blurTransition = ComponentTransition.easeInOut(duration: 0.18)
                         transition.animateTransformScale(layer: textInputPanelNode.opaqueActionButtons.layer, from: CGPoint(x: 1.0, y: 1.0), to: CGPoint(x: 0.01, y: 0.01))
@@ -2238,6 +2246,9 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate, ASGestureRecog
                         textInputPanelNode.opaqueActionButtons.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2)
                         transition.animatePosition(node: textInputPanelNode.opaqueActionButtons, to: CGPoint(x: textInputPanelNode.opaqueActionButtons.position.x, y: textInputPanelNode.opaqueActionButtons.position.y + heightDelta))
 
+                        blurTransition.animateBlur(layer: textInputPanelNode.inputModeView.layer, fromRadius: 0.0, toRadius: 4.0)
+                        componentTransition.animateAlpha(view: textInputPanelNode.inputModeView, from: 1.0, to: 0.0)
+                        
                         transition.animatePositionAdditive(layer: textInputPanelNode.textPlaceholderNode.layer, offset: .zero, to: CGPoint(x: 6.0, y: heightDelta))
                         transition.animatePositionAdditive(layer: textInputPanelNode.inputModeView.layer, offset: .zero, to: CGPoint(x: 64.0, y: heightDelta))
                     } else {

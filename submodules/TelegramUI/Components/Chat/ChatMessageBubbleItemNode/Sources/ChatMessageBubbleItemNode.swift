@@ -6991,9 +6991,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
             }
             if needsSummarization {
                 let _ = (item.context.engine.messages.summarizeMessage(messageId: item.message.id, translateToLang: nil)
-                |> deliverOnMainQueue).start(completed: {
-                    let _ = item.controllerInteraction.requestMessageUpdate(item.message.id, false)
-                })
+                |> deliverOnMainQueue).start()
             }
         }
     }
