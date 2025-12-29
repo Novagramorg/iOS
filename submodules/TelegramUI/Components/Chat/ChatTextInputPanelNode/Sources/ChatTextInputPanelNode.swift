@@ -811,11 +811,9 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 if highlighted {
                     self.attachmentButtonIcon.layer.removeAnimation(forKey: "opacity")
                     self.attachmentButtonIcon.alpha = 0.4
-                    self.attachmentButtonIcon.layer.allowsGroupOpacity = true
                 } else {
                     self.attachmentButtonIcon.alpha = 1.0
                     self.attachmentButtonIcon.layer.animateAlpha(from: 0.4, to: 1.0, duration: 0.2)
-                    self.attachmentButtonIcon.layer.allowsGroupOpacity = false
                 }
             }
         }
@@ -2440,8 +2438,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 self.attachmentButtonBackground.contentView.addSubview(dotAnimationView)
                 dotAnimationView.frame = dotAnimationSize.centered(in: self.attachmentButtonBackground.contentView.bounds)
                 
-                self.attachmentButtonIcon.layer.opacity = 0.0
-                self.attachmentButtonIcon.layer.transform = CATransform3DMakeScale(0.001, 0.001, 1.0)
+                self.attachmentButtonIcon.isHidden = true
                 dotAnimationView.playOnce(completion: { [weak self, weak dotAnimationView] in
                     guard let self else {
                         return
@@ -2456,8 +2453,9 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                         transition.setScale(view: dotAnimationView, scale: 0.001)
                     }
                     
-                    transition.setAlpha(view: self.attachmentButtonIcon, alpha: 1.0)
-                    transition.setScale(view: self.attachmentButtonIcon, scale: 1.0)
+                    self.attachmentButtonIcon.isHidden = false
+                    transition.animateAlpha(view: self.attachmentButtonIcon, from: 0.0, to: 1.0)
+                    transition.animateScale(view: self.attachmentButtonIcon, from: 0.001, to: 1.0)
                 })
             }
         }
@@ -2695,8 +2693,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                         
                         transition.updatePosition(layer: dotAnimationView.layer, position: self.attachmentButtonBackground.contentView.bounds.center)
                         
-                        self.attachmentButtonIcon.layer.opacity = 0.0
-                        self.attachmentButtonIcon.layer.transform = CATransform3DMakeScale(0.001, 0.001, 1.0)
+                        self.attachmentButtonIcon.isHidden = true
                         dotAnimationView.playOnce(completion: { [weak self, weak dotAnimationView] in
                             guard let self else {
                                 return
@@ -2711,8 +2708,9 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                                 transition.setScale(view: dotAnimationView, scale: 0.001)
                             }
                             
-                            transition.setAlpha(view: self.attachmentButtonIcon, alpha: 1.0)
-                            transition.setScale(view: self.attachmentButtonIcon, scale: 1.0)
+                            self.attachmentButtonIcon.isHidden = false
+                            transition.animateAlpha(view: self.attachmentButtonIcon, from: 0.0, to: 1.0)
+                            transition.animateScale(view: self.attachmentButtonIcon, from: 0.001, to: 1.0)
                         })
                     }
                 } else {
