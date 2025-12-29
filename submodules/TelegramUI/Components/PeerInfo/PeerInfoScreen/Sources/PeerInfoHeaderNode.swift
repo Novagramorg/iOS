@@ -493,7 +493,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
     func update(width: CGFloat, containerHeight: CGFloat, containerInset: CGFloat, statusBarHeight: CGFloat, navigationHeight: CGFloat, isModalOverlay: Bool, isMediaOnly: Bool, contentOffset: CGFloat, paneContainerY: CGFloat, presentationData: PresentationData, peer: Peer?, cachedData: CachedPeerData?, threadData: MessageHistoryThreadData?, peerNotificationSettings: TelegramPeerNotificationSettings?, threadNotificationSettings: TelegramPeerNotificationSettings?, globalNotificationSettings: EngineGlobalNotificationSettings?, statusData: PeerInfoStatusData?, panelStatusData: (PeerInfoStatusData?, PeerInfoStatusData?, CGFloat?), isSecretChat: Bool, isContact: Bool, isSettings: Bool, state: PeerInfoState, profileGiftsContext: ProfileGiftsContext?, screenData: PeerInfoScreenData?, isSearching: Bool, metrics: LayoutMetrics, deviceMetrics: DeviceMetrics, transition: ContainedViewLayoutTransition, additive: Bool, animateHeader: Bool) -> CGFloat {
         if self.appliedCustomNavigationContentNode !== self.customNavigationContentNode {
             if let previous = self.appliedCustomNavigationContentNode {
-                transition.updateAlpha(node: previous, alpha: 0.0, completion: { [weak previous] _ in
+                ComponentTransition(transition).setAlpha(view: previous.view, alpha: 0.0, completion: { [weak previous] _ in
                     previous?.removeFromSupernode()
                 })
             }
@@ -503,7 +503,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                 self.searchBarContainer.addSubnode(customNavigationContentNode)
                 customNavigationContentNode.frame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: width, height: navigationHeight))
                 customNavigationContentNode.alpha = 0.0
-                transition.updateAlpha(node: customNavigationContentNode, alpha: 1.0)
+                ComponentTransition(transition).setAlpha(view: customNavigationContentNode.view, alpha: 1.0)
             }
         } else if let customNavigationContentNode = self.customNavigationContentNode {
             transition.updateFrame(node: customNavigationContentNode, frame: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: width, height: navigationHeight)))
@@ -2751,7 +2751,6 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             if let result = customNavigationContentNode.view.hitTest(self.view.convert(point, to: customNavigationContentNode.view), with: event) {
                 return result
             }
-            return self.view
         }
         
         let setByFrame = self.avatarListNode.listContainerNode.setByYouNode.view.convert(self.avatarListNode.listContainerNode.setByYouNode.bounds, to: self.view).insetBy(dx: -44.0, dy: 0.0)
