@@ -1189,7 +1189,7 @@ final class PeerInfoPaneContainerNode: ASDisplayNode, ASGestureRecognizerDelegat
                 } else {
                     let isAnimatingOut = pane.isAnimatingOut
                     pane.isAnimatingOut = true
-                    paneTransition.updateFrame(node: pane.node, frame: adjustedFrame, completion: isAnimatingOut ? nil :  { _ in
+                    paneTransition.updateFrame(node: pane.node, frame: adjustedFrame, completion: isAnimatingOut ? nil : { _ in
                         paneCompletion()
                     })
                 }

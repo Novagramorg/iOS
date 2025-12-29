@@ -2326,10 +2326,11 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
             }
         }
         
+        let translateToLanguage = item.associatedData.translateToLanguage
         var isSummarized = false
         if item.controllerInteraction.summarizedMessageIds.contains(item.message.id) {
             for attribute in item.message.attributes {
-                if let attribute = attribute as? SummarizationMessageAttribute, attribute.summary != nil {
+                if let attribute = attribute as? SummarizationMessageAttribute, attribute.summaryForLang(translateToLanguage) != nil {
                     isSummarized = true
                 }
             }
@@ -6982,15 +6983,16 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
             item.controllerInteraction.summarizedMessageIds.insert(item.message.id)
             let _ = item.controllerInteraction.requestMessageUpdate(item.message.id, false)
             
-            var needsSummarization = true
+            let translateToLanguage = item.associatedData.translateToLanguage
+            var requestSummary = true
             for attribute in item.message.attributes {
-                if let attribute = attribute as? SummarizationMessageAttribute, attribute.summary != nil {
-                    needsSummarization = false
+                if let attribute = attribute as? SummarizationMessageAttribute, attribute.summaryForLang(translateToLanguage) != nil {
+                    requestSummary = false
                     break
                 }
             }
-            if needsSummarization {
-                let _ = (item.context.engine.messages.summarizeMessage(messageId: item.message.id, translateToLang: nil)
+            if requestSummary {
+                let _ = (item.context.engine.messages.summarizeMessage(messageId: item.message.id, translateToLang: translateToLanguage)
                 |> deliverOnMainQueue).start()
             }
         }
