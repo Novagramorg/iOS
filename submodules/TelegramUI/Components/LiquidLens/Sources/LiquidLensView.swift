@@ -248,15 +248,12 @@ public final class LiquidLensView: UIView {
             
             lensView.setValue(UIColor(white: 0.0, alpha: 0.1), forKey: "restingBackgroundColor")
         } else {
-            if case .noContainer = kind {
+            let legacySelectionView = GlassBackgroundView.ContentImageView()
+            self.legacySelectionView = legacySelectionView
+            if let backgroundView = self.backgroundView {
+                backgroundView.contentView.insertSubview(legacySelectionView, at: 0)
             } else {
-                let legacySelectionView = GlassBackgroundView.ContentImageView()
-                self.legacySelectionView = legacySelectionView
-                if let backgroundView = self.backgroundView {
-                    backgroundView.contentView.insertSubview(legacySelectionView, at: 0)
-                } else {
-                    self.containerView.insertSubview(legacySelectionView, at: 0)
-                }
+                self.containerView.insertSubview(legacySelectionView, at: 0)
             }
             
             let legacyContentMaskView = UIView()

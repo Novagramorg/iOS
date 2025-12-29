@@ -503,7 +503,18 @@ public class GlassBackgroundView: UIView {
             }
             
             if let foregroundView = self.foregroundView {
-                foregroundView.image = GlassBackgroundView.generateLegacyGlassImage(size: CGSize(width: outerCornerRadius * 2.0, height: outerCornerRadius * 2.0), inset: shadowInset, isDark: isDark, fillColor: tintColor.color)
+                let fillColor: UIColor
+                switch tintColor.kind {
+                case .panel:
+                    if isDark {
+                        fillColor = UIColor(white: 1.0, alpha: 1.0).mixedWith(.black, alpha: 1.0 - 0.11).withAlphaComponent(0.85)
+                    } else {
+                        fillColor = UIColor(white: 1.0, alpha: 0.7)
+                    }
+                case .custom:
+                    fillColor = tintColor.color
+                }
+                foregroundView.image = GlassBackgroundView.generateLegacyGlassImage(size: CGSize(width: outerCornerRadius * 2.0, height: outerCornerRadius * 2.0), inset: shadowInset, isDark: isDark, fillColor: fillColor)
             } else {
                 if let nativeParamsView = self.nativeParamsView, let nativeView = self.nativeView {
                     if #available(iOS 26.0, *) {
