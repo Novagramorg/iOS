@@ -1835,13 +1835,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         if let subject = item.associatedData.subject, case .messageOptions = subject {
             needsShareButton = false
         }
-        
-        #if DEBUG
-        
-        #else
-        needsSummarizeButton = false
-        #endif
-                
+                        
         var tmpWidth: CGFloat
         if allowFullWidth {
             tmpWidth = baseWidth
