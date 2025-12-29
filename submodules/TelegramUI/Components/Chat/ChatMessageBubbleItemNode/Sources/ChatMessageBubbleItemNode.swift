@@ -1835,13 +1835,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         if let subject = item.associatedData.subject, case .messageOptions = subject {
             needsShareButton = false
         }
-        
-        #if DEBUG
-        
-        #else
-        needsSummarizeButton = false
-        #endif
-                
+                        
         var tmpWidth: CGFloat
         if allowFullWidth {
             tmpWidth = baseWidth
@@ -6997,9 +6991,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
             }
             if needsSummarization {
                 let _ = (item.context.engine.messages.summarizeMessage(messageId: item.message.id, translateToLang: nil)
-                |> deliverOnMainQueue).start(completed: {
-                    let _ = item.controllerInteraction.requestMessageUpdate(item.message.id, false)
-                })
+                |> deliverOnMainQueue).start()
             }
         }
     }

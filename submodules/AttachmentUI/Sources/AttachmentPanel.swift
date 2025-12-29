@@ -889,7 +889,7 @@ private final class MainButtonNode: HighlightTrackingButtonNode {
     }
 }
 
-final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate {
+final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate, ASGestureRecognizerDelegate {
     enum Style {
         case glass
         case legacy
@@ -913,6 +913,7 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate {
     private let makeEntityInputView: () -> AttachmentTextInputPanelInputView?
     
     private let containerNode: ASDisplayNode
+    private var backgroundView: GlassBackgroundView?
     private var liquidLensView: LiquidLensView?
     private let backgroundNode: NavigationBackgroundNode
     private let scrollNode: ASScrollNode
@@ -927,7 +928,8 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate {
     private var itemSizes: [AnyHashable: CGSize] = [:]
     
     private var tabSelectionRecognizer: TabSelectionRecognizer?
-    private var selectionGestureState: (startX: CGFloat, currentX: CGFloat, itemId: AnyHashable)?
+    private var selectionGestureState: (startX: CGFloat, currentX: CGFloat, itemId: AnyHashable, isLifted: Bool)?
+    private var lensIsLifted = false
     
     private var textInputPanelNode: AttachmentTextInputPanelNode?
     private var progressNode: LoadingProgressNode?
@@ -1518,8 +1520,8 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate {
         case .began:
             if let itemId = self.item(at: location), let itemView = self.itemViews[itemId] {
                 let startX = itemView.frame.minX
-                self.selectionGestureState = (startX, startX, itemId)
-                
+                self.selectionGestureState = (startX, startX, itemId, !self.scrollNode.view.isScrollEnabled)
+                                
                 self.requestLayout(transition: .animated(duration: 0.4, curve: .spring))
             }
         case .changed:
@@ -1533,12 +1535,28 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate {
             }
         case .ended, .cancelled:
             if let selectionGestureState = self.selectionGestureState {
+                if !selectionGestureState.isLifted {
+                    self.lensIsLifted = true
+                    self.requestLayout(transition: .animated(duration: 0.4, curve: .spring))
+                    
+                    self.liquidLensView?.clipsToBounds = false
+                    
+                    Queue.mainQueue().after(0.1, {
+                        self.lensIsLifted = false
+                        self.requestLayout(transition: .animated(duration: 0.4, curve: .spring))
+                        Queue.mainQueue().after(0.4, {
+                            self.liquidLensView?.clipsToBounds = true
+                        })
+                    })
+                }
+                
                 self.selectionGestureState = nil
                 if case .ended = recognizer.state {
                     guard let index = self.buttons.firstIndex(where: { AnyHashable($0.key) == selectionGestureState.itemId }) else {
                         return
                     }
                     let button = self.buttons[index]
+                    self.skipLensUpdate = true
                     if self.selectionChanged(button) {
                         self.selectedIndex = index
                         if self.buttons.count > 5, let button = self.itemViews[button.key] {
@@ -1562,6 +1580,7 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate {
                             self.updateItemContainers(contentOffset: newBounds.minX, transition: transition)
                         }
                     }
+                    self.skipLensUpdate = false
                 }
                 self.requestLayout(transition: .animated(duration: 0.4, curve: .spring))
             }
@@ -1591,7 +1610,7 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate {
         var maxButtonsToFit = 5
         switch self.panelStyle {
         case .glass:
-            leftNodeOriginX = layout.safeInsets.left + 3.0 + buttonWidth / 2.0
+            leftNodeOriginX = layout.safeInsets.left + buttonWidth / 2.0
             if layout.size.width < 420.0 {
                 maxButtonsToFit = 5
             }
@@ -1608,7 +1627,7 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate {
                 buttonWidth = smallButtonWidth
                 distanceBetweenNodes = 60.0
             }
-            leftNodeOriginX = layout.safeInsets.left + 3.0 + buttonWidth / 2.0
+            leftNodeOriginX = layout.safeInsets.left + buttonWidth / 2.0
         }
         
         var validIds = Set<AnyHashable>()
@@ -1617,7 +1636,7 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate {
         var mostRightX = 0.0
         for i in 0 ..< self.buttons.count {
             let originX = floorToScreenPixels(leftNodeOriginX + CGFloat(i) * distanceBetweenNodes - buttonWidth / 2.0)
-            let buttonFrame = CGRect(origin: CGPoint(x: originX, y: 0.0), size: CGSize(width: buttonWidth, height: self.buttonSize.height))
+            let buttonFrame = CGRect(origin: CGPoint(x: originX, y: -3.0), size: CGSize(width: buttonWidth, height: self.buttonSize.height))
             mostRightX = buttonFrame.maxX
             
             let type = self.buttons[i]
@@ -1770,9 +1789,10 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate {
         mostRightX += layout.safeInsets.right + 3.0
         
         let contentSize = CGSize(width: mostRightX, height: self.buttonSize.height)
-        if contentSize != self.scrollNode.view.contentSize {
+        if contentSize != self.scrollNode.view.contentSize && self.scrollNode.view.bounds.width > 0.0 {
             self.scrollNode.view.contentSize = contentSize
-            self.scrollNode.view.isScrollEnabled = abs(contentSize.width - self.scrollNode.view.bounds.width) > 1.0
+            self.scrollNode.view.isScrollEnabled = contentSize.width - self.scrollNode.view.bounds.width > 1.0
+            self.liquidLensView?.clipsToBounds = self.scrollNode.view.isScrollEnabled
         }
     }
     
@@ -2036,54 +2056,64 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate {
         }
         
         self.updateViews(transition: .immediate)
-        
-        var selectionFrame = CGRect()
-        if self.selectedIndex >= 0 && self.selectedIndex < self.buttons.count, let itemView = self.itemViews[self.buttons[self.selectedIndex].key], let itemSize = self.itemSizes[self.buttons[self.selectedIndex].key] {
-            let contentOffset = self.scrollNode.view.contentOffset.x
-            selectionFrame = CGRect(origin: CGPoint(x: itemView.center.x - itemSize.width / 2.0 - contentOffset, y: itemView.frame.minY), size: itemSize).insetBy(dx: -3.0, dy: 0.0)
-        }
-        
-        let lensSelection: (x: CGFloat, width: CGFloat)
-        if let selectionGestureState = self.selectionGestureState {
-            lensSelection = (selectionGestureState.currentX, selectionFrame.width)
-        } else {
-            lensSelection = (selectionFrame.minX, selectionFrame.width)
-        }
-        
+                
         let glassPanelHeight: CGFloat = 62.0
         let bounds = CGRect(origin: CGPoint(), size: CGSize(width: layout.size.width, height: self.buttonSize.height + insets.bottom))
         if case .glass = self.panelStyle {
+            let backgroundView: GlassBackgroundView
             let liquidLensView: LiquidLensView
-            if let current = self.liquidLensView {
-                liquidLensView = current
+            if let currentBackground = self.backgroundView, let currentLens = self.liquidLensView {
+                backgroundView = currentBackground
+                liquidLensView = currentLens
             } else {
-                liquidLensView = LiquidLensView(kind: .externalContainer)
+                backgroundView = GlassBackgroundView()
+                self.backgroundView = backgroundView
+                
+                liquidLensView = LiquidLensView(kind: .noContainer)
+                liquidLensView.clipsToBounds = true
+                liquidLensView.layer.cornerRadius = 28.0
+                
+                self.containerNode.view.addSubview(backgroundView)
                 self.containerNode.view.addSubview(liquidLensView)
-                //self.containerNode.view.addSubview(self.scrollNode.view)
+                self.containerNode.view.addSubview(self.scrollNode.view)
                 self.liquidLensView = liquidLensView
                 
                 liquidLensView.contentView.addSubview(self.itemsContainer)
                 liquidLensView.selectedContentView.addSubview(self.selectedItemsContainer)
                 
                 self.itemsContainer.clipsToBounds = true
-                self.itemsContainer.layer.cornerRadius = glassPanelHeight * 0.5
+                self.itemsContainer.layer.cornerRadius = 28.0
                 self.selectedItemsContainer.clipsToBounds = true
-                self.selectedItemsContainer.layer.cornerRadius = glassPanelHeight * 0.5
+                self.selectedItemsContainer.layer.cornerRadius = 28.0
                 
                 let tabSelectionRecognizer = TabSelectionRecognizer(target: self, action: #selector(self.onTabSelectionGesture(_:)))
+                tabSelectionRecognizer.delegate = self.wrappedGestureRecognizerDelegate
                 self.tabSelectionRecognizer = tabSelectionRecognizer
-                liquidLensView.addGestureRecognizer(tabSelectionRecognizer)
+                self.scrollNode.view.addGestureRecognizer(tabSelectionRecognizer)
             }
             let panelSize = CGSize(width: isSelecting ? textPanelWidth : layout.size.width - layout.safeInsets.left - layout.safeInsets.right - panelSideInset * 2.0, height: isSelecting ? textPanelHeight - 11.0 : glassPanelHeight)
             
             let cornerRadius: CGFloat = isSelecting ? min(20.0, panelSize.height * 0.5) : panelSize.height * 0.5
             let backgroundOriginX: CGFloat = isSelecting ? panelSideInset : floorToScreenPixels((layout.size.width - panelSize.width) / 2.0)
-            liquidLensView.update(size: CGSize(width: panelSize.width, height: panelSize.height), cornerRadius: cornerRadius, selectionOrigin: CGPoint(x: max(0.0, min(panelSize.width - lensSelection.width, lensSelection.x)), y: 0.0), selectionSize: CGSize(width: lensSelection.width, height: panelSize.height), inset: 3.0, isDark: self.presentationData.theme.overallDarkAppearance, isLifted: self.selectionGestureState != nil, isCollapsed: isSelecting, transition: ComponentTransition(transition))
+            
+            backgroundView.update(size: panelSize, cornerRadius: cornerRadius, isDark: self.presentationData.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: UIColor(white: self.presentationData.theme.overallDarkAppearance ? 0.0 : 1.0, alpha: 0.6)), isInteractive: true, transition: ComponentTransition(transition))
+            
+            let lensSideInset: CGFloat = defaultPanelSideInset + layout.safeInsets.left
+            let lensPanelSize = CGSize(width: layout.size.width - layout.safeInsets.left - layout.safeInsets.right - lensSideInset * 2.0, height: glassPanelHeight)
+            self.lensParams = (lensPanelSize, cornerRadius)
+            self.updateLiquidLens(transition: ComponentTransition(transition))
             
             transition.updatePosition(layer: liquidLensView.layer, position: CGPoint(x: backgroundOriginX + panelSize.width * 0.5, y: panelSize.height * 0.5))
-            transition.updateBounds(layer: liquidLensView.layer, bounds: CGRect(origin: .zero, size: panelSize))
-            transition.updateFrame(view: self.itemsContainer, frame: CGRect(origin: .zero, size: panelSize))
-            transition.updateFrame(view: self.selectedItemsContainer, frame: CGRect(origin: .zero, size: panelSize))
+            transition.updateBounds(layer: liquidLensView.layer, bounds: CGRect(origin: .zero, size: CGSize(width: lensPanelSize.width - 3.0 * 2.0, height: lensPanelSize.height - 3.0 * 2.0)))
+            
+            transition.updatePosition(layer: backgroundView.layer, position: CGPoint(x: backgroundOriginX + panelSize.width * 0.5, y: panelSize.height * 0.5))
+            transition.updateBounds(layer: backgroundView.layer, bounds: CGRect(origin: .zero, size: panelSize))
+            
+            let itemsContainerFrame = CGRect(origin: .zero, size: CGSize(width: lensPanelSize.width - 3.0 * 2.0, height: lensPanelSize.height - 3.0 * 2.0))
+            transition.updateBounds(layer: self.itemsContainer.layer, bounds: CGRect(origin: .zero, size: itemsContainerFrame.size))
+            transition.updateBounds(layer: self.selectedItemsContainer.layer, bounds: CGRect(origin: .zero, size: itemsContainerFrame.size))
+            transition.updatePosition(layer: self.itemsContainer.layer, position: itemsContainerFrame.center)
+            transition.updatePosition(layer: self.selectedItemsContainer.layer, position: itemsContainerFrame.center)
         }
         
         var containerTransition: ContainedViewLayoutTransition
@@ -2146,14 +2176,9 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate {
         alphaTransition.updateAlpha(node: self.scrollNode, alpha: isSelecting || isAnyButtonVisible ? 0.0 : 1.0)
         containerTransition.updateTransformScale(node: self.scrollNode, scale: isSelecting || isAnyButtonVisible ? 0.85 : 1.0)
         
-        alphaTransition.updateAlpha(layer: self.itemsContainer.layer, alpha: isSelecting || isAnyButtonVisible ? 0.0 : 1.0)
-        containerTransition.updateTransformScale(layer: self.itemsContainer.layer, scale: isSelecting || isAnyButtonVisible ? 0.85 : 1.0)
-        
-        alphaTransition.updateAlpha(layer: self.selectedItemsContainer.layer, alpha: isSelecting || isAnyButtonVisible ? 0.0 : 1.0)
-        containerTransition.updateTransformScale(layer: self.selectedItemsContainer.layer, scale: isSelecting || isAnyButtonVisible ? 0.85 : 1.0)
-        
         if let liquidLensView = self.liquidLensView {
-            containerTransition.updateTransformScale(layer: liquidLensView.layer, scale: isAnyButtonVisible ? 0.85 : 1.0)
+            alphaTransition.updateAlpha(layer: liquidLensView.layer, alpha: isSelecting || isAnyButtonVisible ? 0.0 : 1.0)
+            containerTransition.updateTransformScale(layer: liquidLensView.layer, scale: isSelecting || isAnyButtonVisible ? 0.85 : 1.0)
         }
         
         if isSelectingUpdated {
@@ -2172,7 +2197,10 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate {
                         alphaTransition.updateAlpha(node: textInputPanelNode, alpha: 1.0)
                         
                         let componentTransition = ComponentTransition.easeInOut(duration: 0.25)
-                        componentTransition.animateBlur(layer: self.itemsContainer.layer, fromRadius: 0.0, toRadius: 10.0)
+                        if let liquidLensView = self.liquidLensView {
+                            componentTransition.animateBlur(layer: liquidLensView.layer, fromRadius: 0.0, toRadius: 10.0)
+                            transition.animatePositionAdditive(layer: liquidLensView.layer, offset: .zero, to: CGPoint(x: -27.0, y: 0.0))
+                        }
                         
                         let blurTransition = ComponentTransition.easeInOut(duration: 0.18)
                         transition.animateTransformScale(node: textInputPanelNode.opaqueActionButtons, from: 0.01)
@@ -2180,9 +2208,12 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate {
                         textInputPanelNode.opaqueActionButtons.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
                         transition.animatePosition(node: textInputPanelNode.opaqueActionButtons, from: CGPoint(x: textInputPanelNode.opaqueActionButtons.position.x, y: textInputPanelNode.opaqueActionButtons.position.y + heightDelta))
 
+                        blurTransition.animateBlur(layer: textInputPanelNode.inputModeView.layer, fromRadius: 4.0, toRadius: 0.0)
+                        componentTransition.animateAlpha(view: textInputPanelNode.inputModeView, from: 0.0, to: 1.0)
+                        
                         transition.animatePositionAdditive(layer: textInputPanelNode.textPlaceholderNode.layer, offset: CGPoint(x: 6.0, y: heightDelta))
                         transition.animatePositionAdditive(layer: textInputPanelNode.inputModeView.layer, offset: CGPoint(x: 64.0, y: heightDelta))
-                        
+                                                
                         textInputPanelNode.animateIn(transition: transition)
                     } else {
                         textInputPanelNode.alpha = 1.0
@@ -2204,7 +2235,10 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate {
                         alphaTransition.updateAlpha(node: textInputPanelNode, alpha: 0.0)
                         
                         let componentTransition = ComponentTransition.easeInOut(duration: 0.25)
-                        componentTransition.animateBlur(layer: self.itemsContainer.layer, fromRadius: 10.0, toRadius: 0.0)
+                        if let liquidLensView = self.liquidLensView {
+                            componentTransition.animateBlur(layer: liquidLensView.layer, fromRadius: 10.0, toRadius: 0.0)
+                            transition.animatePositionAdditive(layer: liquidLensView.layer, offset: CGPoint(x: -27.0, y: 0.0))
+                        }
                         
                         let blurTransition = ComponentTransition.easeInOut(duration: 0.18)
                         transition.animateTransformScale(layer: textInputPanelNode.opaqueActionButtons.layer, from: CGPoint(x: 1.0, y: 1.0), to: CGPoint(x: 0.01, y: 0.01))
@@ -2212,6 +2246,9 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate {
                         textInputPanelNode.opaqueActionButtons.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2)
                         transition.animatePosition(node: textInputPanelNode.opaqueActionButtons, to: CGPoint(x: textInputPanelNode.opaqueActionButtons.position.x, y: textInputPanelNode.opaqueActionButtons.position.y + heightDelta))
 
+                        blurTransition.animateBlur(layer: textInputPanelNode.inputModeView.layer, fromRadius: 0.0, toRadius: 4.0)
+                        componentTransition.animateAlpha(view: textInputPanelNode.inputModeView, from: 1.0, to: 0.0)
+                        
                         transition.animatePositionAdditive(layer: textInputPanelNode.textPlaceholderNode.layer, offset: .zero, to: CGPoint(x: 6.0, y: heightDelta))
                         transition.animatePositionAdditive(layer: textInputPanelNode.inputModeView.layer, offset: .zero, to: CGPoint(x: 64.0, y: heightDelta))
                     } else {
@@ -2336,8 +2373,49 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate {
         transition.setSublayerTransform(view: self.itemsContainer, transform: transform)
         transition.setSublayerTransform(view: self.selectedItemsContainer, transform: transform)
     }
+    
+    func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+        if self.selectionGestureState != nil {
+            self.selectionGestureState = nil
+            self.requestLayout(transition: .animated(duration: 0.4, curve: .spring))
+        }
+    }
+    
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
         self.updateItemContainers(contentOffset: scrollView.contentOffset.x, transition: .immediate)
         self.updateViews(transition: .immediate)
+        self.updateLiquidLens(transition: .immediate)
+    }
+    
+    private var skipLensUpdate = false
+    private var lensParams: (panelSize: CGSize, cornerRadius: CGFloat)?
+    func updateLiquidLens(transition: ComponentTransition) {
+        guard !self.skipLensUpdate, let liquidLensView = self.liquidLensView, let (panelSize, _) = self.lensParams else {
+            return
+        }
+        
+        var selectionFrame = CGRect()
+        if self.selectedIndex >= 0 && self.selectedIndex < self.buttons.count, let itemView = self.itemViews[self.buttons[self.selectedIndex].key], let itemSize = self.itemSizes[self.buttons[self.selectedIndex].key] {
+            let contentOffset = self.scrollNode.view.contentOffset.x
+            selectionFrame = CGRect(origin: CGPoint(x: itemView.center.x - itemSize.width / 2.0 - contentOffset, y: itemView.frame.minY), size: itemSize)
+        }
+        
+        var lensSelection: (x: CGFloat, width: CGFloat)
+        if let selectionGestureState = self.selectionGestureState, selectionGestureState.isLifted {
+            lensSelection = (selectionGestureState.currentX, selectionFrame.width)
+        } else {
+            lensSelection = (selectionFrame.minX, selectionFrame.width)
+        }
+        
+        if !self.scrollNode.view.isScrollEnabled {
+            lensSelection.x = max(0.0, min(lensSelection.x, panelSize.width - lensSelection.width))
+        }
+        
+        let inset: CGFloat = 3.0
+        liquidLensView.update(size: CGSize(width: panelSize.width - inset * 2.0, height: panelSize.height - inset * 2.0), cornerRadius: 28.0, selectionOrigin: CGPoint(x: lensSelection.x, y: 0.0), selectionSize: CGSize(width: lensSelection.width, height: panelSize.height), inset: 0.0, isDark: self.presentationData.theme.overallDarkAppearance, isLifted: self.selectionGestureState?.isLifted == true || self.lensIsLifted, isCollapsed: self.isSelecting || self.buttons.count < 2, transition: transition)
+    }
+    
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+        return true
     }
 }
