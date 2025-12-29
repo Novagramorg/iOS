@@ -199,6 +199,7 @@ public class ContactsPeerItem: ItemListItem, ListViewItemWithHeader {
     let searchQuery: String?
     let isAd: Bool
     let alwaysShowLastSeparator: Bool
+    let hideBackground: Bool
     let action: ((ContactsPeerItemPeer) -> Void)?
     let disabledAction: ((ContactsPeerItemPeer) -> Void)?
     let setPeerIdWithRevealedOptions: ((EnginePeer.Id?, EnginePeer.Id?) -> Void)?
@@ -247,6 +248,7 @@ public class ContactsPeerItem: ItemListItem, ListViewItemWithHeader {
         searchQuery: String? = nil,
         isAd: Bool = false,
         alwaysShowLastSeparator: Bool = false,
+        hideBackground: Bool = false,
         action: ((ContactsPeerItemPeer) -> Void)?,
         disabledAction: ((ContactsPeerItemPeer) -> Void)? = nil,
         setPeerIdWithRevealedOptions: ((EnginePeer.Id?, EnginePeer.Id?) -> Void)? = nil,
@@ -285,6 +287,7 @@ public class ContactsPeerItem: ItemListItem, ListViewItemWithHeader {
         self.searchQuery = searchQuery
         self.isAd = isAd
         self.alwaysShowLastSeparator = alwaysShowLastSeparator
+        self.hideBackground = hideBackground
         self.action = action
         self.disabledAction = disabledAction
         self.setPeerIdWithRevealedOptions = setPeerIdWithRevealedOptions
@@ -1325,9 +1328,13 @@ public class ContactsPeerItemNode: ItemListRevealOptionsItemNode {
                                 case .plain:
                                     strongSelf.topSeparatorNode.backgroundColor = item.presentationData.theme.list.itemPlainSeparatorColor
                                     strongSelf.separatorNode.backgroundColor = item.presentationData.theme.list.itemPlainSeparatorColor
-                                    strongSelf.backgroundNode.backgroundColor = item.presentationData.theme.list.plainBackgroundColor
+                                    if !item.hideBackground {
+                                        strongSelf.backgroundNode.backgroundColor = item.presentationData.theme.list.plainBackgroundColor
+                                    }
                                 case .blocks:
-                                    strongSelf.topSeparatorNode.backgroundColor = item.presentationData.theme.list.itemBlocksSeparatorColor
+                                    if !item.hideBackground {
+                                        strongSelf.topSeparatorNode.backgroundColor = item.presentationData.theme.list.itemBlocksSeparatorColor
+                                    }
                                     strongSelf.separatorNode.backgroundColor = item.presentationData.theme.list.itemBlocksSeparatorColor
                                     strongSelf.backgroundNode.backgroundColor = item.presentationData.theme.list.itemBlocksBackgroundColor
                                 }

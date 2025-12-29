@@ -958,7 +958,7 @@ final class GiftStoreScreenComponent: Component {
                 
                 let balanceSideInset: CGFloat = 12.0
                 var balanceBackgroundSize = CGSize(width: balanceTitleSize.width + balanceSideInset * 2.0, height: 44.0)
-                balanceBackgroundSize.width = max(balanceBackgroundSize.width, balanceValueSize.width + balanceIconSize.width + 2.0 + 6.0 * 2.0)
+                balanceBackgroundSize.width = max(balanceBackgroundSize.width, balanceValueSize.width + balanceIconSize.width + 2.0 + balanceSideInset * 2.0)
                 
                 let balanceBackgroundFrame = CGRect(origin: CGPoint(x: availableSize.width - environment.safeInsets.right - 16.0 - balanceBackgroundSize.width, y: environment.navigationHeight - 60.0 + 2.0 + floor((60.0 - 44.0) * 0.5)), size: balanceBackgroundSize)
                 
