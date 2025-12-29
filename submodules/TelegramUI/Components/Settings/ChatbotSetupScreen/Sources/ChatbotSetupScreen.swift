@@ -537,7 +537,7 @@ final class ChatbotSetupScreenComponent: Component {
                         .init(title: environment.strings.Common_Cancel, action: {
                             completion(false)
                         }),
-                        .init(title: environment.strings.Common_Cancel, type: .default, action: {
+                        .init(title: environment.strings.ChatbotSetup_Gift_Warning_Proceed, type: .default, action: {
                             completion(true)
                         }),
                     ]

@@ -277,7 +277,7 @@ public func chatMessagePaymentAlertController(
         context: context,
         presentationData: presentationData,
         updatedPresentationData: updatedPresentationData,
-        configuration: AlertScreen.Configuration(actionAlignment: .vertical),
+        configuration: AlertScreen.Configuration(actionAlignment: .vertical, allowInputInset: true),
         content: content,
         actions: [
             .init(title: strings.Chat_PaidMessage_Confirm_PayForMessage(count), type: .default, action: {

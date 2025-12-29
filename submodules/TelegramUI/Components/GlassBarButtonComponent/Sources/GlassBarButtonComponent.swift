@@ -20,6 +20,7 @@ public final class GlassBarButtonComponent: Component {
     public let animateScale: Bool
     public let component: AnyComponentWithIdentity<Empty>
     public let action: ((UIView) -> Void)?
+    public let tag: AnyObject?
 
     public init(
         size: CGSize?,
@@ -29,7 +30,8 @@ public final class GlassBarButtonComponent: Component {
         isEnabled: Bool = true,
         animateScale: Bool = true,
         component: AnyComponentWithIdentity<Empty>,
-        action: ((UIView) -> Void)?
+        action: ((UIView) -> Void)?,
+        tag: AnyObject? = nil
     ) {
         self.size = size
         self.backgroundColor = backgroundColor
@@ -39,6 +41,7 @@ public final class GlassBarButtonComponent: Component {
         self.animateScale = animateScale
         self.component = component
         self.action = action
+        self.tag = tag
     }
 
     public static func ==(lhs: GlassBarButtonComponent, rhs: GlassBarButtonComponent) -> Bool {
@@ -63,10 +66,23 @@ public final class GlassBarButtonComponent: Component {
         if lhs.component != rhs.component {
             return false
         }
+        if lhs.tag !== rhs.tag {
+            return false
+        }
         return true
     }
 
-    public final class View: UIView {
+    public final class View: UIView, ComponentTaggedView {
+        public func matches(tag: Any) -> Bool {
+            if let component = self.component, let componentTag = component.tag {
+                let tag = tag as AnyObject
+                if componentTag === tag {
+                    return true
+                }
+            }
+            return false
+        }
+        
         private let containerView: HighlightTrackingButton
         private let genericContainerView: UIView
         private let genericBackgroundView: SimpleGlassView

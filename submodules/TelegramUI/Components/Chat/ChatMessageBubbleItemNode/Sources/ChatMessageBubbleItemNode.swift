@@ -1757,11 +1757,14 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                 needsShareButton = true
             }
             
+            if let _ = item.message.attributes.first(where: { $0 is SummarizationMessageAttribute }) {
+                needsSummarizeButton = true
+            }
+            
             if let peer = item.message.peers[item.message.id.peerId] {
                 if let channel = peer as? TelegramChannel {
                     if case .broadcast = channel.info {
                         needsShareButton = true
-                        needsSummarizeButton = true
                     }
                 }
             }
@@ -2329,6 +2332,15 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
             }
         }
         
+        var isSummarized = false
+        if item.controllerInteraction.summarizedMessageIds.contains(item.message.id) {
+            for attribute in item.message.attributes {
+                if let attribute = attribute as? SummarizationMessageAttribute, attribute.summary != nil {
+                    isSummarized = true
+                }
+            }
+        }
+        
         var displayHeader = false
         if initialDisplayHeader {
             if authorNameString != nil {
@@ -2355,6 +2367,9 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                 } else {
                     displayHeader = true
                 }
+            }
+            if isSummarized {
+                displayHeader = true
             }
         }
         
@@ -2734,16 +2749,10 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                 hasReply = false
             }
             
-            var isSummarized = false
-            if item.controllerInteraction.summarizedMessageIds.contains(item.message.id) {
-                for attribute in item.message.attributes {
-                    if let attribute = attribute as? TranslationMessageAttribute, !attribute.text.isEmpty, attribute.toLang == "sum" {
-                        isSummarized = true
-                        hasReply = true
-                    }
-                }
+            if isSummarized {
+                hasReply = true
             }
-            
+                        
             if !isInstantVideo, hasReply, (replyMessage != nil || replyForward != nil || replyStory != nil || isSummarized) {
                 if headerSize.height.isZero {
                     headerSize.height += 11.0
@@ -5007,10 +5016,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
             if let summarizeButtonNode = strongSelf.summarizeButtonNode {
                 let buttonSize = summarizeButtonNode.update(presentationData: item.presentationData, controllerInteraction: item.controllerInteraction, chatLocation: item.chatLocation, subject: item.associatedData.subject, message: item.message, account: item.context.account, disableComments: disablesComments, isSummarize: true)
                 
-                var buttonFrame = CGRect(origin: CGPoint(x: !incoming ? backgroundFrame.minX - buttonSize.width - 8.0 : backgroundFrame.maxX + 8.0, y: backgroundFrame.maxY - buttonSize.width - 1.0), size: buttonSize)
-                if strongSelf.shareButtonNode != nil {
-                    buttonFrame.origin.y -= buttonSize.width + 10.0
-                }
+                var buttonFrame = CGRect(origin: CGPoint(x: !incoming ? backgroundFrame.minX - buttonSize.width - 8.0 : backgroundFrame.maxX + 8.0, y: backgroundFrame.minY + 1.0), size: buttonSize)
                 
                 if let shareButtonOffset = shareButtonOffset {
                     if incoming {
@@ -5068,10 +5074,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
             if let summarizeButtonNode = strongSelf.summarizeButtonNode {
                 let buttonSize = summarizeButtonNode.update(presentationData: item.presentationData, controllerInteraction: item.controllerInteraction, chatLocation: item.chatLocation, subject: item.associatedData.subject, message: item.message, account: item.context.account, disableComments: disablesComments, isSummarize: true)
                 
-                var buttonFrame = CGRect(origin: CGPoint(x: !incoming ? backgroundFrame.minX - buttonSize.width - 8.0 : backgroundFrame.maxX + 8.0, y: backgroundFrame.maxY - buttonSize.width - 1.0), size: buttonSize)
-                if strongSelf.shareButtonNode != nil {
-                    buttonFrame.origin.y -= buttonSize.width + 10.0
-                }
+                var buttonFrame = CGRect(origin: CGPoint(x: !incoming ? backgroundFrame.minX - buttonSize.width - 8.0 : backgroundFrame.maxX + 8.0, y: backgroundFrame.minY + 1.0), size: buttonSize)
                 
                 if let shareButtonOffset = shareButtonOffset {
                     if incoming {
@@ -6980,24 +6983,23 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         
         if item.controllerInteraction.summarizedMessageIds.contains(item.message.id) {
             item.controllerInteraction.summarizedMessageIds.remove(item.message.id)
-            let _ = item.controllerInteraction.requestMessageUpdate(item.message.id, true)
+            let _ = item.controllerInteraction.requestMessageUpdate(item.message.id, false)
         } else {
             item.controllerInteraction.summarizedMessageIds.insert(item.message.id)
+            let _ = item.controllerInteraction.requestMessageUpdate(item.message.id, false)
             
             var needsSummarization = true
             for attribute in item.message.attributes {
-                if let attribute = attribute as? TranslationMessageAttribute, attribute.toLang == "sum" {
+                if let attribute = attribute as? SummarizationMessageAttribute, attribute.summary != nil {
                     needsSummarization = false
                     break
                 }
             }
             if needsSummarization {
-                let _ = (item.context.engine.messages.translateMessages(messageIds: [item.message.id], fromLang: nil, toLang: "sum", enableLocalIfPossible: false)
+                let _ = (item.context.engine.messages.summarizeMessage(messageId: item.message.id, translateToLang: nil)
                 |> deliverOnMainQueue).start(completed: {
-                    let _ = item.controllerInteraction.requestMessageUpdate(item.message.id, true)
+                    let _ = item.controllerInteraction.requestMessageUpdate(item.message.id, false)
                 })
-            } else {
-                let _ = item.controllerInteraction.requestMessageUpdate(item.message.id, true)
             }
         }
     }
