@@ -1232,7 +1232,7 @@ public final class NavigationBarImpl: ASDisplayNode, NavigationBar {
             return nil
         }
         
-        if self.passthroughTouches && (result == self.view || result == self.buttonsContainerNode.view || result == self.backgroundNode.view || result == self.backgroundNode.backgroundView) {
+        if self.passthroughTouches && (result == self.view || result == self.buttonsContainerNode.view || result == self.backgroundNode.view || result == self.backgroundNode.backgroundView || result == self.backgroundContainer?.contentView) {
             return nil
         }
         

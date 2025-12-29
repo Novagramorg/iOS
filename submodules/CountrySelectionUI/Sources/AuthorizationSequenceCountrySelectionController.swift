@@ -394,9 +394,9 @@ public final class AuthorizationSequenceCountrySelectionController: ViewControll
             id: "close",
             component: AnyComponent(GlassBarButtonComponent(
                 size: barButtonSize,
-                backgroundColor: self.theme.rootController.navigationBar.glassBarButtonBackgroundColor,
+                backgroundColor: nil,
                 isDark: self.theme.overallDarkAppearance,
-                state: .generic,
+                state: .glass,
                 component: AnyComponentWithIdentity(id: "close", component: AnyComponent(
                     BundleIconComponent(
                         name: "Navigation/Close",
@@ -415,9 +415,9 @@ public final class AuthorizationSequenceCountrySelectionController: ViewControll
                 id: "search",
                 component: AnyComponent(GlassBarButtonComponent(
                     size: barButtonSize,
-                    backgroundColor: self.theme.rootController.navigationBar.glassBarButtonBackgroundColor,
+                    backgroundColor: nil,
                     isDark: self.theme.overallDarkAppearance,
-                    state: .generic,
+                    state: .glass,
                     component: AnyComponentWithIdentity(id: "search", component: AnyComponent(
                         BundleIconComponent(
                             name: "Navigation/Search",

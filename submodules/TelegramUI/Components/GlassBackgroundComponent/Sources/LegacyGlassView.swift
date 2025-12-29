@@ -138,37 +138,39 @@ final class LegacyGlassView: UIView {
         transition.setCornerRadius(layer: self.layer, cornerRadius: cornerRadius)
         transition.setFrame(layer: backdropLayer, frame: CGRect(origin: CGPoint(), size: size))
         
-        let size = CGSize(width: max(1.0, size.width), height: max(1.0, size.height))
-        let cornerRadius = min(min(size.width, size.height) * 0.5, cornerRadius)
-        let displacementMagnitudePoints: CGFloat = 20.0
-        let displacementMagnitudeU = displacementMagnitudePoints / size.width
-        let displacementMagnitudeV = displacementMagnitudePoints / size.height
-        let outerEdgeDistance = 2.0
-        
-        if let displacementMap = generateDisplacementMap(size: size, cornerRadius: cornerRadius, edgeDistance: min(12.0, cornerRadius), scale: 1.0) {
-            let meshTransform = generateGlassMeshFromDisplacementMap(
-                size: size,
-                cornerRadius: cornerRadius,
-                displacementMap: displacementMap,
-                displacementMagnitudeU: displacementMagnitudeU,
-                displacementMagnitudeV: displacementMagnitudeV,
-                cornerResolution: 12,
-                outerEdgeDistance: outerEdgeDistance,
-                bezier: DisplacementBezier(
-                    x1: 0.816137566137566,
-                    y1: 0.20502645502645533,
-                    x2: 0.5806878306878306,
-                    y2: 0.873015873015873
-                )
-            ).mesh.makeValue()
+        if !"".isEmpty {
+            let size = CGSize(width: max(1.0, size.width), height: max(1.0, size.height))
+            let cornerRadius = min(min(size.width, size.height) * 0.5, cornerRadius)
+            let displacementMagnitudePoints: CGFloat = 20.0
+            let displacementMagnitudeU = displacementMagnitudePoints / size.width
+            let displacementMagnitudeV = displacementMagnitudePoints / size.height
+            let outerEdgeDistance = 2.0
             
-            if let meshTransform {
-                if !transition.animation.isImmediate, let previousTransform = backdropLayer.value(forKey: "meshTransform") as? NSObject {
-                    backdropLayer.removeAnimation(forKey: "meshTransform")
-                    backdropLayer.setValue(meshTransform, forKey: "meshTransform")
-                    transition.animateMeshTransform(layer: backdropLayer, from: previousTransform, to: meshTransform)
-                } else {
-                    backdropLayer.setValue(meshTransform, forKey: "meshTransform")
+            if let displacementMap = generateDisplacementMap(size: size, cornerRadius: cornerRadius, edgeDistance: min(12.0, cornerRadius), scale: 1.0) {
+                let meshTransform = generateGlassMeshFromDisplacementMap(
+                    size: size,
+                    cornerRadius: cornerRadius,
+                    displacementMap: displacementMap,
+                    displacementMagnitudeU: displacementMagnitudeU,
+                    displacementMagnitudeV: displacementMagnitudeV,
+                    cornerResolution: 12,
+                    outerEdgeDistance: outerEdgeDistance,
+                    bezier: DisplacementBezier(
+                        x1: 0.816137566137566,
+                        y1: 0.20502645502645533,
+                        x2: 0.5806878306878306,
+                        y2: 0.873015873015873
+                    )
+                ).mesh.makeValue()
+                
+                if let meshTransform {
+                    if !transition.animation.isImmediate, let previousTransform = backdropLayer.value(forKey: "meshTransform") as? NSObject {
+                        backdropLayer.removeAnimation(forKey: "meshTransform")
+                        backdropLayer.setValue(meshTransform, forKey: "meshTransform")
+                        transition.animateMeshTransform(layer: backdropLayer, from: previousTransform, to: meshTransform)
+                    } else {
+                        backdropLayer.setValue(meshTransform, forKey: "meshTransform")
+                    }
                 }
             }
         }
