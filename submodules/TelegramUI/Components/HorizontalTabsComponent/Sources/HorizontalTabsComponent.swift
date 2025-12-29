@@ -223,6 +223,7 @@ public final class HorizontalTabsComponent: Component {
     public let selectedTab: Tab.Id?
     public let isEditing: Bool
     public let layout: Layout
+    public let liftWhileSwitching: Bool
     
     public init(
         context: AccountContext?,
@@ -230,7 +231,8 @@ public final class HorizontalTabsComponent: Component {
         tabs: [Tab],
         selectedTab: Tab.Id?,
         isEditing: Bool,
-        layout: Layout = .fill
+        layout: Layout = .fill,
+        liftWhileSwitching: Bool = true
     ) {
         self.context = context
         self.theme = theme
@@ -238,6 +240,7 @@ public final class HorizontalTabsComponent: Component {
         self.selectedTab = selectedTab
         self.isEditing = isEditing
         self.layout = layout
+        self.liftWhileSwitching = liftWhileSwitching
     }
     
     public static func ==(lhs: HorizontalTabsComponent, rhs: HorizontalTabsComponent) -> Bool {
@@ -254,6 +257,9 @@ public final class HorizontalTabsComponent: Component {
             return false
         }
         if lhs.layout != rhs.layout {
+            return false
+        }
+        if lhs.liftWhileSwitching != rhs.liftWhileSwitching {
             return false
         }
         return true
@@ -568,7 +574,7 @@ public final class HorizontalTabsComponent: Component {
                 return
             }
             var isLifted = self.temporaryLiftTimer != nil
-            if component.theme.overallDarkAppearance {
+            if !component.liftWhileSwitching {
                 isLifted = false
             }
             self.lensView.update(size: CGSize(width: layoutData.size.width - 3.0 * 2.0, height: layoutData.size.height - 3.0 * 2.0), selectionOrigin: CGPoint(x:  -self.scrollView.contentOffset.x + layoutData.selectedItemFrame.minX, y: 0.0), selectionSize: CGSize(width: layoutData.selectedItemFrame.width, height: layoutData.size.height - 3.0 * 2.0), inset: 0.0, liftedInset: 6.0, isDark: component.theme.overallDarkAppearance, isLifted: isLifted, transition: transition)

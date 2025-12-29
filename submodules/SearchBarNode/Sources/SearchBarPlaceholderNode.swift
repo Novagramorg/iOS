@@ -34,8 +34,9 @@ public final class SearchBarPlaceholderContentView: UIView {
         var backgroundColor: UIColor
         var controlColor: UIColor
         var isActive: Bool
+        var additionalPlaceholderInset: CGFloat
         
-        init(placeholderString: NSAttributedString?, compactPlaceholderString: NSAttributedString?, constrainedSize: CGSize, expansionProgress: CGFloat, iconColor: UIColor, foregroundColor: UIColor, backgroundColor: UIColor, controlColor: UIColor, isActive: Bool) {
+        init(placeholderString: NSAttributedString?, compactPlaceholderString: NSAttributedString?, constrainedSize: CGSize, expansionProgress: CGFloat, iconColor: UIColor, foregroundColor: UIColor, backgroundColor: UIColor, controlColor: UIColor, isActive: Bool, additionalPlaceholderInset: CGFloat) {
             self.placeholderString = placeholderString
             self.compactPlaceholderString = compactPlaceholderString
             self.constrainedSize = constrainedSize
@@ -45,6 +46,7 @@ public final class SearchBarPlaceholderContentView: UIView {
             self.backgroundColor = backgroundColor
             self.controlColor = controlColor
             self.isActive = isActive
+            self.additionalPlaceholderInset = additionalPlaceholderInset
         }
     }
     
@@ -145,19 +147,21 @@ public final class SearchBarPlaceholderContentView: UIView {
             foregroundColor: foregroundColor,
             backgroundColor: backgroundColor,
             controlColor: controlColor,
-            isActive: false
+            isActive: false,
+            additionalPlaceholderInset: 0.0
         )
         self.params = params
         return self.updateLayout(params: params, transition: transition)
     }
     
-    public func update(size: CGSize, isActive: Bool, transition: ContainedViewLayoutTransition) {
+    public func update(size: CGSize, isActive: Bool, additionalPlaceholderInset: CGFloat, transition: ContainedViewLayoutTransition) {
         guard var params = self.params else {
             return
         }
         params.constrainedSize = size
         params.expansionProgress = 1.0
         params.isActive = isActive
+        params.additionalPlaceholderInset = additionalPlaceholderInset
         let _ = self.updateLayout(params: params, transition: transition)
     }
     
@@ -232,7 +236,7 @@ public final class SearchBarPlaceholderContentView: UIView {
         if params.constrainedSize.height >= 36.0 {
             textOffset += 1.0
         }
-        let labelX: CGFloat = iconX + iconSize.width + spacing
+        let labelX: CGFloat = iconX + iconSize.width + spacing + params.additionalPlaceholderInset
         let labelFrame = CGRect(origin: CGPoint(x: labelX, y: floorToScreenPixels((height - labelLayoutResult.size.height) / 2.0) + textOffset), size: labelLayoutResult.size)
         transition.updateFrame(node: self.labelNode, frame: labelFrame)
         transition.updateFrame(node: self.plainLabelNode, frame: labelFrame)

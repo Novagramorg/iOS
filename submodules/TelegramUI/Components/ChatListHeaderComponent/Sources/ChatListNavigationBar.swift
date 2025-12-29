@@ -726,9 +726,9 @@ public final class ChatListNavigationBar: Component {
                     transition: headerPanelsTransition,
                     component: headerPanels,
                     environment: {},
-                    containerSize: CGSize(width: availableSize.width, height: 10000.0)
+                    containerSize: CGSize(width: availableSize.width - component.sideInset * 2.0, height: 10000.0)
                 )
-                let headerPanelsFrame = CGRect(origin: CGPoint(x: 0.0, y: headersContentHeight), size: headerPanelsSize)
+                let headerPanelsFrame = CGRect(origin: CGPoint(x: component.sideInset, y: headersContentHeight), size: headerPanelsSize)
                 if let headerPanelsComponentView = headerPanelsView.view {
                     if headerPanelsComponentView.superview == nil {
                         self.bottomContentsContainer.addSubview(headerPanelsComponentView)

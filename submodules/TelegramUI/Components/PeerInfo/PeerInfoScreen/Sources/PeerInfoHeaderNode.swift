@@ -2804,7 +2804,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             return result
         }
         
-        if self.isSettings {
+        if self.isSettings && self.buttonsContainerNode.alpha != 0.0 {
             if self.subtitleNodeRawContainer.bounds.contains(self.view.convert(point, to: self.subtitleNodeRawContainer.view)) {
                 return self.subtitleNodeRawContainer.view
             }

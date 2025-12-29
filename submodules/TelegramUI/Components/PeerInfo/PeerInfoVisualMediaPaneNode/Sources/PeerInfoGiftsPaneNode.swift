@@ -580,7 +580,7 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
         if let params = self.currentParams {
             let visibleBounds = self.scrollNode.bounds.insetBy(dx: 0.0, dy: -10.0)
                 
-            var topInset: CGFloat = 60.0
+            var topInset: CGFloat = 66.0
             
             var canEditCollections = false
             if self.peerId == self.context.account.peerId || self.canManage {
@@ -703,7 +703,7 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
                         }
                     )),
                     environment: {},
-                    containerSize: CGSize(width: params.size.width - 10.0 * 2.0, height: 44.0)
+                    containerSize: CGSize(width: params.size.width - 14.0 * 2.0, height: 44.0)
                 )
                 if let tabSelectorView = self.tabSelector.view {
                     if tabSelectorView.superview == nil {
@@ -716,7 +716,7 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
                     }
                     transition.setFrame(view: tabSelectorView, frame: CGRect(origin: CGPoint(x: floor((params.size.width - tabSelectorSize.width) / 2.0), y: 66.0), size: tabSelectorSize))
                     
-                    topInset += tabSelectorSize.height + 28.0
+                    topInset += tabSelectorSize.height + 15.0
                 }
             } else if let tabSelectorView = self.tabSelector.view {
                 tabSelectorView.alpha = 0.0

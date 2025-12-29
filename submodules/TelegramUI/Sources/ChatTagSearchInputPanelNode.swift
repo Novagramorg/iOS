@@ -357,7 +357,7 @@ final class ChatTagSearchInputPanelNode: ChatInputPanelNode {
             }
         }
         
-        var nextLeftX: CGFloat = params.leftInset
+        var nextLeftX: CGFloat = params.leftInset + 4.0
         
         var calendarButtonFrameValue: CGRect?
         var membersButtonFrameValue: CGRect?
