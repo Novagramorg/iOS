@@ -18,6 +18,7 @@ import PeerInfoPaneNode
 import ChatListUI
 import DeleteChatPeerActionSheetItem
 import UndoUI
+import ComponentDisplayAdapters
 
 private final class SearchNavigationContentNode: ASDisplayNode, PeerInfoPanelNodeNavigationContentNode {
     private struct Params: Equatable {
@@ -66,7 +67,7 @@ private final class SearchNavigationContentNode: ASDisplayNode, PeerInfoPanelNod
         
         if self.appliedPanelNode !== self.panelNode {
             if let previous = self.appliedPanelNode {
-                transition.updateAlpha(node: previous, alpha: 0.0, completion: { [weak previous] _ in
+                ComponentTransition(transition).setAlpha(view: previous.view, alpha: 0.0, completion: { [weak previous] _ in
                     previous?.removeFromSupernode()
                 })
             }
@@ -79,9 +80,9 @@ private final class SearchNavigationContentNode: ASDisplayNode, PeerInfoPanelNod
                 let panelFrame = CGRect(origin: CGPoint(x: 0.0, y: contentHeight), size: CGSize(width: width, height: panelHeight))
                 panelNode.frame = panelFrame
                 panelNode.alpha = 0.0
-                transition.updateAlpha(node: panelNode, alpha: 1.0)
+                ComponentTransition(transition).setAlpha(view: panelNode.view, alpha: 1.0)
                 
-                contentHeight += 80.0
+                contentHeight += 14.0 + 66.0
                 contentHeight += panelHeight
             }
         } else if let panelNode = self.panelNode, let chatController = self.chatController {
@@ -90,7 +91,7 @@ private final class SearchNavigationContentNode: ASDisplayNode, PeerInfoPanelNod
             let panelFrame = CGRect(origin: CGPoint(x: 0.0, y: contentHeight), size: CGSize(width: width, height: panelHeight))
             transition.updateFrame(node: panelNode, frame: panelFrame)
             
-            contentHeight += 80.0
+            contentHeight += 14.0 + 66.0
             contentHeight += panelHeight
         }
         
@@ -258,11 +259,11 @@ public final class PeerInfoChatListPaneNode: ASDisplayNode, PeerInfoPaneNode, AS
             } else if let emptyShimmerEffectNode = self.emptyShimmerEffectNode {
                 self.emptyShimmerEffectNode = nil
                 let emptyNodeTransition = transition.isAnimated ? transition : .animated(duration: 0.3, curve: .easeInOut)
-                emptyNodeTransition.updateAlpha(node: emptyShimmerEffectNode, alpha: 0.0, completion: { [weak emptyShimmerEffectNode] _ in
+                ComponentTransition(emptyNodeTransition).setAlpha(view: emptyShimmerEffectNode.view, alpha: 0.0, completion: { [weak emptyShimmerEffectNode] _ in
                     emptyShimmerEffectNode?.removeFromSupernode()
                 })
                 self.chatListNode.alpha = 0.0
-                emptyNodeTransition.updateAlpha(node: self.chatListNode, alpha: 1.0)
+                ComponentTransition(emptyNodeTransition).setAlpha(view: self.chatListNode.view, alpha: 1.0)
             }
         }
         
@@ -445,7 +446,7 @@ public final class PeerInfoChatListPaneNode: ASDisplayNode, PeerInfoPaneNode, AS
                         
                         chatController.displayNode.layer.allowsGroupOpacity = true
                         if transition.isAnimated {
-                            ComponentTransition.easeInOut(duration: 0.2).setAlpha(layer: chatController.displayNode.layer, alpha: 1.0)
+                            ComponentTransition.easeInOut(duration: 0.2).setAlpha(view: chatController.displayNode.view, alpha: 1.0)
                         }
                         
                         if self.searchNavigationContentNode?.contentNode !== contentNode {
