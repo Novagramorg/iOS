@@ -92,7 +92,7 @@ public final class ChatSearchNavigationContentNode: NavigationBarContentNode {
         self.backgroundView.contentView.addSubview(self.searchBar.view)
         
         self.backgroundContainer.contentView.addSubview(self.close.background)
-        self.close.background.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(self.onCloseTapGesture(_:))))
+        self.close.background.contentView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(self.onCloseTapGesture(_:))))
         
         self.searchBar.cancel = { [weak self] in
             self?.searchBar.deactivate(clear: false)
