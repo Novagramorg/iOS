@@ -10,6 +10,7 @@ import Postbox
 import WallpaperBackgroundNode
 import ChatMessageItemCommon
 import ContextUI
+import HierarchyTrackingLayer
 
 public class ChatMessageShareButton: ASDisplayNode {
     private let referenceNode: ContextReferenceContentNode
@@ -21,9 +22,11 @@ public class ChatMessageShareButton: ASDisplayNode {
     private let topButton: HighlightTrackingButtonNode
     private let topIconNode: ASImageNode
     private var topIconOffset = CGPoint()
-    
+        
     private var bottomButton: HighlightTrackingButtonNode?
     private var bottomIconNode: ASImageNode?
+    
+    private var starsView: StarsView?
     
     private var separatorNode: ASDisplayNode?
     
@@ -180,6 +183,17 @@ public class ChatMessageShareButton: ASDisplayNode {
                 updatedIconImage = PresentationResourcesChat.chatFreeShareButtonIcon(presentationData.theme.theme, wallpaper: presentationData.theme.wallpaper)
             }
          
+            if isSummarize {
+                if self.topIconNode.image != nil, let snapshotView = self.topIconNode.view.snapshotContentTree() {
+                    self.view.addSubview(snapshotView)
+                    
+                    snapshotView.layer.animateScale(from: 1.0, to: 0.01, duration: 0.25, removeOnCompletion: false, completion: { _ in
+                        snapshotView.removeFromSuperview()
+                    })
+                    self.topIconNode.layer.animateScale(from: 0.01, to: 1.0, duration: 0.25)
+                }
+            }
+            
             self.topIconNode.image = updatedIconImage
             self.topIconOffset = updatedIconOffset
             
@@ -322,6 +336,22 @@ public class ChatMessageShareButton: ASDisplayNode {
             self.backgroundBlurView?.view.isHidden = false
         }
         
+        if isSummarize {
+            let starsView: StarsView
+            if let current = self.starsView {
+                starsView = current
+            } else {
+                starsView = StarsView()
+                self.starsView = starsView
+                self.view.insertSubview(starsView, belowSubview: self.topIconNode.view)
+            }
+            starsView.frame = CGRect(origin: .zero, size: size)
+            starsView.update(size: size, color: .white)
+        } else if let starsView = self.starsView {
+            self.starsView = nil
+            starsView.removeFromSuperview()
+        }
+        
         return size
     }
     
@@ -333,5 +363,72 @@ public class ChatMessageShareButton: ASDisplayNode {
             backgroundFrame.origin.y += rect.minY
             backgroundContent.update(rect: backgroundFrame, within: containerSize, transition: .immediate)
         }
+    }
+}
+
+private final class StarsView: UIView {
+    private let hierarchyTrackingLayer: HierarchyTrackingLayer
+    private let topStar = SimpleLayer()
+    private let bottomStar = SimpleLayer()
+        
+    override init(frame: CGRect) {
+        self.hierarchyTrackingLayer = HierarchyTrackingLayer()
+        
+        super.init(frame: frame)
+        
+        self.clipsToBounds = true
+        self.layer.addSublayer(self.hierarchyTrackingLayer)
+        
+        self.hierarchyTrackingLayer.didEnterHierarchy = { [weak self] in
+            guard let self else {
+                return
+            }
+            self.updateAnimations()
+        }
+        
+        self.layer.addSublayer(self.topStar)
+        self.layer.addSublayer(self.bottomStar)
+        
+        let image = UIImage(bundleImageName: "Settings/Storage/ParticleStar")
+        self.topStar.contents = image?.cgImage
+        self.bottomStar.contents = image?.cgImage
+        
+        self.topStar.bounds = CGRect(origin: .zero, size: CGSize(width: 10.0, height: 10.0))
+        self.bottomStar.bounds = CGRect(origin: .zero, size: CGSize(width: 10.0, height: 10.0))
+        
+        self.topStar.opacity = 0.5
+        self.bottomStar.opacity = 0.5
+    }
+    
+    required init(coder: NSCoder) {
+        preconditionFailure()
+    }
+    
+    func updateAnimations() {
+        let topAnimation = CAKeyframeAnimation(keyPath: "transform.scale")
+        topAnimation.values = [1.0 as NSNumber, 1.0 as NSNumber, 0.55 as NSNumber]
+        topAnimation.keyTimes = [0.0 as NSNumber, 0.1 as NSNumber, 1.0 as NSNumber]
+        topAnimation.duration = 0.9
+        topAnimation.autoreverses = true
+        topAnimation.repeatCount = Float.infinity
+        topAnimation.beginTime = CACurrentMediaTime()
+        self.topStar.add(topAnimation, forKey: "blink")
+        
+        let bottomAnimation = CAKeyframeAnimation(keyPath: "transform.scale")
+        bottomAnimation.values = [1.0 as NSNumber, 1.0 as NSNumber, 0.55 as NSNumber]
+        bottomAnimation.keyTimes = [0.0 as NSNumber, 0.1 as NSNumber, 1.0 as NSNumber]
+        bottomAnimation.duration = 0.9
+        bottomAnimation.autoreverses = true
+        bottomAnimation.repeatCount = Float.infinity
+        bottomAnimation.beginTime = CACurrentMediaTime() + 0.9
+        self.bottomStar.add(bottomAnimation, forKey: "blink")
+    }
+            
+    func update(size: CGSize, color: UIColor) {
+        self.topStar.layerTintColor = color.cgColor
+        self.bottomStar.layerTintColor = color.cgColor
+        
+        self.topStar.position = CGPoint(x: 9.0, y: 9.0)
+        self.bottomStar.position = CGPoint(x: size.width - 9.0, y: size.height - 9.0)
     }
 }

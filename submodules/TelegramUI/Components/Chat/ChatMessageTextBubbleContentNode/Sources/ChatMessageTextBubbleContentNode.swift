@@ -116,6 +116,8 @@ public class ChatMessageTextBubbleContentNode: ChatMessageBubbleContentNode {
     private var appliedExpandedBlockIds: Set<Int>?
     private var displayContentsUnderSpoilers: (value: Bool, location: CGPoint?) = (false, nil)
     
+    private var isSummaryApplied = false
+    
     private final class TextRevealAnimationState {
         let fromCount: Int
         let toCount: Int
@@ -404,6 +406,7 @@ public class ChatMessageTextBubbleContentNode: ChatMessageBubbleContentNode {
                     }
                 }
                 
+                var isSummaryApplied = false
                 var isTranslating = false
                 if let invoice {
                     rawText = invoice.description
@@ -450,7 +453,13 @@ public class ChatMessageTextBubbleContentNode: ChatMessageBubbleContentNode {
                     } else if let translateToLanguage, !item.message.text.isEmpty && incoming {
                         isTranslating = true
                         for attribute in item.message.attributes {
-                            if let attribute = attribute as? TranslationMessageAttribute, !attribute.text.isEmpty, attribute.toLang == translateToLanguage {
+                            if translateToLanguage == "sum", let attribute = attribute as? SummarizationMessageAttribute, let summary = attribute.summary {
+                                rawText = summary.text
+                                messageEntities = summary.entities
+                                isTranslating = false
+                                isSummaryApplied = true
+                                break
+                            } else if let attribute = attribute as? TranslationMessageAttribute, !attribute.text.isEmpty, attribute.toLang == translateToLanguage {
                                 rawText = attribute.text
                                 messageEntities = attribute.entities
                                 isTranslating = false
@@ -794,6 +803,20 @@ public class ChatMessageTextBubbleContentNode: ChatMessageBubbleContentNode {
                             strongSelf.textNode.textNode.displaysAsynchronously = !item.presentationData.isPreview
                             animation.animator.updateFrame(layer: strongSelf.containerNode.layer, frame: CGRect(origin: CGPoint(), size: boundingSize), completion: nil)
                             
+                            
+                            if strongSelf.isSummaryApplied != isSummaryApplied {
+                                strongSelf.isSummaryApplied = isSummaryApplied
+                                itemApply?.setInvertOffsetDirection()
+                                
+                                if let snapshotView = strongSelf.textNode.textNode.view.snapshotContentTree() {
+                                    strongSelf.view.addSubview(snapshotView)
+                                    
+                                    snapshotView.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.25, removeOnCompletion: false, completion: { _ in
+                                        snapshotView.removeFromSuperview()
+                                    })
+                                    strongSelf.textNode.textNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.25)
+                                }
+                            }
                             if strongSelf.appliedExpandedBlockIds != nil && strongSelf.appliedExpandedBlockIds != strongSelf.expandedBlockIds {
                                 itemApply?.setInvertOffsetDirection()
                             }

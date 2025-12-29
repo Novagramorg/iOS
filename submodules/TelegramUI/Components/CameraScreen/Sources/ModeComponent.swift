@@ -329,7 +329,7 @@ final class ModeComponent: Component {
             }
             
             transition.setFrame(view: self.liquidLensView, frame: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: containerFrame.size))
-            self.liquidLensView.update(size: containerFrame.size, selectionOrigin: CGPoint(x: lensSelection.x, y: 0.0), selectionSize: CGSize(width: lensSelection.width, height: selectionFrame.height), inset: 0.0, isDark: true, isLifted: self.selectionGestureState != nil, isCollapsed: false, transition: transition)
+            self.liquidLensView.update(size: containerFrame.size, selectionOrigin: CGPoint(x: max(0.0, min(lensSelection.x, containerFrame.size.width - lensSelection.width)), y: 0.0), selectionSize: CGSize(width: lensSelection.width, height: selectionFrame.height), inset: 3.0, isDark: true, isLifted: self.selectionGestureState != nil, isCollapsed: false, transition: transition)
             self.backgroundContainer.update(size: containerFrame.size, isDark: true, transition: .immediate)
             
             return size
