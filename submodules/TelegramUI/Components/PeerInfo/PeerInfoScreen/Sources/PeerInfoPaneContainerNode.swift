@@ -957,7 +957,14 @@ final class PeerInfoPaneContainerNode: ASDisplayNode, ASGestureRecognizerDelegat
         
         self.currentParams = (size, sideInset, bottomInset, deviceMetrics, visibleHeight, expansionFraction, presentationData, data, areTabsHidden, disableTabSwitching, navigationHeight)
         
-        self.backgroundColor = presentationData.theme.list.blocksBackgroundColor.mixedWith(presentationData.theme.list.plainBackgroundColor, alpha: expansionFraction)
+        let backgroundColor: UIColor
+        if self.currentPaneKey == .gifts {
+            backgroundColor = presentationData.theme.list.blocksBackgroundColor
+        } else {
+            backgroundColor = presentationData.theme.list.blocksBackgroundColor.mixedWith(presentationData.theme.list.plainBackgroundColor, alpha: expansionFraction)
+        }
+        
+        self.backgroundColor = backgroundColor
 
         let isScrollingLockedAtTop = expansionFraction < 1.0 - CGFloat.ulpOfOne
 
@@ -1189,7 +1196,7 @@ final class PeerInfoPaneContainerNode: ASDisplayNode, ASGestureRecognizerDelegat
                 } else {
                     let isAnimatingOut = pane.isAnimatingOut
                     pane.isAnimatingOut = true
-                    paneTransition.updateFrame(node: pane.node, frame: adjustedFrame, completion: isAnimatingOut ? nil :  { _ in
+                    paneTransition.updateFrame(node: pane.node, frame: adjustedFrame, completion: isAnimatingOut ? nil : { _ in
                         paneCompletion()
                     })
                 }
@@ -1220,7 +1227,7 @@ final class PeerInfoPaneContainerNode: ASDisplayNode, ASGestureRecognizerDelegat
         let edgeEffectHeight: CGFloat = 60.0
         let edgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: size.width, height: 60.0 + 6.0))
         transition.updateFrame(view: self.edgeEffectView, frame: edgeEffectFrame)
-        self.edgeEffectView.update(content: presentationData.theme.list.blocksBackgroundColor.mixedWith(presentationData.theme.list.plainBackgroundColor, alpha: expansionFraction), blur: true, alpha: 1.0, rect: edgeEffectFrame, edge: .top, edgeSize: edgeEffectHeight, transition: ComponentTransition(transition))
+        self.edgeEffectView.update(content: backgroundColor, blur: true, alpha: 1.0, rect: edgeEffectFrame, edge: .top, edgeSize: edgeEffectHeight, transition: ComponentTransition(transition))
         ComponentTransition(transition).setAlpha(view: self.edgeEffectView, alpha: tabsAlpha)
         
         var canManageTabs = false
