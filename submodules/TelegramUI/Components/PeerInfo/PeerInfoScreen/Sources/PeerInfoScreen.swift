@@ -13654,6 +13654,8 @@ public final class PeerInfoScreenImpl: ViewController, PeerInfoScreen, KeyShortc
                 badgeTextColor: baseNavigationBarPresentationData.theme.badgeTextColor
         ), strings: baseNavigationBarPresentationData.strings))
         
+        self._hasGlassStyle = true
+        
         self.navigationBar?.enableAutomaticBackButton = false
                 
         if isSettings || isMyProfile {

@@ -3977,10 +3977,10 @@ public final class PremiumIntroScreen: ViewControllerComponentContainer {
                 shareLinkImpl?(link)
             }
         ), navigationBarAppearance: .default, presentationMode: modal ? .modal : .default, theme: forceDark ? .dark : .default, updatedPresentationData: screenContext.updatedPresentationData)
+        
+        self._hasGlassStyle = true
                 
         if modal {
-            let cancelItem = UIBarButtonItem(title: presentationData.strings.Common_Close, style: .plain, target: self, action: #selector(self.cancelPressed))
-            self.navigationItem.setLeftBarButton(cancelItem, animated: false)
             self.navigationPresentation = .modal
         } else {
             self.navigationPresentation = .modalInLargeLayout
