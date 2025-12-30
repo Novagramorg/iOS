@@ -52,11 +52,20 @@ private func calculateWallpaperBrightness(from colors: [UInt32]) -> CGFloat {
 }
 
 private func calculateWallpaperBrightness(from image: UIImage) -> CGFloat {
-    let targetSize = CGSize(width: 10.0, height: 10.0)
     guard let cgImage = image.cgImage else {
         return 1.0
     }
 
+    let sourceWidth = cgImage.width
+    let sourceHeight = cgImage.height
+    let topRegionHeight = max(1, Int(CGFloat(sourceHeight) * 0.1))
+    let cropRect = CGRect(x: 0, y: 0, width: sourceWidth, height: topRegionHeight)
+
+    guard let croppedImage = cgImage.cropping(to: cropRect) else {
+        return 1.0
+    }
+
+    let targetSize = CGSize(width: 10.0, height: 10.0)
     let width = Int(targetSize.width)
     let height = Int(targetSize.height)
     let bytesPerPixel = 4
@@ -77,12 +86,12 @@ private func calculateWallpaperBrightness(from image: UIImage) -> CGFloat {
         return 1.0
     }
 
-    context.draw(cgImage, in: CGRect(origin: .zero, size: targetSize))
+    context.draw(croppedImage, in: CGRect(origin: .zero, size: targetSize))
 
     var totalLuminance: CGFloat = 0.0
     let pixelCount = width * height
 
-    for i in 0..<pixelCount {
+    for i in 0 ..< pixelCount {
         let offset = i * bytesPerPixel
         let r = CGFloat(pixelData[offset]) / 255.0
         let g = CGFloat(pixelData[offset + 1]) / 255.0
