@@ -1203,7 +1203,13 @@ public final class WallpaperBackgroundNodeImpl: ASDisplayNode, WallpaperBackgrou
             self.blurredBackgroundContents = nil
             self.motionEnabled = false
             self.wallpaperDisposable.set(nil)
-            self.updateIsDark(calculateWallpaperBrightness(from: gradientColors) <= 0.3)
+            
+            if case let .file(file) = wallpaper, file.isPattern {
+                let intensity = CGFloat(file.settings.intensity ?? 50) / 100.0
+                self.updateIsDark(intensity < 0)
+            } else {
+                self.updateIsDark(calculateWallpaperBrightness(from: gradientColors) <= 0.3)
+            }
         } else {
             if let gradientBackgroundNode = self.gradientBackgroundNode {
                 self.gradientBackgroundNode = nil
