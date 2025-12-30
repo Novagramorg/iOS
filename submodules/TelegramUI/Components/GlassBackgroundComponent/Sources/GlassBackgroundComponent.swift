@@ -434,6 +434,7 @@ public class GlassBackgroundView: UIView {
                 legacyView.update(size: size, cornerRadius: cornerRadius, transition: transition)
             }
             transition.setFrame(view: legacyView, frame: CGRect(origin: CGPoint(), size: size))
+            transition.setAlpha(view: legacyView, alpha: isVisible ? 1.0 : 0.0)
         }
         
         let shadowInset: CGFloat = 32.0
@@ -500,6 +501,7 @@ public class GlassBackgroundView: UIView {
                     context.setBlendMode(.copy)
                     context.fillEllipse(in: CGRect(origin: CGPoint(x: shadowInset + shadowInnerInset, y: shadowInset + shadowInnerInset), size: CGSize(width: size.width - shadowInset * 2.0 - shadowInnerInset * 2.0, height: size.height - shadowInset * 2.0 - shadowInnerInset * 2.0)))
                 })?.stretchableImage(withLeftCapWidth: Int(shadowInset + outerCornerRadius), topCapHeight: Int(shadowInset + outerCornerRadius))
+                transition.setAlpha(view: shadowView, alpha: isVisible ? 1.0 : 0.0)
             }
             
             if let foregroundView = self.foregroundView {
@@ -515,6 +517,7 @@ public class GlassBackgroundView: UIView {
                     fillColor = tintColor.color
                 }
                 foregroundView.image = GlassBackgroundView.generateLegacyGlassImage(size: CGSize(width: outerCornerRadius * 2.0, height: outerCornerRadius * 2.0), inset: shadowInset, isDark: isDark, fillColor: fillColor)
+                transition.setAlpha(view: foregroundView, alpha: isVisible ? 1.0 : 0.0)
             } else {
                 if let nativeParamsView = self.nativeParamsView, let nativeView = self.nativeView {
                     if #available(iOS 26.0, *) {
@@ -536,21 +539,15 @@ public class GlassBackgroundView: UIView {
                             glassEffect = glassEffectValue
                         }
                         
-                        if glassEffect == nil && nativeView.effect != nil {
-                            if transition.animation.isImmediate {
-                                if #available(iOS 26.2, *) {
+                        if glassEffect == nil {
+                            if nativeView.effect is UIGlassEffect {
+                                if transition.animation.isImmediate {
+                                    nativeView.effect = nil
                                 } else {
-                                    nativeView.effect = UIBlurEffect(style: .regular)
-                                }
-                                nativeView.effect = glassEffect
-                            } else {
-                                UIView.animate(withDuration: 0.2, animations: {
-                                    if #available(iOS 26.2, *) {
-                                    } else {
-                                        nativeView.effect = UIBlurEffect(style: .regular)
+                                    UIView.animate {
+                                        nativeView.effect = nil
                                     }
-                                    nativeView.effect = glassEffect
-                                })
+                                }
                             }
                         } else {
                             if transition.animation.isImmediate {
@@ -558,9 +555,9 @@ public class GlassBackgroundView: UIView {
                             } else {
                                 if let glassEffect, let currentEffect = nativeView.effect as? UIGlassEffect, currentEffect.tintColor == glassEffect.tintColor, currentEffect.isInteractive == glassEffect.isInteractive {
                                 } else {
-                                    UIView.animate(withDuration: 0.15, animations: {
+                                    UIView.animate {
                                         nativeView.effect = glassEffect
-                                    })
+                                    }
                                 }
                             }
                         }
