@@ -33,7 +33,7 @@ private func generateBlurredContents(image: UIImage, dimColor: UIColor?) -> UIIm
     telegramFastBlurMore(Int32(context.size.width), Int32(context.size.height), Int32(context.bytesPerRow), context.bytes)
 
     adjustSaturationInContext(context: context, saturation: 1.7)
-    
+
     if let dimColor {
         context.withFlippedContext { c in
             c.setFillColor(dimColor.cgColor)
@@ -42,6 +42,55 @@ private func generateBlurredContents(image: UIImage, dimColor: UIColor?) -> UIIm
     }
 
     return context.generateImage()
+}
+
+private func calculateWallpaperBrightness(from colors: [UInt32]) -> CGFloat {
+    guard !colors.isEmpty else {
+        return 1.0
+    }
+    return UIColor.average(of: colors.map(UIColor.init(rgb:))).hsb.b
+}
+
+private func calculateWallpaperBrightness(from image: UIImage) -> CGFloat {
+    let targetSize = CGSize(width: 10.0, height: 10.0)
+    guard let cgImage = image.cgImage else {
+        return 1.0
+    }
+
+    let width = Int(targetSize.width)
+    let height = Int(targetSize.height)
+    let bytesPerPixel = 4
+    let bytesPerRow = bytesPerPixel * width
+    let bitsPerComponent = 8
+
+    var pixelData = [UInt8](repeating: 0, count: width * height * bytesPerPixel)
+
+    guard let context = CGContext(
+        data: &pixelData,
+        width: width,
+        height: height,
+        bitsPerComponent: bitsPerComponent,
+        bytesPerRow: bytesPerRow,
+        space: CGColorSpaceCreateDeviceRGB(),
+        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+    ) else {
+        return 1.0
+    }
+
+    context.draw(cgImage, in: CGRect(origin: .zero, size: targetSize))
+
+    var totalLuminance: CGFloat = 0.0
+    let pixelCount = width * height
+
+    for i in 0..<pixelCount {
+        let offset = i * bytesPerPixel
+        let r = CGFloat(pixelData[offset]) / 255.0
+        let g = CGFloat(pixelData[offset + 1]) / 255.0
+        let b = CGFloat(pixelData[offset + 2]) / 255.0
+        totalLuminance += 0.299 * r + 0.587 * g + 0.114 * b
+    }
+
+    return totalLuminance / CGFloat(pixelCount)
 }
 
 public enum WallpaperBubbleType {
@@ -104,6 +153,8 @@ public protocol WallpaperEdgeEffectNode: ASDisplayNode {
 public protocol WallpaperBackgroundNode: ASDisplayNode {
     var isReady: Signal<Bool, NoError> { get }
     var rotation: CGFloat { get set }
+    var isDark: Bool? { get }
+    var isDarkUpdated: (() -> Void)? { get set }
 
     func update(wallpaper: TelegramWallpaper, animated: Bool)
     func update(wallpaper: TelegramWallpaper, starGift: StarGift?, animated: Bool)
@@ -983,12 +1034,19 @@ public final class WallpaperBackgroundNodeImpl: ASDisplayNode, WallpaperBackgrou
     
     public private(set) var isDark: Bool?
     public var isDarkUpdated: (() -> Void)?
-    
+
+    private func updateIsDark(_ isDark: Bool) {
+        if self.isDark != isDark {
+            self.isDark = isDark
+            self.isDarkUpdated?()
+        }
+    }
+
     private let _isReady = ValuePromise<Bool>(false, ignoreRepeated: true)
     public var isReady: Signal<Bool, NoError> {
         return self._isReady.get()
     }
-        
+
     init(context: AccountContext, useSharedAnimationPhase: Bool) {
         self.context = context
         self.useSharedAnimationPhase = useSharedAnimationPhase
@@ -1136,6 +1194,7 @@ public final class WallpaperBackgroundNodeImpl: ASDisplayNode, WallpaperBackgrou
             self.blurredBackgroundContents = nil
             self.motionEnabled = false
             self.wallpaperDisposable.set(nil)
+            self.updateIsDark(calculateWallpaperBrightness(from: gradientColors) <= 0.3)
         } else {
             if let gradientBackgroundNode = self.gradientBackgroundNode {
                 self.gradientBackgroundNode = nil
@@ -1164,17 +1223,20 @@ public final class WallpaperBackgroundNodeImpl: ASDisplayNode, WallpaperBackgrou
                 self.contentNode.contents = image?.cgImage
                 self.blurredBackgroundContents = image
                 self.wallpaperDisposable.set(nil)
+                self.updateIsDark(calculateWallpaperBrightness(from: gradientColors) <= 0.3)
             } else if gradientColors.count >= 1 {
                 self.contentNode.backgroundColor = UIColor(rgb: gradientColors[0])
                 self.contentNode.contents = nil
                 self.blurredBackgroundContents = nil
                 self.wallpaperDisposable.set(nil)
+                self.updateIsDark(calculateWallpaperBrightness(from: gradientColors) <= 0.3)
             } else {
                 self.contentNode.backgroundColor = .white
                 if let image = chatControllerBackgroundImage(theme: nil, wallpaper: wallpaper, mediaBox: self.context.sharedContext.accountManager.mediaBox, knockoutMode: false) {
                     self.contentNode.contents = image.cgImage
                     self.blurredBackgroundContents = generateBlurredContents(image: image, dimColor: wallpaperDimColor)
                     self.wallpaperDisposable.set(nil)
+                    self.updateIsDark(calculateWallpaperBrightness(from: image) <= 0.55)
                     Queue.mainQueue().justDispatch {
                         self._isReady.set(true)
                     }
@@ -1182,6 +1244,7 @@ public final class WallpaperBackgroundNodeImpl: ASDisplayNode, WallpaperBackgrou
                     self.contentNode.contents = image.cgImage
                     self.blurredBackgroundContents = generateBlurredContents(image: image, dimColor: wallpaperDimColor)
                     self.wallpaperDisposable.set(nil)
+                    self.updateIsDark(calculateWallpaperBrightness(from: image) <= 0.55)
                     Queue.mainQueue().justDispatch {
                         self._isReady.set(true)
                     }
@@ -1194,6 +1257,7 @@ public final class WallpaperBackgroundNodeImpl: ASDisplayNode, WallpaperBackgrou
                         strongSelf.contentNode.contents = image?.0?.cgImage
                         if let image = image?.0 {
                             strongSelf.blurredBackgroundContents = generateBlurredContents(image: image, dimColor: wallpaperDimColor)
+                            strongSelf.updateIsDark(calculateWallpaperBrightness(from: image) <= 0.55)
                         } else {
                             strongSelf.blurredBackgroundContents = nil
                         }
