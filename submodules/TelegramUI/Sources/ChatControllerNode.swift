@@ -1104,7 +1104,18 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                 if self.inputPanelContainerNode.expansionFraction > 0.3 {
                     statusBar.updateStatusBarStyle(.White, animated: true)
                 } else {
-                    statusBar.updateStatusBarStyle(self.chatPresentationInterfaceState.theme.rootController.statusBarStyle.style, animated: true)
+                    let statusBarStyle: StatusBarStyle
+                    if let isDark = self.backgroundNode.isDark {
+                        if isDark {
+                            statusBarStyle = .White
+                        } else {
+                            statusBarStyle = .Black
+                        }
+                    } else {
+                        statusBarStyle = self.chatPresentationInterfaceState.theme.rootController.statusBarStyle.style
+                    }
+                    
+                    statusBar.updateStatusBarStyle(statusBarStyle, animated: true)
                 }
                 self.controller?.deferScreenEdgeGestures = []
             case .overlay:

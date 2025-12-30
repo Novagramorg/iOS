@@ -731,6 +731,13 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         
         self.ready.set(.never())
         
+        self.chatBackgroundNode.isDarkUpdated = { [weak self] in
+            guard let self else {
+                return
+            }
+            self.updateStatusBarPresentation(animated: false)
+        }
+        
         self.scrollToTop = { [weak self] in
             guard let strongSelf = self, strongSelf.isNodeLoaded else {
                 return
@@ -6311,7 +6318,15 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                 case .embedded:
                     self.statusBar.statusBarStyle = .Ignore
                 default:
-                    self.statusBar.statusBarStyle = self.presentationData.theme.rootController.statusBarStyle.style
+                    if let isDark = self.chatDisplayNode.backgroundNode.isDark {
+                        if isDark {
+                            self.statusBar.statusBarStyle = .White
+                        } else {
+                            self.statusBar.statusBarStyle = .Black
+                        }
+                    } else {
+                        self.statusBar.statusBarStyle = self.presentationData.theme.rootController.statusBarStyle.style
+                    }
                     self.deferScreenEdgeGestures = []
                 }
             case .overlay:
