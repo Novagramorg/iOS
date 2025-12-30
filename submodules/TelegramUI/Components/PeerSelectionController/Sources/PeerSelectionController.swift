@@ -150,7 +150,6 @@ public final class PeerSelectionControllerImpl: ViewController, PeerSelectionCon
         
         if params.forumPeerId == nil {
             self.navigationPresentation = .modal
-            self.navigationItem.leftBarButtonItem = UIBarButtonItem(title: self.presentationData.strings.Common_Cancel, style: .plain, target: self, action: #selector(self.cancelPressed))
         }
         self.navigationItem.backBarButtonItem = UIBarButtonItem(title: self.presentationData.strings.Common_Back, style: .plain, target: nil, action: nil)
         
@@ -257,6 +256,8 @@ public final class PeerSelectionControllerImpl: ViewController, PeerSelectionCon
     }
     
     override public func loadDisplayNode() {
+        self.navigationBar?.secondaryContentHeight = 44.0 + 10.0
+        
         self.displayNode = PeerSelectionControllerNode(context: self.context, controller: self, presentationData: self.presentationData, filter: self.filter, forumPeerId: self.forumPeerId, hasFilters: self.hasFilters, hasChatListSelector: self.hasChatListSelector, hasContactSelector: self.hasContactSelector, hasGlobalSearch: self.hasGlobalSearch, forwardedMessageIds: self.forwardedMessageIds, hasTypeHeaders: self.hasTypeHeaders, requestPeerType: self.requestPeerType, hasCreation: self.hasCreation, createNewGroup: self.createNewGroup, present: { [weak self] c, a in
             self?.present(c, in: .window(.root), with: a)
         }, presentInGlobalOverlay: { [weak self] c, a in
@@ -463,6 +464,8 @@ public final class PeerSelectionControllerImpl: ViewController, PeerSelectionCon
     }
     
     private var initializedFilters = false
+    private(set) var chatListFiltersNonEmpty: Bool = false
+    
     private func reloadFilters(firstUpdate: (() -> Void)? = nil) {
         let filterItems = chatListFilterItems(context: self.context)
         var notifiedFirstUpdate = false
@@ -566,8 +569,8 @@ public final class PeerSelectionControllerImpl: ViewController, PeerSelectionCon
             
             let isEmpty = resolvedItems.count <= 1
             
+            strongSelf.chatListFiltersNonEmpty = !isEmpty
             if wasEmpty != isEmpty, strongSelf.displayNavigationBar {
-                strongSelf.navigationBar?.secondaryContentHeight = isEmpty ? 0.0 : (44.0 + 10.0)
                 strongSelf.navigationBar?.setSecondaryContentNode(isEmpty ? nil : strongSelf.tabContainerNode, animated: false)
             }
             

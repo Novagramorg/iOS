@@ -1459,7 +1459,9 @@ final class PeerSelectionControllerNode: ASDisplayNode {
                 self.chatListNode?.accessibilityElementsHidden = false
                 self.mainContainerNode?.accessibilityElementsHidden = false
                 
-                self.navigationBar?.setSecondaryContentNode(self.controller?.tabContainerNode, animated: true)
+                if let controller = self.controller, controller.chatListFiltersNonEmpty {
+                    self.navigationBar?.setSecondaryContentNode(self.controller?.tabContainerNode, animated: true)
+                }
                 self.controller?.setDisplayNavigationBar(true, transition: .animated(duration: 0.5, curve: .spring))
                 
                 searchDisplayController.deactivate(placeholder: placeholderNode)
@@ -1587,7 +1589,9 @@ final class PeerSelectionControllerNode: ASDisplayNode {
                     }
                 }
             } else if let contactListNode = self.contactListNode {
-                self.navigationBar?.setSecondaryContentNode(self.controller?.tabContainerNode, animated: false)
+                if let controller = self.controller, controller.chatListFiltersNonEmpty {
+                    self.navigationBar?.setSecondaryContentNode(self.controller?.tabContainerNode, animated: false)
+                }
                 contactListNode.enableUpdates = false
                 
                 if let mainContainerNode = self.mainContainerNode {
