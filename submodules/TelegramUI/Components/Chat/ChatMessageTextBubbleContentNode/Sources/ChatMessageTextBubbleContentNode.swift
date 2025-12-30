@@ -444,26 +444,29 @@ public class ChatMessageTextBubbleContentNode: ChatMessageBubbleContentNode {
                         messageEntities = updatingMedia.entities?.entities ?? []
                     }
                     
-                    var translateToLanguage = item.associatedData.translateToLanguage
+                    let translateToLanguage = item.associatedData.translateToLanguage
+                    var isSummarized = false
                     if item.controllerInteraction.summarizedMessageIds.contains(item.message.id) {
-                        translateToLanguage = "sum"
+                        isSummarized = true
                     }
                     
                     if let subject = item.associatedData.subject, case .messageOptions = subject {
-                    } else if let translateToLanguage, !item.message.text.isEmpty && incoming {
-                        isTranslating = true
-                        for attribute in item.message.attributes {
-                            if translateToLanguage == "sum", let attribute = attribute as? SummarizationMessageAttribute, let summary = attribute.summary {
+                    } else if !item.message.text.isEmpty && incoming {
+                        if translateToLanguage != nil || isSummarized {
+                            isTranslating = true
+                        }
+                        if isTranslating {
+                            if isSummarized, let attribute = item.message.attributes.first(where: { $0 is SummarizationMessageAttribute }) as? SummarizationMessageAttribute, let summary = attribute.summaryForLang(translateToLanguage) {
                                 rawText = summary.text
                                 messageEntities = summary.entities
                                 isTranslating = false
                                 isSummaryApplied = true
-                                break
-                            } else if let attribute = attribute as? TranslationMessageAttribute, !attribute.text.isEmpty, attribute.toLang == translateToLanguage {
+                            } else if let attribute = item.message.attributes.first(where: { $0 is TranslationMessageAttribute }) as? TranslationMessageAttribute, !attribute.text.isEmpty, attribute.toLang == translateToLanguage {
                                 rawText = attribute.text
                                 messageEntities = attribute.entities
-                                isTranslating = false
-                                break
+                                if !isSummarized {
+                                    isTranslating = false
+                                }
                             }
                         }
                     }

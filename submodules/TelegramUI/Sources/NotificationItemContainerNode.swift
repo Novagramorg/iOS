@@ -77,13 +77,13 @@ final class NotificationItemContainerNode: ASDisplayNode {
     
     func animateIn() {
         if let _ = self.validLayout {
-            self.layer.animatePosition(from: CGPoint(x: 0.0, y: -self.backgroundView.bounds.size.height), to: CGPoint(), duration: 0.4, additive: true)
+            self.layer.animatePosition(from: CGPoint(x: 0.0, y: -self.backgroundView.frame.maxY), to: CGPoint(), duration: 0.4, additive: true)
         }
     }
     
     func animateOut(completion: @escaping () -> Void) {
         if let _ = self.validLayout {
-            self.layer.animatePosition(from: CGPoint(), to: CGPoint(x: 0.0, y: -self.backgroundView.bounds.size.height), duration: 0.4, removeOnCompletion: false, additive: true, completion: { _ in
+            self.layer.animatePosition(from: CGPoint(), to: CGPoint(x: 0.0, y: -self.backgroundView.frame.maxY), duration: 0.4, removeOnCompletion: false, additive: true, completion: { _ in
                 completion()
             })
         } else {
