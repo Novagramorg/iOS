@@ -911,7 +911,7 @@ private final class LinkComponent: Component {
                         foreground: component.theme.list.itemCheckColors.foregroundColor,
                         pressedColor: component.theme.list.itemCheckColors.fillColor.withMultipliedAlpha(0.8)
                     ),
-                    content: AnyComponentWithIdentity(id: "label", component: AnyComponent(Text(text: "Copy", font: Font.semibold(17.0), color: component.theme.list.itemCheckColors.foregroundColor))),
+                    content: AnyComponentWithIdentity(id: "label", component: AnyComponent(Text(text: component.strings.FolderLinkScreen_LinkActionCopy, font: Font.semibold(17.0), color: component.theme.list.itemCheckColors.foregroundColor))),
                     action: { [weak self] in
                         guard let self, let component = self.component else {
                             return
@@ -939,7 +939,7 @@ private final class LinkComponent: Component {
                         foreground: component.theme.list.itemCheckColors.foregroundColor,
                         pressedColor: component.theme.list.itemCheckColors.fillColor.withMultipliedAlpha(0.8)
                     ),
-                    content: AnyComponentWithIdentity(id: "label", component: AnyComponent(Text(text: "Share", font: Font.semibold(17.0), color: component.theme.list.itemCheckColors.foregroundColor))),
+                    content: AnyComponentWithIdentity(id: "label", component: AnyComponent(Text(text: component.strings.FolderLinkScreen_LinkActionShare, font: Font.semibold(17.0), color: component.theme.list.itemCheckColors.foregroundColor))),
                     action: { [weak self] in
                         guard let self, let component = self.component else {
                             return

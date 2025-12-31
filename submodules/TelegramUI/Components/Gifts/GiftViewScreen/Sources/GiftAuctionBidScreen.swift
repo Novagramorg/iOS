@@ -1636,8 +1636,10 @@ private final class GiftAuctionBidScreenComponent: Component {
                     ),
                     in: .current
                 )
-                                
-                component.context.starsContext?.load(force: true)
+                  
+                Queue.mainQueue().after(2.5) {
+                    component.context.starsContext?.load(force: true)
+                }
             }, error: { [weak self] _ in
                 guard let self else {
                     return
