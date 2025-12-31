@@ -622,7 +622,9 @@ private final class GiftSetupScreenComponent: Component {
                         }
                     }
                     
-                    starsContext.load(force: true)
+                    Queue.mainQueue().after(2.5) {
+                        starsContext.load(force: true)
+                    }
                 }, error: { [weak self] error in
                     guard let self, let controller = self.environment?.controller() else {
                         return
