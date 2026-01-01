@@ -99,6 +99,7 @@ public final class CollectionTabItemComponent: Component {
                             pointSize: iconSize,
                             loopCount: 1
                         )
+                        iconLayer.isVisibleForAnimations = true
                         self.layer.addSublayer(iconLayer)
                         self.iconLayer = iconLayer
                     }
