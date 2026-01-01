@@ -3131,7 +3131,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                             },
                             animateScale: false
                         ),
-                        availableSize: CGSize(width: 190.0, height: 24.0),
+                        availableSize: CGSize(width: 280.0, height: 24.0),
                         transition: context.transition
                     )
                   
