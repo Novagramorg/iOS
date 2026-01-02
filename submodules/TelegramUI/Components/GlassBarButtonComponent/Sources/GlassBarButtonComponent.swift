@@ -145,6 +145,9 @@ public final class GlassBarButtonComponent: Component {
             guard let result = super.hitTest(point, with: event) else {
                 return nil
             }
+            if result === self.glassContainerView || result === self.genericContainerView {
+                return self.containerView
+            }
             return result
         }
         
@@ -280,7 +283,6 @@ public final class GlassBarButtonComponent: Component {
             }
             
             if let glassBackgroundView = self.glassBackgroundView {
-                self.containerView.isUserInteractionEnabled = false
                 if self.containerView.superview !== glassBackgroundView.contentView {
                     glassBackgroundView.contentView.addSubview(self.containerView)
                 }
