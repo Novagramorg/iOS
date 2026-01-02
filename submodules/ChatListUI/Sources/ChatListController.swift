@@ -2874,15 +2874,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
             self.push(controller)
             return
         }
-        
-        #if DEBUG
-        if "".isEmpty {
-            (self.navigationController as? NavigationController)?.pushViewController(oldChannelsController(context: self.context, intent: .join, completed: { value in
-            }))
-            return
-        }
-        #endif
-        
+                
         var reachedCountLimit = false
         var premiumNeeded = false
         var hasActiveCall = false

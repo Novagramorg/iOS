@@ -2411,8 +2411,24 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate, ASGestureRecog
             lensSelection.x = max(0.0, min(lensSelection.x, panelSize.width - lensSelection.width))
         }
         
+        var isLifted = self.selectionGestureState?.isLifted == true || self.lensIsLifted
+        if let widthClass = self.validLayout?.metrics.widthClass, case .regular = widthClass {
+            isLifted = false
+        }
+        
         let inset: CGFloat = 3.0
-        liquidLensView.update(size: CGSize(width: panelSize.width - inset * 2.0, height: panelSize.height - inset * 2.0), cornerRadius: 28.0, selectionOrigin: CGPoint(x: lensSelection.x, y: 0.0), selectionSize: CGSize(width: lensSelection.width, height: panelSize.height), inset: 0.0, isDark: self.presentationData.theme.overallDarkAppearance, isLifted: self.selectionGestureState?.isLifted == true || self.lensIsLifted, isCollapsed: self.isSelecting || self.buttons.count < 2, transition: transition)
+        liquidLensView.update(size: CGSize(width: panelSize.width - inset * 2.0, height: panelSize.height - inset * 2.0), cornerRadius: 28.0, selectionOrigin: CGPoint(x: lensSelection.x, y: 0.0), selectionSize: CGSize(width: lensSelection.width, height: panelSize.height), inset: 0.0, isDark: self.presentationData.theme.overallDarkAppearance, isLifted: isLifted, isCollapsed: self.isSelecting || self.buttons.count < 2, transition: transition)
+    }
+    
+    override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        if gestureRecognizer == self.tabSelectionRecognizer {
+            return true
+        }
+        return super.gestureRecognizerShouldBegin(gestureRecognizer)
+    }
+    
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+        return true
     }
     
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {

@@ -449,7 +449,8 @@ public final class LiquidLensView: UIView {
             transition.setCornerRadius(layer: self.liftedContainerView.layer, cornerRadius: params.cornerRadius ?? (params.size.height * 0.5))
         }
 
-        let baseLensFrame = CGRect(origin: CGPoint(x: params.selectionOrigin.x, y: 0.0), size: CGSize(width: params.selectionSize.width, height: params.size.height))
+        
+        let baseLensFrame = CGRect(origin: params.selectionOrigin, size: params.selectionSize)
         self.updateLens(params: LensParams(baseFrame: baseLensFrame, inset: params.inset, liftedInset: params.liftedInset, isLifted: params.isLifted), transition: transition)
         
         if let legacyContentMaskView = self.legacyContentMaskView {
