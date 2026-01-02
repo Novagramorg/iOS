@@ -330,6 +330,9 @@ final class ModeComponent: Component {
             
             if isTablet {
                 lensSelection.size.width = size.width
+            } else {
+                lensSelection.size.height = containerFrame.size.height
+                lensSelection.origin.y = 0.0
             }
             
             transition.setFrame(view: liquidLensView, frame: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: containerFrame.size))
