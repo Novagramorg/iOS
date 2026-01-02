@@ -655,7 +655,9 @@ private final class SheetContent: CombinedComponent {
                             controller?.complete(paid: success)
                             controller?.dismissAnimated()
                             
-                            starsContext.load(force: true)
+                            Queue.mainQueue().after(2.5) {
+                                starsContext.load(force: true)
+                            }
                         })
                     }
                 ),

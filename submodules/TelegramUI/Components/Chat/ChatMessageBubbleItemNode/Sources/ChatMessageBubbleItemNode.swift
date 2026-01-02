@@ -2331,6 +2331,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         if item.controllerInteraction.summarizedMessageIds.contains(item.message.id) {
             for attribute in item.message.attributes {
                 if let attribute = attribute as? SummarizationMessageAttribute, attribute.summaryForLang(translateToLanguage) != nil {
+                    initialDisplayHeader = true
                     isSummarized = true
                 }
             }

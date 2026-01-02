@@ -106,7 +106,7 @@ final class ModeComponent: Component {
         private var backgroundView = UIView()
         private var backgroundContainer = GlassBackgroundContainerView()
         
-        private let liquidLensView: LiquidLensView
+        private var liquidLensView: LiquidLensView?
                 
         private var itemViews: [AnyHashable: ItemView] = [:]
         private var selectedItemViews: [AnyHashable: ItemView] = [:]
@@ -125,8 +125,6 @@ final class ModeComponent: Component {
         }
         
         init() {
-            self.liquidLensView = LiquidLensView(kind: .externalContainer)
-            
             super.init(frame: CGRect())
             
             self.backgroundView.backgroundColor = UIColor(rgb: 0xffffff, alpha: 0.11)
@@ -136,12 +134,6 @@ final class ModeComponent: Component {
             
             self.addSubview(self.backgroundView)
             self.backgroundView.addSubview(self.backgroundContainer)
-            
-            self.backgroundContainer.contentView.addSubview(self.liquidLensView)
-            
-            let tabSelectionRecognizer = TabSelectionRecognizer(target: self, action: #selector(self.onTabSelectionGesture(_:)))
-            self.tabSelectionRecognizer = tabSelectionRecognizer
-            self.liquidLensView.addGestureRecognizer(tabSelectionRecognizer)
         }
 
         required init?(coder aDecoder: NSCoder) {
@@ -187,10 +179,10 @@ final class ModeComponent: Component {
         }
         
         @objc private func onTabSelectionGesture(_ recognizer: TabSelectionRecognizer) {
-            guard let component = self.component else {
+            guard let component = self.component, let liquidLensView = self.liquidLensView else {
                 return
             }
-            let location = recognizer.location(in: self.liquidLensView.contentView)
+            let location = recognizer.location(in: liquidLensView.contentView)
             switch recognizer.state {
             case .began:
                 if let itemId = self.item(at: location), let itemView = self.itemViews[itemId] {
@@ -229,6 +221,19 @@ final class ModeComponent: Component {
             
             let isTablet = component.isTablet
             
+            let liquidLensView: LiquidLensView
+            if let current = self.liquidLensView {
+                liquidLensView = current
+            } else {
+                liquidLensView = LiquidLensView(kind: isTablet ? .noContainer : .externalContainer)
+                self.liquidLensView = liquidLensView
+                self.backgroundContainer.contentView.addSubview(liquidLensView)
+                
+                let tabSelectionRecognizer = TabSelectionRecognizer(target: self, action: #selector(self.onTabSelectionGesture(_:)))
+                self.tabSelectionRecognizer = tabSelectionRecognizer
+                liquidLensView.addGestureRecognizer(tabSelectionRecognizer)
+            }
+            
             self.backgroundView.backgroundColor = component.isTablet ? .clear : UIColor(rgb: 0xffffff, alpha: 0.11)
         
             let inset: CGFloat = 23.0
@@ -236,7 +241,6 @@ final class ModeComponent: Component {
       
             var i = 0
             var itemFrame = CGRect(origin: isTablet ? .zero : CGPoint(x: inset, y: 0.0), size: buttonSize)
-            var selectedCenter = itemFrame.minX
             var selectedFrame = itemFrame
             
             var validKeys: Set<AnyHashable> = Set()
@@ -253,12 +257,12 @@ final class ModeComponent: Component {
                     itemView = ItemView()
                     itemView.isUserInteractionEnabled = false
                     self.itemViews[id] = itemView
-                    self.liquidLensView.contentView.addSubview(itemView)
+                    liquidLensView.contentView.addSubview(itemView)
                     
                     selectedItemView = ItemView()
                     selectedItemView.isUserInteractionEnabled = false
                     self.selectedItemViews[id] = selectedItemView
-                    self.liquidLensView.selectedContentView.addSubview(selectedItemView)
+                    liquidLensView.selectedContentView.addSubview(selectedItemView)
                 }
                
                 let itemSize = itemView.update(isTablet: component.isTablet, value: mode.title(strings: component.strings), selected: false, tintColor: component.tintColor)
@@ -276,16 +280,10 @@ final class ModeComponent: Component {
                 if isTablet {
                     itemView.center = CGPoint(x: availableSize.width / 2.0, y: itemFrame.midY)
                     selectedItemView.center = itemView.center
-                    if mode == component.currentMode {
-                        selectedCenter = itemFrame.midY
-                    }
                     itemFrame = itemFrame.offsetBy(dx: 0.0, dy: tabletButtonSize.height + spacing)
                 } else {
                     itemView.center = CGPoint(x: itemFrame.midX, y: itemFrame.midY)
                     selectedItemView.center = itemView.center
-                    if mode == component.currentMode {
-                        selectedCenter = itemFrame.midX
-                    }
                     itemFrame = itemFrame.offsetBy(dx: itemFrame.width + spacing, dy: 0.0)
                 }
                 i += 1
@@ -307,10 +305,12 @@ final class ModeComponent: Component {
             
             let totalSize: CGSize
             let size: CGSize
+            var cornerRadius: CGFloat?
             if isTablet {
                 totalSize = CGSize(width: availableSize.width, height: tabletButtonSize.height * CGFloat(component.availableModes.count) + spacing * CGFloat(component.availableModes.count - 1))
                 size = CGSize(width: availableSize.width, height: availableSize.height)
-                transition.setFrame(view: self.backgroundView, frame: CGRect(origin: CGPoint(x: 0.0, y: availableSize.height / 2.0 - selectedCenter), size: totalSize))
+                transition.setFrame(view: self.backgroundView, frame: CGRect(origin: .zero, size: totalSize))
+                cornerRadius = 20.0
             } else {
                 size = CGSize(width: availableSize.width, height: buttonSize.height)
                 totalSize = CGSize(width: itemFrame.minX - spacing + inset, height: buttonSize.height)
@@ -321,15 +321,22 @@ final class ModeComponent: Component {
             transition.setFrame(view: self.backgroundContainer, frame: containerFrame)
             
             let selectionFrame = selectedFrame.insetBy(dx: -23.0, dy: 3.0)
-            let lensSelection: (x: CGFloat, width: CGFloat)
-            if let selectionGestureState = self.selectionGestureState {
-                lensSelection = (selectionGestureState.currentX, selectionFrame.width)
+            var lensSelection: (origin: CGPoint, size: CGSize)
+            if let selectionGestureState = self.selectionGestureState, !isTablet {
+                lensSelection = (CGPoint(x: selectionGestureState.currentX, y: 0.0), selectionFrame.size)
             } else {
-                lensSelection = (selectionFrame.minX, selectionFrame.width)
+                lensSelection = (CGPoint(x: selectionFrame.minX, y: selectionFrame.minY), selectionFrame.size)
             }
             
-            transition.setFrame(view: self.liquidLensView, frame: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: containerFrame.size))
-            self.liquidLensView.update(size: containerFrame.size, selectionOrigin: CGPoint(x: max(0.0, min(lensSelection.x, containerFrame.size.width - lensSelection.width)), y: 0.0), selectionSize: CGSize(width: lensSelection.width, height: selectionFrame.height), inset: 3.0, isDark: true, isLifted: self.selectionGestureState != nil, isCollapsed: false, transition: transition)
+            if isTablet {
+                lensSelection.size.width = size.width
+            } else {
+                lensSelection.size.height = containerFrame.size.height
+                lensSelection.origin.y = 0.0
+            }
+            
+            transition.setFrame(view: liquidLensView, frame: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: containerFrame.size))
+            liquidLensView.update(size: containerFrame.size, cornerRadius: cornerRadius, selectionOrigin: CGPoint(x: max(0.0, min(lensSelection.origin.x, containerFrame.size.width - lensSelection.size.width)), y: lensSelection.origin.y), selectionSize: lensSelection.size, inset: 3.0, isDark: true, isLifted: self.selectionGestureState != nil && !isTablet, isCollapsed: false, transition: transition)
             self.backgroundContainer.update(size: containerFrame.size, isDark: true, transition: .immediate)
             
             return size

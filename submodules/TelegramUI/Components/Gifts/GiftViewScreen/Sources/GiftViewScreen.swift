@@ -632,7 +632,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                             controller?.dismissAnimated()
                             
                             if let navigationController {
-                                Queue.mainQueue().after(0.5) {
+                                Queue.mainQueue().after(2.5) {
                                     starsContext.load(force: true)
                                     
                                     let text: String
@@ -737,7 +737,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                     guard let self else {
                         return
                     }
-                    Queue.mainQueue().after(0.5) {
+                    Queue.mainQueue().after(2.5) {
                         starsContext?.load(force: true)
                     }
                     switch self.subject {
@@ -1141,7 +1141,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                     guard let peerId = peerIds.first else {
                         return .complete()
                     }
-                    Queue.mainQueue().after(1.5, {
+                    Queue.mainQueue().after(2.5, {
                         if transferStars > 0 {
                             context.starsContext?.load(force: true)
                         }
@@ -1855,7 +1855,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                         
                             self.updated(transition: .spring(duration: 0.4))
                         
-                            Queue.mainQueue().after(0.5) {
+                            Queue.mainQueue().after(2.5) {
                                 switch finalPrice.currency {
                                 case .stars:
                                     context.starsContext?.load(force: true)
@@ -2148,7 +2148,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                     self.subject = .profileGift(peerId, result)
                     self.updated(transition: .spring(duration: 0.4))
                     
-                    Queue.mainQueue().after(0.5) {
+                    Queue.mainQueue().after(2.5) {
                         starsContext?.load(force: true)
                     }
                 })
@@ -2267,7 +2267,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                     guard let self else {
                         return
                     }
-                    Queue.mainQueue().after(0.5) {
+                    Queue.mainQueue().after(2.5) {
                         starsContext?.load(force: true)
                     }
                     
@@ -2431,7 +2431,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                     guard let self else {
                         return
                     }
-                    Queue.mainQueue().after(0.5) {
+                    Queue.mainQueue().after(2.5) {
                         starsContext?.load(force: true)
                     }
                     self.openPeer(peer, dismiss: true)
@@ -3131,7 +3131,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                             },
                             animateScale: false
                         ),
-                        availableSize: CGSize(width: 190.0, height: 24.0),
+                        availableSize: CGSize(width: 280.0, height: 24.0),
                         transition: context.transition
                     )
                   
