@@ -563,7 +563,7 @@ final class UserAppearanceScreenComponent: Component {
                         self.isApplyingSettings = false
                         self.applySettings()
                         
-                        Queue.mainQueue().after(0.5) {
+                        Queue.mainQueue().after(2.5) {
                             switch finalPrice.currency {
                             case .stars:
                                 component.context.starsContext?.load(force: true)
