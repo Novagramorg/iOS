@@ -1481,8 +1481,8 @@ public class ChatMessageTodoBubbleContentNode: ChatMessageBubbleContentNode {
         
         if isTranslating, !rects.isEmpty {
             if self.shimmeringNodes.isEmpty {
-                for rects in rects {
-                    let shimmeringNode = ShimmeringLinkNode(color: item.message.effectivelyIncoming(item.context.account.peerId) ? item.presentationData.theme.theme.chat.message.incoming.secondaryTextColor.withAlphaComponent(0.1) : item.presentationData.theme.theme.chat.message.outgoing.secondaryTextColor.withAlphaComponent(0.1))
+                for rects in rects {    
+                    let shimmeringNode = ShimmeringLinkNode(color: item.message.effectivelyIncoming(item.context.account.peerId) ? item.presentationData.theme.theme.chat.message.incoming.accentTextColor.withAlphaComponent(0.1) : item.presentationData.theme.theme.chat.message.outgoing.secondaryTextColor.withAlphaComponent(0.1))
                     shimmeringNode.updateRects(rects)
                     shimmeringNode.frame = self.bounds
                     shimmeringNode.updateLayout(self.bounds.size)

@@ -1218,7 +1218,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                                         }
                                         
                                         if !data.includePeers.peers.isEmpty && data.categories.isEmpty && !data.excludeRead && !data.excludeMuted && !data.excludeArchived && data.excludePeers.isEmpty {
-                                            items.append(.action(ContextMenuActionItem(text: self.presentationData.strings.ChatList_ContextMenuShare, textColor: .primary, badge: data.hasSharedLinks ? nil : ContextMenuActionBadge(value: self.presentationData.strings.ChatList_ContextMenuBadgeNew, color: .accent, style: .label), icon: { theme in
+                                            items.append(.action(ContextMenuActionItem(text: self.presentationData.strings.ChatList_ContextMenuShare, textColor: .primary, badge: nil, icon: { theme in
                                                 return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Link"), color: theme.contextMenu.primaryColor)
                                             }, action: { [weak self] c, f in
                                                 c?.dismiss(completion: {
