@@ -897,7 +897,6 @@ public class ChatMessageTextBubbleContentNode: ChatMessageBubbleContentNode {
                             }
                             strongSelf.textAccessibilityOverlayNode.frame = textFrame
                     
-                            isTranslating = true
                             strongSelf.updateIsTranslating(isTranslating)
                             
                             if let statusSizeAndApply {
