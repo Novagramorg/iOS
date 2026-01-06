@@ -3195,6 +3195,8 @@ public final class SharedAccountContextImpl: SharedAccountContext {
             guard let controller, case let .starGiftTransfer(_, _, gift, transferStars, _, _) = source else {
                 return
             }
+            controller.view.window?.endEditing(true)
+            
             var dismissAlertImpl: (() -> Void)?
             let alertController = giftTransferAlertController(
                 context: context,
