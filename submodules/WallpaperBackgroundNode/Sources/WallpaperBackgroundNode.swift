@@ -1205,12 +1205,7 @@ public final class WallpaperBackgroundNodeImpl: ASDisplayNode, WallpaperBackgrou
             self.wallpaperDisposable.set(nil)
             
             if case let .file(file) = wallpaper, file.isPattern {
-                let intensity = CGFloat(file.settings.intensity ?? 50) / 100.0
-                if intensity > 0 {
-                    self.updateIsDark(nil)
-                } else {
-                    self.updateIsDark(calculateWallpaperBrightness(from: gradientColors) <= 0.3)
-                }
+                self.updateIsDark(nil)
             } else {
                 self.updateIsDark(calculateWallpaperBrightness(from: gradientColors) <= 0.3)
             }
