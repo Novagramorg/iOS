@@ -5,6 +5,8 @@ import Display
 import GradientBackground
 import EdgeEffect
 import SwiftSignalKit
+import ComponentFlow
+import ComponentDisplayAdapters
 
 final class WallpaperEdgeEffectNodeImpl: ASDisplayNode, WallpaperEdgeEffectNode {
     private struct Params: Equatable {
@@ -161,8 +163,8 @@ final class WallpaperEdgeEffectNodeImpl: ASDisplayNode, WallpaperEdgeEffectNode 
         }
         
         let maskFrame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: rect.size)
-        transition.updatePosition(layer: self.maskView.layer, position: maskFrame.center)
-        transition.updateBounds(layer: self.maskView.layer, bounds: CGRect(origin: CGPoint(), size: maskFrame.size))
+        ComponentTransition(transition).setPosition(view: self.maskView, position: maskFrame.center)
+        ComponentTransition(transition).setBounds(view: self.maskView, bounds: CGRect(origin: CGPoint(), size: maskFrame.size))
         if case .top = edge.edge {
             self.maskView.transform = CGAffineTransformMakeScale(1.0, -1.0)
         } else {
