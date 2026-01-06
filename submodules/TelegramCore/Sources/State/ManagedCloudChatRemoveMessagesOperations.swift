@@ -491,7 +491,7 @@ private func _internal_clearHistory(transaction: Transaction, postbox: Postbox, 
                 |> mapToSignal { result -> Signal<Void, NoError> in
                     if let result = result {
                         switch result {
-                        case let .affectedHistory(pts, ptsCount, offset):
+                        case let .affectedHistory(pts, ptsCount, _):
                             stateManager.addUpdateGroups([.updatePts(pts: pts, ptsCount: ptsCount)])
                             return .complete()
                         }
