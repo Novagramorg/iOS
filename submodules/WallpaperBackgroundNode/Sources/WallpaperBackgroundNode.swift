@@ -1044,7 +1044,7 @@ public final class WallpaperBackgroundNodeImpl: ASDisplayNode, WallpaperBackgrou
     public private(set) var isDark: Bool?
     public var isDarkUpdated: (() -> Void)?
 
-    private func updateIsDark(_ isDark: Bool) {
+    private func updateIsDark(_ isDark: Bool?) {
         if self.isDark != isDark {
             self.isDark = isDark
             self.isDarkUpdated?()
@@ -1206,7 +1206,11 @@ public final class WallpaperBackgroundNodeImpl: ASDisplayNode, WallpaperBackgrou
             
             if case let .file(file) = wallpaper, file.isPattern {
                 let intensity = CGFloat(file.settings.intensity ?? 50) / 100.0
-                self.updateIsDark(intensity < 0)
+                if intensity > 0 {
+                    self.updateIsDark(nil)
+                } else {
+                    self.updateIsDark(calculateWallpaperBrightness(from: gradientColors) <= 0.3)
+                }
             } else {
                 self.updateIsDark(calculateWallpaperBrightness(from: gradientColors) <= 0.3)
             }
