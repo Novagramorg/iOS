@@ -69,8 +69,12 @@ public extension Api {
             var _1: String?
             _1 = parseString(reader)
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.PhoneCallDiscardReason.phoneCallDiscardReasonMigrateConferenceCall(slug: _1!)
+            if _c1 {
+                return Api.PhoneCallDiscardReason.phoneCallDiscardReasonMigrateConferenceCall(slug: _1!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_phoneCallDiscardReasonMissed(_ reader: BufferReader) -> PhoneCallDiscardReason? {
             return Api.PhoneCallDiscardReason.phoneCallDiscardReasonMissed
@@ -122,11 +126,12 @@ public extension Api {
             let _c2 = _2 != nil
             let _c3 = _3 != nil
             let _c4 = _4 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            return Api.PhoneCallProtocol.phoneCallProtocol(flags: _1!, minLayer: _2!, maxLayer: _3!, libraryVersions: _4!)
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.PhoneCallProtocol.phoneCallProtocol(flags: _1!, minLayer: _2!, maxLayer: _3!, libraryVersions: _4!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -192,13 +197,12 @@ public extension Api {
             let _c4 = _4 != nil
             let _c5 = _5 != nil
             let _c6 = _6 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            if !_c6 { return nil }
-            return Api.PhoneConnection.phoneConnection(flags: _1!, id: _2!, ip: _3!, ipv6: _4!, port: _5!, peerTag: _6!)
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 {
+                return Api.PhoneConnection.phoneConnection(flags: _1!, id: _2!, ip: _3!, ipv6: _4!, port: _5!, peerTag: _6!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_phoneConnectionWebrtc(_ reader: BufferReader) -> PhoneConnection? {
             var _1: Int32?
@@ -222,14 +226,12 @@ public extension Api {
             let _c5 = _5 != nil
             let _c6 = _6 != nil
             let _c7 = _7 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            if !_c6 { return nil }
-            if !_c7 { return nil }
-            return Api.PhoneConnection.phoneConnectionWebrtc(flags: _1!, id: _2!, ip: _3!, ipv6: _4!, port: _5!, username: _6!, password: _7!)
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 {
+                return Api.PhoneConnection.phoneConnectionWebrtc(flags: _1!, id: _2!, ip: _3!, ipv6: _4!, port: _5!, username: _6!, password: _7!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -309,22 +311,23 @@ public extension Api {
             let _c6 = _6 != nil
             let _c7 = (Int(_1!) & Int(1 << 1) == 0) || _7 != nil
             let _c8 = _8 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            if !_c6 { return nil }
-            if !_c7 { return nil }
-            if !_c8 { return nil }
-            return Api.Photo.photo(flags: _1!, id: _2!, accessHash: _3!, fileReference: _4!, date: _5!, sizes: _6!, videoSizes: _7, dcId: _8!)
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 {
+                return Api.Photo.photo(flags: _1!, id: _2!, accessHash: _3!, fileReference: _4!, date: _5!, sizes: _6!, videoSizes: _7, dcId: _8!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_photoEmpty(_ reader: BufferReader) -> Photo? {
             var _1: Int64?
             _1 = reader.readInt64()
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.Photo.photoEmpty(id: _1!)
+            if _c1 {
+                return Api.Photo.photoEmpty(id: _1!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -424,11 +427,12 @@ public extension Api {
             let _c2 = _2 != nil
             let _c3 = _3 != nil
             let _c4 = _4 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            return Api.PhotoSize.photoCachedSize(type: _1!, w: _2!, h: _3!, bytes: _4!)
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.PhotoSize.photoCachedSize(type: _1!, w: _2!, h: _3!, bytes: _4!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_photoPathSize(_ reader: BufferReader) -> PhotoSize? {
             var _1: String?
@@ -437,9 +441,12 @@ public extension Api {
             _2 = parseBytes(reader)
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.PhotoSize.photoPathSize(type: _1!, bytes: _2!)
+            if _c1 && _c2 {
+                return Api.PhotoSize.photoPathSize(type: _1!, bytes: _2!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_photoSize(_ reader: BufferReader) -> PhotoSize? {
             var _1: String?
@@ -454,18 +461,23 @@ public extension Api {
             let _c2 = _2 != nil
             let _c3 = _3 != nil
             let _c4 = _4 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            return Api.PhotoSize.photoSize(type: _1!, w: _2!, h: _3!, size: _4!)
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.PhotoSize.photoSize(type: _1!, w: _2!, h: _3!, size: _4!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_photoSizeEmpty(_ reader: BufferReader) -> PhotoSize? {
             var _1: String?
             _1 = parseString(reader)
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.PhotoSize.photoSizeEmpty(type: _1!)
+            if _c1 {
+                return Api.PhotoSize.photoSizeEmpty(type: _1!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_photoSizeProgressive(_ reader: BufferReader) -> PhotoSize? {
             var _1: String?
@@ -482,11 +494,12 @@ public extension Api {
             let _c2 = _2 != nil
             let _c3 = _3 != nil
             let _c4 = _4 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            return Api.PhotoSize.photoSizeProgressive(type: _1!, w: _2!, h: _3!, sizes: _4!)
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.PhotoSize.photoSizeProgressive(type: _1!, w: _2!, h: _3!, sizes: _4!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_photoStrippedSize(_ reader: BufferReader) -> PhotoSize? {
             var _1: String?
@@ -495,9 +508,12 @@ public extension Api {
             _2 = parseBytes(reader)
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.PhotoSize.photoStrippedSize(type: _1!, bytes: _2!)
+            if _c1 && _c2 {
+                return Api.PhotoSize.photoStrippedSize(type: _1!, bytes: _2!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -556,13 +572,12 @@ public extension Api {
             let _c4 = _4 != nil
             let _c5 = (Int(_2!) & Int(1 << 4) == 0) || _5 != nil
             let _c6 = (Int(_2!) & Int(1 << 5) == 0) || _6 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            if !_c6 { return nil }
-            return Api.Poll.poll(id: _1!, flags: _2!, question: _3!, answers: _4!, closePeriod: _5, closeDate: _6)
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 {
+                return Api.Poll.poll(id: _1!, flags: _2!, question: _3!, answers: _4!, closePeriod: _5, closeDate: _6)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -599,9 +614,12 @@ public extension Api {
             _2 = parseBytes(reader)
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.PollAnswer.pollAnswer(text: _1!, option: _2!)
+            if _c1 && _c2 {
+                return Api.PollAnswer.pollAnswer(text: _1!, option: _2!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -640,10 +658,12 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.PollAnswerVoters.pollAnswerVoters(flags: _1!, option: _2!, voters: _3!)
+            if _c1 && _c2 && _c3 {
+                return Api.PollAnswerVoters.pollAnswerVoters(flags: _1!, option: _2!, voters: _3!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -712,13 +732,12 @@ public extension Api {
             let _c4 = (Int(_1!) & Int(1 << 3) == 0) || _4 != nil
             let _c5 = (Int(_1!) & Int(1 << 4) == 0) || _5 != nil
             let _c6 = (Int(_1!) & Int(1 << 4) == 0) || _6 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            if !_c6 { return nil }
-            return Api.PollResults.pollResults(flags: _1!, results: _2, totalVoters: _3, recentVoters: _4, solution: _5, solutionEntities: _6)
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 {
+                return Api.PollResults.pollResults(flags: _1!, results: _2, totalVoters: _3, recentVoters: _4, solution: _5, solutionEntities: _6)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -753,9 +772,12 @@ public extension Api {
             _2 = reader.readInt32()
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.PopularContact.popularContact(clientId: _1!, importers: _2!)
+            if _c1 && _c2 {
+                return Api.PopularContact.popularContact(clientId: _1!, importers: _2!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -806,13 +828,12 @@ public extension Api {
             let _c4 = _4 != nil
             let _c5 = _5 != nil
             let _c6 = _6 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            if !_c6 { return nil }
-            return Api.PostAddress.postAddress(streetLine1: _1!, streetLine2: _2!, city: _3!, state: _4!, countryIso2: _5!, postCode: _6!)
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 {
+                return Api.PostAddress.postAddress(streetLine1: _1!, streetLine2: _2!, city: _3!, state: _4!, countryIso2: _5!, postCode: _6!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -867,11 +888,12 @@ public extension Api {
             let _c2 = _2 != nil
             let _c3 = _3 != nil
             let _c4 = _4 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            return Api.PostInteractionCounters.postInteractionCountersMessage(msgId: _1!, views: _2!, forwards: _3!, reactions: _4!)
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.PostInteractionCounters.postInteractionCountersMessage(msgId: _1!, views: _2!, forwards: _3!, reactions: _4!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_postInteractionCountersStory(_ reader: BufferReader) -> PostInteractionCounters? {
             var _1: Int32?
@@ -886,11 +908,12 @@ public extension Api {
             let _c2 = _2 != nil
             let _c3 = _3 != nil
             let _c4 = _4 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            return Api.PostInteractionCounters.postInteractionCountersStory(storyId: _1!, views: _2!, forwards: _3!, reactions: _4!)
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.PostInteractionCounters.postInteractionCountersStory(storyId: _1!, views: _2!, forwards: _3!, reactions: _4!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -945,14 +968,12 @@ public extension Api {
             let _c5 = (Int(_1!) & Int(1 << 1) == 0) || _5 != nil
             let _c6 = _6 != nil
             let _c7 = _7 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            if !_c6 { return nil }
-            if !_c7 { return nil }
-            return Api.PremiumGiftCodeOption.premiumGiftCodeOption(flags: _1!, users: _2!, months: _3!, storeProduct: _4, storeQuantity: _5, currency: _6!, amount: _7!)
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 {
+                return Api.PremiumGiftCodeOption.premiumGiftCodeOption(flags: _1!, users: _2!, months: _3!, storeProduct: _4, storeQuantity: _5, currency: _6!, amount: _7!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -1007,14 +1028,12 @@ public extension Api {
             let _c5 = _5 != nil
             let _c6 = _6 != nil
             let _c7 = (Int(_1!) & Int(1 << 0) == 0) || _7 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            if !_c6 { return nil }
-            if !_c7 { return nil }
-            return Api.PremiumSubscriptionOption.premiumSubscriptionOption(flags: _1!, transaction: _2, months: _3!, currency: _4!, amount: _5!, botUrl: _6!, storeProduct: _7)
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 {
+                return Api.PremiumSubscriptionOption.premiumSubscriptionOption(flags: _1!, transaction: _2, months: _3!, currency: _4!, amount: _5!, botUrl: _6!, storeProduct: _7)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -1070,11 +1089,12 @@ public extension Api {
             let _c2 = _2 != nil
             let _c3 = _3 != nil
             let _c4 = _4 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            return Api.PrepaidGiveaway.prepaidGiveaway(id: _1!, months: _2!, quantity: _3!, date: _4!)
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.PrepaidGiveaway.prepaidGiveaway(id: _1!, months: _2!, quantity: _3!, date: _4!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_prepaidStarsGiveaway(_ reader: BufferReader) -> PrepaidGiveaway? {
             var _1: Int64?
@@ -1092,12 +1112,12 @@ public extension Api {
             let _c3 = _3 != nil
             let _c4 = _4 != nil
             let _c5 = _5 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            return Api.PrepaidGiveaway.prepaidStarsGiveaway(id: _1!, stars: _2!, quantity: _3!, boosts: _4!, date: _5!)
+            if _c1 && _c2 && _c3 && _c4 && _c5 {
+                return Api.PrepaidGiveaway.prepaidStarsGiveaway(id: _1!, stars: _2!, quantity: _3!, boosts: _4!, date: _5!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
