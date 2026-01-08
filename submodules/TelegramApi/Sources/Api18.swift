@@ -58,9 +58,12 @@ public extension Api {
             _2 = parseString(reader)
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.NotificationSound.notificationSoundLocal(title: _1!, data: _2!)
+            if _c1 && _c2 {
+                return Api.NotificationSound.notificationSoundLocal(title: _1!, data: _2!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_notificationSoundNone(_ reader: BufferReader) -> NotificationSound? {
             return Api.NotificationSound.notificationSoundNone
@@ -69,8 +72,12 @@ public extension Api {
             var _1: Int64?
             _1 = reader.readInt64()
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.NotificationSound.notificationSoundRingtone(id: _1!)
+            if _c1 {
+                return Api.NotificationSound.notificationSoundRingtone(id: _1!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -149,9 +156,12 @@ public extension Api {
             _2 = reader.readInt32()
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.NotifyPeer.notifyForumTopic(peer: _1!, topMsgId: _2!)
+            if _c1 && _c2 {
+                return Api.NotifyPeer.notifyForumTopic(peer: _1!, topMsgId: _2!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_notifyPeer(_ reader: BufferReader) -> NotifyPeer? {
             var _1: Api.Peer?
@@ -159,8 +169,12 @@ public extension Api {
                 _1 = Api.parse(reader, signature: signature) as? Api.Peer
             }
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.NotifyPeer.notifyPeer(peer: _1!)
+            if _c1 {
+                return Api.NotifyPeer.notifyPeer(peer: _1!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_notifyUsers(_ reader: BufferReader) -> NotifyPeer? {
             return Api.NotifyPeer.notifyUsers
@@ -194,8 +208,12 @@ public extension Api {
             var _1: Int32?
             _1 = reader.readInt32()
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.OutboxReadDate.outboxReadDate(date: _1!)
+            if _c1 {
+                return Api.OutboxReadDate.outboxReadDate(date: _1!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -264,13 +282,12 @@ public extension Api {
             let _c4 = _4 != nil
             let _c5 = _5 != nil
             let _c6 = (Int(_1!) & Int(1 << 3) == 0) || _6 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            if !_c6 { return nil }
-            return Api.Page.page(flags: _1!, url: _2!, blocks: _3!, photos: _4!, documents: _5!, views: _6)
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 {
+                return Api.Page.page(flags: _1!, url: _2!, blocks: _3!, photos: _4!, documents: _5!, views: _6)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -619,8 +636,12 @@ public extension Api {
             var _1: String?
             _1 = parseString(reader)
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.PageBlock.pageBlockAnchor(name: _1!)
+            if _c1 {
+                return Api.PageBlock.pageBlockAnchor(name: _1!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_pageBlockAudio(_ reader: BufferReader) -> PageBlock? {
             var _1: Int64?
@@ -631,9 +652,12 @@ public extension Api {
             }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.PageBlock.pageBlockAudio(audioId: _1!, caption: _2!)
+            if _c1 && _c2 {
+                return Api.PageBlock.pageBlockAudio(audioId: _1!, caption: _2!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_pageBlockAuthorDate(_ reader: BufferReader) -> PageBlock? {
             var _1: Api.RichText?
@@ -644,9 +668,12 @@ public extension Api {
             _2 = reader.readInt32()
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.PageBlock.pageBlockAuthorDate(author: _1!, publishedDate: _2!)
+            if _c1 && _c2 {
+                return Api.PageBlock.pageBlockAuthorDate(author: _1!, publishedDate: _2!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_pageBlockBlockquote(_ reader: BufferReader) -> PageBlock? {
             var _1: Api.RichText?
@@ -659,9 +686,12 @@ public extension Api {
             }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.PageBlock.pageBlockBlockquote(text: _1!, caption: _2!)
+            if _c1 && _c2 {
+                return Api.PageBlock.pageBlockBlockquote(text: _1!, caption: _2!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_pageBlockChannel(_ reader: BufferReader) -> PageBlock? {
             var _1: Api.Chat?
@@ -669,8 +699,12 @@ public extension Api {
                 _1 = Api.parse(reader, signature: signature) as? Api.Chat
             }
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.PageBlock.pageBlockChannel(channel: _1!)
+            if _c1 {
+                return Api.PageBlock.pageBlockChannel(channel: _1!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_pageBlockCollage(_ reader: BufferReader) -> PageBlock? {
             var _1: [Api.PageBlock]?
@@ -683,9 +717,12 @@ public extension Api {
             }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.PageBlock.pageBlockCollage(items: _1!, caption: _2!)
+            if _c1 && _c2 {
+                return Api.PageBlock.pageBlockCollage(items: _1!, caption: _2!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_pageBlockCover(_ reader: BufferReader) -> PageBlock? {
             var _1: Api.PageBlock?
@@ -693,8 +730,12 @@ public extension Api {
                 _1 = Api.parse(reader, signature: signature) as? Api.PageBlock
             }
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.PageBlock.pageBlockCover(cover: _1!)
+            if _c1 {
+                return Api.PageBlock.pageBlockCover(cover: _1!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_pageBlockDetails(_ reader: BufferReader) -> PageBlock? {
             var _1: Int32?
@@ -710,10 +751,12 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.PageBlock.pageBlockDetails(flags: _1!, blocks: _2!, title: _3!)
+            if _c1 && _c2 && _c3 {
+                return Api.PageBlock.pageBlockDetails(flags: _1!, blocks: _2!, title: _3!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_pageBlockDivider(_ reader: BufferReader) -> PageBlock? {
             return Api.PageBlock.pageBlockDivider
@@ -742,14 +785,12 @@ public extension Api {
             let _c5 = (Int(_1!) & Int(1 << 5) == 0) || _5 != nil
             let _c6 = (Int(_1!) & Int(1 << 5) == 0) || _6 != nil
             let _c7 = _7 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            if !_c6 { return nil }
-            if !_c7 { return nil }
-            return Api.PageBlock.pageBlockEmbed(flags: _1!, url: _2, html: _3, posterPhotoId: _4, w: _5, h: _6, caption: _7!)
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 {
+                return Api.PageBlock.pageBlockEmbed(flags: _1!, url: _2, html: _3, posterPhotoId: _4, w: _5, h: _6, caption: _7!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_pageBlockEmbedPost(_ reader: BufferReader) -> PageBlock? {
             var _1: String?
@@ -777,14 +818,12 @@ public extension Api {
             let _c5 = _5 != nil
             let _c6 = _6 != nil
             let _c7 = _7 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            if !_c6 { return nil }
-            if !_c7 { return nil }
-            return Api.PageBlock.pageBlockEmbedPost(url: _1!, webpageId: _2!, authorPhotoId: _3!, author: _4!, date: _5!, blocks: _6!, caption: _7!)
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 {
+                return Api.PageBlock.pageBlockEmbedPost(url: _1!, webpageId: _2!, authorPhotoId: _3!, author: _4!, date: _5!, blocks: _6!, caption: _7!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_pageBlockFooter(_ reader: BufferReader) -> PageBlock? {
             var _1: Api.RichText?
@@ -792,8 +831,12 @@ public extension Api {
                 _1 = Api.parse(reader, signature: signature) as? Api.RichText
             }
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.PageBlock.pageBlockFooter(text: _1!)
+            if _c1 {
+                return Api.PageBlock.pageBlockFooter(text: _1!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_pageBlockHeader(_ reader: BufferReader) -> PageBlock? {
             var _1: Api.RichText?
@@ -801,8 +844,12 @@ public extension Api {
                 _1 = Api.parse(reader, signature: signature) as? Api.RichText
             }
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.PageBlock.pageBlockHeader(text: _1!)
+            if _c1 {
+                return Api.PageBlock.pageBlockHeader(text: _1!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_pageBlockKicker(_ reader: BufferReader) -> PageBlock? {
             var _1: Api.RichText?
@@ -810,8 +857,12 @@ public extension Api {
                 _1 = Api.parse(reader, signature: signature) as? Api.RichText
             }
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.PageBlock.pageBlockKicker(text: _1!)
+            if _c1 {
+                return Api.PageBlock.pageBlockKicker(text: _1!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_pageBlockList(_ reader: BufferReader) -> PageBlock? {
             var _1: [Api.PageListItem]?
@@ -819,8 +870,12 @@ public extension Api {
                 _1 = Api.parseVector(reader, elementSignature: 0, elementType: Api.PageListItem.self)
             }
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.PageBlock.pageBlockList(items: _1!)
+            if _c1 {
+                return Api.PageBlock.pageBlockList(items: _1!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_pageBlockMap(_ reader: BufferReader) -> PageBlock? {
             var _1: Api.GeoPoint?
@@ -842,12 +897,12 @@ public extension Api {
             let _c3 = _3 != nil
             let _c4 = _4 != nil
             let _c5 = _5 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            return Api.PageBlock.pageBlockMap(geo: _1!, zoom: _2!, w: _3!, h: _4!, caption: _5!)
+            if _c1 && _c2 && _c3 && _c4 && _c5 {
+                return Api.PageBlock.pageBlockMap(geo: _1!, zoom: _2!, w: _3!, h: _4!, caption: _5!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_pageBlockOrderedList(_ reader: BufferReader) -> PageBlock? {
             var _1: [Api.PageListOrderedItem]?
@@ -855,8 +910,12 @@ public extension Api {
                 _1 = Api.parseVector(reader, elementSignature: 0, elementType: Api.PageListOrderedItem.self)
             }
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.PageBlock.pageBlockOrderedList(items: _1!)
+            if _c1 {
+                return Api.PageBlock.pageBlockOrderedList(items: _1!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_pageBlockParagraph(_ reader: BufferReader) -> PageBlock? {
             var _1: Api.RichText?
@@ -864,8 +923,12 @@ public extension Api {
                 _1 = Api.parse(reader, signature: signature) as? Api.RichText
             }
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.PageBlock.pageBlockParagraph(text: _1!)
+            if _c1 {
+                return Api.PageBlock.pageBlockParagraph(text: _1!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_pageBlockPhoto(_ reader: BufferReader) -> PageBlock? {
             var _1: Int32?
@@ -885,12 +948,12 @@ public extension Api {
             let _c3 = _3 != nil
             let _c4 = (Int(_1!) & Int(1 << 0) == 0) || _4 != nil
             let _c5 = (Int(_1!) & Int(1 << 0) == 0) || _5 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            return Api.PageBlock.pageBlockPhoto(flags: _1!, photoId: _2!, caption: _3!, url: _4, webpageId: _5)
+            if _c1 && _c2 && _c3 && _c4 && _c5 {
+                return Api.PageBlock.pageBlockPhoto(flags: _1!, photoId: _2!, caption: _3!, url: _4, webpageId: _5)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_pageBlockPreformatted(_ reader: BufferReader) -> PageBlock? {
             var _1: Api.RichText?
@@ -901,9 +964,12 @@ public extension Api {
             _2 = parseString(reader)
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.PageBlock.pageBlockPreformatted(text: _1!, language: _2!)
+            if _c1 && _c2 {
+                return Api.PageBlock.pageBlockPreformatted(text: _1!, language: _2!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_pageBlockPullquote(_ reader: BufferReader) -> PageBlock? {
             var _1: Api.RichText?
@@ -916,9 +982,12 @@ public extension Api {
             }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.PageBlock.pageBlockPullquote(text: _1!, caption: _2!)
+            if _c1 && _c2 {
+                return Api.PageBlock.pageBlockPullquote(text: _1!, caption: _2!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_pageBlockRelatedArticles(_ reader: BufferReader) -> PageBlock? {
             var _1: Api.RichText?
@@ -931,9 +1000,12 @@ public extension Api {
             }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.PageBlock.pageBlockRelatedArticles(title: _1!, articles: _2!)
+            if _c1 && _c2 {
+                return Api.PageBlock.pageBlockRelatedArticles(title: _1!, articles: _2!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_pageBlockSlideshow(_ reader: BufferReader) -> PageBlock? {
             var _1: [Api.PageBlock]?
@@ -946,9 +1018,12 @@ public extension Api {
             }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.PageBlock.pageBlockSlideshow(items: _1!, caption: _2!)
+            if _c1 && _c2 {
+                return Api.PageBlock.pageBlockSlideshow(items: _1!, caption: _2!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_pageBlockSubheader(_ reader: BufferReader) -> PageBlock? {
             var _1: Api.RichText?
@@ -956,8 +1031,12 @@ public extension Api {
                 _1 = Api.parse(reader, signature: signature) as? Api.RichText
             }
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.PageBlock.pageBlockSubheader(text: _1!)
+            if _c1 {
+                return Api.PageBlock.pageBlockSubheader(text: _1!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_pageBlockSubtitle(_ reader: BufferReader) -> PageBlock? {
             var _1: Api.RichText?
@@ -965,8 +1044,12 @@ public extension Api {
                 _1 = Api.parse(reader, signature: signature) as? Api.RichText
             }
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.PageBlock.pageBlockSubtitle(text: _1!)
+            if _c1 {
+                return Api.PageBlock.pageBlockSubtitle(text: _1!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_pageBlockTable(_ reader: BufferReader) -> PageBlock? {
             var _1: Int32?
@@ -982,10 +1065,12 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.PageBlock.pageBlockTable(flags: _1!, title: _2!, rows: _3!)
+            if _c1 && _c2 && _c3 {
+                return Api.PageBlock.pageBlockTable(flags: _1!, title: _2!, rows: _3!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_pageBlockTitle(_ reader: BufferReader) -> PageBlock? {
             var _1: Api.RichText?
@@ -993,8 +1078,12 @@ public extension Api {
                 _1 = Api.parse(reader, signature: signature) as? Api.RichText
             }
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.PageBlock.pageBlockTitle(text: _1!)
+            if _c1 {
+                return Api.PageBlock.pageBlockTitle(text: _1!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_pageBlockUnsupported(_ reader: BufferReader) -> PageBlock? {
             return Api.PageBlock.pageBlockUnsupported
@@ -1011,10 +1100,12 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.PageBlock.pageBlockVideo(flags: _1!, videoId: _2!, caption: _3!)
+            if _c1 && _c2 && _c3 {
+                return Api.PageBlock.pageBlockVideo(flags: _1!, videoId: _2!, caption: _3!)
+            }
+            else {
+                return nil
+            }
         }
     
     }

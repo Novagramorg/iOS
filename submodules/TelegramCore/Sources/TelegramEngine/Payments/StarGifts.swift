@@ -1423,7 +1423,7 @@ func _internal_dropStarGiftOriginalDetails(account: Account, reference: StarGift
                             storeForwardInfo = StoreMessageForwardInfo(authorId: forwardInfo.author?.id, sourceId: forwardInfo.source?.id, sourceMessageId: forwardInfo.sourceMessageId, date: forwardInfo.date, authorSignature: forwardInfo.authorSignature, psaType: forwardInfo.psaType, flags: forwardInfo.flags)
                         }
                         var media = currentMessage.media
-                        if let action = media.first(where: { $0 is TelegramMediaAction }) as? TelegramMediaAction, case let .starGiftUnique(gift, isUpgrade, isTransferred, savedToProfile, canExportDate, transferStars, isRefunded, isPrepaidUpgrade, peerId, senderId, savedId, resaleAmount, canTransferDate, canResaleDate, _, assigned, fromOffer) = action.action, case let .unique(uniqueGift) = gift {
+                        if let action = media.first(where: { $0 is TelegramMediaAction }) as? TelegramMediaAction, case let .starGiftUnique(gift, isUpgrade, isTransferred, savedToProfile, canExportDate, transferStars, isRefunded, isPrepaidUpgrade, peerId, senderId, savedId, resaleAmount, canTransferDate, canResaleDate, _, assigned, fromOffer, canCraftAt, craftChancePermille) = action.action, case let .unique(uniqueGift) = gift {
                             let updatedAttributes = uniqueGift.attributes.filter { $0.attributeType != .originalInfo }
                             media = [
                                 TelegramMediaAction(
@@ -1444,7 +1444,9 @@ func _internal_dropStarGiftOriginalDetails(account: Account, reference: StarGift
                                         canResaleDate: canResaleDate,
                                         dropOriginalDetailsStars: nil,
                                         assigned: assigned,
-                                        fromOffer: fromOffer
+                                        fromOffer: fromOffer,
+                                        canCraftAt: canCraftAt,
+                                        craftChancePermille: craftChancePermille
                                     )
                                 )
                             ]
@@ -1550,7 +1552,7 @@ func _internal_upgradeStarGift(account: Account, formId: Int64?, reference: Star
                     case let .updateNewMessage(message, _, _):
                         if let message = StoreMessage(apiMessage: message, accountPeerId: account.peerId, peerIsForum: false) {
                             for media in message.media {
-                                if let action = media as? TelegramMediaAction, case let .starGiftUnique(gift, _, _, savedToProfile, canExportDate, transferStars, _, _, peerId, _, savedId, _, canTransferDate, canResaleDate, dropOriginalDetailsStars, _, _) = action.action, case let .Id(messageId) = message.id {
+                                if let action = media as? TelegramMediaAction, case let .starGiftUnique(gift, _, _, savedToProfile, canExportDate, transferStars, _, _, peerId, _, savedId, _, canTransferDate, canResaleDate, dropOriginalDetailsStars, _, _, canCraftAt, craftChancePermille) = action.action, case let .Id(messageId) = message.id {
                                     let reference: StarGiftReference
                                     if let peerId, let savedId {
                                         reference = .peer(peerId: peerId, id: savedId)
@@ -1579,7 +1581,9 @@ func _internal_upgradeStarGift(account: Account, formId: Int64?, reference: Star
                                         upgradeSeparate: false,
                                         dropOriginalDetailsStars: dropOriginalDetailsStars,
                                         number: nil,
-                                        isRefunded: false
+                                        isRefunded: false,
+                                        canCraftAt: canCraftAt,
+                                        craftChancePermille: craftChancePermille
                                     ))
                                 }
                             }
@@ -2535,6 +2539,8 @@ public final class ProfileGiftsContext {
                 case dropOriginalDetailsStars
                 case number
                 case isRefunded
+                case canCraftAt
+                case craftChancePermille
             }
             
             public let gift: TelegramCore.StarGift
@@ -2559,6 +2565,8 @@ public final class ProfileGiftsContext {
             public let dropOriginalDetailsStars: Int64?
             public let number: Int32?
             public let isRefunded: Bool
+            public let craftChancePermille: Int32?
+            public let canCraftAt: Int32?
             
             fileprivate let _fromPeerId: EnginePeer.Id?
             
@@ -2588,7 +2596,9 @@ public final class ProfileGiftsContext {
                 upgradeSeparate: Bool,
                 dropOriginalDetailsStars: Int64?,
                 number: Int32?,
-                isRefunded: Bool
+                isRefunded: Bool,
+                canCraftAt: Int32?,
+                craftChancePermille: Int32?
             ) {
                 self.gift = gift
                 self.reference = reference
@@ -2613,6 +2623,8 @@ public final class ProfileGiftsContext {
                 self.dropOriginalDetailsStars = dropOriginalDetailsStars
                 self.number = number
                 self.isRefunded = isRefunded
+                self.canCraftAt = canCraftAt
+                self.craftChancePermille = craftChancePermille
             }
             
             public init(from decoder: Decoder) throws {
@@ -2647,6 +2659,10 @@ public final class ProfileGiftsContext {
                 self.dropOriginalDetailsStars = try container.decodeIfPresent(Int64.self, forKey: .dropOriginalDetailsStars)
                 self.number = try container.decodeIfPresent(Int32.self, forKey: .number)
                 self.isRefunded = try container.decodeIfPresent(Bool.self, forKey: .isRefunded) ?? false
+                
+                self.canCraftAt = try container.decodeIfPresent(Int32.self, forKey: .canCraftAt)
+                self.craftChancePermille = try container.decodeIfPresent(Int32.self, forKey: .craftChancePermille)
+
             }
             
             public func encode(to encoder: Encoder) throws {
@@ -2674,7 +2690,8 @@ public final class ProfileGiftsContext {
                 try container.encodeIfPresent(self.dropOriginalDetailsStars, forKey: .dropOriginalDetailsStars)
                 try container.encodeIfPresent(self.number, forKey: .number)
                 try container.encode(self.isRefunded, forKey: .isRefunded)
-
+                try container.encodeIfPresent(self.canCraftAt, forKey: .canCraftAt)
+                try container.encodeIfPresent(self.craftChancePermille, forKey: .craftChancePermille)
             }
             
             public func withGift(_ gift: TelegramCore.StarGift) -> StarGift {
@@ -2700,7 +2717,9 @@ public final class ProfileGiftsContext {
                     upgradeSeparate: self.upgradeSeparate,
                     dropOriginalDetailsStars: self.dropOriginalDetailsStars,
                     number: self.number,
-                    isRefunded: self.isRefunded
+                    isRefunded: self.isRefunded,
+                    canCraftAt: self.canCraftAt,
+                    craftChancePermille: self.craftChancePermille
                 )
             }
             
@@ -2727,7 +2746,9 @@ public final class ProfileGiftsContext {
                     upgradeSeparate: self.upgradeSeparate,
                     dropOriginalDetailsStars: self.dropOriginalDetailsStars,
                     number: self.number,
-                    isRefunded: self.isRefunded
+                    isRefunded: self.isRefunded,
+                    canCraftAt: self.canCraftAt,
+                    craftChancePermille: self.craftChancePermille
                 )
             }
             
@@ -2754,7 +2775,9 @@ public final class ProfileGiftsContext {
                     upgradeSeparate: self.upgradeSeparate,
                     dropOriginalDetailsStars: self.dropOriginalDetailsStars,
                     number: self.number,
-                    isRefunded: self.isRefunded
+                    isRefunded: self.isRefunded,
+                    canCraftAt: self.canCraftAt,
+                    craftChancePermille: self.craftChancePermille
                 )
             }
             fileprivate func withFromPeer(_ fromPeer: EnginePeer?) -> StarGift {
@@ -2780,7 +2803,9 @@ public final class ProfileGiftsContext {
                     upgradeSeparate: self.upgradeSeparate,
                     dropOriginalDetailsStars: self.dropOriginalDetailsStars,
                     number: self.number,
-                    isRefunded: self.isRefunded
+                    isRefunded: self.isRefunded,
+                    canCraftAt: self.canCraftAt,
+                    craftChancePermille: self.craftChancePermille
                 )
             }
             
@@ -2807,7 +2832,9 @@ public final class ProfileGiftsContext {
                     upgradeSeparate: self.upgradeSeparate,
                     dropOriginalDetailsStars: self.dropOriginalDetailsStars,
                     number: self.number,
-                    isRefunded: self.isRefunded
+                    isRefunded: self.isRefunded,
+                    canCraftAt: self.canCraftAt,
+                    craftChancePermille: self.craftChancePermille
                 )
             }
         }
@@ -3022,10 +3049,294 @@ public final class ProfileGiftsContext {
     }
 }
 
+// MARK: - CraftGiftsContext
+
+private final class CraftGiftsContextImpl {
+    private let queue: Queue
+    private let account: Account
+    private let giftId: Int64
+
+    private let disposable = MetaDisposable()
+    private let craftDisposable = MetaDisposable()
+    private var limit: Int32
+
+    private var gifts: [ProfileGiftsContext.State.StarGift] = []
+    private var count: Int32 = 0
+    private var dataState: ProfileGiftsContext.State.DataState = .ready(canLoadMore: true, nextOffset: nil)
+
+    var _state: CraftGiftsContext.State?
+    private let stateValue = Promise<CraftGiftsContext.State>()
+    var state: Signal<CraftGiftsContext.State, NoError> {
+        return self.stateValue.get()
+    }
+
+    init(
+        queue: Queue,
+        account: Account,
+        giftId: Int64,
+        limit: Int32
+    ) {
+        self.queue = queue
+        self.account = account
+        self.giftId = giftId
+        self.limit = limit
+
+        self.loadMore()
+    }
+
+    deinit {
+        self.disposable.dispose()
+        self.craftDisposable.dispose()
+    }
+
+    func craft(references: [StarGiftReference]) -> Signal<ProfileGiftsContext.State.StarGift, CraftStarGiftError> {
+        return _internal_craftStarGift(account: self.account, references: references)
+    }
+
+    func removeGifts(references: [StarGiftReference]) {
+        let referencesSet = Set(references)
+        self.gifts.removeAll { gift in
+            guard let ref = gift.reference else { return false }
+            return referencesSet.contains(ref)
+        }
+        self.count = max(0, self.count - Int32(references.count))
+        self.pushState()
+    }
+
+    func reload() {
+        self.gifts = []
+        self.dataState = .ready(canLoadMore: true, nextOffset: nil)
+        self.loadMore()
+    }
+
+    func loadMore() {
+        let giftId = self.giftId
+        let accountPeerId = self.account.peerId
+        let network = self.account.network
+        let postbox = self.account.postbox
+        let limit = self.limit
+
+        guard case let .ready(true, initialNextOffset) = self.dataState else {
+            return
+        }
+
+        self.dataState = .loading
+        self.pushState()
+
+        let signal: Signal<([ProfileGiftsContext.State.StarGift], Int32, String?), NoError> = network.request(Api.functions.payments.getCraftStarGifts(giftId: giftId, offset: initialNextOffset ?? "", limit: limit))
+        |> map(Optional.init)
+        |> `catch` { _ -> Signal<Api.payments.SavedStarGifts?, NoError> in
+            return .single(nil)
+        }
+        |> mapToSignal { result -> Signal<([ProfileGiftsContext.State.StarGift], Int32, String?), NoError> in
+            guard let result else {
+                return .single(([], 0, nil))
+            }
+            return postbox.transaction { transaction -> ([ProfileGiftsContext.State.StarGift], Int32, String?) in
+                switch result {
+                case let .savedStarGifts(_, count, _, apiGifts, nextOffset, chats, users):
+                    let parsedPeers = AccumulatedPeers(transaction: transaction, chats: chats, users: users)
+                    updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: parsedPeers)
+
+                    let gifts = apiGifts.compactMap { ProfileGiftsContext.State.StarGift(apiSavedStarGift: $0, peerId: accountPeerId, transaction: transaction) }
+                    return (gifts, count, nextOffset)
+                }
+            }
+        }
+
+        self.disposable.set((signal
+        |> deliverOn(self.queue)).start(next: { [weak self] (gifts, count, nextOffset) in
+            guard let self else {
+                return
+            }
+            if initialNextOffset == nil {
+                self.gifts = gifts
+            } else {
+                self.gifts.append(contentsOf: gifts)
+            }
+
+            let updatedCount = max(Int32(self.gifts.count), count)
+            self.count = updatedCount
+            self.dataState = .ready(canLoadMore: count != 0 && updatedCount > self.gifts.count && nextOffset != nil, nextOffset: nextOffset)
+
+            self.pushState()
+        }))
+    }
+
+    private func pushState() {
+        let state = CraftGiftsContext.State(
+            gifts: self.gifts,
+            count: self.count,
+            dataState: self.dataState
+        )
+        self._state = state
+        self.stateValue.set(.single(state))
+    }
+}
+
+public final class CraftGiftsContext {
+    public struct State: Equatable {
+        public var gifts: [ProfileGiftsContext.State.StarGift]
+        public var count: Int32
+        public var dataState: ProfileGiftsContext.State.DataState
+    }
+
+    private let queue: Queue = .mainQueue()
+    private let impl: QueueLocalObject<CraftGiftsContextImpl>
+
+    public var state: Signal<CraftGiftsContext.State, NoError> {
+        return Signal { subscriber in
+            let disposable = MetaDisposable()
+
+            self.impl.with { impl in
+                disposable.set(impl.state.start(next: { value in
+                    subscriber.putNext(value)
+                }))
+            }
+
+            return disposable
+        }
+    }
+
+    public let giftId: Int64
+
+    public init(
+        account: Account,
+        giftId: Int64,
+        limit: Int32 = 36
+    ) {
+        self.giftId = giftId
+
+        let queue = self.queue
+        self.impl = QueueLocalObject(queue: queue, generate: {
+            return CraftGiftsContextImpl(queue: queue, account: account, giftId: giftId, limit: limit)
+        })
+    }
+
+    public func loadMore() {
+        self.impl.with { impl in
+            impl.loadMore()
+        }
+    }
+
+    public func reload() {
+        self.impl.with { impl in
+            impl.reload()
+        }
+    }
+
+    public func removeGifts(references: [StarGiftReference]) {
+        self.impl.with { impl in
+            impl.removeGifts(references: references)
+        }
+    }
+
+    public func craft(references: [StarGiftReference]) -> Signal<ProfileGiftsContext.State.StarGift, CraftStarGiftError> {
+        return Signal { subscriber in
+            let disposable = MetaDisposable()
+            self.impl.with { impl in
+                disposable.set(impl.craft(references: references).start(next: { value in
+                    subscriber.putNext(value)
+                }, error: { error in
+                    subscriber.putError(error)
+                }, completed: {
+                    subscriber.putCompletion()
+                }))
+            }
+            return disposable
+        }
+    }
+
+    public var currentState: CraftGiftsContext.State? {
+        var state: CraftGiftsContext.State?
+        self.impl.syncWith { impl in
+            state = impl._state
+        }
+        return state
+    }
+}
+
+public enum CraftStarGiftError {
+    case generic
+    case tooEarly(Int32)
+    case craftFailed
+}
+
+func _internal_craftStarGift(account: Account, references: [StarGiftReference]) -> Signal<ProfileGiftsContext.State.StarGift, CraftStarGiftError> {
+    return account.postbox.transaction { transaction -> [Api.InputSavedStarGift] in
+        return references.compactMap { $0.apiStarGiftReference(transaction: transaction) }
+    }
+    |> castError(CraftStarGiftError.self)
+    |> mapToSignal { starGifts -> Signal<ProfileGiftsContext.State.StarGift, CraftStarGiftError> in
+        guard !starGifts.isEmpty else {
+            return .fail(.generic)
+        }
+        return account.network.request(Api.functions.payments.craftStarGift(stargift: starGifts))
+        |> mapError { error -> CraftStarGiftError in
+            if error.errorDescription.hasPrefix("STARGIFT_CRAFT_TOO_EARLY_") {
+                let timeout = String(error.errorDescription[error.errorDescription.index(error.errorDescription.startIndex, offsetBy: "STARGIFT_CRAFT_TOO_EARLY_".count)...])
+                if let value = Int32(timeout) {
+                    return .tooEarly(value)
+                }
+            }
+            return .generic
+        }
+        |> mapToSignal { updates -> Signal<ProfileGiftsContext.State.StarGift, CraftStarGiftError> in
+            account.stateManager.addUpdates(updates)
+            for update in updates.allUpdates {
+                switch update {
+                case let .updateNewMessage(message, _, _):
+                    if let message = StoreMessage(apiMessage: message, accountPeerId: account.peerId, peerIsForum: false) {
+                        for media in message.media {
+                            if let action = media as? TelegramMediaAction, case let .starGiftUnique(gift, _, _, savedToProfile, canExportDate, transferStars, _, _, peerId, _, savedId, _, canTransferDate, canResaleDate, dropOriginalDetailsStars, _, _, canCraftAt, craftChancePermille) = action.action, case let .Id(messageId) = message.id {
+                                let reference: StarGiftReference
+                                if let peerId, let savedId {
+                                    reference = .peer(peerId: peerId, id: savedId)
+                                } else {
+                                    reference = .message(messageId: messageId)
+                                }
+                                return .single(ProfileGiftsContext.State.StarGift(
+                                    gift: gift,
+                                    reference: reference,
+                                    fromPeer: nil,
+                                    date: message.timestamp,
+                                    text: nil,
+                                    entities: nil,
+                                    nameHidden: false,
+                                    savedToProfile: savedToProfile,
+                                    pinnedToTop: false,
+                                    convertStars: nil,
+                                    canUpgrade: false,
+                                    canExportDate: canExportDate,
+                                    upgradeStars: nil,
+                                    transferStars: transferStars,
+                                    canTransferDate: canTransferDate,
+                                    canResaleDate: canResaleDate,
+                                    collectionIds: nil,
+                                    prepaidUpgradeHash: nil,
+                                    upgradeSeparate: false,
+                                    dropOriginalDetailsStars: dropOriginalDetailsStars,
+                                    number: nil,
+                                    isRefunded: false,
+                                    canCraftAt: canCraftAt,
+                                    craftChancePermille: craftChancePermille
+                                ))
+                            }
+                        }
+                    }
+                default:
+                    break
+                }
+            }
+            return .fail(.craftFailed)
+        }
+    }
+}
+
 extension ProfileGiftsContext.State.StarGift {
     init?(apiSavedStarGift: Api.SavedStarGift, peerId: EnginePeer.Id, transaction: Transaction) {
         switch apiSavedStarGift {
-        case let .savedStarGift(flags, fromId, date, apiGift, message, msgId, savedId, convertStars, upgradeStars, canExportDate, transferStars, canTransferAt, canResaleAt, collectionIds, prepaidUpgradeHash, dropOriginalDetailsStars, number):
+        case let .savedStarGift(flags, fromId, date, apiGift, message, msgId, savedId, convertStars, upgradeStars, canExportDate, transferStars, canTransferAt, canResaleAt, collectionIds, prepaidUpgradeHash, dropOriginalDetailsStars, number, canCraftAt, craftChancePermille):
             guard let gift = StarGift(apiStarGift: apiGift) else {
                 return nil
             }
@@ -3077,6 +3388,8 @@ extension ProfileGiftsContext.State.StarGift {
             self.dropOriginalDetailsStars = dropOriginalDetailsStars
             self.number = number
             self.isRefunded = (flags & (1 << 9)) != 0
+            self.canCraftAt = canCraftAt
+            self.craftChancePermille = craftChancePermille
         }
     }
 }

@@ -58,9 +58,12 @@ public extension Api {
             }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.InputPaymentCredentials.inputPaymentCredentials(flags: _1!, data: _2!)
+            if _c1 && _c2 {
+                return Api.InputPaymentCredentials.inputPaymentCredentials(flags: _1!, data: _2!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_inputPaymentCredentialsApplePay(_ reader: BufferReader) -> InputPaymentCredentials? {
             var _1: Api.DataJSON?
@@ -68,8 +71,12 @@ public extension Api {
                 _1 = Api.parse(reader, signature: signature) as? Api.DataJSON
             }
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.InputPaymentCredentials.inputPaymentCredentialsApplePay(paymentData: _1!)
+            if _c1 {
+                return Api.InputPaymentCredentials.inputPaymentCredentialsApplePay(paymentData: _1!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_inputPaymentCredentialsGooglePay(_ reader: BufferReader) -> InputPaymentCredentials? {
             var _1: Api.DataJSON?
@@ -77,8 +84,12 @@ public extension Api {
                 _1 = Api.parse(reader, signature: signature) as? Api.DataJSON
             }
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.InputPaymentCredentials.inputPaymentCredentialsGooglePay(paymentToken: _1!)
+            if _c1 {
+                return Api.InputPaymentCredentials.inputPaymentCredentialsGooglePay(paymentToken: _1!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_inputPaymentCredentialsSaved(_ reader: BufferReader) -> InputPaymentCredentials? {
             var _1: String?
@@ -87,9 +98,12 @@ public extension Api {
             _2 = parseBytes(reader)
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.InputPaymentCredentials.inputPaymentCredentialsSaved(id: _1!, tmpPassword: _2!)
+            if _c1 && _c2 {
+                return Api.InputPaymentCredentials.inputPaymentCredentialsSaved(id: _1!, tmpPassword: _2!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -183,9 +197,12 @@ public extension Api {
             _2 = reader.readInt64()
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.InputPeer.inputPeerChannel(channelId: _1!, accessHash: _2!)
+            if _c1 && _c2 {
+                return Api.InputPeer.inputPeerChannel(channelId: _1!, accessHash: _2!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_inputPeerChannelFromMessage(_ reader: BufferReader) -> InputPeer? {
             var _1: Api.InputPeer?
@@ -199,17 +216,23 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.InputPeer.inputPeerChannelFromMessage(peer: _1!, msgId: _2!, channelId: _3!)
+            if _c1 && _c2 && _c3 {
+                return Api.InputPeer.inputPeerChannelFromMessage(peer: _1!, msgId: _2!, channelId: _3!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_inputPeerChat(_ reader: BufferReader) -> InputPeer? {
             var _1: Int64?
             _1 = reader.readInt64()
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.InputPeer.inputPeerChat(chatId: _1!)
+            if _c1 {
+                return Api.InputPeer.inputPeerChat(chatId: _1!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_inputPeerEmpty(_ reader: BufferReader) -> InputPeer? {
             return Api.InputPeer.inputPeerEmpty
@@ -224,9 +247,12 @@ public extension Api {
             _2 = reader.readInt64()
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.InputPeer.inputPeerUser(userId: _1!, accessHash: _2!)
+            if _c1 && _c2 {
+                return Api.InputPeer.inputPeerUser(userId: _1!, accessHash: _2!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_inputPeerUserFromMessage(_ reader: BufferReader) -> InputPeer? {
             var _1: Api.InputPeer?
@@ -240,10 +266,12 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.InputPeer.inputPeerUserFromMessage(peer: _1!, msgId: _2!, userId: _3!)
+            if _c1 && _c2 && _c3 {
+                return Api.InputPeer.inputPeerUserFromMessage(peer: _1!, msgId: _2!, userId: _3!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -314,15 +342,12 @@ public extension Api {
             let _c6 = (Int(_1!) & Int(1 << 6) == 0) || _6 != nil
             let _c7 = (Int(_1!) & Int(1 << 7) == 0) || _7 != nil
             let _c8 = (Int(_1!) & Int(1 << 8) == 0) || _8 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            if !_c6 { return nil }
-            if !_c7 { return nil }
-            if !_c8 { return nil }
-            return Api.InputPeerNotifySettings.inputPeerNotifySettings(flags: _1!, showPreviews: _2, silent: _3, muteUntil: _4, sound: _5, storiesMuted: _6, storiesHideSender: _7, storiesSound: _8)
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 {
+                return Api.InputPeerNotifySettings.inputPeerNotifySettings(flags: _1!, showPreviews: _2, silent: _3, muteUntil: _4, sound: _5, storiesMuted: _6, storiesHideSender: _7, storiesSound: _8)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -357,9 +382,12 @@ public extension Api {
             _2 = reader.readInt64()
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.InputPhoneCall.inputPhoneCall(id: _1!, accessHash: _2!)
+            if _c1 && _c2 {
+                return Api.InputPhoneCall.inputPhoneCall(id: _1!, accessHash: _2!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -407,10 +435,12 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.InputPhoto.inputPhoto(id: _1!, accessHash: _2!, fileReference: _3!)
+            if _c1 && _c2 && _c3 {
+                return Api.InputPhoto.inputPhoto(id: _1!, accessHash: _2!, fileReference: _3!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_inputPhotoEmpty(_ reader: BufferReader) -> InputPhoto? {
             return Api.InputPhoto.inputPhotoEmpty
@@ -751,8 +781,12 @@ public extension Api {
                 _1 = Api.parseVector(reader, elementSignature: 570911930, elementType: Int64.self)
             }
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.InputPrivacyRule.inputPrivacyValueAllowChatParticipants(chats: _1!)
+            if _c1 {
+                return Api.InputPrivacyRule.inputPrivacyValueAllowChatParticipants(chats: _1!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_inputPrivacyValueAllowCloseFriends(_ reader: BufferReader) -> InputPrivacyRule? {
             return Api.InputPrivacyRule.inputPrivacyValueAllowCloseFriends
@@ -769,8 +803,12 @@ public extension Api {
                 _1 = Api.parseVector(reader, elementSignature: 0, elementType: Api.InputUser.self)
             }
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.InputPrivacyRule.inputPrivacyValueAllowUsers(users: _1!)
+            if _c1 {
+                return Api.InputPrivacyRule.inputPrivacyValueAllowUsers(users: _1!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_inputPrivacyValueDisallowAll(_ reader: BufferReader) -> InputPrivacyRule? {
             return Api.InputPrivacyRule.inputPrivacyValueDisallowAll
@@ -784,8 +822,12 @@ public extension Api {
                 _1 = Api.parseVector(reader, elementSignature: 570911930, elementType: Int64.self)
             }
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.InputPrivacyRule.inputPrivacyValueDisallowChatParticipants(chats: _1!)
+            if _c1 {
+                return Api.InputPrivacyRule.inputPrivacyValueDisallowChatParticipants(chats: _1!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_inputPrivacyValueDisallowContacts(_ reader: BufferReader) -> InputPrivacyRule? {
             return Api.InputPrivacyRule.inputPrivacyValueDisallowContacts
@@ -796,8 +838,12 @@ public extension Api {
                 _1 = Api.parseVector(reader, elementSignature: 0, elementType: Api.InputUser.self)
             }
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.InputPrivacyRule.inputPrivacyValueDisallowUsers(users: _1!)
+            if _c1 {
+                return Api.InputPrivacyRule.inputPrivacyValueDisallowUsers(users: _1!)
+            }
+            else {
+                return nil
+            }
         }
     
     }

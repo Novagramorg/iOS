@@ -70,18 +70,12 @@ public extension Api {
             let _c9 = (Int(_1!) & Int(1 << 6) == 0) || _9 != nil
             let _c10 = (Int(_1!) & Int(1 << 14) == 0) || _10 != nil
             let _c11 = (Int(_1!) & Int(1 << 16) == 0) || _11 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            if !_c6 { return nil }
-            if !_c7 { return nil }
-            if !_c8 { return nil }
-            if !_c9 { return nil }
-            if !_c10 { return nil }
-            if !_c11 { return nil }
-            return Api.GroupCallParticipant.groupCallParticipant(flags: _1!, peer: _2!, date: _3!, activeDate: _4, source: _5!, volume: _6, about: _7, raiseHandRating: _8, video: _9, presentation: _10, paidStarsTotal: _11)
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 && _c10 && _c11 {
+                return Api.GroupCallParticipant.groupCallParticipant(flags: _1!, peer: _2!, date: _3!, activeDate: _4, source: _5!, volume: _6, about: _7, raiseHandRating: _8, video: _9, presentation: _10, paidStarsTotal: _11)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -130,11 +124,12 @@ public extension Api {
             let _c2 = _2 != nil
             let _c3 = _3 != nil
             let _c4 = (Int(_1!) & Int(1 << 1) == 0) || _4 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            return Api.GroupCallParticipantVideo.groupCallParticipantVideo(flags: _1!, endpoint: _2!, sourceGroups: _3!, audioSource: _4)
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.GroupCallParticipantVideo.groupCallParticipantVideo(flags: _1!, endpoint: _2!, sourceGroups: _3!, audioSource: _4)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -175,9 +170,12 @@ public extension Api {
             }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.GroupCallParticipantVideoSourceGroup.groupCallParticipantVideoSourceGroup(semantics: _1!, sources: _2!)
+            if _c1 && _c2 {
+                return Api.GroupCallParticipantVideoSourceGroup.groupCallParticipantVideoSourceGroup(semantics: _1!, sources: _2!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -216,10 +214,12 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.GroupCallStreamChannel.groupCallStreamChannel(channel: _1!, scale: _2!, lastTimestampMs: _3!)
+            if _c1 && _c2 && _c3 {
+                return Api.GroupCallStreamChannel.groupCallStreamChannel(channel: _1!, scale: _2!, lastTimestampMs: _3!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -258,10 +258,12 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.HighScore.highScore(pos: _1!, userId: _2!, score: _3!)
+            if _c1 && _c2 && _c3 {
+                return Api.HighScore.highScore(pos: _1!, userId: _2!, score: _3!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -296,9 +298,12 @@ public extension Api {
             _2 = reader.readInt64()
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.ImportedContact.importedContact(userId: _1!, clientId: _2!)
+            if _c1 && _c2 {
+                return Api.ImportedContact.importedContact(userId: _1!, clientId: _2!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -333,9 +338,12 @@ public extension Api {
             _2 = parseString(reader)
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.InlineBotSwitchPM.inlineBotSwitchPM(text: _1!, startParam: _2!)
+            if _c1 && _c2 {
+                return Api.InlineBotSwitchPM.inlineBotSwitchPM(text: _1!, startParam: _2!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -370,9 +378,12 @@ public extension Api {
             _2 = parseString(reader)
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.InlineBotWebView.inlineBotWebView(text: _1!, url: _2!)
+            if _c1 && _c2 {
+                return Api.InlineBotWebView.inlineBotWebView(text: _1!, url: _2!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -505,11 +516,12 @@ public extension Api {
             let _c2 = _2 != nil
             let _c3 = _3 != nil
             let _c4 = _4 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            return Api.InputAppEvent.inputAppEvent(time: _1!, type: _2!, peer: _3!, data: _4!)
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.InputAppEvent.inputAppEvent(time: _1!, type: _2!, peer: _3!, data: _4!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -554,9 +566,12 @@ public extension Api {
             _2 = reader.readInt64()
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.InputBotApp.inputBotAppID(id: _1!, accessHash: _2!)
+            if _c1 && _c2 {
+                return Api.InputBotApp.inputBotAppID(id: _1!, accessHash: _2!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_inputBotAppShortName(_ reader: BufferReader) -> InputBotApp? {
             var _1: Api.InputUser?
@@ -567,9 +582,12 @@ public extension Api {
             _2 = parseString(reader)
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.InputBotApp.inputBotAppShortName(botId: _1!, shortName: _2!)
+            if _c1 && _c2 {
+                return Api.InputBotApp.inputBotAppShortName(botId: _1!, shortName: _2!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -716,9 +734,12 @@ public extension Api {
             } }
             let _c1 = _1 != nil
             let _c2 = (Int(_1!) & Int(1 << 2) == 0) || _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.InputBotInlineMessage.inputBotInlineMessageGame(flags: _1!, replyMarkup: _2)
+            if _c1 && _c2 {
+                return Api.InputBotInlineMessage.inputBotInlineMessageGame(flags: _1!, replyMarkup: _2)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_inputBotInlineMessageMediaAuto(_ reader: BufferReader) -> InputBotInlineMessage? {
             var _1: Int32?
@@ -737,11 +758,12 @@ public extension Api {
             let _c2 = _2 != nil
             let _c3 = (Int(_1!) & Int(1 << 1) == 0) || _3 != nil
             let _c4 = (Int(_1!) & Int(1 << 2) == 0) || _4 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            return Api.InputBotInlineMessage.inputBotInlineMessageMediaAuto(flags: _1!, message: _2!, entities: _3, replyMarkup: _4)
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.InputBotInlineMessage.inputBotInlineMessageMediaAuto(flags: _1!, message: _2!, entities: _3, replyMarkup: _4)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_inputBotInlineMessageMediaContact(_ reader: BufferReader) -> InputBotInlineMessage? {
             var _1: Int32?
@@ -764,13 +786,12 @@ public extension Api {
             let _c4 = _4 != nil
             let _c5 = _5 != nil
             let _c6 = (Int(_1!) & Int(1 << 2) == 0) || _6 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            if !_c6 { return nil }
-            return Api.InputBotInlineMessage.inputBotInlineMessageMediaContact(flags: _1!, phoneNumber: _2!, firstName: _3!, lastName: _4!, vcard: _5!, replyMarkup: _6)
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 {
+                return Api.InputBotInlineMessage.inputBotInlineMessageMediaContact(flags: _1!, phoneNumber: _2!, firstName: _3!, lastName: _4!, vcard: _5!, replyMarkup: _6)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_inputBotInlineMessageMediaGeo(_ reader: BufferReader) -> InputBotInlineMessage? {
             var _1: Int32?
@@ -795,13 +816,12 @@ public extension Api {
             let _c4 = (Int(_1!) & Int(1 << 1) == 0) || _4 != nil
             let _c5 = (Int(_1!) & Int(1 << 3) == 0) || _5 != nil
             let _c6 = (Int(_1!) & Int(1 << 2) == 0) || _6 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            if !_c6 { return nil }
-            return Api.InputBotInlineMessage.inputBotInlineMessageMediaGeo(flags: _1!, geoPoint: _2!, heading: _3, period: _4, proximityNotificationRadius: _5, replyMarkup: _6)
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 {
+                return Api.InputBotInlineMessage.inputBotInlineMessageMediaGeo(flags: _1!, geoPoint: _2!, heading: _3, period: _4, proximityNotificationRadius: _5, replyMarkup: _6)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_inputBotInlineMessageMediaInvoice(_ reader: BufferReader) -> InputBotInlineMessage? {
             var _1: Int32?
@@ -839,16 +859,12 @@ public extension Api {
             let _c7 = _7 != nil
             let _c8 = _8 != nil
             let _c9 = (Int(_1!) & Int(1 << 2) == 0) || _9 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            if !_c6 { return nil }
-            if !_c7 { return nil }
-            if !_c8 { return nil }
-            if !_c9 { return nil }
-            return Api.InputBotInlineMessage.inputBotInlineMessageMediaInvoice(flags: _1!, title: _2!, description: _3!, photo: _4, invoice: _5!, payload: _6!, provider: _7!, providerData: _8!, replyMarkup: _9)
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 {
+                return Api.InputBotInlineMessage.inputBotInlineMessageMediaInvoice(flags: _1!, title: _2!, description: _3!, photo: _4, invoice: _5!, payload: _6!, provider: _7!, providerData: _8!, replyMarkup: _9)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_inputBotInlineMessageMediaVenue(_ reader: BufferReader) -> InputBotInlineMessage? {
             var _1: Int32?
@@ -879,15 +895,12 @@ public extension Api {
             let _c6 = _6 != nil
             let _c7 = _7 != nil
             let _c8 = (Int(_1!) & Int(1 << 2) == 0) || _8 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            if !_c6 { return nil }
-            if !_c7 { return nil }
-            if !_c8 { return nil }
-            return Api.InputBotInlineMessage.inputBotInlineMessageMediaVenue(flags: _1!, geoPoint: _2!, title: _3!, address: _4!, provider: _5!, venueId: _6!, venueType: _7!, replyMarkup: _8)
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 {
+                return Api.InputBotInlineMessage.inputBotInlineMessageMediaVenue(flags: _1!, geoPoint: _2!, title: _3!, address: _4!, provider: _5!, venueId: _6!, venueType: _7!, replyMarkup: _8)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_inputBotInlineMessageMediaWebPage(_ reader: BufferReader) -> InputBotInlineMessage? {
             var _1: Int32?
@@ -909,12 +922,12 @@ public extension Api {
             let _c3 = (Int(_1!) & Int(1 << 1) == 0) || _3 != nil
             let _c4 = _4 != nil
             let _c5 = (Int(_1!) & Int(1 << 2) == 0) || _5 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            return Api.InputBotInlineMessage.inputBotInlineMessageMediaWebPage(flags: _1!, message: _2!, entities: _3, url: _4!, replyMarkup: _5)
+            if _c1 && _c2 && _c3 && _c4 && _c5 {
+                return Api.InputBotInlineMessage.inputBotInlineMessageMediaWebPage(flags: _1!, message: _2!, entities: _3, url: _4!, replyMarkup: _5)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_inputBotInlineMessageText(_ reader: BufferReader) -> InputBotInlineMessage? {
             var _1: Int32?
@@ -933,11 +946,12 @@ public extension Api {
             let _c2 = _2 != nil
             let _c3 = (Int(_1!) & Int(1 << 1) == 0) || _3 != nil
             let _c4 = (Int(_1!) & Int(1 << 2) == 0) || _4 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            return Api.InputBotInlineMessage.inputBotInlineMessageText(flags: _1!, message: _2!, entities: _3, replyMarkup: _4)
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.InputBotInlineMessage.inputBotInlineMessageText(flags: _1!, message: _2!, entities: _3, replyMarkup: _4)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -988,10 +1002,12 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.InputBotInlineMessageID.inputBotInlineMessageID(dcId: _1!, id: _2!, accessHash: _3!)
+            if _c1 && _c2 && _c3 {
+                return Api.InputBotInlineMessageID.inputBotInlineMessageID(dcId: _1!, id: _2!, accessHash: _3!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_inputBotInlineMessageID64(_ reader: BufferReader) -> InputBotInlineMessageID? {
             var _1: Int32?
@@ -1006,11 +1022,12 @@ public extension Api {
             let _c2 = _2 != nil
             let _c3 = _3 != nil
             let _c4 = _4 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            return Api.InputBotInlineMessageID.inputBotInlineMessageID64(dcId: _1!, ownerId: _2!, id: _3!, accessHash: _4!)
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.InputBotInlineMessageID.inputBotInlineMessageID64(dcId: _1!, ownerId: _2!, id: _3!, accessHash: _4!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -1117,16 +1134,12 @@ public extension Api {
             let _c7 = (Int(_1!) & Int(1 << 4) == 0) || _7 != nil
             let _c8 = (Int(_1!) & Int(1 << 5) == 0) || _8 != nil
             let _c9 = _9 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            if !_c6 { return nil }
-            if !_c7 { return nil }
-            if !_c8 { return nil }
-            if !_c9 { return nil }
-            return Api.InputBotInlineResult.inputBotInlineResult(flags: _1!, id: _2!, type: _3!, title: _4, description: _5, url: _6, thumb: _7, content: _8, sendMessage: _9!)
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 {
+                return Api.InputBotInlineResult.inputBotInlineResult(flags: _1!, id: _2!, type: _3!, title: _4, description: _5, url: _6, thumb: _7, content: _8, sendMessage: _9!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_inputBotInlineResultDocument(_ reader: BufferReader) -> InputBotInlineResult? {
             var _1: Int32?
@@ -1154,14 +1167,12 @@ public extension Api {
             let _c5 = (Int(_1!) & Int(1 << 2) == 0) || _5 != nil
             let _c6 = _6 != nil
             let _c7 = _7 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            if !_c6 { return nil }
-            if !_c7 { return nil }
-            return Api.InputBotInlineResult.inputBotInlineResultDocument(flags: _1!, id: _2!, type: _3!, title: _4, description: _5, document: _6!, sendMessage: _7!)
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 {
+                return Api.InputBotInlineResult.inputBotInlineResultDocument(flags: _1!, id: _2!, type: _3!, title: _4, description: _5, document: _6!, sendMessage: _7!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_inputBotInlineResultGame(_ reader: BufferReader) -> InputBotInlineResult? {
             var _1: String?
@@ -1175,10 +1186,12 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.InputBotInlineResult.inputBotInlineResultGame(id: _1!, shortName: _2!, sendMessage: _3!)
+            if _c1 && _c2 && _c3 {
+                return Api.InputBotInlineResult.inputBotInlineResultGame(id: _1!, shortName: _2!, sendMessage: _3!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_inputBotInlineResultPhoto(_ reader: BufferReader) -> InputBotInlineResult? {
             var _1: String?
@@ -1197,11 +1210,12 @@ public extension Api {
             let _c2 = _2 != nil
             let _c3 = _3 != nil
             let _c4 = _4 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            return Api.InputBotInlineResult.inputBotInlineResultPhoto(id: _1!, type: _2!, photo: _3!, sendMessage: _4!)
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.InputBotInlineResult.inputBotInlineResultPhoto(id: _1!, type: _2!, photo: _3!, sendMessage: _4!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -1248,11 +1262,12 @@ public extension Api {
             let _c2 = _2 != nil
             let _c3 = _3 != nil
             let _c4 = _4 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            return Api.InputBusinessAwayMessage.inputBusinessAwayMessage(flags: _1!, shortcutId: _2!, schedule: _3!, recipients: _4!)
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.InputBusinessAwayMessage.inputBusinessAwayMessage(flags: _1!, shortcutId: _2!, schedule: _3!, recipients: _4!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
