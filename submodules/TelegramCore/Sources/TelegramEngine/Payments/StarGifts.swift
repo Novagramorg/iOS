@@ -3093,6 +3093,16 @@ private final class CraftGiftsContextImpl {
         return _internal_craftStarGift(account: self.account, references: references)
     }
 
+    func removeGifts(references: [StarGiftReference]) {
+        let referencesSet = Set(references)
+        self.gifts.removeAll { gift in
+            guard let ref = gift.reference else { return false }
+            return referencesSet.contains(ref)
+        }
+        self.count = max(0, self.count - Int32(references.count))
+        self.pushState()
+    }
+
     func reload() {
         self.gifts = []
         self.dataState = .ready(canLoadMore: true, nextOffset: nil)
@@ -3215,6 +3225,12 @@ public final class CraftGiftsContext {
         }
     }
 
+    public func removeGifts(references: [StarGiftReference]) {
+        self.impl.with { impl in
+            impl.removeGifts(references: references)
+        }
+    }
+
     public func craft(references: [StarGiftReference]) -> Signal<ProfileGiftsContext.State.StarGift, CraftStarGiftError> {
         return Signal { subscriber in
             let disposable = MetaDisposable()
@@ -3243,6 +3259,7 @@ public final class CraftGiftsContext {
 public enum CraftStarGiftError {
     case generic
     case tooEarly(Int32)
+    case craftFailed
 }
 
 func _internal_craftStarGift(account: Account, references: [StarGiftReference]) -> Signal<ProfileGiftsContext.State.StarGift, CraftStarGiftError> {
@@ -3311,7 +3328,7 @@ func _internal_craftStarGift(account: Account, references: [StarGiftReference]) 
                     break
                 }
             }
-            return .fail(.generic)
+            return .fail(.craftFailed)
         }
     }
 }
