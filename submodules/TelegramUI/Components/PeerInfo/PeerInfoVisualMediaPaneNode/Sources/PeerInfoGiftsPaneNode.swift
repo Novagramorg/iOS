@@ -714,7 +714,7 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
                             tabSelectorView.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.25)
                         }
                     }
-                    transition.setFrame(view: tabSelectorView, frame: CGRect(origin: CGPoint(x: floor((params.size.width - tabSelectorSize.width) / 2.0), y: 66.0), size: tabSelectorSize))
+                    transition.setFrame(view: tabSelectorView, frame: CGRect(origin: CGPoint(x: floor((params.size.width - tabSelectorSize.width) / 2.0), y: topInset), size: tabSelectorSize))
                     
                     topInset += tabSelectorSize.height + 15.0
                 }
@@ -823,7 +823,7 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
             var scrollOffset: CGFloat = max(0.0, size.height - params.visibleHeight)
             
             let effectiveBottomInset = max(buttonInsets.bottom, bottomInset)
-            var bottomPanelHeight = effectiveBottomInset + panelButtonSize.height + 8.0
+            let bottomPanelHeight = effectiveBottomInset + panelButtonSize.height + 8.0
             if params.visibleHeight < 110.0 {
                 scrollOffset -= bottomPanelHeight
             }
@@ -838,8 +838,6 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
             panelTransition.setFrame(view: panelContentContainer, frame: CGRect(origin: CGPoint(x: 0.0, y: size.height - bottomPanelHeight), size: CGSize(width: size.width, height: bottomPanelHeight)))
             
             if self.canManage {
-                bottomPanelHeight -= 9.0
-                
                 let panelCheck: ComponentView<Empty>
                 if let current = self.panelCheck {
                     panelCheck = current
@@ -904,7 +902,7 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
                     if panelCheckView.superview == nil {
                         panelContentContainer.addSubview(panelCheckView)
                     }
-                    panelCheckView.frame = CGRect(origin: CGPoint(x: floor((size.width - panelCheckSize.width) / 2.0), y: 16.0), size: panelCheckSize)
+                    panelCheckView.frame = CGRect(origin: CGPoint(x: floor((size.width - panelCheckSize.width) / 2.0), y: 16.0 + 16.0), size: panelCheckSize)
                 }
                 if let panelButtonView = panelButton.view {
                     panelButtonView.isHidden = true
