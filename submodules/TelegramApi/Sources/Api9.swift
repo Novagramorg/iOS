@@ -44,10 +44,12 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = (Int(_1!) & Int(1 << 4) == 0) || _2 != nil
             let _c3 = (Int(_1!) & Int(1 << 6) == 0) || _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.InputBusinessBotRecipients.inputBusinessBotRecipients(flags: _1!, users: _2, excludeUsers: _3)
+            if _c1 && _c2 && _c3 {
+                return Api.InputBusinessBotRecipients.inputBusinessBotRecipients(flags: _1!, users: _2, excludeUsers: _3)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -96,11 +98,12 @@ public extension Api {
             let _c2 = _2 != nil
             let _c3 = (Int(_1!) & Int(1 << 0) == 0) || _3 != nil
             let _c4 = (Int(_1!) & Int(1 << 1) == 0) || _4 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            return Api.InputBusinessChatLink.inputBusinessChatLink(flags: _1!, message: _2!, entities: _3, title: _4)
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.InputBusinessChatLink.inputBusinessChatLink(flags: _1!, message: _2!, entities: _3, title: _4)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -141,10 +144,12 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.InputBusinessGreetingMessage.inputBusinessGreetingMessage(shortcutId: _1!, recipients: _2!, noActivityDays: _3!)
+            if _c1 && _c2 && _c3 {
+                return Api.InputBusinessGreetingMessage.inputBusinessGreetingMessage(shortcutId: _1!, recipients: _2!, noActivityDays: _3!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -189,11 +194,12 @@ public extension Api {
             let _c2 = _2 != nil
             let _c3 = _3 != nil
             let _c4 = (Int(_1!) & Int(1 << 0) == 0) || _4 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            return Api.InputBusinessIntro.inputBusinessIntro(flags: _1!, title: _2!, description: _3!, sticker: _4)
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.InputBusinessIntro.inputBusinessIntro(flags: _1!, title: _2!, description: _3!, sticker: _4)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -234,9 +240,12 @@ public extension Api {
             } }
             let _c1 = _1 != nil
             let _c2 = (Int(_1!) & Int(1 << 4) == 0) || _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.InputBusinessRecipients.inputBusinessRecipients(flags: _1!, users: _2)
+            if _c1 && _c2 {
+                return Api.InputBusinessRecipients.inputBusinessRecipients(flags: _1!, users: _2)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -291,9 +300,12 @@ public extension Api {
             _2 = reader.readInt64()
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.InputChannel.inputChannel(channelId: _1!, accessHash: _2!)
+            if _c1 && _c2 {
+                return Api.InputChannel.inputChannel(channelId: _1!, accessHash: _2!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_inputChannelEmpty(_ reader: BufferReader) -> InputChannel? {
             return Api.InputChannel.inputChannelEmpty
@@ -310,10 +322,12 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.InputChannel.inputChannelFromMessage(peer: _1!, msgId: _2!, channelId: _3!)
+            if _c1 && _c2 && _c3 {
+                return Api.InputChannel.inputChannelFromMessage(peer: _1!, msgId: _2!, channelId: _3!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -368,8 +382,12 @@ public extension Api {
                 _1 = Api.parse(reader, signature: signature) as? Api.InputPhoto
             }
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.InputChatPhoto.inputChatPhoto(id: _1!)
+            if _c1 {
+                return Api.InputChatPhoto.inputChatPhoto(id: _1!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_inputChatPhotoEmpty(_ reader: BufferReader) -> InputChatPhoto? {
             return Api.InputChatPhoto.inputChatPhotoEmpty
@@ -396,12 +414,12 @@ public extension Api {
             let _c3 = (Int(_1!) & Int(1 << 1) == 0) || _3 != nil
             let _c4 = (Int(_1!) & Int(1 << 2) == 0) || _4 != nil
             let _c5 = (Int(_1!) & Int(1 << 3) == 0) || _5 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            return Api.InputChatPhoto.inputChatUploadedPhoto(flags: _1!, file: _2, video: _3, videoStartTs: _4, videoEmojiMarkup: _5)
+            if _c1 && _c2 && _c3 && _c4 && _c5 {
+                return Api.InputChatPhoto.inputChatUploadedPhoto(flags: _1!, file: _2, video: _3, videoStartTs: _4, videoEmojiMarkup: _5)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -450,8 +468,12 @@ public extension Api {
             var _1: String?
             _1 = parseString(reader)
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.InputChatTheme.inputChatTheme(emoticon: _1!)
+            if _c1 {
+                return Api.InputChatTheme.inputChatTheme(emoticon: _1!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_inputChatThemeEmpty(_ reader: BufferReader) -> InputChatTheme? {
             return Api.InputChatTheme.inputChatThemeEmpty
@@ -460,8 +482,12 @@ public extension Api {
             var _1: String?
             _1 = parseString(reader)
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.InputChatTheme.inputChatThemeUniqueGift(slug: _1!)
+            if _c1 {
+                return Api.InputChatTheme.inputChatThemeUniqueGift(slug: _1!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -492,8 +518,12 @@ public extension Api {
             var _1: Int32?
             _1 = reader.readInt32()
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.InputChatlist.inputChatlistDialogFilter(filterId: _1!)
+            if _c1 {
+                return Api.InputChatlist.inputChatlistDialogFilter(filterId: _1!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -544,10 +574,12 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.InputCheckPasswordSRP.inputCheckPasswordSRP(srpId: _1!, A: _2!, M1: _3!)
+            if _c1 && _c2 && _c3 {
+                return Api.InputCheckPasswordSRP.inputCheckPasswordSRP(srpId: _1!, A: _2!, M1: _3!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -582,9 +614,12 @@ public extension Api {
             _2 = reader.readInt32()
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.InputClientProxy.inputClientProxy(address: _1!, port: _2!)
+            if _c1 && _c2 {
+                return Api.InputClientProxy.inputClientProxy(address: _1!, port: _2!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -624,15 +659,23 @@ public extension Api {
             var _1: String?
             _1 = parseString(reader)
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.InputCollectible.inputCollectiblePhone(phone: _1!)
+            if _c1 {
+                return Api.InputCollectible.inputCollectiblePhone(phone: _1!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_inputCollectibleUsername(_ reader: BufferReader) -> InputCollectible? {
             var _1: String?
             _1 = parseString(reader)
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.InputCollectible.inputCollectibleUsername(username: _1!)
+            if _c1 {
+                return Api.InputCollectible.inputCollectibleUsername(username: _1!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -685,13 +728,12 @@ public extension Api {
             let _c4 = _4 != nil
             let _c5 = _5 != nil
             let _c6 = (Int(_1!) & Int(1 << 0) == 0) || _6 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            if !_c6 { return nil }
-            return Api.InputContact.inputPhoneContact(flags: _1!, clientId: _2!, phone: _3!, firstName: _4!, lastName: _5!, note: _6)
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 {
+                return Api.InputContact.inputPhoneContact(flags: _1!, clientId: _2!, phone: _3!, firstName: _4!, lastName: _5!, note: _6)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -733,15 +775,23 @@ public extension Api {
                 _1 = Api.parse(reader, signature: signature) as? Api.InputPeer
             }
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.InputDialogPeer.inputDialogPeer(peer: _1!)
+            if _c1 {
+                return Api.InputDialogPeer.inputDialogPeer(peer: _1!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_inputDialogPeerFolder(_ reader: BufferReader) -> InputDialogPeer? {
             var _1: Int32?
             _1 = reader.readInt32()
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.InputDialogPeer.inputDialogPeerFolder(folderId: _1!)
+            if _c1 {
+                return Api.InputDialogPeer.inputDialogPeerFolder(folderId: _1!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -789,10 +839,12 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.InputDocument.inputDocument(id: _1!, accessHash: _2!, fileReference: _3!)
+            if _c1 && _c2 && _c3 {
+                return Api.InputDocument.inputDocument(id: _1!, accessHash: _2!, fileReference: _3!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_inputDocumentEmpty(_ reader: BufferReader) -> InputDocument? {
             return Api.InputDocument.inputDocumentEmpty
@@ -830,9 +882,12 @@ public extension Api {
             _2 = reader.readInt64()
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.InputEncryptedChat.inputEncryptedChat(chatId: _1!, accessHash: _2!)
+            if _c1 && _c2 {
+                return Api.InputEncryptedChat.inputEncryptedChat(chatId: _1!, accessHash: _2!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -899,9 +954,12 @@ public extension Api {
             _2 = reader.readInt64()
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.InputEncryptedFile.inputEncryptedFile(id: _1!, accessHash: _2!)
+            if _c1 && _c2 {
+                return Api.InputEncryptedFile.inputEncryptedFile(id: _1!, accessHash: _2!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_inputEncryptedFileBigUploaded(_ reader: BufferReader) -> InputEncryptedFile? {
             var _1: Int64?
@@ -913,10 +971,12 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.InputEncryptedFile.inputEncryptedFileBigUploaded(id: _1!, parts: _2!, keyFingerprint: _3!)
+            if _c1 && _c2 && _c3 {
+                return Api.InputEncryptedFile.inputEncryptedFileBigUploaded(id: _1!, parts: _2!, keyFingerprint: _3!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_inputEncryptedFileEmpty(_ reader: BufferReader) -> InputEncryptedFile? {
             return Api.InputEncryptedFile.inputEncryptedFileEmpty
@@ -934,11 +994,12 @@ public extension Api {
             let _c2 = _2 != nil
             let _c3 = _3 != nil
             let _c4 = _4 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            return Api.InputEncryptedFile.inputEncryptedFileUploaded(id: _1!, parts: _2!, md5Checksum: _3!, keyFingerprint: _4!)
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.InputEncryptedFile.inputEncryptedFileUploaded(id: _1!, parts: _2!, md5Checksum: _3!, keyFingerprint: _4!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -1001,11 +1062,12 @@ public extension Api {
             let _c2 = _2 != nil
             let _c3 = _3 != nil
             let _c4 = _4 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            return Api.InputFile.inputFile(id: _1!, parts: _2!, name: _3!, md5Checksum: _4!)
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.InputFile.inputFile(id: _1!, parts: _2!, name: _3!, md5Checksum: _4!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_inputFileBig(_ reader: BufferReader) -> InputFile? {
             var _1: Int64?
@@ -1017,10 +1079,12 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.InputFile.inputFileBig(id: _1!, parts: _2!, name: _3!)
+            if _c1 && _c2 && _c3 {
+                return Api.InputFile.inputFileBig(id: _1!, parts: _2!, name: _3!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_inputFileStoryDocument(_ reader: BufferReader) -> InputFile? {
             var _1: Api.InputDocument?
@@ -1028,8 +1092,12 @@ public extension Api {
                 _1 = Api.parse(reader, signature: signature) as? Api.InputDocument
             }
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.InputFile.inputFileStoryDocument(id: _1!)
+            if _c1 {
+                return Api.InputFile.inputFileStoryDocument(id: _1!)
+            }
+            else {
+                return nil
+            }
         }
     
     }

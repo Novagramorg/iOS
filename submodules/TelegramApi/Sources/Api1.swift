@@ -24,8 +24,12 @@ public extension Api {
             var _1: Int32?
             _1 = reader.readInt32()
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.AccountDaysTTL.accountDaysTTL(days: _1!)
+            if _c1 {
+                return Api.AccountDaysTTL.accountDaysTTL(days: _1!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -84,12 +88,12 @@ public extension Api {
             let _c3 = _3 != nil
             let _c4 = (Int(_1!) & Int(1 << 3) == 0) || _4 != nil
             let _c5 = _5 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            return Api.AttachMenuBot.attachMenuBot(flags: _1!, botId: _2!, shortName: _3!, peerTypes: _4, icons: _5!)
+            if _c1 && _c2 && _c3 && _c4 && _c5 {
+                return Api.AttachMenuBot.attachMenuBot(flags: _1!, botId: _2!, shortName: _3!, peerTypes: _4, icons: _5!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -140,11 +144,12 @@ public extension Api {
             let _c2 = _2 != nil
             let _c3 = _3 != nil
             let _c4 = (Int(_1!) & Int(1 << 0) == 0) || _4 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            return Api.AttachMenuBotIcon.attachMenuBotIcon(flags: _1!, name: _2!, icon: _3!, colors: _4)
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.AttachMenuBotIcon.attachMenuBotIcon(flags: _1!, name: _2!, icon: _3!, colors: _4)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -179,9 +184,12 @@ public extension Api {
             _2 = reader.readInt32()
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.AttachMenuBotIconColor.attachMenuBotIconColor(name: _1!, color: _2!)
+            if _c1 && _c2 {
+                return Api.AttachMenuBotIconColor.attachMenuBotIconColor(name: _1!, color: _2!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -241,10 +249,12 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.AttachMenuBots.attachMenuBots(hash: _1!, bots: _2!, users: _3!)
+            if _c1 && _c2 && _c3 {
+                return Api.AttachMenuBots.attachMenuBots(hash: _1!, bots: _2!, users: _3!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_attachMenuBotsNotModified(_ reader: BufferReader) -> AttachMenuBots? {
             return Api.AttachMenuBots.attachMenuBotsNotModified
@@ -290,9 +300,12 @@ public extension Api {
             }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.AttachMenuBotsBot.attachMenuBotsBot(bot: _1!, users: _2!)
+            if _c1 && _c2 {
+                return Api.AttachMenuBotsBot.attachMenuBotsBot(bot: _1!, users: _2!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -407,10 +420,12 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.AuctionBidLevel.auctionBidLevel(pos: _1!, amount: _2!, date: _3!)
+            if _c1 && _c2 && _c3 {
+                return Api.AuctionBidLevel.auctionBidLevel(pos: _1!, amount: _2!, date: _3!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -489,20 +504,12 @@ public extension Api {
             let _c11 = _11 != nil
             let _c12 = _12 != nil
             let _c13 = _13 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            if !_c6 { return nil }
-            if !_c7 { return nil }
-            if !_c8 { return nil }
-            if !_c9 { return nil }
-            if !_c10 { return nil }
-            if !_c11 { return nil }
-            if !_c12 { return nil }
-            if !_c13 { return nil }
-            return Api.Authorization.authorization(flags: _1!, hash: _2!, deviceModel: _3!, platform: _4!, systemVersion: _5!, apiId: _6!, appName: _7!, appVersion: _8!, dateCreated: _9!, dateActive: _10!, ip: _11!, country: _12!, region: _13!)
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 && _c10 && _c11 && _c12 && _c13 {
+                return Api.Authorization.authorization(flags: _1!, hash: _2!, deviceModel: _3!, platform: _4!, systemVersion: _5!, apiId: _6!, appName: _7!, appVersion: _8!, dateCreated: _9!, dateActive: _10!, ip: _11!, country: _12!, region: _13!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -557,14 +564,12 @@ public extension Api {
             let _c5 = _5 != nil
             let _c6 = _6 != nil
             let _c7 = _7 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            if !_c6 { return nil }
-            if !_c7 { return nil }
-            return Api.AutoDownloadSettings.autoDownloadSettings(flags: _1!, photoSizeMax: _2!, videoSizeMax: _3!, fileSizeMax: _4!, videoUploadMaxbitrate: _5!, smallQueueActiveOperationsMax: _6!, largeQueueActiveOperationsMax: _7!)
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 {
+                return Api.AutoDownloadSettings.autoDownloadSettings(flags: _1!, photoSizeMax: _2!, videoSizeMax: _3!, fileSizeMax: _4!, videoUploadMaxbitrate: _5!, smallQueueActiveOperationsMax: _6!, largeQueueActiveOperationsMax: _7!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -603,9 +608,12 @@ public extension Api {
             }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.AutoSaveException.autoSaveException(peer: _1!, settings: _2!)
+            if _c1 && _c2 {
+                return Api.AutoSaveException.autoSaveException(peer: _1!, settings: _2!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -640,9 +648,12 @@ public extension Api {
             if Int(_1!) & Int(1 << 2) != 0 {_2 = reader.readInt64() }
             let _c1 = _1 != nil
             let _c2 = (Int(_1!) & Int(1 << 2) == 0) || _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.AutoSaveSettings.autoSaveSettings(flags: _1!, videoMaxSize: _2)
+            if _c1 && _c2 {
+                return Api.AutoSaveSettings.autoSaveSettings(flags: _1!, videoMaxSize: _2)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -693,13 +704,12 @@ public extension Api {
             let _c4 = (Int(_1!) & Int(1 << 0) == 0) || _4 != nil
             let _c5 = _5 != nil
             let _c6 = (Int(_1!) & Int(1 << 1) == 0) || _6 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            if !_c6 { return nil }
-            return Api.AvailableEffect.availableEffect(flags: _1!, id: _2!, emoticon: _3!, staticIconId: _4, effectStickerId: _5!, effectAnimationId: _6)
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 {
+                return Api.AvailableEffect.availableEffect(flags: _1!, id: _2!, emoticon: _3!, staticIconId: _4, effectStickerId: _5!, effectAnimationId: _6)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -780,17 +790,12 @@ public extension Api {
             let _c8 = _8 != nil
             let _c9 = (Int(_1!) & Int(1 << 1) == 0) || _9 != nil
             let _c10 = (Int(_1!) & Int(1 << 1) == 0) || _10 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            if !_c6 { return nil }
-            if !_c7 { return nil }
-            if !_c8 { return nil }
-            if !_c9 { return nil }
-            if !_c10 { return nil }
-            return Api.AvailableReaction.availableReaction(flags: _1!, reaction: _2!, title: _3!, staticIcon: _4!, appearAnimation: _5!, selectAnimation: _6!, activateAnimation: _7!, effectAnimation: _8!, aroundAnimation: _9, centerIcon: _10)
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 && _c10 {
+                return Api.AvailableReaction.availableReaction(flags: _1!, reaction: _2!, title: _3!, staticIcon: _4!, appearAnimation: _5!, selectAnimation: _6!, activateAnimation: _7!, effectAnimation: _8!, aroundAnimation: _9, centerIcon: _10)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -825,9 +830,12 @@ public extension Api {
             _2 = parseString(reader)
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.BankCardOpenUrl.bankCardOpenUrl(url: _1!, name: _2!)
+            if _c1 && _c2 {
+                return Api.BankCardOpenUrl.bankCardOpenUrl(url: _1!, name: _2!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -946,11 +954,12 @@ public extension Api {
             let _c2 = _2 != nil
             let _c3 = _3 != nil
             let _c4 = (Int(_1!) & Int(1 << 0) == 0) || _4 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            return Api.Birthday.birthday(flags: _1!, day: _2!, month: _3!, year: _4)
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.Birthday.birthday(flags: _1!, day: _2!, month: _3!, year: _4)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -1053,16 +1062,12 @@ public extension Api {
             let _c7 = (Int(_1!) & Int(1 << 4) == 0) || _7 != nil
             let _c8 = (Int(_1!) & Int(1 << 5) == 0) || _8 != nil
             let _c9 = (Int(_1!) & Int(1 << 6) == 0) || _9 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            if !_c6 { return nil }
-            if !_c7 { return nil }
-            if !_c8 { return nil }
-            if !_c9 { return nil }
-            return Api.Boost.boost(flags: _1!, id: _2!, userId: _3, giveawayMsgId: _4, date: _5!, expires: _6!, usedGiftSlug: _7, multiplier: _8, stars: _9)
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 {
+                return Api.Boost.boost(flags: _1!, id: _2!, userId: _3, giveawayMsgId: _4, date: _5!, expires: _6!, usedGiftSlug: _7, multiplier: _8, stars: _9)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -1138,16 +1143,12 @@ public extension Api {
             let _c7 = _7 != nil
             let _c8 = (Int(_1!) & Int(1 << 0) == 0) || _8 != nil
             let _c9 = _9 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            if !_c6 { return nil }
-            if !_c7 { return nil }
-            if !_c8 { return nil }
-            if !_c9 { return nil }
-            return Api.BotApp.botApp(flags: _1!, id: _2!, accessHash: _3!, shortName: _4!, title: _5!, description: _6!, photo: _7!, document: _8, hash: _9!)
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 {
+                return Api.BotApp.botApp(flags: _1!, id: _2!, accessHash: _3!, shortName: _4!, title: _5!, description: _6!, photo: _7!, document: _8, hash: _9!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_botAppNotModified(_ reader: BufferReader) -> BotApp? {
             return Api.BotApp.botAppNotModified
@@ -1201,13 +1202,12 @@ public extension Api {
             let _c4 = (Int(_1!) & Int(1 << 2) == 0) || _4 != nil
             let _c5 = (Int(_1!) & Int(1 << 3) == 0) || _5 != nil
             let _c6 = (Int(_1!) & Int(1 << 4) == 0) || _6 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            if !_c6 { return nil }
-            return Api.BotAppSettings.botAppSettings(flags: _1!, placeholderPath: _2, backgroundColor: _3, backgroundDarkColor: _4, headerColor: _5, headerDarkColor: _6)
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 {
+                return Api.BotAppSettings.botAppSettings(flags: _1!, placeholderPath: _2, backgroundColor: _3, backgroundDarkColor: _4, headerColor: _5, headerDarkColor: _6)
+            }
+            else {
+                return nil
+            }
         }
     
     }
