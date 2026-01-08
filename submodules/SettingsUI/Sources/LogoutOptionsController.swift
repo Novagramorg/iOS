@@ -264,7 +264,7 @@ public func logoutOptionsController(context: AccountContext, navigationControlle
                 dismissImpl?()
             })
         ])
-        pushControllerImpl?(alertController)
+        presentControllerImpl?(alertController, nil)
     })
         
     let signal = combineLatest(queue: .mainQueue(),
