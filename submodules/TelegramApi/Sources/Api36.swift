@@ -117,22 +117,12 @@ public extension Api.payments {
             let _c13 = _13 != nil
             let _c14 = _14 != nil
             let _c15 = _15 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            if !_c6 { return nil }
-            if !_c7 { return nil }
-            if !_c8 { return nil }
-            if !_c9 { return nil }
-            if !_c10 { return nil }
-            if !_c11 { return nil }
-            if !_c12 { return nil }
-            if !_c13 { return nil }
-            if !_c14 { return nil }
-            if !_c15 { return nil }
-            return Api.payments.PaymentReceipt.paymentReceipt(flags: _1!, date: _2!, botId: _3!, providerId: _4!, title: _5!, description: _6!, photo: _7, invoice: _8!, info: _9, shipping: _10, tipAmount: _11, currency: _12!, totalAmount: _13!, credentialsTitle: _14!, users: _15!)
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 && _c10 && _c11 && _c12 && _c13 && _c14 && _c15 {
+                return Api.payments.PaymentReceipt.paymentReceipt(flags: _1!, date: _2!, botId: _3!, providerId: _4!, title: _5!, description: _6!, photo: _7, invoice: _8!, info: _9, shipping: _10, tipAmount: _11, currency: _12!, totalAmount: _13!, credentialsTitle: _14!, users: _15!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_paymentReceiptStars(_ reader: BufferReader) -> PaymentReceipt? {
             var _1: Int32?
@@ -174,18 +164,12 @@ public extension Api.payments {
             let _c9 = _9 != nil
             let _c10 = _10 != nil
             let _c11 = _11 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            if !_c6 { return nil }
-            if !_c7 { return nil }
-            if !_c8 { return nil }
-            if !_c9 { return nil }
-            if !_c10 { return nil }
-            if !_c11 { return nil }
-            return Api.payments.PaymentReceipt.paymentReceiptStars(flags: _1!, date: _2!, botId: _3!, title: _4!, description: _5!, photo: _6, invoice: _7!, currency: _8!, totalAmount: _9!, transactionId: _10!, users: _11!)
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 && _c10 && _c11 {
+                return Api.payments.PaymentReceipt.paymentReceiptStars(flags: _1!, date: _2!, botId: _3!, title: _4!, description: _5!, photo: _6, invoice: _7!, currency: _8!, totalAmount: _9!, transactionId: _10!, users: _11!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -227,15 +211,23 @@ public extension Api.payments {
                 _1 = Api.parse(reader, signature: signature) as? Api.Updates
             }
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.payments.PaymentResult.paymentResult(updates: _1!)
+            if _c1 {
+                return Api.payments.PaymentResult.paymentResult(updates: _1!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_paymentVerificationNeeded(_ reader: BufferReader) -> PaymentResult? {
             var _1: String?
             _1 = parseString(reader)
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.payments.PaymentResult.paymentVerificationNeeded(url: _1!)
+            if _c1 {
+                return Api.payments.PaymentResult.paymentVerificationNeeded(url: _1!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -328,16 +320,12 @@ public extension Api.payments {
             let _c7 = _7 != nil
             let _c8 = (Int(_1!) & Int(1 << 2) == 0) || _8 != nil
             let _c9 = _9 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            if !_c6 { return nil }
-            if !_c7 { return nil }
-            if !_c8 { return nil }
-            if !_c9 { return nil }
-            return Api.payments.ResaleStarGifts.resaleStarGifts(flags: _1!, count: _2!, gifts: _3!, nextOffset: _4, attributes: _5, attributesHash: _6, chats: _7!, counters: _8, users: _9!)
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 {
+                return Api.payments.ResaleStarGifts.resaleStarGifts(flags: _1!, count: _2!, gifts: _3!, nextOffset: _4, attributes: _5, attributesHash: _6, chats: _7!, counters: _8, users: _9!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -374,9 +362,12 @@ public extension Api.payments {
             } }
             let _c1 = _1 != nil
             let _c2 = (Int(_1!) & Int(1 << 0) == 0) || _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.payments.SavedInfo.savedInfo(flags: _1!, savedInfo: _2)
+            if _c1 && _c2 {
+                return Api.payments.SavedInfo.savedInfo(flags: _1!, savedInfo: _2)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -451,14 +442,12 @@ public extension Api.payments {
             let _c5 = (Int(_1!) & Int(1 << 0) == 0) || _5 != nil
             let _c6 = _6 != nil
             let _c7 = _7 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            if !_c6 { return nil }
-            if !_c7 { return nil }
-            return Api.payments.SavedStarGifts.savedStarGifts(flags: _1!, count: _2!, chatNotificationsEnabled: _3, gifts: _4!, nextOffset: _5, chats: _6!, users: _7!)
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 {
+                return Api.payments.SavedStarGifts.savedStarGifts(flags: _1!, count: _2!, chatNotificationsEnabled: _3, gifts: _4!, nextOffset: _5, chats: _6!, users: _7!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -524,10 +513,12 @@ public extension Api.payments {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.payments.StarGiftActiveAuctions.starGiftActiveAuctions(auctions: _1!, users: _2!, chats: _3!)
+            if _c1 && _c2 && _c3 {
+                return Api.payments.StarGiftActiveAuctions.starGiftActiveAuctions(auctions: _1!, users: _2!, chats: _3!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_starGiftActiveAuctionsNotModified(_ reader: BufferReader) -> StarGiftActiveAuctions? {
             return Api.payments.StarGiftActiveAuctions.starGiftActiveAuctionsNotModified
@@ -587,10 +578,12 @@ public extension Api.payments {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.payments.StarGiftAuctionAcquiredGifts.starGiftAuctionAcquiredGifts(gifts: _1!, users: _2!, chats: _3!)
+            if _c1 && _c2 && _c3 {
+                return Api.payments.StarGiftAuctionAcquiredGifts.starGiftAuctionAcquiredGifts(gifts: _1!, users: _2!, chats: _3!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -659,13 +652,12 @@ public extension Api.payments {
             let _c4 = _4 != nil
             let _c5 = _5 != nil
             let _c6 = _6 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            if !_c6 { return nil }
-            return Api.payments.StarGiftAuctionState.starGiftAuctionState(gift: _1!, state: _2!, userState: _3!, timeout: _4!, users: _5!, chats: _6!)
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 {
+                return Api.payments.StarGiftAuctionState.starGiftAuctionState(gift: _1!, state: _2!, userState: _3!, timeout: _4!, users: _5!, chats: _6!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -711,8 +703,12 @@ public extension Api.payments {
                 _1 = Api.parseVector(reader, elementSignature: 0, elementType: Api.StarGiftCollection.self)
             }
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.payments.StarGiftCollections.starGiftCollections(collections: _1!)
+            if _c1 {
+                return Api.payments.StarGiftCollections.starGiftCollections(collections: _1!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_starGiftCollectionsNotModified(_ reader: BufferReader) -> StarGiftCollections? {
             return Api.payments.StarGiftCollections.starGiftCollectionsNotModified
@@ -752,8 +748,12 @@ public extension Api.payments {
                 _1 = Api.parseVector(reader, elementSignature: 0, elementType: Api.StarGiftAttribute.self)
             }
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.payments.StarGiftUpgradeAttributes.starGiftUpgradeAttributes(attributes: _1!)
+            if _c1 {
+                return Api.payments.StarGiftUpgradeAttributes.starGiftUpgradeAttributes(attributes: _1!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -810,10 +810,12 @@ public extension Api.payments {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.payments.StarGiftUpgradePreview.starGiftUpgradePreview(sampleAttributes: _1!, prices: _2!, nextPrices: _3!)
+            if _c1 && _c2 && _c3 {
+                return Api.payments.StarGiftUpgradePreview.starGiftUpgradePreview(sampleAttributes: _1!, prices: _2!, nextPrices: _3!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -844,8 +846,12 @@ public extension Api.payments {
             var _1: String?
             _1 = parseString(reader)
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.payments.StarGiftWithdrawalUrl.starGiftWithdrawalUrl(url: _1!)
+            if _c1 {
+                return Api.payments.StarGiftWithdrawalUrl.starGiftWithdrawalUrl(url: _1!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -915,11 +921,12 @@ public extension Api.payments {
             let _c2 = _2 != nil
             let _c3 = _3 != nil
             let _c4 = _4 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            return Api.payments.StarGifts.starGifts(hash: _1!, gifts: _2!, chats: _3!, users: _4!)
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.payments.StarGifts.starGifts(hash: _1!, gifts: _2!, chats: _3!, users: _4!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_starGiftsNotModified(_ reader: BufferReader) -> StarGifts? {
             return Api.payments.StarGifts.starGiftsNotModified
@@ -953,8 +960,12 @@ public extension Api.payments {
             var _1: String?
             _1 = parseString(reader)
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.payments.StarsRevenueAdsAccountUrl.starsRevenueAdsAccountUrl(url: _1!)
+            if _c1 {
+                return Api.payments.StarsRevenueAdsAccountUrl.starsRevenueAdsAccountUrl(url: _1!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -1007,12 +1018,12 @@ public extension Api.payments {
             let _c3 = _3 != nil
             let _c4 = _4 != nil
             let _c5 = _5 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            return Api.payments.StarsRevenueStats.starsRevenueStats(flags: _1!, topHoursGraph: _2, revenueGraph: _3!, status: _4!, usdRate: _5!)
+            if _c1 && _c2 && _c3 && _c4 && _c5 {
+                return Api.payments.StarsRevenueStats.starsRevenueStats(flags: _1!, topHoursGraph: _2, revenueGraph: _3!, status: _4!, usdRate: _5!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -1043,8 +1054,12 @@ public extension Api.payments {
             var _1: String?
             _1 = parseString(reader)
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.payments.StarsRevenueWithdrawalUrl.starsRevenueWithdrawalUrl(url: _1!)
+            if _c1 {
+                return Api.payments.StarsRevenueWithdrawalUrl.starsRevenueWithdrawalUrl(url: _1!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -1133,16 +1148,12 @@ public extension Api.payments {
             let _c7 = (Int(_1!) & Int(1 << 0) == 0) || _7 != nil
             let _c8 = _8 != nil
             let _c9 = _9 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            if !_c6 { return nil }
-            if !_c7 { return nil }
-            if !_c8 { return nil }
-            if !_c9 { return nil }
-            return Api.payments.StarsStatus.starsStatus(flags: _1!, balance: _2!, subscriptions: _3, subscriptionsNextOffset: _4, subscriptionsMissingBalance: _5, history: _6, nextOffset: _7, chats: _8!, users: _9!)
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 {
+                return Api.payments.StarsStatus.starsStatus(flags: _1!, balance: _2!, subscriptions: _3, subscriptionsNextOffset: _4, subscriptionsMissingBalance: _5, history: _6, nextOffset: _7, chats: _8!, users: _9!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -1201,12 +1212,12 @@ public extension Api.payments {
             let _c3 = _3 != nil
             let _c4 = _4 != nil
             let _c5 = (Int(_1!) & Int(1 << 0) == 0) || _5 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            return Api.payments.SuggestedStarRefBots.suggestedStarRefBots(flags: _1!, count: _2!, suggestedBots: _3!, users: _4!, nextOffset: _5)
+            if _c1 && _c2 && _c3 && _c4 && _c5 {
+                return Api.payments.SuggestedStarRefBots.suggestedStarRefBots(flags: _1!, count: _2!, suggestedBots: _3!, users: _4!, nextOffset: _5)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -1259,10 +1270,12 @@ public extension Api.payments {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.payments.UniqueStarGift.uniqueStarGift(gift: _1!, chats: _2!, users: _3!)
+            if _c1 && _c2 && _c3 {
+                return Api.payments.UniqueStarGift.uniqueStarGift(gift: _1!, chats: _2!, users: _3!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -1341,20 +1354,12 @@ public extension Api.payments {
             let _c11 = (Int(_1!) & Int(1 << 4) == 0) || _11 != nil
             let _c12 = (Int(_1!) & Int(1 << 5) == 0) || _12 != nil
             let _c13 = (Int(_1!) & Int(1 << 5) == 0) || _13 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            if !_c6 { return nil }
-            if !_c7 { return nil }
-            if !_c8 { return nil }
-            if !_c9 { return nil }
-            if !_c10 { return nil }
-            if !_c11 { return nil }
-            if !_c12 { return nil }
-            if !_c13 { return nil }
-            return Api.payments.UniqueStarGiftValueInfo.uniqueStarGiftValueInfo(flags: _1!, currency: _2!, value: _3!, initialSaleDate: _4!, initialSaleStars: _5!, initialSalePrice: _6!, lastSaleDate: _7, lastSalePrice: _8, floorPrice: _9, averagePrice: _10, listedCount: _11, fragmentListedCount: _12, fragmentListedUrl: _13)
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 && _c10 && _c11 && _c12 && _c13 {
+                return Api.payments.UniqueStarGiftValueInfo.uniqueStarGiftValueInfo(flags: _1!, currency: _2!, value: _3!, initialSaleDate: _4!, initialSaleStars: _5!, initialSalePrice: _6!, lastSaleDate: _7, lastSalePrice: _8, floorPrice: _9, averagePrice: _10, listedCount: _11, fragmentListedCount: _12, fragmentListedUrl: _13)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -1399,10 +1404,12 @@ public extension Api.payments {
             let _c1 = _1 != nil
             let _c2 = (Int(_1!) & Int(1 << 0) == 0) || _2 != nil
             let _c3 = (Int(_1!) & Int(1 << 1) == 0) || _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.payments.ValidatedRequestedInfo.validatedRequestedInfo(flags: _1!, id: _2, shippingOptions: _3)
+            if _c1 && _c2 && _c3 {
+                return Api.payments.ValidatedRequestedInfo.validatedRequestedInfo(flags: _1!, id: _2, shippingOptions: _3)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -1433,8 +1440,12 @@ public extension Api.phone {
             var _1: String?
             _1 = parseString(reader)
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.phone.ExportedGroupCallInvite.exportedGroupCallInvite(link: _1!)
+            if _c1 {
+                return Api.phone.ExportedGroupCallInvite.exportedGroupCallInvite(link: _1!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -1501,12 +1512,12 @@ public extension Api.phone {
             let _c3 = _3 != nil
             let _c4 = _4 != nil
             let _c5 = _5 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            return Api.phone.GroupCall.groupCall(call: _1!, participants: _2!, participantsNextOffset: _3!, chats: _4!, users: _5!)
+            if _c1 && _c2 && _c3 && _c4 && _c5 {
+                return Api.phone.GroupCall.groupCall(call: _1!, participants: _2!, participantsNextOffset: _3!, chats: _4!, users: _5!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -1567,11 +1578,12 @@ public extension Api.phone {
             let _c2 = _2 != nil
             let _c3 = _3 != nil
             let _c4 = _4 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            return Api.phone.GroupCallStars.groupCallStars(totalStars: _1!, topDonors: _2!, chats: _3!, users: _4!)
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.phone.GroupCallStars.groupCallStars(totalStars: _1!, topDonors: _2!, chats: _3!, users: _4!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -1608,8 +1620,12 @@ public extension Api.phone {
                 _1 = Api.parseVector(reader, elementSignature: 0, elementType: Api.GroupCallStreamChannel.self)
             }
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.phone.GroupCallStreamChannels.groupCallStreamChannels(channels: _1!)
+            if _c1 {
+                return Api.phone.GroupCallStreamChannels.groupCallStreamChannels(channels: _1!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -1644,9 +1660,12 @@ public extension Api.phone {
             _2 = parseString(reader)
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.phone.GroupCallStreamRtmpUrl.groupCallStreamRtmpUrl(url: _1!, key: _2!)
+            if _c1 && _c2 {
+                return Api.phone.GroupCallStreamRtmpUrl.groupCallStreamRtmpUrl(url: _1!, key: _2!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -1715,13 +1734,12 @@ public extension Api.phone {
             let _c4 = _4 != nil
             let _c5 = _5 != nil
             let _c6 = _6 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            if !_c6 { return nil }
-            return Api.phone.GroupParticipants.groupParticipants(count: _1!, participants: _2!, nextOffset: _3!, chats: _4!, users: _5!, version: _6!)
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 {
+                return Api.phone.GroupParticipants.groupParticipants(count: _1!, participants: _2!, nextOffset: _3!, chats: _4!, users: _5!, version: _6!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
